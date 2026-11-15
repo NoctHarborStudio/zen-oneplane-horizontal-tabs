@@ -16,8 +16,14 @@ The first CSS-only experiment uses the existing top toolbar as the activation su
 
 Zen's workspaces contain their own vertical arrowscrollboxes, pinned sections and normal sections. Visual CSS changes do not change their internal orientation, scrolling logic or drag-and-drop geometry. A production layout must address those differences rather than assume CSS alone is sufficient.
 
+## Automatic configuration
+
+A Sine window script snapshots native layout preferences and activates the required Zen settings using the native Compact Mode manager. The stylesheet applies only when that window is marked active. Unload attempts to restore the original configuration; multi-window, update and restart behavior need runtime validation.
+
 ## Manual validation checklist
 
+- [ ] Install and enable with no manual native layout changes; disable and verify restoration.
+- [ ] Two windows, close one, disable mod, restart and update from preview.1.
 - [ ] Windows 11, Zen version and clean test profile recorded.
 - [ ] Compact Mode reveals from the top and hides without flickering or moving page content unexpectedly.
 - [ ] Native URL field, suggestions, Ctrl+L and Ctrl+T work while compact and expanded.

@@ -1,7 +1,7 @@
 /* OnePlane / Horizontal Tab Bar — experimental CSS-only layout. */
-@media -moz-pref("zen.oneplane.enabled") {
+@media (min-width: 900px) {
   @media (-moz-pref("zen.view.compact.hide-toolbar")) and (not -moz-pref("zen.view.compact.hide-tabbar")) and (min-width: 900px) {
-    :root[zen-compact-mode="true"][zen-sidebar-expanded="true"]:not([zen-single-toolbar="true"], [zen-right-side="true"], [customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window]) {
+    :root[oneplane-active="true"][zen-compact-mode="true"][zen-sidebar-expanded="true"]:not([zen-single-toolbar="true"], [zen-right-side="true"], [customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window]) {
       --op-height: 34px;
       --op-tab: 36px;
       --op-tab-open: 180px;

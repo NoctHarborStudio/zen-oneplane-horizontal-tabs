@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-preview.2
+
+- Configure required native Zen layout automatically using an auditable local Sine script.
+- Attempt to restore saved settings on unload; gate CSS by a per-window activation marker.
+- Remove the redundant internal enable checkbox; use Sine's mod toggle.
+
 ## 0.1.0-preview.1
 
 - Initial experimental horizontal top tab bar.

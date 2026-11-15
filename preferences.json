@@ -1,11 +1,5 @@
 [
   {
-    "type": "checkbox",
-    "property": "zen.oneplane.enabled",
-    "label": "Enable OnePlane (experimental)",
-    "defaultValue": false
-  },
-  {
     "type": "dropdown",
     "property": "zen.oneplane.tab-width",
     "label": "Collapsed tab width",

@@ -1,43 +1,20 @@
-# Installation (development preview)
+# Installation — development preview
 
-## Sine (recommended for testing)
+Use a disposable profile, not your daily browser.
 
-Use Sine in a separate test profile, following its [official installation instructions](https://github.com/CosmoCreeper/Sine). Do not enable unsigned or unofficial JavaScript installation for OnePlane: it contains no JavaScript.
+1. Install Sine using its [official instructions](https://github.com/CosmoCreeper/Sine).
+2. In Sine Mods, install `NoctHarborStudio/zen-oneplane-horizontal-tabs/tree/preview`.
+3. OnePlane uses a local browser-chrome script to prepare the layout automatically. Sine 2.3.3 requires the user to explicitly permit scripts from unofficial mods for this feature. Review [layout.uc.mjs](../layout.uc.mjs) first. The Sine setting applies to other unpublished mods too; it is not changed by OnePlane.
+4. Enable OnePlane in Sine. Restart Zen after updating if the new script is not loaded immediately.
 
-1. Open Zen Settings → Sine Mods.
-2. Find the field for installing an unpublished/local mod from GitHub.
-3. Enter `NoctHarborStudio/zen-oneplane-horizontal-tabs/tree/preview`.
-4. Install, then open OnePlane's preferences. The layout switch defaults to off.
-5. Select **Multiple Toolbars**, an expanded left sidebar and **Compact Mode → Hide toolbar** in Zen. Use a window at least 900 CSS pixels wide.
-6. Enable **Enable OnePlane (experimental)** in Sine.
-
-Sine 2.3.3 reads the source branch from the GitHub URL. Use the `preview` branch, not the slash-containing development branch. This package uses the standard CSS and preferences format, and updates are signaled by `theme.json`'s `updatedAt` and version fields. In Sine 2.3.3, preference defaults may be initialized only when opening the settings; the CSS independently falls back to safe defaults.
-
-For rollback, switch off OnePlane's preference or disable the entire mod in Sine. If needed, close Zen and use the test profile's original configuration. Do not install into the primary profile until validated.
-
-## Manual installation
-
-**Do not install into your primary profile.** This is an untested layout prototype. Use a separate Zen profile created via `about:profiles`. Disable other layout-changing mods for the first test.
-
-1. Open the test profile's `about:support` and click **Open Folder** next to Profile Folder.
-2. Create a `chrome` directory if necessary.
-3. Set `toolkit.legacyUserProfileCustomizations.stylesheets` to Boolean `true` in `about:config`.
-4. Copy [chrome.css](../chrome.css) into `chrome/oneplane/chrome.css`.
-5. Add the following import to the beginning of `chrome/userChrome.css` (create the file if missing; do not overwrite existing styles).
-
-```css
-@import url("oneplane/chrome.css");
-```
-
-6. In **Look and Feel**, select **Multiple Toolbars** and an expanded left sidebar.
-7. Enable **Compact Mode → Hide toolbar** (not Hide both). Use a window at least 900 CSS pixels wide.
-8. Create Boolean `zen.oneplane.enabled` in `about:config`, initially set it to `false`.
-9. Restart Zen, then set the preference to `true` to test the layout.
-
-The preview does not change Zen's original tab orientation logic. Scroll behavior, tab reordering, folders and toolbar overlap are unresolved. See the [design and validation plan](design.md).
+No manual sidebar position, toolbar mode or Compact Mode setup is intended. The script records the original native values, configures Multiple Toolbars, the expanded left sidebar and Hide Toolbar, and requests native Compact Mode. The CSS is gated by the script's per-window active marker.
 
 ## Rollback
 
-Set `zen.oneplane.enabled` to `false`. If Zen is unusable, close it completely and remove the import or rename `chrome/oneplane/chrome.css`, then restart. Keep a copy of any existing `userChrome.css`.
+Disable OnePlane in Sine. The script attempts to restore original layout preferences, preserving values changed by the user where possible. Restore behavior across multiple windows, script reload and startup is not yet runtime validated.
 
-No executable installer or privileged script is required. Sine packaging is available on the preview branch. Official Zen Mods packaging is not available yet.
+If the interface is unusable, use the test profile rather than your primary profile. Remove the mod or disable it in Sine. The saved values are available in `zen.oneplane.original-layout` if automatic restoration fails. Do not delete that backup before recording its contents. If required, restore the original native preferences manually.
+
+## Limitations
+
+The current preview is not a stable release. Sine packaging and Zen API references have been inspected, but browser execution has not been tested. Tab scrolling, drag and drop, folder layout and window control placement are still experimental. Official Zen Mods packaging is not provided.
