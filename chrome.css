@@ -1062,9 +1062,10 @@
       opacity: 1 !important;
       pointer-events: auto !important;
     }
-    /* Fade one continuous background over the existing overlay height.
-       Keep the tint on the real surface so it also paints without blur.
-       Never mask the interactive rows or extend the hover region. */
+    /* A single contour mask softens both tint and backdrop blur.
+       Its shoulders follow the actual visible bookmark buttons.
+       The visual surface may extend below the controls, but never
+       changes the wrapper's interactive height or native bookmark layout. */
     #zen-appcontent-navbar-wrapper {
       --op-surface-tint: light-dark(rgba(244, 245, 249, .94), rgba(21, 23, 30, .94));
       background: transparent !important;
@@ -1072,13 +1073,16 @@
     #zen-appcontent-navbar-wrapper .zen-toolbar-background { display: none !important; }
     #zen-appcontent-navbar-wrapper > #oneplane-toolbar-surface {
       display: block !important;
-      height: max(100%, var(--op-measured-toolbar-height, var(--op-height))) !important;
+      height: max(100%, var(--op-measured-toolbar-height, var(--op-height)), var(--op-contour-height, 0px)) !important;
       backdrop-filter: blur(24px) saturate(1.2) !important;
-      /* Start inside the tab row; reach zero at the existing bottom edge. */
-      mask-image: linear-gradient(to bottom,
-        #000 0%, #000 12%, rgb(0 0 0 / 94%) 30%,
-        rgb(0 0 0 / 72%) 50%, rgb(0 0 0 / 34%) 70%,
-        rgb(0 0 0 / 6%) 90%, transparent 100%) !important;
+      /* Fallback before the first geometry pass. The generated SVG
+         has an alpha feather of equal thickness on horizontal and
+         vertical edges, and is measured in actual CSS pixels. */
+      mask-image: var(--op-contour-mask, linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%)) !important;
+      mask-mode: alpha !important;
+      mask-repeat: no-repeat !important;
+      mask-position: top left !important;
+      mask-size: 100% var(--op-contour-height, 100%) !important;
       box-shadow: none !important;
       opacity: 0;
       transition: opacity var(--op-panel-motion) var(--op-panel-ease) !important;
@@ -1108,6 +1112,7 @@
       }
       #zen-appcontent-navbar-wrapper > #oneplane-toolbar-surface {
         mask-image: none !important;
+        height: max(100%, var(--op-measured-toolbar-height, var(--op-height))) !important;
         backdrop-filter: none !important;
       }
       #zen-appcontent-navbar-wrapper :is(#nav-bar, #PersonalToolbar) {

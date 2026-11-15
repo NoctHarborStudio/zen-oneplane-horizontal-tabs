@@ -545,6 +545,134 @@ function installTabStrip() {
     "pointer-events": "none", "z-index": "0",
     "background-color": "var(--op-surface-tint, rgba(21, 23, 30, .34))"
   })) surface.style.setProperty(name, value, "important");
+  // Contour Fade: one alpha mask for BOTH tint and backdrop blur.
+  // Its constant-width feather follows the contour normal, not screen Y.
+  const CONTOUR_RADIUS=18, CONTOUR_PAD=5, CONTOUR_FADE=9;
+  let contourFrame=0, contourUntil=0, contourKey="";
+  let contourResize=null, contourObserver=null;
+  const contourObserved=new Set();
+  function contourPath(width,base,deep,left,right,radius=CONTOUR_RADIUS){
+    const r=Math.max(0,Math.min(radius,(deep-base)/2));
+    const outside=radius+CONTOUR_FADE+4;
+    if(!r || left===null || right===null)
+      return "M"+(-outside)+" "+base+"H"+(width+outside);
+    // Two equal tangent quarter circles on each shoulder, with a
+    // straight vertical section when the depth permits. The right
+    // shoulder is the exact reflection of the left shoulder.
+    const start=Math.min(-outside,left-2*r-outside);
+    const end=Math.max(width+outside,right+2*r+outside);
+    return "M"+start+" "+base+"H"+(left-2*r)+
+      " A"+r+" "+r+" 0 0 1 "+(left-r)+" "+(base+r)+
+      " V"+(deep-r)+" A"+r+" "+r+" 0 0 0 "+left+" "+deep+
+      " H"+right+" A"+r+" "+r+" 0 0 0 "+(right+r)+" "+(deep-r)+
+      " V"+(base+r)+" A"+r+" "+r+" 0 0 1 "+(right+2*r)+" "+base+
+      " H"+end;
+  }
+  function contourImage(width,height,base,deep,left,right){
+    const edge=contourPath(width,base,deep,left,right);
+    const startX=Number(edge.match(/^M(-?[\d.]+)/)[1]);
+    const smooth=t=>t*t*(3-2*t);
+    const steps=24;
+    let strokes="";
+    // Nested round strokes approximate a true Euclidean-distance alpha
+    // ramp. Compensate source-over compositing to retain the smoothstep
+    // profile instead of accidentally making the outer edge too dark.
+    for(let i=0;i<steps;i++){
+      const a=smooth(i/steps),b=smooth((i+1)/steps);
+      const opacity=(b-a)/(1-a);
+      strokes+='<path d="'+edge+'" stroke="black" fill="none" stroke-linejoin="round" stroke-linecap="round" stroke-width="'+(2*CONTOUR_FADE*(1-i/steps)).toFixed(3)+'" opacity="'+opacity.toFixed(6)+'"/>';
+    }
+    const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+width+'" height="'+height+'" viewBox="0 0 '+width+' '+height+'">'+strokes+
+      '<path fill="black" d="'+edge+'V-100H'+startX+'Z"/></svg>';
+    return 'url("data:image/svg+xml,'+encodeURIComponent(svg)+'")';
+  }
+  function contourCandidates(){
+    if(!bookmarks)return [];
+    const items=document.getElementById("PlacesToolbarItems");
+    const result=items?Array.from(items.children):[];
+    const chevron=document.getElementById("PlacesChevron");
+    if(chevron && bookmarks.contains(chevron))result.push(chevron);
+    // Also cover native toolbar controls (e.g. Other Bookmarks) that
+    // are placed beside the Places strip, not inside it.
+    for(const node of bookmarks.querySelectorAll("toolbarbutton.bookmark-item, #OtherBookmarks")){
+      if(!items?.contains(node) && !result.includes(node))result.push(node);
+    }
+    return result;
+  }
+  function observeContourNodes(){
+    if(!contourResize)return;
+    const wanted=new Set(contourCandidates());
+    for(const node of contourObserved)if(!wanted.has(node)){
+      contourResize.unobserve(node);contourObserved.delete(node);
+    }
+    for(const node of wanted)if(!contourObserved.has(node)){
+      contourResize.observe(node);contourObserved.add(node);
+    }
+  }
+  function paintContour(){
+    if(dead||!toolbarWrapper||!hoverSupported())return;
+    const wrapper=toolbarWrapper.getBoundingClientRect();
+    const nav=navbar?.getBoundingClientRect();
+    if(wrapper.width<=0||!nav||nav.height<=0)return;
+    const width=Math.max(1,Math.round(wrapper.width));
+    // Keep the top short. Include the bottom of the actual tab row
+    // (including its reserved hover room), not the bookmarks row.
+    const base=Math.max(1,Math.round(Math.max(nav.bottom,row.getBoundingClientRect().bottom)-wrapper.top-5));
+    let left=null,right=null,deep=base;
+    if(bookmarks && !bookmarks.hidden && !bookmarks.collapsed){
+      const style=window.getComputedStyle(bookmarks);
+      const bm=bookmarks.getBoundingClientRect();
+      if(style.display!=="none" && style.visibility==="visible" && bm.height>1){
+        for(const node of contourCandidates()){
+          if(node.hidden||node.collapsed||node.getAttribute("hidden")==="true"||
+            node.getAttribute("collapsed")==="true")continue;
+          const s=window.getComputedStyle(node);
+          if(s.display==="none"||s.visibility!=="visible"||Number(s.opacity)===0)continue;
+          const b=node.getBoundingClientRect();
+          if(b.width<1||b.height<1||b.right<=bm.left||b.left>=bm.right||
+            b.bottom<=bm.top||b.top>=bm.bottom)continue;
+          const l=Math.max(0,b.left-wrapper.left,bm.left-wrapper.left);
+          const r=Math.min(width,b.right-wrapper.left,bm.right-wrapper.left);
+          if(r<=l)continue;
+          left=left===null?l:Math.min(left,l);
+          right=right===null?r:Math.max(right,r);
+          deep=Math.max(deep,b.bottom-wrapper.top+CONTOUR_PAD);
+        }
+      }
+    }
+    // Only visible items contribute. A full bookmark row naturally
+    // extends its lower contour beyond the window instead of folding
+    // the shoulders back through the edge bookmarks.
+    if(left!==null){
+      left=Math.floor(left-CONTOUR_PAD);
+      right=Math.ceil(right+CONTOUR_PAD);
+      deep=Math.ceil(deep);
+      if(deep<=base){left=right=null;deep=base;}
+    }
+    const height=Math.max(1,Math.ceil(deep+CONTOUR_FADE+1));
+    const key=[width,height,base,deep,left,right].join(":");
+    if(key===contourKey)return;
+    contourKey=key;
+    surface.style.setProperty("--op-contour-height",height+"px");
+    surface.style.setProperty("--op-contour-mask",contourImage(width,height,base,deep,left,right));
+  }
+  function stepContour(now){
+    contourFrame=0;
+    if(dead)return;
+    paintContour();
+    if(now<contourUntil && hoverSupported())contourFrame=window.requestAnimationFrame(stepContour);
+  }
+  function scheduleContour(){
+    if(!dead&&!contourFrame)contourFrame=window.requestAnimationFrame(stepContour);
+  }
+  function onContourTransition(event){
+    if(!contourObserved.has(event.target))return;
+    if(!/^(margin|width|height|scale|translate|transform|padding)/.test(event.propertyName||""))return;
+    // Magnetic Bookmarks can move through CSS transforms without a
+    // resize notification. Follow only while its short transition runs.
+    contourUntil=window.performance.now()+360;
+    scheduleContour();
+  }
   const leftIds = new Set(["sidebar-button", "sidebar-toggle-button", "back-button",
     "forward-button", "stop-reload-button", "reload-button", "home-button", "urlbar-container"]);
   const centerIds = new Set(["oneplane-tabs", "oneplane-center-start", "oneplane-center-end"]);
@@ -611,6 +739,7 @@ function installTabStrip() {
         ? bookmarks.getBoundingClientRect().height : 0;
       if (navHeight > 0) setLength(toolbarWrapper, "--op-measured-toolbar-height", navHeight + bookmarksHeight);
       refreshIndicator();
+      scheduleContour();
     });
   }
   function observeGeometry() {
@@ -2109,6 +2238,13 @@ function installTabStrip() {
     toolbarObserver.disconnect();
     actionObserver.disconnect();
     geometryObserver?.disconnect();
+    contourResize?.disconnect();
+    contourObserver?.disconnect();
+    contourObserved.clear();
+    if(contourFrame)window.cancelAnimationFrame(contourFrame);
+    contourFrame=0;
+    if(bookmarks)for(const event of ["transitionrun","transitionend","transitioncancel"])
+      bookmarks.removeEventListener(event,onContourTransition,true);
     hoverObserver?.disconnect();
     modeObserver?.disconnect();
     if (geometryFrame) window.cancelAnimationFrame(geometryFrame);
@@ -2239,6 +2375,21 @@ function installTabStrip() {
     toolbarObserver.observe(target, { childList: true });
     geometryObserver = new ResizeObserver(scheduleGeometry);
     observeGeometry();
+    if(bookmarks){
+      contourResize=new ResizeObserver(scheduleContour);
+      observeContourNodes();
+      contourObserver=new MutationObserver(records=>{
+        if(records.some(r=>r.type==="childList"))observeContourNodes();
+        if(records.some(r=>r.type==="childList"||r.target===bookmarks||
+          contourObserved.has(r.target)||r.target.id==="PlacesToolbarItems"||
+          r.target.id==="PlacesToolbar"||r.target.id==="personal-bookmarks"))scheduleContour();
+      });
+      contourObserver.observe(bookmarks,{subtree:true,childList:true,attributes:true,
+        attributeFilter:["hidden","collapsed","style","class","label","overflowed","data-zr-bm-active","data-zr-bm-room"]});
+      for(const event of ["transitionrun","transitionend","transitioncancel"])
+        bookmarks.addEventListener(event,onContourTransition,true);
+    }
+    scheduleContour();
     if (toolbarWrapper) {
       hoverObserver = new MutationObserver(maintainHover);
       hoverObserver.observe(toolbarWrapper, { attributes: true, attributeFilter: ["zen-has-hover"] });

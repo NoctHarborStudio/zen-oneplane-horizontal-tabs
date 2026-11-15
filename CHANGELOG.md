@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-preview.29
+
+- Replace the uniform static toolbar fade with Adaptive Contour Fade: a short upper edge, rounded symmetric shoulders and a lower shelf around actual visible bookmark buttons.
+- Use the selected prototype's 18px radius (limited by available depth), 5px padding and 9px contour-normal feather; mask the shared tint and blur together.
+- Measure individual visible native bookmark buttons and the overflow chevron, update on resize, visibility, bookmark changes and Magnetic Bookmarks transitions. Without bookmarks the contour is flat.
+- Keep the existing address bar animation, reveal/close timings, hover region, tab and bookmark interactions unchanged; retain opaque reduced-transparency behavior.
+
 ## 0.1.0-preview.28
 
 - Fade the top overlay's shared tint and blur from the tab row to fully transparent at its existing lower edge; remove the hard row fills and bottom shadow.
