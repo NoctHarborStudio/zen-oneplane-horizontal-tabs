@@ -1,30 +1,30 @@
-# Zen Refined
+# OnePlane — Horizontal Tab Bar for Zen Browser
 
-Modular interface improvements for [Zen Browser](https://zen-browser.app/).
+Adaptive horizontal top tabs for [Zen Browser](https://zen-browser.app/), with hover-expandable tabs, a dynamic address bar, and an auto-hide single-row toolbar.
 
-Zen Refined aims to reduce visual clutter while preserving Zen's native navigation, keyboard shortcuts and compact mode. Each module can be used independently.
+OnePlane is designed to keep browser controls on a single horizontal plane at the top of the window, without permanently sacrificing screen space.
 
-> **Development preview:** no stable release is available yet. The CSS is experimental and has not been validated in a running Zen instance. Use a disposable profile for testing.
+> **Early development.** No stable release yet. The CSS prototype is based on Zen 1.24.2b source and has not been tested in a running browser.
 
-## Modules
+## Design goals
 
-| Module | Purpose | Status |
-| --- | --- | --- |
-| [OnePlane](mods/oneplane/) | A single horizontal toolbar with icon-first tabs, hover expansion and an expandable address bar. | Experimental layout |
-| [General Improvements](mods/general-improvements/) | Small, independent visual refinements, starting with a configurable loading-animation backdrop. | Experimental CSS; native spacing setting confirmed |
+- Horizontal tab bar at the top of the window.
+- Icon-only tabs by default; hovering reveals the title and close control.
+- Compact address bar that expands when clicked or focused.
+- Tabs and address bar on the same row.
+- Native Compact Mode integration for top-edge reveal and automatic hiding.
+- Preserve native navigation, window controls, keyboard shortcuts and theme colors wherever possible.
 
-## Getting started
+## Development preview
 
-- [Native Zen settings](docs/native-settings.md) — remove the content gap without installing a mod.
-- [Manual installation and rollback](docs/installation.md) — opt-in CSS previews.
-- [Design and test plan](docs/oneplane-design.md) — requirements and open issues.
+The [development branch](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/tree/dev/initial-prototype) contains the experimental CSS, [manual installation and rollback guide](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/dev/initial-prototype/docs/installation.md), and [design and validation plan](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/dev/initial-prototype/docs/design.md).
 
-## Development
+Use a disposable profile for testing. Horizontal scrolling, drag and drop, pinned tabs, folders, workspaces, extension controls and compatibility with other themes are not yet validated.
 
-The current source baseline is Zen 1.24.2b. Compatibility with other versions, themes, operating systems and split view is not yet established. Changes to browser internals may require updated selectors.
+## Scope
 
-This is an independent community project, not an official Zen Browser product.
+This project is exclusively about horizontal tabs and the integrated top toolbar. It does not change page backgrounds, loading animations, content spacing or unrelated browser styling.
 
 ## License
 
-[MIT](LICENSE). External projects are referenced for compatibility research; their code is not redistributed here.
+[MIT](LICENSE). Independent community project; not affiliated with Zen Browser.

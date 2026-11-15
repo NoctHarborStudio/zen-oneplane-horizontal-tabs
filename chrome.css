@@ -1,6 +1,6 @@
-/* Zen Refined / OnePlane — experimental CSS-only layout. */
-@media -moz-pref("zen.refined.oneplane.enabled") {
-  @media -moz-pref("zen.view.compact.hide-toolbar") {
+/* OnePlane / Horizontal Tab Bar — experimental CSS-only layout. */
+@media -moz-pref("zen.oneplane.enabled") {
+  @media (-moz-pref("zen.view.compact.hide-toolbar")) and (not -moz-pref("zen.view.compact.hide-tabbar")) and (min-width: 900px) {
     :root[zen-compact-mode="true"][zen-sidebar-expanded="true"]:not([zen-single-toolbar="true"], [zen-right-side="true"], [customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window]) {
       --op-height: 34px;
       --op-tab: 36px;
@@ -9,6 +9,8 @@
       --op-left: clamp(280px, 25vw, 390px);
       --op-right: clamp(200px, 20vw, 340px);
       --op-speed: 160ms;
+
+      /* Native layout is retained below 900 CSS pixels and outside the supported configuration. */
 
       /* Native URL field: preserve its original input and suggestions. */
       #nav-bar-customization-target { min-width: 0 !important; }
@@ -86,6 +88,10 @@
       #navigator-toolbox :is(#zen-toolbar-background, #zen-sidebar-foot-buttons, #zen-sidebar-top-buttons, #zen-overflow-extensions-list, .zen-current-workspace-indicator, .zen-workspace-empty-space, .zen-workspace-scroll-to-tab, .pinned-tabs-container-separator),
       #navigator-toolbox #TabsToolbar-customization-target::after {
         display: none !important;
+      }
+      #navigator-toolbox zen-workspace:not([active]):not([swipe-gesture]) {
+        visibility: hidden !important;
+        pointer-events: none !important;
       }
       #navigator-toolbox #zen-tabs-wrapper {
         position: relative !important;
@@ -199,6 +205,7 @@
 
       @media (prefers-reduced-motion: reduce) {
         --op-speed: 0ms;
+        #urlbar-container { transition: none !important; }
       }
     }
   }

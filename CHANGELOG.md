@@ -2,8 +2,10 @@
 
 ## Unreleased
 
-- Document Zen's built-in content spacing preference.
-- Add an opt-in loading backdrop color override; retain the existing loading animation.
-- Add the initial opt-in OnePlane layout experiment and a manual test plan.
+- Initial experimental horizontal top tab bar.
+- Icon-first tabs with hover expansion and compact address field.
+- Native Compact Mode integration experiment.
+- Fallback to the standard layout outside the supported configuration or below 900 CSS pixels.
+- Manual installation, rollback and validation documentation.
 
-No release has been published.
+No stable release has been published.

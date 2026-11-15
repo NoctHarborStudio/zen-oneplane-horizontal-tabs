@@ -8,11 +8,11 @@ One horizontal control plane at the top of the window. Back/forward and other na
 - The address field expands when focused and collapses when focus leaves. Native URL suggestions and keyboard shortcuts should remain available.
 - Preserve the existing Compact Mode top-edge activation, popup tracking and timing rather than inventing a new edge detector.
 - Prefer native theme colors; no forced full-browser theme.
-- Keep bookmarks and general visual improvements independent of the tab layout.
+- Preserve access to bookmarks without coupling the layout to unrelated visual changes.
 
 ## Implementation strategy
 
-The first CSS-only experiment uses the existing top toolbar as the activation surface and visually repositions the real tab strip into reserved space in the same row. It does not create duplicate tabs. The current reserved widths are provisional; the overlay is temporarily suppressed during address editing.
+The first CSS-only experiment uses the existing top toolbar as the activation surface and visually repositions the real tab strip into reserved space in the same row. It does not create duplicate tabs. The current reserved widths are provisional; below 900 CSS pixels the experiment falls back to the original layout. the overlay is temporarily suppressed during address editing.
 
 Zen's workspaces contain their own vertical arrowscrollboxes, pinned sections and normal sections. Visual CSS changes do not change their internal orientation, scrolling logic or drag-and-drop geometry. A production layout must address those differences rather than assume CSS alone is sufficient.
 
