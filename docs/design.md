@@ -28,8 +28,15 @@ Preview.4 moves the original page-action nodes with reversible DOM anchors, uses
 
 Preview.5 uses CSS ordering without reparenting native navigation widgets, two balancing spacers and a bounded tab strip with reserved hover expansion space. A resize observer compensates for native edge controls and measures the bookmarks row. A pointer guard preserves native toolbar hover while inside its visible bounds; native Compact Mode resumes on exit. Nebula has a fixed-height compact-toolbar rule, so the measured full height is also used as a compatibility override.
 
+## Three-zone layout and overlay reveal
+
+Preview.6 centers the collapsed tab strip alone. Navigation and the URL stay at the left; other native controls stay at the right. The balancing spacers compensate for the new-tab button and reserved expansion space, and maintain a stable left anchor while a tab expands. If the window is crowded the tab viewport shrinks and exact centering may give way to available space.
+
+The native toolbar wrapper is positioned above the web content, rather than changing its allocated height. The corresponding native content margin compensation is neutralized only while OnePlane is active. Native compact hover and popup attributes still drive the reveal. Compatibility overrides are part of OnePlane, not external theme edits.
+
 ## Manual validation checklist
 
+- [ ] Verify preview.6: tab-only centering (including odd/even counts), plus excluded, left navigation, stable page position during reveal and hide, URL focus and crowded windows.
 - [ ] Verify preview.5: centered navigation and bookmarks, stable hover across rows and empty space, no sticky toolbar after leaving, many tabs and narrow windows.
 - [ ] Verify preview.4: native page actions, click dismissal, loaded/unloaded states, URL fade and frosted background on bright/dark pages.
 - [ ] Verify preview.3 shows the tab strip, expands the address field on click, and reveals via native top hover.

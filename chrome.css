@@ -44,11 +44,11 @@
       min-width: 0 !important;
       overflow: visible !important;
     }
-    /* Center navigation, URL and tabs as one group; native edge buttons stay separate. */
+    /* Three zones: left navigation, truly centered tabs, right page/window controls. */
     #nav-bar-customization-target > * { order: 100 !important; }
     #nav-bar-customization-target > toolbarspring { display: none !important; }
     #nav-bar-customization-target > :is(#sidebar-button, #sidebar-toggle-button) { order: 0 !important; }
-    #nav-bar-customization-target > #oneplane-center-start { order: 10 !important; }
+    #nav-bar-customization-target > #oneplane-center-start { order: 35 !important; }
     #nav-bar-customization-target > #back-button { order: 20 !important; }
     #nav-bar-customization-target > #forward-button { order: 21 !important; }
     #nav-bar-customization-target > :is(#stop-reload-button, #reload-button) { order: 22 !important; }
@@ -100,8 +100,8 @@
     /* As a real toolbar child, the strip inherits native Compact Mode reveal. */
     #oneplane-tabs {
       display: flex !important;
-      /* Reserve space for one expanded tab so centering does not move its
-         hit target underneath a stationary pointer during hover. */
+      /* The left spacer compensates for this trailing reserve, so neither
+         the plus button nor expansion space contributes to tab centering. */
       flex: 0 1 auto !important;
       min-width: 0 !important;
       width: calc(var(--op-tab-count, 0) * (var(--op-tab) + 3px) + var(--op-tab-open) + 3px) !important;
@@ -289,17 +289,42 @@
     &:has(#urlbar[focused="true"], #urlbar[open]) #oneplane-url-dismiss,
     #oneplane-url-dismiss[data-pressed] { display: block !important; }
 
-    /* Frosted native toolbar; retain the native reveal animation and height. */
+    /* Keep the page fixed in place. Native hover states still drive reveal,
+       but the toolbar is out of document flow and overlays web content. */
+    #zen-appcontent-wrapper {
+      position: relative !important;
+    }
+    #zen-appcontent-navbar-wrapper {
+      position: absolute !important;
+      inset: 0 0 auto 0 !important;
+      width: 100% !important;
+      flex: none !important;
+      min-height: max(2px, var(--zen-element-separation, 0px)) !important;
+      height: max(2px, var(--zen-element-separation, 0px)) !important;
+      transition: height var(--zen-hidden-toolbar-transition, 160ms ease) !important;
+      overflow: clip;
+    }
+    /* Native Zen offsets the web view when an in-flow toolbar expands.
+       Our overlay has no such offset; neutralize it only while OnePlane runs. */
+    #tabbrowser-tabpanels[has-toolbar-hovered]
+      .browserSidebarContainer:is(.deck-selected, [zen-split="true"]) .browserContainer {
+      --zen-browser-container-margin-top-fix: 0px !important;
+      margin-top: 0 !important;
+    }
+    #zen-appcontent-navbar-wrapper:not(:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], :hover)) #zen-appcontent-navbar-container {
+      pointer-events: none !important;
+    }
+    /* Frosted native toolbar; retain native reveal animation and popup states. */
     #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], :hover) {
       height: max(var(--zen-toolbar-height-with-bookmarks, var(--op-height)), var(--op-measured-toolbar-height, 0px)) !important;
       overflow: visible !important;
       contain: none !important;
     }
-    #zen-appcontent-navbar-wrapper:is([oneplane-hover-lock], :hover) #zen-appcontent-navbar-container {
+    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], :hover) #zen-appcontent-navbar-container {
       opacity: 1 !important;
       pointer-events: auto !important;
     }
-    #zen-appcontent-navbar-wrapper:is([oneplane-hover-lock], :hover) #urlbar {
+    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], :hover) #urlbar {
       opacity: 1 !important;
       pointer-events: auto !important;
     }
@@ -316,6 +341,9 @@
     }
     #zen-appcontent-navbar-wrapper .zen-toolbar-background .zen-browser-grain { display: none !important; }
     #zen-appcontent-navbar-wrapper #nav-bar { background: transparent !important; }
+    @media (prefers-reduced-motion: reduce) {
+      #zen-appcontent-navbar-wrapper { transition: none !important; }
+    }
     @media (prefers-reduced-transparency: reduce) {
       #zen-appcontent-navbar-wrapper .zen-toolbar-background {
         backdrop-filter: none !important;

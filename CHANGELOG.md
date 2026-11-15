@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-preview.6
+
+- Return navigation and the address field to the left edge.
+- Center the collapsed tab strip against the full browser window, excluding the new-tab button and expansion reserve.
+- Preserve native right-edge controls and centered bookmarks.
+- Make the native top toolbar an overlay instead of resizing web content during reveal.
+- Neutralize Zen's corresponding content margin adjustment within the active OnePlane layout.
+- Keep Nebula height compatibility and hover retention inside OnePlane; no manual theme edits.
+
 ## 0.1.0-preview.5
 
 - Center the navigation buttons, compact address field and horizontal tabs in one group.

@@ -229,9 +229,9 @@ function installTabStrip() {
   const navbar = document.getElementById("nav-bar");
   const toolbarWrapper = document.getElementById("zen-appcontent-navbar-wrapper");
   const bookmarks = document.getElementById("PersonalToolbar");
-  const centerIds = new Set(["back-button", "forward-button", "stop-reload-button",
-    "reload-button", "home-button", "urlbar-container", "oneplane-tabs",
-    "oneplane-center-start", "oneplane-center-end"]);
+  const leftIds = new Set(["sidebar-button", "sidebar-toggle-button", "back-button",
+    "forward-button", "stop-reload-button", "reload-button", "home-button", "urlbar-container"]);
+  const centerIds = new Set(["oneplane-tabs", "oneplane-center-start", "oneplane-center-end"]);
   let geometryFrame = 0;
   let geometryObserver = null;
   function scheduleGeometry() {
@@ -240,26 +240,35 @@ function installTabStrip() {
       geometryFrame = 0;
       if (dead || !root.hasAttribute("oneplane-active") || !toolbarWrapper) return;
       if (window.innerWidth < 900 || root.hasAttribute("customizing")) return;
-      const wrapperRect = toolbarWrapper.getBoundingClientRect();
       const targetRect = target.getBoundingClientRect();
-      // Offset the center for native edge controls (including window captions).
-      let left = Math.max(0, targetRect.left - wrapperRect.left);
-      let right = Math.max(0, wrapperRect.right - targetRect.right);
+      // Center the collapsed tabs against the WINDOW, not the remaining toolbar.
+      // Native window buttons and all left/right controls consume edge space.
+      let left = Math.max(0, targetRect.left);
+      let right = Math.max(0, window.innerWidth - targetRect.right);
       for (const child of target.children) {
         if (centerIds.has(child.id) || child.localName === "toolbarspring") continue;
         const box = child.getBoundingClientRect();
         if (!box.width) continue;
         const style = window.getComputedStyle(child);
         const extent = box.width + (parseFloat(style.marginLeft) || 0) + (parseFloat(style.marginRight) || 0);
-        if (child.id === "sidebar-button" || child.id === "sidebar-toggle-button") left += extent;
+        if (leftIds.has(child.id)) left += extent;
         else right += extent;
       }
       const setLength = (node, name, value) => {
         const next = Math.max(0, Math.round(value)) + "px";
         if (node.style.getPropertyValue(name) !== next) node.style.setProperty(name, next);
       };
-      setLength(leftSpacer, "--op-center-bias", right - left);
-      setLength(rightSpacer, "--op-center-bias", left - right);
+      const rowWidth = row.getBoundingClientRect().width;
+      const tabWidth = parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab")) || 36;
+      const count = list.children.length;
+      const naturalTabsWidth = count ? count * (tabWidth + 3) - 3 : 0;
+      // Do not count the new-tab button or the expansion reserve in the center.
+      // When space runs out, center only the visible tab viewport as far as possible.
+      const collapsedTabsWidth = Math.min(naturalTabsWidth, Math.max(0, rowWidth - tabWidth - 3));
+      const trailingReserve = Math.max(0, rowWidth - collapsedTabsWidth);
+      const bias = right - left + trailingReserve;
+      setLength(leftSpacer, "--op-center-bias", bias);
+      setLength(rightSpacer, "--op-center-bias", -bias);
       // Nebula can constrain the wrapper to a fixed height. Include the
       // actual bookmarks row instead of letting it sit outside the hover area.
       const navHeight = navbar?.getBoundingClientRect().height || 0;
@@ -272,7 +281,7 @@ function installTabStrip() {
     if (!geometryObserver) return;
     geometryObserver.disconnect();
     for (const element of [target, navbar, toolbarWrapper, bookmarks, ...target.children]) {
-      if (element && !centerIds.has(element.id)) geometryObserver.observe(element);
+      if (element && element !== leftSpacer && element !== rightSpacer) geometryObserver.observe(element);
     }
     scheduleGeometry();
   }
@@ -285,7 +294,7 @@ function installTabStrip() {
     return !dead && root.hasAttribute("oneplane-active") &&
       root.getAttribute("zen-compact-mode") === "true" &&
       !root.hasAttribute("customizing") && !root.hasAttribute("inDOMFullscreen") &&
-      window.innerWidth >= 900;
+      !root.hasAttribute("inFullscreen") && window.innerWidth >= 900;
   }
   function clearHover() {
     pointerInside = false;
@@ -374,7 +383,11 @@ function installTabStrip() {
     const tabs = Array.from(browser.visibleTabs || browser.tabs || []).filter(
       tab => !tab.closing && !tab.hidden && !tab.hasAttribute("zen-empty-tab")
     );
-    row.style.setProperty('--op-tab-count', String(tabs.length));
+    const count = String(tabs.length);
+    if (row.style.getPropertyValue("--op-tab-count") !== count) {
+      row.style.setProperty("--op-tab-count", count);
+      scheduleGeometry();
+    }
     const keep = new Set(tabs);
     for (const [tab, entry] of entries) {
       if (!keep.has(tab)) { entry.item.remove(); entries.delete(tab); }

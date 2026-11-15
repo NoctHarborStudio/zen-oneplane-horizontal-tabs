@@ -18,3 +18,7 @@ If the interface is unusable, use the test profile rather than your primary prof
 ## Limitations
 
 The current preview is not a stable release. Sine packaging and Zen API references have been inspected, but browser execution has not been tested. The new horizontal view mirrors the current workspace's visible native tabs. Drag and drop, folders, native tab menus and workspace controls are not implemented yet; scrolling and window control placement require testing. Official Zen Mods packaging is not provided.
+
+## Layout backup and script permission
+
+The `zen.oneplane.original-layout` preference is an internal backup, created automatically. It is not a switch and should not be removed while the mod is active. No manual layout preparation or Nebula edits are required. Sine's global permission for unpublished JavaScript mods remains an explicit user choice; the mod does not modify it. A future marketplace submission may allow Sine to treat OnePlane as a store-origin script instead.
