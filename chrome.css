@@ -351,7 +351,8 @@
       flex: 0 1 auto !important;
       min-width: 0 !important;
       width: calc(var(--op-tab-count, 0) * (var(--op-tab) + 3px) + var(--op-split-count, 0) * 25px + var(--op-tab-open) + 3px) !important;
-      height: var(--op-height) !important;
+      height: calc(var(--op-height) + 8px) !important;
+      min-height: calc(var(--op-height) + 8px) !important;
       align-items: center;
       gap: 3px;
       margin-inline: 2px;
@@ -384,6 +385,66 @@
       overflow-x: auto;
       overflow-y: hidden;
       scrollbar-width: none;
+    }
+    /* Island mode uses a fixed central grid track and two separately
+       scrollable icon lanes. During drag display:contents preserves the
+       existing flat slot geometry and the native DOM drag source. */
+    #oneplane-tabs .oneplane-island-lane { display: contents; }
+    #oneplane-tabs .oneplane-title-island { display: none; }
+    #oneplane-tabs[data-op-hover-mode="island"] {
+      width: calc(var(--op-tab-count, 0) * (var(--op-tab) + 3px) + var(--op-split-count, 0) * 25px + var(--op-tab)) !important;
+    }
+    #oneplane-tabs[data-op-show-island]:not(:is([data-op-island-tight],[data-op-dragging],[data-op-island-incoming])) {
+      width: var(--op-island-row-width, 280px) !important;
+      flex: 0 0 var(--op-island-row-width, 280px) !important;
+    }
+    #oneplane-tabs[data-op-show-island]:not(:is([data-op-island-tight],[data-op-dragging],[data-op-island-incoming])) .oneplane-tab-list {
+      display:grid;
+      grid-template-columns:minmax(0,1fr) var(--op-island-width,180px) minmax(0,1fr);
+      column-gap:3px;
+      width:100%;
+      flex:1 1 100%;
+      overflow:visible;
+      padding:0;
+    }
+    #oneplane-tabs[data-op-show-island]:not(:is([data-op-island-tight],[data-op-dragging],[data-op-island-incoming])) .oneplane-island-lane {
+      display:flex;
+      align-items:center;
+      gap:3px;
+      min-width:0;
+      height:100%;
+      padding-inline:3px;
+      box-sizing:border-box;
+      overflow-x:auto;
+      overflow-y:hidden;
+      scrollbar-width:none;
+    }
+    #oneplane-tabs[data-op-show-island]:not(:is([data-op-island-tight],[data-op-dragging],[data-op-island-incoming])) .oneplane-island-left {
+      grid-column:1;grid-row:1;
+      justify-content:safe flex-end;
+    }
+    #oneplane-tabs[data-op-show-island]:not(:is([data-op-island-tight],[data-op-dragging],[data-op-island-incoming])) .oneplane-island-right {
+      grid-column:3;grid-row:1;
+      justify-content:flex-start;
+      margin-inline-end:calc(var(--op-tab) + 3px);
+    }
+    #oneplane-tabs[data-op-show-island]:not(:is([data-op-island-tight],[data-op-dragging],[data-op-island-incoming])) .oneplane-new-tab {
+      position:absolute;right:0;top:50%;translate:0 -50%;
+    }
+    #oneplane-tabs[data-op-show-island]:not(:is([data-op-island-tight],[data-op-dragging],[data-op-island-incoming])) .oneplane-title-island {
+      position:absolute;display:flex;align-items:center;justify-content:center;
+      left:50%;top:50%;translate:-50% -50%;
+      width:var(--op-island-width,180px);height:calc(var(--op-height) - 6px);
+      box-sizing:border-box;padding-inline:10px;
+      border-radius:999px;
+      background:color-mix(in srgb,currentColor 12%,transparent);
+      box-shadow:inset 0 0 0 1px color-mix(in srgb,currentColor 10%,transparent);
+      pointer-events:none;overflow:hidden;
+    }
+    #oneplane-tabs .oneplane-island-title {
+      display:block;min-width:0;max-width:100%;white-space:nowrap;
+      overflow:hidden;text-overflow:ellipsis;text-align:center;
+      font-size:12px;font-weight:500;
     }
     #oneplane-tabs .oneplane-tab {
       position: relative;
@@ -511,7 +572,7 @@
       filter: grayscale(1);
       opacity: .42;
     }
-    #oneplane-tabs .oneplane-tab[data-unloaded][data-op-expanded] .oneplane-tab-icon {
+    #oneplane-tabs .oneplane-tab[data-unloaded][data-op-hovered] .oneplane-tab-icon {
       filter: grayscale(.5);
       opacity: .5;
       transition-duration: 150ms;
@@ -581,7 +642,7 @@
     #oneplane-tabs .oneplane-split-group .oneplane-tab[data-selected] {
       background: color-mix(in srgb, var(--op-split-color) 33%, transparent);
     }
-    #oneplane-tabs .oneplane-split-group .oneplane-tab[data-op-expanded] {
+    #oneplane-tabs .oneplane-split-group .oneplane-tab[data-op-hovered] {
       background: color-mix(in srgb, var(--op-split-color) 27%, transparent);
     }
     #oneplane-tabs button.oneplane-split-handle {
@@ -657,18 +718,18 @@
     #oneplane-tabs[data-op-dragging] { cursor: grabbing; }
     /* The actual mirror follows the pointer inside the toolbar. Outside,
        switch the OS image and hide the source until native drop. */
-    #oneplane-tabs .oneplane-tab-list > :is(.oneplane-tab, .oneplane-split-group),
+    #oneplane-tabs :is(.oneplane-tab-list,.oneplane-island-lane) > :is(.oneplane-tab, .oneplane-split-group),
     #oneplane-tabs .oneplane-new-tab {
       transform: translateX(var(--op-drag-x, 0px));
     }
-    #oneplane-tabs .oneplane-tab-list > .oneplane-tab {
+    #oneplane-tabs :is(.oneplane-tab-list,.oneplane-island-lane) > .oneplane-tab {
       transition: width var(--op-tab-speed) var(--op-tab-ease),
         flex-basis var(--op-tab-speed) var(--op-tab-ease), background-color var(--op-tab-speed) ease,
         transform 170ms cubic-bezier(.22,.72,.2,1), opacity 120ms ease,
         margin-inline-end var(--op-tab-speed) var(--op-tab-ease),
-        scale var(--op-tab-speed) var(--op-tab-ease);
+        scale var(--op-tab-speed) var(--op-tab-ease), translate var(--op-tab-speed) var(--op-tab-ease);
     }
-    #oneplane-tabs .oneplane-tab-list > .oneplane-split-group {
+    #oneplane-tabs :is(.oneplane-tab-list,.oneplane-island-lane) > .oneplane-split-group {
       /* Width is measured from already-animated members, not animated twice. */
       max-width: none;
       transition: background-color var(--op-tab-speed) ease, box-shadow var(--op-tab-speed) ease,
@@ -681,7 +742,7 @@
     #oneplane-tabs .oneplane-tab-list {
       padding-inline-end: var(--op-drag-incoming, 0px);
     }
-    #oneplane-tabs[data-op-drag-commit] .oneplane-tab-list > :is(.oneplane-tab, .oneplane-split-group),
+    #oneplane-tabs[data-op-drag-commit] :is(.oneplane-tab-list,.oneplane-island-lane) > :is(.oneplane-tab, .oneplane-split-group),
     #oneplane-tabs[data-op-drag-commit] .oneplane-new-tab {
       transition: none !important;
     }
@@ -708,30 +769,41 @@
         flex-basis var(--op-tab-speed) var(--op-tab-ease), background-color var(--op-tab-speed) ease,
         transform 170ms cubic-bezier(.22,.72,.2,1), opacity 120ms ease,
         margin-inline-end var(--op-tab-speed) var(--op-tab-ease),
-        scale var(--op-tab-speed) var(--op-tab-ease);
+        scale var(--op-tab-speed) var(--op-tab-ease), translate var(--op-tab-speed) var(--op-tab-ease);
     }
     /* The card visibly grows into the spare vertical space of the row.
        Keep horizontal overhang below half the 3px slot gap at every
        supported width, and keep the independent drag transform untouched. */
-    #oneplane-tabs .oneplane-tab { scale: 1; transform-origin: center; }
+    #oneplane-tabs .oneplane-tab { scale: 1; translate: 0 0; transform-origin: center; }
     #oneplane-tabs .oneplane-tab-icon img {
       scale: 1;
       transition: scale var(--op-tab-speed) var(--op-tab-ease);
     }
-    #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-expanded]:not([data-op-reinsert]) {
+    #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) {
       scale: 1.02 1.12;
+      translate: 0 3px;
       z-index: 2;
     }
-    #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-expanded]:not([data-op-reinsert]) .oneplane-tab-icon img {
+    #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) .oneplane-tab-icon img {
       scale: 1.18;
     }
     @media (prefers-reduced-motion: reduce) {
-      #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-expanded],
-      #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-expanded] .oneplane-tab-icon img { scale: 1 !important; }
+      #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered],
+      #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered] .oneplane-tab-icon img { scale: 1 !important; translate: none !important; }
     }
     @media (-moz-pref("zen.oneplane.animation-duration", 0)) {
-      #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-expanded],
-      #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-expanded] .oneplane-tab-icon img { scale: 1 !important; }
+      #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered],
+      #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered] .oneplane-tab-icon img { scale: 1 !important; translate: none !important; }
+    }
+    #oneplane-tabs[data-op-hover-mode="island"] .oneplane-tab[data-op-hovered] {
+      background: color-mix(in srgb, currentColor 19%, transparent);
+    }
+    #oneplane-tabs[data-op-hover-mode="island"] .oneplane-split-group .oneplane-tab[data-op-hovered] {
+      background: color-mix(in srgb, var(--op-split-color) 27%, transparent);
+    }
+    #oneplane-tabs[data-op-dragging] .oneplane-tab:not([data-op-reinsert]) {
+      scale: 1;
+      translate: none;
     }
     #oneplane-tabs[data-op-dragging] .oneplane-tab {
       width: var(--op-tab) !important;
@@ -797,7 +869,7 @@
     }
     /* A single pointer-driven geometry pass positions all neighbors.
        Transitions here would lag behind the moving group and overlap it. */
-    #oneplane-tabs[data-op-group-pull] .oneplane-tab-list > :is(.oneplane-tab,.oneplane-split-group),
+    #oneplane-tabs[data-op-group-pull] :is(.oneplane-tab-list,.oneplane-island-lane) > :is(.oneplane-tab,.oneplane-split-group),
     #oneplane-tabs[data-op-group-pull] .oneplane-new-tab {
       transition: none !important;
     }
@@ -829,7 +901,7 @@
     #oneplane-tabs[data-op-dragging] .oneplane-tab-title { max-width: 0 !important; opacity: 0 !important; }
     #oneplane-tabs[data-op-dragging] .oneplane-tab-select { gap: 0 !important; padding-inline: 0 !important; }
     @media (prefers-reduced-motion: reduce) {
-      #oneplane-tabs .oneplane-tab-list > :is(.oneplane-tab, .oneplane-split-group),
+      #oneplane-tabs :is(.oneplane-tab-list,.oneplane-island-lane) > :is(.oneplane-tab, .oneplane-split-group),
       #oneplane-tabs .oneplane-new-tab { transition: none !important; }
     }
     @media (prefers-reduced-motion: reduce) {

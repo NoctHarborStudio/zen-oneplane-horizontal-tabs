@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-preview.26
+
+- Add optional Island Mode: compact icons in two independently scrollable lanes around a fixed-width centered title pill. Hover changes only the title and visual lift, never the slot widths; the idle pill displays the selected tab.
+- Add Sine preferences for hover mode and showing the center island; keep Expand Mode as default. Hide the island if there is insufficient symmetric space or during drag, with no loss of tab order.
+- Use the same magnification and 3px downward motion in both modes, reserving 8px of row height for the effect and indicator so bookmarks remain clear.
+- Preserve native split groups as indivisible lane slots and reuse continuous-strip drag geometry without reparenting the dragged node at drag start.
+
 ## 0.1.0-preview.25
 
 - Make tab hover magnification visible: 12% taller card, 2% wider card and 18% larger favicon, with smooth reversible easing.

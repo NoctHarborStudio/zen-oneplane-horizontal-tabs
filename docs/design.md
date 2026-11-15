@@ -111,3 +111,8 @@ The horizontal strip mirrors visible native tabs and supports selection, middle-
 - Glance: native content-side behavior is not deliberately replaced, but the mirror has no dedicated Glance parent/child representation. Verify before modifying.
 
 Optional design ideas (not implemented): small pinned/Essentials capsule, workspace pill with its native color, folder accordion/popover, delayed preview card, subtle loading progress ring, clickable audio equalizer. Prioritize native context-menu access and workspace/folder semantics before adding more effects. Do not replace native session or security behavior. Known group edge-reorder hesitation remains deferred.
+
+
+## Island Mode (preview.26)
+
+Expand Mode remains the default. Island Mode keeps compact widths, uses two scrollable icon lanes and a fixed center label; groups are atomic slots. The label displays the hovered title or selected title when idle, and is optional. When space is too narrow for two usable lanes and the center label, the compact strip is shown without the label. During native drag the lanes become a continuous flex strip via display:contents, then return to the island layout; no source node is reparented at drag start. Both modes use identical scale, icon magnification and 3px downward translation with an 8px permanent vertical reserve. Test mode switching, odd/even and crowded strips, group boundaries, bookmarks, keyboard focus, scroll, local/cross-window drag, and narrow windows in live Zen.

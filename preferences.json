@@ -122,5 +122,29 @@
     "property": "zen.oneplane.tab-indicator",
     "label": "Liquid tab hover indicator",
     "defaultValue": true
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.oneplane.hover-mode",
+    "label": "Tab hover mode",
+    "value": "number",
+    "defaultValue": 0,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Expand Mode",
+        "value": 0
+      },
+      {
+        "label": "Island Mode (compact icons)",
+        "value": 1
+      }
+    ]
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.oneplane.show-center-island",
+    "label": "Show center title island (Island Mode)",
+    "defaultValue": true
   }
 ]
