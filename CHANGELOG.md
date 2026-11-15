@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.0-preview.28
+
+- Fade the top overlay's shared tint and blur from the tab row to fully transparent at its existing lower edge; remove the hard row fills and bottom shadow.
+- Preserve the current toolbar height, reveal/close behavior, interactive controls and bookmark geometry. Respect reduced transparency with an opaque, unmasked panel.
+
 ## 0.1.0-preview.27
 
 - Keep the center title island visible and stationary during drag; show the carried tab title or combined Split View titles. Preserve the center gap in virtual reorder slots.

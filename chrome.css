@@ -1062,12 +1062,11 @@
       opacity: 1 !important;
       pointer-events: auto !important;
     }
-    /* Paint a real background surface inside the native overlay. Use an
-       explicit tint on the visible rows as a second independent fallback:
-       some theme/compositor combinations suppress the backdrop layer. */
+    /* Fade one continuous background over the existing overlay height.
+       Keep the tint on the real surface so it also paints without blur.
+       Never mask the interactive rows or extend the hover region. */
     #zen-appcontent-navbar-wrapper {
-      --op-surface-tint: light-dark(rgba(244, 245, 249, .36), rgba(21, 23, 30, .36));
-      --op-row-tint: light-dark(rgba(244, 245, 249, .86), rgba(21, 23, 30, .86));
+      --op-surface-tint: light-dark(rgba(244, 245, 249, .94), rgba(21, 23, 30, .94));
       background: transparent !important;
     }
     #zen-appcontent-navbar-wrapper .zen-toolbar-background { display: none !important; }
@@ -1075,7 +1074,12 @@
       display: block !important;
       height: max(100%, var(--op-measured-toolbar-height, var(--op-height))) !important;
       backdrop-filter: blur(24px) saturate(1.2) !important;
-      box-shadow: 0 4px 18px rgba(0, 0, 0, .22) !important;
+      /* Start inside the tab row; reach zero at the existing bottom edge. */
+      mask-image: linear-gradient(to bottom,
+        #000 0%, #000 12%, rgb(0 0 0 / 94%) 30%,
+        rgb(0 0 0 / 72%) 50%, rgb(0 0 0 / 34%) 70%,
+        rgb(0 0 0 / 6%) 90%, transparent 100%) !important;
+      box-shadow: none !important;
       opacity: 0;
       transition: opacity var(--op-panel-motion) var(--op-panel-ease) !important;
     }
@@ -1089,10 +1093,11 @@
     }
     #zen-appcontent-navbar-wrapper #nav-bar,
     #zen-appcontent-navbar-wrapper #PersonalToolbar {
-      background: rgba(21, 23, 30, .86) !important;
-      background: var(--op-row-tint, rgba(21, 23, 30, .86)) !important;
-      backdrop-filter: blur(24px) saturate(1.2) !important;
-      background-clip: border-box !important;
+      /* Independent row fills/blur would create a hard seam over the mask. */
+      background: transparent !important;
+      backdrop-filter: none !important;
+      box-shadow: none !important;
+      border-block-end-color: transparent !important;
     }
     @media (prefers-reduced-motion: reduce) {
       #zen-appcontent-navbar-wrapper { transition: none !important; }
@@ -1100,10 +1105,13 @@
     @media (prefers-reduced-transparency: reduce) {
       #zen-appcontent-navbar-wrapper {
         --op-surface-tint: light-dark(#f1f2f5, #1b1d24);
-        --op-row-tint: light-dark(#f1f2f5, #1b1d24);
       }
-      #zen-appcontent-navbar-wrapper :is(#oneplane-toolbar-surface, #nav-bar, #PersonalToolbar) {
+      #zen-appcontent-navbar-wrapper > #oneplane-toolbar-surface {
+        mask-image: none !important;
         backdrop-filter: none !important;
+      }
+      #zen-appcontent-navbar-wrapper :is(#nav-bar, #PersonalToolbar) {
+        background: var(--op-surface-tint) !important;
       }
     }
   }
