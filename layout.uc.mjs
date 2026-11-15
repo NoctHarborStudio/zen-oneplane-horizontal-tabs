@@ -214,6 +214,9 @@ function installTabStrip() {
   let addressTransition = null;
   let addressWasOpen = false;
   let addressVisual = null;
+  let addressCompactWidth = 0;
+  let addressSettling = false;
+  let addressSettleTimer = 0;
   const addressEase = t => 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 3);
 
   function addressBar() { return document.getElementById("urlbar"); }
@@ -229,14 +232,44 @@ function installTabStrip() {
   }
   function addressWidths() {
     const base = parseFloat(window.getComputedStyle(url).getPropertyValue("--op-url")) || 180;
-    return { compact: url.hasAttribute("data-op-empty") ? 0 : base,
-      expanded: Math.max(320, Math.min(window.innerWidth * .45, 760)) };
+    const compact = url.hasAttribute("data-op-empty") ? 0 : (addressCompactWidth || base);
+    const bar = addressBar();
+    const anchor = url.getBoundingClientRect();
+    const left = nativeInlineOpen(bar) ? bar.getBoundingClientRect().left : anchor.left;
+    // Zen has several caption containers, including hidden sidebar copies.
+    // Prefer the live right-hand group; never cover the minimize button.
+    const groups = Array.from(document.querySelectorAll(".titlebar-buttonbox-container"));
+    const nativeGroup = window.gZenVerticalTabsManager?.actualWindowButtons;
+    if (nativeGroup && !groups.includes(nativeGroup)) groups.unshift(nativeGroup);
+    let right = window.innerWidth;
+    for (const group of groups) {
+      const box = group.getBoundingClientRect();
+      const style = window.getComputedStyle(group);
+      if (box.width > 0 && box.height > 0 && box.left > window.innerWidth / 2 &&
+          box.right <= window.innerWidth + 2 && style.visibility === "visible" &&
+          style.display !== "none" && Number(style.opacity || 1) > 0) {
+        right = Math.min(right, box.left);
+      }
+    }
+    const expanded = Math.max(compact, right - Math.max(0, left) - 6);
+    url.style.setProperty("--op-url-expanded-width", expanded.toFixed(2) + "px");
+    return { compact, expanded };
+  }
+  function rememberCompactAddress() {
+    const bar = addressBar();
+    if (!bar || bar.hasAttribute("breakout-extend") ||
+        bar.hasAttribute("zen-floating-urlbar") || url.hasAttribute("data-op-empty")) return;
+    const width = bar.getBoundingClientRect().width;
+    if (width > 0) addressCompactWidth = width;
   }
   function clearAddressAnimation() {
     if (addressAnimationFrame) window.cancelAnimationFrame(addressAnimationFrame);
     addressAnimationFrame = 0;
     addressTransition = null;
     addressVisual = null;
+    addressSettling = false;
+    if (addressSettleTimer) window.clearTimeout(addressSettleTimer);
+    addressSettleTimer = 0;
     url.removeAttribute("data-op-url-phase");
     const bar = addressBar();
     bar?.removeAttribute("data-op-url-animating");
@@ -292,10 +325,26 @@ function installTabStrip() {
     } else if (a.name === "closing-results") {
       beginAddressPhase("closing-width", a.to, { width: addressWidths().compact, reveal: 0 }, 360);
     } else if (a.name === "closing-width") {
+      // Native focus and popover-close notifications can arrive separately.
+      // Hold the last compact frame until the real popover has closed;
+      // otherwise the expanded fallback width flashes for a frame.
       addressTransition = null;
+      addressSettling = true;
+      url.setAttribute("data-op-url-phase", "settling");
       finishDismissUrl();
-      clearAddressAnimation();
-      addressWasOpen = false;
+      if (!addressSettling) return;
+      if (!nativeInlineOpen(addressBar())) {
+        clearAddressAnimation();
+        addressWasOpen = false;
+      } else {
+        addressSettleTimer = window.setTimeout(() => {
+          if (dead || !addressSettling) return;
+          // Fail open if native closure was blocked, rather than leaving the
+          // editor clipped indefinitely.
+          clearAddressAnimation();
+          addressWasOpen = nativeInlineOpen(addressBar());
+        }, 600);
+      }
     } else {
       clearAddressAnimation();
     }
@@ -303,6 +352,14 @@ function installTabStrip() {
   function updateAddressAnimation() {
     const bar = addressBar();
     const open = nativeInlineOpen(bar);
+    if (addressSettling) {
+      if (!open) {
+        clearAddressAnimation();
+        addressWasOpen = false;
+      }
+      return;
+    }
+    if (open && !addressTransition) addressWidths();
     if (!open || !addressMotionEnabled()) {
       if (addressTransition) {
         const closing = addressTransition.name.startsWith("closing");
@@ -324,7 +381,7 @@ function installTabStrip() {
   function startAddressClose() {
     const bar = addressBar();
     if (!nativeInlineOpen(bar) || !addressMotionEnabled()) return false;
-    if (addressTransition?.name.startsWith("closing")) return true;
+    if (addressSettling || addressTransition?.name.startsWith("closing")) return true;
     holdToolbarAfterDismiss();
     const widths = addressWidths();
     const from = addressVisual || { width: widths.expanded, reveal: 1 };
@@ -347,8 +404,14 @@ function installTabStrip() {
   }
   function onAddressInput() {
     // Typing or clicking the real input during closing reverses the close.
-    if (!addressTransition?.name.startsWith("closing")) return;
+    if (!addressSettling && !addressTransition?.name.startsWith("closing")) {
+      rememberCompactAddress();
+      return;
+    }
     const from = addressVisual || { width: addressWidths().compact, reveal: 0 };
+    addressSettling = false;
+    if (addressSettleTimer) window.clearTimeout(addressSettleTimer);
+    addressSettleTimer = 0;
     if (addressAnimationFrame) window.cancelAnimationFrame(addressAnimationFrame);
     addressAnimationFrame = 0;
     const width = addressWidths().expanded;
@@ -365,6 +428,7 @@ function installTabStrip() {
       const bar = document.getElementById("urlbar");
       const input = addressInput();
       updateEmptyAddress();
+      rememberCompactAddress();
       if (!bar?.hasAttribute("focused") && !bar?.hasAttribute("open") && input) {
         input.scrollLeft = 0;
       }
@@ -533,6 +597,7 @@ function installTabStrip() {
   }
   function onCompactChanged() {
     if (!hoverSupported()) { clearHover(); clearTabHover(); releaseAddressHold(); clearAddressAnimation(); addressWasOpen = false; }
+    else if (nativeInlineOpen(addressBar()) && !addressTransition && !addressSettling) addressWidths();
     scheduleGeometry();
   }
 
@@ -800,6 +865,7 @@ function installTabStrip() {
     plus.removeEventListener("click", onNewTabClick);
     try { browser.removeProgressListener(progressListener); } catch {}
     url.removeAttribute("data-op-empty");
+    url.style.removeProperty("--op-url-expanded-width");
     toolbarWrapper?.style.removeProperty("--op-measured-toolbar-height");
     surface.remove();
     leftSpacer.remove();

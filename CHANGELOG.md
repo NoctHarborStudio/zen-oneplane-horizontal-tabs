@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-preview.13
+
+- Expand the inline address to the actual right-hand window-caption boundary, instead of a fixed width cap.
+- Keep the toolbar anchor compact throughout the popover animation, so native close does not trigger a second horizontal transition.
+- Retain the final compact visual frame until native closure settles; recover if native dismissal is blocked.
+- Use one consistent compact/focused/expanded surface color and 8 px corner radius.
+- Preserve the native floating New Tab search and existing two-phase animation.
+
 ## 0.1.0-preview.12
 
 - Collapse the inline URL placeholder whenever Zen opens floating search, including New Tab over an already loaded page.

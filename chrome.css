@@ -6,7 +6,9 @@
     --op-tab: 36px;
     --op-tab-open: 180px;
     --op-url: 180px;
-    --op-url-expanded-width: clamp(320px, 45vw, 760px);
+    --op-url-expanded-width: calc(100vw - 220px);
+    --op-url-radius: 8px;
+    --op-url-surface: light-dark(#e0e4ec, #30343e);
     --op-speed: 160ms;
     --op-tab-speed: 240ms;
     --op-tab-ease: cubic-bezier(.2, .75, .2, 1);
@@ -100,30 +102,35 @@
       min-width: 100px !important;
       max-width: none !important;
       margin-inline: 4px !important;
-      --op-url-motion: var(--op-url-close-speed);
-      transition: width var(--op-url-motion) var(--op-url-ease),
-        flex-basis var(--op-url-motion) var(--op-url-ease) !important;
+      /* The top-layer popover alone expands. Keep its layout anchor
+         compact, including during native focus/close notifications. */
+      transition: none !important;
     }
-    #nav-bar-customization-target > #urlbar-container:is(:focus-within, :has(#urlbar[focused="true"], #urlbar[open])) {
-      flex-basis: var(--op-url-expanded-width) !important;
-      width: var(--op-url-expanded-width) !important;
-      --op-url-motion: var(--op-url-open-speed);
-      max-width: none !important;
-    }
-    /* A lighter neutral surface makes the compact address distinguishable
-       from the frosted toolbar. Leave the floating Zen search theme intact. */
+    /* One surface and one radius for compact, focused and open states.
+       Keep the native central floating search appearance unchanged. */
     #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) {
-      --zen-urlbar-background-base: light-dark(#e0e4ec, #30343e) !important;
-      --urlbar-background-color: light-dark(#e0e4ec, #30343e) !important;
-      --urlbar-background-color-focus: light-dark(#edf0f6, #393e49) !important;
+      --zen-urlbar-background-base: var(--op-url-surface) !important;
+      --zen-urlbar-background-transparent: var(--op-url-surface) !important;
+      --urlbar-background-color: var(--op-url-surface) !important;
+      --urlbar-background-color-focus: var(--op-url-surface) !important;
+      --urlbar-background-border-radius: var(--op-url-radius) !important;
+      --urlbar-background-border-top-radius-open: var(--op-url-radius) !important;
+      --urlbar-background-overhang-open: 0px !important;
+      border-radius: var(--op-url-radius) !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) :is(.urlbar-background, .urlbar-input-container) {
+      border-radius: var(--op-url-radius) !important;
     }
     #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) .urlbar-background {
-      background-color: light-dark(#e0e4ec, #30343e) !important;
-      background-image: none !important;
-      transition: background-color var(--op-url-motion, var(--op-url-close-speed)) var(--op-url-ease) !important;
+      background: var(--op-url-surface) !important;
+      --zen-urlbar-background-base: var(--op-url-surface) !important;
+      --zen-urlbar-background-transparent: var(--op-url-surface) !important;
+      border-radius: var(--op-url-radius) !important;
+      transition: none !important;
     }
-    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]):is([focused="true"], [open]) .urlbar-background {
-      background-color: light-dark(#edf0f6, #393e49) !important;
+    #urlbar-container #urlbar[breakout-extend]:not([zen-floating-urlbar="true"]) .urlbar-background {
+      inset: 0 !important;
+      border-radius: var(--op-url-radius) !important;
     }
     /* A floating search is a top-layer popover, not an inline address.
        Zen can open it over an existing page (New Tab / Ctrl+T), before a
@@ -163,15 +170,10 @@
       transition: none !important;
       animation: none !important;
     }
-    #urlbar-container:is([data-op-url-phase="opening-width"], [data-op-url-phase="closing-results"], [data-op-url-phase="closing-width"]) #urlbar:not([zen-floating-urlbar="true"]) .urlbarView {
+    #urlbar-container:is([data-op-url-phase="opening-width"], [data-op-url-phase="closing-results"], [data-op-url-phase="closing-width"], [data-op-url-phase="settling"]) #urlbar:not([zen-floating-urlbar="true"]) .urlbarView {
       pointer-events: none !important;
     }
-    #nav-bar-customization-target > #urlbar-container[data-op-url-phase="closing-width"] {
-      flex-basis: var(--op-url) !important;
-      width: var(--op-url) !important;
-      --op-url-motion: var(--op-url-close-speed);
-    }
-    #nav-bar-customization-target > #urlbar-container[data-op-empty][data-op-url-phase="closing-width"] {
+    #nav-bar-customization-target > #urlbar-container[data-op-empty]:is([data-op-url-phase="closing-width"], [data-op-url-phase="settling"]) {
       flex-basis: 0px !important;
       width: 0px !important;
       min-width: 0px !important;
