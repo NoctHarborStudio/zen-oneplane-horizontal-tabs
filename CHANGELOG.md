@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-preview.15
+
+- Speed up tab and inline address transitions, and align the real popover with the compact field's measured origin and header.
+- Neutralize conflicting Nebula address surface scale/fade and return the page to its unblurred state when closing begins.
+- Move the native page zoom indicator out of the address field into the right-side actions.
+- Show shared Split View group accents on horizontal tabs and update them from native group state.
+- Remove a single tab from Split View when dragged into the content, out of its group in the strip, or into another window; use native unsplit logic.
+- Make the native split resize divider visible and easier to grab, including at zero content separation.
+
 ## 0.1.0-preview.14
 
 - Display animated audio playback and static muted indicators on compact and expanded tabs, using native tab media state.

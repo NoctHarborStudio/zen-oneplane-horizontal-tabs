@@ -116,7 +116,7 @@ function installTabStrip() {
   actions.setAttribute("skipintoolbarset", "true");
   actions.setAttribute("removable", "false");
   actions.setAttribute("align", "center");
-  const actionIds = ["translations-button", "zen-site-data-icon-button"];
+  const actionIds = ["translations-button", "zen-site-data-icon-button", "urlbar-zoom-button"];
   const actionHomes = new Map();
   function movePageActions() {
     if (root.hasAttribute("customizing")) return;
@@ -215,6 +215,9 @@ function installTabStrip() {
   let addressWasOpen = false;
   let addressVisual = null;
   let addressCompactWidth = 0;
+  let addressAnchor = null;
+  const ADDRESS_WIDTH_OPEN = 265, ADDRESS_RESULTS_OPEN = 175;
+  const ADDRESS_WIDTH_CLOSE = 290, ADDRESS_RESULTS_CLOSE = 165;
   let addressSettling = false;
   let addressSettleTimer = 0;
   const addressEase = t => 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 3);
@@ -239,7 +242,11 @@ function installTabStrip() {
     const compact = url.hasAttribute("data-op-empty") ? 0 : (addressCompactWidth || base);
     const bar = addressBar();
     const anchor = url.getBoundingClientRect();
-    const left = nativeInlineOpen(bar) ? bar.getBoundingClientRect().left : anchor.left;
+    const left = anchor.left + (addressAnchor?.dx || 0);
+    const top = anchor.top + (addressAnchor?.dy || 0);
+    url.style.setProperty("--op-url-anchor-left", left.toFixed(2) + "px");
+    url.style.setProperty("--op-url-anchor-top", top.toFixed(2) + "px");
+    url.style.setProperty("--op-url-header-height", Math.max(24, addressAnchor?.height || anchor.height || 30).toFixed(2) + "px");
     // Zen has several caption containers, including hidden sidebar copies.
     // Prefer the live right-hand group; never cover the minimize button.
     const groups = Array.from(document.querySelectorAll(".titlebar-buttonbox-container"));
@@ -264,8 +271,15 @@ function installTabStrip() {
     const bar = addressBar();
     if (!bar || bar.hasAttribute("breakout-extend") ||
         bar.hasAttribute("zen-floating-urlbar") || url.hasAttribute("data-op-empty")) return;
-    const width = bar.getBoundingClientRect().width;
-    if (width > 0) addressCompactWidth = width;
+    const box = bar.getBoundingClientRect();
+    const anchor = url.getBoundingClientRect();
+    const input = bar.querySelector(".urlbar-input-container")?.getBoundingClientRect();
+    if (box.width > 0 && box.height > 0) {
+      addressCompactWidth = box.width;
+      addressAnchor = { dx: box.left - anchor.left, dy: box.top - anchor.top,
+        height: input?.height || box.height };
+      addressWidths();
+    }
   }
   function clearAddressAnimation() {
     if (addressAnimationFrame) window.cancelAnimationFrame(addressAnimationFrame);
@@ -276,6 +290,7 @@ function installTabStrip() {
     if (addressSettleTimer) window.clearTimeout(addressSettleTimer);
     addressSettleTimer = 0;
     url.removeAttribute("data-op-url-phase");
+    root.removeAttribute("oneplane-address-unblur");
     const bar = addressBar();
     bar?.removeAttribute("data-op-url-animating");
     bar?.style.removeProperty("--op-url-live-width");
@@ -293,7 +308,7 @@ function installTabStrip() {
     const input = bar.querySelector(".urlbar-input-container");
     const view = bar.querySelector(".urlbarView");
     const inputBottom = input?.getBoundingClientRect().bottom || bounds.top + 34;
-    const header = Math.max(1, inputBottom - bounds.top + 2);
+    const header = Math.max(1, inputBottom - bounds.top);
     const full = Math.max(header, bounds.height,
       (view?.getBoundingClientRect().bottom || bounds.bottom) - bounds.top);
     const visible = header + (full - header) * reveal;
@@ -303,6 +318,7 @@ function installTabStrip() {
   function beginAddressPhase(name, from, to, duration) {
     addressTransition = { name, from, to, duration, start: null };
     url.setAttribute("data-op-url-phase", name);
+    root.toggleAttribute("oneplane-address-unblur", name.startsWith("closing"));
     drawAddress(from.width, from.reveal);
     if (!addressAnimationFrame) addressAnimationFrame = window.requestAnimationFrame(stepAddress);
   }
@@ -326,9 +342,9 @@ function installTabStrip() {
       return;
     }
     if (a.name === "opening-width") {
-      beginAddressPhase("opening-results", a.to, { width: a.to.width, reveal: 1 }, 220);
+      beginAddressPhase("opening-results", a.to, { width: a.to.width, reveal: 1 }, ADDRESS_RESULTS_OPEN);
     } else if (a.name === "closing-results") {
-      beginAddressPhase("closing-width", a.to, { width: addressWidths().compact, reveal: 0 }, 360);
+      beginAddressPhase("closing-width", a.to, { width: addressWidths().compact, reveal: 0 }, ADDRESS_WIDTH_CLOSE);
     } else if (a.name === "closing-width") {
       // Native focus and popover-close notifications can arrive separately.
       // Hold the last compact frame until the real popover has closed;
@@ -381,7 +397,7 @@ function installTabStrip() {
     // mutation is delivered. Start at the actual compact target, not a
     // potentially fully expanded placeholder.
     beginAddressPhase("opening-width", { width: widths.compact, reveal: 0 },
-      { width: widths.expanded, reveal: 0 }, 320);
+      { width: widths.expanded, reveal: 0 }, ADDRESS_WIDTH_OPEN);
   }
   function startAddressClose() {
     const bar = addressBar();
@@ -395,10 +411,10 @@ function installTabStrip() {
     // Reverse an interrupted opening from its current visual position.
     if (from.reveal > .01) {
       beginAddressPhase("closing-results", from,
-        { width: from.width, reveal: 0 }, Math.max(80, 200 * from.reveal));
+        { width: from.width, reveal: 0 }, Math.max(65, ADDRESS_RESULTS_CLOSE * from.reveal));
     } else {
       beginAddressPhase("closing-width", from,
-        { width: widths.compact, reveal: 0 }, 360);
+        { width: widths.compact, reveal: 0 }, ADDRESS_WIDTH_CLOSE);
     }
     return true;
   }
@@ -421,9 +437,9 @@ function installTabStrip() {
     addressAnimationFrame = 0;
     const width = addressWidths().expanded;
     if (from.reveal > 0) {
-      beginAddressPhase("opening-results", from, { width, reveal: 1 }, 220);
+      beginAddressPhase("opening-results", from, { width, reveal: 1 }, ADDRESS_RESULTS_OPEN);
     } else {
-      beginAddressPhase("opening-width", from, { width, reveal: 0 }, 320);
+      beginAddressPhase("opening-width", from, { width, reveal: 0 }, ADDRESS_WIDTH_OPEN);
     }
   }
   function alignAddressStart() {
@@ -658,6 +674,19 @@ function installTabStrip() {
       return tab;
     } catch { return null; }
   }
+  function splitGroup(tab) {
+    const group = tab?.group;
+    return group?.hasAttribute("split-view-group") ? group : null;
+  }
+  function isSplit(tab) { return Boolean(tab?.splitView || tab?.hasAttribute("split-view") || splitGroup(tab)); }
+  function unsplitTab(tab) {
+    const owner = tabOwner(tab);
+    if (!isSplit(tab)) return true;
+    const splitter = owner?.gZenViewSplitter;
+    if (typeof splitter?.removeTabFromGroup !== "function") return false;
+    splitter.removeTabFromGroup(tab, undefined, { forUnsplit: true });
+    return !isSplit(tab);
+  }
   function tabFromItem(item) {
     for (const [tab, entry] of entries) if (entry.item === item) return tab;
     return null;
@@ -717,7 +746,7 @@ function installTabStrip() {
       const entry = entries.get(tab);
       if (entry) event.dataTransfer.setDragImage(entry.item, entry.item.offsetWidth / 2, entry.item.offsetHeight / 2);
       row.setAttribute("data-op-dragging", "true");
-      if (browser.selectedTab !== tab && window.gZenViewSplitter?.splitTabs) {
+      if ((browser.selectedTab !== tab || isSplit(tab)) && window.gZenViewSplitter?.splitTabs) {
         splitZone.setAttribute("data-op-dragging", "true");
       }
       event.stopPropagation();
@@ -743,7 +772,12 @@ function installTabStrip() {
     const item = event.target?.closest?.(".oneplane-tab");
     const neighbor = item && tabFromItem(item);
     const owner = tabOwner(tab);
-    if (neighbor === tab) { sourceHandled(tab); clearDropMarker(); return; }
+    if (neighbor === tab || (owner === window && splitGroup(tab) && splitGroup(tab) === splitGroup(neighbor))) {
+      sourceHandled(tab); clearDropMarker(); return;
+    }
+    try {
+      if (isSplit(tab) && !unsplitTab(tab)) { sourceHandled(tab); return; }
+    } catch (error) { console.error("[OnePlane] Unsplit before move:", error); sourceHandled(tab); return; }
     const all = Array.from(browser.tabs);
     let index = neighbor ? all.indexOf(neighbor) +
       (event.clientX >= (item.getBoundingClientRect().left + item.getBoundingClientRect().right) / 2 ? 1 : 0)
@@ -776,8 +810,8 @@ function installTabStrip() {
   }
   function onSplitDragOver(event) {
     const tab = readDraggedTab(event);
-    if (!tab || tabOwner(tab) !== window || tab === browser.selectedTab) return;
-    const side = splitSide(event);
+    if (!tab || tabOwner(tab) !== window || (tab === browser.selectedTab && !isSplit(tab))) return;
+    const side = isSplit(tab) ? "unsplit" : splitSide(event);
     splitZone.setAttribute("data-op-side", side);
     event.preventDefault();
     event.stopPropagation();
@@ -786,12 +820,15 @@ function installTabStrip() {
   function onSplitDrop(event) {
     const tab = readDraggedTab(event);
     const current = browser.selectedTab;
-    if (!tab || tabOwner(tab) !== window || tab === current) return;
+    if (!tab || tabOwner(tab) !== window || (tab === current && !isSplit(tab))) return;
     event.preventDefault();
     event.stopPropagation();
     const side = splitSide(event);
     try {
-      if (side && validNativeTab(current)) {
+      if (isSplit(tab)) {
+        unsplitTab(tab);
+        schedule();
+      } else if (side && validNativeTab(current)) {
         const first = side === "left" || side === "top";
         const grid = side === "left" || side === "right" ? "vsep" : "hsep";
         window.gZenViewSplitter?.splitTabs(first ? [tab,current] : [current,tab], grid, first ? 0 : 1);
@@ -822,6 +859,7 @@ function installTabStrip() {
     try {
       // Native session adoption preserves the live browser, history, audio
       // and private-window state. Zen chooses its native window-sync mode.
+      if (isSplit(tab) && !unsplitTab(tab)) return;
       browser.replaceTabWithWindow(tab, {
         replaceLastTab: true, screenX: x - 40, screenY: y - 20,
         outerWidth: Math.min(window.outerWidth, 1200),
@@ -1030,6 +1068,8 @@ function installTabStrip() {
         entry.item.remove(); entries.delete(tab);
       }
     }
+    const groups = [...new Set(tabs.map(splitGroup).filter(Boolean))];
+    const palette = ["#8eafff", "#74d6b6", "#d6a5ff", "#efba78", "#ed8fa9"];
     for (let index = 0; index < tabs.length; index++) {
       const tab = tabs[index];
       let entry = entries.get(tab);
@@ -1040,6 +1080,14 @@ function installTabStrip() {
       const label = tab.label || tab.getAttribute("label") || "New tab";
       const selected = tab === browser.selectedTab;
       entry.item.toggleAttribute("data-selected", selected);
+      const group = splitGroup(tab);
+      const split = isSplit(tab);
+      entry.item.toggleAttribute("data-op-split", split);
+      entry.item.toggleAttribute("data-op-split-active", split && Boolean(group && group === splitGroup(browser.selectedTab)));
+      entry.item.toggleAttribute("data-op-split-prev", Boolean(group && group === splitGroup(tabs[index - 1])));
+      entry.item.toggleAttribute("data-op-split-next", Boolean(group && group === splitGroup(tabs[index + 1])));
+      if (split) entry.item.style.setProperty("--op-split-color", palette[Math.max(0, groups.indexOf(group)) % palette.length]);
+      else entry.item.style.removeProperty("--op-split-color");
       entry.item.toggleAttribute("data-pinned", Boolean(tab.pinned));
       entry.item.toggleAttribute("data-busy", tab.hasAttribute("busy"));
       entry.item.toggleAttribute("data-unloaded", !selected && (tab.hasAttribute("pending") || tab.hasAttribute("discarded")));
@@ -1049,7 +1097,7 @@ function installTabStrip() {
       entry.item.toggleAttribute("data-muted", muted);
       entry.audio.title = muted ? "Tab muted" : audible ? "Playing audio" : "";
       entry.button.setAttribute("aria-selected", String(selected));
-      entry.button.setAttribute("aria-label", label + (muted ? ", muted" : audible ? ", playing audio" : ""));
+      entry.button.setAttribute("aria-label", label + (split ? ", Split View" : "") + (muted ? ", muted" : audible ? ", playing audio" : ""));
       if (entry.title.textContent !== label) entry.title.textContent = label;
       const src = favicon(tab);
       if (entry.src !== src) {
@@ -1073,7 +1121,7 @@ function installTabStrip() {
       if (!dead) entries.get(browser.selectedTab)?.item.scrollIntoView({ block: "nearest", inline: "nearest" });
     });
   }
-  const events = ["TabOpen", "TabClose", "TabMove", "TabAttrModified", "TabPinned", "TabUnpinned", "TabShow", "TabHide", "TabBrowserInserted", "TabBrowserDiscarded"];
+  const events = ["TabOpen", "TabClose", "TabMove", "TabAttrModified", "TabPinned", "TabUnpinned", "TabShow", "TabHide", "TabBrowserInserted", "TabBrowserDiscarded", "ZenTabRemovedFromSplit"];
   const tabObserver = new MutationObserver(schedule);
   const workspaceObserver = new MutationObserver(schedule);
   const toolbarObserver = new MutationObserver(() => {
@@ -1119,7 +1167,7 @@ function installTabStrip() {
     plus.removeEventListener("click", onNewTabClick);
     try { browser.removeProgressListener(progressListener); } catch {}
     url.removeAttribute("data-op-empty");
-    url.style.removeProperty("--op-url-expanded-width");
+    for (const name of ["--op-url-expanded-width", "--op-url-anchor-left", "--op-url-anchor-top", "--op-url-header-height"]) url.style.removeProperty(name);
     toolbarWrapper?.style.removeProperty("--op-measured-toolbar-height");
     surface.remove();
     leftSpacer.remove();
@@ -1142,6 +1190,8 @@ function installTabStrip() {
     for (const event of events) browser.tabContainer.removeEventListener(event, schedule);
     browser.tabContainer.removeEventListener("TabSelect", onSelect);
     window.removeEventListener("ZenWorkspaceDataChanged", schedule);
+    window.removeEventListener("ZenViewSplitter:SplitViewActivated", schedule);
+    window.removeEventListener("ZenViewSplitter:SplitViewDeactivated", schedule);
     window.removeEventListener("aftercustomization", schedule);
     row.remove();
     entries.clear();
@@ -1182,10 +1232,12 @@ function installTabStrip() {
     for (const event of events) browser.tabContainer.addEventListener(event, schedule);
     browser.tabContainer.addEventListener("TabSelect", onSelect);
     window.addEventListener("ZenWorkspaceDataChanged", schedule);
+    window.addEventListener("ZenViewSplitter:SplitViewActivated", schedule);
+    window.addEventListener("ZenViewSplitter:SplitViewDeactivated", schedule);
     window.addEventListener("aftercustomization", schedule);
     tabObserver.observe(browser.tabContainer, {
       subtree: true, childList: true, attributes: true,
-      attributeFilter: ["label", "image", "selected", "hidden", "busy", "pinned", "active", "zen-workspace-id", "pending", "discarded", "soundplaying", "soundplaying-scheduledremoval", "muted", "zen-empty-tab"]
+      attributeFilter: ["label", "image", "selected", "hidden", "busy", "pinned", "active", "zen-workspace-id", "pending", "discarded", "soundplaying", "soundplaying-scheduledremoval", "muted", "zen-empty-tab", "split-view", "split-view-group"]
     });
     const wrapper = document.getElementById("zen-tabs-wrapper");
     if (wrapper && !browser.tabContainer.contains(wrapper)) {

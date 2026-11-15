@@ -10,10 +10,10 @@
     --op-url-radius: 8px;
     --op-url-surface: light-dark(#e0e4ec, #30343e);
     --op-speed: 160ms;
-    --op-tab-speed: 240ms;
+    --op-tab-speed: 205ms;
     --op-tab-ease: cubic-bezier(.2, .75, .2, 1);
-    --op-url-open-speed: 260ms;
-    --op-url-close-speed: 360ms;
+    --op-url-open-speed: 265ms;
+    --op-url-close-speed: 290ms;
     --op-url-ease: cubic-bezier(.22, .72, .2, 1);
     --op-panel-open-speed: 230ms;
     --op-panel-close-speed: 340ms;
@@ -116,17 +116,40 @@
       --urlbar-background-border-radius: var(--op-url-radius) !important;
       --urlbar-background-border-top-radius-open: var(--op-url-radius) !important;
       --urlbar-background-overhang-open: 0px !important;
+      --urlbar-margin-block-start-open: 0px !important;
       border-radius: var(--op-url-radius) !important;
+      scale: 1 !important;
+      animation: none !important;
+      box-shadow: none !important;
+      backdrop-filter: none !important;
     }
     #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) :is(.urlbar-background, .urlbar-input-container) {
       border-radius: var(--op-url-radius) !important;
     }
     #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) .urlbar-background {
       background: var(--op-url-surface) !important;
+      margin: 0 !important;
+      scale: 1 !important;
+      outline: none !important;
+      box-shadow: none !important;
+      backdrop-filter: none !important;
       --zen-urlbar-background-base: var(--op-url-surface) !important;
       --zen-urlbar-background-transparent: var(--op-url-surface) !important;
       border-radius: var(--op-url-radius) !important;
       transition: none !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) .urlbar-input-container {
+      box-sizing: border-box !important;
+      padding-inline: 8px !important;
+      padding-block: 0 !important;
+      gap: 6px !important;
+      margin: 0 !important;
+      border: 0 !important;
+    }
+    #urlbar-container #urlbar[breakout-extend]:not([zen-floating-urlbar="true"]) .urlbar-input-container {
+      height: var(--op-url-header-height, 30px) !important;
+      min-height: var(--op-url-header-height, 30px) !important;
+      max-height: var(--op-url-header-height, 30px) !important;
     }
     #urlbar-container #urlbar[breakout-extend]:not([zen-floating-urlbar="true"]) .urlbar-background {
       inset: 0 !important;
@@ -158,10 +181,23 @@
       pointer-events: none !important;
     }
     #urlbar-container #urlbar[breakout-extend]:not([zen-floating-urlbar="true"]) {
+      position: fixed !important;
+      inset: auto !important;
+      left: var(--op-url-anchor-left, 110px) !important;
+      top: var(--op-url-anchor-top, 3px) !important;
+      margin: 0 !important;
       width: var(--op-url-live-width, var(--op-url-expanded-width)) !important;
       min-width: 0 !important;
       max-width: none !important;
       box-sizing: border-box !important;
+    }
+    /* Nebula keeps the web surface blurred as long as native [open] is
+       present. During our deferred closing, release that effect immediately. */
+    &[oneplane-address-unblur] #browser:has(#urlbar[open]) .browserStack {
+      filter: none !important;
+      scale: 1 !important;
+      opacity: 1 !important;
+      transition: filter 170ms ease-out, scale 170ms ease-out, opacity 170ms ease-out !important;
     }
     /* The real top-layer element must be animated explicitly. Native
        popover positioning and search behavior are otherwise untouched. */
@@ -389,6 +425,64 @@
       content: ""; position: absolute; width: 10px; height: 1px;
       background: currentColor; transform: rotate(-40deg);
     }
+    /* A shared accent identifies native Split View membership, even when
+       the tabs are collapsed. Adjacent members have connected inner edges. */
+    #oneplane-tabs .oneplane-tab[data-op-split] {
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--op-split-color) 65%, transparent),
+        inset 0 -2px var(--op-split-color) !important;
+    }
+    #oneplane-tabs .oneplane-tab[data-op-split-active] {
+      background: color-mix(in srgb, var(--op-split-color) 21%, transparent) !important;
+    }
+    #oneplane-tabs .oneplane-tab[data-op-split-prev] {
+      border-start-start-radius: 3px; border-end-start-radius: 3px;
+    }
+    #oneplane-tabs .oneplane-tab[data-op-split-next] {
+      border-start-end-radius: 3px; border-end-end-radius: 3px;
+    }
+
+    /* The native separator can be effectively zero-width with separation=0.
+       Give it a real hit target and draw a handle, without adding layout gaps. */
+    #tabbrowser-tabpanels[zen-split-view] .zen-split-view-splitter[orient="vertical"] {
+      width: 12px !important;
+      right: auto !important;
+      translate: -50% 0;
+      cursor: ew-resize !important;
+      z-index: 5;
+    }
+    #tabbrowser-tabpanels[zen-split-view] .zen-split-view-splitter[orient="horizontal"] {
+      height: 12px !important;
+      bottom: auto !important;
+      translate: 0 -50%;
+      cursor: ns-resize !important;
+      z-index: 5;
+    }
+    #tabbrowser-tabpanels[zen-split-view] .zen-split-view-splitter::after {
+      content: "";
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: light-dark(#687180, #c4ccdc);
+      opacity: .68;
+      border-radius: 99px;
+      box-shadow: 0 0 0 2px light-dark(#e3e6ed, #292d36);
+      pointer-events: none;
+      transition: opacity 150ms ease;
+    }
+    #tabbrowser-tabpanels[zen-split-view] .zen-split-view-splitter[orient="vertical"]::after { width: 4px; height: 34px; }
+    #tabbrowser-tabpanels[zen-split-view] .zen-split-view-splitter[orient="horizontal"]::after { width: 34px; height: 4px; }
+    #tabbrowser-tabpanels[zen-split-view] .zen-split-view-splitter:hover::after,
+    #tabbrowser-tabpanels[zen-split-resizing] .zen-split-view-splitter::after { opacity: 1; }
+
+    #oneplane-split-drop[data-op-side="unsplit"] .oneplane-split-preview {
+      display: grid; place-items: center; inset: 4px;
+      background: rgba(112,150,255,.12);
+    }
+    #oneplane-split-drop[data-op-side="unsplit"] .oneplane-split-preview::after {
+      content: "Remove from Split View";
+      padding: 10px 16px; border-radius: 8px;
+      background: #292e3a; color: #e0e8fc; font-size: 14px;
+    }
     #oneplane-tabs .oneplane-tab[data-op-drop-before] { box-shadow: inset 3px 0 #a9c1ff !important; }
     #oneplane-tabs .oneplane-tab[data-op-drop-after] { box-shadow: inset -3px 0 #a9c1ff !important; }
     #oneplane-tabs[data-op-dragging] { cursor: grabbing; }
@@ -439,7 +533,7 @@
       padding-inline: 4px;
       -moz-window-dragging: no-drag;
     }
-    #oneplane-page-actions > :is(#translations-button, #zen-site-data-icon-button):not([hidden]) {
+    #oneplane-page-actions > :is(#translations-button, #zen-site-data-icon-button, #urlbar-zoom-button):not([hidden]) {
       display: flex !important;
       align-items: center;
       justify-content: center;
@@ -454,8 +548,14 @@
       box-sizing: border-box;
       color: var(--toolbar-color, currentColor);
     }
+    #oneplane-page-actions > #urlbar-zoom-button:not([hidden]) {
+      width: auto !important;
+      min-width: 28px !important;
+      padding-inline: 6px !important;
+      font-size: 11px !important;
+    }
     #oneplane-page-actions > [hidden] { display: none !important; }
-    #oneplane-page-actions > :is(#translations-button, #zen-site-data-icon-button):hover {
+    #oneplane-page-actions > :is(#translations-button, #zen-site-data-icon-button, #urlbar-zoom-button):hover {
       background: color-mix(in srgb, currentColor 12%, transparent);
     }
 
