@@ -670,6 +670,8 @@ function installTabStrip() {
   let dragGhostAnimation = null;
   let dragLastPoint = null;
   let dragReentry = false, dragInsertAnimation = null, dragInsertNode = null;
+  let groupPullLayout = null;
+  let pointerSearch = null, dragSearch = null, restoreSearchTimer = 0;
   const blankDragImage = html("canvas");
   blankDragImage.width = blankDragImage.height = 1;
   let dragHandled = false;
@@ -829,6 +831,21 @@ function installTabStrip() {
     dragGhost.setAttribute("aria-hidden", "true");
     dragGhostBody = html("div", "oneplane-bunny-card");
     const members = draggedGroup ? Array.from(dragNode.querySelectorAll(".oneplane-tab")) : [dragNode];
+    if (draggedGroup) {
+      // Reproduce the actual compact Split View surface, its accent,
+      // six-dot handle, member cards and selected member. No interactive
+      // elements or IDs from the original toolbar are copied.
+      dragGhostBody.setAttribute("data-op-bunny-group","true");
+      dragGhostBody.toggleAttribute("data-op-bunny-active",dragNode.hasAttribute("data-op-split-active"));
+      dragGhostBody.style.setProperty("--op-bunny-accent",
+        dragNode.style.getPropertyValue("--op-split-color") || "#8eafff");
+      const style = window.getComputedStyle(row);
+      dragGhostBody.style.setProperty("--op-bunny-tab-width",style.getPropertyValue("--op-tab").trim() || "36px");
+      dragGhostBody.style.setProperty("--op-bunny-height",style.getPropertyValue("--op-height").trim() || "34px");
+      const handle = html("span","oneplane-bunny-handle");
+      for(let i=0;i<6;i++) handle.append(html("i"));
+      dragGhostBody.append(handle);
+    }
     for (const member of members) {
       const icon = html("span", "oneplane-bunny-icon");
       const original = member.querySelector(".oneplane-tab-icon img:not([hidden])");
@@ -837,7 +854,11 @@ function installTabStrip() {
         img.src = original.getAttribute("src"); img.alt = ""; img.draggable = false;
         icon.append(img);
       } else icon.textContent = "•";
-      dragGhostBody.append(icon);
+      if (draggedGroup) {
+        const card = html("span","oneplane-bunny-member");
+        card.toggleAttribute("data-op-bunny-selected",member.hasAttribute("data-selected"));
+        card.append(icon); dragGhostBody.append(card);
+      } else dragGhostBody.append(icon);
     }
     dragGhost.append(dragGhostBody);
     root.append(dragGhost);
@@ -867,6 +888,47 @@ function installTabStrip() {
         {transform:"translateY(0) scale(1)",offset:1}
       ], {duration:360,easing:"linear"});
     }
+  }
+  function captureGroupPull(event) {
+    if (groupPullLayout || !draggedGroup || !dragNode || dragNode.parentElement !== list) return;
+    const nodes = Array.from(list.children);
+    const order = nodes.filter(node=>node!==dragNode);
+    const target = liveDragTarget?.element;
+    const targetIndex = order.indexOf(target);
+    const index = targetIndex < 0 ? nodes.indexOf(dragNode) :
+      targetIndex + (liveDragTarget.before ? 0 : 1);
+    order.splice(Math.max(0,index),0,dragNode);
+    const bounds = dragNode.getBoundingClientRect();
+    groupPullLayout = {
+      order, index:order.indexOf(dragNode),
+      center:(bounds.left+bounds.right)/2,
+      pointerX:event.clientX,
+      gap:parseFloat(window.getComputedStyle(list).columnGap)||3
+    };
+  }
+  function previewGroupPull(event) {
+    const state = groupPullLayout;
+    if (!state || !dragNode) return false;
+    const {order,index,gap} = state;
+    // Freeze the visual reorder slot, rather than reverting to the
+    // original DOM position while the group shrinks.
+    const center = state.center + (event.clientX-state.pointerX)*.4;
+    const source = unshiftedRect(dragNode);
+    let left = center-source.width/2, right = center+source.width/2;
+    shiftDragNode(dragNode,left-source.left,true);
+    for(let i=index-1;i>=0;i--){
+      const node=order[i], rect=unshiftedRect(node);
+      left-=gap+rect.width;
+      shiftDragNode(node,left-rect.left);
+    }
+    for(let i=index+1;i<order.length;i++){
+      const node=order[i], rect=unshiftedRect(node);
+      right+=gap;
+      shiftDragNode(node,right-rect.left);
+      right+=rect.width;
+    }
+    shiftDragNode(plus,right+gap-unshiftedRect(plus).left);
+    return true;
   }
   function setPull(progress) {
     if (!dragNode) return;
@@ -946,6 +1008,7 @@ function installTabStrip() {
     dragNode.toggleAttribute("data-op-detached", detached);
     row.toggleAttribute("data-op-inline-drag", !detached);
     if (detached) {
+      groupPullLayout = null;
       dragReentry = false;
       cancelInsertion();
       setPull(0);
@@ -1068,7 +1131,8 @@ function installTabStrip() {
     if (event.relatedTarget instanceof Node && row.contains(event.relatedTarget)) return;
     if (toolbarContainsPoint(event.clientX,event.clientY)) return;
     // The window capture listener owns pull and image transitions.
-    clearLiveDrag();
+    // Do not erase a group's visual position mid-extraction.
+    if (!(groupPullLayout && dragImageMode === "inline")) clearLiveDrag();
     clearDropMarker();
   }
   function clearDropMarker() {
@@ -1112,15 +1176,17 @@ function installTabStrip() {
       if (dragImageMode === "outside") return;
       if (p === 0) dragReentry = false;
       if (p > 0 && !dragReentry) {
-        clearLiveDrag();
+        if (draggedGroup) captureGroupPull(event);
+        if (!groupPullLayout) clearLiveDrag();
         setPull(p);
-        followLocalSource(event,dragNode);
+        if (!previewGroupPull(event)) followLocalSource(event,dragNode);
         toolbarWrapper.setAttribute("oneplane-drag-hold","true");
         if (dragRevealTimer) window.clearTimeout(dragRevealTimer);
         dragRevealTimer = window.setTimeout(releaseDragReveal,500);
         if (within) { event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect="move"; }
         return;
       }
+      groupPullLayout = null;
       setPull(0);
     } else if (!local) tabOwner(tab)?.[DRAG_CONTROLLER]?.outside(event);
     if (!within && !(local && dragReentry && dragImageMode === "inline")) {
@@ -1140,7 +1206,47 @@ function installTabStrip() {
   function onToolbarDrop(event) {
     if (toolbarContainsPoint(event.clientX,event.clientY) && readDraggedTab(event)) onStripDrop(event);
   }
+  function emptySplitTarget(tab) {
+    return Boolean(tab?.hasAttribute("zen-empty-tab") ||
+      (dragSearch?.tab === tab && dragSearch.empty));
+  }
+  function readStartupSearch() {
+    const tab = browser.selectedTab, bar = window.gURLBar;
+    if (!tab || !bar) return null;
+    const empty = tab.hasAttribute("zen-empty-tab") ||
+      /^(about:(blank|newtab|home|privatebrowsing))(?:[?#].*)?$/i.test(tab.linkedBrowser?.currentURI?.spec || "");
+    if (!empty || !(bar.hasAttribute("zen-newtab") || bar.hasAttribute("zen-floating-urlbar")) ||
+        !(bar.hasAttribute("open") || bar.hasAttribute("focused") || bar.view?.isOpen)) return null;
+    return {tab,empty,query:bar.value || "",newtab:bar.hasAttribute("zen-newtab")};
+  }
+  function rememberStartupSearch(event) {
+    if (event.button !== 0) return;
+    pointerSearch = readStartupSearch();
+  }
+  function restoreStartupSearch(state) {
+    if (!state || dead) return;
+    if (restoreSearchTimer) window.clearTimeout(restoreSearchTimer);
+    restoreSearchTimer = window.setTimeout(()=>{
+      restoreSearchTimer=0;
+      if (dead || browser.selectedTab !== state.tab || !validNativeTab(state.tab)) return;
+      const bar=window.gURLBar;
+      if (!bar || bar.hasAttribute("open") || bar.hasAttribute("focused") || bar.view?.isOpen) return;
+      try {
+        if (state.newtab && typeof window.gZenUIManager?.handleNewTab === "function") {
+          // Native Zen new-tab search, without toggling an already-open popup.
+          if (!bar.hasAttribute("zen-newtab")) window.gZenUIManager.handleNewTab(false,false,"tab",true);
+          else { bar.search(state.query); document.getElementById("Browser:OpenLocation")?.doCommand(); }
+          if (state.query && bar.value!==state.query) bar.search(state.query);
+        } else {
+          bar.search(state.query);
+          document.getElementById("Browser:OpenLocation")?.doCommand();
+        }
+      } catch(error) { console.error("[OnePlane] Restore startup search:",error); }
+    },80);
+  }
   function endDragVisual() {
+    const search = dragSearch;
+    dragSearch = null; pointerSearch = null; groupPullLayout = null;
     dragNode?.removeAttribute("data-op-detached");
     dragNode?.removeAttribute("data-op-drag-follow");
     dragNode?.removeAttribute("data-op-pulling");
@@ -1160,6 +1266,7 @@ function installTabStrip() {
     splitZone.removeAttribute("data-op-dragging");
     splitZone.removeAttribute("data-op-side");
     refreshIndicator();
+    restoreStartupSearch(search);
   }
   function sourceHandled(tab) {
     const source = tabOwner(tab)?.[DRAG_CONTROLLER];
@@ -1176,7 +1283,8 @@ function installTabStrip() {
     const grabbed = image.getBoundingClientRect();
     dragGrabRatio = Math.max(0,Math.min(1,(event.clientX-grabbed.left)/Math.max(1,grabbed.width)));
     dragGrabY = Math.max(0,Math.min(1,(event.clientY-grabbed.top)/Math.max(1,grabbed.height)));
-    dragWidth = group ? grabbed.width : (parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab")) || 36);
+    const compactWidth = parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab")) || 36;
+    dragWidth = group ? (22 + image.querySelectorAll(".oneplane-tab").length*(compactWidth+3)) : compactWidth;
     dragEdge = toolbarWrapper?.getBoundingClientRect().bottom || grabbed.bottom;
     dragLastPoint = {x:event.clientX,y:event.clientY};
     clearTabHover();
@@ -1184,6 +1292,9 @@ function installTabStrip() {
       event.preventDefault();
       return;
     }
+    dragSearch = pointerSearch?.tab === browser.selectedTab ? pointerSearch : readStartupSearch();
+    pointerSearch = null;
+    groupPullLayout = null;
     draggedTab = tab;
     draggedGroup = group;
     dragHandled = false;
@@ -1288,8 +1399,13 @@ function installTabStrip() {
   }
   function onSplitDragOver(event) {
     const tab = readDraggedTab(event);
-    if (!tab || tabOwner(tab) !== window || (tab === browser.selectedTab && !isSplit(tab))) return;
-    const side = isSplit(tab) ? "unsplit" : splitSide(event);
+    if (!tab || tabOwner(tab) !== window || draggedGroup ||
+        (tab === browser.selectedTab && !isSplit(tab))) return;
+    // Zen's native splitter does not accept its empty workspace tab.
+    // Keep the start-page search instead of calling splitTabs with one
+    // real tab (Zen filters the empty tab out).
+    const side = emptySplitTarget(browser.selectedTab) ? "" :
+      isSplit(tab) ? "unsplit" : splitSide(event);
     splitZone.setAttribute("data-op-side", side);
     event.preventDefault();
     event.stopPropagation();
@@ -1298,22 +1414,34 @@ function installTabStrip() {
   function onSplitDrop(event) {
     const tab = readDraggedTab(event);
     const current = browser.selectedTab;
-    if (!tab || tabOwner(tab) !== window || (tab === current && !isSplit(tab))) return;
+    if (!tab || tabOwner(tab) !== window || draggedGroup ||
+        (tab === current && !isSplit(tab))) return;
     event.preventDefault();
     event.stopPropagation();
     const side = splitSide(event);
     try {
+      if (emptySplitTarget(current)) {
+        // Reject an unsupported split without changing the selected tab.
+        sourceHandled(tab);
+        return;
+      }
       if (isSplit(tab)) {
         unsplitTab(tab);
         schedule();
-      } else if (side && validNativeTab(current)) {
+      } else if (side && validNativeTab(current) && !tab.hasAttribute("zen-empty-tab")) {
         const first = side === "left" || side === "top";
         const grid = side === "left" || side === "right" ? "vsep" : "hsep";
-        window.gZenViewSplitter?.splitTabs(first ? [tab,current] : [current,tab], grid, first ? 0 : 1);
+        // Mirror ZenViewSplitter's native drop order: selecting the
+        // dragged tab first restores its pending browser. Keep the old
+        // selected tab as the other pane, and let Zen own the session.
+        browser.selectedTab = tab;
+        const result = window.gZenViewSplitter?.splitTabs(first ? [tab,current] : [current,tab], grid, first ? 0 : 1);
+        if (!result && validNativeTab(current)) browser.selectedTab = current;
+        schedule();
       }
-      // A drop inside the content is not a request to detach a window.
       sourceHandled(tab);
     } catch (error) {
+      if (validNativeTab(current) && browser.selectedTab !== current) browser.selectedTab = current;
       console.error("[OnePlane] Split View:", error);
     } finally { endDragVisual(); }
   }
@@ -1764,6 +1892,9 @@ function installTabStrip() {
     window.removeEventListener("drop", onToolbarDrop, true);
     window.removeEventListener("dragleave", onWindowDragLeave, true);
     window.removeEventListener("dragexit", onWindowDragLeave, true);
+    row.removeEventListener("pointerdown", rememberStartupSearch, true);
+    if (restoreSearchTimer) window.clearTimeout(restoreSearchTimer);
+    restoreSearchTimer=0;
     row.removeEventListener("dragover", onStripDragOver);
     row.removeEventListener("drop", onStripDrop);
     row.removeEventListener("dragleave", onStripDragLeave);
@@ -1823,6 +1954,7 @@ function installTabStrip() {
     window.addEventListener("drop", onToolbarDrop, true);
     window.addEventListener("dragleave", onWindowDragLeave, true);
     window.addEventListener("dragexit", onWindowDragLeave, true);
+    row.addEventListener("pointerdown", rememberStartupSearch, true);
     row.addEventListener("dragover", onStripDragOver);
     row.addEventListener("drop", onStripDrop);
     row.addEventListener("dragleave", onStripDragLeave);

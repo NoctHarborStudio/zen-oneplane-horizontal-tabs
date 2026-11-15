@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-preview.23
+
+- Keep unloaded favicons half-strength on hover (50% opacity and grayscale), fully bright while carried, then fade smoothly to the appropriate idle/hover state.
+- Render detached Split View groups with the original group accent, frame, six-dot handle, individual compact tab cards and selected-member styling.
+- Keep a group's visual reorder position while beginning extraction, rather than returning to its original native slot.
+- Follow Zen 1.24.2b's native split-drop activation sequence for inactive/pending tabs; reject splits against the empty workspace tab and restore the previously open startup search after an unsuccessful drop.
+- Known issue, intentionally deferred: a group may hesitate or transition unevenly when reordered from an outer edge.
+
 ## 0.1.0-preview.22
 
 - Preserve the last hovered liquid-indicator target in inter-tab gaps, split handles and group padding; return to the active tab only when leaving the strip or reaching the plus.

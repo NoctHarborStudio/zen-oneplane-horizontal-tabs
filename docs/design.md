@@ -90,3 +90,9 @@ Preview.11 observes Zen's real non-floating URL popover. A bounded animation-fra
 - [Zen 1.24.2b workspace element](https://github.com/zen-browser/desktop/blob/1.24.2b/src/zen/spaces/ZenSpace.mjs)
 
 These references establish selector and layout assumptions, not runtime compatibility.
+
+
+## Known issues (preview.23)
+
+- Reordering a whole Split View group from an outer edge can sometimes hesitate or transition unevenly. Deferred at the user's request; the existing horizontal reorder behavior is otherwise retained.
+- Verify startup floating search preservation and inactive-tab side drops in running Zen 1.24.2b; the native splitter explicitly excludes the empty workspace tab.

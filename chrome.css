@@ -445,6 +445,7 @@
       height: 16px;
       place-items: center;
       position: relative;
+      transition: filter 220ms ease-out, opacity 220ms ease-out;
     }
     #oneplane-tabs .oneplane-tab-icon::before {
       content: "•";
@@ -511,8 +512,8 @@
       opacity: .42;
     }
     #oneplane-tabs .oneplane-tab[data-unloaded][data-op-expanded] .oneplane-tab-icon {
-      filter: none;
-      opacity: .8;
+      filter: grayscale(.5);
+      opacity: .5;
     }
     #oneplane-tabs .oneplane-tab[data-busy] .oneplane-tab-icon { opacity: .55; }
 
@@ -770,6 +771,20 @@
     #oneplane-tabs[data-op-dragging] [data-op-drag-follow] .oneplane-tab-icon img {
       opacity: 1 !important;
       filter: none !important;
+      transition: none !important;
+    }
+    #oneplane-tabs[data-op-dragging] .oneplane-split-group[data-op-drag-follow]:not([data-op-detached]) {
+      background: color-mix(in srgb, var(--op-split-color) 13%, light-dark(#e9edf5,#222631)) !important;
+      box-shadow: inset 0 0 0 1px var(--op-split-color), 0 3px 10px #0004 !important;
+    }
+    #oneplane-tabs[data-op-dragging] .oneplane-split-group[data-op-split-active][data-op-drag-follow]:not([data-op-detached]) {
+      background: color-mix(in srgb, var(--op-split-color) 24%, light-dark(#e9edf5,#222631)) !important;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #oneplane-tabs .oneplane-tab-icon { transition: none !important; }
+    }
+    @media (-moz-pref("zen.oneplane.animation-duration", 0)) {
+      #oneplane-tabs .oneplane-tab-icon { transition: none !important; }
     }
     /* The slot opens immediately; the card itself springs into it. */
     #oneplane-tabs [data-op-reinsert] {
@@ -1001,4 +1016,40 @@
 }
 :root[oneplane-active="true"] .oneplane-bunny-icon img {
   width:21px;height:21px;object-fit:contain;opacity:1 !important;filter:none !important;
+}
+
+/* The detached Split View ghost uses the same compact geometry and accent
+   as its toolbar group, including the six-dot handle and individual cards. */
+:root[oneplane-active="true"] .oneplane-bunny-card[data-op-bunny-group] {
+  min-width:0; height:var(--op-bunny-height,34px); padding:2px 3px; gap:3px;
+  border:0; border-radius:8px;
+  background:color-mix(in srgb,var(--op-bunny-accent) 13%,light-dark(#e9edf5,#222631));
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--op-bunny-accent) 75%,transparent),0 8px 19px #0008;
+}
+:root[oneplane-active="true"] .oneplane-bunny-card[data-op-bunny-group][data-op-bunny-active] {
+  background:color-mix(in srgb,var(--op-bunny-accent) 24%,light-dark(#e9edf5,#222631));
+  box-shadow:inset 0 0 0 1px var(--op-bunny-accent),0 8px 19px #0008;
+}
+:root[oneplane-active="true"] .oneplane-bunny-handle {
+  display:grid; flex:0 0 16px; width:16px;
+  height:calc(var(--op-bunny-height,34px) - 8px);
+  grid-template-columns:repeat(2,3px);grid-template-rows:repeat(3,3px);
+  place-content:center;gap:2px;border-radius:4px;
+  color:var(--op-bunny-accent);background:color-mix(in srgb,var(--op-bunny-accent) 15%,transparent);
+}
+:root[oneplane-active="true"] .oneplane-bunny-handle i {
+  width:3px;height:3px;border-radius:50%;background:currentColor;
+}
+:root[oneplane-active="true"] .oneplane-bunny-member {
+  display:grid;place-items:center;
+  width:var(--op-bunny-tab-width,36px);flex:0 0 var(--op-bunny-tab-width,36px);
+  height:calc(var(--op-bunny-height,34px) - 8px);border-radius:5px;
+  background:color-mix(in srgb,currentColor 11%,transparent);
+}
+:root[oneplane-active="true"] .oneplane-bunny-member[data-op-bunny-selected] {
+  background:color-mix(in srgb,var(--op-bunny-accent) 33%,transparent);
+}
+:root[oneplane-active="true"] .oneplane-bunny-member .oneplane-bunny-icon,
+:root[oneplane-active="true"] .oneplane-bunny-member .oneplane-bunny-icon img {
+  width:16px;height:16px;
 }
