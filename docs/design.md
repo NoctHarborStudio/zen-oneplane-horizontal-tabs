@@ -44,8 +44,13 @@ The overlay now has a real background element plus independent tint on the actua
 
 Preview.9 moves tab expansion from CSS hover alone to a single explicit target. Crossing tabs retargets immediately; leaving the strip schedules a collapse, except while the pointer is on the plus. The indicator shares the spring constants of Magnetic Bookmarks but has no dependency on Zen Refined. Native close shortcuts and middle-click remain. The empty URL anchor is collapsed without hiding the native floating search popover.
 
+## Address interaction and panel hold
+
+Preview.10 arms an independent two-second visibility hold before dismissing the address field through the content shield. The hold is restarted on another dismissal and cleared on unload, window deactivation or unsupported layout. Native hover and popup states still govern visibility after it expires. Address width and toolbar height use separate opening and closing durations. The floating Zen search appearance remains native.
+
 ## Manual validation checklist
 
+- [ ] Verify preview.10: lighter compact/focused URL, smooth width animation, two-second hold after outside dismissal without page click-through, slower panel close, re-hover/reopen during hold, floating search and reduced motion.
 - [ ] Verify preview.9: empty new tab and floating search, Ctrl+L, first/middle/last tab expansion, centered title, no X, middle-click, indicator continuity across gaps, delayed exit and stable plus.
 - [ ] Verify preview.8: visible backdrop over bright and dark websites; first/middle/last/single tab expansion, keyboard focus, pointer stability and crowded windows.
 - [ ] Verify preview.6: tab-only centering (including odd/even counts), plus excluded, left navigation, stable page position during reveal and hide, URL focus and crowded windows.

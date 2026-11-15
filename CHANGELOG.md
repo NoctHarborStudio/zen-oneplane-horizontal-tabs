@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-preview.10
+
+- Improve compact and focused address-field contrast with a lighter neutral surface.
+- Use asymmetric address expansion/collapse durations (260/360 ms).
+- Keep the top panel open for two seconds after an outside click dismisses address editing.
+- Slow the top panel closing transition to 340 ms; preserve ordinary compact hover behavior and reduced motion.
+
 ## 0.1.0-preview.9
 
 - Collapse the empty start-page address anchor while preserving native floating search and non-floating keyboard focus.

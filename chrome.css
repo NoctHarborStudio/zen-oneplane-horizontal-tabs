@@ -9,16 +9,30 @@
     --op-speed: 160ms;
     --op-tab-speed: 240ms;
     --op-tab-ease: cubic-bezier(.2, .75, .2, 1);
+    --op-url-open-speed: 260ms;
+    --op-url-close-speed: 360ms;
+    --op-url-ease: cubic-bezier(.22, .72, .2, 1);
+    --op-panel-open-speed: 230ms;
+    --op-panel-close-speed: 340ms;
+    --op-panel-ease: cubic-bezier(.22, .72, .2, 1);
     @media (-moz-pref("zen.oneplane.tab-width", 32)) { --op-tab: 32px; }
     @media (-moz-pref("zen.oneplane.tab-width", 44)) { --op-tab: 44px; }
     @media (-moz-pref("zen.oneplane.expanded-tab-width", 140)) { --op-tab-open: 140px; }
     @media (-moz-pref("zen.oneplane.expanded-tab-width", 240)) { --op-tab-open: 240px; }
     @media (-moz-pref("zen.oneplane.address-width", 140)) { --op-url: 140px; }
     @media (-moz-pref("zen.oneplane.address-width", 220)) { --op-url: 220px; }
-    @media (-moz-pref("zen.oneplane.animation-duration", 0)) { --op-speed: 0ms; --op-tab-speed: 0ms; }
+    @media (-moz-pref("zen.oneplane.animation-duration", 0)) {
+      --op-speed: 0ms; --op-tab-speed: 0ms;
+      --op-url-open-speed: 0ms; --op-url-close-speed: 0ms;
+      --op-panel-open-speed: 0ms; --op-panel-close-speed: 0ms;
+    }
     @media (-moz-pref("zen.oneplane.animation-duration", 100)) { --op-speed: 100ms; --op-tab-speed: 160ms; }
     @media (-moz-pref("zen.oneplane.animation-duration", 250)) { --op-speed: 250ms; --op-tab-speed: 300ms; }
-    @media (prefers-reduced-motion: reduce) { --op-speed: 0ms; --op-tab-speed: 0ms; }
+    @media (prefers-reduced-motion: reduce) {
+      --op-speed: 0ms; --op-tab-speed: 0ms;
+      --op-url-open-speed: 0ms; --op-url-close-speed: 0ms;
+      --op-panel-open-speed: 0ms; --op-panel-close-speed: 0ms;
+    }
 
     /* Keep the original tab model and native sidebar DOM intact. */
     #navigator-toolbox {
@@ -85,12 +99,30 @@
       min-width: 100px !important;
       max-width: none !important;
       margin-inline: 4px !important;
-      transition: width var(--op-speed) ease, flex-basis var(--op-speed) ease !important;
+      --op-url-motion: var(--op-url-close-speed);
+      transition: width var(--op-url-motion) var(--op-url-ease),
+        flex-basis var(--op-url-motion) var(--op-url-ease) !important;
     }
     #nav-bar-customization-target > #urlbar-container:is(:focus-within, :has(#urlbar[focused="true"], #urlbar[open])) {
       flex-basis: clamp(320px, 45vw, 760px) !important;
       width: clamp(320px, 45vw, 760px) !important;
-      max-width: 60vw !important;
+      --op-url-motion: var(--op-url-open-speed);
+      max-width: none !important;
+    }
+    /* A lighter neutral surface makes the compact address distinguishable
+       from the frosted toolbar. Leave the floating Zen search theme intact. */
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) {
+      --zen-urlbar-background-base: light-dark(#e0e4ec, #30343e) !important;
+      --urlbar-background-color: light-dark(#e0e4ec, #30343e) !important;
+      --urlbar-background-color-focus: light-dark(#edf0f6, #393e49) !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) .urlbar-background {
+      background-color: light-dark(#e0e4ec, #30343e) !important;
+      background-image: none !important;
+      transition: background-color var(--op-url-motion, var(--op-url-close-speed)) var(--op-url-ease) !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]):is([focused="true"], [open]) .urlbar-background {
+      background-color: light-dark(#edf0f6, #393e49) !important;
     }
     /* Collapse only the empty anchor; preserve Zen's floating search. */
     #nav-bar-customization-target > #urlbar-container[data-op-empty]:not(:has(#urlbar:is([focused="true"], [open]):not([zen-floating-urlbar="true"]))),
@@ -361,7 +393,8 @@
       flex: none !important;
       min-height: max(2px, var(--zen-element-separation, 0px)) !important;
       height: max(2px, var(--zen-element-separation, 0px)) !important;
-      transition: height var(--zen-hidden-toolbar-transition, 160ms ease) !important;
+      --op-panel-motion: var(--op-panel-close-speed);
+      transition: height var(--op-panel-motion) var(--op-panel-ease) !important;
       overflow: clip;
     }
     /* Native Zen offsets the web view when an in-flow toolbar expands.
@@ -371,20 +404,21 @@
       --zen-browser-container-margin-top-fix: 0px !important;
       margin-top: 0 !important;
     }
-    #zen-appcontent-navbar-wrapper:not(:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], :hover)) #zen-appcontent-navbar-container {
+    #zen-appcontent-navbar-wrapper:not(:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], [oneplane-url-hold], :hover)) #zen-appcontent-navbar-container {
       pointer-events: none !important;
     }
     /* Frosted native toolbar; retain native reveal animation and popup states. */
-    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], :hover) {
+    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], [oneplane-url-hold], :hover) {
+      --op-panel-motion: var(--op-panel-open-speed);
       height: max(var(--zen-toolbar-height-with-bookmarks, var(--op-height)), var(--op-measured-toolbar-height, 0px)) !important;
       overflow: visible !important;
       contain: none !important;
     }
-    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], :hover) #zen-appcontent-navbar-container {
+    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], [oneplane-url-hold], :hover) #zen-appcontent-navbar-container {
       opacity: 1 !important;
       pointer-events: auto !important;
     }
-    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], :hover) #urlbar {
+    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], [oneplane-url-hold], :hover) #urlbar {
       opacity: 1 !important;
       pointer-events: auto !important;
     }
@@ -403,12 +437,13 @@
       backdrop-filter: blur(24px) saturate(1.2) !important;
       box-shadow: 0 4px 18px rgba(0, 0, 0, .22) !important;
       opacity: 0;
-      transition: opacity var(--op-speed) ease;
+      transition: opacity var(--op-panel-motion) var(--op-panel-ease) !important;
     }
-    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], :hover) > #oneplane-toolbar-surface {
+    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], [oneplane-url-hold], :hover) > #oneplane-toolbar-surface {
       opacity: 1 !important;
     }
     #zen-appcontent-navbar-wrapper > #zen-appcontent-navbar-container {
+      transition: opacity var(--op-panel-motion) var(--op-panel-ease) !important;
       position: relative !important;
       z-index: 1 !important;
     }
