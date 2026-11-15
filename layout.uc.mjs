@@ -104,7 +104,10 @@ function installTabStrip() {
     if (typeof command?.doCommand === "function") command.doCommand();
     else window.BrowserCommands?.openTab();
   });
-  row.append(list, plus);
+  const indicator = html("div");
+  indicator.id = "oneplane-tab-indicator";
+  indicator.setAttribute("aria-hidden", "true");
+  row.append(list, plus, indicator);
 
 
   // Keep native page actions and popup anchors, moving only their actual nodes.
@@ -205,11 +208,22 @@ function installTabStrip() {
       addressFrame = 0;
       const bar = document.getElementById("urlbar");
       const input = addressInput();
+      updateEmptyAddress();
       if (!bar?.hasAttribute("focused") && !bar?.hasAttribute("open") && input) {
         input.scrollLeft = 0;
       }
     });
   }
+  function updateEmptyAddress() {
+    const tab = browser.selectedTab;
+    const spec = tab?.linkedBrowser?.currentURI?.spec || "";
+    const empty = Boolean(tab?.hasAttribute("zen-empty-tab")) ||
+      /^(about:(blank|newtab|home|privatebrowsing))(?:[?#].*)?$/i.test(spec);
+    url.toggleAttribute("data-op-empty", empty);
+  }
+  const progressListener = {
+    onLocationChange() { updateEmptyAddress(); alignAddressStart(); }
+  };
   const actionObserver = new MutationObserver(() => {
     if (!dead) { movePageActions(); alignAddressStart(); }
   });
@@ -337,13 +351,143 @@ function installTabStrip() {
     if (event.relatedTarget === null) clearHover();
   }
   function onCompactChanged() {
-    if (!hoverSupported()) clearHover();
+    if (!hoverSupported()) { clearHover(); clearTabHover(); }
     scheduleGeometry();
   }
 
   const entries = new Map();
   let frame = 0;
   let dead = false;
+
+  // Single hover target; preserve momentum across tabs and short gaps.
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const clamp = (x, min, max) => Math.max(min, Math.min(max, x));
+  let hoverTab = null, hoverX = null, hoverTimer = 0, indicatorFrame = 0;
+  let indicatorShown = false, ix = 0, iy = 0, iw = 14, ih = 3, iv = 0, last = 0, until = 0;
+  const hoverDelay = () => reducedMotion.matches ? 0 :
+    clamp(prefs.getIntPref("zen.oneplane.hover-close-delay", 260), 0, 600);
+
+  function cancelHoverTimer() {
+    if (hoverTimer) window.clearTimeout(hoverTimer);
+    hoverTimer = 0;
+  }
+  function indicatorTarget() {
+    if (!hoverTab || !list.contains(hoverTab)) return null;
+    const a = hoverTab.getBoundingClientRect(), s = row.getBoundingClientRect();
+    if (a.width <= 0 || s.width <= 0) return null;
+    const center = (a.left + a.right) / 2;
+    const bias = hoverX === null ? 0 : clamp((hoverX - center) / Math.max(1, a.width / 2), -1, 1);
+    return { x: center - s.left - row.clientLeft + bias * Math.min(12, a.width * .12),
+      y: Math.min(s.height - 2, a.bottom - s.top + 2), w: clamp(a.width * .14, 12, 18) };
+  }
+  function paintIndicator() {
+    const tail = clamp(iv * .0035, -5, 5);
+    indicator.style.width = iw.toFixed(2) + "px";
+    indicator.style.height = ih.toFixed(2) + "px";
+    indicator.style.transform = "translate3d(" + (ix - iw / 2 - tail).toFixed(2) +
+      "px," + (iy - ih / 2).toFixed(2) + "px,0)";
+  }
+  function tickIndicator(now) {
+    indicatorFrame = 0;
+    const p = indicatorTarget();
+    if (dead || !p || !indicatorShown) return;
+    const dt = last ? clamp((now - last) / 1000, .001, .05) : 1 / 60;
+    last = now;
+    if (reducedMotion.matches) {
+      ix = p.x; iy = p.y; iv = 0; iw = p.w; ih = 3;
+    } else {
+      const steps = Math.max(1, Math.ceil(dt * 120)), step = dt / steps;
+      for (let i = 0; i < steps; i++) {
+        iv += (p.x - ix) * 350 * step;
+        iv *= Math.exp(-23 * step);
+        ix += iv * step;
+      }
+      const stretch = Math.min(18, Math.abs(iv) * .025);
+      const blend = 1 - Math.exp(-24 * dt);
+      iw += (p.w + stretch - iw) * blend;
+      ih += (3 - stretch * .035 - ih) * blend;
+      iy += (p.y - iy) * (1 - Math.exp(-30 * dt));
+    }
+    paintIndicator();
+    if (!reducedMotion.matches && (now < until || Math.abs(ix-p.x) > .08 ||
+        Math.abs(iy-p.y) > .08 || Math.abs(iv) > .2 || Math.abs(iw-p.w) > .08 ||
+        Math.abs(ih-3) > .04)) {
+      indicatorFrame = window.requestAnimationFrame(tickIndicator);
+    }
+  }
+  function scheduleIndicator() {
+    if (!hoverTab || !indicatorShown || dead) return;
+    until = window.performance.now() + 450;
+    if (!indicatorFrame) { last = 0; indicatorFrame = window.requestAnimationFrame(tickIndicator); }
+  }
+  function selectHover(item, x = null) {
+    if (!item || !list.contains(item)) return;
+    cancelHoverTimer();
+    hoverX = x;
+    if (hoverTab !== item) {
+      hoverTab?.removeAttribute("data-op-expanded");
+      hoverTab = item;
+      item.setAttribute("data-op-expanded", "true");
+    }
+    if (!prefs.getBoolPref("zen.oneplane.tab-indicator", true)) {
+      indicatorShown = false;
+      indicator.removeAttribute("data-visible");
+      if (indicatorFrame) window.cancelAnimationFrame(indicatorFrame);
+      indicatorFrame = 0;
+      return;
+    }
+    if (!indicatorShown) {
+      const p = indicatorTarget();
+      if (p) { ix = p.x; iy = p.y; iw = p.w; ih = 3; iv = 0; paintIndicator(); }
+      indicatorShown = true;
+      indicator.setAttribute("data-visible", "true");
+    }
+    scheduleIndicator();
+  }
+  function clearTabHover() {
+    cancelHoverTimer();
+    hoverTab?.removeAttribute("data-op-expanded");
+    hoverTab = null; hoverX = null;
+    indicatorShown = false;
+    indicator.removeAttribute("data-visible");
+    if (indicatorFrame) window.cancelAnimationFrame(indicatorFrame);
+    indicatorFrame = 0; iv = 0; last = 0;
+  }
+  function queueTabCollapse() {
+    if (!hoverTab || hoverTimer) return;
+    hoverTimer = window.setTimeout(() => {
+      hoverTimer = 0;
+      // Keep the plus stationary until the pointer actually leaves it.
+      if (plus.matches(":hover") || plus.matches(":active")) return;
+      clearTabHover();
+    }, hoverDelay());
+  }
+  function trackTabPointer(event) {
+    if (!hoverSupported() || event.pointerType === "touch") return;
+    const hit = event.target?.closest?.(".oneplane-tab");
+    if (hit && list.contains(hit)) { selectHover(hit, event.clientX); return; }
+    if (!hoverTab) return;
+    if (event.target === plus || (event.target instanceof Node && plus.contains(event.target))) {
+      cancelHoverTimer(); return;
+    }
+    // Inter-tab gaps are part of the hover session, not departures.
+    const a = list.getBoundingClientRect();
+    if (event.clientX >= a.left - 3 && event.clientX <= a.right + 3 &&
+        event.clientY >= a.top - 2 && event.clientY <= a.bottom + 2) {
+      cancelHoverTimer();
+      return;
+    }
+    queueTabCollapse();
+  }
+  function focusTab(event) {
+    const item = event.target?.closest?.(".oneplane-tab");
+    if (item && event.target.matches(":focus-visible")) selectHover(item);
+  }
+  function blurTab(event) {
+    if (!row.contains(event.relatedTarget) && !row.matches(":hover")) queueTabCollapse();
+  }
+  function leaveTabPointer() { queueTabCollapse(); }
+  function onNewTabClick() { clearTabHover(); }
 
   function favicon(tab) {
     const src = tab.querySelector(".tab-icon-image")?.getAttribute("src")
@@ -367,16 +511,8 @@ function installTabStrip() {
     icon.append(img);
     const title = html("span", "oneplane-tab-title");
     button.append(icon, title);
-    const close = html("button", "oneplane-tab-close");
-    close.type = "button";
-    close.textContent = "×";
-    close.title = "Close tab";
-    close.setAttribute("aria-label", "Close tab");
     button.addEventListener("click", () => {
       if (!tab.closing) browser.selectedTab = tab;
-    });
-    close.addEventListener("click", () => {
-      if (!tab.closing) browser.removeTab(tab, { animate: true });
     });
     item.addEventListener("auxclick", event => {
       if (event.button === 1 && !tab.closing) {
@@ -384,7 +520,7 @@ function installTabStrip() {
         browser.removeTab(tab, { animate: true });
       }
     });
-    item.append(button, close);
+    item.append(button);
     return { item, button, title, img, src: null };
   }
 
@@ -400,9 +536,13 @@ function installTabStrip() {
       row.style.setProperty("--op-tab-count", count);
       scheduleGeometry();
     }
+    updateEmptyAddress();
     const keep = new Set(tabs);
     for (const [tab, entry] of entries) {
-      if (!keep.has(tab)) { entry.item.remove(); entries.delete(tab); }
+      if (!keep.has(tab)) {
+        if (hoverTab === entry.item) clearTabHover();
+        entry.item.remove(); entries.delete(tab);
+      }
     }
     for (let index = 0; index < tabs.length; index++) {
       const tab = tabs[index];
@@ -436,6 +576,7 @@ function installTabStrip() {
     if (!dead && !frame) frame = window.requestAnimationFrame(sync);
   }
   function onSelect() {
+    updateEmptyAddress();
     schedule();
     alignAddressStart();
     window.requestAnimationFrame(() => {
@@ -466,6 +607,16 @@ function installTabStrip() {
     hoverObserver?.disconnect();
     if (geometryFrame) window.cancelAnimationFrame(geometryFrame);
     clearHover();
+    clearTabHover();
+    window.removeEventListener("pointermove", trackTabPointer, true);
+    window.removeEventListener("deactivate", clearTabHover);
+    row.removeEventListener("pointerleave", leaveTabPointer);
+    row.removeEventListener("focusin", focusTab);
+    row.removeEventListener("focusout", blurTab);
+    plus.removeEventListener("pointerleave", leaveTabPointer);
+    plus.removeEventListener("click", onNewTabClick);
+    try { browser.removeProgressListener(progressListener); } catch {}
+    url.removeAttribute("data-op-empty");
     toolbarWrapper?.style.removeProperty("--op-measured-toolbar-height");
     surface.remove();
     leftSpacer.remove();
@@ -500,19 +651,27 @@ function installTabStrip() {
     const bar = document.getElementById("urlbar");
     if (bar) {
       addressObserver = new MutationObserver(alignAddressStart);
-      addressObserver.observe(bar, { attributes: true, attributeFilter: ["focused", "open", "textoverflow", "pageproxystate"] });
+      addressObserver.observe(bar, { attributes: true, attributeFilter: ["focused", "open", "textoverflow", "pageproxystate", "zen-floating-urlbar", "breakout-extend"] });
     }
     url.addEventListener("focusout", alignAddressStart);
     actionObserver.observe(url, { subtree: true, childList: true });
     alignAddressStart();
     sync();
+    try { browser.addProgressListener(progressListener); } catch {}
+    window.addEventListener("pointermove", trackTabPointer, true);
+    window.addEventListener("deactivate", clearTabHover);
+    row.addEventListener("pointerleave", leaveTabPointer);
+    row.addEventListener("focusin", focusTab);
+    row.addEventListener("focusout", blurTab);
+    plus.addEventListener("pointerleave", leaveTabPointer);
+    plus.addEventListener("click", onNewTabClick);
     for (const event of events) browser.tabContainer.addEventListener(event, schedule);
     browser.tabContainer.addEventListener("TabSelect", onSelect);
     window.addEventListener("ZenWorkspaceDataChanged", schedule);
     window.addEventListener("aftercustomization", schedule);
     tabObserver.observe(browser.tabContainer, {
       subtree: true, childList: true, attributes: true,
-      attributeFilter: ["label", "image", "selected", "hidden", "busy", "pinned", "active", "zen-workspace-id", "pending", "discarded", "soundplaying"]
+      attributeFilter: ["label", "image", "selected", "hidden", "busy", "pinned", "active", "zen-workspace-id", "pending", "discarded", "soundplaying", "zen-empty-tab"]
     });
     const wrapper = document.getElementById("zen-tabs-wrapper");
     if (wrapper && !browser.tabContainer.contains(wrapper)) {

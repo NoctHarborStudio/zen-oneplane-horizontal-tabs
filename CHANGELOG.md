@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-preview.9
+
+- Collapse the empty start-page address anchor while preserving native floating search and non-floating keyboard focus.
+- Remove the close button from expanded tabs; retain middle-click and native keyboard closing.
+- Center the favicon and title together; soften expansion and collapse timing.
+- Add the spring-driven liquid hover indicator with restrained cursor-relative offset, independently of Zen Refined.
+- Retarget immediately between tabs; delay collapse on departure and keep the new-tab button stationary while hovered.
+- Add indicator and collapse-delay settings.
+
 ## 0.1.0-preview.8
 
 - Use a dedicated real toolbar backdrop element, with an independent tinted background on the visible navigation and bookmarks rows.

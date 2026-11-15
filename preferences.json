@@ -90,5 +90,37 @@
         "value": 250
       }
     ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.oneplane.hover-close-delay",
+    "label": "Tab collapse delay",
+    "value": "number",
+    "defaultValue": 260,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Off",
+        "value": 0
+      },
+      {
+        "label": "150 ms",
+        "value": 150
+      },
+      {
+        "label": "260 ms",
+        "value": 260
+      },
+      {
+        "label": "400 ms",
+        "value": 400
+      }
+    ]
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.oneplane.tab-indicator",
+    "label": "Liquid tab hover indicator",
+    "defaultValue": true
   }
 ]

@@ -40,8 +40,13 @@ Preview.8 retains the collapsed strip anchor and uses the existing trailing expa
 
 The overlay now has a real background element plus independent tint on the actual visible navigation and bookmark rows; this avoids relying solely on the native background element or wrapper pseudo-element.
 
+## Tab hover controller
+
+Preview.9 moves tab expansion from CSS hover alone to a single explicit target. Crossing tabs retargets immediately; leaving the strip schedules a collapse, except while the pointer is on the plus. The indicator shares the spring constants of Magnetic Bookmarks but has no dependency on Zen Refined. Native close shortcuts and middle-click remain. The empty URL anchor is collapsed without hiding the native floating search popover.
+
 ## Manual validation checklist
 
+- [ ] Verify preview.9: empty new tab and floating search, Ctrl+L, first/middle/last tab expansion, centered title, no X, middle-click, indicator continuity across gaps, delayed exit and stable plus.
 - [ ] Verify preview.8: visible backdrop over bright and dark websites; first/middle/last/single tab expansion, keyboard focus, pointer stability and crowded windows.
 - [ ] Verify preview.6: tab-only centering (including odd/even counts), plus excluded, left navigation, stable page position during reveal and hide, URL focus and crowded windows.
 - [ ] Verify preview.5: centered navigation and bookmarks, stable hover across rows and empty space, no sticky toolbar after leaving, many tabs and narrow windows.
@@ -52,7 +57,7 @@ The overlay now has a real background element plus independent tint on the actua
 - [ ] Windows 11, Zen version and clean test profile recorded.
 - [ ] Compact Mode reveals from the top and hides without flickering or moving page content unexpectedly.
 - [ ] Native URL field, suggestions, Ctrl+L and Ctrl+T work while compact and expanded.
-- [ ] Tab activation, close buttons, middle-click, keyboard focus and pinned tabs work.
+- [ ] Tab activation, native close shortcuts, middle-click, keyboard focus and pinned tabs work.
 - [ ] 1, 10, 50 and 100 tabs: overflow, scrolling and access to the final tab.
 - [ ] Drag/reorder tabs; pinned tabs, folders, Essentials and workspace switching.
 - [ ] Window buttons, extensions, overflow menus, bookmarks and popup positioning.

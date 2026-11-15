@@ -7,16 +7,18 @@
     --op-tab-open: 180px;
     --op-url: 180px;
     --op-speed: 160ms;
+    --op-tab-speed: 240ms;
+    --op-tab-ease: cubic-bezier(.2, .75, .2, 1);
     @media (-moz-pref("zen.oneplane.tab-width", 32)) { --op-tab: 32px; }
     @media (-moz-pref("zen.oneplane.tab-width", 44)) { --op-tab: 44px; }
     @media (-moz-pref("zen.oneplane.expanded-tab-width", 140)) { --op-tab-open: 140px; }
     @media (-moz-pref("zen.oneplane.expanded-tab-width", 240)) { --op-tab-open: 240px; }
     @media (-moz-pref("zen.oneplane.address-width", 140)) { --op-url: 140px; }
     @media (-moz-pref("zen.oneplane.address-width", 220)) { --op-url: 220px; }
-    @media (-moz-pref("zen.oneplane.animation-duration", 0)) { --op-speed: 0ms; }
-    @media (-moz-pref("zen.oneplane.animation-duration", 100)) { --op-speed: 100ms; }
-    @media (-moz-pref("zen.oneplane.animation-duration", 250)) { --op-speed: 250ms; }
-    @media (prefers-reduced-motion: reduce) { --op-speed: 0ms; }
+    @media (-moz-pref("zen.oneplane.animation-duration", 0)) { --op-speed: 0ms; --op-tab-speed: 0ms; }
+    @media (-moz-pref("zen.oneplane.animation-duration", 100)) { --op-speed: 100ms; --op-tab-speed: 160ms; }
+    @media (-moz-pref("zen.oneplane.animation-duration", 250)) { --op-speed: 250ms; --op-tab-speed: 300ms; }
+    @media (prefers-reduced-motion: reduce) { --op-speed: 0ms; --op-tab-speed: 0ms; }
 
     /* Keep the original tab model and native sidebar DOM intact. */
     #navigator-toolbox {
@@ -90,6 +92,24 @@
       width: clamp(320px, 45vw, 760px) !important;
       max-width: 60vw !important;
     }
+    /* Collapse only the empty anchor; preserve Zen's floating search. */
+    #nav-bar-customization-target > #urlbar-container[data-op-empty]:not(:has(#urlbar:is([focused="true"], [open]):not([zen-floating-urlbar="true"]))),
+    #nav-bar-customization-target > #urlbar-container[data-op-empty]:has(#urlbar[zen-floating-urlbar="true"]) {
+      flex: 0 0 0px !important;
+      width: 0px !important;
+      min-width: 0px !important;
+      max-width: 0px !important;
+      margin-inline: 0 !important;
+      padding-inline: 0 !important;
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      overflow: visible !important;
+    }
+    #urlbar-container[data-op-empty] #urlbar:not([focused="true"], [open], [zen-floating-urlbar="true"]) {
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
     #urlbar-container #urlbar[breakout-extend]:not([zen-floating-urlbar="true"]) {
       width: 100% !important;
       min-width: 0 !important;
@@ -106,6 +126,7 @@
       --op-expand-left: 0px;
       --op-shift-left: min(var(--op-expand-left), var(--op-left-room, 0px));
       overflow: visible !important;
+      position: relative !important;
       flex: 0 1 auto !important;
       min-width: 0 !important;
       width: calc(var(--op-tab-count, 0) * (var(--op-tab) + 3px) + var(--op-tab-open) + 3px) !important;
@@ -118,18 +139,18 @@
     }
     /* Leftmost grows left, rightmost grows right, middle tabs grow equally
        in both directions. The plus follows the actual right edge. */
-    #oneplane-tabs:has(.oneplane-tab:is(:hover, :has(:focus-visible))) {
+    #oneplane-tabs:has(.oneplane-tab[data-op-expanded]) {
       --op-expand-left: calc(var(--op-growth) / 2);
     }
-    #oneplane-tabs:has(.oneplane-tab:first-child:not(:last-child):is(:hover, :has(:focus-visible))) {
+    #oneplane-tabs:has(.oneplane-tab:first-child:not(:last-child)[data-op-expanded]) {
       --op-expand-left: var(--op-growth);
     }
-    #oneplane-tabs:has(.oneplane-tab:last-child:not(:first-child):is(:hover, :has(:focus-visible))) {
+    #oneplane-tabs:has(.oneplane-tab:last-child:not(:first-child)[data-op-expanded]) {
       --op-expand-left: 0px;
     }
     #oneplane-tabs :is(.oneplane-tab-list, .oneplane-new-tab) {
       translate: calc(-1 * var(--op-shift-left)) 0;
-      transition: translate var(--op-speed) ease;
+      transition: translate var(--op-tab-speed) var(--op-tab-ease);
     }
     #oneplane-tabs .oneplane-tab-list {
       display: flex;
@@ -152,31 +173,12 @@
       border-radius: 7px;
       background: color-mix(in srgb, currentColor 11%, transparent);
       box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 5%, transparent);
-      transition: width var(--op-speed) ease, flex-basis var(--op-speed) ease, background-color var(--op-speed) ease;
+      transition: width var(--op-tab-speed) var(--op-tab-ease), flex-basis var(--op-tab-speed) var(--op-tab-ease), background-color var(--op-tab-speed) ease;
     }
-    #oneplane-tabs .oneplane-tab:is(:hover, :has(:focus-visible)) {
+    #oneplane-tabs .oneplane-tab[data-op-expanded] {
       flex-basis: var(--op-tab-open);
       width: var(--op-tab-open);
       background: color-mix(in srgb, currentColor 19%, transparent);
-    }
-    #oneplane-tabs:has(.oneplane-tab:hover) .oneplane-tab:not(:hover):has(:focus-visible) {
-      flex-basis: var(--op-tab);
-      width: var(--op-tab);
-    }
-    #oneplane-tabs:has(.oneplane-tab:hover) .oneplane-tab:not(:hover) .oneplane-tab-title {
-      opacity: 0;
-    }
-    #oneplane-tabs:has(.oneplane-tab:hover) .oneplane-tab:not(:hover) .oneplane-tab-close {
-      display: none;
-    }
-    #oneplane-tabs:has(.oneplane-tab:hover) {
-      --op-expand-left: calc(var(--op-growth) / 2);
-    }
-    #oneplane-tabs:has(.oneplane-tab:first-child:not(:last-child):hover) {
-      --op-expand-left: var(--op-growth);
-    }
-    #oneplane-tabs:has(.oneplane-tab:last-child:not(:first-child):hover) {
-      --op-expand-left: 0px;
     }
     #oneplane-tabs .oneplane-tab[data-selected] {
       background: color-mix(in srgb, currentColor 24%, transparent);
@@ -203,9 +205,15 @@
       display: flex;
       flex: 1 1 0;
       align-items: center;
-      gap: 7px;
-      padding-inline: calc((var(--op-tab) - 16px) / 2) 4px;
+      justify-content: center;
+      gap: 0;
+      padding-inline: 0;
       overflow: hidden;
+      transition: gap var(--op-tab-speed) var(--op-tab-ease), padding var(--op-tab-speed) var(--op-tab-ease);
+    }
+    #oneplane-tabs .oneplane-tab[data-op-expanded] .oneplane-tab-select {
+      gap: 7px;
+      padding-inline: 8px;
     }
     #oneplane-tabs .oneplane-tab-icon {
       display: grid;
@@ -228,26 +236,40 @@
     }
     #oneplane-tabs .oneplane-tab-icon img[hidden] { display: none !important; }
     #oneplane-tabs .oneplane-tab-title {
-      flex: 1 1 auto;
+      flex: 0 1 auto;
       min-width: 0;
-      text-align: start;
+      max-width: 0;
+      text-align: center;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       opacity: 0;
+      transition: max-width var(--op-tab-speed) var(--op-tab-ease), opacity var(--op-tab-speed) ease;
     }
-    #oneplane-tabs .oneplane-tab:is(:hover, :has(:focus-visible)) .oneplane-tab-title { opacity: 1; }
-    #oneplane-tabs .oneplane-tab-close {
-      display: none;
-      flex: 0 0 24px;
-      font-size: 17px;
-      line-height: 1;
-      border-radius: 5px;
+    #oneplane-tabs .oneplane-tab[data-op-expanded] .oneplane-tab-title {
+      max-width: calc(var(--op-tab-open) - 39px);
+      opacity: 1;
     }
-    #oneplane-tabs .oneplane-tab:is(:hover, :has(:focus-visible)) .oneplane-tab-close { display: block; }
-    #oneplane-tabs .oneplane-tab-close:hover,
     #oneplane-tabs .oneplane-new-tab:hover {
       background: var(--toolbarbutton-hover-background, color-mix(in srgb, currentColor 12%, transparent));
+    }
+    #oneplane-tab-indicator {
+      position: absolute;
+      inset: 0 auto auto 0;
+      width: 14px;
+      height: 3px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, color-mix(in srgb, var(--toolbar-color, #dce6ff) 75%, #a9c1ff), color-mix(in srgb, var(--toolbar-color, #dce6ff) 90%, #a9c1ff));
+      box-shadow: 0 0 8px color-mix(in srgb, #99b4ff 52%, transparent);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 3;
+      transition: opacity 150ms ease;
+      will-change: transform, width, height;
+    }
+    #oneplane-tab-indicator[data-visible] { opacity: 1; }
+    @media (prefers-reduced-motion: reduce) {
+      #oneplane-tab-indicator { transition: none; }
     }
     #oneplane-tabs .oneplane-new-tab {
       flex: 0 0 var(--op-tab);
@@ -265,7 +287,7 @@
       filter: grayscale(1);
       opacity: .42;
     }
-    #oneplane-tabs .oneplane-tab[data-unloaded]:is(:hover, :has(:focus-visible)) .oneplane-tab-icon {
+    #oneplane-tabs .oneplane-tab[data-unloaded][data-op-expanded] .oneplane-tab-icon {
       filter: none;
       opacity: .8;
     }
