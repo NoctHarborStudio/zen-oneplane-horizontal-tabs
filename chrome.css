@@ -228,7 +228,7 @@
       position: relative !important;
       flex: 0 1 auto !important;
       min-width: 0 !important;
-      width: calc(var(--op-tab-count, 0) * (var(--op-tab) + 3px) + var(--op-tab-open) + 3px) !important;
+      width: calc(var(--op-tab-count, 0) * (var(--op-tab) + 3px) + var(--op-split-count, 0) * 25px + var(--op-tab-open) + 3px) !important;
       height: var(--op-height) !important;
       align-items: center;
       gap: 3px;
@@ -241,10 +241,10 @@
     #oneplane-tabs:has(.oneplane-tab[data-op-expanded]) {
       --op-expand-left: calc(var(--op-growth) / 2);
     }
-    #oneplane-tabs:has(.oneplane-tab:first-child:not(:last-child)[data-op-expanded]) {
+    #oneplane-tabs:has(.oneplane-tab[data-op-first]:not([data-op-last])[data-op-expanded]) {
       --op-expand-left: var(--op-growth);
     }
-    #oneplane-tabs:has(.oneplane-tab:last-child:not(:first-child)[data-op-expanded]) {
+    #oneplane-tabs:has(.oneplane-tab[data-op-last]:not([data-op-first])[data-op-expanded]) {
       --op-expand-left: 0px;
     }
     #oneplane-tabs :is(.oneplane-tab-list, .oneplane-new-tab) {
@@ -425,21 +425,62 @@
       content: ""; position: absolute; width: 10px; height: 1px;
       background: currentColor; transform: rotate(-40deg);
     }
-    /* A shared accent identifies native Split View membership, even when
-       the tabs are collapsed. Adjacent members have connected inner edges. */
-    #oneplane-tabs .oneplane-tab[data-op-split] {
-      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--op-split-color) 65%, transparent),
-        inset 0 -2px var(--op-split-color) !important;
+    /* A real flex wrapper, with one shared surface and a dedicated handle.
+       Its 25px overhead is included in collapsed-strip centering. */
+    #oneplane-tabs .oneplane-split-group {
+      position: relative;
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 3px;
+      height: var(--op-height);
+      box-sizing: border-box;
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--op-split-color) 13%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--op-split-color) 75%, transparent);
+      transition: background-color var(--op-tab-speed) ease, box-shadow var(--op-tab-speed) ease;
     }
-    #oneplane-tabs .oneplane-tab[data-op-split-active] {
-      background: color-mix(in srgb, var(--op-split-color) 21%, transparent) !important;
+    #oneplane-tabs .oneplane-split-group[data-op-split-active] {
+      background: color-mix(in srgb, var(--op-split-color) 24%, transparent);
+      box-shadow: inset 0 0 0 1px var(--op-split-color);
     }
-    #oneplane-tabs .oneplane-tab[data-op-split-prev] {
-      border-start-start-radius: 3px; border-end-start-radius: 3px;
+    #oneplane-tabs .oneplane-split-group .oneplane-tab {
+      height: calc(var(--op-height) - 8px);
+      border-radius: 5px;
+      box-shadow: none !important;
     }
-    #oneplane-tabs .oneplane-tab[data-op-split-next] {
-      border-start-end-radius: 3px; border-end-end-radius: 3px;
+    #oneplane-tabs .oneplane-split-group .oneplane-tab[data-selected] {
+      background: color-mix(in srgb, var(--op-split-color) 33%, transparent);
     }
+    #oneplane-tabs .oneplane-split-group .oneplane-tab[data-op-expanded] {
+      background: color-mix(in srgb, var(--op-split-color) 27%, transparent);
+    }
+    #oneplane-tabs button.oneplane-split-handle {
+      flex: 0 0 16px;
+      width: 16px;
+      height: calc(var(--op-height) - 8px);
+      display: grid;
+      grid-template-columns: repeat(2, 3px);
+      grid-template-rows: repeat(3, 3px);
+      place-content: center;
+      gap: 2px;
+      border-radius: 4px;
+      color: var(--op-split-color);
+      background: color-mix(in srgb, var(--op-split-color) 15%, transparent);
+      cursor: grab;
+    }
+    #oneplane-tabs button.oneplane-split-handle i {
+      width: 3px; height: 3px; border-radius: 50%;
+      background: currentColor; pointer-events: none;
+    }
+    #oneplane-tabs button.oneplane-split-handle:hover {
+      background: color-mix(in srgb, var(--op-split-color) 33%, transparent);
+    }
+    #oneplane-tabs .oneplane-split-group[data-op-group-dragging] { opacity: .65; }
+    #oneplane-tabs .oneplane-split-group[data-op-group-dragging] .oneplane-split-handle { cursor: grabbing; }
+    #oneplane-tabs :is(.oneplane-split-group, .oneplane-tab)[data-op-drop-before] { box-shadow: inset 3px 0 #a9c1ff !important; }
+    #oneplane-tabs :is(.oneplane-split-group, .oneplane-tab)[data-op-drop-after] { box-shadow: inset -3px 0 #a9c1ff !important; }
 
     /* The native separator can be effectively zero-width with separation=0.
        Give it a real hit target and draw a handle, without adding layout gaps. */

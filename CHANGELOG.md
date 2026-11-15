@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-preview.16
+
+- Render each native Split View as a single horizontal group with shared background, outline and a dedicated six-dot handle on its left.
+- Drag the handle to reorder the entire native group within the window without unsplitting; keyboard arrows on the handle provide an alternative.
+- Drag individual tabs out of the group to unsplit; treat other groups as atomic drop targets.
+- Include group handle width in tab-strip centering and preserve directional hover expansion.
+- Retain native page-divider resize controls.
+
 ## 0.1.0-preview.15
 
 - Speed up tab and inline address transitions, and align the real popover with the compact field's measured origin and header.

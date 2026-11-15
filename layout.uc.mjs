@@ -525,8 +525,9 @@ function installTabStrip() {
       };
       const rowWidth = row.getBoundingClientRect().width;
       const tabWidth = parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab")) || 36;
-      const count = list.children.length;
-      const naturalTabsWidth = count ? count * (tabWidth + 3) - 3 : 0;
+      const count = Number(row.style.getPropertyValue("--op-tab-count")) || 0;
+      const groupOverhead = Number(row.style.getPropertyValue("--op-split-count")) * 25 || 0;
+      const naturalTabsWidth = count ? count * (tabWidth + 3) - 3 + groupOverhead : 0;
       // Do not count the new-tab button or the expansion reserve in the center.
       // When space runs out, center only the visible tab viewport as far as possible.
       const collapsedTabsWidth = Math.min(naturalTabsWidth, Math.max(0, rowWidth - tabWidth - 3));
@@ -623,6 +624,10 @@ function installTabStrip() {
   }
 
   const entries = new Map();
+  const splitEntries = new Map();
+  const splitColors = new WeakMap();
+  const splitPalette = ["#8eafff", "#74d6b6", "#d6a5ff", "#efba78", "#ed8fa9"];
+  let nextSplitColor = 0;
   let frame = 0;
   let dead = false;
   // Only OnePlane's chrome UI accepts this custom flavor. Do not advertise
@@ -630,6 +635,7 @@ function installTabStrip() {
   const DRAG_TYPE = "application/x-oneplane-native-tab";
   const DRAG_CONTROLLER = "__oneplaneTabDrag";
   let draggedTab = null;
+  let draggedGroup = null;
   let dragHandled = false;
   let dragStartPoint = null;
   let dropMarker = null;
@@ -669,6 +675,9 @@ function installTabStrip() {
       }
       const owner = tabOwner(tab);
       if (!validNativeTab(tab) || owner?.[DRAG_CONTROLLER]?.source() !== tab) return null;
+      // Moving the native group as a unit is supported within one window.
+      // Individual members can still be adopted by another window.
+      if (owner !== window && owner?.[DRAG_CONTROLLER]?.group()) return null;
       const ours = privateState(window), theirs = privateState(owner);
       if (owner !== window && (ours === null || theirs === null || ours !== theirs)) return null;
       return tab;
@@ -691,6 +700,24 @@ function installTabStrip() {
     for (const [tab, entry] of entries) if (entry.item === item) return tab;
     return null;
   }
+  function groupMembers(group) {
+    return Array.from(group?.tabs || []).filter(validNativeTab);
+  }
+  function dropTarget(event) {
+    const children = Array.from(list.children);
+    if (!children.length) return null;
+    let element = event.target?.closest?.(".oneplane-split-group, .oneplane-tab");
+    // The entire group is atomic for strip drops, including its internal tabs.
+    element = element?.closest?.(".oneplane-split-group") || element;
+    if (!element || element.parentElement !== list) {
+      element = children.find(child => event.clientX < child.getBoundingClientRect().right) || children.at(-1);
+    }
+    const box = element.getBoundingClientRect();
+    const group = [...splitEntries].find(([, entry]) => entry.box === element)?.[0];
+    const tab = group ? null : tabFromItem(element);
+    const before = event.clientX < (box.left + box.right) / 2;
+    return { element, native: group || tab, group, tab, before };
+  }
   function clearDropMarker() {
     dropMarker?.removeAttribute("data-op-drop-before");
     dropMarker?.removeAttribute("data-op-drop-after");
@@ -698,12 +725,11 @@ function installTabStrip() {
   }
   function markDrop(event) {
     clearDropMarker();
-    const item = event.target?.closest?.(".oneplane-tab");
-    if (!item || !list.contains(item)) return;
-    const box = item.getBoundingClientRect();
-    dropMarker = item;
-    item.setAttribute(event.clientX < (box.left + box.right) / 2
-      ? "data-op-drop-before" : "data-op-drop-after", "true");
+    const dest = dropTarget(event);
+    if (!dest?.native || dest.group === draggedGroup && draggedGroup) return;
+    if (!draggedGroup && draggedTab && dest.group && splitGroup(draggedTab) === dest.group) return;
+    dropMarker = dest.element;
+    dropMarker.setAttribute(dest.before ? "data-op-drop-before" : "data-op-drop-after", "true");
   }
   function releaseDragReveal() {
     if (dragRevealTimer) window.clearTimeout(dragRevealTimer);
@@ -724,6 +750,7 @@ function installTabStrip() {
     releaseDragReveal();
     clearDropMarker();
     row.removeAttribute("data-op-dragging");
+    for (const entry of splitEntries.values()) entry.box.removeAttribute("data-op-group-dragging");
     splitZone.removeAttribute("data-op-dragging");
     splitZone.removeAttribute("data-op-side");
   }
@@ -731,22 +758,28 @@ function installTabStrip() {
     const source = tabOwner(tab)?.[DRAG_CONTROLLER];
     source?.markHandled();
   }
-  function onDragStart(event, tab) {
+  function onDragStart(event, tab, group = null) {
     if (!hoverSupported() || !validNativeTab(tab) || !event.dataTransfer) {
       event.preventDefault();
       return;
     }
     clearTabHover();
+    if (group && (splitGroup(tab) !== group || groupMembers(group).length < 2)) {
+      event.preventDefault();
+      return;
+    }
     draggedTab = tab;
+    draggedGroup = group;
     dragHandled = false;
     dragStartPoint = { x: event.screenX, y: event.screenY };
     try {
       event.dataTransfer.mozSetDataAt(DRAG_TYPE, tab, 0);
       event.dataTransfer.effectAllowed = "move";
-      const entry = entries.get(tab);
-      if (entry) event.dataTransfer.setDragImage(entry.item, entry.item.offsetWidth / 2, entry.item.offsetHeight / 2);
+      const image = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
+      if (image) event.dataTransfer.setDragImage(image, image.offsetWidth / 2, image.offsetHeight / 2);
       row.setAttribute("data-op-dragging", "true");
-      if ((browser.selectedTab !== tab || isSplit(tab)) && window.gZenViewSplitter?.splitTabs) {
+      if (group) image?.setAttribute("data-op-group-dragging", "true");
+      if (!group && (browser.selectedTab !== tab || isSplit(tab)) && window.gZenViewSplitter?.splitTabs) {
         splitZone.setAttribute("data-op-dragging", "true");
       }
       event.stopPropagation();
@@ -754,6 +787,7 @@ function installTabStrip() {
       event.preventDefault();
       endDragVisual();
       draggedTab = null;
+      draggedGroup = null;
       console.error("[OnePlane] Tab drag start:", error);
     }
   }
@@ -764,39 +798,55 @@ function installTabStrip() {
     event.dataTransfer.dropEffect = "move";
     markDrop(event);
   }
+  function moveNativeNextTo(element, dest) {
+    if (!element || !dest?.native || element === dest.native) return false;
+    const method = dest.before ? "moveTabBefore" : "moveTabAfter";
+    if (typeof browser[method] !== "function") return false;
+    browser[method](element, dest.native);
+    return true;
+  }
   function onStripDrop(event) {
     const tab = readDraggedTab(event);
     if (!tab) return;
     event.preventDefault();
     event.stopPropagation();
-    const item = event.target?.closest?.(".oneplane-tab");
-    const neighbor = item && tabFromItem(item);
     const owner = tabOwner(tab);
-    if (neighbor === tab || (owner === window && splitGroup(tab) && splitGroup(tab) === splitGroup(neighbor))) {
-      sourceHandled(tab); clearDropMarker(); return;
-    }
+    const source = owner?.[DRAG_CONTROLLER];
+    const group = source?.group();
+    const dest = dropTarget(event);
     try {
-      if (isSplit(tab) && !unsplitTab(tab)) { sourceHandled(tab); return; }
-    } catch (error) { console.error("[OnePlane] Unsplit before move:", error); sourceHandled(tab); return; }
-    const all = Array.from(browser.tabs);
-    let index = neighbor ? all.indexOf(neighbor) +
-      (event.clientX >= (item.getBoundingClientRect().left + item.getBoundingClientRect().right) / 2 ? 1 : 0)
-      : all.length;
-    try {
+      if (group) {
+        // Zen exposes a real tab-group object. Moving that object keeps the
+        // grid, live browser instances and the selected pane intact.
+        if (owner === window && splitGroup(tab) === group && dest?.native !== group) {
+          moveNativeNextTo(group, dest);
+        }
+        source?.markHandled();
+        schedule();
+        return;
+      }
+      if (dest?.tab === tab || (owner === window && dest?.group && splitGroup(tab) === dest.group)) {
+        source?.markHandled();
+        return;
+      }
+      if (isSplit(tab) && !unsplitTab(tab)) { source?.markHandled(); return; }
       if (owner === window) {
-        const old = all.indexOf(tab);
-        if (old < index) index--;
-        browser.moveTabTo(tab, { tabIndex: Math.max(0, Math.min(all.length - 1, index)) });
-        sourceHandled(tab);
+        // Dropping a member beyond its original group detaches only that
+        // member. Never insert an ordinary tab inside another split group.
+        moveNativeNextTo(tab, dest);
+        source?.markHandled();
       } else {
-        // Mark the source before adoption changes the tab's owner document.
-        const source = owner[DRAG_CONTROLLER];
-        const adopted = browser.adoptTab(tab, { tabIndex: index, selectTab: true });
+        const all = Array.from(browser.tabs);
+        const boundary = dest?.group ? groupMembers(dest.group) : dest?.tab ? [dest.tab] : [];
+        const index = boundary.length
+          ? all.indexOf(dest.before ? boundary[0] : boundary.at(-1)) + (dest.before ? 0 : 1)
+          : all.length;
+        const adopted = browser.adoptTab(tab, { tabIndex: Math.max(0, index), selectTab: true });
         if (adopted) source?.markHandled();
       }
       schedule();
     } catch (error) {
-      console.error("[OnePlane] Tab move:", error);
+      console.error("[OnePlane] Tab or split group move:", error);
     } finally { clearDropMarker(); }
   }
   function splitSide(event) {
@@ -842,10 +892,11 @@ function installTabStrip() {
   function onDragEnd(event, tab) {
     const dt = event.dataTransfer;
     const handled = dragHandled;
+    const wasGroup = Boolean(draggedGroup);
     const start = dragStartPoint;
-    draggedTab = null; dragHandled = false; dragStartPoint = null;
+    draggedTab = null; draggedGroup = null; dragHandled = false; dragStartPoint = null;
     endDragVisual();
-    if (!start || handled || dt?.mozUserCancelled || dt?.dropEffect !== "none" ||
+    if (wasGroup || !start || handled || dt?.mozUserCancelled || dt?.dropEffect !== "none" ||
         !validNativeTab(tab) || tabOwner(tab) !== window) return;
     // A cancelled drag or a drop within this window must never create
     // another window. screenX/Y are browser-chrome desktop CSS coordinates.
@@ -869,10 +920,12 @@ function installTabStrip() {
   }
   const dragController = {
     source: () => draggedTab,
+    group: () => draggedGroup,
     markHandled: () => {
       dragHandled = true;
       endDragVisual();
       draggedTab = null;
+      draggedGroup = null;
     }
   };
   window[DRAG_CONTROLLER] = dragController;
@@ -1048,6 +1101,42 @@ function installTabStrip() {
     return { item, button, title, img, audio, src: null };
   }
 
+  function createSplitEntry(group) {
+    const box = html("div", "oneplane-split-group");
+    box.setAttribute("role", "group");
+    const handle = html("button", "oneplane-split-handle");
+    handle.type = "button";
+    handle.draggable = true;
+    handle.title = "Move entire Split View";
+    handle.setAttribute("aria-label", "Move entire Split View");
+    for (let i = 0; i < 6; i++) handle.append(html("i"));
+    handle.addEventListener("dragstart", event => {
+      const member = groupMembers(group)[0];
+      if (member) onDragStart(event, member, group);
+      else event.preventDefault();
+    });
+    handle.addEventListener("dragend", event => onDragEnd(event, draggedTab));
+    handle.addEventListener("click", event => {
+      event.stopPropagation();
+      const member = groupMembers(group)[0];
+      if (member && splitGroup(browser.selectedTab) !== group) browser.selectedTab = member;
+    });
+    // Keyboard alternative to drag. Move the whole group one top-level slot.
+    handle.addEventListener("keydown", event => {
+      if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+      const before = event.key === "ArrowLeft";
+      const other = before ? box.previousElementSibling : box.nextElementSibling;
+      if (!other) return;
+      const native = [...splitEntries].find(([, entry]) => entry.box === other)?.[0] || tabFromItem(other);
+      if (!native) return;
+      event.preventDefault();
+      event.stopPropagation();
+      moveNativeNextTo(group, { native, before });
+      schedule();
+    });
+    box.append(handle);
+    return {box, handle};
+  }
   function sync() {
     frame = 0;
     if (dead) return;
@@ -1069,7 +1158,21 @@ function installTabStrip() {
       }
     }
     const groups = [...new Set(tabs.map(splitGroup).filter(Boolean))];
-    const palette = ["#8eafff", "#74d6b6", "#d6a5ff", "#efba78", "#ed8fa9"];
+    const groupCount = String(groups.length);
+    if (row.style.getPropertyValue("--op-split-count") !== groupCount) {
+      row.style.setProperty("--op-split-count", groupCount);
+      scheduleGeometry();
+    }
+    const order = [];
+    const groupItems = new Map();
+    for (const group of groups) {
+      if (!splitEntries.has(group)) splitEntries.set(group, createSplitEntry(group));
+      if (!splitColors.has(group)) splitColors.set(group, splitPalette[nextSplitColor++ % splitPalette.length]);
+      const entry = splitEntries.get(group);
+      entry.box.style.setProperty("--op-split-color", splitColors.get(group));
+      entry.box.toggleAttribute("data-op-split-active", group === splitGroup(browser.selectedTab));
+      groupItems.set(group, []);
+    }
     for (let index = 0; index < tabs.length; index++) {
       const tab = tabs[index];
       let entry = entries.get(tab);
@@ -1084,9 +1187,11 @@ function installTabStrip() {
       const split = isSplit(tab);
       entry.item.toggleAttribute("data-op-split", split);
       entry.item.toggleAttribute("data-op-split-active", split && Boolean(group && group === splitGroup(browser.selectedTab)));
-      entry.item.toggleAttribute("data-op-split-prev", Boolean(group && group === splitGroup(tabs[index - 1])));
-      entry.item.toggleAttribute("data-op-split-next", Boolean(group && group === splitGroup(tabs[index + 1])));
-      if (split) entry.item.style.setProperty("--op-split-color", palette[Math.max(0, groups.indexOf(group)) % palette.length]);
+      entry.item.toggleAttribute("data-op-first", index === 0);
+      entry.item.toggleAttribute("data-op-last", index === tabs.length - 1);
+      entry.item.removeAttribute("data-op-split-prev");
+      entry.item.removeAttribute("data-op-split-next");
+      if (split) entry.item.style.setProperty("--op-split-color", splitColors.get(group) || splitPalette[0]);
       else entry.item.style.removeProperty("--op-split-color");
       entry.item.toggleAttribute("data-pinned", Boolean(tab.pinned));
       entry.item.toggleAttribute("data-busy", tab.hasAttribute("busy"));
@@ -1106,7 +1211,29 @@ function installTabStrip() {
         if (src) entry.img.setAttribute("src", src);
         else entry.img.removeAttribute("src");
       }
-      if (list.children[index] !== entry.item) list.insertBefore(entry.item, list.children[index] || null);
+      if (group && splitEntries.has(group)) {
+        const members = groupItems.get(group);
+        if (!members.length) order.push(splitEntries.get(group).box);
+        members.push(entry.item);
+      } else {
+        order.push(entry.item);
+      }
+    }
+    // Reparent the mirrored UI only when membership actually changes.
+    // Native tabs and their native Split View containers are not reparented.
+    for (const [group, items] of groupItems) {
+      const entry = splitEntries.get(group);
+      entry.box.setAttribute("aria-label", "Split View, " + items.length + " tabs");
+      for (let i = 0; i < items.length; i++) {
+        const node = items[i];
+        if (entry.box.children[i + 1] !== node) entry.box.insertBefore(node, entry.box.children[i + 1] || null);
+      }
+    }
+    for (let i = 0; i < order.length; i++) {
+      if (list.children[i] !== order[i]) list.insertBefore(order[i], list.children[i] || null);
+    }
+    for (const [group, entry] of splitEntries) {
+      if (!groupItems.has(group)) { entry.box.remove(); splitEntries.delete(group); }
     }
   }
 
@@ -1150,6 +1277,7 @@ function installTabStrip() {
     clearTabHover();
     endDragVisual();
     draggedTab = null;
+    draggedGroup = null;
     if (window[DRAG_CONTROLLER] === dragController) delete window[DRAG_CONTROLLER];
     window.removeEventListener("dragover", revealForDrag, true);
     row.removeEventListener("dragover", onStripDragOver);
@@ -1195,6 +1323,7 @@ function installTabStrip() {
     window.removeEventListener("aftercustomization", schedule);
     row.remove();
     entries.clear();
+    splitEntries.clear();
   }
 
   try {
