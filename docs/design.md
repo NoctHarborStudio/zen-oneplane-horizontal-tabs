@@ -54,6 +54,7 @@ Preview.11 observes Zen's real non-floating URL popover. A bounded animation-fra
 
 ## Manual validation checklist
 
+- [ ] Verify preview.18: hover group growth and neighbor movement; no duplicate while dragging anywhere in the upper toolbar; outside/re-entry transitions, cancellation, cross-monitor single-tab transfer, group handle and split extraction; verify address silhouette in all phases.
 - [ ] Verify preview.17: continuous drag slot preview both directions, entire group, extraction, incoming tab, Escape cancellation, cross-monitor transfer, narrow/scrolling strip; identical address first/last frame geometry, text/identity alignment, two-phase reveal, floating search and reduced motion.
 - [ ] Verify preview.16: shared group surfaces, six-dot handle, group reorder both directions, moving past a second group, keyboard reorder, individual unsplit, stable group width/centering, cancel drag and page resizing. Whole-group reorder is limited to the same window; individual tabs can still transfer between windows.
 - [ ] Verify preview.15: compact/open header alignment, initial/final frame, zoom action, unblur from start of dismissal, split membership colors, drag to unsplit (including two/three pane groups), drag out of window, native resize handles in both orientations with zero separation.

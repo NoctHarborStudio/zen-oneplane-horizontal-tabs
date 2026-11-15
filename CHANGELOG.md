@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-preview.18
+
+- Animate the actual Split View wrapper width alongside its expanded member.
+- Use a transparent native drag image while the pointer is inside the whole upper toolbar, with the real tab/group following the pointer.
+- Switch to the normal OS drag image outside the toolbar and hide the original until drop or re-entry.
+- Unify compact and expanded address clipping, corners, text and identity icon geometry, and disable competing inline result animations.
+
 ## 0.1.0-preview.17
 
 - Preview horizontal drag reordering in real time: the native drag image follows the pointer, while adjacent tab/group slots slide and a translucent destination slot moves into place.

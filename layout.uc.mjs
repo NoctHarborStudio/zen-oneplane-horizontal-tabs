@@ -274,7 +274,6 @@ function installTabStrip() {
         bar.hasAttribute("zen-floating-urlbar") || url.hasAttribute("data-op-empty")) return;
     const box = bar.getBoundingClientRect();
     const anchor = url.getBoundingClientRect();
-    const input = bar.querySelector(".urlbar-input-container")?.getBoundingClientRect();
     if (box.width > 0 && box.height > 0) {
       addressCompactWidth = box.width;
       addressAnchor = { dx: box.left - anchor.left, dy: box.top - anchor.top,
@@ -315,7 +314,7 @@ function installTabStrip() {
       (view?.getBoundingClientRect().bottom || bounds.bottom) - bounds.top);
     const visible = header + (full - header) * reveal;
     bar.style.setProperty("--op-url-live-clip",
-      "inset(0px 0px " + (bounds.height - visible).toFixed(2) + "px 0px round 8px)");
+      "inset(0px 0px " + Math.max(0,bounds.height - visible).toFixed(2) + "px 0px round var(--op-url-radius))");
   }
   function beginAddressPhase(name, from, to, duration) {
     addressTransition = { name, from, to, duration, start: null };
@@ -640,6 +639,9 @@ function installTabStrip() {
   const DRAG_CONTROLLER = "__oneplaneTabDrag";
   let draggedTab = null;
   let draggedGroup = null;
+  let dragNode = null, dragImageMode = null, dragGrabRatio = .5, dragGrabY = .5;
+  const blankDragImage = html("canvas");
+  blankDragImage.width = blankDragImage.height = 1;
   let dragHandled = false;
   let dragStartPoint = null;
   let dropMarker = null;
@@ -748,7 +750,7 @@ function installTabStrip() {
     liveDragTarget = null;
     for (const node of dragShifted) {
       node.style.removeProperty("--op-drag-x");
-      node.removeAttribute("data-op-drag-slot");
+      node.removeAttribute("data-op-drag-follow");
     }
     dragShifted.clear();
     row.removeAttribute("data-op-live-drag");
@@ -767,10 +769,55 @@ function installTabStrip() {
       row.removeAttribute("data-op-drag-commit");
     });
   }
-  function shiftDragNode(node, x, placeholder = false) {
+  function shiftDragNode(node, x, follow = false) {
     node.style.setProperty("--op-drag-x", x.toFixed(2) + "px");
-    node.toggleAttribute("data-op-drag-slot", placeholder);
+    node.toggleAttribute("data-op-drag-follow", follow);
     dragShifted.add(node);
+  }
+  function toolbarContainsPoint(x, y) {
+    const rect = toolbarWrapper?.getBoundingClientRect();
+    return Boolean(rect && x >= rect.left && x < rect.right &&
+      y >= rect.top && y <= Math.max(rect.top + 8, rect.bottom));
+  }
+  function setDragImageMode(mode, event) {
+    if (!dragNode || mode === dragImageMode) return;
+    try {
+      const session = Cc["@mozilla.org/widget/dragservice;1"]
+        .getService(Ci.nsIDragService).getCurrentSession(window);
+      const image = mode === "inline" ? blankDragImage : dragNode;
+      const x = mode === "inline" ? 0 : Math.round(dragNode.offsetWidth * dragGrabRatio);
+      const y = mode === "inline" ? 0 : Math.round(dragNode.offsetHeight * dragGrabY);
+      // Capture the visible source before hiding it in its old slot.
+      if (mode === "outside") dragNode.removeAttribute("data-op-detached");
+      if (session?.updateDragImage) session.updateDragImage(image, x, y);
+      else if (event?.dataTransfer?.updateDragImage) event.dataTransfer.updateDragImage(image, x, y);
+      else return;
+      dragImageMode = mode;
+      dragNode.toggleAttribute("data-op-detached", mode === "outside");
+      row.toggleAttribute("data-op-inline-drag", mode === "inline");
+      if (mode === "outside") clearLiveDrag();
+    } catch (error) {
+      console.error("[OnePlane] Drag image transition:", error);
+    }
+  }
+  function followLocalSource(event, node) {
+    const rect = unshiftedRect(node);
+    shiftDragNode(node, event.clientX - rect.width * dragGrabRatio - rect.left, true);
+  }
+  function sourceDrag(event) {
+    if (!draggedTab || !dragNode || (event.screenX === 0 && event.screenY === 0)) return;
+    const x = event.screenX - window.mozInnerScreenX;
+    const y = event.screenY - window.mozInnerScreenY;
+    if (!toolbarContainsPoint(x, y)) setDragImageMode("outside", event);
+    else {
+      setDragImageMode("inline", event);
+      previewStripDrag({clientX:x, clientY:y}, draggedTab);
+    }
+  }
+  function onWindowDragLeave(event) {
+    if (!draggedTab || !dragNode) return;
+    if (event.relatedTarget instanceof Node && toolbarWrapper?.contains(event.relatedTarget)) return;
+    if (!toolbarContainsPoint(event.clientX,event.clientY)) setDragImageMode("outside",event);
   }
   function previewStripDrag(event, tab) {
     const owner = tabOwner(tab);
@@ -780,17 +827,23 @@ function installTabStrip() {
     if (!nodes.length) { clearLiveDrag(); return null; }
     const slots = nodes.map(node => ({ node, rect: unshiftedRect(node) }));
     const local = owner === window && entry?.parentElement === list;
+    const inline = owner === window && dragImageMode === "inline" && entry === dragNode;
     const memberGroup = !local && owner === window && splitGroup(tab);
     if (memberGroup) {
       const own = slots.find(slot => slot.node === splitEntries.get(memberGroup)?.box);
       if (own && event.clientX >= own.rect.left && event.clientX <= own.rect.right) {
         clearLiveDrag();
+        if (inline) followLocalSource(event, entry);
         return { ...nativeSlot(own.node), before: false };
       }
     }
     const moving = local ? slots.find(slot => slot.node === entry) : null;
     const rest = slots.filter(slot => slot !== moving);
-    if (!rest.length) { clearLiveDrag(); return null; }
+    if (!rest.length) {
+      clearLiveDrag();
+      if (inline) followLocalSource(event, entry);
+      return null;
+    }
     const found = dragSlotIndex(rest, event.clientX);
     const index = found < 0 ? rest.length : found;
     const target = rest[Math.min(index, rest.length - 1)];
@@ -801,8 +854,8 @@ function installTabStrip() {
     const gap = parseFloat(window.getComputedStyle(list).columnGap) || 3;
     const base = slots[0].rect.left;
     const incomingWidth = Math.max(1, parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab")) || 36);
-    // The source's native drag image follows the cursor, while a translucent
-    // placeholder shows its eventual slot. Other slots glide to make room.
+    // Only the actual source follows the pointer. Neighbors glide into
+    // their future slots without painting an additional placeholder.
     const order = rest.slice();
     if (moving) order.splice(index, 0, moving);
     else order.splice(index, 0, { node: null, rect: { width: incomingWidth } });
@@ -810,7 +863,7 @@ function installTabStrip() {
     let left = base;
     for (const slot of order) {
       if (slot.node) {
-        shiftDragNode(slot.node, left - slot.rect.left, slot === moving);
+        if (slot !== moving || !inline) shiftDragNode(slot.node, left - slot.rect.left);
         used.add(slot.node);
       }
       left += slot.rect.width + gap;
@@ -821,10 +874,11 @@ function installTabStrip() {
     row.style.setProperty("--op-drag-incoming", (moving ? 0 : incomingWidth + gap) + "px");
     shiftDragNode(plus, 0);
     used.add(plus);
+    if (inline) { followLocalSource(event, entry); used.add(entry); }
     for (const node of [...dragShifted]) {
       if (used.has(node)) continue;
       node.style.removeProperty("--op-drag-x");
-      node.removeAttribute("data-op-drag-slot");
+      node.removeAttribute("data-op-drag-follow");
       dragShifted.delete(node);
     }
     liveDragTarget = dest;
@@ -832,9 +886,8 @@ function installTabStrip() {
   }
   function onStripDragLeave(event) {
     if (event.relatedTarget instanceof Node && row.contains(event.relatedTarget)) return;
-    const box = row.getBoundingClientRect();
-    if (event.clientX >= box.left && event.clientX <= box.right &&
-        event.clientY >= box.top && event.clientY <= box.bottom) return;
+    if (toolbarContainsPoint(event.clientX,event.clientY)) return;
+    if (draggedTab) setDragImageMode("outside",event);
     clearLiveDrag();
     clearDropMarker();
   }
@@ -857,19 +910,30 @@ function installTabStrip() {
     toolbarWrapper?.removeAttribute("oneplane-drag-hold");
   }
   function revealForDrag(event) {
-    if (!hoverSupported() || !readDraggedTab(event) || !toolbarWrapper) return;
-    const rect = toolbarWrapper.getBoundingClientRect();
-    const within = event.clientX >= rect.left && event.clientX < rect.right &&
-      event.clientY >= rect.top && event.clientY <= Math.max(rect.top + 8, rect.bottom);
-    const strip = row.getBoundingClientRect();
-    if (liveDragTarget && (event.clientX < strip.left || event.clientX > strip.right ||
-        event.clientY < strip.top || event.clientY > strip.bottom)) clearLiveDrag();
-    if (!within) { releaseDragReveal(); return; }
+    const tab = readDraggedTab(event);
+    if (!hoverSupported() || !tab || !toolbarWrapper) return;
+    const within = toolbarContainsPoint(event.clientX,event.clientY);
+    if (tabOwner(tab) === window) setDragImageMode(within ? "inline" : "outside",event);
+    else tabOwner(tab)?.[DRAG_CONTROLLER]?.outside(event);
+    if (!within) { clearLiveDrag(); releaseDragReveal(); return; }
     toolbarWrapper.setAttribute("oneplane-drag-hold", "true");
     if (dragRevealTimer) window.clearTimeout(dragRevealTimer);
     dragRevealTimer = window.setTimeout(releaseDragReveal, 500);
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "move";
+    clearDropMarker();
+    previewStripDrag(event,tab);
+  }
+  function onToolbarDrop(event) {
+    if (toolbarContainsPoint(event.clientX,event.clientY) && readDraggedTab(event)) onStripDrop(event);
   }
   function endDragVisual() {
+    dragNode?.removeAttribute("data-op-detached");
+    dragNode?.removeAttribute("data-op-drag-follow");
+    dragNode = null;
+    dragImageMode = null;
+    row.removeAttribute("data-op-inline-drag");
     releaseDragReveal();
     clearLiveDrag();
     clearDropMarker();
@@ -887,6 +951,11 @@ function installTabStrip() {
       event.preventDefault();
       return;
     }
+    const image = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
+    if (!image) { event.preventDefault(); return; }
+    const grabbed = image.getBoundingClientRect();
+    dragGrabRatio = Math.max(0,Math.min(1,(event.clientX-grabbed.left)/Math.max(1,grabbed.width)));
+    dragGrabY = Math.max(0,Math.min(1,(event.clientY-grabbed.top)/Math.max(1,grabbed.height)));
     clearTabHover();
     if (group && (splitGroup(tab) !== group || groupMembers(group).length < 2)) {
       event.preventDefault();
@@ -899,10 +968,13 @@ function installTabStrip() {
     try {
       event.dataTransfer.mozSetDataAt(DRAG_TYPE, tab, 0);
       event.dataTransfer.effectAllowed = "move";
-      const image = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
-      if (image) event.dataTransfer.setDragImage(image, image.offsetWidth / 2, image.offsetHeight / 2);
+      dragNode = image;
+      dragImageMode = "inline";
+      event.dataTransfer.setDragImage(blankDragImage, 0, 0);
       row.setAttribute("data-op-dragging", "true");
-      if (group) image?.setAttribute("data-op-group-dragging", "true");
+      row.setAttribute("data-op-inline-drag", "true");
+      image.setAttribute("data-op-drag-follow","true");
+      if (group) image.setAttribute("data-op-group-dragging", "true");
       if (!group && (browser.selectedTab !== tab || isSplit(tab)) && window.gZenViewSplitter?.splitTabs) {
         splitZone.setAttribute("data-op-dragging", "true");
       }
@@ -1051,6 +1123,7 @@ function installTabStrip() {
   const dragController = {
     source: () => draggedTab,
     group: () => draggedGroup,
+    outside: event => setDragImageMode("outside",event),
     markHandled: () => {
       dragHandled = true;
       endDragVisual();
@@ -1226,6 +1299,7 @@ function installTabStrip() {
       }
     });
     item.addEventListener("dragstart", event => onDragStart(event, tab));
+    item.addEventListener("drag", sourceDrag);
     item.addEventListener("dragend", event => onDragEnd(event, tab));
     item.append(button, audio);
     return { item, button, title, img, audio, src: null };
@@ -1245,6 +1319,7 @@ function installTabStrip() {
       if (member) onDragStart(event, member, group);
       else event.preventDefault();
     });
+    handle.addEventListener("drag", sourceDrag);
     handle.addEventListener("dragend", event => onDragEnd(event, draggedTab));
     handle.addEventListener("click", event => {
       event.stopPropagation();
@@ -1354,6 +1429,7 @@ function installTabStrip() {
     for (const [group, items] of groupItems) {
       const entry = splitEntries.get(group);
       entry.box.setAttribute("aria-label", "Split View, " + items.length + " tabs");
+      entry.box.style.setProperty("--op-split-members", String(items.length));
       for (let i = 0; i < items.length; i++) {
         const node = items[i];
         if (entry.box.children[i + 1] !== node) entry.box.insertBefore(node, entry.box.children[i + 1] || null);
@@ -1412,6 +1488,8 @@ function installTabStrip() {
     draggedGroup = null;
     if (window[DRAG_CONTROLLER] === dragController) delete window[DRAG_CONTROLLER];
     window.removeEventListener("dragover", revealForDrag, true);
+    window.removeEventListener("drop", onToolbarDrop, true);
+    window.removeEventListener("dragleave", onWindowDragLeave, true);
     row.removeEventListener("dragover", onStripDragOver);
     row.removeEventListener("drop", onStripDrop);
     row.removeEventListener("dragleave", onStripDragLeave);
@@ -1466,6 +1544,8 @@ function installTabStrip() {
     row.after(rightSpacer);
     tabbox.append(shield, splitZone);
     window.addEventListener("dragover", revealForDrag, true);
+    window.addEventListener("drop", onToolbarDrop, true);
+    window.addEventListener("dragleave", onWindowDragLeave, true);
     row.addEventListener("dragover", onStripDragOver);
     row.addEventListener("drop", onStripDrop);
     row.addEventListener("dragleave", onStripDragLeave);
