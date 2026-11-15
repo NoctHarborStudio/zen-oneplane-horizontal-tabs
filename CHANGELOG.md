@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-preview.22
+
+- Preserve the last hovered liquid-indicator target in inter-tab gaps, split handles and group padding; return to the active tab only when leaving the strip or reaching the plus.
+- Use directional edge expansion only with one to three visible tabs, counting every Split View member in rendered order. For four or more tabs use the same centered expansion for every position.
+- Add a restrained hover lift (1.008x horizontal, 1.065x vertical) without changing slot or group geometry; respect reduced motion and disabled animations.
+- Leave the Bunny extraction, insertion spring, drag buffer and native desktop transfer unchanged.
+
 ## 0.1.0-preview.21
 
 - Restore bounded directional hover expansion from preview.19 while preserving intrinsic Split View widths; eliminate cumulative anchor drift.

@@ -635,9 +635,9 @@ function installTabStrip() {
     const members = Array.from(entry.box.children).filter(node => node.classList.contains("oneplane-tab"));
     const gap = 3;
     const widths = members.reduce((total, node) => {
-      const rect = node.getBoundingClientRect();
       const style = window.getComputedStyle(node);
-      return total + rect.width + (parseFloat(style.marginInlineEnd) || 0);
+      // Hover scale is purely visual and must not change group layout.
+      return total + node.offsetWidth + (parseFloat(style.marginInlineEnd) || 0);
     }, 0);
     const width = 22 + widths + gap * members.length;
     const next = Math.max(0,width).toFixed(2) + "px";
@@ -1473,29 +1473,39 @@ function installTabStrip() {
       clearTabHover();
     }, hoverDelay());
   }
+  function pointOverTabStrip(event) {
+    const a = list.getBoundingClientRect();
+    return a.width > 0 && a.height > 0 &&
+      event.clientX >= a.left - 3 && event.clientX <= a.right + 3 &&
+      event.clientY >= a.top - 2 && event.clientY <= a.bottom + 2;
+  }
+  function releaseIndicatorHover() {
+    if (!indicatorHover) return;
+    indicatorHover = null;
+    hoverX = null;
+    refreshIndicator();
+  }
   function trackTabPointer(event) {
     if (!hoverSupported() || event.pointerType === "touch" || draggedTab) return;
     const hit = event.target?.closest?.(".oneplane-tab");
     if (hit && list.contains(hit)) {
       const point = {x:event.clientX,y:event.clientY};
-      // A moving layout must not retarget a stationary physical pointer.
+      // Ignore synthetic retargets from geometry changes under a stationary mouse.
       if (hoverTab && hoverTab !== hit && lastHoverPointer &&
           Math.hypot(point.x-lastHoverPointer.x,point.y-lastHoverPointer.y) < 1) return;
       lastHoverPointer = point;
       selectHover(hit,event.clientX); return;
     }
-    if (indicatorHover) { indicatorHover = null; hoverX = null; refreshIndicator(); }
-    if (!hoverTab) return;
     if (event.target === plus || (event.target instanceof Node && plus.contains(event.target))) {
+      releaseIndicatorHover();
       cancelHoverTimer(); return;
     }
-    // Inter-tab gaps are part of the hover session, not departures.
-    const a = list.getBoundingClientRect();
-    if (event.clientX >= a.left - 3 && event.clientX <= a.right + 3 &&
-        event.clientY >= a.top - 2 && event.clientY <= a.bottom + 2) {
-      cancelHoverTimer();
-      return;
+    // Gaps, split handles and group padding are part of the same hover
+    // session. Do not briefly retarget the selected tab in these areas.
+    if (pointOverTabStrip(event)) {
+      cancelHoverTimer(); return;
     }
+    releaseIndicatorHover();
     queueTabCollapse();
   }
   function focusTab(event) {
@@ -1505,9 +1515,11 @@ function installTabStrip() {
   function blurTab(event) {
     if (!row.contains(event.relatedTarget) && !row.matches(":hover")) queueTabCollapse();
   }
-  function leaveTabPointer() {
-    indicatorHover = null; hoverX = null;
-    refreshIndicator();
+  function leaveTabPointer(event) {
+    // The translated strip can extend beyond the row's original box.
+    // A pointerleave from the plus or row is not necessarily a departure.
+    if (event && pointOverTabStrip(event)) return;
+    releaseIndicatorHover();
     queueTabCollapse();
   }
   function onNewTabClick() { clearTabHover(); }
@@ -1641,8 +1653,7 @@ function installTabStrip() {
       const split = isSplit(tab);
       entry.item.toggleAttribute("data-op-split", split);
       entry.item.toggleAttribute("data-op-split-active", split && Boolean(group && group === splitGroup(browser.selectedTab)));
-      entry.item.toggleAttribute("data-op-first", index === 0);
-      entry.item.toggleAttribute("data-op-last", index === tabs.length - 1);
+      // First/last flags are assigned after groups are laid out in visual order.
       entry.item.removeAttribute("data-op-split-prev");
       entry.item.removeAttribute("data-op-split-next");
       if (split) entry.item.style.setProperty("--op-split-color", splitColors.get(group) || splitPalette[0]);
@@ -1690,6 +1701,15 @@ function installTabStrip() {
     for (const [group, entry] of splitEntries) {
       if (!groupItems.has(group)) { entry.box.remove(); splitEntries.delete(group); }
       else measureSplitGroup(group);
+    }
+    // Count each actual visible tab, including split members, but never
+    // the group wrapper, handle or plus. Use rendered order, not native
+    // indexes, because a split can collect non-adjacent native tabs.
+    const visualTabs = Array.from(list.querySelectorAll(".oneplane-tab"));
+    row.toggleAttribute("data-op-small-strip", visualTabs.length <= 3);
+    for (let i = 0; i < visualTabs.length; i++) {
+      visualTabs[i].toggleAttribute("data-op-first", i === 0);
+      visualTabs[i].toggleAttribute("data-op-last", i === visualTabs.length - 1);
     }
     refreshIndicator();
   }

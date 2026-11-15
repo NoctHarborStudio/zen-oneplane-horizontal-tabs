@@ -358,15 +358,16 @@
       color: var(--toolbar-color, currentColor);
       -moz-window-dragging: no-drag;
     }
-    /* Stable collapsed geometry: never use a previously displaced tab
-       as the next anchor. Restore the original edge/middle expansion. */
+    /* Same centered expansion for every tab when the strip is crowded.
+       Only strips of one to three visible tabs get directional edges.
+       The first/last attributes are assigned across split members too. */
     #oneplane-tabs:has(.oneplane-tab[data-op-expanded]) {
       --op-expand-left: calc(var(--op-growth) / 2);
     }
-    #oneplane-tabs:has(.oneplane-tab[data-op-first]:not([data-op-last])[data-op-expanded]) {
+    #oneplane-tabs[data-op-small-strip]:has(.oneplane-tab[data-op-first]:not([data-op-last])[data-op-expanded]) {
       --op-expand-left: var(--op-growth);
     }
-    #oneplane-tabs:has(.oneplane-tab[data-op-last]:not([data-op-first])[data-op-expanded]) {
+    #oneplane-tabs[data-op-small-strip]:has(.oneplane-tab[data-op-last]:not([data-op-first])[data-op-expanded]) {
       --op-expand-left: 0px;
     }
     #oneplane-tabs :is(.oneplane-tab-list, .oneplane-new-tab) {
@@ -702,7 +703,20 @@
       transition: width var(--op-tab-speed) var(--op-tab-ease),
         flex-basis var(--op-tab-speed) var(--op-tab-ease), background-color var(--op-tab-speed) ease,
         transform 170ms cubic-bezier(.22,.72,.2,1), opacity 120ms ease,
-        margin-inline-end var(--op-tab-speed) var(--op-tab-ease);
+        margin-inline-end var(--op-tab-speed) var(--op-tab-ease),
+        scale var(--op-tab-speed) cubic-bezier(.2,.85,.25,1.15);
+    }
+    /* Small visual lift on hover, independent of layout and drag transforms.
+       A 240px expanded tab grows <2px horizontally, staying inside its gap. */
+    #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-expanded] {
+      scale: 1.008 1.065;
+      z-index: 2;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-expanded] { scale: none; }
+    }
+    @media (-moz-pref("zen.oneplane.animation-duration", 0)) {
+      #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-expanded] { scale: none; }
     }
     #oneplane-tabs[data-op-dragging] .oneplane-tab {
       width: var(--op-tab) !important;
