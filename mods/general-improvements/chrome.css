@@ -1,0 +1,23 @@
+/* Zen Refined / General Improvements — opt-in development preview. */
+@media -moz-pref("zen.refined.general.loading-backdrop") {
+  :root {
+    --zr-loading-backdrop: #000;
+    --zr-loading-return-delay: 350ms;
+  }
+
+  /* Keep the backdrop through the scale-out return transition. */
+  #main-window #tabbrowser-tabpanels:not([zen-split-view="true"]):not(:has(> .zen-glance-background, > .zen-glance-overlay, [zen-glance-selected="true"])) {
+    transition: background-color 0s var(--zr-loading-return-delay) !important;
+  }
+
+  /* Only change the backing surface, not the animated page itself. */
+  #main-window:has(.tabbrowser-tab[selected][busy])
+    #tabbrowser-tabpanels:not([zen-split-view="true"]):not(:has(> .zen-glance-background, > .zen-glance-overlay, [zen-glance-selected="true"])) {
+    background-color: var(--zr-loading-backdrop) !important;
+    transition-delay: 0s !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root { --zr-loading-return-delay: 0ms; }
+  }
+}
