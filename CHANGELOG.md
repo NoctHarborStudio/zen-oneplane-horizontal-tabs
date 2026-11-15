@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-preview.21
+
+- Restore bounded directional hover expansion from preview.19 while preserving intrinsic Split View widths; eliminate cumulative anchor drift.
+- Preserve the approved Bunny extraction; add a 240ms full-card insertion spring with a fast-opening slot and prevent re-compression during re-entry.
+- Add elastic horizontal resistance and neighbor displacement before the reorder threshold.
+- Keep the liquid indicator under the selected tab when idle, retarget it on hover and return it to the selected tab on departure.
+- Preserve Sine package identity and advance update metadata.
+
 ## 0.1.0-preview.20
 
 - Anchor hover expansion to the actual tab center, including adjacent Split View groups and rapid retargeting; use intrinsic group widths.

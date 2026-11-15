@@ -546,6 +546,7 @@ function installTabStrip() {
       const bookmarksHeight = bookmarks && !bookmarks.collapsed && !bookmarks.hidden
         ? bookmarks.getBoundingClientRect().height : 0;
       if (navHeight > 0) setLength(toolbarWrapper, "--op-measured-toolbar-height", navHeight + bookmarksHeight);
+      refreshIndicator();
     });
   }
   function observeGeometry() {
@@ -668,6 +669,7 @@ function installTabStrip() {
   let dragGhost = null, dragGhostBody = null, dragPull = 0, dragEdge = 0, dragWidth = 0;
   let dragGhostAnimation = null;
   let dragLastPoint = null;
+  let dragReentry = false, dragInsertAnimation = null, dragInsertNode = null;
   const blankDragImage = html("canvas");
   blankDragImage.width = blankDragImage.height = 1;
   let dragHandled = false;
@@ -764,7 +766,11 @@ function installTabStrip() {
       const transform = window.getComputedStyle(node).transform;
       if (transform && transform !== "none") x = new DOMMatrixReadOnly(transform).m41;
     } catch {}
-    return { left: rect.left - x, right: rect.right - x, width: rect.width };
+    // CSS individual scale can be animated during reinsertion; do not use
+    // the painted width as the slot width or the reorder thresholds drift.
+    const width = node.offsetWidth;
+    const center = (rect.left + rect.right)/2 - x;
+    return { left: center-width/2, right: center+width/2, width };
   }
   function dragSlotIndex(slots, x) {
     const midpoint = slot => (slot.rect.left + slot.rect.right) / 2;
@@ -883,6 +889,38 @@ function installTabStrip() {
       return true;
     } catch (error) { console.error("[OnePlane] Drag image transition:",error); return false; }
   }
+  function cancelInsertion() {
+    const animation = dragInsertAnimation;
+    dragInsertAnimation = null;
+    if (animation) animation.cancel();
+    dragInsertNode?.removeAttribute("data-op-reinsert");
+    dragInsertNode = null;
+  }
+  function animateInsertion(event) {
+    cancelInsertion();
+    if (!dragNode || reducedMotion.matches ||
+        prefs.getIntPref("zen.oneplane.animation-duration",160) === 0) return;
+    const node = dragNode;
+    dragInsertNode = node;
+    node.setAttribute("data-op-reinsert","true");
+    const rect = node.getBoundingClientRect();
+    const dy = Math.max(-12,Math.min(34,event.clientY-(rect.top+rect.height/2)));
+    // Animate the real card (not just its icon), using individual transforms
+    // so horizontal tracking and native drop/slot positioning stay independent.
+    const animation = node.animate([
+      {translate:"0 "+dy+"px",scale:".78 1.06",offset:0},
+      {translate:"0 -4px",scale:"1.16 .72",offset:.30},
+      {translate:"0 2px",scale:".94 1.14",offset:.56},
+      {translate:"0 -1px",scale:"1.04 .97",offset:.78},
+      {translate:"0 0",scale:"1 1",offset:1}
+    ],{duration:240,easing:"linear"});
+    dragInsertAnimation=animation;
+    animation.onfinish=animation.oncancel=()=>{
+      if (dragInsertAnimation !== animation) return;
+      dragInsertAnimation=null; dragInsertNode=null;
+      node.removeAttribute("data-op-reinsert");
+    };
+  }
   function setDragImageMode(mode, event) {
     if (!dragNode || mode === dragImageMode) return;
     const previous = dragImageMode;
@@ -908,17 +946,20 @@ function installTabStrip() {
     dragNode.toggleAttribute("data-op-detached", detached);
     row.toggleAttribute("data-op-inline-drag", !detached);
     if (detached) {
+      dragReentry = false;
+      cancelInsertion();
       setPull(0);
       clearLiveDrag();
       if (mode === "content") showGhost(event,previous === "inline");
     } else {
       hideGhost();
       setPull(0);
-      if (previous !== "inline" && !reducedMotion.matches &&
-          prefs.getIntPref("zen.oneplane.animation-duration",160) !== 0) {
-        try { dragNode.firstElementChild?.animate([
-          {transform:"scale(.66,.74)"},{transform:"scale(1.11,.94)",offset:.55},{transform:"scale(1)"}
-        ],{duration:220,easing:"ease-out"}); } catch {}
+      if (previous !== "inline") {
+        dragReentry = true;
+        try { animateInsertion(event); } catch (error) {
+          cancelInsertion();
+          console.error("[OnePlane] Insertion animation:",error);
+        }
       }
     }
     if (draggedTab && !draggedGroup) measureSplitGroup(splitGroup(draggedTab));
@@ -975,22 +1016,45 @@ function installTabStrip() {
     const order = rest.slice();
     if (moving) order.splice(index, 0, moving);
     else order.splice(index, 0, { node: null, rect: { width: incomingWidth } });
-    const used = new Set();
+    const used = new Set(), positions = [];
     let left = base;
     for (const slot of order) {
-      if (slot.node) {
-        if (slot !== moving || !inline) shiftDragNode(slot.node, left - slot.rect.left);
-        used.add(slot.node);
-      }
+      positions.push(left);
       left += slot.rect.width + gap;
     }
-    // Incoming tabs (other window or a member being extracted) get a gap.
-    // The plus moves with the visible strip; the source group stays intact
-    // until the native unsplit actually succeeds at drop.
+    // An elastic buffer follows the pointer before crossing the 8px
+    // reorder hysteresis. Neighboring slots yield as a chain, with
+    // decreasing pressure farther from the dragged item. The dragged
+    // card has resistance at the edges of its slot, not a free overlap.
+    let pressure = 0, direction = 0, followX = null;
+    if (inline && moving) {
+      const slotLeft = positions[index], width = moving.rect.width;
+      const rawDelta = event.clientX - width*dragGrabRatio - slotLeft;
+      direction = Math.sign(rawDelta);
+      const maxYield = Math.min(15,Math.max(8,width*.33));
+      pressure = maxYield * (1-Math.exp(-Math.abs(rawDelta)/18));
+      followX = slotLeft + direction * Math.min(Math.abs(rawDelta),pressure);
+    }
+    for (let i=0;i<order.length;i++) {
+      const slot=order[i];
+      if (!slot.node) continue;
+      if (slot === moving && inline) {
+        if (followX !== null) shiftDragNode(slot.node,followX-slot.rect.left,true);
+        else followLocalSource(event,slot.node);
+      } else {
+        // Shift the whole chain equally for the first neighbor; the
+        // same displacement keeps the existing gaps from collapsing.
+        const onSide = direction > 0 ? i > index : direction < 0 && i < index;
+        const elastic = onSide ? direction*pressure : 0;
+        shiftDragNode(slot.node,positions[i]-slot.rect.left+elastic);
+      }
+      used.add(slot.node);
+    }
+    // Incoming tabs retain the original native group until successful drop.
     row.style.setProperty("--op-drag-incoming", (moving ? 0 : incomingWidth + gap) + "px");
-    shiftDragNode(plus, 0);
+    shiftDragNode(plus,direction > 0 ? pressure : 0);
     used.add(plus);
-    if (inline) { followLocalSource(event, entry); used.add(entry); }
+    if (inline && !moving) { followLocalSource(event,entry); used.add(entry); }
     for (const node of [...dragShifted]) {
       if (used.has(node)) continue;
       node.style.removeProperty("--op-drag-x");
@@ -1046,7 +1110,8 @@ function installTabStrip() {
         return;
       }
       if (dragImageMode === "outside") return;
-      if (p > 0) {
+      if (p === 0) dragReentry = false;
+      if (p > 0 && !dragReentry) {
         clearLiveDrag();
         setPull(p);
         followLocalSource(event,dragNode);
@@ -1058,13 +1123,17 @@ function installTabStrip() {
       }
       setPull(0);
     } else if (!local) tabOwner(tab)?.[DRAG_CONTROLLER]?.outside(event);
-    if (!within) { clearLiveDrag(); releaseDragReveal(); return; }
+    if (!within && !(local && dragReentry && dragImageMode === "inline")) {
+      clearLiveDrag(); releaseDragReveal(); return;
+    }
     toolbarWrapper.setAttribute("oneplane-drag-hold", "true");
     if (dragRevealTimer) window.clearTimeout(dragRevealTimer);
     dragRevealTimer = window.setTimeout(releaseDragReveal, 500);
-    event.preventDefault();
-    event.stopPropagation();
-    event.dataTransfer.dropEffect = "move";
+    if (within) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = "move";
+    }
     clearDropMarker();
     previewStripDrag(event,tab);
   }
@@ -1079,7 +1148,7 @@ function installTabStrip() {
       dragNode?.style.removeProperty(name);
     hideGhost();
     dragGhost?.remove(); dragGhost = null; dragGhostBody = null;
-    dragPull = 0; dragLastPoint = null;
+    dragPull = 0; dragLastPoint = null; dragReentry = false;
     dragNode = null;
     dragImageMode = null;
     row.removeAttribute("data-op-inline-drag");
@@ -1090,6 +1159,7 @@ function installTabStrip() {
     for (const entry of splitEntries.values()) entry.box.removeAttribute("data-op-group-dragging");
     splitZone.removeAttribute("data-op-dragging");
     splitZone.removeAttribute("data-op-side");
+    refreshIndicator();
   }
   function sourceHandled(tab) {
     const source = tabOwner(tab)?.[DRAG_CONTROLLER];
@@ -1102,6 +1172,7 @@ function installTabStrip() {
     }
     const image = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
     if (!image) { event.preventDefault(); return; }
+    cancelInsertion();
     const grabbed = image.getBoundingClientRect();
     dragGrabRatio = Math.max(0,Math.min(1,(event.clientX-grabbed.left)/Math.max(1,grabbed.width)));
     dragGrabY = Math.max(0,Math.min(1,(event.clientY-grabbed.top)/Math.max(1,grabbed.height)));
@@ -1292,25 +1363,7 @@ function installTabStrip() {
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const clamp = (x, min, max) => Math.max(min, Math.min(max, x));
   let hoverTab = null, hoverX = null, hoverTimer = 0, indicatorFrame = 0;
-  let hoverAnchor = null, hoverGeometryFrame = 0, hoverGeometryUntil = 0;
-  let lastHoverPointer = null;
-  function alignHoverGeometry(now) {
-    hoverGeometryFrame = 0;
-    if (!hoverTab || hoverAnchor === null || dead || !list.contains(hoverTab)) return;
-    const offset = parseFloat(window.getComputedStyle(list).translate) || 0;
-    const bounds = hoverTab.getBoundingClientRect();
-    const baseCenter = (bounds.left + bounds.right)/2 - offset;
-    const leftRoom = Math.max(0,leftSpacer.getBoundingClientRect().width-4);
-    const rightLimit = row.getBoundingClientRect().right + rightSpacer.getBoundingClientRect().width - 4;
-    const maxOffset = Math.max(-leftRoom,rightLimit-(plus.getBoundingClientRect().right-offset));
-    const next = Math.max(-leftRoom,Math.min(maxOffset,hoverAnchor-baseCenter));
-    row.style.setProperty("--op-hover-offset",next.toFixed(2)+"px");
-    if (now < hoverGeometryUntil) hoverGeometryFrame = window.requestAnimationFrame(alignHoverGeometry);
-  }
-  function scheduleHoverGeometry() {
-    hoverGeometryUntil = window.performance.now()+650;
-    if (!hoverGeometryFrame) hoverGeometryFrame = window.requestAnimationFrame(alignHoverGeometry);
-  }
+  let lastHoverPointer = null, indicatorHover = null;
   let indicatorShown = false, ix = 0, iy = 0, iw = 14, ih = 3, iv = 0, last = 0, until = 0;
   const hoverDelay = () => reducedMotion.matches ? 0 :
     clamp(prefs.getIntPref("zen.oneplane.hover-close-delay", 260), 0, 600);
@@ -1320,11 +1373,15 @@ function installTabStrip() {
     hoverTimer = 0;
   }
   function indicatorTarget() {
-    if (!hoverTab || !list.contains(hoverTab)) return null;
-    const a = hoverTab.getBoundingClientRect(), s = row.getBoundingClientRect();
+    const item = indicatorHover && list.contains(indicatorHover) ?
+      indicatorHover : entries.get(browser.selectedTab)?.item;
+    if (!item || !list.contains(item) || item.hasAttribute("data-op-detached") ||
+        item.closest(".oneplane-split-group[data-op-detached]")) return null;
+    const a = item.getBoundingClientRect(), s = row.getBoundingClientRect();
     if (a.width <= 0 || s.width <= 0) return null;
     const center = (a.left + a.right) / 2;
-    const bias = hoverX === null ? 0 : clamp((hoverX - center) / Math.max(1, a.width / 2), -1, 1);
+    const bias = item !== indicatorHover || hoverX === null ? 0 :
+      clamp((hoverX - center) / Math.max(1, a.width / 2), -1, 1);
     return { x: center - s.left - row.clientLeft + bias * Math.min(12, a.width * .12),
       y: Math.min(s.height - 2, a.bottom - s.top + 2), w: clamp(a.width * .14, 12, 18) };
   }
@@ -1338,7 +1395,7 @@ function installTabStrip() {
   function tickIndicator(now) {
     indicatorFrame = 0;
     const p = indicatorTarget();
-    if (dead || !p || !indicatorShown) return;
+    if (dead || !p || !indicatorShown) { hideIndicator(); return; }
     const dt = last ? clamp((now - last) / 1000, .001, .05) : 1 / 60;
     last = now;
     if (reducedMotion.matches) {
@@ -1364,50 +1421,48 @@ function installTabStrip() {
     }
   }
   function scheduleIndicator() {
-    if (!hoverTab || !indicatorShown || dead) return;
+    if (!indicatorShown || dead) return;
     until = window.performance.now() + 450;
     if (!indicatorFrame) { last = 0; indicatorFrame = window.requestAnimationFrame(tickIndicator); }
+  }
+  const indicatorPreferenceObserver = { observe() { refreshIndicator(); } };
+  function hideIndicator() {
+    indicatorShown = false;
+    indicator.removeAttribute("data-visible");
+    if (indicatorFrame) window.cancelAnimationFrame(indicatorFrame);
+    indicatorFrame = 0; iv = 0; last = 0;
+  }
+  function refreshIndicator() {
+    if (dead || !prefs.getBoolPref("zen.oneplane.tab-indicator", true)) {
+      hideIndicator(); return;
+    }
+    const p = indicatorTarget();
+    if (!p) { hideIndicator(); return; }
+    if (!indicatorShown) {
+      ix=p.x; iy=p.y; iw=p.w; ih=3; iv=0;
+      paintIndicator();
+      indicatorShown=true;
+      indicator.setAttribute("data-visible","true");
+    }
+    scheduleIndicator();
   }
   function selectHover(item, x = null) {
     if (!item || !list.contains(item)) return;
     cancelHoverTimer();
     hoverX = x;
     if (hoverTab !== item) {
-      const bounds = item.getBoundingClientRect();
-      hoverAnchor = (bounds.left+bounds.right)/2;
-      row.setAttribute("data-op-hover-anchor","true");
       hoverTab?.removeAttribute("data-op-expanded");
       hoverTab = item;
       item.setAttribute("data-op-expanded", "true");
     }
-    scheduleHoverGeometry();
-    if (!prefs.getBoolPref("zen.oneplane.tab-indicator", true)) {
-      indicatorShown = false;
-      indicator.removeAttribute("data-visible");
-      if (indicatorFrame) window.cancelAnimationFrame(indicatorFrame);
-      indicatorFrame = 0;
-      return;
-    }
-    if (!indicatorShown) {
-      const p = indicatorTarget();
-      if (p) { ix = p.x; iy = p.y; iw = p.w; ih = 3; iv = 0; paintIndicator(); }
-      indicatorShown = true;
-      indicator.setAttribute("data-visible", "true");
-    }
-    scheduleIndicator();
+    indicatorHover = item;
+    refreshIndicator();
   }
   function clearTabHover() {
     cancelHoverTimer();
     hoverTab?.removeAttribute("data-op-expanded");
-    hoverTab = null; hoverX = null; hoverAnchor = null; lastHoverPointer = null;
-    if (hoverGeometryFrame) window.cancelAnimationFrame(hoverGeometryFrame);
-    hoverGeometryFrame = 0;
-    row.removeAttribute("data-op-hover-anchor");
-    row.style.removeProperty("--op-hover-offset");
-    indicatorShown = false;
-    indicator.removeAttribute("data-visible");
-    if (indicatorFrame) window.cancelAnimationFrame(indicatorFrame);
-    indicatorFrame = 0; iv = 0; last = 0;
+    hoverTab = null; hoverX = null; lastHoverPointer = null; indicatorHover = null;
+    refreshIndicator();
   }
   function queueTabCollapse() {
     if (!hoverTab || hoverTimer) return;
@@ -1429,6 +1484,7 @@ function installTabStrip() {
       lastHoverPointer = point;
       selectHover(hit,event.clientX); return;
     }
+    if (indicatorHover) { indicatorHover = null; hoverX = null; refreshIndicator(); }
     if (!hoverTab) return;
     if (event.target === plus || (event.target instanceof Node && plus.contains(event.target))) {
       cancelHoverTimer(); return;
@@ -1449,7 +1505,11 @@ function installTabStrip() {
   function blurTab(event) {
     if (!row.contains(event.relatedTarget) && !row.matches(":hover")) queueTabCollapse();
   }
-  function leaveTabPointer() { queueTabCollapse(); }
+  function leaveTabPointer() {
+    indicatorHover = null; hoverX = null;
+    refreshIndicator();
+    queueTabCollapse();
+  }
   function onNewTabClick() { clearTabHover(); }
 
   function favicon(tab) {
@@ -1631,6 +1691,7 @@ function installTabStrip() {
       if (!groupItems.has(group)) { entry.box.remove(); splitEntries.delete(group); }
       else measureSplitGroup(group);
     }
+    refreshIndicator();
   }
 
   function schedule() {
@@ -1675,6 +1736,7 @@ function installTabStrip() {
     releaseAddressHold();
     clearTabHover();
     endDragVisual();
+    cancelInsertion();
     draggedTab = null;
     draggedGroup = null;
     if (window[DRAG_CONTROLLER] === dragController) delete window[DRAG_CONTROLLER];
@@ -1688,6 +1750,8 @@ function installTabStrip() {
     splitZone.removeEventListener("dragover", onSplitDragOver);
     splitZone.removeEventListener("drop", onSplitDrop);
     splitZone.remove();
+    list.removeEventListener("scroll", refreshIndicator);
+    prefs.removeObserver("zen.oneplane.tab-indicator", indicatorPreferenceObserver);
     window.removeEventListener("pointermove", trackTabPointer, true);
     window.removeEventListener("deactivate", clearTabHover);
     row.removeEventListener("pointerleave", leaveTabPointer);
@@ -1759,6 +1823,8 @@ function installTabStrip() {
     alignAddressStart();
     sync();
     try { browser.addProgressListener(progressListener); } catch {}
+    list.addEventListener("scroll", refreshIndicator);
+    prefs.addObserver("zen.oneplane.tab-indicator", indicatorPreferenceObserver);
     window.addEventListener("pointermove", trackTabPointer, true);
     window.addEventListener("deactivate", clearTabHover);
     row.addEventListener("pointerleave", leaveTabPointer);

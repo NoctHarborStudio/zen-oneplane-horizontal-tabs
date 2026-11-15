@@ -358,14 +358,20 @@
       color: var(--toolbar-color, currentColor);
       -moz-window-dragging: no-drag;
     }
-    /* Keep the physical center of the newly hovered tab fixed. The
-       controller measures actual member geometry throughout the transition. */
-    #oneplane-tabs :is(.oneplane-tab-list, .oneplane-new-tab) {
-      translate: var(--op-hover-offset, 0px) 0;
-      transition: translate var(--op-tab-speed) var(--op-tab-ease);
+    /* Stable collapsed geometry: never use a previously displaced tab
+       as the next anchor. Restore the original edge/middle expansion. */
+    #oneplane-tabs:has(.oneplane-tab[data-op-expanded]) {
+      --op-expand-left: calc(var(--op-growth) / 2);
     }
-    #oneplane-tabs[data-op-hover-anchor] :is(.oneplane-tab-list, .oneplane-new-tab) {
-      transition-property: transform !important;
+    #oneplane-tabs:has(.oneplane-tab[data-op-first]:not([data-op-last])[data-op-expanded]) {
+      --op-expand-left: var(--op-growth);
+    }
+    #oneplane-tabs:has(.oneplane-tab[data-op-last]:not([data-op-first])[data-op-expanded]) {
+      --op-expand-left: 0px;
+    }
+    #oneplane-tabs :is(.oneplane-tab-list, .oneplane-new-tab) {
+      translate: calc(-1 * var(--op-shift-left)) 0;
+      transition: translate var(--op-tab-speed) var(--op-tab-ease);
     }
     #oneplane-tabs .oneplane-tab-list {
       display: flex;
@@ -750,6 +756,13 @@
     #oneplane-tabs[data-op-dragging] [data-op-drag-follow] .oneplane-tab-icon img {
       opacity: 1 !important;
       filter: none !important;
+    }
+    /* The slot opens immediately; the card itself springs into it. */
+    #oneplane-tabs [data-op-reinsert] {
+      transform-origin: center center !important;
+      transition: none !important;
+      will-change: scale, translate;
+      z-index: 12 !important;
     }
     #oneplane-tabs[data-op-dragging] [data-op-detached] { visibility: hidden !important; }
     #oneplane-tabs[data-op-dragging] .oneplane-tab-title { max-width: 0 !important; opacity: 0 !important; }
