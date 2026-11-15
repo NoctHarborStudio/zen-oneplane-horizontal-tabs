@@ -804,20 +804,15 @@ function installTabStrip() {
     const rect = unshiftedRect(node);
     shiftDragNode(node, event.clientX - rect.width * dragGrabRatio - rect.left, true);
   }
-  function sourceDrag(event) {
-    if (!draggedTab || !dragNode || (event.screenX === 0 && event.screenY === 0)) return;
-    const x = event.screenX - window.mozInnerScreenX;
-    const y = event.screenY - window.mozInnerScreenY;
-    if (!toolbarContainsPoint(x, y)) setDragImageMode("outside", event);
-    else {
-      setDragImageMode("inline", event);
-      previewStripDrag({clientX:x, clientY:y}, draggedTab);
-    }
-  }
   function onWindowDragLeave(event) {
     if (!draggedTab || !dragNode) return;
     if (event.relatedTarget instanceof Node && toolbarWrapper?.contains(event.relatedTarget)) return;
-    if (!toolbarContainsPoint(event.clientX,event.clientY)) setDragImageMode("outside",event);
+    // Gecko's actual window exit carries the last in-window position.
+    // Its null related target is therefore more useful than coordinates.
+    // Source 'drag' events lack reliable positions on Windows.
+    if (event.relatedTarget === null || !toolbarContainsPoint(event.clientX,event.clientY)) {
+      setDragImageMode("outside",event);
+    }
   }
   function previewStripDrag(event, tab) {
     const owner = tabOwner(tab);
@@ -978,6 +973,7 @@ function installTabStrip() {
       if (!group && (browser.selectedTab !== tab || isSplit(tab)) && window.gZenViewSplitter?.splitTabs) {
         splitZone.setAttribute("data-op-dragging", "true");
       }
+      previewStripDrag(event,tab);
       event.stopPropagation();
     } catch (error) {
       event.preventDefault();
@@ -1299,7 +1295,6 @@ function installTabStrip() {
       }
     });
     item.addEventListener("dragstart", event => onDragStart(event, tab));
-    item.addEventListener("drag", sourceDrag);
     item.addEventListener("dragend", event => onDragEnd(event, tab));
     item.append(button, audio);
     return { item, button, title, img, audio, src: null };
@@ -1319,7 +1314,6 @@ function installTabStrip() {
       if (member) onDragStart(event, member, group);
       else event.preventDefault();
     });
-    handle.addEventListener("drag", sourceDrag);
     handle.addEventListener("dragend", event => onDragEnd(event, draggedTab));
     handle.addEventListener("click", event => {
       event.stopPropagation();
@@ -1490,6 +1484,7 @@ function installTabStrip() {
     window.removeEventListener("dragover", revealForDrag, true);
     window.removeEventListener("drop", onToolbarDrop, true);
     window.removeEventListener("dragleave", onWindowDragLeave, true);
+    window.removeEventListener("dragexit", onWindowDragLeave, true);
     row.removeEventListener("dragover", onStripDragOver);
     row.removeEventListener("drop", onStripDrop);
     row.removeEventListener("dragleave", onStripDragLeave);
@@ -1546,6 +1541,7 @@ function installTabStrip() {
     window.addEventListener("dragover", revealForDrag, true);
     window.addEventListener("drop", onToolbarDrop, true);
     window.addEventListener("dragleave", onWindowDragLeave, true);
+    window.addEventListener("dragexit", onWindowDragLeave, true);
     row.addEventListener("dragover", onStripDragOver);
     row.addEventListener("drop", onStripDrop);
     row.addEventListener("dragleave", onStripDragLeave);
