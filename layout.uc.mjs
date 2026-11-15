@@ -848,6 +848,7 @@ function installTabStrip() {
     }
     for (const member of members) {
       const icon = html("span", "oneplane-bunny-icon");
+      icon.toggleAttribute("data-op-bunny-unloaded",member.hasAttribute("data-unloaded") && !member.hasAttribute("data-selected"));
       const original = member.querySelector(".oneplane-tab-icon img:not([hidden])");
       if (original?.getAttribute("src")) {
         const img = html("img");
@@ -871,11 +872,13 @@ function installTabStrip() {
   function hideGhost() {
     dragGhostAnimation?.cancel(); dragGhostAnimation = null;
     if (dragGhost) dragGhost.hidden = true;
+    if (dragGhostBody) dragGhostBody.style.removeProperty("transform");
   }
   function showGhost(event, bounce) {
     makeDragGhost();
     if (!dragGhost) return;
     positionGhost(event.clientX, event.clientY);
+    dragGhostBody.style.removeProperty("transform");
     dragGhost.hidden = false;
     if (bounce && !reducedMotion.matches && prefs.getIntPref("zen.oneplane.animation-duration",160) !== 0) {
       dragGhostAnimation?.cancel();
@@ -902,6 +905,7 @@ function installTabStrip() {
     groupPullLayout = {
       order, index:order.indexOf(dragNode),
       center:(bounds.left+bounds.right)/2,
+      centerY:(bounds.top+bounds.bottom)/2,
       pointerX:event.clientX,
       gap:parseFloat(window.getComputedStyle(list).columnGap)||3
     };
@@ -915,7 +919,18 @@ function installTabStrip() {
     const center = state.center + (event.clientX-state.pointerX)*.4;
     const source = unshiftedRect(dragNode);
     let left = center-source.width/2, right = center+source.width/2;
+    row.setAttribute("data-op-group-pull","true");
     shiftDragNode(dragNode,left-source.left,true);
+    // Shrink the full-size group artwork as a single object, not the
+    // individual flex children. The invisible source only reserves space.
+    makeDragGhost();
+    if (dragGhost && dragGhostBody) {
+      const sx = Math.max(.05,1-.95*dragPull);
+      const sy = Math.max(.12,1.055-.91*dragPull);
+      positionGhost(center,state.centerY+17*dragPull);
+      dragGhostBody.style.transform = "scale("+sx+","+sy+")";
+      dragGhost.hidden = false;
+    }
     for(let i=index-1;i>=0;i--){
       const node=order[i], rect=unshiftedRect(node);
       left-=gap+rect.width;
@@ -929,6 +944,12 @@ function installTabStrip() {
     }
     shiftDragNode(plus,right+gap-unshiftedRect(plus).left);
     return true;
+  }
+  function clearGroupPull() {
+    if (!groupPullLayout && !row.hasAttribute("data-op-group-pull")) return;
+    groupPullLayout = null;
+    row.removeAttribute("data-op-group-pull");
+    hideGhost();
   }
   function setPull(progress) {
     if (!dragNode) return;
@@ -1008,7 +1029,7 @@ function installTabStrip() {
     dragNode.toggleAttribute("data-op-detached", detached);
     row.toggleAttribute("data-op-inline-drag", !detached);
     if (detached) {
-      groupPullLayout = null;
+      clearGroupPull();
       dragReentry = false;
       cancelInsertion();
       setPull(0);
@@ -1177,7 +1198,8 @@ function installTabStrip() {
       if (p === 0) dragReentry = false;
       if (p > 0 && !dragReentry) {
         if (draggedGroup) captureGroupPull(event);
-        if (!groupPullLayout) clearLiveDrag();
+        if (groupPullLayout) row.setAttribute("data-op-group-pull","true");
+        else clearLiveDrag();
         setPull(p);
         if (!previewGroupPull(event)) followLocalSource(event,dragNode);
         toolbarWrapper.setAttribute("oneplane-drag-hold","true");
@@ -1186,7 +1208,7 @@ function installTabStrip() {
         if (within) { event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect="move"; }
         return;
       }
-      groupPullLayout = null;
+      clearGroupPull();
       setPull(0);
     } else if (!local) tabOwner(tab)?.[DRAG_CONTROLLER]?.outside(event);
     if (!within && !(local && dragReentry && dragImageMode === "inline")) {
@@ -1246,7 +1268,8 @@ function installTabStrip() {
   }
   function endDragVisual() {
     const search = dragSearch;
-    dragSearch = null; pointerSearch = null; groupPullLayout = null;
+    dragSearch = null; pointerSearch = null;
+    clearGroupPull();
     dragNode?.removeAttribute("data-op-detached");
     dragNode?.removeAttribute("data-op-drag-follow");
     dragNode?.removeAttribute("data-op-pulling");

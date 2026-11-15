@@ -445,7 +445,7 @@
       height: 16px;
       place-items: center;
       position: relative;
-      transition: filter 220ms ease-out, opacity 220ms ease-out;
+      transition: filter 2000ms ease-out, opacity 2000ms ease-out;
     }
     #oneplane-tabs .oneplane-tab-icon::before {
       content: "•";
@@ -514,6 +514,7 @@
     #oneplane-tabs .oneplane-tab[data-unloaded][data-op-expanded] .oneplane-tab-icon {
       filter: grayscale(.5);
       opacity: .5;
+      transition-duration: 150ms;
     }
     #oneplane-tabs .oneplane-tab[data-busy] .oneplane-tab-icon { opacity: .55; }
 
@@ -772,6 +773,24 @@
       opacity: 1 !important;
       filter: none !important;
       transition: none !important;
+    }
+    /* Unloaded tabs stay half-strength throughout pickup and carriage.
+       Only the icon is dimmed; the drag card remains opaque. */
+    #oneplane-tabs[data-op-dragging] .oneplane-tab[data-unloaded]:not([data-selected])[data-op-drag-follow] .oneplane-tab-icon,
+    #oneplane-tabs[data-op-dragging] .oneplane-split-group[data-op-drag-follow] .oneplane-tab[data-unloaded]:not([data-selected]) .oneplane-tab-icon {
+      opacity: .5 !important;
+      filter: grayscale(.5) !important;
+      transition: none !important;
+    }
+    /* A single pointer-driven geometry pass positions all neighbors.
+       Transitions here would lag behind the moving group and overlap it. */
+    #oneplane-tabs[data-op-group-pull] .oneplane-tab-list > :is(.oneplane-tab,.oneplane-split-group),
+    #oneplane-tabs[data-op-group-pull] .oneplane-new-tab {
+      transition: none !important;
+    }
+    #oneplane-tabs[data-op-group-pull] .oneplane-split-group[data-op-pulling] {
+      visibility: hidden !important;
+      padding-inline: 0 !important;
     }
     #oneplane-tabs[data-op-dragging] .oneplane-split-group[data-op-drag-follow]:not([data-op-detached]) {
       background: color-mix(in srgb, var(--op-split-color) 13%, light-dark(#e9edf5,#222631)) !important;
@@ -1052,4 +1071,10 @@
 :root[oneplane-active="true"] .oneplane-bunny-member .oneplane-bunny-icon,
 :root[oneplane-active="true"] .oneplane-bunny-member .oneplane-bunny-icon img {
   width:16px;height:16px;
+}
+
+/* The ghost inherits the same unloaded icon state for single tabs and group members. */
+:root[oneplane-active="true"] .oneplane-bunny-icon[data-op-bunny-unloaded] {
+  opacity: .5 !important;
+  filter: grayscale(.5) !important;
 }

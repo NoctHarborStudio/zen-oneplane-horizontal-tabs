@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-preview.24
+
+- Keep unloaded favicons at half strength throughout hover, inline dragging, extraction, desktop dragging and return; retain full-strength loaded icons and opaque cards.
+- Slow unloaded icon fade to 2 seconds after the hover/drag state ends; keep the 150ms hover response.
+- Shrink the complete Split View artwork as one object during extraction, using the same group ghost instead of clipping the member cards inside a narrowing frame.
+- Position adjacent slots in a synchronized geometry pass during group extraction, preventing transition lag from causing overlap; keep the existing horizontal reorder and Bunny bounce.
+
 ## 0.1.0-preview.23
 
 - Keep unloaded favicons half-strength on hover (50% opacity and grayscale), fully bright while carried, then fade smoothly to the appropriate idle/hover state.
