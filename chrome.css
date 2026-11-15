@@ -59,7 +59,11 @@
     }
     #zen-sidebar-splitter { display: none !important; }
 
+    #nav-bar {
+      min-height:calc(var(--op-height) + 18px) !important;
+    }
     #nav-bar-customization-target {
+      min-height:calc(var(--op-height) + 18px) !important;
       display: flex !important;
       align-items: center !important;
       min-width: 0 !important;
@@ -351,8 +355,10 @@
       flex: 0 1 auto !important;
       min-width: 0 !important;
       width: calc(var(--op-tab-count, 0) * (var(--op-tab) + 3px) + var(--op-split-count, 0) * 25px + var(--op-tab-open) + 3px) !important;
-      height: calc(var(--op-height) + 8px) !important;
-      min-height: calc(var(--op-height) + 8px) !important;
+      --op-hover-reserve:18px;
+      --op-hover-bottom-pad:10px;
+      height: calc(var(--op-height) + var(--op-hover-reserve)) !important;
+      min-height: calc(var(--op-height) + var(--op-hover-reserve)) !important;
       align-items: center;
       gap: 3px;
       margin-inline: 2px;
@@ -385,61 +391,76 @@
       overflow-x: auto;
       overflow-y: hidden;
       scrollbar-width: none;
+      box-sizing:border-box;
+      padding-block-end:var(--op-hover-bottom-pad);
     }
-    /* Island mode uses a fixed central grid track and two separately
-       scrollable icon lanes. During drag display:contents preserves the
-       existing flat slot geometry and the native DOM drag source. */
+    /* The island and both lanes remain stationary during dragging.
+       The native drag controller positions cards in virtual lane slots. */
     #oneplane-tabs .oneplane-island-lane { display: contents; }
     #oneplane-tabs .oneplane-title-island { display: none; }
     #oneplane-tabs[data-op-hover-mode="island"] {
       width: calc(var(--op-tab-count, 0) * (var(--op-tab) + 3px) + var(--op-split-count, 0) * 25px + var(--op-tab)) !important;
     }
-    #oneplane-tabs[data-op-show-island]:not(:is([data-op-island-tight],[data-op-dragging],[data-op-island-incoming])) {
+    #oneplane-tabs[data-op-show-island]:not([data-op-island-tight]) {
       width: var(--op-island-row-width, 280px) !important;
       flex: 0 0 var(--op-island-row-width, 280px) !important;
     }
-    #oneplane-tabs[data-op-show-island]:not(:is([data-op-island-tight],[data-op-dragging],[data-op-island-incoming])) .oneplane-tab-list {
+    #oneplane-tabs[data-op-show-island]:not([data-op-island-tight]) .oneplane-tab-list {
       display:grid;
       grid-template-columns:minmax(0,1fr) var(--op-island-width,180px) minmax(0,1fr);
+      grid-template-rows:minmax(0,1fr);
       column-gap:3px;
       width:100%;
       flex:1 1 100%;
       overflow:visible;
       padding:0;
     }
-    #oneplane-tabs[data-op-show-island]:not(:is([data-op-island-tight],[data-op-dragging],[data-op-island-incoming])) .oneplane-island-lane {
+    #oneplane-tabs[data-op-show-island]:not([data-op-island-tight]) .oneplane-island-lane {
       display:flex;
       align-items:center;
       gap:3px;
       min-width:0;
       height:100%;
-      padding-inline:3px;
+      padding:0 3px var(--op-hover-bottom-pad);
       box-sizing:border-box;
       overflow-x:auto;
       overflow-y:hidden;
       scrollbar-width:none;
     }
-    #oneplane-tabs[data-op-show-island]:not(:is([data-op-island-tight],[data-op-dragging],[data-op-island-incoming])) .oneplane-island-left {
+    #oneplane-tabs[data-op-show-island]:not([data-op-island-tight]) .oneplane-island-left {
       grid-column:1;grid-row:1;
       justify-content:safe flex-end;
     }
-    #oneplane-tabs[data-op-show-island]:not(:is([data-op-island-tight],[data-op-dragging],[data-op-island-incoming])) .oneplane-island-right {
+    #oneplane-tabs[data-op-show-island]:not([data-op-island-tight]) .oneplane-island-right {
       grid-column:3;grid-row:1;
       justify-content:flex-start;
       margin-inline-end:calc(var(--op-tab) + 3px);
     }
-    #oneplane-tabs[data-op-show-island]:not(:is([data-op-island-tight],[data-op-dragging],[data-op-island-incoming])) .oneplane-new-tab {
-      position:absolute;right:0;top:50%;translate:0 -50%;
+    #oneplane-tabs[data-op-show-island]:not([data-op-island-tight]) .oneplane-new-tab {
+      position:absolute;right:0;top:calc(50% - var(--op-hover-bottom-pad)/2);translate:0 -50%;
     }
-    #oneplane-tabs[data-op-show-island]:not(:is([data-op-island-tight],[data-op-dragging],[data-op-island-incoming])) .oneplane-title-island {
+    #oneplane-tabs[data-op-show-island]:not([data-op-island-tight]) .oneplane-title-island {
       position:absolute;display:flex;align-items:center;justify-content:center;
-      left:50%;top:50%;translate:-50% -50%;
+      left:50%;top:calc(50% - var(--op-hover-bottom-pad)/2);translate:-50% -50%;
       width:var(--op-island-width,180px);height:calc(var(--op-height) - 6px);
       box-sizing:border-box;padding-inline:10px;
       border-radius:999px;
       background:color-mix(in srgb,currentColor 12%,transparent);
       box-shadow:inset 0 0 0 1px color-mix(in srgb,currentColor 10%,transparent);
-      pointer-events:none;overflow:hidden;
+      pointer-events:none;overflow:hidden;z-index:15;
+    }
+    #oneplane-tabs[data-op-show-island]:not([data-op-island-tight]):is([data-op-dragging],[data-op-island-incoming]) .oneplane-island-lane {
+      overflow:visible !important;
+    }
+    #oneplane-tabs[data-op-show-island]:not([data-op-island-tight]):is([data-op-dragging],[data-op-island-incoming]) .oneplane-tab-list {
+      clip-path:inset(-80px 0 -80px 0);
+    }
+    #oneplane-tabs[data-op-show-island]:not([data-op-island-tight]):is([data-op-dragging],[data-op-island-incoming]) .oneplane-title-island {
+      background:color-mix(in srgb,currentColor 12%,light-dark(#e9edf5,#222631));
+    }
+    #oneplane-tabs:not([data-op-show-island]) .oneplane-new-tab,
+    #oneplane-tabs[data-op-island-tight] .oneplane-new-tab {
+      margin-block-end:var(--op-hover-bottom-pad);
     }
     #oneplane-tabs .oneplane-island-title {
       display:block;min-width:0;max-width:100%;white-space:nowrap;
@@ -553,6 +574,7 @@
       will-change: transform, width, height;
     }
     #oneplane-tab-indicator[data-visible] { opacity: 1; }
+    #oneplane-tabs[data-op-dragging] #oneplane-tab-indicator { transition:none; }
     @media (prefers-reduced-motion: reduce) {
       #oneplane-tab-indicator { transition: none; }
     }
@@ -780,12 +802,18 @@
       transition: scale var(--op-tab-speed) var(--op-tab-ease);
     }
     #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) {
-      scale: 1.02 1.12;
-      translate: 0 3px;
+      scale: 1.02 1.20;
+      translate: 0 7px;
       z-index: 2;
     }
     #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) .oneplane-tab-icon img {
-      scale: 1.18;
+      scale: 1.28;
+    }
+    /* Split members stay within their shared frame. A small in-frame
+       lift and a larger favicon are preferable to stretching the group. */
+    #oneplane-tabs:not([data-op-dragging]) .oneplane-split-group .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) {
+      scale:1 1.05;
+      translate:0 1px;
     }
     @media (prefers-reduced-motion: reduce) {
       #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered],

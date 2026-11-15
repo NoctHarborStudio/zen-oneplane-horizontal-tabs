@@ -139,8 +139,8 @@ function installTabStrip() {
   }
   function placeStripOrder(order) {
     const useLanes=row.hasAttribute("data-op-show-island");
-    // Preserve the native drag source DOM parent. During drag the two
-    // lanes use display:contents to form the original continuous strip.
+    // Preserve the native drag source DOM parent. Both lanes stay in
+    // place during a drag; only visual slot transforms change.
     if(row.hasAttribute("data-op-dragging")) return;
     if(useLanes){
       if(leftLane.parentElement!==list) list.append(leftLane,rightLane);
@@ -590,8 +590,7 @@ function installTabStrip() {
       const minIslandRoom = 100+2*(tabWidth+9);
       const tight = wantsIsland && available < minIslandRoom;
       row.toggleAttribute("data-op-island-tight",tight);
-      const centered = wantsIsland && !tight && !row.hasAttribute("data-op-dragging") &&
-        !row.hasAttribute("data-op-island-incoming");
+      const centered = wantsIsland && !tight;
       if (centered) {
         const titleWidth=Math.max(100,Math.min(180,available-2*(tabWidth+9)));
         const laneWidth=lane=>Array.from(lane.children).reduce((sum,n)=>sum+compactSlotWidth(n,tabWidth)+3,6);
@@ -606,7 +605,8 @@ function installTabStrip() {
       setLength(row, "--op-left-room", leftSpacer.getBoundingClientRect().width - 4);
       // Nebula can constrain the wrapper to a fixed height. Include the
       // actual bookmarks row instead of letting it sit outside the hover area.
-      const navHeight = navbar?.getBoundingClientRect().height || 0;
+      const navHeight = Math.max(navbar?.getBoundingClientRect().height || 0,
+        row.getBoundingClientRect().height || 0);
       const bookmarksHeight = bookmarks && !bookmarks.collapsed && !bookmarks.hidden
         ? bookmarks.getBoundingClientRect().height : 0;
       if (navHeight > 0) setLength(toolbarWrapper, "--op-measured-toolbar-height", navHeight + bookmarksHeight);
@@ -978,14 +978,50 @@ function installTabStrip() {
       gap:parseFloat(window.getComputedStyle(list).columnGap)||3
     };
   }
+  function hasCenteredIsland(){
+    return row.hasAttribute("data-op-show-island") && !row.hasAttribute("data-op-island-tight") &&
+      leftLane.parentElement===list;
+  }
+  function lanePositions(widths,boundary,leftEdge,rightEdge,gap){
+    const positions=[];
+    const leftWidth=widths.slice(0,boundary).reduce((s,w)=>s+w,0)+Math.max(0,boundary-1)*gap;
+    let x=leftEdge-leftWidth;
+    for(let i=0;i<widths.length;i++){
+      if(i===boundary)x=rightEdge;
+      positions.push(x);x+=widths[i]+gap;
+    }
+    return positions;
+  }
+  function islandSlotPositions(widths,gap){
+    if(!hasCenteredIsland()) return null;
+    const boundary=Math.min(leftLane.children.length,widths.length);
+    const l=leftLane.getBoundingClientRect(),r=rightLane.getBoundingClientRect();
+    return {boundary,positions:lanePositions(widths,boundary,l.right-3,r.left+3,gap)};
+  }
   function previewGroupPull(event) {
     const state = groupPullLayout;
     if (!state || !dragNode) return false;
     const {order,index,gap} = state;
     // Freeze the visual reorder slot, rather than reverting to the
     // original DOM position while the group shrinks.
-    const center = state.center + (event.clientX-state.pointerX)*.4;
+    let center = state.center + (event.clientX-state.pointerX)*.4;
     const source = unshiftedRect(dragNode);
+    const rects=order.map(unshiftedRect);
+    const lanes=islandSlotPositions(rects.map(r=>r.width),gap);
+    if(lanes){
+      // Keep the whole group and its neighbours on their respective
+      // sides of the fixed title. Preserve the captured center where
+      // possible, without pushing the near edge into the island.
+      const anchored=lanes.positions[index]+source.width/2;
+      let delta=center-anchored;
+      delta=index<lanes.boundary?Math.min(0,delta):Math.max(0,delta);
+      const laneWidth=(index<lanes.boundary?leftLane:rightLane).getBoundingClientRect().width;
+      delta=Math.max(-laneWidth/2,Math.min(laneWidth/2,delta));
+      for(let i=0;i<order.length;i++){
+        if((i<lanes.boundary)===(index<lanes.boundary))lanes.positions[i]+=delta;
+      }
+      center=lanes.positions[index]+source.width/2;
+    }
     let left = center-source.width/2, right = center+source.width/2;
     row.setAttribute("data-op-group-pull","true");
     shiftDragNode(dragNode,left-source.left,true);
@@ -999,18 +1035,25 @@ function installTabStrip() {
       dragGhostBody.style.transform = "scale("+sx+","+sy+")";
       dragGhost.hidden = false;
     }
-    for(let i=index-1;i>=0;i--){
-      const node=order[i], rect=unshiftedRect(node);
-      left-=gap+rect.width;
-      shiftDragNode(node,left-rect.left);
+    if(lanes){
+      for(let i=0;i<order.length;i++) if(i!==index)
+        shiftDragNode(order[i],lanes.positions[i]-rects[i].left);
+      shiftDragNode(plus,0);
+    }else{
+      for(let i=index-1;i>=0;i--){
+        const node=order[i], rect=rects[i];
+        left-=gap+rect.width;
+        shiftDragNode(node,left-rect.left);
+      }
+      for(let i=index+1;i<order.length;i++){
+        const node=order[i], rect=rects[i];
+        right+=gap;
+        shiftDragNode(node,right-rect.left);
+        right+=rect.width;
+      }
+      shiftDragNode(plus,right+gap-unshiftedRect(plus).left);
     }
-    for(let i=index+1;i<order.length;i++){
-      const node=order[i], rect=unshiftedRect(node);
-      right+=gap;
-      shiftDragNode(node,right-rect.left);
-      right+=rect.width;
-    }
-    shiftDragNode(plus,right+gap-unshiftedRect(plus).left);
+    refreshIndicator();
     return true;
   }
   function clearGroupPull() {
@@ -1029,6 +1072,7 @@ function installTabStrip() {
     dragNode.style.setProperty("--op-pull-scale-x", String(Math.max(.08,1.055-.98*progress)));
     dragNode.style.setProperty("--op-pull-gap", (-3*progress).toFixed(2)+"px");
     if (draggedTab && !draggedGroup) measureSplitGroup(splitGroup(draggedTab));
+    refreshIndicator();
   }
   function updateNativeDragImage(image, x, y, event) {
     try {
@@ -1115,6 +1159,8 @@ function installTabStrip() {
       }
     }
     if (draggedTab && !draggedGroup) measureSplitGroup(splitGroup(draggedTab));
+    refreshIndicator();
+    refreshIslandTitle();
   }
   function followLocalSource(event, node) {
     const rect = unshiftedRect(node);
@@ -1173,11 +1219,12 @@ function installTabStrip() {
     const order = rest.slice();
     if (moving) order.splice(index, 0, moving);
     else order.splice(index, 0, { node: null, rect: { width: incomingWidth } });
-    const used = new Set(), positions = [];
-    let left = base;
-    for (const slot of order) {
-      positions.push(left);
-      left += slot.rect.width + gap;
+    const used = new Set();
+    const lanes=islandSlotPositions(order.map(slot=>slot.rect.width),gap);
+    const positions=lanes?.positions||[];
+    if(!lanes){
+      let left=base;
+      for(const slot of order){positions.push(left);left+=slot.rect.width+gap;}
     }
     // An elastic buffer follows the pointer before crossing the 8px
     // reorder hysteresis. Neighboring slots yield as a chain, with
@@ -1188,6 +1235,9 @@ function installTabStrip() {
       const slotLeft = positions[index], width = moving.rect.width;
       const rawDelta = event.clientX - width*dragGrabRatio - slotLeft;
       direction = Math.sign(rawDelta);
+      // The island is an immovable boundary. Do not yield toward it.
+      if(lanes && ((index<lanes.boundary && direction>0) ||
+          (index>=lanes.boundary && direction<0))) direction=0;
       const maxYield = Math.min(15,Math.max(8,width*.33));
       pressure = maxYield * (1-Math.exp(-Math.abs(rawDelta)/18));
       followX = slotLeft + direction * Math.min(Math.abs(rawDelta),pressure);
@@ -1201,7 +1251,8 @@ function installTabStrip() {
       } else {
         // Shift the whole chain equally for the first neighbor; the
         // same displacement keeps the existing gaps from collapsing.
-        const onSide = direction > 0 ? i > index : direction < 0 && i < index;
+        const sameLane=!lanes || (i<lanes.boundary)===(index<lanes.boundary);
+        const onSide = sameLane && (direction > 0 ? i > index : direction < 0 && i < index);
         const elastic = onSide ? direction*pressure : 0;
         shiftDragNode(slot.node,positions[i]-slot.rect.left+elastic);
       }
@@ -1209,7 +1260,7 @@ function installTabStrip() {
     }
     // Incoming tabs retain the original native group until successful drop.
     row.style.setProperty("--op-drag-incoming", (moving ? 0 : incomingWidth + gap) + "px");
-    shiftDragNode(plus,direction > 0 ? pressure : 0);
+    shiftDragNode(plus,!lanes && direction > 0 ? pressure : 0);
     used.add(plus);
     if (inline && !moving) { followLocalSource(event,entry); used.add(entry); }
     for (const node of [...dragShifted]) {
@@ -1219,6 +1270,7 @@ function installTabStrip() {
       dragShifted.delete(node);
     }
     liveDragTarget = dest;
+    refreshIndicator();
     return dest;
   }
   function onStripDragLeave(event) {
@@ -1363,6 +1415,7 @@ function installTabStrip() {
     splitZone.removeAttribute("data-op-dragging");
     splitZone.removeAttribute("data-op-side");
     refreshIndicator();
+    refreshIslandTitle();
     restoreStartupSearch(search);
   }
   function sourceHandled(tab) {
@@ -1412,6 +1465,8 @@ function installTabStrip() {
         splitZone.setAttribute("data-op-dragging", "true");
       }
       previewStripDrag(event,tab);
+      refreshIndicator();
+      refreshIslandTitle();
       event.stopPropagation();
     } catch (error) {
       event.preventDefault();
@@ -1598,18 +1653,51 @@ function installTabStrip() {
     if (hoverTimer) window.clearTimeout(hoverTimer);
     hoverTimer = 0;
   }
+  function pullIndicatorFactor(progress){
+    const t=Math.max(0,Math.min(1,(progress-.06)/.56));
+    return (1-t)*(1-t);
+  }
   function indicatorTarget() {
-    const item = indicatorHover && list.contains(indicatorHover) ?
-      indicatorHover : entries.get(browser.selectedTab)?.item;
-    if (!item || !list.contains(item) || item.hasAttribute("data-op-detached") ||
-        item.closest(".oneplane-split-group[data-op-detached]")) return null;
-    const a = item.getBoundingClientRect(), s = row.getBoundingClientRect();
-    if (a.width <= 0 || s.width <= 0) return null;
-    const center = (a.left + a.right) / 2;
-    const bias = item !== indicatorHover || hoverX === null ? 0 :
-      clamp((hoverX - center) / Math.max(1, a.width / 2), -1, 1);
-    return { x: center - s.left - row.clientLeft + bias * Math.min(12, a.width * .12),
-      y: Math.min(s.height - 2, a.bottom - s.top + 2), w: clamp(a.width * .14, 12, 18) };
+    const s=row.getBoundingClientRect();
+    if(s.width<=0||s.height<=0)return null;
+    const dragging=Boolean(dragNode && row.hasAttribute("data-op-dragging"));
+    const item=dragging?dragNode:indicatorHover && list.contains(indicatorHover)?
+      indicatorHover:entries.get(browser.selectedTab)?.item;
+    if(!item||!list.contains(item)||item.hasAttribute("data-op-detached")||
+        item.closest(".oneplane-split-group[data-op-detached]"))return null;
+    if(dragging && (dragImageMode!=="inline" || dragPull>=.62))return null;
+    // For a shrinking group use the visible ghost rather than its
+    // invisible layout placeholder when determining vertical clearance.
+    const visual=dragging && dragPull>0 && draggedGroup && dragGhost &&
+      !dragGhost.hidden && dragGhostBody ? dragGhostBody : item;
+    let a=visual.getBoundingClientRect(),center=(a.left+a.right)/2;
+    if(a.width<=0)return null;
+    let w=clamp(a.width*.14,12,18),h=3;
+    if(dragging){
+      if(draggedGroup){
+        const members=Array.from(item.querySelectorAll(".oneplane-tab"));
+        if(dragPull===0 && members.length){
+          const first=members[0].getBoundingClientRect(),last=members.at(-1).getBoundingClientRect();
+          center=(first.left+last.right)/2;
+          w=Math.max(12,last.right-first.left-4);
+        }else{
+          center+=10*(1-dragPull);
+          w=Math.max(12,dragWidth-22-4);
+        }
+      }
+      const factor=pullIndicatorFactor(dragPull);
+      // Collapse before the descending card can intersect the underline.
+      const clearance=s.bottom-a.bottom-2;
+      const visibility=Math.min(factor,clamp(clearance/5,0,1));
+      if(visibility<.015)return null;
+      w*=visibility;h*=visibility;
+      return {x:center-s.left-row.clientLeft,y:Math.min(s.height-2,a.bottom-s.top+3),
+        w,h,drag:true,pulling:dragPull>0};
+    }
+    const bias=item!==indicatorHover||hoverX===null?0:
+      clamp((hoverX-center)/Math.max(1,a.width/2),-1,1);
+    return {x:center-s.left-row.clientLeft+bias*Math.min(12,a.width*.12),
+      y:Math.min(s.height-2,a.bottom-s.top+2),w,h};
   }
   function paintIndicator() {
     const tail = clamp(iv * .0035, -5, 5);
@@ -1624,8 +1712,15 @@ function installTabStrip() {
     if (dead || !p || !indicatorShown) { hideIndicator(); return; }
     const dt = last ? clamp((now - last) / 1000, .001, .05) : 1 / 60;
     last = now;
-    if (reducedMotion.matches) {
-      ix = p.x; iy = p.y; iv = 0; iw = p.w; ih = 3;
+    if(p.drag){
+      // Track the painted drag card directly, with no horizontal spring
+      // lag. The width expands quickly on pickup, but collapses without
+      // lag during the pull so the indicator cannot cross the card.
+      ix=p.x;iy=p.y;iv=0;
+      const blend=reducedMotion.matches||p.pulling?1:1-Math.exp(-28*dt);
+      iw+=(p.w-iw)*blend;ih=p.h;
+    } else if (reducedMotion.matches) {
+      ix = p.x; iy = p.y; iv = 0; iw = p.w; ih = p.h;
     } else {
       const steps = Math.max(1, Math.ceil(dt * 120)), step = dt / steps;
       for (let i = 0; i < steps; i++) {
@@ -1640,9 +1735,9 @@ function installTabStrip() {
       iy += (p.y - iy) * (1 - Math.exp(-30 * dt));
     }
     paintIndicator();
-    if (!reducedMotion.matches && (now < until || Math.abs(ix-p.x) > .08 ||
+    if (p.drag || (!reducedMotion.matches && (now < until || Math.abs(ix-p.x) > .08 ||
         Math.abs(iy-p.y) > .08 || Math.abs(iv) > .2 || Math.abs(iw-p.w) > .08 ||
-        Math.abs(ih-3) > .04)) {
+        Math.abs(ih-p.h) > .04))) {
       indicatorFrame = window.requestAnimationFrame(tickIndicator);
     }
   }
@@ -1665,7 +1760,7 @@ function installTabStrip() {
     const p = indicatorTarget();
     if (!p) { hideIndicator(); return; }
     if (!indicatorShown) {
-      ix=p.x; iy=p.y; iw=p.w; ih=3; iv=0;
+      ix=p.x; iy=p.y; iw=p.w; ih=p.h; iv=0;
       paintIndicator();
       indicatorShown=true;
       indicator.setAttribute("data-visible","true");
@@ -1675,9 +1770,11 @@ function installTabStrip() {
   let islandTextAnimation = null;
   function refreshIslandTitle(){
     if(dead || !row.hasAttribute("data-op-show-island")) return;
-    const item=indicatorHover && list.contains(indicatorHover) ?
-      indicatorHover : entries.get(browser.selectedTab)?.item;
-    const title=item?.querySelector(".oneplane-tab-title")?.textContent || "";
+    const item=dragNode && row.hasAttribute("data-op-dragging")?dragNode:
+      indicatorHover && list.contains(indicatorHover)?indicatorHover:entries.get(browser.selectedTab)?.item;
+    const title=item?.classList.contains("oneplane-split-group")?
+      Array.from(item.querySelectorAll(".oneplane-tab-title")).map(n=>n.textContent).filter(Boolean).join(" · "):
+      item?.querySelector(".oneplane-tab-title")?.textContent || "";
     if(islandTitle.textContent===title) return;
     islandTextAnimation?.cancel();
     const hadTitle=Boolean(islandTitle.textContent);

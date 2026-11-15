@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-preview.27
+
+- Keep the center title island visible and stationary during drag; show the carried tab title or combined Split View titles. Preserve the center gap in virtual reorder slots.
+- Track the actual dragged tab with the liquid indicator; span all member cards when carrying a Split View group. Collapse the line during extraction and suppress it while detached; restore it on re-entry or after the drag ends.
+- Strengthen ordinary hover motion to 20% vertical scale, 7px descent and 28% favicon scale. Reserve 18px of row height; keep member hover motion inside the Split View frame.
+- Preserve unloaded-icon brightness, native adoption, reduced motion and Sine settings.
+
 ## 0.1.0-preview.26
 
 - Add optional Island Mode: compact icons in two independently scrollable lanes around a fixed-width centered title pill. Hover changes only the title and visual lift, never the slot widths; the idle pill displays the selected tab.
