@@ -216,7 +216,8 @@ function installTabStrip() {
   let addressVisual = null;
   let addressCompactWidth = 0;
   let addressAnchor = null;
-  const ADDRESS_WIDTH_OPEN = 265, ADDRESS_RESULTS_OPEN = 175;
+  const ADDRESS_WIDTH_OPEN = 265, ADDRESS_RESULTS_OPEN = 220;
+  const ADDRESS_RESULTS_OFFSET = 45;
   const ADDRESS_WIDTH_CLOSE = 290, ADDRESS_RESULTS_CLOSE = 165;
   let addressSettling = false;
   let addressSettleTimer = 0;
@@ -334,17 +335,19 @@ function installTabStrip() {
       return;
     }
     if (a.start === null) a.start = now;
-    const t = Math.min(1, (now - a.start) / a.duration);
+    const elapsed = now - a.start;
+    const t = Math.min(1, elapsed / a.duration);
     const eased = addressEase(t);
-    drawAddress(a.from.width + (a.to.width - a.from.width) * eased,
-      a.from.reveal + (a.to.reveal - a.from.reveal) * eased);
+    const horizontal = a.name === "opening" ? addressEase(elapsed / ADDRESS_WIDTH_OPEN) : eased;
+    const vertical = a.name === "opening"
+      ? addressEase((elapsed - ADDRESS_RESULTS_OFFSET) / ADDRESS_RESULTS_OPEN) : eased;
+    drawAddress(a.from.width + (a.to.width - a.from.width) * horizontal,
+      a.from.reveal + (a.to.reveal - a.from.reveal) * vertical);
     if (t < 1) {
       addressAnimationFrame = window.requestAnimationFrame(stepAddress);
       return;
     }
-    if (a.name === "opening-width") {
-      beginAddressPhase("opening-results", a.to, { width: a.to.width, reveal: 1 }, ADDRESS_RESULTS_OPEN);
-    } else if (a.name === "closing-results") {
+    if (a.name === "closing-results") {
       beginAddressPhase("closing-width", a.to, { width: addressWidths().compact, reveal: 0 }, ADDRESS_WIDTH_CLOSE);
     } else if (a.name === "closing-width") {
       // Native focus and popover-close notifications can arrive separately.
@@ -399,8 +402,8 @@ function installTabStrip() {
     // Zen may have already expanded the placeholder before its popover
     // mutation is delivered. Start at the actual compact target, not a
     // potentially fully expanded placeholder.
-    beginAddressPhase("opening-width", { width: widths.compact, reveal: 0 },
-      { width: widths.expanded, reveal: 0 }, ADDRESS_WIDTH_OPEN);
+    beginAddressPhase("opening", { width: widths.compact, reveal: 0 },
+      { width: widths.expanded, reveal: 1 }, Math.max(ADDRESS_WIDTH_OPEN, ADDRESS_RESULTS_OFFSET + ADDRESS_RESULTS_OPEN));
   }
   function startAddressClose() {
     const bar = addressBar();
@@ -439,11 +442,8 @@ function installTabStrip() {
     if (addressAnimationFrame) window.cancelAnimationFrame(addressAnimationFrame);
     addressAnimationFrame = 0;
     const width = addressWidths().expanded;
-    if (from.reveal > 0) {
-      beginAddressPhase("opening-results", from, { width, reveal: 1 }, ADDRESS_RESULTS_OPEN);
-    } else {
-      beginAddressPhase("opening-width", from, { width, reveal: 0 }, ADDRESS_WIDTH_OPEN);
-    }
+    beginAddressPhase("opening", from, { width, reveal: 1 },
+      Math.max(ADDRESS_WIDTH_OPEN, ADDRESS_RESULTS_OFFSET + ADDRESS_RESULTS_OPEN));
   }
   function alignAddressStart() {
     if (addressFrame) return;
@@ -628,6 +628,30 @@ function installTabStrip() {
 
   const entries = new Map();
   const splitEntries = new Map();
+  function measureSplitGroup(group) {
+    const entry = splitEntries.get(group);
+    if (!entry || !entry.box.isConnected) return;
+    const members = Array.from(entry.box.children).filter(node => node.classList.contains("oneplane-tab"));
+    const gap = 3;
+    const widths = members.reduce((total, node) => {
+      const rect = node.getBoundingClientRect();
+      const style = window.getComputedStyle(node);
+      return total + rect.width + (parseFloat(style.marginInlineEnd) || 0);
+    }, 0);
+    const width = 22 + widths + gap * members.length;
+    const next = Math.max(0,width).toFixed(2) + "px";
+    if (entry.box.style.getPropertyValue("--op-split-measured") !== next)
+      entry.box.style.setProperty("--op-split-measured", next);
+  }
+  const splitMeasureObserver = new ResizeObserver(records => {
+    const groups = new Set();
+    for (const {target: node} of records) {
+      const tab = tabFromItem(node);
+      const group = splitGroup(tab);
+      if (group) groups.add(group);
+    }
+    for (const group of groups) measureSplitGroup(group);
+  });
   const splitColors = new WeakMap();
   const splitPalette = ["#8eafff", "#74d6b6", "#d6a5ff", "#efba78", "#ed8fa9"];
   let nextSplitColor = 0;
@@ -795,7 +819,16 @@ function installTabStrip() {
       dragImageMode = mode;
       dragNode.toggleAttribute("data-op-detached", mode === "outside");
       row.toggleAttribute("data-op-inline-drag", mode === "inline");
-      if (mode === "outside") clearLiveDrag();
+      if (mode === "outside") {
+        clearLiveDrag();
+        // A short, restrained visual acknowledgement at the old strip.
+        if (prefs.getIntPref("zen.oneplane.animation-duration",160) !== 0 &&
+            !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          try { row.animate([{filter:"brightness(1.10)"},{filter:"brightness(1)"}],
+            {duration:180,easing:"ease-out"}); } catch {}
+        }
+      }
+      if (draggedTab && !draggedGroup) measureSplitGroup(splitGroup(draggedTab));
     } catch (error) {
       console.error("[OnePlane] Drag image transition:", error);
     }
@@ -810,7 +843,8 @@ function installTabStrip() {
     // Gecko's actual window exit carries the last in-window position.
     // Its null related target is therefore more useful than coordinates.
     // Source 'drag' events lack reliable positions on Windows.
-    if (event.relatedTarget === null || !toolbarContainsPoint(event.clientX,event.clientY)) {
+    if (!toolbarContainsPoint(event.clientX,event.clientY) ||
+        (event.type === "dragleave" && event.relatedTarget === null)) {
       setDragImageMode("outside",event);
     }
   }
@@ -1353,6 +1387,7 @@ function installTabStrip() {
     for (const [tab, entry] of entries) {
       if (!keep.has(tab)) {
         if (hoverTab === entry.item) clearTabHover();
+        splitMeasureObserver.unobserve(entry.item);
         entry.item.remove(); entries.delete(tab);
       }
     }
@@ -1378,6 +1413,7 @@ function installTabStrip() {
       if (!entry) {
         entry = createEntry(tab);
         entries.set(tab, entry);
+        splitMeasureObserver.observe(entry.item);
       }
       const label = tab.label || tab.getAttribute("label") || "New tab";
       const selected = tab === browser.selectedTab;
@@ -1434,6 +1470,7 @@ function installTabStrip() {
     }
     for (const [group, entry] of splitEntries) {
       if (!groupItems.has(group)) { entry.box.remove(); splitEntries.delete(group); }
+      else measureSplitGroup(group);
     }
   }
 
@@ -1467,6 +1504,7 @@ function installTabStrip() {
     if (dragCommitFrame) window.cancelAnimationFrame(dragCommitFrame);
     dragCommitFrame = 0;
     tabObserver.disconnect();
+    splitMeasureObserver.disconnect();
     workspaceObserver.disconnect();
     toolbarObserver.disconnect();
     actionObserver.disconnect();

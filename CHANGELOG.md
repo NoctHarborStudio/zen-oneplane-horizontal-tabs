@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-preview.19
+
+- Isolate nested drag transforms so a Split View group's frame and tabs move together.
+- Measure live member widths to size groups during hover and collapse without a second independent width animation.
+- Collapse the source's layout slot while detached and provide subtle visual feedback.
+- Preserve the width/title transition at drag start instead of instantly snapping to compact.
+- Keep the native copy-link control in the leading address slot; suppress the invalid/search identity icon.
+- Overlap horizontal address growth and downward results reveal, with a short 45 ms lead for width; retain results-first dismissal.
+
 ## 0.1.0-preview.18
 
 - Animate the actual Split View wrapper width alongside its expanded member.

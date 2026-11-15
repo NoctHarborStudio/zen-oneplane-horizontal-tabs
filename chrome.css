@@ -204,7 +204,7 @@
       color: var(--toolbar-color, currentColor) !important;
     }
     #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) #identity-box {
-      order: -1 !important;
+      order: 999 !important;
       align-items: center !important;
       height: 100% !important;
       margin: 0 !important;
@@ -222,6 +222,40 @@
       width: 16px !important;
       height: 16px !important;
       margin: 0 !important;
+    }
+    /* Keep the real Zen copy-link action at a fixed leading position.
+       Hide only the invalid/search identity icon; valid site security
+       and permission controls remain reachable on the trailing side. */
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) #zen-copy-url-button {
+      display: flex !important;
+      order: -100 !important;
+      flex: 0 0 24px !important;
+      width: 24px !important;
+      min-width: 24px !important;
+      height: 24px !important;
+      padding: 4px !important;
+      margin: 0 !important;
+      align-items: center !important;
+      justify-content: center !important;
+      box-sizing: border-box !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      cursor: pointer !important;
+      background: transparent !important;
+      border-radius: 5px !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) #zen-copy-url-button[disabled] {
+      opacity: .35 !important;
+      cursor: default !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) #zen-copy-url-button:not([disabled]):hover {
+      background: color-mix(in srgb, currentColor 12%, transparent) !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) #identity-box[pageproxystate="invalid"] #identity-icon-box {
+      display: none !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) #searchmode-switcher:not([open]) {
+      display: none !important;
     }
     #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) .urlbarView {
       border-radius: 0 0 var(--op-url-radius) var(--op-url-radius) !important;
@@ -295,7 +329,7 @@
       transition: none !important;
       animation: none !important;
     }
-    #urlbar-container:is([data-op-url-phase="opening-width"], [data-op-url-phase="closing-results"], [data-op-url-phase="closing-width"], [data-op-url-phase="settling"]) #urlbar:not([zen-floating-urlbar="true"]) .urlbarView {
+    #urlbar-container:is([data-op-url-phase="opening"], [data-op-url-phase="closing-results"], [data-op-url-phase="closing-width"], [data-op-url-phase="settling"]) #urlbar:not([zen-floating-urlbar="true"]) .urlbarView {
       pointer-events: none !important;
     }
     #nav-bar-customization-target > #urlbar-container[data-op-empty]:is([data-op-url-phase="closing-width"], [data-op-url-phase="settling"]) {
@@ -518,7 +552,7 @@
     #oneplane-tabs .oneplane-split-group {
       position: relative;
       display: flex;
-      --op-split-width: calc(var(--op-split-members, 2) * (var(--op-tab) + 3px) + 22px);
+      --op-split-width: var(--op-split-measured, calc(var(--op-split-members, 2) * (var(--op-tab) + 3px) + 22px));
       flex: 0 0 var(--op-split-width);
       width: var(--op-split-width);
       min-width: 0;
@@ -531,12 +565,6 @@
       background: color-mix(in srgb, var(--op-split-color) 13%, transparent);
       box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--op-split-color) 75%, transparent);
       transition: background-color var(--op-tab-speed) ease, box-shadow var(--op-tab-speed) ease;
-    }
-    #oneplane-tabs .oneplane-split-group:has(.oneplane-tab[data-op-expanded]) {
-      --op-split-width: calc(var(--op-split-members, 2) * (var(--op-tab) + 3px) + 22px + var(--op-growth));
-    }
-    #oneplane-tabs[data-op-dragging] .oneplane-split-group {
-      --op-split-width: calc(var(--op-split-members, 2) * (var(--op-tab) + 3px) + 22px);
     }
     #oneplane-tabs .oneplane-split-group[data-op-split-active] {
       background: color-mix(in srgb, var(--op-split-color) 24%, transparent);
@@ -636,10 +664,11 @@
         transform 170ms cubic-bezier(.22,.72,.2,1), opacity 120ms ease;
     }
     #oneplane-tabs .oneplane-tab-list > .oneplane-split-group {
-      transition: width var(--op-tab-speed) var(--op-tab-ease),
-        flex-basis var(--op-tab-speed) var(--op-tab-ease),
-        background-color var(--op-tab-speed) ease, box-shadow var(--op-tab-speed) ease,
-        transform 170ms cubic-bezier(.22,.72,.2,1), opacity 120ms ease;
+      /* Width is measured from already-animated members, not animated twice. */
+      max-width: var(--op-split-width);
+      transition: background-color var(--op-tab-speed) ease, box-shadow var(--op-tab-speed) ease,
+        transform 170ms cubic-bezier(.22,.72,.2,1), opacity 120ms ease,
+        margin-inline-end var(--op-tab-speed) var(--op-tab-ease);
     }
     #oneplane-tabs .oneplane-new-tab {
       transition: translate var(--op-tab-speed) var(--op-tab-ease), transform 170ms cubic-bezier(.22,.72,.2,1);
@@ -652,7 +681,8 @@
       transition: none !important;
     }
     #oneplane-tabs .oneplane-split-group > .oneplane-tab {
-      transform: translateX(var(--op-drag-x, 0px));
+      --op-drag-x: 0px;
+      transform: translateX(var(--op-drag-x));
     }
     #oneplane-tabs[data-op-inline-drag] .oneplane-tab-list {
       overflow: visible !important;
@@ -660,17 +690,47 @@
     #oneplane-tabs [data-op-drag-follow] {
       position: relative;
       z-index: 12 !important;
-      transition: none !important;
+      transition: width var(--op-tab-speed) var(--op-tab-ease),
+        flex-basis var(--op-tab-speed) var(--op-tab-ease),
+        background-color var(--op-tab-speed) ease, opacity 120ms ease !important;
       opacity: 1 !important;
       pointer-events: none !important;
       cursor: grabbing;
     }
     #oneplane-tabs .oneplane-split-group:has([data-op-drag-follow]) { z-index: 11; }
-    #oneplane-tabs [data-op-detached] { opacity: 0 !important; }
+    #oneplane-tabs .oneplane-tab {
+      transition: width var(--op-tab-speed) var(--op-tab-ease),
+        flex-basis var(--op-tab-speed) var(--op-tab-ease), background-color var(--op-tab-speed) ease,
+        transform 170ms cubic-bezier(.22,.72,.2,1), opacity 120ms ease,
+        margin-inline-end var(--op-tab-speed) var(--op-tab-ease);
+    }
     #oneplane-tabs[data-op-dragging] .oneplane-tab {
       width: var(--op-tab) !important;
       flex-basis: var(--op-tab) !important;
-      transition-property: transform, opacity, background-color !important;
+    }
+    #oneplane-tabs[data-op-dragging] :is(.oneplane-tab, .oneplane-split-group)[data-op-detached] {
+      opacity: 0 !important;
+      width: 0 !important;
+      flex-basis: 0px !important;
+      min-width: 0 !important;
+      max-width: 0 !important;
+      margin-inline-end: -3px !important;
+      padding-inline: 0 !important;
+      overflow: hidden !important;
+      pointer-events: none !important;
+      transition: width var(--op-tab-speed) var(--op-tab-ease),
+        flex-basis var(--op-tab-speed) var(--op-tab-ease),
+        max-width var(--op-tab-speed) var(--op-tab-ease),
+        margin-inline-end var(--op-tab-speed) var(--op-tab-ease),
+        padding-inline var(--op-tab-speed) var(--op-tab-ease),
+        opacity 100ms ease !important;
+    }
+    #oneplane-tabs[data-op-dragging] .oneplane-tab[data-op-drag-follow] {
+      transition: width var(--op-tab-speed) var(--op-tab-ease),
+        flex-basis var(--op-tab-speed) var(--op-tab-ease), opacity 120ms ease !important;
+    }
+    #oneplane-tabs[data-op-dragging] .oneplane-split-group[data-op-drag-follow] {
+      transition: background-color var(--op-tab-speed) ease, opacity 120ms ease !important;
     }
     #oneplane-tabs[data-op-dragging] .oneplane-tab-title { max-width: 0 !important; opacity: 0 !important; }
     #oneplane-tabs[data-op-dragging] .oneplane-tab-select { gap: 0 !important; padding-inline: 0 !important; }
