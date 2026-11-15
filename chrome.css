@@ -328,26 +328,53 @@
       opacity: 1 !important;
       pointer-events: auto !important;
     }
+    /* Paint the overlay itself, independently of Zen/Nebula's background
+       element. The tint is a fallback even when Gecko cannot sample the
+       remote web surface for backdrop-filter. Never blur toolbar controls. */
+    #zen-appcontent-navbar-wrapper {
+      --op-toolbar-tint: light-dark(rgba(244, 245, 249, .30), rgba(21, 23, 30, .30));
+      background: transparent !important;
+    }
     #zen-appcontent-navbar-wrapper .zen-toolbar-background {
-      background: light-dark(rgba(245, 246, 249, .72), rgba(20, 22, 29, .66)) !important;
-      backdrop-filter: blur(22px) saturate(1.25) !important;
-      box-shadow: 0 3px 15px rgba(0, 0, 0, .14) !important;
-      isolation: auto !important;
+      display: none !important;
     }
-    #zen-appcontent-navbar-wrapper .zen-toolbar-background::before,
-    #zen-appcontent-navbar-wrapper .zen-toolbar-background::after {
-      background: none !important;
-      outline: none !important;
+    #zen-appcontent-navbar-wrapper::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      z-index: -1 !important;
+      display: block !important;
+      pointer-events: none !important;
+      background: var(--op-toolbar-tint) !important;
+      backdrop-filter: blur(24px) saturate(1.2) !important;
+      box-shadow: 0 3px 15px rgba(0, 0, 0, .22) !important;
+      opacity: 0;
+      transition: opacity var(--op-speed) ease;
     }
-    #zen-appcontent-navbar-wrapper .zen-toolbar-background .zen-browser-grain { display: none !important; }
-    #zen-appcontent-navbar-wrapper #nav-bar { background: transparent !important; }
+    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], :hover) {
+      /* Independent fallback: maintain readable contrast if the pseudo
+         layer or backdrop compositing is suppressed by another theme. */
+      background-color: light-dark(rgba(244, 245, 249, .83), rgba(21, 23, 30, .83)) !important;
+    }
+    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], :hover)::before {
+      opacity: 1 !important;
+    }
+    #zen-appcontent-navbar-wrapper :is(#zen-appcontent-navbar-container, #nav-bar, #PersonalToolbar) {
+      background-color: transparent !important;
+      background-image: none !important;
+    }
     @media (prefers-reduced-motion: reduce) {
       #zen-appcontent-navbar-wrapper { transition: none !important; }
     }
     @media (prefers-reduced-transparency: reduce) {
-      #zen-appcontent-navbar-wrapper .zen-toolbar-background {
+      #zen-appcontent-navbar-wrapper {
+        --op-toolbar-tint: light-dark(#f1f2f5, #1b1d24);
+      }
+      #zen-appcontent-navbar-wrapper::before {
         backdrop-filter: none !important;
-        background: light-dark(#f1f2f5, #1b1d24) !important;
+      }
+      #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], :hover) {
+        background-color: var(--op-toolbar-tint) !important;
       }
     }
   }

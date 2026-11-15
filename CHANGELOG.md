@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-preview.7
+
+- Restore the top overlay's frosted surface independently of the native Zen/Nebula background layer.
+- Provide a readable tinted fallback when backdrop blur cannot sample web content.
+- Preserve the existing tab centering, left/right controls and overlay positioning.
+- Respect reduced-transparency preferences.
+
 ## 0.1.0-preview.6
 
 - Return navigation and the address field to the left edge.
