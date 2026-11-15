@@ -1,0 +1,100 @@
+[
+  {
+    "type": "checkbox",
+    "property": "zen.oneplane.enabled",
+    "label": "Enable OnePlane (experimental)",
+    "defaultValue": false
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.oneplane.tab-width",
+    "label": "Collapsed tab width",
+    "value": "number",
+    "defaultValue": 36,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "32 px",
+        "value": 32
+      },
+      {
+        "label": "36 px",
+        "value": 36
+      },
+      {
+        "label": "44 px",
+        "value": 44
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.oneplane.expanded-tab-width",
+    "label": "Expanded tab width",
+    "value": "number",
+    "defaultValue": 180,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "140 px",
+        "value": 140
+      },
+      {
+        "label": "180 px",
+        "value": 180
+      },
+      {
+        "label": "240 px",
+        "value": 240
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.oneplane.address-width",
+    "label": "Compact address bar width",
+    "value": "number",
+    "defaultValue": 180,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "140 px",
+        "value": 140
+      },
+      {
+        "label": "180 px",
+        "value": 180
+      },
+      {
+        "label": "220 px",
+        "value": 220
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.oneplane.animation-duration",
+    "label": "Expansion animation duration",
+    "value": "number",
+    "defaultValue": 160,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Off",
+        "value": 0
+      },
+      {
+        "label": "100 ms",
+        "value": 100
+      },
+      {
+        "label": "160 ms",
+        "value": 160
+      },
+      {
+        "label": "250 ms",
+        "value": 250
+      }
+    ]
+  }
+]
