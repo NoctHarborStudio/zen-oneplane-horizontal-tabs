@@ -125,9 +125,11 @@
     #urlbar-container #urlbar:not([zen-floating-urlbar="true"]):is([focused="true"], [open]) .urlbar-background {
       background-color: light-dark(#edf0f6, #393e49) !important;
     }
-    /* Collapse only the empty anchor; preserve Zen's floating search. */
+    /* A floating search is a top-layer popover, not an inline address.
+       Zen can open it over an existing page (New Tab / Ctrl+T), before a
+       new tab exists. Collapse its anchor regardless of the current URI. */
     #nav-bar-customization-target > #urlbar-container[data-op-empty]:not(:has(#urlbar:is([focused="true"], [open]):not([zen-floating-urlbar="true"]))),
-    #nav-bar-customization-target > #urlbar-container[data-op-empty]:has(#urlbar[zen-floating-urlbar="true"]) {
+    #nav-bar-customization-target > #urlbar-container:has(#urlbar[zen-floating-urlbar="true"]) {
       flex: 0 0 0px !important;
       width: 0px !important;
       min-width: 0px !important;
@@ -138,6 +140,11 @@
       border: 0 !important;
       box-shadow: none !important;
       overflow: visible !important;
+    }
+    #nav-bar-customization-target > #urlbar-container:has(#urlbar[zen-floating-urlbar="true"]) {
+      /* The native floating search keeps its own width and position.
+         Do not animate the empty placeholder or reserve horizontal space. */
+      transition: none !important;
     }
     #urlbar-container[data-op-empty] #urlbar:not([focused="true"], [open], [zen-floating-urlbar="true"]) {
       opacity: 0 !important;

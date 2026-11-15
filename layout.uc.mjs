@@ -315,8 +315,10 @@ function installTabStrip() {
     if (addressWasOpen) return;
     addressWasOpen = true;
     const widths = addressWidths();
-    const start = Math.max(widths.compact, Math.min(widths.expanded, url.getBoundingClientRect().width));
-    beginAddressPhase("opening-width", { width: start, reveal: 0 },
+    // Zen may have already expanded the placeholder before its popover
+    // mutation is delivered. Start at the actual compact target, not a
+    // potentially fully expanded placeholder.
+    beginAddressPhase("opening-width", { width: widths.compact, reveal: 0 },
       { width: widths.expanded, reveal: 0 }, 320);
   }
   function startAddressClose() {

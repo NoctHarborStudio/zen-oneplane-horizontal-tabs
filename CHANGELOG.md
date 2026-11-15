@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-preview.12
+
+- Collapse the inline URL placeholder whenever Zen opens floating search, including New Tab over an already loaded page.
+- Keep the native central search visible and prevent its empty toolbar anchor from animating.
+- Start inline address growth from its compact width even if Zen already expanded the placeholder.
+- Preserve the same Sine package ID and preview source with a strictly newer update timestamp.
+
 ## 0.1.0-preview.11
 
 - Animate the real inline address popover instead of just its toolbar anchor.

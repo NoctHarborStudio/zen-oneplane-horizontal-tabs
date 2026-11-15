@@ -54,6 +54,7 @@ Preview.11 observes Zen's real non-floating URL popover. A bounded animation-fra
 
 ## Manual validation checklist
 
+- [ ] Verify preview.12: click the plus or Ctrl+T from a loaded page and from an empty tab; central floating search remains usable and no empty address placeholder appears. Close it and confirm the loaded page's address returns.
 - [ ] Verify preview.11: real popover opens width-first and closes results-first on outside click, no flash, left edge stationary, rapid interruption, typing during close, native keyboard and navigation, floating search.
 - [ ] Verify preview.10: lighter compact/focused URL, smooth width animation, two-second hold after outside dismissal without page click-through, slower panel close, re-hover/reopen during hold, floating search and reduced motion.
 - [ ] Verify preview.9: empty new tab and floating search, Ctrl+L, first/middle/last tab expansion, centered title, no X, middle-click, indicator continuity across gaps, delayed exit and stable plus.
