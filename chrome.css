@@ -664,7 +664,9 @@
     #oneplane-tabs .oneplane-tab-list > .oneplane-tab {
       transition: width var(--op-tab-speed) var(--op-tab-ease),
         flex-basis var(--op-tab-speed) var(--op-tab-ease), background-color var(--op-tab-speed) ease,
-        transform 170ms cubic-bezier(.22,.72,.2,1), opacity 120ms ease;
+        transform 170ms cubic-bezier(.22,.72,.2,1), opacity 120ms ease,
+        margin-inline-end var(--op-tab-speed) var(--op-tab-ease),
+        scale var(--op-tab-speed) var(--op-tab-ease);
     }
     #oneplane-tabs .oneplane-tab-list > .oneplane-split-group {
       /* Width is measured from already-animated members, not animated twice. */
@@ -706,19 +708,30 @@
         flex-basis var(--op-tab-speed) var(--op-tab-ease), background-color var(--op-tab-speed) ease,
         transform 170ms cubic-bezier(.22,.72,.2,1), opacity 120ms ease,
         margin-inline-end var(--op-tab-speed) var(--op-tab-ease),
-        scale var(--op-tab-speed) cubic-bezier(.2,.85,.25,1.15);
+        scale var(--op-tab-speed) var(--op-tab-ease);
     }
-    /* Small visual lift on hover, independent of layout and drag transforms.
-       A 240px expanded tab grows <2px horizontally, staying inside its gap. */
-    #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-expanded] {
-      scale: 1.008 1.065;
+    /* The card visibly grows into the spare vertical space of the row.
+       Keep horizontal overhang below half the 3px slot gap at every
+       supported width, and keep the independent drag transform untouched. */
+    #oneplane-tabs .oneplane-tab { scale: 1; transform-origin: center; }
+    #oneplane-tabs .oneplane-tab-icon img {
+      scale: 1;
+      transition: scale var(--op-tab-speed) var(--op-tab-ease);
+    }
+    #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-expanded]:not([data-op-reinsert]) {
+      scale: 1.02 1.12;
       z-index: 2;
     }
+    #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-expanded]:not([data-op-reinsert]) .oneplane-tab-icon img {
+      scale: 1.18;
+    }
     @media (prefers-reduced-motion: reduce) {
-      #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-expanded] { scale: none; }
+      #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-expanded],
+      #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-expanded] .oneplane-tab-icon img { scale: 1 !important; }
     }
     @media (-moz-pref("zen.oneplane.animation-duration", 0)) {
-      #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-expanded] { scale: none; }
+      #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-expanded],
+      #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-expanded] .oneplane-tab-icon img { scale: 1 !important; }
     }
     #oneplane-tabs[data-op-dragging] .oneplane-tab {
       width: var(--op-tab) !important;

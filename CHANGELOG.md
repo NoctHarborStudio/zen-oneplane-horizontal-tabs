@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-preview.25
+
+- Make tab hover magnification visible: 12% taller card, 2% wider card and 18% larger favicon, with smooth reversible easing.
+- Fix the more-specific direct-child transition that previously omitted scale. Keep the same tab-slot geometry, split group width and drag transforms.
+- Preserve reduced-motion and disabled-animation settings, unloaded-icon fade and all drag behavior.
+- Record native Zen 1.24.2b feature gaps and optional visual ideas in the design notes.
+
 ## 0.1.0-preview.24
 
 - Keep unloaded favicons at half strength throughout hover, inline dragging, extraction, desktop dragging and return; retain full-strength loaded icons and opaque cards.

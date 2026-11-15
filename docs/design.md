@@ -96,3 +96,18 @@ These references establish selector and layout assumptions, not runtime compatib
 
 - Reordering a whole Split View group from an outer edge can sometimes hesitate or transition unevenly. Deferred at the user's request; the existing horizontal reorder behavior is otherwise retained.
 - Verify startup floating search preservation and inactive-tab side drops in running Zen 1.24.2b; the native splitter explicitly excludes the empty workspace tab.
+
+
+## Native feature audit (preview.25, Zen 1.24.2b)
+
+The horizontal strip mirrors visible native tabs and supports selection, middle-click close, title expansion, pending state, audio status, split groups, drag reorder and individual tab transfer. It does not yet provide these native surfaces directly:
+
+- Native tab context menu (pin, duplicate, mute, move, split, folder and other native commands). A right-click handler that opens the native menu for the actual tab is a high-value next step.
+- Dedicated Essentials and pinned sections. The mirror records pinned state but does not render the native hierarchy or Essentials-specific controls.
+- Workspace switcher and workspace/container identity. The mirror follows visible tabs and workspace changes but has no dedicated switcher.
+- Native folders: Split View groups have their own representation; ordinary folders do not have an expandable horizontal representation.
+- Tab multiselection: mirror clicks currently select a single tab; native Ctrl/Shift multi-select actions are not mirrored.
+- Tab audio control: the equalizer/mute status is rendered, but the mirrored audio badge has no click handler.
+- Glance: native content-side behavior is not deliberately replaced, but the mirror has no dedicated Glance parent/child representation. Verify before modifying.
+
+Optional design ideas (not implemented): small pinned/Essentials capsule, workspace pill with its native color, folder accordion/popover, delayed preview card, subtle loading progress ring, clickable audio equalizer. Prioritize native context-menu access and workspace/folder semantics before adding more effects. Do not replace native session or security behavior. Known group edge-reorder hesitation remains deferred.
