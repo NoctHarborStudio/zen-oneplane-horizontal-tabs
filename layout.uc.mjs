@@ -1,8 +1,7 @@
 /* OnePlane — local, reversible Zen layout configuration.
  * Runs only in browser.xhtml via Sine; no network or page access.
  */
-const { Services } = ChromeUtils.importESModule("resource://gre/modules/Services.sys.mjs");
-const { SessionStore } = ChromeUtils.importESModule("resource:///modules/sessionstore/SessionStore.sys.mjs");
+// Services and SessionStore are native browser-chrome globals.
 
 const KEY = "zen.oneplane.original-layout";
 const CONTROLLER = "__oneplaneLayoutController";
@@ -61,7 +60,7 @@ function restorePrefs() {
     if (!original || typeof original.value !== "boolean" || typeof original.user !== "boolean") continue;
     // Do not overwrite settings changed by the user while the mod was active.
     const expected = name === STARTUP ? true : TARGET[name];
-    if (prefs.getBoolPref(name) !== expected) continue;
+    if (name !== STARTUP && prefs.getBoolPref(name) !== expected) continue;
     if (original.user) prefs.setBoolPref(name, original.value);
     else prefs.clearUserPref(name);
   }
@@ -102,7 +101,7 @@ const controller = { get active() { return applied && !disposed; }, cleanup };
 
 async function activate() {
   try {
-    await SessionStore.promiseAllWindowsRestored;
+    await window.SessionStore?.promiseAllWindowsRestored;
     await window.gZenWorkspaces?.promiseInitialized;
     if (disposed || window.closed || root.hasAttribute("popup-window")) return;
     const manager = window.gZenCompactModeManager;
