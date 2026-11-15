@@ -225,6 +225,10 @@ function installTabStrip() {
       !bar.hasAttribute("zen-floating-urlbar") &&
       (bar.hasAttribute("open") || bar.hasAttribute("focused")));
   }
+  function inlinePopoverPresent(bar) {
+    return Boolean(bar && !bar.hasAttribute("zen-floating-urlbar") &&
+      (bar.hasAttribute("breakout-extend") || bar.matches(":popover-open")));
+  }
   function addressMotionEnabled() {
     return hoverSupported() &&
       prefs.getIntPref("zen.oneplane.animation-duration", 160) !== 0 &&
@@ -239,7 +243,8 @@ function installTabStrip() {
     // Zen has several caption containers, including hidden sidebar copies.
     // Prefer the live right-hand group; never cover the minimize button.
     const groups = Array.from(document.querySelectorAll(".titlebar-buttonbox-container"));
-    const nativeGroup = window.gZenVerticalTabsManager?.actualWindowButtons;
+    let nativeGroup;
+    try { nativeGroup = window.gZenVerticalTabsManager?.actualWindowButtons; } catch {}
     if (nativeGroup && !groups.includes(nativeGroup)) groups.unshift(nativeGroup);
     let right = window.innerWidth;
     for (const group of groups) {
@@ -333,7 +338,7 @@ function installTabStrip() {
       url.setAttribute("data-op-url-phase", "settling");
       finishDismissUrl();
       if (!addressSettling) return;
-      if (!nativeInlineOpen(addressBar())) {
+      if (!inlinePopoverPresent(addressBar())) {
         clearAddressAnimation();
         addressWasOpen = false;
       } else {
@@ -353,7 +358,7 @@ function installTabStrip() {
     const bar = addressBar();
     const open = nativeInlineOpen(bar);
     if (addressSettling) {
-      if (!open) {
+      if (!inlinePopoverPresent(bar)) {
         clearAddressAnimation();
         addressWasOpen = false;
       }

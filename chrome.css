@@ -166,6 +166,7 @@
     /* The real top-layer element must be animated explicitly. Native
        popover positioning and search behavior are otherwise untouched. */
     #urlbar-container #urlbar[data-op-url-animating]:not([zen-floating-urlbar="true"]) {
+      width: var(--op-url-live-width, var(--op-url-expanded-width)) !important;
       clip-path: var(--op-url-live-clip, none) !important;
       transition: none !important;
       animation: none !important;
