@@ -33,7 +33,7 @@ Restart the test browser after updating from preview.1 if the script is not load
 
 See the [installation guide](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/docs/installation.md) and [design and validation plan](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/docs/design.md).
 
-The horizontal strip mirrors native tabs and uses their selection and close APIs. Drag and drop, folder presentation, native tab context menus, workspace controls, and compatibility with other themes are unfinished. Sine installation and automatic configuration were observed in the developer's browser on preview.2; preview.3 still needs runtime validation.
+The horizontal strip mirrors native tabs and uses their selection and close APIs. Drag and drop, folder presentation, native tab context menus, workspace controls, and compatibility with other themes are unfinished. Sine installation, automatic configuration and the horizontal strip were observed in the developer's browser through preview.3. Preview.4 refines styling and URL dismissal; runtime validation is pending.
 
 ## Scope
 

@@ -1,5 +1,5 @@
 /* OnePlane — native toolbar tab view. No fixed-position overlay. */
-#oneplane-tabs { display: none !important; }
+#oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss { display: none !important; }
 @media (min-width: 900px) {
   :root[oneplane-active="true"][zen-compact-mode="true"]:not([customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window]):has(#nav-bar-customization-target > #oneplane-tabs[data-ready="true"]) {
     --op-height: 34px;
@@ -79,7 +79,7 @@
     }
     #oneplane-tabs .oneplane-tab-list {
       display: flex;
-      flex: 1 1 0;
+      flex: 0 1 auto;
       min-width: 0;
       height: 100%;
       align-items: center;
@@ -96,16 +96,18 @@
       align-items: stretch;
       overflow: hidden;
       border-radius: 7px;
-      background: transparent;
+      background: color-mix(in srgb, currentColor 11%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 5%, transparent);
       transition: width var(--op-speed) ease, flex-basis var(--op-speed) ease, background-color var(--op-speed) ease;
     }
     #oneplane-tabs .oneplane-tab:is(:hover, :focus-within) {
       flex-basis: var(--op-tab-open);
       width: var(--op-tab-open);
-      background: var(--toolbarbutton-hover-background, color-mix(in srgb, currentColor 10%, transparent));
+      background: color-mix(in srgb, currentColor 19%, transparent);
     }
     #oneplane-tabs .oneplane-tab[data-selected] {
-      background: var(--tab-selected-bgcolor, color-mix(in srgb, currentColor 17%, transparent));
+      background: color-mix(in srgb, currentColor 24%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 14%, transparent);
     }
     #oneplane-tabs button {
       appearance: none;
@@ -181,6 +183,99 @@
       border-radius: 7px;
       font-size: 21px;
     }
+
+    #oneplane-tabs .oneplane-tab[data-unloaded]:not([data-selected]) {
+      background: color-mix(in srgb, currentColor 5%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 4%, transparent);
+    }
+    #oneplane-tabs .oneplane-tab[data-unloaded]:not([data-selected]) .oneplane-tab-icon {
+      filter: grayscale(1);
+      opacity: .42;
+    }
+    #oneplane-tabs .oneplane-tab[data-unloaded]:is(:hover, :focus-within) .oneplane-tab-icon {
+      filter: none;
+      opacity: .8;
+    }
     #oneplane-tabs .oneplane-tab[data-busy] .oneplane-tab-icon { opacity: .55; }
+
+    /* Address text: preserve the left edge, fade only overflowing right text. */
+    #urlbar:not([focused]) :is(.urlbar-input, #urlbar-input) {
+      mask-image: none !important;
+      text-align: start !important;
+    }
+    #urlbar:not([focused])[textoverflow] :is(.urlbar-input, #urlbar-input) {
+      mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 2ch), transparent 100%) !important;
+    }
+    #urlbar[focused] :is(.urlbar-input, #urlbar-input) { mask-image: none !important; }
+
+    /* Page actions remain native popup anchors; their new location is to the right of the tabs. */
+    #oneplane-page-actions {
+      display: flex !important;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: 2px;
+      min-width: 0;
+      padding-inline: 4px;
+      -moz-window-dragging: no-drag;
+    }
+    #oneplane-page-actions > :is(#translations-button, #zen-site-data-icon-button):not([hidden]) {
+      display: flex !important;
+      align-items: center;
+      justify-content: center;
+      visibility: visible !important;
+      opacity: 1 !important;
+      flex: 0 0 auto;
+      width: 28px !important;
+      height: 28px !important;
+      min-width: 28px !important;
+      padding: 4px !important;
+      border-radius: 7px;
+      box-sizing: border-box;
+      color: var(--toolbar-color, currentColor);
+    }
+    #oneplane-page-actions > [hidden] { display: none !important; }
+    #oneplane-page-actions > :is(#translations-button, #zen-site-data-icon-button):hover {
+      background: color-mix(in srgb, currentColor 12%, transparent);
+    }
+
+    /* The web page cannot receive the pointer sequence used to dismiss search. */
+    #zen-tabbox-wrapper { position: relative !important; }
+    #zen-appcontent-navbar-wrapper { z-index: 5 !important; }
+    #oneplane-url-dismiss {
+      position: absolute !important;
+      inset: 0 !important;
+      z-index: 100 !important;
+      background: transparent !important;
+      pointer-events: auto !important;
+      touch-action: none;
+      user-select: none;
+      cursor: default;
+    }
+    &:has(#urlbar[focused="true"], #urlbar[open]) #oneplane-url-dismiss,
+    #oneplane-url-dismiss[data-pressed] { display: block !important; }
+
+    /* Frosted native toolbar; retain the native reveal animation and height. */
+    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active]) {
+      contain: none !important;
+    }
+    #zen-appcontent-navbar-wrapper .zen-toolbar-background {
+      background: light-dark(rgba(245, 246, 249, .72), rgba(20, 22, 29, .66)) !important;
+      backdrop-filter: blur(22px) saturate(1.25) !important;
+      box-shadow: 0 3px 15px rgba(0, 0, 0, .14) !important;
+      isolation: auto !important;
+    }
+    #zen-appcontent-navbar-wrapper .zen-toolbar-background::before,
+    #zen-appcontent-navbar-wrapper .zen-toolbar-background::after {
+      background: none !important;
+      outline: none !important;
+    }
+    #zen-appcontent-navbar-wrapper .zen-toolbar-background .zen-browser-grain { display: none !important; }
+    #zen-appcontent-navbar-wrapper #nav-bar { background: transparent !important; }
+    @media (prefers-reduced-transparency: reduce) {
+      #zen-appcontent-navbar-wrapper .zen-toolbar-background {
+        backdrop-filter: none !important;
+        background: light-dark(#f1f2f5, #1b1d24) !important;
+      }
+    }
   }
 }

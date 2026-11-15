@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-preview.4
+
+- Move the native translation and site-data buttons to the right end of the toolbar.
+- Intercept the click used to dismiss the address field before it reaches the page.
+- Give active, loaded and unloaded tabs distinct surfaces; mute unloaded favicons.
+- Align the compact address at its start and apply overflow fading only on the right.
+- Add a translucent frosted native toolbar background and place New Tab next to the tab list.
+
 ## 0.1.0-preview.3
 
 - Replace the invisible fixed-position tab overlay with a horizontal view in the native navigation toolbar.

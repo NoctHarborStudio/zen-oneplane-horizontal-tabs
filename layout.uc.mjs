@@ -106,6 +106,114 @@ function installTabStrip() {
   });
   row.append(list, plus);
 
+
+  // Keep native page actions and popup anchors, moving only their actual nodes.
+  const actions = document.createXULElement("hbox");
+  actions.id = "oneplane-page-actions";
+  actions.setAttribute("skipintoolbarset", "true");
+  actions.setAttribute("removable", "false");
+  actions.setAttribute("align", "center");
+  const actionIds = ["translations-button", "zen-site-data-icon-button"];
+  const actionHomes = new Map();
+  function movePageActions() {
+    if (root.hasAttribute("customizing")) return;
+    if (actions.parentElement !== target || actions !== target.lastElementChild) {
+      target.append(actions);
+    }
+    for (const id of actionIds) {
+      const node = document.getElementById(id);
+      if (!node || node.parentElement === actions) continue;
+      if (!url.contains(node)) continue;
+      const anchor = document.createComment("OnePlane original position: " + id);
+      node.before(anchor);
+      actionHomes.set(node, anchor);
+      if (typeof actions.moveBefore === "function") actions.moveBefore(node, null);
+      else actions.append(node);
+    }
+  }
+  function restorePageActions() {
+    for (const [node, anchor] of actionHomes) {
+      if (anchor.parentNode && node.parentElement === actions) {
+        const parent = anchor.parentNode;
+        if (typeof parent.moveBefore === "function") parent.moveBefore(node, anchor);
+        else parent.insertBefore(node, anchor);
+      }
+      anchor.remove();
+    }
+    actionHomes.clear();
+    actions.remove();
+  }
+
+  // Shield the web content, not the toolbar. Keep it until the complete click
+  // has been consumed, even if a native focus handler closes the URL view early.
+  const tabbox = document.getElementById("zen-tabbox-wrapper");
+  if (!tabbox) throw new Error("OnePlane: native content wrapper not available");
+  const shield = html("div");
+  shield.id = "oneplane-url-dismiss";
+  shield.setAttribute("aria-hidden", "true");
+  let shieldPointer = null;
+  let shieldTimer = 0;
+  function stopInput(event) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+  function releaseShield() {
+    shieldPointer = null;
+    shield.removeAttribute("data-pressed");
+    if (shieldTimer) window.clearTimeout(shieldTimer);
+    shieldTimer = 0;
+  }
+  function dismissUrl() {
+    const bar = window.gURLBar;
+    try {
+      bar?.view?.close();
+      bar?.blur();
+      browser.selectedBrowser?.focus();
+    } finally {
+      releaseShield();
+    }
+  }
+  shield.addEventListener("pointerdown", event => {
+    stopInput(event);
+    shieldPointer = event.pointerId;
+    shield.setAttribute("data-pressed", "true");
+    try { shield.setPointerCapture(event.pointerId); } catch {}
+  });
+  shield.addEventListener("pointerup", event => {
+    stopInput(event);
+    // Click follows pointerup. Delay fallback for gestures that do not produce one.
+    if (shieldPointer === event.pointerId) {
+      shieldTimer = window.setTimeout(dismissUrl, 250);
+    }
+  });
+  shield.addEventListener("pointercancel", () => releaseShield());
+  for (const type of ["mousedown", "mouseup", "dblclick", "contextmenu", "auxclick", "dragstart"]) {
+    shield.addEventListener(type, stopInput);
+  }
+  shield.addEventListener("click", event => {
+    stopInput(event);
+    dismissUrl();
+  });
+  // A native double-click can generate a second independent pointer sequence.
+  // Only the first dismissing click is intentionally intercepted.
+  const addressInput = () => window.gURLBar?.inputField || document.getElementById("urlbar-input");
+  let addressFrame = 0;
+  let addressObserver = null;
+  function alignAddressStart() {
+    if (addressFrame) return;
+    addressFrame = window.requestAnimationFrame(() => {
+      addressFrame = 0;
+      const bar = document.getElementById("urlbar");
+      const input = addressInput();
+      if (!bar?.hasAttribute("focused") && !bar?.hasAttribute("open") && input) {
+        input.scrollLeft = 0;
+      }
+    });
+  }
+  const actionObserver = new MutationObserver(() => {
+    if (!dead) { movePageActions(); alignAddressStart(); }
+  });
+
   const entries = new Map();
   let frame = 0;
   let dead = false;
@@ -176,6 +284,8 @@ function installTabStrip() {
       entry.item.toggleAttribute("data-selected", selected);
       entry.item.toggleAttribute("data-pinned", Boolean(tab.pinned));
       entry.item.toggleAttribute("data-busy", tab.hasAttribute("busy"));
+      entry.item.toggleAttribute("data-unloaded", !selected && (tab.hasAttribute("pending") || tab.hasAttribute("discarded")));
+      entry.item.toggleAttribute("data-audio", tab.hasAttribute("soundplaying"));
       entry.button.setAttribute("aria-selected", String(selected));
       entry.button.setAttribute("aria-label", label);
       if (entry.title.textContent !== label) entry.title.textContent = label;
@@ -195,16 +305,18 @@ function installTabStrip() {
   }
   function onSelect() {
     schedule();
+    alignAddressStart();
     window.requestAnimationFrame(() => {
       if (!dead) entries.get(browser.selectedTab)?.item.scrollIntoView({ block: "nearest", inline: "nearest" });
     });
   }
-  const events = ["TabOpen", "TabClose", "TabMove", "TabAttrModified", "TabPinned", "TabUnpinned", "TabShow", "TabHide"];
+  const events = ["TabOpen", "TabClose", "TabMove", "TabAttrModified", "TabPinned", "TabUnpinned", "TabShow", "TabHide", "TabBrowserInserted", "TabBrowserDiscarded"];
   const tabObserver = new MutationObserver(schedule);
   const workspaceObserver = new MutationObserver(schedule);
   const toolbarObserver = new MutationObserver(() => {
     if (dead || root.hasAttribute("customizing")) return;
     if (url.parentElement === target && row.parentElement !== target) url.after(row);
+    movePageActions();
   });
 
   function destroy() {
@@ -214,6 +326,13 @@ function installTabStrip() {
     tabObserver.disconnect();
     workspaceObserver.disconnect();
     toolbarObserver.disconnect();
+    actionObserver.disconnect();
+    addressObserver?.disconnect();
+    if (addressFrame) window.cancelAnimationFrame(addressFrame);
+    releaseShield();
+    shield.remove();
+    url.removeEventListener("focusout", alignAddressStart);
+    restorePageActions();
     for (const event of events) browser.tabContainer.removeEventListener(event, schedule);
     browser.tabContainer.removeEventListener("TabSelect", onSelect);
     window.removeEventListener("ZenWorkspaceDataChanged", schedule);
@@ -224,6 +343,16 @@ function installTabStrip() {
 
   try {
     url.after(row);
+    tabbox.append(shield);
+    movePageActions();
+    const bar = document.getElementById("urlbar");
+    if (bar) {
+      addressObserver = new MutationObserver(alignAddressStart);
+      addressObserver.observe(bar, { attributes: true, attributeFilter: ["focused", "open", "textoverflow", "pageproxystate"] });
+    }
+    url.addEventListener("focusout", alignAddressStart);
+    actionObserver.observe(url, { subtree: true, childList: true });
+    alignAddressStart();
     sync();
     for (const event of events) browser.tabContainer.addEventListener(event, schedule);
     browser.tabContainer.addEventListener("TabSelect", onSelect);
@@ -231,7 +360,7 @@ function installTabStrip() {
     window.addEventListener("aftercustomization", schedule);
     tabObserver.observe(browser.tabContainer, {
       subtree: true, childList: true, attributes: true,
-      attributeFilter: ["label", "image", "selected", "hidden", "busy", "pinned", "active", "zen-workspace-id"]
+      attributeFilter: ["label", "image", "selected", "hidden", "busy", "pinned", "active", "zen-workspace-id", "pending", "discarded", "soundplaying"]
     });
     const wrapper = document.getElementById("zen-tabs-wrapper");
     if (wrapper && !browser.tabContainer.contains(wrapper)) {
