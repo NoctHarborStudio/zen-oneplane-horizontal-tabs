@@ -1062,12 +1062,11 @@
       opacity: 1 !important;
       pointer-events: auto !important;
     }
-    /* A single contour mask softens both tint and backdrop blur.
-       Its shoulders follow the actual visible bookmark buttons.
-       The visual surface may extend below the controls, but never
-       changes the wrapper's interactive height or native bookmark layout. */
+    /* Unified contour mask: a solid rounded shelf and one vertical
+       rear fade, with opacity applied once to their union. The visual
+       surface never enlarges the interactive toolbar or moves controls. */
     #zen-appcontent-navbar-wrapper {
-      --op-surface-tint: light-dark(rgba(244, 245, 249, .94), rgba(21, 23, 30, .94));
+      --op-surface-tint: light-dark(#f4f5f9, #15171e);
       background: transparent !important;
     }
     #zen-appcontent-navbar-wrapper .zen-toolbar-background { display: none !important; }
@@ -1075,10 +1074,9 @@
       display: block !important;
       height: max(100%, var(--op-measured-toolbar-height, var(--op-height)), var(--op-contour-height, 0px)) !important;
       backdrop-filter: blur(24px) saturate(1.2) !important;
-      /* Fallback before the first geometry pass. The generated SVG
-         has an alpha feather of equal thickness on horizontal and
-         vertical edges, and is measured in actual CSS pixels. */
-      mask-image: var(--op-contour-mask, linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%)) !important;
+      /* The SVG mask contains the single global opacity. Keep the
+         underlying tint solid so it is not multiplied a second time. */
+      mask-image: var(--op-contour-mask, linear-gradient(to bottom, rgb(0 0 0 / 96%) 0%, rgb(0 0 0 / 96%) 55%, transparent 100%)) !important;
       mask-mode: alpha !important;
       mask-repeat: no-repeat !important;
       mask-position: top left !important;

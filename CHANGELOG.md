@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-preview.30
+
+- Use Unified Contour: a solid rounded bookmark shelf without its own feather, and a full-width vertical fade beginning at the bottom of the upper toolbar row. Composite the two shapes into one alpha mask before applying global transparency.
+- Defaults match the selected prototype: 4% transparency, 100% fade intensity, 69px fade length, 30px solid start, 0.65 falloff, 24px maximum corner radius and 0px bookmark padding.
+- Add seven live Sine preferences for these parameters. Clamp the solid start to the fade length and the radius to half the shelf depth.
+- Keep bookmark geometry tracking, toolbar interaction bounds, reduced transparency, address bar and tab animations unchanged.
+
 ## 0.1.0-preview.29
 
 - Replace the uniform static toolbar fade with Adaptive Contour Fade: a short upper edge, rounded symmetric shoulders and a lower shelf around actual visible bookmark buttons.

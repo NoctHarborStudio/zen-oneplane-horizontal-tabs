@@ -545,20 +545,28 @@ function installTabStrip() {
     "pointer-events": "none", "z-index": "0",
     "background-color": "var(--op-surface-tint, rgba(21, 23, 30, .34))"
   })) surface.style.setProperty(name, value, "important");
-  // Contour Fade: one alpha mask for BOTH tint and backdrop blur.
-  // Its constant-width feather follows the contour normal, not screen Y.
-  const CONTOUR_RADIUS=18, CONTOUR_PAD=5, CONTOUR_FADE=9;
+  // Unified Contour: composite the solid silhouette and vertical ramp
+  // into ONE alpha mask. Applying opacity to their union prevents the
+  // gradient from darkening the already translucent bookmark shelf.
+  const contourDefaults={transparency:4,strength:100,length:69,hold:30,curve:65,radius:24,padding:0};
+  const contourPrefPrefix="zen.oneplane.fade-";
   let contourFrame=0, contourUntil=0, contourKey="";
   let contourResize=null, contourObserver=null;
   const contourObserved=new Set();
-  function contourPath(width,base,deep,left,right,radius=CONTOUR_RADIUS){
+  function contourSettings(){
+    const read=(name,min,max)=>Math.max(min,Math.min(max,
+      prefs.getIntPref(contourPrefPrefix+name,contourDefaults[name])));
+    const length=read("length",10,160);
+    return {transparency:read("transparency",0,40),strength:read("strength",0,100),
+      length,hold:Math.min(length-1,read("hold",0,45)),curve:read("curve",25,300),
+      radius:read("radius",4,24),padding:read("padding",0,20)};
+  }
+  const contourPreferenceObserver={observe(){scheduleContour();}};
+  function contourPath(width,base,deep,left,right,radius){
     const r=Math.max(0,Math.min(radius,(deep-base)/2));
-    const outside=radius+CONTOUR_FADE+4;
+    const outside=radius+4;
     if(!r || left===null || right===null)
       return "M"+(-outside)+" "+base+"H"+(width+outside);
-    // Two equal tangent quarter circles on each shoulder, with a
-    // straight vertical section when the depth permits. The right
-    // shoulder is the exact reflection of the left shoulder.
     const start=Math.min(-outside,left-2*r-outside);
     const end=Math.max(width+outside,right+2*r+outside);
     return "M"+start+" "+base+"H"+(left-2*r)+
@@ -568,22 +576,26 @@ function installTabStrip() {
       " V"+(base+r)+" A"+r+" "+r+" 0 0 1 "+(right+2*r)+" "+base+
       " H"+end;
   }
-  function contourImage(width,height,base,deep,left,right){
-    const edge=contourPath(width,base,deep,left,right);
+  function contourAlpha(distance,settings){
+    const t=Math.max(0,Math.min(1,(distance-settings.hold)/(settings.length-settings.hold)));
+    return settings.strength/100*Math.pow(Math.max(0,1-t*t*(3-2*t)),settings.curve/100);
+  }
+  function contourImage(width,height,base,deep,left,right,settings){
+    const edge=contourPath(width,base,deep,left,right,settings.radius);
     const startX=Number(edge.match(/^M(-?[\d.]+)/)[1]);
-    const smooth=t=>t*t*(3-2*t);
-    const steps=24;
-    let strokes="";
-    // Nested round strokes approximate a true Euclidean-distance alpha
-    // ramp. Compensate source-over compositing to retain the smoothstep
-    // profile instead of accidentally making the outer edge too dark.
-    for(let i=0;i<steps;i++){
-      const a=smooth(i/steps),b=smooth((i+1)/steps);
-      const opacity=(b-a)/(1-a);
-      strokes+='<path d="'+edge+'" stroke="black" fill="none" stroke-linejoin="round" stroke-linecap="round" stroke-width="'+(2*CONTOUR_FADE*(1-i/steps)).toFixed(3)+'" opacity="'+opacity.toFixed(6)+'"/>';
-    }
-    const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+width+'" height="'+height+'" viewBox="0 0 '+width+' '+height+'">'+strokes+
-      '<path fill="black" d="'+edge+'V-100H'+startX+'Z"/></svg>';
+    const steps=64;
+    const positions=Array.from({length:steps+1},(_,i)=>settings.length*i/steps);
+    positions.push(settings.hold);
+    positions.sort((a,b)=>a-b);
+    const stops=positions.map(y=>'<stop offset="'+(y/settings.length).toFixed(6)+
+      '" stop-color="black" stop-opacity="'+contourAlpha(y,settings).toFixed(6)+'"/>').join("");
+    // Both shapes are opaque/partially opaque INSIDE the group. The
+    // group itself gets the requested opacity exactly once. Thus the
+    // silhouette is always the maximum alpha, never a sum of two tints.
+    const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+width+'" height="'+height+'" viewBox="0 0 '+width+' '+height+'">'+
+      '<defs><linearGradient id="fade" gradientUnits="userSpaceOnUse" x1="0" y1="'+base+'" x2="0" y2="'+(base+settings.length)+'">'+stops+'</linearGradient></defs>'+
+      '<g opacity="'+(1-settings.transparency/100)+'"><rect x="0" y="'+base+'" width="'+width+'" height="'+settings.length+'" fill="url(#fade)"/>'+
+      '<path fill="black" d="'+edge+'V-100H'+startX+'Z"/></g></svg>';
     return 'url("data:image/svg+xml,'+encodeURIComponent(svg)+'")';
   }
   function contourCandidates(){
@@ -615,6 +627,7 @@ function installTabStrip() {
     const nav=navbar?.getBoundingClientRect();
     if(wrapper.width<=0||!nav||nav.height<=0)return;
     const width=Math.max(1,Math.round(wrapper.width));
+    const settings=contourSettings();
     // Keep the top short. Include the bottom of the actual tab row
     // (including its reserved hover room), not the bookmarks row.
     const base=Math.max(1,Math.round(Math.max(nav.bottom,row.getBoundingClientRect().bottom)-wrapper.top-5));
@@ -636,7 +649,7 @@ function installTabStrip() {
           if(r<=l)continue;
           left=left===null?l:Math.min(left,l);
           right=right===null?r:Math.max(right,r);
-          deep=Math.max(deep,b.bottom-wrapper.top+CONTOUR_PAD);
+          deep=Math.max(deep,b.bottom-wrapper.top+settings.padding);
         }
       }
     }
@@ -644,17 +657,19 @@ function installTabStrip() {
     // extends its lower contour beyond the window instead of folding
     // the shoulders back through the edge bookmarks.
     if(left!==null){
-      left=Math.floor(left-CONTOUR_PAD);
-      right=Math.ceil(right+CONTOUR_PAD);
+      left=Math.floor(left-settings.padding);
+      right=Math.ceil(right+settings.padding);
       deep=Math.ceil(deep);
       if(deep<=base){left=right=null;deep=base;}
     }
-    const height=Math.max(1,Math.ceil(deep+CONTOUR_FADE+1));
-    const key=[width,height,base,deep,left,right].join(":");
+    // The fade begins at the bottom of the TOP row, not the window
+    // top or bookmark shelf. Only the rear ramp extends below that row.
+    const height=Math.max(1,Math.ceil(Math.max(deep,base+settings.length)+1));
+    const key=[width,height,base,deep,left,right,...Object.values(settings)].join(":");
     if(key===contourKey)return;
     contourKey=key;
     surface.style.setProperty("--op-contour-height",height+"px");
-    surface.style.setProperty("--op-contour-mask",contourImage(width,height,base,deep,left,right));
+    surface.style.setProperty("--op-contour-mask",contourImage(width,height,base,deep,left,right,settings));
   }
   function stepContour(now){
     contourFrame=0;
@@ -2240,6 +2255,7 @@ function installTabStrip() {
     geometryObserver?.disconnect();
     contourResize?.disconnect();
     contourObserver?.disconnect();
+    prefs.removeObserver(contourPrefPrefix,contourPreferenceObserver);
     contourObserved.clear();
     if(contourFrame)window.cancelAnimationFrame(contourFrame);
     contourFrame=0;
@@ -2389,6 +2405,7 @@ function installTabStrip() {
       for(const event of ["transitionrun","transitionend","transitioncancel"])
         bookmarks.addEventListener(event,onContourTransition,true);
     }
+    prefs.addObserver(contourPrefPrefix,contourPreferenceObserver);
     scheduleContour();
     if (toolbarWrapper) {
       hoverObserver = new MutationObserver(maintainHover);
