@@ -5,3 +5,5 @@ Sine 2.3.3 checks the installed entry in `chrome/sine-mods/mods.json`, skips dis
 Every OnePlane preview must retain the package ID and homepage and increase both the version and timestamp. Run `python scripts/verify-release.py --previous <previous-version> --previous-date <previous-timestamp>` from the checked-out preview after publication. This verifies both exact public URLs used by Sine and all package file bytes.
 
 If an installed copy still does not update, use about:support to open the current profile directory. Read (do not edit) the OnePlane entry in `chrome/sine-mods/mods.json`. Check version, updatedAt, homepage, enabled and no-updates. Also compare the theme.json inside the package ID directory. Check the Browser Console for updater errors at the moment Check for Updates is clicked. Do not post the entire mods.json or profile. The mod does not modify Sine's global update policy, caches, or installed metadata.
+
+The preview verification workflow runs the local checks and retries the exact public manifest/archive endpoints for propagation. A failed workflow must be investigated before advertising a preview as ready. It is not a patch to Sine itself.

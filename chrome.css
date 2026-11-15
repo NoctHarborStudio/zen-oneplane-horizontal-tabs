@@ -498,21 +498,21 @@
       --zen-browser-container-margin-top-fix: 0px !important;
       margin-top: 0 !important;
     }
-    #zen-appcontent-navbar-wrapper:not(:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], [oneplane-url-hold], :hover)) #zen-appcontent-navbar-container {
+    #zen-appcontent-navbar-wrapper:not(:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], [oneplane-url-hold], [oneplane-drag-hold], :hover)) #zen-appcontent-navbar-container {
       pointer-events: none !important;
     }
     /* Frosted native toolbar; retain native reveal animation and popup states. */
-    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], [oneplane-url-hold], :hover) {
+    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], [oneplane-url-hold], [oneplane-drag-hold], :hover) {
       --op-panel-motion: var(--op-panel-open-speed);
       height: max(var(--zen-toolbar-height-with-bookmarks, var(--op-height)), var(--op-measured-toolbar-height, 0px)) !important;
       overflow: visible !important;
       contain: none !important;
     }
-    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], [oneplane-url-hold], :hover) #zen-appcontent-navbar-container {
+    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], [oneplane-url-hold], [oneplane-drag-hold], :hover) #zen-appcontent-navbar-container {
       opacity: 1 !important;
       pointer-events: auto !important;
     }
-    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], [oneplane-url-hold], :hover) #urlbar {
+    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], [oneplane-url-hold], [oneplane-drag-hold], :hover) #urlbar {
       opacity: 1 !important;
       pointer-events: auto !important;
     }
@@ -533,7 +533,7 @@
       opacity: 0;
       transition: opacity var(--op-panel-motion) var(--op-panel-ease) !important;
     }
-    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], [oneplane-url-hold], :hover) > #oneplane-toolbar-surface {
+    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], [oneplane-url-hold], [oneplane-drag-hold], :hover) > #oneplane-toolbar-surface {
       opacity: 1 !important;
     }
     #zen-appcontent-navbar-wrapper > #zen-appcontent-navbar-container {

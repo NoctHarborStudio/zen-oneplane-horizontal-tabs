@@ -617,6 +617,7 @@ function installTabStrip() {
   let dragHandled = false;
   let dragStartPoint = null;
   let dropMarker = null;
+  let dragRevealTimer = 0;
   const splitZone = html("div");
   splitZone.id = "oneplane-split-drop";
   splitZone.setAttribute("aria-hidden", "true");
@@ -639,7 +640,17 @@ function installTabStrip() {
     const dt = event.dataTransfer;
     if (!dt || !Array.from(dt.types || []).includes(DRAG_TYPE)) return null;
     try {
-      const tab = dt.mozGetDataAt(DRAG_TYPE, 0);
+      let tab = null;
+      try { tab = dt.mozGetDataAt(DRAG_TYPE, 0); } catch {}
+      // Some dragover events expose types but not data until drop. During
+      // that protected phase, resolve only an active chrome drag controller.
+      if (!tab && event.type === "dragover" && event.isTrusted) {
+        const windows = Services.wm.getEnumerator("navigator:browser");
+        while (windows.hasMoreElements()) {
+          const candidate = windows.getNext()?.[DRAG_CONTROLLER]?.source();
+          if (candidate && validNativeTab(candidate)) { tab = candidate; break; }
+        }
+      }
       const owner = tabOwner(tab);
       if (!validNativeTab(tab) || owner?.[DRAG_CONTROLLER]?.source() !== tab) return null;
       const ours = privateState(window), theirs = privateState(owner);
@@ -665,7 +676,23 @@ function installTabStrip() {
     item.setAttribute(event.clientX < (box.left + box.right) / 2
       ? "data-op-drop-before" : "data-op-drop-after", "true");
   }
+  function releaseDragReveal() {
+    if (dragRevealTimer) window.clearTimeout(dragRevealTimer);
+    dragRevealTimer = 0;
+    toolbarWrapper?.removeAttribute("oneplane-drag-hold");
+  }
+  function revealForDrag(event) {
+    if (!hoverSupported() || !readDraggedTab(event) || !toolbarWrapper) return;
+    const rect = toolbarWrapper.getBoundingClientRect();
+    const within = event.clientX >= rect.left && event.clientX < rect.right &&
+      event.clientY >= rect.top && event.clientY <= Math.max(rect.top + 8, rect.bottom);
+    if (!within) { releaseDragReveal(); return; }
+    toolbarWrapper.setAttribute("oneplane-drag-hold", "true");
+    if (dragRevealTimer) window.clearTimeout(dragRevealTimer);
+    dragRevealTimer = window.setTimeout(releaseDragReveal, 500);
+  }
   function endDragVisual() {
+    releaseDragReveal();
     clearDropMarker();
     row.removeAttribute("data-op-dragging");
     splitZone.removeAttribute("data-op-dragging");
@@ -802,7 +829,14 @@ function installTabStrip() {
       });
     } catch (error) { console.error("[OnePlane] Detach tab:", error); }
   }
-  const dragController = { source: () => draggedTab, markHandled: () => { dragHandled = true; } };
+  const dragController = {
+    source: () => draggedTab,
+    markHandled: () => {
+      dragHandled = true;
+      endDragVisual();
+      draggedTab = null;
+    }
+  };
   window[DRAG_CONTROLLER] = dragController;
 
   // Single hover target; preserve momentum across tabs and short gaps.
@@ -1069,6 +1103,7 @@ function installTabStrip() {
     endDragVisual();
     draggedTab = null;
     if (window[DRAG_CONTROLLER] === dragController) delete window[DRAG_CONTROLLER];
+    window.removeEventListener("dragover", revealForDrag, true);
     row.removeEventListener("dragover", onStripDragOver);
     row.removeEventListener("drop", onStripDrop);
     row.removeEventListener("dragleave", clearDropMarker);
@@ -1117,6 +1152,7 @@ function installTabStrip() {
     target.prepend(leftSpacer);
     row.after(rightSpacer);
     tabbox.append(shield, splitZone);
+    window.addEventListener("dragover", revealForDrag, true);
     row.addEventListener("dragover", onStripDragOver);
     row.addEventListener("drop", onStripDrop);
     row.addEventListener("dragleave", clearDropMarker);
