@@ -8,6 +8,8 @@
     --op-url: 180px;
     --op-url-expanded-width: calc(100vw - 220px);
     --op-url-radius: 8px;
+    --op-url-header-height: calc(var(--op-height) - 4px);
+    --op-url-compact-width: var(--op-url);
     --op-url-surface: light-dark(#e0e4ec, #30343e);
     --op-speed: 160ms;
     --op-tab-speed: 205ms;
@@ -102,12 +104,16 @@
       min-width: 100px !important;
       max-width: none !important;
       margin-inline: 4px !important;
+      padding-block: 0 !important;
+      align-items: center !important;
+      height: var(--op-height) !important;
       /* The top-layer popover alone expands. Keep its layout anchor
          compact, including during native focus/close notifications. */
       transition: none !important;
     }
-    /* One surface and one radius for compact, focused and open states.
-       Keep the native central floating search appearance unchanged. */
+    /* Paint the same real box in compact and top-layer states. The native
+       background child is transparent, so its state-dependent inset,
+       margins, scale or theme radius cannot change the visible silhouette. */
     #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) {
       --zen-urlbar-background-base: var(--op-url-surface) !important;
       --zen-urlbar-background-transparent: var(--op-url-surface) !important;
@@ -117,43 +123,91 @@
       --urlbar-background-border-top-radius-open: var(--op-url-radius) !important;
       --urlbar-background-overhang-open: 0px !important;
       --urlbar-margin-block-start-open: 0px !important;
+      --urlbar-height: var(--op-url-header-height) !important;
+      --urlbar-container-height: var(--op-url-header-height) !important;
+      --urlbar-margin-inline: 0px !important;
+      --urlbar-component-gap: 6px !important;
+      box-sizing: border-box !important;
+      background: var(--op-url-surface) !important;
+      border: 0 !important;
+      outline: 0 !important;
+      padding: 0 !important;
+      margin: 0 !important;
       border-radius: var(--op-url-radius) !important;
+      color-scheme: inherit !important;
       scale: 1 !important;
+      transform: none !important;
       animation: none !important;
+      transition: none !important;
       box-shadow: none !important;
       backdrop-filter: none !important;
+      overflow: clip !important;
     }
-    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) :is(.urlbar-background, .urlbar-input-container) {
-      border-radius: var(--op-url-radius) !important;
+    #urlbar-container #urlbar:not([breakout-extend], [zen-floating-urlbar="true"], [data-op-url-animating]) {
+      position: relative !important;
+      inset: auto !important;
+      flex: 1 1 auto !important;
+      width: 100% !important;
+      min-width: 0 !important;
+      height: var(--op-url-header-height) !important;
+      min-height: var(--op-url-header-height) !important;
+      max-height: var(--op-url-header-height) !important;
     }
-    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) .urlbar-background {
-      background: var(--op-url-surface) !important;
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) > .urlbar-background {
+      background: transparent !important;
+      inset: 0 !important;
       margin: 0 !important;
+      padding: 0 !important;
+      border: 0 !important;
       scale: 1 !important;
+      transform: none !important;
       outline: none !important;
       box-shadow: none !important;
       backdrop-filter: none !important;
-      --zen-urlbar-background-base: var(--op-url-surface) !important;
-      --zen-urlbar-background-transparent: var(--op-url-surface) !important;
-      border-radius: var(--op-url-radius) !important;
+      border-radius: inherit !important;
       transition: none !important;
     }
-    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) .urlbar-input-container {
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) > .urlbar-input-container {
       box-sizing: border-box !important;
-      padding-inline: 8px !important;
-      padding-block: 0 !important;
+      flex: 0 0 auto !important;
+      width: 100% !important;
+      height: var(--op-url-header-height) !important;
+      min-height: var(--op-url-header-height) !important;
+      max-height: var(--op-url-header-height) !important;
+      align-items: center !important;
+      padding: 0 8px !important;
       gap: 6px !important;
       margin: 0 !important;
       border: 0 !important;
+      outline: 0 !important;
+      border-radius: inherit !important;
+      background: transparent !important;
     }
-    #urlbar-container #urlbar[breakout-extend]:not([zen-floating-urlbar="true"]) .urlbar-input-container {
-      height: var(--op-url-header-height, 30px) !important;
-      min-height: var(--op-url-header-height, 30px) !important;
-      max-height: var(--op-url-header-height, 30px) !important;
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) .urlbar-input-box {
+      flex: 1 1 0 !important;
+      min-width: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      align-items: center !important;
     }
-    #urlbar-container #urlbar[breakout-extend]:not([zen-floating-urlbar="true"]) .urlbar-background {
-      inset: 0 !important;
-      border-radius: var(--op-url-radius) !important;
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) #urlbar-input {
+      margin: 0 !important;
+      padding: 0 !important;
+      font-size: 13px !important;
+      line-height: normal !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) #identity-box {
+      order: -1 !important;
+      align-items: center !important;
+      height: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) #identity-icon-box {
+      margin: 0 !important;
+      padding: 0 4px !important;
+      min-width: 24px !important;
+      box-sizing: border-box !important;
     }
     /* A floating search is a top-layer popover, not an inline address.
        Zen can open it over an existing page (New Tab / Ctrl+T), before a
@@ -186,10 +240,19 @@
       left: var(--op-url-anchor-left, 110px) !important;
       top: var(--op-url-anchor-top, 3px) !important;
       margin: 0 !important;
-      width: var(--op-url-live-width, var(--op-url-expanded-width)) !important;
+      width: var(--op-url-live-width, var(--op-url-compact-width)) !important;
       min-width: 0 !important;
       max-width: none !important;
+      min-height: var(--op-url-header-height) !important;
+      max-height: none !important;
       box-sizing: border-box !important;
+      position-anchor: none !important;
+      position-area: none !important;
+      clip-path: inset(0 0 max(0px, calc(100% - var(--op-url-header-height))) 0 round var(--op-url-radius)) !important;
+    }
+    #urlbar-container[data-op-url-ready] #urlbar[breakout-extend]:not([zen-floating-urlbar="true"]) {
+      width: var(--op-url-live-width, var(--op-url-expanded-width)) !important;
+      clip-path: none !important;
     }
     /* Nebula keeps the web surface blurred as long as native [open] is
        present. During our deferred closing, release that effect immediately. */
@@ -201,8 +264,9 @@
     }
     /* The real top-layer element must be animated explicitly. Native
        popover positioning and search behavior are otherwise untouched. */
-    #urlbar-container #urlbar[data-op-url-animating]:not([zen-floating-urlbar="true"]) {
-      width: var(--op-url-live-width, var(--op-url-expanded-width)) !important;
+    #urlbar-container #urlbar[data-op-url-animating]:not([zen-floating-urlbar="true"]),
+    #urlbar-container[data-op-url-ready] #urlbar[data-op-url-animating]:not([zen-floating-urlbar="true"]) {
+      width: var(--op-url-live-width, var(--op-url-compact-width)) !important;
       clip-path: var(--op-url-live-clip, none) !important;
       transition: none !important;
       animation: none !important;
@@ -527,6 +591,36 @@
     #oneplane-tabs .oneplane-tab[data-op-drop-before] { box-shadow: inset 3px 0 #a9c1ff !important; }
     #oneplane-tabs .oneplane-tab[data-op-drop-after] { box-shadow: inset -3px 0 #a9c1ff !important; }
     #oneplane-tabs[data-op-dragging] { cursor: grabbing; }
+    /* The browser's native drag image follows the pointer, and the slot
+       preview reorders continuously without mutating native tab order. */
+    #oneplane-tabs .oneplane-tab-list > :is(.oneplane-tab, .oneplane-split-group),
+    #oneplane-tabs .oneplane-new-tab {
+      transform: translateX(var(--op-drag-x, 0px));
+    }
+    #oneplane-tabs .oneplane-tab-list > .oneplane-tab {
+      transition: width var(--op-tab-speed) var(--op-tab-ease),
+        flex-basis var(--op-tab-speed) var(--op-tab-ease), background-color var(--op-tab-speed) ease,
+        transform 170ms cubic-bezier(.22,.72,.2,1), opacity 120ms ease;
+    }
+    #oneplane-tabs .oneplane-tab-list > .oneplane-split-group {
+      transition: background-color var(--op-tab-speed) ease, box-shadow var(--op-tab-speed) ease,
+        transform 170ms cubic-bezier(.22,.72,.2,1), opacity 120ms ease;
+    }
+    #oneplane-tabs .oneplane-new-tab {
+      transition: translate var(--op-tab-speed) var(--op-tab-ease), transform 170ms cubic-bezier(.22,.72,.2,1);
+    }
+    #oneplane-tabs [data-op-drag-slot] { opacity: .25 !important; }
+    #oneplane-tabs[data-op-dragging] .oneplane-tab {
+      width: var(--op-tab) !important;
+      flex-basis: var(--op-tab) !important;
+      transition-property: transform, opacity, background-color !important;
+    }
+    #oneplane-tabs[data-op-dragging] .oneplane-tab-title { max-width: 0 !important; opacity: 0 !important; }
+    #oneplane-tabs[data-op-dragging] .oneplane-tab-select { gap: 0 !important; padding-inline: 0 !important; }
+    @media (prefers-reduced-motion: reduce) {
+      #oneplane-tabs .oneplane-tab-list > :is(.oneplane-tab, .oneplane-split-group),
+      #oneplane-tabs .oneplane-new-tab { transition: none !important; }
+    }
     @media (prefers-reduced-motion: reduce) {
       #oneplane-tabs .oneplane-tab-audio i { animation: none !important; }
     }

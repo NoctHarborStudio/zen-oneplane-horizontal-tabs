@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-preview.17
+
+- Preview horizontal drag reordering in real time: the native drag image follows the pointer, while adjacent tab/group slots slide and a translucent destination slot moves into place.
+- Keep native tab order unchanged until drop, preserving cancellation, split extraction and cross-window transfer.
+- Give the compact and inline popover address the same painted box, header dimensions, corner radius and internal spacing.
+- Start native inline popovers at compact width before the animation controller reveals them, avoiding an expanded first frame.
+- Preserve the central floating search and native identity/search controls.
+
 ## 0.1.0-preview.16
 
 - Render each native Split View as a single horizontal group with shared background, outline and a dedicated six-dot handle on its left.

@@ -265,11 +265,12 @@ function installTabStrip() {
     }
     const expanded = Math.max(compact, right - Math.max(0, left) - 6);
     url.style.setProperty("--op-url-expanded-width", expanded.toFixed(2) + "px");
+    url.style.setProperty("--op-url-compact-width", Math.max(1, compact).toFixed(2) + "px");
     return { compact, expanded };
   }
   function rememberCompactAddress() {
     const bar = addressBar();
-    if (!bar || bar.hasAttribute("breakout-extend") ||
+    if (!bar || inlinePopoverPresent(bar) ||
         bar.hasAttribute("zen-floating-urlbar") || url.hasAttribute("data-op-empty")) return;
     const box = bar.getBoundingClientRect();
     const anchor = url.getBoundingClientRect();
@@ -277,7 +278,7 @@ function installTabStrip() {
     if (box.width > 0 && box.height > 0) {
       addressCompactWidth = box.width;
       addressAnchor = { dx: box.left - anchor.left, dy: box.top - anchor.top,
-        height: input?.height || box.height };
+        height: box.height };
       addressWidths();
     }
   }
@@ -290,6 +291,7 @@ function installTabStrip() {
     if (addressSettleTimer) window.clearTimeout(addressSettleTimer);
     addressSettleTimer = 0;
     url.removeAttribute("data-op-url-phase");
+    url.toggleAttribute("data-op-url-ready", nativeInlineOpen(addressBar()));
     root.removeAttribute("oneplane-address-unblur");
     const bar = addressBar();
     bar?.removeAttribute("data-op-url-animating");
@@ -307,8 +309,8 @@ function installTabStrip() {
     const bounds = bar.getBoundingClientRect();
     const input = bar.querySelector(".urlbar-input-container");
     const view = bar.querySelector(".urlbarView");
-    const inputBottom = input?.getBoundingClientRect().bottom || bounds.top + 34;
-    const header = Math.max(1, inputBottom - bounds.top);
+    const inputBottom = input?.getBoundingClientRect().bottom || bounds.top + 30;
+    const header = Math.max(1, addressAnchor?.height || inputBottom - bounds.top);
     const full = Math.max(header, bounds.height,
       (view?.getBoundingClientRect().bottom || bounds.bottom) - bounds.top);
     const visible = header + (full - header) * reveal;
@@ -388,10 +390,12 @@ function installTabStrip() {
         if (closing && open) finishDismissUrl();
       }
       addressWasOpen = open;
+      url.toggleAttribute("data-op-url-ready", open);
       return;
     }
     if (addressWasOpen) return;
     addressWasOpen = true;
+    url.removeAttribute("data-op-url-ready");
     const widths = addressWidths();
     // Zen may have already expanded the placeholder before its popover
     // mutation is delivered. Start at the actual compact target, not a
@@ -640,6 +644,8 @@ function installTabStrip() {
   let dragStartPoint = null;
   let dropMarker = null;
   let dragRevealTimer = 0;
+  let liveDragTarget = null;
+  const dragShifted = new Set();
   const splitZone = html("div");
   splitZone.id = "oneplane-split-drop";
   splitZone.setAttribute("aria-hidden", "true");
@@ -718,6 +724,104 @@ function installTabStrip() {
     const before = event.clientX < (box.left + box.right) / 2;
     return { element, native: group || tab, group, tab, before };
   }
+  // Keep native drag-and-drop alive: do not move/remove the source DOM node
+  // until drop. Visually reorder its slot and animate the other slots instead.
+  function unshiftedRect(node) {
+    const rect = node.getBoundingClientRect();
+    let x = 0;
+    try {
+      const transform = window.getComputedStyle(node).transform;
+      if (transform && transform !== "none") x = new DOMMatrixReadOnly(transform).m41;
+    } catch {}
+    return { left: rect.left - x, right: rect.right - x, width: rect.width };
+  }
+  function dragSlotIndex(slots, x) {
+    return slots.findIndex(slot => x < (slot.rect.left + slot.rect.right) / 2);
+  }
+  function nativeSlot(node) {
+    const group = [...splitEntries].find(([, entry]) => entry.box === node)?.[0];
+    const tab = group ? null : tabFromItem(node);
+    return { element: node, native: group || tab, group, tab };
+  }
+  function clearLiveDrag() {
+    liveDragTarget = null;
+    for (const node of dragShifted) {
+      node.style.removeProperty("--op-drag-x");
+      node.removeAttribute("data-op-drag-slot");
+    }
+    dragShifted.clear();
+    row.removeAttribute("data-op-live-drag");
+  }
+  function shiftDragNode(node, x, placeholder = false) {
+    node.style.setProperty("--op-drag-x", x.toFixed(2) + "px");
+    node.toggleAttribute("data-op-drag-slot", placeholder);
+    dragShifted.add(node);
+  }
+  function previewStripDrag(event, tab) {
+    const owner = tabOwner(tab);
+    const group = owner?.[DRAG_CONTROLLER]?.group();
+    const entry = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
+    const nodes = Array.from(list.children);
+    if (!nodes.length) { clearLiveDrag(); return null; }
+    const slots = nodes.map(node => ({ node, rect: unshiftedRect(node) }));
+    const local = owner === window && entry?.parentElement === list;
+    const memberGroup = !local && owner === window && splitGroup(tab);
+    if (memberGroup) {
+      const own = slots.find(slot => slot.node === splitEntries.get(memberGroup)?.box);
+      if (own && event.clientX >= own.rect.left && event.clientX <= own.rect.right) {
+        clearLiveDrag();
+        return { ...nativeSlot(own.node), before: false };
+      }
+    }
+    const moving = local ? slots.find(slot => slot.node === entry) : null;
+    const rest = slots.filter(slot => slot !== moving);
+    if (!rest.length) { clearLiveDrag(); return null; }
+    const found = dragSlotIndex(rest, event.clientX);
+    const index = found < 0 ? rest.length : found;
+    const target = rest[Math.min(index, rest.length - 1)];
+    const dest = { ...nativeSlot(target.node), before: index < rest.length };
+    if (!dest.native) { clearLiveDrag(); return null; }
+
+    row.setAttribute("data-op-live-drag", "true");
+    const gap = parseFloat(window.getComputedStyle(list).columnGap) || 3;
+    const base = slots[0].rect.left;
+    const incomingWidth = Math.max(1, parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab")) || 36);
+    // The source's native drag image follows the cursor, while a translucent
+    // placeholder shows its eventual slot. Other slots glide to make room.
+    const order = rest.slice();
+    if (moving) order.splice(index, 0, moving);
+    else order.splice(index, 0, { node: null, rect: { width: incomingWidth } });
+    const used = new Set();
+    let left = base;
+    for (const slot of order) {
+      if (slot.node) {
+        shiftDragNode(slot.node, left - slot.rect.left, slot === moving);
+        used.add(slot.node);
+      }
+      left += slot.rect.width + gap;
+    }
+    // Incoming tabs (other window or a member being extracted) get a gap.
+    // The plus moves with the visible strip; the source group stays intact
+    // until the native unsplit actually succeeds at drop.
+    shiftDragNode(plus, moving ? 0 : incomingWidth + gap);
+    used.add(plus);
+    for (const node of [...dragShifted]) {
+      if (used.has(node)) continue;
+      node.style.removeProperty("--op-drag-x");
+      node.removeAttribute("data-op-drag-slot");
+      dragShifted.delete(node);
+    }
+    liveDragTarget = dest;
+    return dest;
+  }
+  function onStripDragLeave(event) {
+    if (event.relatedTarget instanceof Node && row.contains(event.relatedTarget)) return;
+    const box = row.getBoundingClientRect();
+    if (event.clientX >= box.left && event.clientX <= box.right &&
+        event.clientY >= box.top && event.clientY <= box.bottom) return;
+    clearLiveDrag();
+    clearDropMarker();
+  }
   function clearDropMarker() {
     dropMarker?.removeAttribute("data-op-drop-before");
     dropMarker?.removeAttribute("data-op-drop-after");
@@ -741,6 +845,9 @@ function installTabStrip() {
     const rect = toolbarWrapper.getBoundingClientRect();
     const within = event.clientX >= rect.left && event.clientX < rect.right &&
       event.clientY >= rect.top && event.clientY <= Math.max(rect.top + 8, rect.bottom);
+    const strip = row.getBoundingClientRect();
+    if (liveDragTarget && (event.clientX < strip.left || event.clientX > strip.right ||
+        event.clientY < strip.top || event.clientY > strip.bottom)) clearLiveDrag();
     if (!within) { releaseDragReveal(); return; }
     toolbarWrapper.setAttribute("oneplane-drag-hold", "true");
     if (dragRevealTimer) window.clearTimeout(dragRevealTimer);
@@ -748,6 +855,7 @@ function installTabStrip() {
   }
   function endDragVisual() {
     releaseDragReveal();
+    clearLiveDrag();
     clearDropMarker();
     row.removeAttribute("data-op-dragging");
     for (const entry of splitEntries.values()) entry.box.removeAttribute("data-op-group-dragging");
@@ -792,11 +900,13 @@ function installTabStrip() {
     }
   }
   function onStripDragOver(event) {
-    if (!readDraggedTab(event)) return;
+    const tab = readDraggedTab(event);
+    if (!tab) return;
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = "move";
-    markDrop(event);
+    clearDropMarker();
+    previewStripDrag(event, tab);
   }
   function moveNativeNextTo(element, dest) {
     if (!element || !dest?.native || element === dest.native) return false;
@@ -813,7 +923,7 @@ function installTabStrip() {
     const owner = tabOwner(tab);
     const source = owner?.[DRAG_CONTROLLER];
     const group = source?.group();
-    const dest = dropTarget(event);
+    const dest = previewStripDrag(event, tab) || dropTarget(event);
     try {
       if (group) {
         // Zen exposes a real tab-group object. Moving that object keeps the
@@ -847,7 +957,7 @@ function installTabStrip() {
       schedule();
     } catch (error) {
       console.error("[OnePlane] Tab or split group move:", error);
-    } finally { clearDropMarker(); }
+    } finally { clearLiveDrag(); clearDropMarker(); }
   }
   function splitSide(event) {
     const box = splitZone.getBoundingClientRect();
@@ -1282,7 +1392,7 @@ function installTabStrip() {
     window.removeEventListener("dragover", revealForDrag, true);
     row.removeEventListener("dragover", onStripDragOver);
     row.removeEventListener("drop", onStripDrop);
-    row.removeEventListener("dragleave", clearDropMarker);
+    row.removeEventListener("dragleave", onStripDragLeave);
     splitZone.removeEventListener("dragover", onSplitDragOver);
     splitZone.removeEventListener("drop", onSplitDrop);
     splitZone.remove();
@@ -1295,7 +1405,8 @@ function installTabStrip() {
     plus.removeEventListener("click", onNewTabClick);
     try { browser.removeProgressListener(progressListener); } catch {}
     url.removeAttribute("data-op-empty");
-    for (const name of ["--op-url-expanded-width", "--op-url-anchor-left", "--op-url-anchor-top", "--op-url-header-height"]) url.style.removeProperty(name);
+    url.removeAttribute("data-op-url-ready");
+    for (const name of ["--op-url-expanded-width", "--op-url-compact-width", "--op-url-anchor-left", "--op-url-anchor-top", "--op-url-header-height"]) url.style.removeProperty(name);
     toolbarWrapper?.style.removeProperty("--op-measured-toolbar-height");
     surface.remove();
     leftSpacer.remove();
@@ -1310,6 +1421,7 @@ function installTabStrip() {
     clearAddressAnimation();
     addressBar()?.removeEventListener("pointerdown", onAddressInput, true);
     addressBar()?.removeEventListener("input", onAddressInput, true);
+    addressBar()?.removeEventListener("toggle", onAddressMutation);
     if (addressFrame) window.cancelAnimationFrame(addressFrame);
     releaseShield();
     shield.remove();
@@ -1334,7 +1446,7 @@ function installTabStrip() {
     window.addEventListener("dragover", revealForDrag, true);
     row.addEventListener("dragover", onStripDragOver);
     row.addEventListener("drop", onStripDrop);
-    row.addEventListener("dragleave", clearDropMarker);
+    row.addEventListener("dragleave", onStripDragLeave);
     splitZone.addEventListener("dragover", onSplitDragOver);
     splitZone.addEventListener("drop", onSplitDrop);
     toolbarWrapper?.prepend(surface);
@@ -1344,7 +1456,8 @@ function installTabStrip() {
       addressObserver = new MutationObserver(onAddressMutation);
       bar.addEventListener("pointerdown", onAddressInput, true);
       bar.addEventListener("input", onAddressInput, true);
-      addressObserver.observe(bar, { attributes: true, attributeFilter: ["focused", "open", "textoverflow", "pageproxystate", "zen-floating-urlbar", "breakout-extend"] });
+      bar.addEventListener("toggle", onAddressMutation);
+      addressObserver.observe(bar, { attributes: true, attributeFilter: ["focused", "open", "textoverflow", "pageproxystate", "zen-floating-urlbar", "breakout-extend", "popover-open"] });
     }
     url.addEventListener("focusout", onAddressMutation);
     actionObserver.observe(url, { subtree: true, childList: true });
