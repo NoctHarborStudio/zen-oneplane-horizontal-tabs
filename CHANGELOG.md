@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-preview.14
+
+- Display animated audio playback and static muted indicators on compact and expanded tabs, using native tab media state.
+- Add horizontal drag reorder, transfer to another OnePlane window, and drag outside the source window to detach using native browser tab adoption.
+- Add directional Split View drop targets on the current page.
+- Validate update metadata, package identity, raw manifest and branch archive with a release verification utility.
+
 ## 0.1.0-preview.13
 
 - Expand the inline address to the actual right-hand window-caption boundary, instead of a fixed width cap.

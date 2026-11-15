@@ -54,6 +54,7 @@ Preview.11 observes Zen's real non-floating URL popover. A bounded animation-fra
 
 ## Manual validation checklist
 
+- [ ] Verify preview.14: audio playback/mute/unmute, reduced motion, tab reorder and cancellation, drag outside a maximized window to another monitor, drop in an existing window, private-window isolation, drag to each page edge for Split View, unload and multiple windows.
 - [ ] Verify preview.13: full-width inline search stops before the real minimize/maximize/close group; test maximized and windowed. Verify identical compact/open colors and corners, no second width jump after outside dismissal, rapid re-entry, and floating New Tab behavior.
 - [ ] Verify preview.12: click the plus or Ctrl+T from a loaded page and from an empty tab; central floating search remains usable and no empty address placeholder appears. Close it and confirm the loaded page's address returns.
 - [ ] Verify preview.11: real popover opens width-first and closes results-first on outside click, no flash, left edge stationary, rapid interruption, typing during close, native keyboard and navigation, floating search.
