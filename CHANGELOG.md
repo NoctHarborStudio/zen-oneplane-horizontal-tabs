@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-preview.5
+
+- Center the navigation buttons, compact address field and horizontal tabs in one group.
+- Keep page actions, extensions and native window controls at the edge.
+- Center the native bookmarks row and remove flexible gaps between navigation and URL.
+- Reserve expansion space for hovered tabs to avoid moving the center group.
+- Measure the full toolbar height (including bookmarks) and keep it open while the pointer is within its bounds, preserving native Compact Mode outside that area.
+
 ## 0.1.0-preview.4
 
 - Move the native translation and site-data buttons to the right end of the toolbar.

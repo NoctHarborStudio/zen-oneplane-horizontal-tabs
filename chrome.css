@@ -1,5 +1,5 @@
 /* OnePlane — native toolbar tab view. No fixed-position overlay. */
-#oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss { display: none !important; }
+#oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss, #oneplane-center-start, #oneplane-center-end { display: none !important; }
 @media (min-width: 900px) {
   :root[oneplane-active="true"][zen-compact-mode="true"]:not([customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window]):has(#nav-bar-customization-target > #oneplane-tabs[data-ready="true"]) {
     --op-height: 34px;
@@ -44,12 +44,45 @@
       min-width: 0 !important;
       overflow: visible !important;
     }
+    /* Center navigation, URL and tabs as one group; native edge buttons stay separate. */
+    #nav-bar-customization-target > * { order: 100 !important; }
+    #nav-bar-customization-target > toolbarspring { display: none !important; }
+    #nav-bar-customization-target > :is(#sidebar-button, #sidebar-toggle-button) { order: 0 !important; }
+    #nav-bar-customization-target > #oneplane-center-start { order: 10 !important; }
+    #nav-bar-customization-target > #back-button { order: 20 !important; }
+    #nav-bar-customization-target > #forward-button { order: 21 !important; }
+    #nav-bar-customization-target > :is(#stop-reload-button, #reload-button) { order: 22 !important; }
+    #nav-bar-customization-target > #home-button { order: 23 !important; }
+    #nav-bar-customization-target > :is(#back-button, #forward-button, #stop-reload-button, #reload-button, #home-button) {
+      margin-inline: 0 !important;
+      flex: 0 0 auto !important;
+    }
+    #nav-bar-customization-target > #urlbar-container { order: 30 !important; }
+    #nav-bar-customization-target > #oneplane-tabs { order: 40 !important; }
+    #nav-bar-customization-target > #oneplane-center-end { order: 50 !important; }
+    #nav-bar-customization-target > #oneplane-page-actions { order: 110 !important; }
+    #oneplane-center-start, #oneplane-center-end {
+      display: block !important;
+      flex: 1 1 var(--op-center-bias, 0px) !important;
+      width: 0;
+      min-width: 0;
+      height: 1px;
+      pointer-events: none;
+    }
+    #PersonalToolbar #personal-bookmarks, #PersonalToolbar #PlacesToolbar {
+      flex: 1 1 auto !important;
+      min-width: 0 !important;
+    }
+    #PersonalToolbar #PlacesToolbarItems {
+      justify-content: center !important;
+      flex: 1 1 auto !important;
+    }
     #nav-bar-customization-target > #urlbar-container {
       flex: 0 0 var(--op-url) !important;
       width: var(--op-url) !important;
       min-width: 100px !important;
       max-width: none !important;
-      margin-inline-end: 4px !important;
+      margin-inline: 4px !important;
       transition: width var(--op-speed) ease, flex-basis var(--op-speed) ease !important;
     }
     #nav-bar-customization-target > #urlbar-container:is(:focus-within, :has(#urlbar[focused="true"], #urlbar[open])) {
@@ -67,9 +100,11 @@
     /* As a real toolbar child, the strip inherits native Compact Mode reveal. */
     #oneplane-tabs {
       display: flex !important;
-      flex: 1 1 0 !important;
+      /* Reserve space for one expanded tab so centering does not move its
+         hit target underneath a stationary pointer during hover. */
+      flex: 0 1 auto !important;
       min-width: 0 !important;
-      width: auto !important;
+      width: calc(var(--op-tab-count, 0) * (var(--op-tab) + 3px) + var(--op-tab-open) + 3px) !important;
       height: var(--op-height) !important;
       align-items: center;
       gap: 3px;
@@ -255,8 +290,18 @@
     #oneplane-url-dismiss[data-pressed] { display: block !important; }
 
     /* Frosted native toolbar; retain the native reveal animation and height. */
-    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active]) {
+    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], :hover) {
+      height: max(var(--zen-toolbar-height-with-bookmarks, var(--op-height)), var(--op-measured-toolbar-height, 0px)) !important;
+      overflow: visible !important;
       contain: none !important;
+    }
+    #zen-appcontent-navbar-wrapper:is([oneplane-hover-lock], :hover) #zen-appcontent-navbar-container {
+      opacity: 1 !important;
+      pointer-events: auto !important;
+    }
+    #zen-appcontent-navbar-wrapper:is([oneplane-hover-lock], :hover) #urlbar {
+      opacity: 1 !important;
+      pointer-events: auto !important;
     }
     #zen-appcontent-navbar-wrapper .zen-toolbar-background {
       background: light-dark(rgba(245, 246, 249, .72), rgba(20, 22, 29, .66)) !important;

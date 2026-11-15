@@ -214,6 +214,112 @@ function installTabStrip() {
     if (!dead) { movePageActions(); alignAddressStart(); }
   });
 
+
+  // Keep native customizable toolbar items in their original parent. Only
+  // insert two flexible spacers and use CSS ordering for the center group.
+  const leftSpacer = html("div");
+  leftSpacer.id = "oneplane-center-start";
+  const rightSpacer = html("div");
+  rightSpacer.id = "oneplane-center-end";
+  for (const spacer of [leftSpacer, rightSpacer]) {
+    spacer.setAttribute("skipintoolbarset", "true");
+    spacer.setAttribute("removable", "false");
+    spacer.setAttribute("aria-hidden", "true");
+  }
+  const navbar = document.getElementById("nav-bar");
+  const toolbarWrapper = document.getElementById("zen-appcontent-navbar-wrapper");
+  const bookmarks = document.getElementById("PersonalToolbar");
+  const centerIds = new Set(["back-button", "forward-button", "stop-reload-button",
+    "reload-button", "home-button", "urlbar-container", "oneplane-tabs",
+    "oneplane-center-start", "oneplane-center-end"]);
+  let geometryFrame = 0;
+  let geometryObserver = null;
+  function scheduleGeometry() {
+    if (dead || geometryFrame) return;
+    geometryFrame = window.requestAnimationFrame(() => {
+      geometryFrame = 0;
+      if (dead || !root.hasAttribute("oneplane-active") || !toolbarWrapper) return;
+      if (window.innerWidth < 900 || root.hasAttribute("customizing")) return;
+      const wrapperRect = toolbarWrapper.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      // Offset the center for native edge controls (including window captions).
+      let left = Math.max(0, targetRect.left - wrapperRect.left);
+      let right = Math.max(0, wrapperRect.right - targetRect.right);
+      for (const child of target.children) {
+        if (centerIds.has(child.id) || child.localName === "toolbarspring") continue;
+        const box = child.getBoundingClientRect();
+        if (!box.width) continue;
+        const style = window.getComputedStyle(child);
+        const extent = box.width + (parseFloat(style.marginLeft) || 0) + (parseFloat(style.marginRight) || 0);
+        if (child.id === "sidebar-button" || child.id === "sidebar-toggle-button") left += extent;
+        else right += extent;
+      }
+      const setLength = (node, name, value) => {
+        const next = Math.max(0, Math.round(value)) + "px";
+        if (node.style.getPropertyValue(name) !== next) node.style.setProperty(name, next);
+      };
+      setLength(leftSpacer, "--op-center-bias", right - left);
+      setLength(rightSpacer, "--op-center-bias", left - right);
+      // Nebula can constrain the wrapper to a fixed height. Include the
+      // actual bookmarks row instead of letting it sit outside the hover area.
+      const navHeight = navbar?.getBoundingClientRect().height || 0;
+      const bookmarksHeight = bookmarks && !bookmarks.collapsed && !bookmarks.hidden
+        ? bookmarks.getBoundingClientRect().height : 0;
+      if (navHeight > 0) setLength(toolbarWrapper, "--op-measured-toolbar-height", navHeight + bookmarksHeight);
+    });
+  }
+  function observeGeometry() {
+    if (!geometryObserver) return;
+    geometryObserver.disconnect();
+    for (const element of [target, navbar, toolbarWrapper, bookmarks, ...target.children]) {
+      if (element && !centerIds.has(element.id)) geometryObserver.observe(element);
+    }
+    scheduleGeometry();
+  }
+
+  // Native Compact Mode may clear its hover flag during a tab expansion or
+  // while entering a bookmarks row. Keep the entire visible toolbar interactive.
+  let pointerInside = false;
+  let hoverObserver = null;
+  function hoverSupported() {
+    return !dead && root.hasAttribute("oneplane-active") &&
+      root.getAttribute("zen-compact-mode") === "true" &&
+      !root.hasAttribute("customizing") && !root.hasAttribute("inDOMFullscreen") &&
+      window.innerWidth >= 900;
+  }
+  function clearHover() {
+    pointerInside = false;
+    toolbarWrapper?.removeAttribute("oneplane-hover-lock");
+  }
+  function maintainHover() {
+    if (!hoverSupported() || !pointerInside || !toolbarWrapper) return;
+    toolbarWrapper.setAttribute("oneplane-hover-lock", "true");
+    if (!toolbarWrapper.hasAttribute("zen-has-hover")) {
+      const manager = window.gZenCompactModeManager;
+      if (typeof manager?._setElementExpandAttribute === "function") {
+        manager._setElementExpandAttribute(toolbarWrapper, true);
+      }
+    }
+  }
+  function trackPointer(event) {
+    if (!hoverSupported() || !toolbarWrapper) { clearHover(); return; }
+    const insideTarget = event.composedPath().includes(toolbarWrapper);
+    if (!insideTarget && !pointerInside) return;
+    const rect = toolbarWrapper.getBoundingClientRect();
+    const inside = rect.height > 8 && event.clientX >= rect.left &&
+      event.clientX < rect.right && event.clientY >= rect.top && event.clientY < rect.bottom;
+    if (!inside) { clearHover(); return; }
+    pointerInside = true;
+    maintainHover();
+  }
+  function leaveWindow(event) {
+    if (event.relatedTarget === null) clearHover();
+  }
+  function onCompactChanged() {
+    if (!hoverSupported()) clearHover();
+    scheduleGeometry();
+  }
+
   const entries = new Map();
   let frame = 0;
   let dead = false;
@@ -268,6 +374,7 @@ function installTabStrip() {
     const tabs = Array.from(browser.visibleTabs || browser.tabs || []).filter(
       tab => !tab.closing && !tab.hidden && !tab.hasAttribute("zen-empty-tab")
     );
+    row.style.setProperty('--op-tab-count', String(tabs.length));
     const keep = new Set(tabs);
     for (const [tab, entry] of entries) {
       if (!keep.has(tab)) { entry.item.remove(); entries.delete(tab); }
@@ -316,7 +423,10 @@ function installTabStrip() {
   const toolbarObserver = new MutationObserver(() => {
     if (dead || root.hasAttribute("customizing")) return;
     if (url.parentElement === target && row.parentElement !== target) url.after(row);
+    if (leftSpacer.parentElement !== target) target.prepend(leftSpacer);
+    if (rightSpacer.parentElement !== target) row.after(rightSpacer);
     movePageActions();
+    observeGeometry();
   });
 
   function destroy() {
@@ -327,6 +437,19 @@ function installTabStrip() {
     workspaceObserver.disconnect();
     toolbarObserver.disconnect();
     actionObserver.disconnect();
+    geometryObserver?.disconnect();
+    hoverObserver?.disconnect();
+    if (geometryFrame) window.cancelAnimationFrame(geometryFrame);
+    clearHover();
+    toolbarWrapper?.style.removeProperty("--op-measured-toolbar-height");
+    leftSpacer.remove();
+    rightSpacer.remove();
+    window.removeEventListener("pointermove", trackPointer, true);
+    toolbarWrapper?.removeEventListener("pointerover", trackPointer);
+    document.documentElement.removeEventListener("mouseleave", leaveWindow);
+    window.removeEventListener("deactivate", clearHover);
+    window.removeEventListener("ZenCompactMode:Toggled", onCompactChanged);
+    window.removeEventListener("resize", onCompactChanged);
     addressObserver?.disconnect();
     if (addressFrame) window.cancelAnimationFrame(addressFrame);
     releaseShield();
@@ -343,6 +466,8 @@ function installTabStrip() {
 
   try {
     url.after(row);
+    target.prepend(leftSpacer);
+    row.after(rightSpacer);
     tabbox.append(shield);
     movePageActions();
     const bar = document.getElementById("urlbar");
@@ -367,6 +492,18 @@ function installTabStrip() {
       workspaceObserver.observe(wrapper, { subtree: true, childList: true, attributes: true, attributeFilter: ["active", "hidden"] });
     }
     toolbarObserver.observe(target, { childList: true });
+    geometryObserver = new ResizeObserver(scheduleGeometry);
+    observeGeometry();
+    if (toolbarWrapper) {
+      hoverObserver = new MutationObserver(maintainHover);
+      hoverObserver.observe(toolbarWrapper, { attributes: true, attributeFilter: ["zen-has-hover"] });
+      toolbarWrapper.addEventListener("pointerover", trackPointer);
+    }
+    window.addEventListener("pointermove", trackPointer, true);
+    document.documentElement.addEventListener("mouseleave", leaveWindow);
+    window.addEventListener("deactivate", clearHover);
+    window.addEventListener("ZenCompactMode:Toggled", onCompactChanged);
+    window.addEventListener("resize", onCompactChanged);
     row.setAttribute("data-ready", "true");
   } catch (error) {
     destroy();
