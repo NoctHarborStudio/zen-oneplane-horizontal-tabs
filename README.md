@@ -4,7 +4,7 @@ Adaptive horizontal top tabs for [Zen Browser](https://zen-browser.app/), with h
 
 OnePlane is designed to keep browser controls on a single horizontal plane at the top of the window, without permanently sacrificing screen space.
 
-> **Early development.** No stable release yet. The CSS prototype is based on Zen 1.24.2b source and has not been tested in a running browser.
+> **Early development.** No stable release yet. The toolbar prototype is based on Zen 1.24.2b source and has not been tested in a running browser.
 
 ## Design goals
 
@@ -33,7 +33,7 @@ Restart the test browser after updating from preview.1 if the script is not load
 
 See the [installation guide](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/docs/installation.md) and [design and validation plan](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/docs/design.md).
 
-Horizontal scrolling, drag and drop, pinned tabs, folders, workspaces, extension controls and compatibility with other themes are not yet validated. Sine packaging was checked against its v2.3.3 source; installation has not been tested in a running browser.
+The horizontal strip mirrors native tabs and uses their selection and close APIs. Drag and drop, folder presentation, native tab context menus, workspace controls, and compatibility with other themes are unfinished. Sine installation and automatic configuration were observed in the developer's browser on preview.2; preview.3 still needs runtime validation.
 
 ## Scope
 

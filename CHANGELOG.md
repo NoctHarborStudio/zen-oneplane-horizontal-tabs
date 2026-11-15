@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-preview.3
+
+- Replace the invisible fixed-position tab overlay with a horizontal view in the native navigation toolbar.
+- Mirror native tabs and synchronize selection, labels, icons and open/close events.
+- Expand the real address field and non-floating suggestion panel on focus.
+- Preserve native toolbar reveal and fall back to the original layout when the strip is unavailable.
+- Native drag and drop, folder rendering and context menus remain unfinished.
+
 ## 0.1.0-preview.2
 
 - Configure required native Zen layout automatically using an auditable local Sine script.

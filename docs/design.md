@@ -12,9 +12,9 @@ One horizontal control plane at the top of the window. Back/forward and other na
 
 ## Implementation strategy
 
-The first CSS-only experiment uses the existing top toolbar as the activation surface and visually repositions the real tab strip into reserved space in the same row. It does not create duplicate tabs. The current reserved widths are provisional; below 900 CSS pixels the experiment falls back to the original layout. the overlay is temporarily suppressed during address editing.
+The third preview replaces the fixed-position sidebar overlay with a lightweight horizontal view inserted into the real navigation toolbar. Each control references an existing native tab; selection and closing go through gBrowser, and the original tab model is unchanged. The original sidebar remains available after disabling the mod.
 
-Zen's workspaces contain their own vertical arrowscrollboxes, pinned sections and normal sections. Visual CSS changes do not change their internal orientation, scrolling logic or drag-and-drop geometry. A production layout must address those differences rather than assume CSS alone is sufficient.
+This is a change in implementation, not a second tab session. The toolbar inherits native Compact Mode visibility. Native drag-and-drop, folders, tab context menus, workspace controls, and accessibility parity are still unfinished.
 
 ## Automatic configuration
 
@@ -22,6 +22,7 @@ A Sine window script snapshots native layout preferences and activates the requi
 
 ## Manual validation checklist
 
+- [ ] Verify preview.3 shows the tab strip, expands the address field on click, and reveals via native top hover.
 - [ ] Install and enable with no manual native layout changes; disable and verify restoration.
 - [ ] Two windows, close one, disable mod, restart and update from preview.1.
 - [ ] Windows 11, Zen version and clean test profile recorded.

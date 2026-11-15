@@ -17,4 +17,4 @@ If the interface is unusable, use the test profile rather than your primary prof
 
 ## Limitations
 
-The current preview is not a stable release. Sine packaging and Zen API references have been inspected, but browser execution has not been tested. Tab scrolling, drag and drop, folder layout and window control placement are still experimental. Official Zen Mods packaging is not provided.
+The current preview is not a stable release. Sine packaging and Zen API references have been inspected, but browser execution has not been tested. The new horizontal view mirrors the current workspace's visible native tabs. Drag and drop, folders, native tab menus and workspace controls are not implemented yet; scrolling and window control placement require testing. Official Zen Mods packaging is not provided.
