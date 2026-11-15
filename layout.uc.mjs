@@ -167,8 +167,13 @@ function installTabStrip() {
     shieldTimer = 0;
   }
   function dismissUrl() {
+    releaseShield();
+    if (startAddressClose()) return;
+    finishDismissUrl();
+  }
+  function finishDismissUrl() {
     const bar = window.gURLBar;
-    // Arm the hold before native focus/popup handling removes its hover state.
+    // Restart the hold after the visual closing sequence.
     holdToolbarAfterDismiss();
     try {
       bar?.view?.close();
@@ -205,6 +210,152 @@ function installTabStrip() {
   const addressInput = () => window.gURLBar?.inputField || document.getElementById("urlbar-input");
   let addressFrame = 0;
   let addressObserver = null;
+  let addressAnimationFrame = 0;
+  let addressTransition = null;
+  let addressWasOpen = false;
+  let addressVisual = null;
+  const addressEase = t => 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 3);
+
+  function addressBar() { return document.getElementById("urlbar"); }
+  function nativeInlineOpen(bar) {
+    return Boolean(bar && bar.hasAttribute("breakout-extend") &&
+      !bar.hasAttribute("zen-floating-urlbar") &&
+      (bar.hasAttribute("open") || bar.hasAttribute("focused")));
+  }
+  function addressMotionEnabled() {
+    return hoverSupported() &&
+      prefs.getIntPref("zen.oneplane.animation-duration", 160) !== 0 &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+  function addressWidths() {
+    const base = parseFloat(window.getComputedStyle(url).getPropertyValue("--op-url")) || 180;
+    return { compact: url.hasAttribute("data-op-empty") ? 0 : base,
+      expanded: Math.max(320, Math.min(window.innerWidth * .45, 760)) };
+  }
+  function clearAddressAnimation() {
+    if (addressAnimationFrame) window.cancelAnimationFrame(addressAnimationFrame);
+    addressAnimationFrame = 0;
+    addressTransition = null;
+    addressVisual = null;
+    url.removeAttribute("data-op-url-phase");
+    const bar = addressBar();
+    bar?.removeAttribute("data-op-url-animating");
+    bar?.style.removeProperty("--op-url-live-width");
+    bar?.style.removeProperty("--op-url-live-clip");
+  }
+  function drawAddress(width, reveal) {
+    const bar = addressBar();
+    if (!bar) return;
+    addressVisual = { width, reveal };
+    // The native popover background includes both the header and results.
+    // Animate its real width and clip the results until width is ready.
+    bar.setAttribute("data-op-url-animating", "true");
+    bar.style.setProperty("--op-url-live-width", Math.max(1, width).toFixed(2) + "px");
+    const bounds = bar.getBoundingClientRect();
+    const input = bar.querySelector(".urlbar-input-container");
+    const view = bar.querySelector(".urlbarView");
+    const inputBottom = input?.getBoundingClientRect().bottom || bounds.top + 34;
+    const header = Math.max(1, inputBottom - bounds.top + 2);
+    const full = Math.max(header, bounds.height,
+      (view?.getBoundingClientRect().bottom || bounds.bottom) - bounds.top);
+    const visible = header + (full - header) * reveal;
+    bar.style.setProperty("--op-url-live-clip",
+      "inset(0px 0px " + (bounds.height - visible).toFixed(2) + "px 0px round 8px)");
+  }
+  function beginAddressPhase(name, from, to, duration) {
+    addressTransition = { name, from, to, duration, start: null };
+    url.setAttribute("data-op-url-phase", name);
+    drawAddress(from.width, from.reveal);
+    if (!addressAnimationFrame) addressAnimationFrame = window.requestAnimationFrame(stepAddress);
+  }
+  function stepAddress(now) {
+    addressAnimationFrame = 0;
+    const a = addressTransition;
+    if (!a || dead) return;
+    if (!nativeInlineOpen(addressBar()) || !addressMotionEnabled()) {
+      const closing = a.name.startsWith("closing");
+      clearAddressAnimation();
+      if (closing && nativeInlineOpen(addressBar())) finishDismissUrl();
+      return;
+    }
+    if (a.start === null) a.start = now;
+    const t = Math.min(1, (now - a.start) / a.duration);
+    const eased = addressEase(t);
+    drawAddress(a.from.width + (a.to.width - a.from.width) * eased,
+      a.from.reveal + (a.to.reveal - a.from.reveal) * eased);
+    if (t < 1) {
+      addressAnimationFrame = window.requestAnimationFrame(stepAddress);
+      return;
+    }
+    if (a.name === "opening-width") {
+      beginAddressPhase("opening-results", a.to, { width: a.to.width, reveal: 1 }, 220);
+    } else if (a.name === "closing-results") {
+      beginAddressPhase("closing-width", a.to, { width: addressWidths().compact, reveal: 0 }, 360);
+    } else if (a.name === "closing-width") {
+      addressTransition = null;
+      finishDismissUrl();
+      clearAddressAnimation();
+      addressWasOpen = false;
+    } else {
+      clearAddressAnimation();
+    }
+  }
+  function updateAddressAnimation() {
+    const bar = addressBar();
+    const open = nativeInlineOpen(bar);
+    if (!open || !addressMotionEnabled()) {
+      if (addressTransition) {
+        const closing = addressTransition.name.startsWith("closing");
+        clearAddressAnimation();
+        if (closing && open) finishDismissUrl();
+      }
+      addressWasOpen = open;
+      return;
+    }
+    if (addressWasOpen) return;
+    addressWasOpen = true;
+    const widths = addressWidths();
+    const start = Math.max(widths.compact, Math.min(widths.expanded, url.getBoundingClientRect().width));
+    beginAddressPhase("opening-width", { width: start, reveal: 0 },
+      { width: widths.expanded, reveal: 0 }, 320);
+  }
+  function startAddressClose() {
+    const bar = addressBar();
+    if (!nativeInlineOpen(bar) || !addressMotionEnabled()) return false;
+    if (addressTransition?.name.startsWith("closing")) return true;
+    holdToolbarAfterDismiss();
+    const widths = addressWidths();
+    const from = addressVisual || { width: widths.expanded, reveal: 1 };
+    if (addressAnimationFrame) window.cancelAnimationFrame(addressAnimationFrame);
+    addressAnimationFrame = 0;
+    // Reverse an interrupted opening from its current visual position.
+    if (from.reveal > .01) {
+      beginAddressPhase("closing-results", from,
+        { width: from.width, reveal: 0 }, Math.max(80, 200 * from.reveal));
+    } else {
+      beginAddressPhase("closing-width", from,
+        { width: widths.compact, reveal: 0 }, 360);
+    }
+    return true;
+  }
+  function onAddressMutation() {
+    if (dead) return;
+    updateAddressAnimation();
+    alignAddressStart();
+  }
+  function onAddressInput() {
+    // Typing or clicking the real input during closing reverses the close.
+    if (!addressTransition?.name.startsWith("closing")) return;
+    const from = addressVisual || { width: addressWidths().compact, reveal: 0 };
+    if (addressAnimationFrame) window.cancelAnimationFrame(addressAnimationFrame);
+    addressAnimationFrame = 0;
+    const width = addressWidths().expanded;
+    if (from.reveal > 0) {
+      beginAddressPhase("opening-results", from, { width, reveal: 1 }, 220);
+    } else {
+      beginAddressPhase("opening-width", from, { width, reveal: 0 }, 320);
+    }
+  }
   function alignAddressStart() {
     if (addressFrame) return;
     addressFrame = window.requestAnimationFrame(() => {
@@ -342,6 +493,7 @@ function installTabStrip() {
   function onWindowDeactivate() {
     clearHover();
     releaseAddressHold();
+    clearAddressAnimation();
   }
   function hoverSupported() {
     return !dead && root.hasAttribute("oneplane-active") &&
@@ -378,7 +530,7 @@ function installTabStrip() {
     if (event.relatedTarget === null) clearHover();
   }
   function onCompactChanged() {
-    if (!hoverSupported()) { clearHover(); clearTabHover(); releaseAddressHold(); }
+    if (!hoverSupported()) { clearHover(); clearTabHover(); releaseAddressHold(); clearAddressAnimation(); addressWasOpen = false; }
     scheduleGeometry();
   }
 
@@ -657,10 +809,13 @@ function installTabStrip() {
     window.removeEventListener("ZenCompactMode:Toggled", onCompactChanged);
     window.removeEventListener("resize", onCompactChanged);
     addressObserver?.disconnect();
+    clearAddressAnimation();
+    addressBar()?.removeEventListener("pointerdown", onAddressInput, true);
+    addressBar()?.removeEventListener("input", onAddressInput, true);
     if (addressFrame) window.cancelAnimationFrame(addressFrame);
     releaseShield();
     shield.remove();
-    url.removeEventListener("focusout", alignAddressStart);
+    url.removeEventListener("focusout", onAddressMutation);
     restorePageActions();
     for (const event of events) browser.tabContainer.removeEventListener(event, schedule);
     browser.tabContainer.removeEventListener("TabSelect", onSelect);
@@ -679,10 +834,12 @@ function installTabStrip() {
     movePageActions();
     const bar = document.getElementById("urlbar");
     if (bar) {
-      addressObserver = new MutationObserver(alignAddressStart);
+      addressObserver = new MutationObserver(onAddressMutation);
+      bar.addEventListener("pointerdown", onAddressInput, true);
+      bar.addEventListener("input", onAddressInput, true);
       addressObserver.observe(bar, { attributes: true, attributeFilter: ["focused", "open", "textoverflow", "pageproxystate", "zen-floating-urlbar", "breakout-extend"] });
     }
-    url.addEventListener("focusout", alignAddressStart);
+    url.addEventListener("focusout", onAddressMutation);
     actionObserver.observe(url, { subtree: true, childList: true });
     alignAddressStart();
     sync();

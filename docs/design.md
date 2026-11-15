@@ -48,8 +48,13 @@ Preview.9 moves tab expansion from CSS hover alone to a single explicit target. 
 
 Preview.10 arms an independent two-second visibility hold before dismissing the address field through the content shield. The hold is restarted on another dismissal and cleared on unload, window deactivation or unsupported layout. Native hover and popup states still govern visibility after it expires. Address width and toolbar height use separate opening and closing durations. The floating Zen search appearance remains native.
 
+## Sequenced inline address animation
+
+Preview.11 observes Zen's real non-floating URL popover. A bounded animation-frame controller sets its actual width and clips the joint background/results surface. Opening uses 320 ms width growth followed by 220 ms results reveal. Outside-click dismissal uses up to 200 ms results collapse followed by 360 ms width contraction, before native close. Keyboard and navigation-triggered native closure are not deferred. Floating Zen search retains its native behavior. All transient styles are removed on unload and native close.
+
 ## Manual validation checklist
 
+- [ ] Verify preview.11: real popover opens width-first and closes results-first on outside click, no flash, left edge stationary, rapid interruption, typing during close, native keyboard and navigation, floating search.
 - [ ] Verify preview.10: lighter compact/focused URL, smooth width animation, two-second hold after outside dismissal without page click-through, slower panel close, re-hover/reopen during hold, floating search and reduced motion.
 - [ ] Verify preview.9: empty new tab and floating search, Ctrl+L, first/middle/last tab expansion, centered title, no X, middle-click, indicator continuity across gaps, delayed exit and stable plus.
 - [ ] Verify preview.8: visible backdrop over bright and dark websites; first/middle/last/single tab expansion, keyboard focus, pointer stability and crowded windows.

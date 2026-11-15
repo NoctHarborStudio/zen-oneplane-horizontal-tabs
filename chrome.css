@@ -6,6 +6,7 @@
     --op-tab: 36px;
     --op-tab-open: 180px;
     --op-url: 180px;
+    --op-url-expanded-width: clamp(320px, 45vw, 760px);
     --op-speed: 160ms;
     --op-tab-speed: 240ms;
     --op-tab-ease: cubic-bezier(.2, .75, .2, 1);
@@ -104,8 +105,8 @@
         flex-basis var(--op-url-motion) var(--op-url-ease) !important;
     }
     #nav-bar-customization-target > #urlbar-container:is(:focus-within, :has(#urlbar[focused="true"], #urlbar[open])) {
-      flex-basis: clamp(320px, 45vw, 760px) !important;
-      width: clamp(320px, 45vw, 760px) !important;
+      flex-basis: var(--op-url-expanded-width) !important;
+      width: var(--op-url-expanded-width) !important;
       --op-url-motion: var(--op-url-open-speed);
       max-width: none !important;
     }
@@ -143,10 +144,30 @@
       pointer-events: none !important;
     }
     #urlbar-container #urlbar[breakout-extend]:not([zen-floating-urlbar="true"]) {
-      width: 100% !important;
+      width: var(--op-url-live-width, var(--op-url-expanded-width)) !important;
       min-width: 0 !important;
       max-width: none !important;
       box-sizing: border-box !important;
+    }
+    /* The real top-layer element must be animated explicitly. Native
+       popover positioning and search behavior are otherwise untouched. */
+    #urlbar-container #urlbar[data-op-url-animating]:not([zen-floating-urlbar="true"]) {
+      clip-path: var(--op-url-live-clip, none) !important;
+      transition: none !important;
+      animation: none !important;
+    }
+    #urlbar-container:is([data-op-url-phase="opening-width"], [data-op-url-phase="closing-results"], [data-op-url-phase="closing-width"]) #urlbar:not([zen-floating-urlbar="true"]) .urlbarView {
+      pointer-events: none !important;
+    }
+    #nav-bar-customization-target > #urlbar-container[data-op-url-phase="closing-width"] {
+      flex-basis: var(--op-url) !important;
+      width: var(--op-url) !important;
+      --op-url-motion: var(--op-url-close-speed);
+    }
+    #nav-bar-customization-target > #urlbar-container[data-op-empty][data-op-url-phase="closing-width"] {
+      flex-basis: 0px !important;
+      width: 0px !important;
+      min-width: 0px !important;
     }
 
     /* As a real toolbar child, the strip inherits native Compact Mode reveal. */

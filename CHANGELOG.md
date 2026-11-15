@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-preview.11
+
+- Animate the real inline address popover instead of just its toolbar anchor.
+- Open in two phases: grow rightward, then reveal search results downward.
+- Dismiss from outside in reverse: hide the results upward, then shrink the address field before invoking native close.
+- Preserve the two-second toolbar hold after dismissal, native floating search and reduced motion.
+- Allow an interrupted opening to reverse from its current geometry.
+
 ## 0.1.0-preview.10
 
 - Improve compact and focused address-field contrast with a lighter neutral surface.
