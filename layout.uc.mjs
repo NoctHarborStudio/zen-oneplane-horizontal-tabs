@@ -229,6 +229,16 @@ function installTabStrip() {
   const navbar = document.getElementById("nav-bar");
   const toolbarWrapper = document.getElementById("zen-appcontent-navbar-wrapper");
   const bookmarks = document.getElementById("PersonalToolbar");
+  const surface = html("div");
+  surface.id = "oneplane-toolbar-surface";
+  surface.setAttribute("aria-hidden", "true");
+  // A real element, not a native theme pseudo-element. Keep the background
+  // behind the controls and above the web surface without receiving input.
+  for (const [name, value] of Object.entries({
+    position: "absolute", top: "0", left: "0", right: "0",
+    "pointer-events": "none", "z-index": "0",
+    "background-color": "var(--op-surface-tint, rgba(21, 23, 30, .34))"
+  })) surface.style.setProperty(name, value, "important");
   const leftIds = new Set(["sidebar-button", "sidebar-toggle-button", "back-button",
     "forward-button", "stop-reload-button", "reload-button", "home-button", "urlbar-container"]);
   const centerIds = new Set(["oneplane-tabs", "oneplane-center-start", "oneplane-center-end"]);
@@ -269,6 +279,8 @@ function installTabStrip() {
       const bias = right - left + trailingReserve;
       setLength(leftSpacer, "--op-center-bias", bias);
       setLength(rightSpacer, "--op-center-bias", -bias);
+      // Cap leftward expansion at actual free space next to navigation.
+      setLength(row, "--op-left-room", leftSpacer.getBoundingClientRect().width - 4);
       // Nebula can constrain the wrapper to a fixed height. Include the
       // actual bookmarks row instead of letting it sit outside the hover area.
       const navHeight = navbar?.getBoundingClientRect().height || 0;
@@ -281,7 +293,7 @@ function installTabStrip() {
     if (!geometryObserver) return;
     geometryObserver.disconnect();
     for (const element of [target, navbar, toolbarWrapper, bookmarks, ...target.children]) {
-      if (element && element !== leftSpacer && element !== rightSpacer) geometryObserver.observe(element);
+      if (element) geometryObserver.observe(element);
     }
     scheduleGeometry();
   }
@@ -455,6 +467,7 @@ function installTabStrip() {
     if (geometryFrame) window.cancelAnimationFrame(geometryFrame);
     clearHover();
     toolbarWrapper?.style.removeProperty("--op-measured-toolbar-height");
+    surface.remove();
     leftSpacer.remove();
     rightSpacer.remove();
     window.removeEventListener("pointermove", trackPointer, true);
@@ -482,6 +495,7 @@ function installTabStrip() {
     target.prepend(leftSpacer);
     row.after(rightSpacer);
     tabbox.append(shield);
+    toolbarWrapper?.prepend(surface);
     movePageActions();
     const bar = document.getElementById("urlbar");
     if (bar) {

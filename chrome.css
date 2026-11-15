@@ -1,5 +1,5 @@
 /* OnePlane — native toolbar tab view. No fixed-position overlay. */
-#oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss, #oneplane-center-start, #oneplane-center-end { display: none !important; }
+#oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss, #oneplane-center-start, #oneplane-center-end, #oneplane-toolbar-surface { display: none !important; }
 @media (min-width: 900px) {
   :root[oneplane-active="true"][zen-compact-mode="true"]:not([customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window]):has(#nav-bar-customization-target > #oneplane-tabs[data-ready="true"]) {
     --op-height: 34px;
@@ -100,8 +100,12 @@
     /* As a real toolbar child, the strip inherits native Compact Mode reveal. */
     #oneplane-tabs {
       display: flex !important;
-      /* The left spacer compensates for this trailing reserve, so neither
-         the plus button nor expansion space contributes to tab centering. */
+      /* The collapsed group remains centered. Its expansion reserve is
+         excluded from the center; directional growth uses available left space. */
+      --op-growth: calc(var(--op-tab-open) - var(--op-tab));
+      --op-expand-left: 0px;
+      --op-shift-left: min(var(--op-expand-left), var(--op-left-room, 0px));
+      overflow: visible !important;
       flex: 0 1 auto !important;
       min-width: 0 !important;
       width: calc(var(--op-tab-count, 0) * (var(--op-tab) + 3px) + var(--op-tab-open) + 3px) !important;
@@ -111,6 +115,21 @@
       margin-inline: 2px;
       color: var(--toolbar-color, currentColor);
       -moz-window-dragging: no-drag;
+    }
+    /* Leftmost grows left, rightmost grows right, middle tabs grow equally
+       in both directions. The plus follows the actual right edge. */
+    #oneplane-tabs:has(.oneplane-tab:is(:hover, :has(:focus-visible))) {
+      --op-expand-left: calc(var(--op-growth) / 2);
+    }
+    #oneplane-tabs:has(.oneplane-tab:first-child:not(:last-child):is(:hover, :has(:focus-visible))) {
+      --op-expand-left: var(--op-growth);
+    }
+    #oneplane-tabs:has(.oneplane-tab:last-child:not(:first-child):is(:hover, :has(:focus-visible))) {
+      --op-expand-left: 0px;
+    }
+    #oneplane-tabs :is(.oneplane-tab-list, .oneplane-new-tab) {
+      translate: calc(-1 * var(--op-shift-left)) 0;
+      transition: translate var(--op-speed) ease;
     }
     #oneplane-tabs .oneplane-tab-list {
       display: flex;
@@ -135,10 +154,29 @@
       box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 5%, transparent);
       transition: width var(--op-speed) ease, flex-basis var(--op-speed) ease, background-color var(--op-speed) ease;
     }
-    #oneplane-tabs .oneplane-tab:is(:hover, :focus-within) {
+    #oneplane-tabs .oneplane-tab:is(:hover, :has(:focus-visible)) {
       flex-basis: var(--op-tab-open);
       width: var(--op-tab-open);
       background: color-mix(in srgb, currentColor 19%, transparent);
+    }
+    #oneplane-tabs:has(.oneplane-tab:hover) .oneplane-tab:not(:hover):has(:focus-visible) {
+      flex-basis: var(--op-tab);
+      width: var(--op-tab);
+    }
+    #oneplane-tabs:has(.oneplane-tab:hover) .oneplane-tab:not(:hover) .oneplane-tab-title {
+      opacity: 0;
+    }
+    #oneplane-tabs:has(.oneplane-tab:hover) .oneplane-tab:not(:hover) .oneplane-tab-close {
+      display: none;
+    }
+    #oneplane-tabs:has(.oneplane-tab:hover) {
+      --op-expand-left: calc(var(--op-growth) / 2);
+    }
+    #oneplane-tabs:has(.oneplane-tab:first-child:not(:last-child):hover) {
+      --op-expand-left: var(--op-growth);
+    }
+    #oneplane-tabs:has(.oneplane-tab:last-child:not(:first-child):hover) {
+      --op-expand-left: 0px;
     }
     #oneplane-tabs .oneplane-tab[data-selected] {
       background: color-mix(in srgb, currentColor 24%, transparent);
@@ -198,7 +236,7 @@
       text-overflow: ellipsis;
       opacity: 0;
     }
-    #oneplane-tabs .oneplane-tab:is(:hover, :focus-within) .oneplane-tab-title { opacity: 1; }
+    #oneplane-tabs .oneplane-tab:is(:hover, :has(:focus-visible)) .oneplane-tab-title { opacity: 1; }
     #oneplane-tabs .oneplane-tab-close {
       display: none;
       flex: 0 0 24px;
@@ -206,7 +244,7 @@
       line-height: 1;
       border-radius: 5px;
     }
-    #oneplane-tabs .oneplane-tab:is(:hover, :focus-within) .oneplane-tab-close { display: block; }
+    #oneplane-tabs .oneplane-tab:is(:hover, :has(:focus-visible)) .oneplane-tab-close { display: block; }
     #oneplane-tabs .oneplane-tab-close:hover,
     #oneplane-tabs .oneplane-new-tab:hover {
       background: var(--toolbarbutton-hover-background, color-mix(in srgb, currentColor 12%, transparent));
@@ -227,7 +265,7 @@
       filter: grayscale(1);
       opacity: .42;
     }
-    #oneplane-tabs .oneplane-tab[data-unloaded]:is(:hover, :focus-within) .oneplane-tab-icon {
+    #oneplane-tabs .oneplane-tab[data-unloaded]:is(:hover, :has(:focus-visible)) .oneplane-tab-icon {
       filter: none;
       opacity: .8;
     }
@@ -328,53 +366,47 @@
       opacity: 1 !important;
       pointer-events: auto !important;
     }
-    /* Paint the overlay itself, independently of Zen/Nebula's background
-       element. The tint is a fallback even when Gecko cannot sample the
-       remote web surface for backdrop-filter. Never blur toolbar controls. */
+    /* Paint a real background surface inside the native overlay. Use an
+       explicit tint on the visible rows as a second independent fallback:
+       some theme/compositor combinations suppress the backdrop layer. */
     #zen-appcontent-navbar-wrapper {
-      --op-toolbar-tint: light-dark(rgba(244, 245, 249, .30), rgba(21, 23, 30, .30));
+      --op-surface-tint: light-dark(rgba(244, 245, 249, .36), rgba(21, 23, 30, .36));
+      --op-row-tint: light-dark(rgba(244, 245, 249, .86), rgba(21, 23, 30, .86));
       background: transparent !important;
     }
-    #zen-appcontent-navbar-wrapper .zen-toolbar-background {
-      display: none !important;
-    }
-    #zen-appcontent-navbar-wrapper::before {
-      content: "" !important;
-      position: absolute !important;
-      inset: 0 !important;
-      z-index: -1 !important;
+    #zen-appcontent-navbar-wrapper .zen-toolbar-background { display: none !important; }
+    #zen-appcontent-navbar-wrapper > #oneplane-toolbar-surface {
       display: block !important;
-      pointer-events: none !important;
-      background: var(--op-toolbar-tint) !important;
+      height: max(100%, var(--op-measured-toolbar-height, var(--op-height))) !important;
       backdrop-filter: blur(24px) saturate(1.2) !important;
-      box-shadow: 0 3px 15px rgba(0, 0, 0, .22) !important;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, .22) !important;
       opacity: 0;
       transition: opacity var(--op-speed) ease;
     }
-    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], :hover) {
-      /* Independent fallback: maintain readable contrast if the pseudo
-         layer or backdrop compositing is suppressed by another theme. */
-      background-color: light-dark(rgba(244, 245, 249, .83), rgba(21, 23, 30, .83)) !important;
-    }
-    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], :hover)::before {
+    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], :hover) > #oneplane-toolbar-surface {
       opacity: 1 !important;
     }
-    #zen-appcontent-navbar-wrapper :is(#zen-appcontent-navbar-container, #nav-bar, #PersonalToolbar) {
-      background-color: transparent !important;
-      background-image: none !important;
+    #zen-appcontent-navbar-wrapper > #zen-appcontent-navbar-container {
+      position: relative !important;
+      z-index: 1 !important;
+    }
+    #zen-appcontent-navbar-wrapper #nav-bar,
+    #zen-appcontent-navbar-wrapper #PersonalToolbar {
+      background: rgba(21, 23, 30, .86) !important;
+      background: var(--op-row-tint, rgba(21, 23, 30, .86)) !important;
+      backdrop-filter: blur(24px) saturate(1.2) !important;
+      background-clip: border-box !important;
     }
     @media (prefers-reduced-motion: reduce) {
       #zen-appcontent-navbar-wrapper { transition: none !important; }
     }
     @media (prefers-reduced-transparency: reduce) {
       #zen-appcontent-navbar-wrapper {
-        --op-toolbar-tint: light-dark(#f1f2f5, #1b1d24);
+        --op-surface-tint: light-dark(#f1f2f5, #1b1d24);
+        --op-row-tint: light-dark(#f1f2f5, #1b1d24);
       }
-      #zen-appcontent-navbar-wrapper::before {
+      #zen-appcontent-navbar-wrapper :is(#oneplane-toolbar-surface, #nav-bar, #PersonalToolbar) {
         backdrop-filter: none !important;
-      }
-      #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], :hover) {
-        background-color: var(--op-toolbar-tint) !important;
       }
     }
   }

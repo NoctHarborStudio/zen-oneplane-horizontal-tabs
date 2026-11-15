@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-preview.8
+
+- Use a dedicated real toolbar backdrop element, with an independent tinted background on the visible navigation and bookmarks rows.
+- Expand the first tab leftward, the last tab rightward, and interior or single tabs symmetrically, subject to available space.
+- Keep the collapsed tab strip centered and move the new-tab button with the right edge of the expanding strip.
+- Prefer pointer hover over stale keyboard focus, and cap left expansion at the available navigation gap.
+
 ## 0.1.0-preview.7
 
 - Restore the top overlay's frosted surface independently of the native Zen/Nebula background layer.

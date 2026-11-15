@@ -34,8 +34,15 @@ Preview.6 centers the collapsed tab strip alone. Navigation and the URL stay at 
 
 The native toolbar wrapper is positioned above the web content, rather than changing its allocated height. The corresponding native content margin compensation is neutralized only while OnePlane is active. Native compact hover and popup attributes still drive the reveal. Compatibility overrides are part of OnePlane, not external theme edits.
 
+## Directional tab expansion
+
+Preview.8 retains the collapsed strip anchor and uses the existing trailing expansion reserve. Its tab list and new-tab button translate by the leftward share of the expanded width. The first tab expands left, the last right, and interior or single tabs expand equally in both directions when space permits. The translation is capped by measured free space before the strip. Crowded windows and scrolling require runtime testing.
+
+The overlay now has a real background element plus independent tint on the actual visible navigation and bookmark rows; this avoids relying solely on the native background element or wrapper pseudo-element.
+
 ## Manual validation checklist
 
+- [ ] Verify preview.8: visible backdrop over bright and dark websites; first/middle/last/single tab expansion, keyboard focus, pointer stability and crowded windows.
 - [ ] Verify preview.6: tab-only centering (including odd/even counts), plus excluded, left navigation, stable page position during reveal and hide, URL focus and crowded windows.
 - [ ] Verify preview.5: centered navigation and bookmarks, stable hover across rows and empty space, no sticky toolbar after leaving, many tabs and narrow windows.
 - [ ] Verify preview.4: native page actions, click dismissal, loaded/unloaded states, URL fade and frosted background on bright/dark pages.
