@@ -645,6 +645,7 @@ function installTabStrip() {
   let dropMarker = null;
   let dragRevealTimer = 0;
   let liveDragTarget = null;
+  let dragCommitFrame = 0;
   const dragShifted = new Set();
   const splitZone = html("div");
   splitZone.id = "oneplane-split-drop";
@@ -751,6 +752,20 @@ function installTabStrip() {
     }
     dragShifted.clear();
     row.removeAttribute("data-op-live-drag");
+    row.style.removeProperty("--op-drag-incoming");
+  }
+  function finishStripCommit() {
+    // The visual slots already occupy their destination. Apply the native
+    // order and remove transforms together, without a second transition.
+    clearLiveDrag();
+    if (frame) window.cancelAnimationFrame(frame);
+    frame = 0;
+    sync();
+    if (dragCommitFrame) window.cancelAnimationFrame(dragCommitFrame);
+    dragCommitFrame = window.requestAnimationFrame(() => {
+      dragCommitFrame = 0;
+      row.removeAttribute("data-op-drag-commit");
+    });
   }
   function shiftDragNode(node, x, placeholder = false) {
     node.style.setProperty("--op-drag-x", x.toFixed(2) + "px");
@@ -803,7 +818,8 @@ function installTabStrip() {
     // Incoming tabs (other window or a member being extracted) get a gap.
     // The plus moves with the visible strip; the source group stays intact
     // until the native unsplit actually succeeds at drop.
-    shiftDragNode(plus, moving ? 0 : incomingWidth + gap);
+    row.style.setProperty("--op-drag-incoming", (moving ? 0 : incomingWidth + gap) + "px");
+    shiftDragNode(plus, 0);
     used.add(plus);
     for (const node of [...dragShifted]) {
       if (used.has(node)) continue;
@@ -924,6 +940,7 @@ function installTabStrip() {
     const source = owner?.[DRAG_CONTROLLER];
     const group = source?.group();
     const dest = previewStripDrag(event, tab) || dropTarget(event);
+    row.setAttribute("data-op-drag-commit", "true");
     try {
       if (group) {
         // Zen exposes a real tab-group object. Moving that object keeps the
@@ -957,7 +974,10 @@ function installTabStrip() {
       schedule();
     } catch (error) {
       console.error("[OnePlane] Tab or split group move:", error);
-    } finally { clearLiveDrag(); clearDropMarker(); }
+    } finally {
+      clearDropMarker();
+      finishStripCommit();
+    }
   }
   function splitSide(event) {
     const box = splitZone.getBoundingClientRect();
@@ -1374,6 +1394,8 @@ function installTabStrip() {
     if (dead) return;
     dead = true;
     if (frame) window.cancelAnimationFrame(frame);
+    if (dragCommitFrame) window.cancelAnimationFrame(dragCommitFrame);
+    dragCommitFrame = 0;
     tabObserver.disconnect();
     workspaceObserver.disconnect();
     toolbarObserver.disconnect();

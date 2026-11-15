@@ -143,7 +143,7 @@
       backdrop-filter: none !important;
       overflow: clip !important;
     }
-    #urlbar-container #urlbar:not([breakout-extend], [zen-floating-urlbar="true"], [data-op-url-animating]) {
+    #urlbar-container #urlbar:not([breakout-extend], [zen-floating-urlbar="true"], :popover-open) {
       position: relative !important;
       inset: auto !important;
       flex: 1 1 auto !important;
@@ -234,7 +234,8 @@
       opacity: 0 !important;
       pointer-events: none !important;
     }
-    #urlbar-container #urlbar[breakout-extend]:not([zen-floating-urlbar="true"]) {
+    #urlbar-container #urlbar[breakout-extend]:not([zen-floating-urlbar="true"]),
+    #urlbar-container #urlbar[data-op-url-animating]:popover-open:not([zen-floating-urlbar="true"]) {
       position: fixed !important;
       inset: auto !important;
       left: var(--op-url-anchor-left, 110px) !important;
@@ -608,6 +609,13 @@
     }
     #oneplane-tabs .oneplane-new-tab {
       transition: translate var(--op-tab-speed) var(--op-tab-ease), transform 170ms cubic-bezier(.22,.72,.2,1);
+    }
+    #oneplane-tabs .oneplane-tab-list {
+      padding-inline-end: var(--op-drag-incoming, 0px);
+    }
+    #oneplane-tabs[data-op-drag-commit] .oneplane-tab-list > :is(.oneplane-tab, .oneplane-split-group),
+    #oneplane-tabs[data-op-drag-commit] .oneplane-new-tab {
+      transition: none !important;
     }
     #oneplane-tabs [data-op-drag-slot] { opacity: .25 !important; }
     #oneplane-tabs[data-op-dragging] .oneplane-tab {
