@@ -15,11 +15,27 @@ OnePlane is designed to keep browser controls on a single horizontal plane at th
 - Native Compact Mode integration for top-edge reveal and automatic hiding.
 - Preserve native navigation, window controls, keyboard shortcuts and theme colors wherever possible.
 
-## Development preview
+## Install the development preview with Sine
 
-The [development branch](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/tree/dev/initial-prototype) contains the experimental CSS, [manual installation and rollback guide](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/dev/initial-prototype/docs/installation.md), and [design and validation plan](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/dev/initial-prototype/docs/design.md).
+**Use a disposable Zen profile.** Install Sine in that profile using its official instructions, then open Sine Mods in Zen Settings.
 
-Use a disposable profile for testing. Horizontal scrolling, drag and drop, pinned tabs, folders, workspaces, extension controls and compatibility with other themes are not yet validated.
+Paste this GitHub source into Sine's unpublished/local mod installation field:
+
+```text
+NoctHarborStudio/zen-oneplane-horizontal-tabs/tree/preview
+```
+
+The installation contains CSS and preference metadata only. OnePlane's own layout switch is off by default; enable **Enable OnePlane (experimental)** in the mod's settings only after configuring the native layout:
+
+- Multiple Toolbars, expanded left sidebar.
+- Compact Mode → Hide toolbar (not Hide both).
+- Window width at least 900 CSS pixels.
+
+Disable the mod in Sine or set `zen.oneplane.enabled` to false to restore the native UI.
+
+See the [Sine and manual installation guide](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/docs/installation.md) and [design and validation plan](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/docs/design.md). All preview code is on the [preview branch](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/tree/preview).
+
+Horizontal scrolling, drag and drop, pinned tabs, folders, workspaces, extension controls and compatibility with other themes are not yet validated. Sine packaging was checked against its v2.3.3 source; installation has not been tested in a running browser.
 
 ## Scope
 
