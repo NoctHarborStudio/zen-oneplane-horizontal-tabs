@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-preview.20
+
+- Anchor hover expansion to the actual tab center, including adjacent Split View groups and rapid retargeting; use intrinsic group widths.
+- Add an 8px reorder hysteresis and pointer-driven two-axis squash before detachment.
+- Animate one opaque in-window drag card with a 360ms Bunny bounce and reverse insertion; hand off to Gecko only at the window boundary.
+- Brighten unloaded icons during drag, suppress the old detached source and preserve native tab/group drop operations.
+- Keep the Sine package identity and advance its update timestamp.
+
 ## 0.1.0-preview.19
 
 - Isolate nested drag transforms so a Split View group's frame and tabs move together.
