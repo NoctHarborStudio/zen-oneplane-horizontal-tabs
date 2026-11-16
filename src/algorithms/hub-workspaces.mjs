@@ -40,3 +40,16 @@
     const w=Math.round(width*.72),ht=Math.round(height*.74);
     return {x:left+Math.floor((width-w)/2),y:top+Math.floor((height-ht)/2),width:w,height:ht,mode:"center"};
   }
+  export function hubTrashAgeMatches(stamp,age,now){
+    if(age==="all")return true;
+    const duration={"5m":300000,"1h":3600000,"1d":86400000,"7d":604800000,"30d":2592000000,"1y":31536000000}[age];
+    return Number.isFinite(duration)&&Number.isFinite(stamp)&&stamp>0&&Number.isFinite(now)&&now-stamp>=duration;
+  }
+  export function hubWorkspaceOrder(spaces,free,trash){
+    return Array.isArray(spaces)?spaces.filter(s=>s.id!==trash).sort((a,b)=>Number(b.id===free)-Number(a.id===free)):null;
+  }
+  export function hubTrashTabEligible(tab){
+    return !!tab&&!tab.closing&&!tab.group&&!tab.hasAttribute("zen-essential")&&!tab.hasAttribute("zen-empty-tab")&&
+      !tab.hasAttribute("split-view")&&!tab.hasAttribute("glance-id")&&!tab.hasAttribute("zen-glance-tab")&&
+      !tab.querySelector?.(".tabbrowser-tab[glance-id],.tabbrowser-tab[zen-glance-tab]");
+  }

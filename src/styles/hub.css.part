@@ -72,3 +72,24 @@
 #oneplane-workspace-drag-badge {position:fixed!important;inset:0 auto auto 0!important;margin:0!important;box-sizing:border-box;max-width:160px;padding:9px 13px;border-radius:8px;border:1px solid color-mix(in srgb,currentColor 35%,transparent);background:light-dark(#e9edf5,#353946);color:light-dark(#24262e,#edf0f6);box-shadow:0 4px 14px #0004;pointer-events:none!important;z-index:2147483647;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font:600 13px system-ui;}
 #oneplane-workspace-drag-badge[hidden] {display:none!important;}
 #oneplane-workspace-drag-badge::backdrop {pointer-events:none;background:transparent;}
+
+/* Workspace management and native Trash drawer. */
+#oneplane-hub-panel .op-hub-title-row {display:flex;align-items:center;justify-content:space-between;gap:8px;}
+#oneplane-hub-panel .op-hub-title-row .op-hub-title {margin:0;}
+#oneplane-hub-panel .op-hub-trash-toggle {display:grid;place-items:center;width:30px;height:30px;border:0;border-radius:7px;background:transparent;color:inherit;cursor:pointer;}
+#oneplane-hub-panel .op-hub-trash-toggle:is(:hover,[aria-expanded="true"]) {background:color-mix(in srgb,currentColor 14%,transparent);}
+#oneplane-hub-panel .op-hub-trash-toggle svg {width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;}
+#oneplane-hub-panel .op-hub-lock,#oneplane-hub-panel .op-hub-trash-date {font-size:10px;opacity:.65;white-space:nowrap;}
+#oneplane-hub-panel .op-hub-icon {color:var(--op-space-accent,inherit);background:color-mix(in srgb,var(--op-space-accent,currentColor) 18%,transparent);}
+#oneplane-hub-panel :is(.op-hub-free-setup,.op-hub-edit,.op-hub-trash-panel,.op-hub-trash-list,.op-hub-trash-confirm) {display:flex;flex-direction:column;gap:6px;}
+#oneplane-hub-panel :is(.op-hub-free-setup,.op-hub-trash-panel)[hidden] {display:none!important;}
+#oneplane-hub-panel .op-hub-trash-panel {border-top:1px solid color-mix(in srgb,currentColor 13%,transparent);padding-top:6px;}
+#oneplane-hub-panel .op-hub-trash-list {max-height:245px;overflow:auto;}
+#oneplane-hub-panel .op-hub-trash-item {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px;padding:7px;border-radius:7px;background:color-mix(in srgb,currentColor 7%,transparent);}
+#oneplane-hub-panel .op-hub-trash-item[draggable="true"] {cursor:grab;}
+#oneplane-hub-panel .op-hub-trash-item select {grid-column:1/-1;}
+#oneplane-hub-panel .op-hub-trash-tools {display:flex;gap:5px;align-items:center;}
+#oneplane-hub-panel .op-hub-trash-tools .op-hub-action {width:auto;}
+#oneplane-hub-panel .op-hub-age {min-width:0;flex:1;max-width:100%;color:inherit;background:var(--op-hub-bg,Canvas);border:1px solid color-mix(in srgb,currentColor 20%,transparent);border-radius:6px;padding:5px;font:inherit;}
+#oneplane-hub-panel .op-hub-color {width:100%;min-height:28px;border:0;background:transparent;}
+#oneplane-hub-panel .op-hub-edit .op-hub-name {width:100%;}

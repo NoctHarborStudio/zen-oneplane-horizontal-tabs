@@ -22,10 +22,38 @@
     name.type="text";name.maxLength=80;name.placeholder="New workspace";name.setAttribute("aria-label","New workspace name");
     add.type="submit";add.setAttribute("aria-label","Create workspace");form.append(name,add);
     const mode=make("button","op-hub-mode");mode.type="button";
-    content.append(make("h2","op-hub-title","OnePlane"),make("h3","op-hub-heading","Workspaces"),spaces,form,status,make("h3","op-hub-heading","Settings"),mode);
+    const titleRow=make("div","op-hub-title-row"),trashToggle=make("button","op-hub-trash-toggle");
+    trashToggle.type="button";trashToggle.title="Trash";trashToggle.setAttribute("aria-label","Trash");
+    trashToggle.setAttribute("aria-expanded","false");
+    const trashIcon=document.createElementNS(glyph.namespaceURI,"svg");
+    trashIcon.setAttribute("viewBox","0 0 20 20");trashIcon.setAttribute("aria-hidden","true");
+    const trashPath=document.createElementNS(glyph.namespaceURI,"path");
+    trashPath.setAttribute("d","M3 5h14M7 5V3h6v2M5 5l1 12h8l1-12M8 8v6M12 8v6");
+    trashIcon.append(trashPath);trashToggle.append(trashIcon);
+    titleRow.append(make("h2","op-hub-title","OnePlane"),trashToggle);
+    const freeSetup=make("div","op-hub-free-setup"),trashPanel=make("section","op-hub-trash-panel");
+    trashPanel.hidden=true;trashPanel.setAttribute("aria-label","Trash");
+    const trashList=make("div","op-hub-trash-list"),trashTools=make("div","op-hub-trash-tools");
+    const ageSelect=make("select","op-hub-age"),clearTrash=make("button","op-hub-action","Clear");
+    clearTrash.type="button";ageSelect.setAttribute("aria-label","Clear tabs older than");
+    for(const [value,label] of [["all","All tabs"],["5m","Older than 5 minutes"],["1h","Older than 1 hour"],["1d","Older than 1 day"],["7d","Older than 7 days"],["30d","Older than 30 days"],["1y","Older than 1 year"]]){
+      const option=make("option","",label);option.value=value;ageSelect.append(option);
+    }
+    trashTools.append(ageSelect,clearTrash);
+    const trashConfirmation=make("div","op-hub-trash-confirm");
+    trashPanel.append(make("h3","op-hub-heading","Trash"),trashList,trashTools,trashConfirmation);
+    trashToggle.addEventListener("click",()=>{
+      trashOpen=!trashOpen;purgePlan=null;render();
+      if(trashOpen&&!window.matchMedia("(prefers-reduced-motion: reduce)").matches)try{trashPanel.animate([{opacity:0,translate:"0 -6px"},{opacity:1,translate:"0 0"}],{duration:240,easing:"ease-out"});}catch{}
+    });
+    ageSelect.addEventListener("change",()=>{purgePlan=null;renderTrash();});
+    clearTrash.addEventListener("click",()=>askPurge());
+    content.append(titleRow,make("h3","op-hub-heading","Workspaces"),freeSetup,spaces,form,trashPanel,status,make("h3","op-hub-heading","Settings"),mode);
     const returnButton=make("button","op-hub-return","Return to main window");returnButton.type="button";returnButton.hidden=true;content.prepend(returnButton);
     panel.append(content);
     let destroyed=false,busy=false,open=false,contextId=null;
+    let trashOpen=false,purgePlan=null,trashDrag=null,editId=null;
+    const FREE_PREF="zen.oneplane.free-space-id",TRASH_PREF="zen.oneplane.trash-space-id",COLOR_PREF="zen.oneplane.workspace-colors",TRASH_TIME="oneplane-trashed-at";
     let geometryFrame=0,motion=null,confirmation=null,drag=null,suppressClickUntil=0,projectionBusy=false;
     const PROJECTION="__oneplaneWorkspaceProjection";
     let dragBadge=null,dragBadgeFrame=0,dragBadgePoint=null;
@@ -69,7 +97,7 @@
       }catch{done();}
     }
     function close(restoreFocus=false,immediate=false){
-      const wasVisible=!panel.hidden;contextId=null;confirmation=null;open=false;
+      const wasVisible=!panel.hidden;contextId=null;confirmation=null;editId=null;trashDrag=null;purgePlan=null;open=false;
       if(drag)cancelDrag();
       if(geometryFrame)window.cancelAnimationFrame(geometryFrame);geometryFrame=0;
       button.setAttribute("aria-expanded","false");
@@ -109,8 +137,10 @@
       fluid(true,()=>{});return true;
     }
     function render(){
-      if(destroyed)return;
-      const snapshot=hubWorkspaceSnapshot(manager()),focusedId=document.activeElement?.dataset?.workspaceId;
+      if(destroyed||trashDrag)return;
+      const snapshot=hubWorkspaceOrder(hubWorkspaceSnapshot(manager()),freeId(),trashId()),focusedId=document.activeElement?.dataset?.workspaceId;
+      renderFreeSetup(snapshot);
+      renderTrash();
       returnButton.hidden=!window[PROJECTION];returnButton.disabled=projectionBusy;
       spaces.replaceChildren();
       if(!snapshot?.length)spaces.append(make("p","op-hub-empty",snapshot?"No native workspaces":"Native workspaces unavailable"));
@@ -118,11 +148,16 @@
         const entry=make("button","op-hub-space");entry.type="button";entry.dataset.workspaceId=space.id;entry.disabled=busy;
         entry.setAttribute("aria-current",space.active?"true":"false");
         const icon=make("span","op-hub-icon",space.icon||Array.from(space.name)[0]?.toUpperCase()||"·");icon.setAttribute("aria-hidden","true");
+        const accent=workspaceColor(space.id);if(accent)icon.style.setProperty("--op-space-accent",accent);
+        if(space.id===freeId())entry.setAttribute("data-op-free","true");
+        entry.addEventListener("dragover",event=>trashRestoreOver(event,space.id));
+        entry.addEventListener("drop",event=>trashRestoreDrop(event,space.id));
         entry.append(icon,make("span","op-hub-label",space.name));
+        if(space.id===freeId())entry.append(make("span","op-hub-lock","· Free"));
         if(space.active)entry.append(make("span","op-hub-current","•"));
         entry.addEventListener("click",()=>{if(window.performance.now()>=suppressClickUntil)void select(space.id);});
         entry.addEventListener("pointerdown",event=>beginDrag(event,space.id,entry));
-        entry.addEventListener("contextmenu",event=>{event.preventDefault();event.stopPropagation();if(!busy){confirmation=null;contextId=contextId===space.id?null:space.id;render();}});
+        entry.addEventListener("contextmenu",event=>{event.preventDefault();event.stopPropagation();if(!busy){confirmation=null;editId=null;contextId=contextId===space.id?null:space.id;render();}});
         spaces.append(entry);
         if(contextId===space.id)spaces.append(workspaceMenu(space,snapshot));
         if(focusedId===space.id&&open&&!busy)entry.focus({preventScroll:true});
@@ -136,9 +171,23 @@
     function workspaceMenu(space,snapshot){
       const menu=make("div","op-hub-context");menu.setAttribute("role","group");menu.setAttribute("aria-label","Workspace actions");
       const native=manager(),free=prefs.getStringPref("zen.oneplane.free-space-id","");
-      const canDelete=snapshot.length>1&&space.id!==free&&typeof native?.removeWorkspace==="function";
+      const canDelete=snapshot.length>1&&!!freeId()&&space.id!==free&&singleWindow()&&canManage()&&typeof native?.removeWorkspace==="function";
       const detach=make("button","op-hub-action","Open in another window");detach.type="button";detach.disabled=busy||projectionBusy;
       detach.addEventListener("click",()=>void project(space.id,null));menu.append(detach);
+      if(editId===space.id){menu.append(workspaceEditor(space));return menu;}
+      if(!confirmation){
+        const edit=action("Edit workspace",()=>{editId=space.id;render();});
+        edit.disabled=!canManage()||typeof native?.saveWorkspace!=="function";menu.append(edit);
+        if(!freeId()&&space.id!==trashId()){
+          const designate=action("Make Free (rename)",()=>void designateFree(space.id));designate.disabled=!canManage();menu.append(designate);
+        }
+        const order=make("div","op-hub-confirm-controls");
+        const up=action("Move up",()=>void moveWorkspace(space.id,-1)),down=action("Move down",()=>void moveWorkspace(space.id,1));
+        const index=snapshot.findIndex(s=>s.id===space.id);
+        up.disabled=!canManage()||space.id===freeId()||index<=Number(!!freeId())||typeof native?.reorderWorkspace!=="function";
+        down.disabled=!canManage()||space.id===freeId()||index>=snapshot.length-1||typeof native?.reorderWorkspace!=="function";
+        order.append(up,down);menu.append(order);
+      }
       if(confirmation?.id===space.id){
         const message=make("p","op-hub-confirm-text",confirmation.description);
         const controls=make("div","op-hub-confirm-controls");
@@ -157,58 +206,211 @@
       return native.allStoredTabs.filter(tab=>tab.getAttribute("zen-workspace-id")===id&&
         !tab.hasAttribute("zen-essential")&&!(tab.hasAttribute("zen-empty-tab")&&!tab.group));
     }
-    // Keep existing data by default. Moving ordinary tabs is safe only with
-    // one participating window and no native grouping/Glance relationships.
-    function preservationPlan(native,id,destination){
-      try{
-        const tabs=ownedTabs(native,id);
-        if(!tabs||!destination||typeof native.moveTabsToWorkspace!=="function")return null;
-        const windows=Services.wm.getEnumerator("navigator:browser");
-        while(windows.hasMoreElements()){
-          const other=windows.getNext();
-          if(other!==window&&!other.closed&&other.gZenWorkspaces?.getWorkspaceFromId?.(id))return null;
-        }
-        if(tabs.some(t=>t.closing||t.group||t.hasAttribute("glance-id")||t.hasAttribute("zen-glance-tab")||
-          t.hasAttribute("split-view")||t.querySelector?.(".tabbrowser-tab[glance-id]")))return null;
-        const targetSpace=native.getWorkspaceFromId(destination.id),element=native.workspaceElement(destination.id);
-        if(!targetSpace||!element||tabs.some(t=>!((t.pinned?element.pinnedTabsContainer:element.tabsContainer))))return null;
-        return tabs;
-      }catch{return null;}
+    // Native spaces own tabs and session data; prefs contain roles and Hub accent only.
+    function storedId(key){const id=prefs.getStringPref(key,"");return id&&manager()?.getWorkspaceFromId?.(id)?id:"";}
+    const freeId=()=>storedId(FREE_PREF),trashId=()=>storedId(TRASH_PREF);
+    function canManage(){const native=manager();return !!native?.workspaceEnabled&&!native.privateWindowOrDisabled&&native.currentWindowIsSyncing&&privateState(window)===false;}
+    function singleWindow(){
+      try{const windows=Services.wm.getEnumerator("navigator:browser");
+        while(windows.hasMoreElements()){const win=windows.getNext();if(win!==window&&!win.closed)return false;}return true;
+      }catch{return false;}
+    }
+    function action(label,fn){const btn=make("button","op-hub-action",label);btn.type="button";btn.addEventListener("click",fn);return btn;}
+    function workspaceColor(id){try{const v=JSON.parse(prefs.getStringPref(COLOR_PREF,"{}"))[id];return /^#[0-9a-f]{6}$/i.test(v)?v:"";}catch{return "";}}
+    function saveWorkspaceColor(id,value){
+      let colors={};try{colors=JSON.parse(prefs.getStringPref(COLOR_PREF,"{}"));}catch{}
+      if(!colors||typeof colors!=="object"||Array.isArray(colors))colors={};
+      if(/^#[0-9a-f]{6}$/i.test(value))colors[id]=value;
+      prefs.setStringPref(COLOR_PREF,JSON.stringify(colors));
+    }
+    async function operation(fn){
+      if(busy||projectionBusy||destroyed||!canManage())return;
+      busy=true;status.textContent="";
+      try{await fn();}catch(error){status.textContent=String(error.message||error);console.warn("[OnePlane] Workspace Engine:",error);}
+      finally{busy=false;if(!destroyed&&open)render();}
+    }
+    function renderFreeSetup(snapshot){
+      freeSetup.replaceChildren();freeSetup.hidden=!!freeId()||!snapshot?.length;
+      if(freeSetup.hidden)return;
+      const msg=make("p","op-hub-confirm-text","Choose an existing workspace → Make Free, or create a new Free.");
+      const btn=action("Create Free",()=>void designateFree(null));btn.disabled=busy||!canManage();
+      freeSetup.append(msg,btn);
+    }
+    async function designateFree(id){
+      await operation(async()=>{
+        if(freeId())throw Error("Free is already designated.");
+        const native=manager(),ws=id?native.getWorkspaceFromId(id):await native.createAndSaveWorkspace("Free","⌂",true);
+        if(!ws?.uuid||ws.uuid===trashId()||!native.getWorkspaceFromId(ws.uuid))throw Error("Could not designate Free.");
+        if(id){if(typeof native.saveWorkspace!=="function")throw Error("Native rename unavailable.");native.saveWorkspace({...ws,name:"Free"});}
+        prefs.setStringPref(FREE_PREF,ws.uuid);
+        if(typeof native.reorderWorkspace==="function")await native.reorderWorkspace(ws.uuid,0);
+        contextId=null;editId=null;
+      });
+    }
+    function workspaceEditor(space){
+      const wrap=make("div","op-hub-edit"),label=make("input","op-hub-name"),icon=make("input","op-hub-name"),color=make("input","op-hub-color");
+      label.value=space.name;label.maxLength=80;label.placeholder="Workspace name";label.setAttribute("aria-label","Workspace name");label.disabled=space.id===freeId();
+      icon.value=space.icon;icon.maxLength=24;icon.placeholder="Icon / emoji";icon.setAttribute("aria-label","Workspace icon");
+      color.type="color";color.value=workspaceColor(space.id)||"#7089b8";color.setAttribute("aria-label","Hub icon color");
+      let colorEdited=false;color.addEventListener("input",()=>{colorEdited=true;});
+      const controls=make("div","op-hub-confirm-controls"),cancel=action("Cancel",()=>{editId=null;render();});
+      const save=action("Save",()=>void operation(async()=>{
+        const native=manager(),ws=native.getWorkspaceFromId(space.id),value=label.value.trim();
+        if(!ws||!value)throw Error("Enter a workspace name.");
+        const next={...ws,name:space.id===freeId()?"Free":value};
+        if(icon.value.trim()!==space.icon)next.icon=icon.value.trim()||undefined;
+        native.saveWorkspace(next);
+        if(colorEdited)saveWorkspaceColor(space.id,color.value);
+        editId=null;
+      }));
+      controls.append(cancel,save);wrap.append(label,icon,color,controls);return wrap;
+    }
+    async function moveWorkspace(id,direction){
+      await operation(async()=>{
+        const native=manager(),ordered=hubWorkspaceOrder(hubWorkspaceSnapshot(native),freeId(),trashId());
+        const index=ordered.findIndex(s=>s.id===id),destination=ordered[index+direction];
+        if(id===freeId()||!destination||destination.id===freeId())return;
+        const nativeIndex=native.getWorkspaces().findIndex(s=>s.uuid===destination.id);
+        if(nativeIndex>=0)await native.reorderWorkspace(id,nativeIndex);
+      });
+    }
+    function trashSessionStore(){
+      try{return ChromeUtils.importESModule("moz-src:///browser/components/sessionstore/SessionStore.sys.mjs").SessionStore;}
+      catch{return ChromeUtils.importESModule("resource:///modules/sessionstore/SessionStore.sys.mjs").SessionStore;}
+    }
+    function trashStamp(tab){try{return Number(trashSessionStore().getCustomTabValue(tab,TRASH_TIME))||0;}catch{return 0;}}
+    async function ensureTrash(){
+      const native=manager();
+      if(!singleWindow()||!freeId())throw Error("Set up Free and close other browser windows first.");
+      let id=trashId();
+      if(!id){
+        const result=await native.createAndSaveWorkspace("Trash","🗑",true);
+        if(!result?.uuid||!native.getWorkspaceFromId(result.uuid))throw Error("Could not create Trash.");
+        id=result.uuid;prefs.setStringPref(TRASH_PREF,id);
+      }
+      for(let i=0;i<20&&!native.workspaceElement(id);i++)await new Promise(r=>window.setTimeout(r,50));
+      if(destroyed||!singleWindow()||!native.workspaceElement(id))throw Error("Trash is not ready.");
+      return id;
+    }
+    function moveNativeTab(tab,destination){
+      const native=manager(),element=native.workspaceElement(destination);
+      if(!singleWindow()||!canManage()||!hubTrashTabEligible(tab)||tab===browser.selectedTab||
+        !native.getWorkspaceFromId(destination)||!(tab.pinned?element?.pinnedTabsContainer:element?.tabsContainer))
+        throw Error("Tab cannot be moved safely.");
+      native.moveTabsToWorkspace([tab],destination);
+      if(tab.getAttribute("zen-workspace-id")!==destination)throw Error("Native tab move did not complete.");
     }
     function deletionDetails(id){
-      const native=manager(),snapshot=hubWorkspaceSnapshot(native),space=snapshot?.find(s=>s.id===id);
-      const free=prefs.getStringPref("zen.oneplane.free-space-id","");
-      if(!space||snapshot.length<=1||id===free||typeof native.removeWorkspace!=="function")return null;
-      const destination=snapshot.find(s=>s.id===free&&s.id!==id)||snapshot.find(s=>s.id!==id&&s.active)||snapshot.find(s=>s.id!==id);
-      const plan=preservationPlan(native,id,destination);
-      const description=plan===null?
-        "Delete “"+space.name+"” and close its remaining tabs, including in synced windows?":
-        plan.length?"Move "+plan.length+" tab(s) to “"+destination.name+"” and delete “"+space.name+"”?":
-        "Delete empty workspace “"+space.name+"”?";
-      return {id,native,destination,plan,description};
+      const native=manager(),snapshot=hubWorkspaceOrder(hubWorkspaceSnapshot(native),freeId(),trashId()),space=snapshot?.find(s=>s.id===id);
+      if(!space||!freeId()||id===freeId()||snapshot.length<=1||!canManage()||!singleWindow()||
+        typeof native.removeWorkspace!=="function"||typeof native.moveTabsToWorkspace!=="function")return null;
+      const tabs=ownedTabs(native,id);
+      if(!tabs||tabs.some(t=>!hubTrashTabEligible(t)))return null;
+      return {id,native,plan:tabs,description:tabs.length?"Move "+tabs.length+" tab(s) to Trash and delete “"+space.name+"”?":"Delete empty workspace “"+space.name+"”?"};
     }
     function askDelete(id){
       if(busy||destroyed)return;
-      confirmation=deletionDetails(id);contextId=id;render();
+      confirmation=deletionDetails(id);contextId=id;editId=null;
+      if(!confirmation)status.textContent="Cannot delete safely. Set up Free, close other windows, or resolve grouped tabs.";
+      render();
     }
     async function removeSpace(id){
       if(busy||destroyed||confirmation?.id!==id)return;
       const approved=confirmation,now=deletionDetails(id);
       if(!now||now.native!==approved.native||now.description!==approved.description||
-        (now.plan!==null&&approved.plan!==null&&(now.plan.length!==approved.plan.length||now.plan.some(t=>!approved.plan.includes(t))))){
+        now.plan.length!==approved.plan.length||now.plan.some(t=>!approved.plan.includes(t))){
         confirmation=now;status.textContent="Workspace changed. Review again.";render();return;
       }
-      const {native,destination,plan}=now;
-      busy=true;confirmation=null;contextId=null;status.textContent="";render();
-      try{
-        if(plan!==null){
-          if(plan.length)native.moveTabsToWorkspace([...plan],destination.id);
-          if(plan.some(t=>t.getAttribute("zen-workspace-id")!==destination.id)||ownedTabs(native,id)?.length!==0)throw Error("Not all tabs moved");
+      confirmation=null;contextId=null;
+      await operation(async()=>{
+        const native=now.native,destination=now.plan.length?await ensureTrash():null;
+        if(native.activeWorkspace===id){switchGuard();await native.changeWorkspaceWithID(freeId());}
+        if(destroyed||!singleWindow()||native.activeWorkspace===id)throw Error("Workspace is still active.");
+        const fresh=deletionDetails(id);
+        if(!fresh||fresh.plan.length!==now.plan.length||fresh.plan.some(t=>!now.plan.includes(t)))throw Error("Workspace changed. Nothing deleted.");
+        const store=destination?trashSessionStore():null;
+        for(const tab of fresh.plan){
+          store.setCustomTabValue(tab,TRASH_TIME,String(Date.now()));
+          moveNativeTab(tab,destination);
         }
+        if(!singleWindow()||ownedTabs(native,id)?.length!==0)throw Error("Not all tabs moved. Workspace kept.");
         switchGuard();await native.removeWorkspace(id);
-        if(native.getWorkspaceFromId(id))throw Error("Workspace not removed");
-      }catch(error){if(!destroyed)status.textContent="Could not delete workspace safely.";console.warn("[OnePlane] Hub delete:",error);}
-      finally{busy=false;if(!destroyed&&open)render();}
+        if(native.getWorkspaceFromId(id))throw Error("Workspace not removed.");
+        trashOpen=!!destination||trashOpen;
+      });
+    }
+    function trashTabs(){const id=trashId();return id?(ownedTabs(manager(),id)||[]):[];}
+    function restoreTargets(){return hubWorkspaceOrder(hubWorkspaceSnapshot(manager()),freeId(),trashId())||[];}
+    function restoreTrashTab(tab,id){
+      return operation(async()=>{
+        if(!trashTabs().includes(tab)||id===trashId()||!restoreTargets().some(s=>s.id===id))throw Error("Restore target changed.");
+        moveNativeTab(tab,id);
+        try{trashSessionStore().deleteCustomTabValue(tab,TRASH_TIME);}catch{}
+        purgePlan=null;
+      });
+    }
+    const TRASH_DRAG_TYPE="application/x-oneplane-trash-tab";
+    function trashRestoreOver(event,id){
+      if(!trashDrag||!event.isTrusted||!Array.from(event.dataTransfer?.types||[]).includes(TRASH_DRAG_TYPE)||id===trashId())return;
+      event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";
+    }
+    function trashRestoreDrop(event,id){
+      if(!trashDrag||!event.isTrusted||event.dataTransfer?.getData(TRASH_DRAG_TYPE)!==trashDrag.token)return;
+      event.preventDefault();event.stopPropagation();const tab=trashDrag.tab;trashDrag=null;void restoreTrashTab(tab,id);
+    }
+    function purgeEligible(tab){
+      return hubTrashTabEligible(tab)&&!tab.pinned&&tab!==browser.selectedTab&&
+        !["busy","soundplaying","soundplaying-scheduledremoval","sharing","pictureinpicture"].some(k=>tab.hasAttribute(k));
+    }
+    function askPurge(){
+      if(busy||!canManage()||!singleWindow())return;
+      const age=ageSelect.value,now=Date.now();
+      purgePlan={age,tabs:trashTabs().filter(t=>purgeEligible(t)&&hubTrashAgeMatches(trashStamp(t),age,now))};renderTrash();
+    }
+    async function executePurge(){
+      const approved=purgePlan;purgePlan=null;if(!approved)return;
+      await operation(async()=>{
+        const current=trashTabs();
+        if(!singleWindow()||approved.tabs.some(t=>!current.includes(t)||!purgeEligible(t)||!hubTrashAgeMatches(trashStamp(t),approved.age,Date.now())))
+          throw Error("Trash changed. Review again.");
+        for(const tab of approved.tabs){
+          if(!singleWindow()||!trashTabs().includes(tab)||!purgeEligible(tab))break;
+          browser.removeTab(tab,{animate:false,closeWindowWithLastTab:false});
+        }
+      });
+    }
+    function renderTrash(){
+      trashToggle.setAttribute("aria-expanded",String(trashOpen));trashPanel.hidden=!trashOpen;
+      if(!trashOpen)return;
+      const tabs=trashTabs(),allowed=!busy&&canManage()&&singleWindow();
+      trashList.replaceChildren();trashConfirmation.replaceChildren();
+      if(!tabs.length)trashList.append(make("p","op-hub-confirm-text","Trash is empty. Deleted workspace tabs will appear here."));
+      if(!allowed)trashList.append(make("p","op-hub-confirm-text","Close other browser windows to restore or clear tabs."));
+      for(const tab of tabs){
+        const row=make("div","op-hub-trash-item"),title=make("span","op-hub-label",tab.label||"Tab"),stamp=trashStamp(tab);
+        row.draggable=allowed&&hubTrashTabEligible(tab)&&tab!==browser.selectedTab;
+        row.append(title,make("span","op-hub-trash-date",stamp?new Date(stamp).toLocaleDateString():"Unknown date"));
+        row.addEventListener("dragstart",event=>{
+          if(!event.isTrusted||!row.draggable||!event.dataTransfer){event.preventDefault();return;}
+          const token=Services.uuid.generateUUID().toString();trashDrag={tab,token};
+          event.dataTransfer.setData(TRASH_DRAG_TYPE,token);event.dataTransfer.effectAllowed="move";
+        });
+        row.addEventListener("dragend",()=>{trashDrag=null;render();});
+        const restore=make("select","op-hub-age");restore.setAttribute("aria-label","Restore to workspace");
+        const placeholder=make("option","","Restore to…");placeholder.value="";restore.append(placeholder);
+        for(const space of restoreTargets()){const option=make("option","",space.name);option.value=space.id;restore.append(option);}
+        restore.disabled=!row.draggable;restore.addEventListener("change",()=>{if(restore.value)void restoreTrashTab(tab,restore.value);});
+        row.append(restore);trashList.append(row);
+      }
+      clearTrash.disabled=!allowed||!tabs.some(purgeEligible);ageSelect.disabled=!allowed;
+      if(purgePlan){
+        const n=purgePlan.tabs.length;
+        trashConfirmation.append(make("p","op-hub-confirm-text",n?"Close "+n+" matching tab(s)? Native recently closed history may retain them.":"No eligible tabs match this age."));
+        const controls=make("div","op-hub-confirm-controls");
+        controls.append(action("Cancel",()=>{purgePlan=null;renderTrash();}));
+        if(n)controls.append(action("Confirm clear",()=>void executePurge()));
+        trashConfirmation.append(controls);
+      }
     }
     // A projection is a native synced window, not a copy or adoption of tabs.
     function canProject(){
@@ -590,7 +792,7 @@
       event.preventDefault();event.stopPropagation();
       if(drag){cancelDrag();return;}if(confirmation){confirmation=null;render();return;}if(contextId){contextId=null;render();return;}close(true);
     }
-    function changed(){if(open){if(drag&&!manager()?.getWorkspaceFromId(drag.id))cancelDrag();if(!drag)render();scheduleHubGeometry();}}
+    function changed(){if(open){if(drag&&!manager()?.getWorkspaceFromId(drag.id))cancelDrag();if(!drag&&!trashDrag&&!editId)render();scheduleHubGeometry();}}
     function onMode(){if(!supported())close(false,true);else if(open){setHold(true);changed();}}
     function deactivate(){if(drag)cancelDrag();if(open&&!busy&&!projectionBusy)close();}
     function toggleMode(){

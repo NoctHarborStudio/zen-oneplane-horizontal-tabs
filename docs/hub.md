@@ -72,3 +72,7 @@ User reports .28 projection now generally works. Projecting an already active Sp
 ## Preview.29 — acceptance checkpoint
 
 User confirms the current projection/startup behavior works well. Resume Workspace Engine according to the roadmap; do not reopen accepted geometry, native empty-page search or Fluid Indicator unless a reproducible regression occurs. Projected window opening lacks the usual appearance animation; Zen Refined owns that visual backlog item. No runtime changes in this checkpoint.
+
+## Preview.30 — Workspace Engine first slice and native Trash
+
+Explicit Free setup, native saveWorkspace/reorderWorkspace, icon text and local Hub accent, Trash drawer, age-filtered confirmation, native tab restore by drag/drop or selector. Workspace deletion parks eligible tabs and deletes source only after zero owned tabs. Trash created lazily by UUID; timestamps via SessionStore custom tab value, unknown dates only match All. Clear uses normal native close, excludes pinned/selected/busy/audio/sharing tabs. Single-window gate; grouped/Glance/Split protected; private/unsynced management unavailable. No automatic purge. Cold-start Free routing and native theme color, group/multiwindow preservation deferred. No projection or indicator changes. Runtime verification required; if a move fails, keep workspace and already moved tabs in Trash.

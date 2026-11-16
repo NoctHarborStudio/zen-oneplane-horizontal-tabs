@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0-preview.30
+
+- Explicit Free designation, native workspace name/icon/order controls and Hub accent.
+- Native Trash drawer, age-filtered confirmed Clear and drag/selector restore. Safe workspace deletion parks eligible tabs rather than closing them.
+- Gate moves/deletion/clear to single-window and supported ordinary tabs; preserve native session and close semantics. Runtime verification pending.
+
 ## 0.2.0-preview.29
 
 - Open projected workspace search after placement settles; verify actual visible native view, resume inherited closed new-tab session, skip redundant same-space switch and add bounded diagnostics. No tab creation or geometry/indicator changes.

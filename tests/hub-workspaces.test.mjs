@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {hubWorkspaceSnapshot,hubPanelWidth,hubWorkspaceBrowserEligible,hubOtherDisplay,hubSnapRect} from "../src/algorithms/hub-workspaces.mjs";
+import {hubWorkspaceSnapshot,hubPanelWidth,hubWorkspaceBrowserEligible,hubOtherDisplay,hubSnapRect,hubTrashAgeMatches,hubWorkspaceOrder,hubTrashTabEligible} from "../src/algorithms/hub-workspaces.mjs";
 test("native identities and current state; no mutation",()=>{
   const native=[{uuid:"a",name:"Study",icon:"📚"},{uuid:"b",name:"Free",icon:"chrome://x.svg"},{uuid:"a",name:"duplicate"}];
   const manager={activeWorkspace:"b",getWorkspaces:()=>native,changeWorkspaceWithID(){}};
@@ -40,4 +40,27 @@ test("snap zones stay inside work area with negative coordinates",()=>{
   assert.deepEqual(hubSnapRect(d,-1915,500),{x:-1920,y:40,width:960,height:1040,mode:"left"});
   assert.deepEqual(hubSnapRect(d,-5,1070),{x:-960,y:560,width:960,height:520,mode:"right-bottom"});
   const c=hubSnapRect(d,-960,600);assert.equal(c.mode,"center");assert.deepEqual(c,hubSnapRect(d,-800,650));assert.ok(c.x>=d.x&&c.x+c.width<=d.x+d.width&&c.y>=d.y&&c.y+c.height<=d.y+d.height);
+});
+
+test("Free first, Trash separate, native order otherwise intact",()=>{
+ const s=[{id:"a"},{id:"trash"},{id:"b"},{id:"free"}];
+ assert.deepEqual(hubWorkspaceOrder(s,"free","trash").map(x=>x.id),["free","a","b"]);
+ assert.equal(s.length,4);assert.equal(s[0].id,"a");
+});
+test("Trash ages use removal time; unknown and future ages do not match finite cutoffs",()=>{
+ const now=2000000000000;
+ assert.equal(hubTrashAgeMatches(now-300000,"5m",now),true);
+ assert.equal(hubTrashAgeMatches(now-299999,"5m",now),false);
+ assert.equal(hubTrashAgeMatches(0,"5m",now),false);
+ assert.equal(hubTrashAgeMatches(now+1,"1y",now),false);
+ assert.equal(hubTrashAgeMatches(0,"all",now),true);
+ assert.equal(hubTrashAgeMatches(now-31536000000,"1y",now),true);
+ assert.equal(hubTrashAgeMatches(now-31536000000,"invalid",now),false);
+});
+test("Trash refuses grouped, split, essential, placeholder and closing tabs",()=>{
+ const t=(attrs=[],extra={})=>({hasAttribute:k=>attrs.includes(k),...extra});
+ assert.equal(hubTrashTabEligible(t()),true);
+ for(const k of ["zen-essential","zen-empty-tab","split-view","glance-id","zen-glance-tab"])assert.equal(hubTrashTabEligible(t([k])),false);
+ assert.equal(hubTrashTabEligible(t([],{group:{}})),false);
+ assert.equal(hubTrashTabEligible(t([],{closing:true})),false);
 });
