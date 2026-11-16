@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-preview.32
+
+- Stabilize Compact Mode visibility with one visual state for the surface and controls, a 180ms tab-switch settling window and 100ms close hysteresis. Do not restart the panel transition on transient native hover flags or stationary-pointer retargets.
+- Replace selected-tab scrollIntoView with horizontal scrolling restricted to its own tab viewport.
+- Keep the last valid contour during native tab transactions and stop observing the animated wrapper height, avoiding unnecessary mask/layout regeneration.
+- Preserve Liquid Wave, Unified Contour settings, native floating search and drag holds. Live Zen verification remains required for the intermittent flicker.
+
 ## 0.1.0-preview.31
 
 - Add Liquid Wave for the inline address editor: expand width and reveal the native result surface together, with a smooth left-to-right wave (420ms). Reverse the wave and width together on outside-click dismissal (380ms), including interrupted opening/reopening.

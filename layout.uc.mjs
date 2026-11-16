@@ -645,6 +645,9 @@ function installTabStrip() {
   }
   function paintContour(){
     if(dead||!toolbarWrapper||!hoverSupported())return;
+    // A switch can briefly hide or resize native bookmark controls.
+    // Retain the last valid mask until the native layout settles.
+    if(contourKey && window.performance.now()<panelSwitchUntil)return;
     const wrapper=toolbarWrapper.getBoundingClientRect();
     const nav=navbar?.getBoundingClientRect();
     if(wrapper.width<=0||!nav||nav.height<=0)return;
@@ -787,7 +790,9 @@ function installTabStrip() {
   function observeGeometry() {
     if (!geometryObserver) return;
     geometryObserver.disconnect();
-    for (const element of [target, navbar, toolbarWrapper, bookmarks, ...target.children]) {
+    // The wrapper's height is animated; observing it would trigger a
+    // geometry/mask pass every frame of reveal. Observe real rows only.
+    for (const element of [target, navbar, bookmarks, ...target.children]) {
       if (element) geometryObserver.observe(element);
     }
     scheduleGeometry();
@@ -796,6 +801,57 @@ function installTabStrip() {
   // Native Compact Mode may clear its hover flag during a tab expansion or
   // while entering a bookmarks row. Keep the entire visible toolbar interactive.
   let pointerInside = false;
+  let panelTimer=0, panelSwitchTimer=0, panelSwitchUntil=0, panelCloseSince=null;
+  let panelLastPointer=null;
+  const PANEL_NATIVE_FLAGS=["zen-has-hover","has-popup-menu","zen-compact-mode-active"];
+  const PANEL_HOLD_FLAGS=["oneplane-url-hold","oneplane-drag-hold"];
+  const PANEL_SWITCH_GRACE=180, PANEL_CLOSE_GRACE=100;
+  // One visual state for the wrapper, tint and controls. Native flags
+  // can disappear/reappear during a native tab selection transaction.
+  function panelDecision(open,direct,native,now,switchUntil,closeSince){
+    if(direct)return {open:true,wait:0,closeSince:null};
+    if(native){
+      if(!open && now<switchUntil)return {open:false,wait:switchUntil-now,closeSince:null};
+      return {open:true,wait:0,closeSince:null};
+    }
+    if(!open)return {open:false,wait:0,closeSince:null};
+    const since=closeSince??now;
+    const until=Math.max(since+PANEL_CLOSE_GRACE,switchUntil);
+    return now<until?{open:true,wait:until-now,closeSince:since}:{open:false,wait:0,closeSince:null};
+  }
+  function reconcilePanel(){
+    if(panelTimer)window.clearTimeout(panelTimer);
+    panelTimer=0;
+    if(!toolbarWrapper)return;
+    if(!hoverSupported()){
+      toolbarWrapper.removeAttribute("data-op-panel-open");
+      panelCloseSince=null;
+      return;
+    }
+    const open=toolbarWrapper.hasAttribute("data-op-panel-open");
+    const direct=pointerInside||PANEL_HOLD_FLAGS.some(a=>toolbarWrapper.hasAttribute(a));
+    const native=PANEL_NATIVE_FLAGS.some(a=>toolbarWrapper.hasAttribute(a));
+    const state=panelDecision(open,direct,native,window.performance.now(),panelSwitchUntil,panelCloseSince);
+    panelCloseSince=state.closeSince;
+    if(open!==state.open){
+      toolbarWrapper.toggleAttribute("data-op-panel-open",state.open);
+      if(state.open)scheduleContour();
+      else clearTabHover();
+    }
+    if(state.wait>0)panelTimer=window.setTimeout(reconcilePanel,Math.ceil(state.wait)+1);
+  }
+  function guardPanelSwitch(){
+    if(!hoverSupported())return;
+    panelSwitchUntil=window.performance.now()+PANEL_SWITCH_GRACE;
+    if(panelSwitchTimer)window.clearTimeout(panelSwitchTimer);
+    panelSwitchTimer=window.setTimeout(()=>{
+      panelSwitchTimer=0;
+      reconcilePanel();
+      scheduleGeometry();
+      scheduleContour();
+    },PANEL_SWITCH_GRACE+1);
+    reconcilePanel();
+  }
   let hoverObserver = null;
   let modeObserver = null;
   let addressHoldTimer = 0;
@@ -831,34 +887,42 @@ function installTabStrip() {
   function clearHover() {
     pointerInside = false;
     toolbarWrapper?.removeAttribute("oneplane-hover-lock");
+    reconcilePanel();
   }
   function maintainHover() {
     if (!hoverSupported() || !pointerInside || !toolbarWrapper) return;
     toolbarWrapper.setAttribute("oneplane-hover-lock", "true");
-    if (!toolbarWrapper.hasAttribute("zen-has-hover")) {
-      const manager = window.gZenCompactModeManager;
-      if (typeof manager?._setElementExpandAttribute === "function") {
-        manager._setElementExpandAttribute(toolbarWrapper, true);
-      }
-    }
+    reconcilePanel();
   }
   function trackPointer(event) {
     if (!hoverSupported() || !toolbarWrapper) { clearHover(); return; }
-    const insideTarget = event.composedPath().includes(toolbarWrapper);
-    if (!insideTarget && !pointerInside) return;
-    const rect = toolbarWrapper.getBoundingClientRect();
-    const inside = rect.height > 8 && event.clientX >= rect.left &&
-      event.clientX < rect.right && event.clientY >= rect.top && event.clientY < rect.bottom;
-    if (!inside) { clearHover(); return; }
-    pointerInside = true;
+    if(event.pointerType==="touch")return;
+    const point={x:event.clientX,y:event.clientY};
+    const moved=!panelLastPointer || Math.hypot(point.x-panelLastPointer.x,point.y-panelLastPointer.y)>=1;
+    panelLastPointer=point;
+    // Gecko can synthesize hover retargets when a tab changes layout
+    // under a stationary pointer. They must not open/close the panel.
+    if(!moved && window.performance.now()<panelSwitchUntil)return;
+    const rect=toolbarWrapper.getBoundingClientRect();
+    const open=toolbarWrapper.hasAttribute("data-op-panel-open");
+    const measured=parseFloat(toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height"))||0;
+    const height=open?Math.max(rect.height,measured):Math.max(2,Math.min(rect.height,8));
+    const inside=point.x>=rect.left && point.x<rect.right &&
+      point.y>=rect.top && point.y<rect.top+height;
+    if(!inside){if(pointerInside)clearHover();return;}
+    // Ignore synthetic enter events from descendants outside the
+    // collapsed native hit strip; actual motion/edge hover can reopen.
+    if(!open&&!moved&&!pointerInside)return;
+    pointerInside=true;
     maintainHover();
   }
   function leaveWindow(event) {
-    if (event.relatedTarget === null) clearHover();
+    if (event.relatedTarget === null) {panelLastPointer=null;clearHover();}
   }
   function onCompactChanged() {
     if (!hoverSupported()) { clearHover(); clearTabHover(); releaseAddressHold(); clearAddressAnimation(); addressWasOpen = false; }
     else if (nativeInlineOpen(addressBar()) && !addressTransition && !addressSettling) addressWidths();
+    reconcilePanel();
     scheduleGeometry();
   }
 
@@ -2248,13 +2312,27 @@ function installTabStrip() {
   function schedule() {
     if (!dead && !frame) frame = window.requestAnimationFrame(sync);
   }
+  function revealSelectedInStrip(){
+    if(dead)return;
+    const item=entries.get(browser.selectedTab)?.item;
+    if(!item||!list.contains(item))return;
+    // Never scroll ancestors (native toolbar, page, or window).
+    const viewport=item.closest(".oneplane-island-lane")||list;
+    if(viewport.scrollWidth<=viewport.clientWidth+1)return;
+    const a=item.getBoundingClientRect(),b=viewport.getBoundingClientRect();
+    const delta=a.left<b.left?a.left-b.left:a.right>b.right?a.right-b.right:0;
+    if(Math.abs(delta)>1)viewport.scrollLeft+=delta;
+  }
   function onSelect() {
+    guardPanelSwitch();
     updateEmptyAddress();
     schedule();
     alignAddressStart();
-    window.requestAnimationFrame(() => {
-      if (!dead) entries.get(browser.selectedTab)?.item.scrollIntoView({ block: "nearest", inline: "nearest" });
-    });
+    window.requestAnimationFrame(revealSelectedInStrip);
+  }
+  function onTabOpenOrClose(){
+    guardPanelSwitch();
+    schedule();
   }
   const events = ["TabOpen", "TabClose", "TabMove", "TabAttrModified", "TabPinned", "TabUnpinned", "TabShow", "TabHide", "TabBrowserInserted", "TabBrowserDiscarded", "ZenTabRemovedFromSplit"];
   const tabObserver = new MutationObserver(schedule);
@@ -2290,6 +2368,10 @@ function installTabStrip() {
       bookmarks.removeEventListener(event,onContourTransition,true);
     hoverObserver?.disconnect();
     modeObserver?.disconnect();
+    if(panelTimer)window.clearTimeout(panelTimer);
+    if(panelSwitchTimer)window.clearTimeout(panelSwitchTimer);
+    panelTimer=panelSwitchTimer=0;
+    toolbarWrapper?.removeAttribute("data-op-panel-open");
     if (geometryFrame) window.cancelAnimationFrame(geometryFrame);
     clearHover();
     releaseAddressHold();
@@ -2350,6 +2432,7 @@ function installTabStrip() {
     restorePageActions();
     for (const event of events) browser.tabContainer.removeEventListener(event, schedule);
     browser.tabContainer.removeEventListener("TabSelect", onSelect);
+    for(const event of ["TabOpen","TabClose"])browser.tabContainer.removeEventListener(event,onTabOpenOrClose,true);
     window.removeEventListener("ZenWorkspaceDataChanged", schedule);
     window.removeEventListener("ZenViewSplitter:SplitViewActivated", schedule);
     window.removeEventListener("ZenViewSplitter:SplitViewDeactivated", schedule);
@@ -2403,6 +2486,7 @@ function installTabStrip() {
     plus.addEventListener("click", onNewTabClick);
     for (const event of events) browser.tabContainer.addEventListener(event, schedule);
     browser.tabContainer.addEventListener("TabSelect", onSelect);
+    for(const event of ["TabOpen","TabClose"])browser.tabContainer.addEventListener(event,onTabOpenOrClose,true);
     window.addEventListener("ZenWorkspaceDataChanged", schedule);
     window.addEventListener("ZenViewSplitter:SplitViewActivated", schedule);
     window.addEventListener("ZenViewSplitter:SplitViewDeactivated", schedule);
@@ -2435,12 +2519,13 @@ function installTabStrip() {
     prefs.addObserver(contourPrefPrefix,contourPreferenceObserver);
     scheduleContour();
     if (toolbarWrapper) {
-      hoverObserver = new MutationObserver(maintainHover);
-      hoverObserver.observe(toolbarWrapper, { attributes: true, attributeFilter: ["zen-has-hover"] });
+      hoverObserver = new MutationObserver(reconcilePanel);
+      hoverObserver.observe(toolbarWrapper, { attributes: true, attributeFilter: [...PANEL_NATIVE_FLAGS,...PANEL_HOLD_FLAGS] });
+      window.requestAnimationFrame(reconcilePanel);
       toolbarWrapper.addEventListener("pointerover", trackPointer);
     }
     modeObserver = new MutationObserver(onCompactChanged);
-    modeObserver.observe(root, { attributes: true, attributeFilter: ["zen-compact-mode", "customizing", "inDOMFullscreen", "inFullscreen"] });
+    modeObserver.observe(root, { attributes: true, attributeFilter: ["oneplane-active", "zen-compact-mode", "customizing", "inDOMFullscreen", "inFullscreen"] });
     window.addEventListener("pointermove", trackPointer, true);
     document.documentElement.addEventListener("mouseleave", leaveWindow);
     window.addEventListener("deactivate", onWindowDeactivate);
