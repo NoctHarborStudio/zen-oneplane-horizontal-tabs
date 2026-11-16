@@ -50,7 +50,10 @@
     splitZone.removeEventListener("dragover", onSplitDragOver);
     splitZone.removeEventListener("drop", onSplitDrop);
     splitZone.remove();
-    for(const lane of [list,leftLane,rightLane]) lane.removeEventListener("scroll",refreshIndicator);
+    for(const lane of [list,leftLane,rightLane]){
+      lane.removeEventListener("scroll",refreshIndicator);
+      lane.removeEventListener("wheel",onLaneWheel);
+    }
     islandTextAnimation?.cancel();
     prefs.removeObserver("zen.oneplane.hover-mode",hoverModePreferenceObserver);
     prefs.removeObserver("zen.oneplane.show-center-island",hoverModePreferenceObserver);
@@ -145,7 +148,10 @@
     applyHoverMode();
     sync();
     try { browser.addProgressListener(progressListener); } catch {}
-    for(const lane of [list,leftLane,rightLane]) lane.addEventListener("scroll",refreshIndicator);
+    for(const lane of [list,leftLane,rightLane]){
+      lane.addEventListener("scroll",refreshIndicator,{passive:true});
+      lane.addEventListener("wheel",onLaneWheel,{passive:false});
+    }
     prefs.addObserver("zen.oneplane.hover-mode",hoverModePreferenceObserver);
     prefs.addObserver("zen.oneplane.show-center-island",hoverModePreferenceObserver);
     prefs.addObserver("zen.oneplane.tab-indicator", indicatorPreferenceObserver);

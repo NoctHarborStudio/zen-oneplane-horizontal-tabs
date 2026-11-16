@@ -3464,12 +3464,14 @@ function installTabStrip() {
       const wantsIsland = row.hasAttribute("data-op-show-island");
       const available = Math.max(0,2*Math.min(window.innerWidth/2-left,window.innerWidth/2-right)-8);
       const iconHome=row.hasAttribute("data-op-home-icon");
-      const minIslandRoom = (iconHome?32:100)+2*(tabWidth+9);
+      const minIslandRoom = 32+2*(tabWidth+9);
+      const compactTitle=wantsIsland&&!iconHome&&available<100+2*(tabWidth+9);
+      row.toggleAttribute("data-op-island-compact",compactTitle);
       const tight = wantsIsland && available < minIslandRoom;
       row.toggleAttribute("data-op-island-tight",tight);
       const centered = wantsIsland && !tight;
       if (centered) {
-        const titleWidth=iconHome?32:Math.max(100,Math.min(180,available-2*(tabWidth+9)));
+        const titleWidth=iconHome||compactTitle?32:Math.max(100,Math.min(180,available-2*(tabWidth+9)));
         const laneWidth=lane=>Array.from(lane.children).reduce((sum,n)=>sum+compactSlotWidth(n,tabWidth)+3,6);
         const expandReserve=iconHome&&row.getAttribute("data-op-hover-mode")==="expand"?Math.max(0,(parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab-open"))||180)-tabWidth):0;
         const half=Math.max(laneWidth(leftLane),laneWidth(rightLane)+tabWidth+3,tabWidth+9)+expandReserve;
@@ -3481,6 +3483,7 @@ function installTabStrip() {
       setLength(rightSpacer,"--op-center-bias",bias.right);
       // Cap leftward expansion at actual free space next to navigation.
       setLength(row, "--op-left-room", leftSpacer.getBoundingClientRect().width - 4);
+      syncLaneScroll();
     } finally {centering=false;}
   }
   function scheduleGeometry(){
@@ -4712,6 +4715,12 @@ function installTabStrip() {
       !dragGhost.hidden && dragGhostBody ? dragGhostBody : item;
     let a=visual.getBoundingClientRect(),center=(a.left+a.right)/2;
     if(a.width<=0)return null;
+    // A scrolled-off card must not paint its underline over Home or controls.
+    if(!dragging){
+      const lane=item.closest(".oneplane-island-lane")||list;
+      const clip=lane.getBoundingClientRect();
+      if(clip.width>0&&(center<clip.left+3||center>clip.right-3))return null;
+    }
     let w=clamp(a.width*.14,12,18),h=3;
     if(dragging){
       if(draggedGroup){
@@ -4990,6 +4999,33 @@ function installTabStrip() {
     if (cascadeState!=="idle" || (event && pointOverTabStrip(event))) return;
     releaseIndicatorHover();
     queueTabCollapse();
+  }
+  // Scroll only the viewport beneath the pointer, never the other lane
+  // or the web page. A trackpad's horizontal axis takes precedence.
+  function onLaneWheel(event){
+    const lane=event.currentTarget;
+    // The list is a grid wrapper while centered lanes are active. It must
+    // never consume an event bubbling from a non-overflowing child lane.
+    if(lane===list&&row.hasAttribute("data-op-show-island")&&!row.hasAttribute("data-op-island-tight"))return;
+    if(!hoverSupported()||cascadeState!=="idle"||row.hasAttribute("data-op-dragging")||
+       event.ctrlKey||event.metaKey||lane.scrollWidth<=lane.clientWidth+1)return;
+    const raw=Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.deltaY;
+    if(!raw||!Number.isFinite(raw))return;
+    const unit=event.deltaMode===1?32:event.deltaMode===2?lane.clientWidth:1;
+    event.preventDefault();event.stopPropagation();
+    lane.scrollLeft+=raw*unit;
+    refreshIndicator();
+  }
+  let leftScrollMax=null;
+  function syncLaneScroll(){
+    if(!row.hasAttribute("data-op-show-island")||row.hasAttribute("data-op-island-tight")||
+       row.hasAttribute("data-op-dragging")||!leftLane.clientWidth)return;
+    const max=Math.max(0,leftLane.scrollWidth-leftLane.clientWidth);
+    // The first overflowing left lane reveals its center-facing edge.
+    // Preserve a manually scrolled position when subsequent tabs arrive.
+    if(leftScrollMax===null||leftScrollMax<=1||Math.abs(leftLane.scrollLeft-leftScrollMax)<=1)
+      leftLane.scrollLeft=max;
+    leftScrollMax=max;
   }
   function onNewTabClick() { clearTabHover(); }
 
@@ -5314,7 +5350,10 @@ function installTabStrip() {
     splitZone.removeEventListener("dragover", onSplitDragOver);
     splitZone.removeEventListener("drop", onSplitDrop);
     splitZone.remove();
-    for(const lane of [list,leftLane,rightLane]) lane.removeEventListener("scroll",refreshIndicator);
+    for(const lane of [list,leftLane,rightLane]){
+      lane.removeEventListener("scroll",refreshIndicator);
+      lane.removeEventListener("wheel",onLaneWheel);
+    }
     islandTextAnimation?.cancel();
     prefs.removeObserver("zen.oneplane.hover-mode",hoverModePreferenceObserver);
     prefs.removeObserver("zen.oneplane.show-center-island",hoverModePreferenceObserver);
@@ -5409,7 +5448,10 @@ function installTabStrip() {
     applyHoverMode();
     sync();
     try { browser.addProgressListener(progressListener); } catch {}
-    for(const lane of [list,leftLane,rightLane]) lane.addEventListener("scroll",refreshIndicator);
+    for(const lane of [list,leftLane,rightLane]){
+      lane.addEventListener("scroll",refreshIndicator,{passive:true});
+      lane.addEventListener("wheel",onLaneWheel,{passive:false});
+    }
     prefs.addObserver("zen.oneplane.hover-mode",hoverModePreferenceObserver);
     prefs.addObserver("zen.oneplane.show-center-island",hoverModePreferenceObserver);
     prefs.addObserver("zen.oneplane.tab-indicator", indicatorPreferenceObserver);

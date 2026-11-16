@@ -1,3 +1,9 @@
+## 0.2.0-preview.41 — Independent tab lanes
+
+- Native thin horizontal scrollbars and wheel/trackpad scrolling for each overflowing lane around Home, without scrolling the opposite lane or the web page. Keep the left lane initially aligned toward Home and hide indicators outside their viewport.
+- Collapse a narrow title island to the Home icon before using the existing unsupported-space fallback. Preserve hover and native Split View groups.
+- Second overflow row is a separate pending 2D layout/drag milestone; the existing 900px support threshold remains until adaptive native controls are implemented. Runtime Zen verification pending.
+
 ## 0.2.0-preview.40 — Proportional tab hover
 
 - Expand ordinary tabs with uniform 120% scale and the existing 7px descent. A single interpolated progress drives layout width, scale and exact symmetric slot compensation; the configured expanded width remains the final painted width, with no additional horizontal overhang.

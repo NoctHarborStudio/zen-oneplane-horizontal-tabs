@@ -14,6 +14,12 @@
       !dragGhost.hidden && dragGhostBody ? dragGhostBody : item;
     let a=visual.getBoundingClientRect(),center=(a.left+a.right)/2;
     if(a.width<=0)return null;
+    // A scrolled-off card must not paint its underline over Home or controls.
+    if(!dragging){
+      const lane=item.closest(".oneplane-island-lane")||list;
+      const clip=lane.getBoundingClientRect();
+      if(clip.width>0&&(center<clip.left+3||center>clip.right-3))return null;
+    }
     let w=clamp(a.width*.14,12,18),h=3;
     if(dragging){
       if(draggedGroup){

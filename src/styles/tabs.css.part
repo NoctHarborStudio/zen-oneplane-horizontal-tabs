@@ -81,7 +81,9 @@
       box-sizing:border-box;
       overflow-x:auto;
       overflow-y:hidden;
-      scrollbar-width:none;
+      overscroll-behavior-x:contain;
+      scrollbar-width:thin;
+      scrollbar-color:color-mix(in srgb,currentColor 25%,transparent) transparent;
     }
     #oneplane-tabs[data-op-show-island]:not([data-op-island-tight]) .oneplane-island-left {
       grid-column:1;grid-row:1;
@@ -113,6 +115,9 @@
     #oneplane-tabs[data-op-home-icon]:not([data-op-island-tight]) .oneplane-title-island {background:transparent;box-shadow:none;padding:0;}
     #oneplane-tabs[data-op-home-icon] .oneplane-title-island > svg {display:block;}
     #oneplane-tabs[data-op-home-icon] .oneplane-island-title {display:none;}
+    #oneplane-tabs[data-op-island-compact]:not([data-op-island-tight]) .oneplane-title-island[data-op-home-enabled] {background:transparent;box-shadow:none;padding:0;}
+    #oneplane-tabs[data-op-island-compact] .oneplane-title-island[data-op-home-enabled] > svg {display:block;}
+    #oneplane-tabs[data-op-island-compact] .oneplane-title-island[data-op-home-enabled] .oneplane-island-title {display:none;}
     #oneplane-tabs[data-op-home-icon]:not([data-op-island-tight]) .oneplane-tab-list {translate:none;}
     #oneplane-tabs[data-op-show-island]:not([data-op-island-tight]):is([data-op-dragging],[data-op-island-incoming]) .oneplane-island-lane {
       overflow:visible !important;

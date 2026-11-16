@@ -135,5 +135,32 @@
     releaseIndicatorHover();
     queueTabCollapse();
   }
+  // Scroll only the viewport beneath the pointer, never the other lane
+  // or the web page. A trackpad's horizontal axis takes precedence.
+  function onLaneWheel(event){
+    const lane=event.currentTarget;
+    // The list is a grid wrapper while centered lanes are active. It must
+    // never consume an event bubbling from a non-overflowing child lane.
+    if(lane===list&&row.hasAttribute("data-op-show-island")&&!row.hasAttribute("data-op-island-tight"))return;
+    if(!hoverSupported()||cascadeState!=="idle"||row.hasAttribute("data-op-dragging")||
+       event.ctrlKey||event.metaKey||lane.scrollWidth<=lane.clientWidth+1)return;
+    const raw=Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.deltaY;
+    if(!raw||!Number.isFinite(raw))return;
+    const unit=event.deltaMode===1?32:event.deltaMode===2?lane.clientWidth:1;
+    event.preventDefault();event.stopPropagation();
+    lane.scrollLeft+=raw*unit;
+    refreshIndicator();
+  }
+  let leftScrollMax=null;
+  function syncLaneScroll(){
+    if(!row.hasAttribute("data-op-show-island")||row.hasAttribute("data-op-island-tight")||
+       row.hasAttribute("data-op-dragging")||!leftLane.clientWidth)return;
+    const max=Math.max(0,leftLane.scrollWidth-leftLane.clientWidth);
+    // The first overflowing left lane reveals its center-facing edge.
+    // Preserve a manually scrolled position when subsequent tabs arrive.
+    if(leftScrollMax===null||leftScrollMax<=1||Math.abs(leftLane.scrollLeft-leftScrollMax)<=1)
+      leftLane.scrollLeft=max;
+    leftScrollMax=max;
+  }
   function onNewTabClick() { clearTabHover(); }
 
