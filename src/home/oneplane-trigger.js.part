@@ -34,7 +34,7 @@
   function onHomeTrigger(e){
     e.stopPropagation();
     if(!hoverSupported()||cascadeState!=="idle"||row.hasAttribute("data-op-dragging"))return;
-    homeLease?.toggle();
+    homeLease?.show();
   }
   function destroyHome(){
     clearHomeIdle();homeUnsubscribe?.();homeUnsubscribe=null;

@@ -46,6 +46,8 @@ test("Home native search preserves surface on cancel and ignores stale close",()
  const run=new Function("win","panel","content",code+`
  let open=true,searchToken=null,searchBar=null,searchFrame=0,searchMotion=null,searchTimer=0,closed=0;
  function close(){open=false;closed++;finishSearchVisual()}
+ function leaveHome(){close()}
+ function ensurePrimaryHome(){}
  return {search,searchActive,onSearchClosed,morphFrames,observeSearch,get closed(){return closed},get token(){return searchToken}};
  `);
  const calls=[],node=()=>({attrs:new Map(),setAttribute(k,v){this.attrs.set(k,v)},removeAttribute(k){this.attrs.delete(k)},hasAttribute(k){return this.attrs.has(k)},getAttribute(k){return this.attrs.get(k)},querySelector(){return {getBoundingClientRect:()=>({left:20,top:40,width:600,height:56})}}});
@@ -68,7 +70,7 @@ test("Startup uses existing readiness handshake and one shared claim",()=>{
  assert.ok(layout.includes('window.addEventListener("OnePlane:StartupState",onHomeStartup)'));
  assert.ok(layout.includes('homeLease?.showOnStartup?.()'));
  assert.ok(core.includes("if(released||win[STARTUP])return false"));
- assert.ok(core.includes("if(open&&!startupHome&&!switching"));
+ assert.ok(core.includes("(!startupHome||homeOnPlaceholder)"));
 });
 test("Home visual selection does not mutate native selected tab",()=>{
  assert.ok(layout.includes("const selected = !homeOpen && nativeSelected;"));
@@ -137,4 +139,53 @@ test("Add Pin replaces search and pinned grid but retains shared workspaces and 
  assert.ok(render.indexOf("const manager=win.gZenWorkspaces")>render.indexOf("content.append(section);\n    }"));
  assert.ok(core.includes("for(const item of page.items)"));
  assert.ok(core.includes('grid-template-columns:repeat(3,minmax(0,1fr))'));
+});
+
+test("Home is primary: repeated clicks, Escape, background opens and real navigation",()=>{
+ class Node{
+  constructor(){this.children=[];this.attrs=new Map();this.isConnected=true;this.listeners=new Map();}
+  append(...nodes){this.children.push(...nodes);for(const n of nodes)n.parent=this}
+  replaceChildren(...nodes){this.children=[];this.append(...nodes)}
+  contains(n){return this===n||this.children.some(x=>x.contains(n))}
+  setAttribute(k,v){this.attrs.set(k,v)} hasAttribute(k){return this.attrs.has(k)} getAttribute(k){return this.attrs.get(k)} removeAttribute(k){this.attrs.delete(k)}
+  toggleAttribute(k,v){v?this.attrs.set(k,""):this.attrs.delete(k)}
+  addEventListener(k,f){this.listeners.set(k,f)} removeEventListener(k,f){if(this.listeners.get(k)===f)this.listeners.delete(k)}
+  querySelector(){return null} focus(){}
+  remove(){if(this.parent)this.parent.children=this.parent.children.filter(x=>x!==this);this.isConnected=false}
+  fire(k,e={}){this.listeners.get(k)?.(e)}
+ }
+ const root=new Node(),host=new Node(),panels=new Node(),tabs=new Node();root.append(host);host.append(panels);
+ const doc={documentElement:root,getElementById:id=>id==="zen-tabbox-wrapper"?host:id==="tabbrowser-tabpanels"?panels:null,createElementNS:()=>new Node()};
+ const win=new Node();win.document=doc;win.console={warn(...args){throw Error(args.join(" "))}};win.matchMedia=()=>({matches:true});win.MutationObserver=class{observe(){} disconnect(){}};
+ const blank=new Node(),page=new Node(),pending=new Node();
+ blank.setAttribute("zen-empty-tab","");blank.linkedBrowser={currentURI:{spec:"about:blank"}};
+ page.linkedBrowser={currentURI:{spec:"https://example.org/"}};
+ pending.setAttribute("pending","");pending.linkedBrowser={currentURI:{spec:"about:blank"}};
+ let progress;win.gBrowser={tabContainer:tabs,selectedTab:blank,get selectedBrowser(){return this.selectedTab.linkedBrowser;},addTabsProgressListener(p){progress=p},removeTabsProgressListener(){}};
+ const services={prefs:{getStringPref:(k,v)=>v,addObserver(){},removeObserver(){}}};
+ const acquire=new Function("ChromeUtils",core+"return acquireZenHome;")({importESModule:()=>({PrivateBrowsingUtils:{isWindowPrivate:()=>false}})});
+ const lease=acquire(win,services),states=[];lease.subscribe(v=>states.push(v));
+ assert.equal(lease.open,true);assert.equal(panels.hasAttribute("data-zr-home-covered"),true);
+ const content=host.children[1].children[0],initial=content.children;
+ lease.show();lease.toggle();lease.toggle();lease.close();
+ assert.equal(lease.open,true);assert.equal(content.children,initial);assert.deepEqual(states,[true]);
+ win.fire("keydown",{key:"Escape",preventDefault(){},stopPropagation(){}});
+ assert.equal(lease.open,true);
+ tabs.fire("TabOpen",{target:page});assert.equal(lease.open,true);
+ win.gBrowser.selectedTab=page;tabs.fire("TabSelect",{target:page});assert.equal(lease.open,false);
+ assert.equal(panels.hasAttribute("data-zr-home-covered"),false);
+ lease.show();lease.show();assert.equal(lease.open,true);
+ win.gBrowser.selectedTab=pending;tabs.fire("TabSelect",{target:pending});assert.equal(lease.open,false);
+ win.gBrowser.selectedTab=blank;tabs.fire("TabSelect",{target:blank});assert.equal(lease.open,true);
+ blank.removeAttribute("zen-empty-tab");blank.linkedBrowser.currentURI={spec:"https://example.net/"};
+ progress.onLocationChange(blank.linkedBrowser,{isTopLevel:true},blank.linkedBrowser.currentURI);
+ assert.equal(lease.open,false);
+ blank.linkedBrowser.currentURI={spec:"about:blank"};
+ progress.onLocationChange(blank.linkedBrowser,{isTopLevel:true},blank.linkedBrowser.currentURI);
+ assert.equal(lease.open,true);
+ lease.release();assert.equal(panels.hasAttribute("data-zr-home-covered"),false);
+});
+test("Home button invokes idempotent show instead of toggle",()=>{
+ assert.ok(layout.includes("homeLease?.show();"));assert.ok(!layout.includes("homeLease?.toggle();"));
+ assert.ok(core.includes("toggle:()=>!released&&show()"));
 });

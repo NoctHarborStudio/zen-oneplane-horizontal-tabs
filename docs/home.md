@@ -37,3 +37,7 @@ Add Pin is available only in Customize. The portable core reads native Places to
 ## 0.2.0-preview.42 — Compact Add Pin
 
 Add Pin is a dedicated substate of Customize. It replaces the search and existing pinned grid with a compact recommendation picker, displays at most three cards per page, retains Workspaces and one footer Done. Page index clamps after additions; custom URL form replaces recommendations rather than expanding the page. Done returns to Customize, Escape returns from custom form to recommendations first. Existing pin data remains unchanged. Verify short/portrait windows and real browser focus.
+
+## 0.2.0-preview.43 — Home as primary destination
+
+Home trigger calls show(); legacy toggle is also idempotent. Plain Escape returns focus to search (picker/customization Escape retain their own behavior). Ordinary empty native tabs present Home instead of an empty background. Pending/discarded/busy tabs are not mistaken for placeholders. Real selected page navigation still exits; background TabOpen does not dismiss Home. Native projection startup, private windows, fullscreen/customization and last-lease teardown retain existing paths. No additional tabs or session mutation. Runtime validation pending.

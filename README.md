@@ -75,6 +75,6 @@ Preview.14 retains Hub on create/switch, adds inline deletion and Fluid animatio
 
 ## Home (preview.33)
 
-Click the center title or central home icon to open transparent Home. Customize adds, removes and reorders shortcuts; ordinary mode stays symmetric. Native search and workspaces are reused. Portable controller uses per-window leases for future Zen Refined integration. [Architecture and validation](docs/home.md). Live Zen validation pending.
+The center title or Home icon always opens Home; repeated clicks keep it open. Home replaces the ordinary empty native tab surface, while selecting or navigating to a real page leaves it. Customize adds, removes and reorders shortcuts; ordinary mode stays symmetric. Native search and workspaces are reused. Portable controller uses per-window leases for future Zen Refined integration. [Architecture and validation](docs/home.md). Live Zen validation pending.
 
 Home opens automatically on normal supported window startup since preview.36; center search expands into Zen's native floating search with a dedicated animation.

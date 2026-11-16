@@ -48,6 +48,10 @@
 
 # Changelog
 
+## 0.2.0-preview.43
+
+- Make Home an idempotent primary destination instead of a toggle. Repeated Home clicks and plain Escape no longer uncover empty transparent background. Empty ordinary native tabs return to Home; real page navigation exits. Background TabOpen does not dismiss Home. Preserve projection startup, private and fullscreen/customization paths, native search cancellation, current Add Pin and workspace transition.
+
 ## 0.2.0-preview.38
 
 - Integrate the optional Zen Refined Center Workspace Transition in Home and Hub without changing native workspace ownership. Hold the Compact toolbar and retain the Unified Contour mask during the transition. Home updates workspace selection by native identity instead of rebuilding its search and pinned shortcuts.
