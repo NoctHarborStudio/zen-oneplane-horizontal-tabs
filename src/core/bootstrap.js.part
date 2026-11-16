@@ -26,11 +26,40 @@ function cleanup() {
 
 const controller = { get active() { return applied && !disposed; }, cleanup };
 
+// One startup selection per browser process. Never redirect a projected
+// child, a private/unsynced window or a live reload of this mod.
+async function initializeFreeAtStartup(){
+  try{
+    const native=window.gZenWorkspaces;
+    if(window.__oneplaneWorkspaceProjection||!native?.workspaceEnabled||native.privateWindowOrDisabled||!native.currentWindowIsSyncing)return;
+    const host=Services.appShell.hiddenDOMWindow;
+    const key="__oneplaneFreeStartupClaim";
+    if(!host||host[key])return;
+    host[key]=true;
+    const snapshot=native.getWorkspaces().map(s=>({id:s.uuid,name:typeof s.name==="string"?s.name:""}));
+    const stored=prefs.getStringPref("zen.oneplane.free-space-id","");
+    const trash=prefs.getStringPref("zen.oneplane.trash-space-id","");
+    let id=stored&&stored!==trash&&snapshot.some(s=>s.id===stored)?stored:"";
+    if(!id){
+      if(snapshot.some(s=>s.name.trim().toLowerCase()==="free"))return;
+      const ws=await native.createAndSaveWorkspace("Free","⌂",true);
+      if(!ws?.uuid||!native.getWorkspaceFromId(ws.uuid))return;
+      id=ws.uuid;prefs.setStringPref("zen.oneplane.free-space-id",id);
+      if(typeof native.reorderWorkspace==="function")await native.reorderWorkspace(id,0);
+    }
+    if(disposed||window.closed||window.__oneplaneWorkspaceProjection)return;
+    if(native.activeWorkspace!==id)await native.changeWorkspaceWithID(id);
+    console.info("[OnePlane] Free startup",JSON.stringify({selected:native.activeWorkspace===id}));
+  }catch(error){console.warn("[OnePlane] Free startup:",error);}
+}
+
 async function activate() {
   try {
     await window.SessionStore?.promiseAllWindowsRestored;
     await window.gZenWorkspaces?.promiseInitialized;
     if (disposed || window.closed || root.hasAttribute("popup-window")) return;
+    if(!reloadingLayout)await initializeFreeAtStartup();
+    if(disposed||window.closed)return;
     const manager = window.gZenCompactModeManager;
     if (!manager || typeof manager.hideToolbar !== "function") {
       throw new Error("Unsupported Zen Compact Mode API.");
@@ -59,6 +88,7 @@ async function activate() {
   }
 }
 
+const reloadingLayout=!!window[CONTROLLER];
 if (!root.hasAttribute("popup-window") && typeof window.addUnloadListener === "function") {
   window[CONTROLLER]?.cleanup();
   window[CONTROLLER] = controller;

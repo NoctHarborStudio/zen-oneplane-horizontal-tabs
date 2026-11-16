@@ -73,23 +73,66 @@
 #oneplane-workspace-drag-badge[hidden] {display:none!important;}
 #oneplane-workspace-drag-badge::backdrop {pointer-events:none;background:transparent;}
 
-/* Workspace management and native Trash drawer. */
-#oneplane-hub-panel .op-hub-title-row {display:flex;align-items:center;justify-content:space-between;gap:8px;}
+/* Workspace management and expanding Trash button. */
+#oneplane-hub-panel .op-hub-title-row {display:flex;align-items:center;margin:2px 0 4px;}
 #oneplane-hub-panel .op-hub-title-row .op-hub-title {margin:0;}
-#oneplane-hub-panel .op-hub-trash-toggle {display:grid;place-items:center;width:30px;height:30px;border:0;border-radius:7px;background:transparent;color:inherit;cursor:pointer;}
-#oneplane-hub-panel .op-hub-trash-toggle:is(:hover,[aria-expanded="true"]) {background:color-mix(in srgb,currentColor 14%,transparent);}
-#oneplane-hub-panel .op-hub-trash-toggle svg {width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;}
-#oneplane-hub-panel .op-hub-lock,#oneplane-hub-panel .op-hub-trash-date {font-size:10px;opacity:.65;white-space:nowrap;}
+#oneplane-hub-panel .op-hub-free-slot {display:flex;flex-direction:column;gap:3px;}
+#oneplane-hub-panel .op-hub-free-slot:empty {display:none;}
+#oneplane-hub-panel .op-hub-divider {height:1px;background:color-mix(in srgb,currentColor 14%,transparent);margin:2px 2px;}
+#oneplane-hub-panel .op-hub-divider[hidden] {display:none;}
+#oneplane-hub-panel .op-hub-lock {display:flex;opacity:.65;}
+#oneplane-hub-panel .op-hub-lock svg {width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;}
 #oneplane-hub-panel .op-hub-icon {color:var(--op-space-accent,inherit);background:color-mix(in srgb,var(--op-space-accent,currentColor) 18%,transparent);}
-#oneplane-hub-panel :is(.op-hub-free-setup,.op-hub-edit,.op-hub-trash-panel,.op-hub-trash-list,.op-hub-trash-confirm) {display:flex;flex-direction:column;gap:6px;}
-#oneplane-hub-panel :is(.op-hub-free-setup,.op-hub-trash-panel)[hidden] {display:none!important;}
-#oneplane-hub-panel .op-hub-trash-panel {border-top:1px solid color-mix(in srgb,currentColor 13%,transparent);padding-top:6px;}
-#oneplane-hub-panel .op-hub-trash-list {max-height:245px;overflow:auto;}
-#oneplane-hub-panel .op-hub-trash-item {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px;padding:7px;border-radius:7px;background:color-mix(in srgb,currentColor 7%,transparent);}
+#oneplane-hub-panel :is(.op-hub-free-setup,.op-hub-edit,.op-hub-trash-confirm,.op-hub-trash-notice) {display:flex;flex-direction:column;gap:6px;}
+#oneplane-hub-panel .op-hub-free-setup[hidden] {display:none!important;}
+#oneplane-hub-panel .op-hub-mode {display:flex;justify-content:space-between;align-items:center;}
+#oneplane-hub-panel .op-hub-mode-state {opacity:.7;}
+#oneplane-hub-panel .op-hub-trash-panel {border:1px solid color-mix(in srgb,currentColor 15%,transparent);border-radius:9px;background:color-mix(in srgb,currentColor 5%,transparent);transition:background 300ms,border-color 300ms;margin-top:3px;}
+#oneplane-hub-panel .op-hub-trash-panel[data-op-trash-open] {background:color-mix(in srgb,currentColor 7%,transparent);}
+#oneplane-hub-panel .op-hub-trash-head {position:relative;height:40px;}
+#oneplane-hub-panel .op-hub-trash-toggle {position:absolute;inset:0;width:100%;border:0;border-radius:8px;background:transparent;color:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;font:inherit;}
+#oneplane-hub-panel .op-hub-trash-toggle:hover {background:color-mix(in srgb,currentColor 5%,transparent);}
+#oneplane-hub-panel .op-hub-trash-title {position:absolute;inset-inline-start:8px;opacity:0;transform:translateX(-4px);font-weight:600;transition:opacity 200ms,transform 300ms;font-size:11px;}
+#oneplane-hub-panel .op-hub-trash-symbol {position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:4px;transition:left 400ms cubic-bezier(.22,.75,.22,1),transform 400ms cubic-bezier(.22,.75,.22,1);}
+#oneplane-hub-panel .op-hub-trash-toggle svg {width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;}
+#oneplane-hub-panel .op-hub-trash-count {font-size:10px;font-variant-numeric:tabular-nums;border-radius:4px;background:color-mix(in srgb,currentColor 10%,transparent);padding:2px 4px;min-width:15px;text-align:center;}
+#oneplane-hub-panel [data-op-trash-open] .op-hub-trash-symbol {left:calc(100% - 7px);transform:translateX(-100%);}
+#oneplane-hub-panel [data-op-trash-open] .op-hub-trash-title {opacity:1;transform:translateX(0);}
+#oneplane-hub-panel .op-hub-trash-tools {position:absolute;left:50%;top:7px;transform:translate(-50%,-3px);display:flex;align-items:center;gap:3px;opacity:0;visibility:hidden;pointer-events:none;transition:opacity 200ms,transform 300ms;}
+#oneplane-hub-panel [data-op-trash-open] .op-hub-trash-tools {opacity:1;visibility:visible;pointer-events:auto;transform:translate(-50%,0);transition-delay:130ms;}
+#oneplane-hub-panel .op-hub-trash-tools .op-hub-action,#oneplane-hub-panel .op-hub-age {width:auto;height:26px;box-sizing:border-box;padding:3px 5px;font:inherit;font-size:10px;white-space:nowrap;}
+#oneplane-hub-panel .op-hub-age {width:72px;min-width:0;max-width:100%;color:inherit;background:var(--op-hub-bg,Canvas);border:1px solid color-mix(in srgb,currentColor 20%,transparent);border-radius:5px;}
+#oneplane-hub-panel .op-hub-trash-drawer {display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows 420ms cubic-bezier(.22,.75,.22,1),opacity 280ms;}
+#oneplane-hub-panel [data-op-trash-open] .op-hub-trash-drawer {grid-template-rows:1fr;opacity:1;}
+#oneplane-hub-panel .op-hub-trash-inner {min-height:0;overflow:hidden;}
+#oneplane-hub-panel .op-hub-trash-list {max-height:270px;overflow:auto;padding:0 5px;scrollbar-width:thin;overflow-anchor:none;}
+#oneplane-hub-panel .op-hub-trash-list[hidden] {display:none;}
+#oneplane-hub-panel .op-hub-trash-rows {box-sizing:content-box;}
+#oneplane-hub-panel .op-hub-trash-item {display:flex;align-items:center;gap:7px;height:50px;box-sizing:border-box;margin:0 0 4px;padding:6px;border:1px solid transparent;border-radius:7px;background:color-mix(in srgb,currentColor 6%,transparent);transition:background 200ms,transform 220ms,opacity 200ms;user-select:none;overflow:hidden;}
+#oneplane-hub-panel .op-hub-trash-item:hover {background:color-mix(in srgb,currentColor 11%,transparent);}
 #oneplane-hub-panel .op-hub-trash-item[draggable="true"] {cursor:grab;}
-#oneplane-hub-panel .op-hub-trash-item select {grid-column:1/-1;}
-#oneplane-hub-panel .op-hub-trash-tools {display:flex;gap:5px;align-items:center;}
-#oneplane-hub-panel .op-hub-trash-tools .op-hub-action {width:auto;}
-#oneplane-hub-panel .op-hub-age {min-width:0;flex:1;max-width:100%;color:inherit;background:var(--op-hub-bg,Canvas);border:1px solid color-mix(in srgb,currentColor 20%,transparent);border-radius:6px;padding:5px;font:inherit;}
+#oneplane-hub-panel .op-hub-trash-item[draggable="true"]:active {transform:scale(1.025);}
+#oneplane-hub-panel .op-hub-trash-item[data-op-trash-dragging] {opacity:.28;transform:scale(.97);}
+#oneplane-hub-panel .op-hub-trash-site-icon {display:grid;place-items:center;flex:0 0 22px;height:22px;border-radius:4px;font-size:16px;opacity:.9;}
+#oneplane-hub-panel .op-hub-trash-site-icon img {width:18px;height:18px;object-fit:contain;pointer-events:none;}
+#oneplane-hub-panel .op-hub-trash-copy {min-width:0;flex:1;display:flex;flex-direction:column;gap:3px;}
+#oneplane-hub-panel :is(.op-hub-trash-site-title,.op-hub-trash-url) {white-space:nowrap;text-overflow:ellipsis;overflow:hidden;}
+#oneplane-hub-panel .op-hub-trash-site-title {font-size:12px;font-weight:550;}
+#oneplane-hub-panel .op-hub-trash-url,#oneplane-hub-panel .op-hub-trash-date {font-size:10px;opacity:.65;}
+#oneplane-hub-panel .op-hub-trash-date {white-space:nowrap;font-variant-numeric:tabular-nums;}
+#oneplane-hub-panel .op-hub-trash-confirm:not(:empty),#oneplane-hub-panel .op-hub-trash-notice:not(:empty) {padding:4px 7px;}
+#oneplane-hub-panel .op-hub-trash-ghost {position:fixed;z-index:2;margin:0;transform:scale(1.04);opacity:1;pointer-events:none;background:var(--op-hub-bg,Canvas);border-color:AccentColor;box-shadow:0 4px 14px #0004;}
+#oneplane-hub-panel .op-hub-space[data-op-trash-target] {background:color-mix(in srgb,AccentColor 24%,transparent);outline:1px solid AccentColor;transform:scale(1.015);}
 #oneplane-hub-panel .op-hub-color {width:100%;min-height:28px;border:0;background:transparent;}
 #oneplane-hub-panel .op-hub-edit .op-hub-name {width:100%;}
+/* Keep the fixed Hub width; narrow chrome uses a second header line. */
+@container (max-width: 225px) {
+  #oneplane-hub-panel [data-op-trash-open] .op-hub-trash-head {height:70px;}
+  #oneplane-hub-panel [data-op-trash-open] .op-hub-trash-tools {top:38px;}
+  #oneplane-hub-panel [data-op-trash-open] .op-hub-trash-toggle {height:40px;}
+}
+#oneplane-hub-panel .op-hub-content {container-type:inline-size;}
+#oneplane-hub-panel .op-hub-space {transition:background 180ms,transform 220ms;}
+@media (prefers-reduced-motion:reduce) {
+  #oneplane-hub-panel :is(.op-hub-trash-panel,.op-hub-trash-title,.op-hub-trash-symbol,.op-hub-trash-tools,.op-hub-trash-drawer,.op-hub-trash-item,.op-hub-space) {transition:none!important;}
+}

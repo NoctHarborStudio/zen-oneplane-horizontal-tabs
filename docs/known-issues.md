@@ -170,3 +170,7 @@ User confirms the previously failing workspace projection/search now appears cor
 ## Workspace Engine preview.30 limitations
 
 First native Trash/Free candidate, not live-validated. Native Trash visible in Zen native UI; no automatic expiration. Multiwindow/group/Split/Glance preservation blocked rather than closing tabs; Clear retains Recently Closed semantics. Free cold-start routing, broader transfer and native theme color pending.
+
+### Preview.31 Hub visual candidate
+
+Approved prototype implemented; runtime verification pending. Trash restore via drag only as requested; keyboard-only restore deferred. Native favicon may be unavailable or nonlocal, in which case use fallback glyph. Free startup intentionally skips ambiguous same-name spaces, projected/private/unsynced windows and live reload; confirm cold start and session restoration on Windows. Native drag image is OS-controlled after lift, not a custom cross-monitor ghost.

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {hubWorkspaceSnapshot,hubPanelWidth,hubWorkspaceBrowserEligible,hubOtherDisplay,hubSnapRect,hubTrashAgeMatches,hubWorkspaceOrder,hubTrashTabEligible} from "../src/algorithms/hub-workspaces.mjs";
+import {hubWorkspaceSnapshot,hubPanelWidth,hubWorkspaceBrowserEligible,hubOtherDisplay,hubSnapRect,hubTrashAgeMatches,hubWorkspaceOrder,hubTrashTabEligible,hubTrashRange,hubTrashRelativeAge} from "../src/algorithms/hub-workspaces.mjs";
 test("native identities and current state; no mutation",()=>{
   const native=[{uuid:"a",name:"Study",icon:"📚"},{uuid:"b",name:"Free",icon:"chrome://x.svg"},{uuid:"a",name:"duplicate"}];
   const manager={activeWorkspace:"b",getWorkspaces:()=>native,changeWorkspaceWithID(){}};
@@ -63,4 +63,21 @@ test("Trash refuses grouped, split, essential, placeholder and closing tabs",()=
  for(const k of ["zen-essential","zen-empty-tab","split-view","glance-id","zen-glance-tab"])assert.equal(hubTrashTabEligible(t([k])),false);
  assert.equal(hubTrashTabEligible(t([],{group:{}})),false);
  assert.equal(hubTrashTabEligible(t([],{closing:true})),false);
+});
+
+test("large Trash only mounts visible rows with bounded overscan",()=>{
+  const r=hubTrashRange(10000,54000,270);
+  assert.deepEqual(r,{first:997,end:1008,top:53838,bottom:485568});
+  assert.ok(r.end-r.first<=12);
+  assert.deepEqual(hubTrashRange(0,0,270),{first:0,end:0,top:0,bottom:0});
+  assert.equal(hubTrashRange(10000,539730,270).end,10000);
+});
+test("relative time is derived from fixed timestamps",()=>{
+  const n=2000000000000;
+  assert.equal(hubTrashRelativeAge(n,n),"Just now");
+  assert.equal(hubTrashRelativeAge(n-120000,n),"2 min");
+  assert.equal(hubTrashRelativeAge(n-3600000,n),"1 h");
+  assert.equal(hubTrashRelativeAge(n-86400000,n),"1 d");
+  assert.equal(hubTrashRelativeAge(n-31536000000,n),"1 y");
+  assert.equal(hubTrashRelativeAge(0,n),"Unknown");
 });

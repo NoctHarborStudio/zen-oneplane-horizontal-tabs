@@ -6,14 +6,14 @@
     glyph.setAttribute("viewBox","0 0 20 20");glyph.setAttribute("aria-hidden","true");
     const shape=document.createElementNS(glyph.namespaceURI,"path");
     shape.setAttribute("d","M4 3.5h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2ZM2 8h16M7 8v8.5M10 11h5M10 14h5");
-    glyph.append(shape);button.append(glyph);button.title="OnePlane Hub";
-    for(const [key,value] of Object.entries({skipintoolbarset:"true",removable:"false",tooltiptext:"OnePlane Hub","aria-label":"OnePlane Hub","aria-haspopup":"dialog","aria-expanded":"false"}))button.setAttribute(key,value);
+    glyph.append(shape);button.append(glyph);button.title="One Plane Hub";
+    for(const [key,value] of Object.entries({skipintoolbarset:"true",removable:"false",tooltiptext:"One Plane Hub","aria-label":"One Plane Hub","aria-haspopup":"dialog","aria-expanded":"false"}))button.setAttribute(key,value);
     const panel=html("div","op-hub-panel");
     panel.hidden=true;
     const topLayer=typeof panel.showPopover==="function"&&typeof panel.hidePopover==="function";
     if(topLayer)panel.setAttribute("popover","manual");
     panel.id="oneplane-hub-panel";
-    for(const [key,value] of Object.entries({role:"dialog","aria-label":"OnePlane Hub"}))panel.setAttribute(key,value);
+    for(const [key,value] of Object.entries({role:"dialog","aria-label":"One Plane Hub"}))panel.setAttribute(key,value);
     const make=(tag,cls,text)=>{const n=html(tag,cls);if(text!==undefined)n.textContent=text;return n;};
     const content=make("div","op-hub-content");
     const spaces=make("div","op-hub-spaces"),status=make("div","op-hub-status");
@@ -29,30 +29,42 @@
     trashIcon.setAttribute("viewBox","0 0 20 20");trashIcon.setAttribute("aria-hidden","true");
     const trashPath=document.createElementNS(glyph.namespaceURI,"path");
     trashPath.setAttribute("d","M3 5h14M7 5V3h6v2M5 5l1 12h8l1-12M8 8v6M12 8v6");
-    trashIcon.append(trashPath);trashToggle.append(trashIcon);
-    titleRow.append(make("h2","op-hub-title","OnePlane"),trashToggle);
+    trashIcon.append(trashPath);
+    const trashSymbol=make("span","op-hub-trash-symbol"),trashCount=make("span","op-hub-trash-count","0");
+    trashSymbol.append(trashIcon,trashCount);
+    trashToggle.append(make("span","op-hub-trash-title","Trash"),trashSymbol);
+    titleRow.append(make("h2","op-hub-title","One Plane Hub"));
     const freeSetup=make("div","op-hub-free-setup"),trashPanel=make("section","op-hub-trash-panel");
-    trashPanel.hidden=true;trashPanel.setAttribute("aria-label","Trash");
+    trashPanel.setAttribute("aria-label","Trash");
     const trashList=make("div","op-hub-trash-list"),trashTools=make("div","op-hub-trash-tools");
     const ageSelect=make("select","op-hub-age"),clearTrash=make("button","op-hub-action","Clear");
     clearTrash.type="button";ageSelect.setAttribute("aria-label","Clear tabs older than");
     for(const [value,label] of [["all","All tabs"],["5m","Older than 5 minutes"],["1h","Older than 1 hour"],["1d","Older than 1 day"],["7d","Older than 7 days"],["30d","Older than 30 days"],["1y","Older than 1 year"]]){
       const option=make("option","",label);option.value=value;ageSelect.append(option);
     }
-    trashTools.append(ageSelect,clearTrash);
+    trashTools.append(clearTrash,ageSelect);
     const trashConfirmation=make("div","op-hub-trash-confirm");
-    trashPanel.append(make("h3","op-hub-heading","Trash"),trashList,trashTools,trashConfirmation);
+    const trashHead=make("div","op-hub-trash-head"),trashDrawer=make("div","op-hub-trash-drawer"),trashInner=make("div","op-hub-trash-inner");
+    const trashNotice=make("div","op-hub-trash-notice"),trashRows=make("div","op-hub-trash-rows");
+    trashList.append(trashRows);trashHead.append(trashToggle,trashTools);
+    trashInner.append(trashConfirmation,trashNotice,trashList);trashDrawer.append(trashInner);trashDrawer.inert=true;
+    trashPanel.append(trashHead,trashDrawer);
     trashToggle.addEventListener("click",()=>{
-      trashOpen=!trashOpen;purgePlan=null;render();
-      if(trashOpen&&!window.matchMedia("(prefers-reduced-motion: reduce)").matches)try{trashPanel.animate([{opacity:0,translate:"0 -6px"},{opacity:1,translate:"0 0"}],{duration:240,easing:"ease-out"});}catch{}
+      if(trashDrag)return;
+      trashOpen=!trashOpen;purgePlan=null;renderTrash();
     });
+    trashList.addEventListener("scroll",scheduleTrashRows,{passive:true});
     ageSelect.addEventListener("change",()=>{purgePlan=null;renderTrash();});
     clearTrash.addEventListener("click",()=>askPurge());
-    content.append(titleRow,make("h3","op-hub-heading","Workspaces"),freeSetup,spaces,form,trashPanel,status,make("h3","op-hub-heading","Settings"),mode);
+    const freeSlot=make("div","op-hub-free-slot"),freeDivider=make("div","op-hub-divider");
+    freeDivider.hidden=true;
+    content.append(titleRow,make("h3","op-hub-heading","Workspaces"),freeSetup,freeSlot,freeDivider,spaces,form,status,make("div","op-hub-divider"),make("h3","op-hub-heading","Settings"),mode,trashPanel);
     const returnButton=make("button","op-hub-return","Return to main window");returnButton.type="button";returnButton.hidden=true;content.prepend(returnButton);
     panel.append(content);
     let destroyed=false,busy=false,open=false,contextId=null;
     let trashOpen=false,purgePlan=null,trashDrag=null,editId=null;
+    let trashData=[],trashAllowed=false,trashAgeTimer=0,trashFrame=0,trashRangeKey="",trashTarget=null,trashGhost=null;
+    const TRASH_ROW_HEIGHT=54;
     const FREE_PREF="zen.oneplane.free-space-id",TRASH_PREF="zen.oneplane.trash-space-id",COLOR_PREF="zen.oneplane.workspace-colors",TRASH_TIME="oneplane-trashed-at";
     let geometryFrame=0,motion=null,confirmation=null,drag=null,suppressClickUntil=0,projectionBusy=false;
     const PROJECTION="__oneplaneWorkspaceProjection";
@@ -97,7 +109,7 @@
       }catch{done();}
     }
     function close(restoreFocus=false,immediate=false){
-      const wasVisible=!panel.hidden;contextId=null;confirmation=null;editId=null;trashDrag=null;purgePlan=null;open=false;
+      const wasVisible=!panel.hidden;contextId=null;confirmation=null;editId=null;finishTrashDrag();purgePlan=null;open=false;stopTrashUpdates();
       if(drag)cancelDrag();
       if(geometryFrame)window.cancelAnimationFrame(geometryFrame);geometryFrame=0;
       button.setAttribute("aria-expanded","false");
@@ -142,7 +154,7 @@
       renderFreeSetup(snapshot);
       renderTrash();
       returnButton.hidden=!window[PROJECTION];returnButton.disabled=projectionBusy;
-      spaces.replaceChildren();
+      spaces.replaceChildren();freeSlot.replaceChildren();freeDivider.hidden=!freeId();
       if(!snapshot?.length)spaces.append(make("p","op-hub-empty",snapshot?"No native workspaces":"Native workspaces unavailable"));
       else for(const space of snapshot){
         const entry=make("button","op-hub-space");entry.type="button";entry.dataset.workspaceId=space.id;entry.disabled=busy;
@@ -151,21 +163,27 @@
         const accent=workspaceColor(space.id);if(accent)icon.style.setProperty("--op-space-accent",accent);
         if(space.id===freeId())entry.setAttribute("data-op-free","true");
         entry.addEventListener("dragover",event=>trashRestoreOver(event,space.id));
-        entry.addEventListener("drop",event=>trashRestoreDrop(event,space.id));
+        entry.addEventListener("drop",event=>void trashRestoreDrop(event,space.id));
+        entry.addEventListener("dragleave",event=>{if(trashTarget===entry&&!entry.contains(event.relatedTarget))clearTrashTarget();});
         entry.append(icon,make("span","op-hub-label",space.name));
-        if(space.id===freeId())entry.append(make("span","op-hub-lock","· Free"));
+        if(space.id===freeId()){
+          const lock=make("span","op-hub-lock","");lock.title="Default workspace";lock.setAttribute("aria-label","Protected default workspace");
+          const svg=document.createElementNS(glyph.namespaceURI,"svg");svg.setAttribute("viewBox","0 0 20 20");svg.setAttribute("aria-hidden","true");
+          const path=document.createElementNS(glyph.namespaceURI,"path");path.setAttribute("d","M6 9V6a4 4 0 0 1 8 0v3M5 9h10v8H5z");svg.append(path);lock.append(svg);entry.append(lock);
+        }
         if(space.active)entry.append(make("span","op-hub-current","•"));
         entry.addEventListener("click",()=>{if(window.performance.now()>=suppressClickUntil)void select(space.id);});
         entry.addEventListener("pointerdown",event=>beginDrag(event,space.id,entry));
         entry.addEventListener("contextmenu",event=>{event.preventDefault();event.stopPropagation();if(!busy){confirmation=null;editId=null;contextId=contextId===space.id?null:space.id;render();}});
-        spaces.append(entry);
-        if(contextId===space.id)spaces.append(workspaceMenu(space,snapshot));
+        const slot=space.id===freeId()?freeSlot:spaces;
+        slot.append(entry);
+        if(contextId===space.id)slot.append(workspaceMenu(space,snapshot));
         if(focusedId===space.id&&open&&!busy)entry.focus({preventScroll:true});
       }
       form.hidden=!snapshot||typeof manager()?.createAndSaveWorkspace!=="function";
       name.disabled=busy;add.disabled=busy||!name.value.trim();
       const compact=root.getAttribute("zen-compact-mode")==="true";
-      mode.textContent=compact?"Compact Mode     On":"Compact Mode     Off";
+      const modeLabel=make("span","op-hub-mode-label","Compact Mode"),modeState=make("span","op-hub-mode-state",compact?"On":"Off");mode.replaceChildren(modeLabel,modeState);
       mode.setAttribute("aria-pressed",String(compact));mode.disabled=typeof command()?.doCommand!=="function";
     }
     function workspaceMenu(space,snapshot){
@@ -350,13 +368,27 @@
       });
     }
     const TRASH_DRAG_TYPE="application/x-oneplane-trash-tab";
+    function clearTrashTarget(){
+      trashTarget?.removeAttribute("data-op-trash-target");trashTarget=null;
+    }
+    function finishTrashDrag(){
+      trashDrag?.row?.removeAttribute("data-op-trash-dragging");trashDrag=null;
+      clearTrashTarget();
+      trashGhost?.remove();trashGhost=null;
+    }
     function trashRestoreOver(event,id){
       if(!trashDrag||!event.isTrusted||!Array.from(event.dataTransfer?.types||[]).includes(TRASH_DRAG_TYPE)||id===trashId())return;
       event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";
+      const target=event.currentTarget;
+      if(trashTarget!==target){clearTrashTarget();trashTarget=target;target.setAttribute("data-op-trash-target","true");}
     }
-    function trashRestoreDrop(event,id){
+    async function trashRestoreDrop(event,id){
       if(!trashDrag||!event.isTrusted||event.dataTransfer?.getData(TRASH_DRAG_TYPE)!==trashDrag.token)return;
-      event.preventDefault();event.stopPropagation();const tab=trashDrag.tab;trashDrag=null;void restoreTrashTab(tab,id);
+      event.preventDefault();event.stopPropagation();
+      const tab=trashDrag.tab;finishTrashDrag();await restoreTrashTab(tab,id);
+      if(!open||trashTabs().includes(tab)||window.matchMedia("(prefers-reduced-motion: reduce)").matches)return;
+      const target=Array.from(panel.querySelectorAll(".op-hub-space")).find(n=>n.dataset.workspaceId===id);
+      try{target?.animate([{transform:"scale(1)"},{transform:"scale(1.035)"},{transform:"scale(1)"}],{duration:420,easing:"cubic-bezier(.22,.75,.2,1)"});}catch{}
     }
     function purgeEligible(tab){
       return hubTrashTabEligible(tab)&&!tab.pinned&&tab!==browser.selectedTab&&
@@ -379,30 +411,87 @@
         }
       });
     }
-    function renderTrash(){
-      trashToggle.setAttribute("aria-expanded",String(trashOpen));trashPanel.hidden=!trashOpen;
-      if(!trashOpen)return;
-      const tabs=trashTabs(),allowed=!busy&&canManage()&&singleWindow();
-      trashList.replaceChildren();trashConfirmation.replaceChildren();
-      if(!tabs.length)trashList.append(make("p","op-hub-confirm-text","Trash is empty. Deleted workspace tabs will appear here."));
-      if(!allowed)trashList.append(make("p","op-hub-confirm-text","Close other browser windows to restore or clear tabs."));
-      for(const tab of tabs){
-        const row=make("div","op-hub-trash-item"),title=make("span","op-hub-label",tab.label||"Tab"),stamp=trashStamp(tab);
-        row.draggable=allowed&&hubTrashTabEligible(tab)&&tab!==browser.selectedTab;
-        row.append(title,make("span","op-hub-trash-date",stamp?new Date(stamp).toLocaleDateString():"Unknown date"));
-        row.addEventListener("dragstart",event=>{
-          if(!event.isTrusted||!row.draggable||!event.dataTransfer){event.preventDefault();return;}
-          const token=Services.uuid.generateUUID().toString();trashDrag={tab,token};
-          event.dataTransfer.setData(TRASH_DRAG_TYPE,token);event.dataTransfer.effectAllowed="move";
-        });
-        row.addEventListener("dragend",()=>{trashDrag=null;render();});
-        const restore=make("select","op-hub-age");restore.setAttribute("aria-label","Restore to workspace");
-        const placeholder=make("option","","Restore to…");placeholder.value="";restore.append(placeholder);
-        for(const space of restoreTargets()){const option=make("option","",space.name);option.value=space.id;restore.append(option);}
-        restore.disabled=!row.draggable;restore.addEventListener("change",()=>{if(restore.value)void restoreTrashTab(tab,restore.value);});
-        row.append(restore);trashList.append(row);
+    function trashTabUrl(tab){
+      // Never load a remote favicon or navigate on behalf of this card.
+      // The native tab may be lazy; its original URI is the display fallback.
+      try{
+        const current=tab.linkedBrowser?.currentURI?.spec;
+        const value=(current&&current!=="about:blank"?current:tab._originalUrl||current)||"";
+        if(typeof value!=="string")return "";
+        try{const u=new URL(value);return ["http:","https:"].includes(u.protocol)?u.host+(u.pathname==="/"?"":u.pathname):u.protocol==="about:"?value:"";}catch{return "";}
+      }catch{return "";}
+    }
+    function trashCard(item){
+      const {tab,stamp}=item,row=make("div","op-hub-trash-item"),icon=make("span","op-hub-trash-site-icon");
+      const image=tab.getAttribute("image");
+      // Browser-owned favicon URI only; avoid new HTTP requests from chrome.
+      if(image&&/^(?:data:image\/|moz-anno:|page-icon:|chrome:|resource:)/i.test(image)){
+        const img=make("img","");img.alt="";img.src=image;img.addEventListener("error",()=>{img.remove();icon.textContent="◎";},{once:true});icon.append(img);
+      }else icon.textContent="◎";
+      const copy=make("span","op-hub-trash-copy"),title=make("span","op-hub-trash-site-title",tab.label||"Tab"),link=make("span","op-hub-trash-url",trashTabUrl(tab)||"No address");
+      copy.append(title,link);
+      const age=make("span","op-hub-trash-date",hubTrashRelativeAge(stamp,Date.now()));age._stamp=stamp;
+      row.append(icon,copy,age);row.title=stamp?new Date(stamp).toLocaleString():"Unknown date";
+      row.draggable=trashAllowed&&hubTrashTabEligible(tab)&&tab!==browser.selectedTab;
+      row.addEventListener("dragstart",event=>{
+        if(!event.isTrusted||!row.draggable||!event.dataTransfer||!singleWindow()){event.preventDefault();return;}
+        const token=Services.uuid.generateUUID().toString();trashDrag={tab,token,row};
+        event.dataTransfer.setData(TRASH_DRAG_TYPE,token);event.dataTransfer.effectAllowed="move";
+        // One native drag image, not an extra cursor-following overlay.
+        // Clone the card within the visible top-layer panel for Gecko.
+        try{
+          const rect=row.getBoundingClientRect();trashGhost=row.cloneNode(true);
+          trashGhost.classList.add("op-hub-trash-ghost");trashGhost.draggable=false;
+          trashGhost.style.width=rect.width+"px";trashGhost.style.left=rect.left+"px";trashGhost.style.top=rect.top+"px";
+          panel.append(trashGhost);event.dataTransfer.setDragImage(trashGhost,Math.min(20,rect.width/2),rect.height/2);
+          window.requestAnimationFrame(()=>{trashGhost?.remove();trashGhost=null;});
+        }catch{trashGhost?.remove();trashGhost=null;}
+        row.setAttribute("data-op-trash-dragging","true");
+      });
+      row.addEventListener("dragend",()=>{finishTrashDrag();if(open)renderTrash();});
+      return row;
+    }
+    function stopTrashUpdates(){
+      if(trashAgeTimer)window.clearInterval(trashAgeTimer);trashAgeTimer=0;
+      if(trashFrame)window.cancelAnimationFrame(trashFrame);trashFrame=0;
+    }
+    function updateTrashAges(){
+      if(!open||!trashOpen||trashDrag)return;
+      const now=Date.now();
+      for(const age of trashRows.querySelectorAll(".op-hub-trash-date")){
+        const value=hubTrashRelativeAge(age._stamp,now);if(age.textContent!==value)age.textContent=value;
       }
-      clearTrash.disabled=!allowed||!tabs.some(purgeEligible);ageSelect.disabled=!allowed;
+    }
+    function scheduleTrashRows(){
+      if(!open||!trashOpen||trashDrag||trashFrame)return;
+      trashFrame=window.requestAnimationFrame(()=>{trashFrame=0;renderTrashRows();});
+    }
+    function renderTrashRows(){
+      if(!open||!trashOpen||trashDrag)return;
+      const range=hubTrashRange(trashData.length,trashList.scrollTop,trashList.clientHeight||270,TRASH_ROW_HEIGHT);
+      const key=range.first+":"+range.end;if(key===trashRangeKey)return;trashRangeKey=key;
+      const frag=document.createDocumentFragment();
+      for(let i=range.first;i<range.end;i++)frag.append(trashCard(trashData[i]));
+      trashRows.style.paddingTop=range.top+"px";trashRows.style.paddingBottom=range.bottom+"px";
+      trashRows.replaceChildren(frag);
+    }
+    function renderTrash(){
+      if(trashDrag)return;
+      const tabs=trashTabs();
+      trashCount.textContent=String(tabs.length);
+      trashToggle.setAttribute("aria-expanded",String(trashOpen));
+      trashToggle.setAttribute("aria-label",(trashOpen?"Collapse":"Expand")+" Trash ("+tabs.length+" tabs)");
+      trashPanel.toggleAttribute("data-op-trash-open",trashOpen);trashDrawer.inert=!trashOpen;trashTools.inert=!trashOpen;
+      if(!open||!trashOpen){stopTrashUpdates();return;}
+      trashAllowed=!busy&&canManage()&&singleWindow();
+      trashData=tabs.map(tab=>({tab,stamp:trashStamp(tab)})).sort((a,b)=>b.stamp-a.stamp);
+      trashRangeKey="";trashConfirmation.replaceChildren();trashNotice.replaceChildren();
+      if(!tabs.length)trashNotice.append(make("p","op-hub-confirm-text","Trash is empty."));
+      else if(!trashAllowed)trashNotice.append(make("p","op-hub-confirm-text","Close other browser windows to restore or clear tabs."));
+      trashList.hidden=!tabs.length;
+      renderTrashRows();scheduleTrashRows();
+      if(!trashAgeTimer)trashAgeTimer=window.setInterval(updateTrashAges,60000);
+      clearTrash.disabled=!trashAllowed||!tabs.some(purgeEligible);ageSelect.disabled=!trashAllowed;
       if(purgePlan){
         const n=purgePlan.tabs.length;
         trashConfirmation.append(make("p","op-hub-confirm-text",n?"Close "+n+" matching tab(s)? Native recently closed history may retain them.":"No eligible tabs match this age."));
@@ -784,17 +873,17 @@
       button.setAttribute("aria-expanded","true");setHold(true);render();
       try{
         if(!showPopup()){close();return;}
-        (spaces.querySelector('[aria-current="true"]:not(:disabled)')||spaces.querySelector("button:not(:disabled)")||mode).focus({preventScroll:true});
+        (panel.querySelector('.op-hub-space[aria-current="true"]:not(:disabled)')||panel.querySelector(".op-hub-space:not(:disabled)")||mode).focus({preventScroll:true});
       }catch(error){close();console.warn("[OnePlane] Hub open:",error);}
     }
     function key(event){
       if(!open||event.key!=="Escape")return;
       event.preventDefault();event.stopPropagation();
-      if(drag){cancelDrag();return;}if(confirmation){confirmation=null;render();return;}if(contextId){contextId=null;render();return;}close(true);
+      if(trashDrag){finishTrashDrag();renderTrash();return;}if(drag){cancelDrag();return;}if(confirmation){confirmation=null;render();return;}if(contextId){contextId=null;render();return;}close(true);
     }
     function changed(){if(open){if(drag&&!manager()?.getWorkspaceFromId(drag.id))cancelDrag();if(!drag&&!trashDrag&&!editId)render();scheduleHubGeometry();}}
     function onMode(){if(!supported())close(false,true);else if(open){setHold(true);changed();}}
-    function deactivate(){if(drag)cancelDrag();if(open&&!busy&&!projectionBusy)close();}
+    function deactivate(){if(drag)cancelDrag();if(trashDrag){finishTrashDrag();renderTrash();}if(open&&!busy&&!projectionBusy)close();}
     function toggleMode(){
       const cmd=command();if(typeof cmd?.doCommand!=="function"||!open)return;
       setHold(true);

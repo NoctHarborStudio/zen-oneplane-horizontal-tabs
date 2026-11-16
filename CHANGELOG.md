@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0-preview.31
+
+- Redesign One Plane Hub: separated Free, settings above expandable bottom Trash button, count/header controls and compact drag-only site cards.
+- Add virtualized Trash viewport, shared visible-only relative age timer, native drag lift and destination feedback.
+- Select designated Free on first normal startup; create if absent without renaming existing spaces. Preserve projection and safety gates.
+
 ## 0.2.0-preview.30
 
 - Explicit Free designation, native workspace name/icon/order controls and Hub accent.

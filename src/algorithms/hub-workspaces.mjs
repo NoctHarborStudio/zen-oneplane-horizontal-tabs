@@ -53,3 +53,14 @@
       !tab.hasAttribute("split-view")&&!tab.hasAttribute("glance-id")&&!tab.hasAttribute("zen-glance-tab")&&
       !tab.querySelector?.(".tabbrowser-tab[glance-id],.tabbrowser-tab[zen-glance-tab]");
   }
+  export function hubTrashRange(count,scroll,height,row=54,overscan=3){
+    const n=Math.max(0,Math.floor(count)||0),size=Math.max(1,row||54);
+    const first=Math.min(n,Math.max(0,Math.floor(Math.max(0,scroll||0)/size)-overscan));
+    const end=Math.min(n,Math.max(first,Math.ceil((Math.max(0,scroll||0)+Math.max(0,height||0))/size)+overscan));
+    return {first,end,top:first*size,bottom:(n-end)*size};
+  }
+  export function hubTrashRelativeAge(stamp,now){
+    if(!Number.isFinite(stamp)||stamp<=0)return "Unknown";
+    const m=Math.max(0,Math.floor((now-stamp)/60000));
+    return m<1?"Just now":m<60?m+" min":m<1440?Math.floor(m/60)+" h":m<525600?Math.floor(m/1440)+" d":Math.floor(m/525600)+" y";
+  }
