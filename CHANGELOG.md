@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0-preview.20
+
+- Repair Sine update timestamp regression: new updatedAt exceeds preview.16 and intervening publications. No browser runtime changes from preview.19.
+- Verify timestamp high-water mark against full manifest history before running build/tests; keep version and identity checks.
+
 ## 0.2.0-preview.19
 
 - Normalize screenshot-shortcut detection to a strict boolean; fix regression test without weakening assertions. Includes preview.17–18 Drag Engine changes.

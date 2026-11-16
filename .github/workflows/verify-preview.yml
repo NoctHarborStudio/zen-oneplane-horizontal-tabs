@@ -11,28 +11,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Check reproducible build and algorithm regressions
-        run: npm run verify
-      - name: Check package metadata and source syntax
+      - name: Check Sine publication metadata before build
         run: |
-          python scripts/verify-release.py --offline
-          node --check layout.uc.mjs
+          python scripts/verify-release.py --offline --history
           python - <<'PY'
-          import json, subprocess, datetime
+          import json, subprocess, re
           current = json.load(open("theme.json"))
           previous = json.loads(subprocess.check_output(["git", "show", "HEAD^:theme.json"]))
           assert current["id"] == previous["id"]
           assert current["homepage"] == previous["homepage"]
-          date = lambda x: datetime.datetime.fromisoformat(x.replace("Z", "+00:00"))
-          assert date(current["updatedAt"]) > date(previous["updatedAt"])
-          import re
           version = lambda s: tuple(map(int, re.fullmatch(r"(\d+)\.(\d+)\.(\d+)-preview\.(\d+)", s).groups()))
           assert version(current["version"]) > version(previous["version"])
+          assert current["version"] == json.load(open("package.json"))["version"]
           PY
+      - name: Check reproducible build and algorithm regressions
+        run: npm run verify
       - name: Check Raw GitHub and Sine download archive
         run: |
           for attempt in 1 2 3 4 5 6 7 8; do

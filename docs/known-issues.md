@@ -34,7 +34,7 @@
 - Verified preview.2 raw manifest (with and without cache-busting query), GitHub branch head, increasing updatedAt, stable ID/homepage and successful archive verification.
 - Sine 2.3.3 compares updatedAt, skips disabled/no-updates mods, and processes the installed list sequentially without a per-mod catch in updateMods. Its fetch helper uses ordinary fetch without explicit cache bypass. The crossed-arrow icon is also used for enabled updates; the highlighted button state and tooltip distinguish opt-out.
 - Next diagnostic: inspect only the local OnePlane entry in chrome/sine-mods/mods.json (version, updatedAt, homepage, enabled, no-updates, origin), and browser console errors during manual update. A stale response or failure in another mod is possible, but unconfirmed.
-- Status: open; repository-side metadata is valid. Do not alter the local database blindly or mark this fixed merely by bumping versions.
+- Preview.16 → .19 reproduced a confirmed repository-side regression: .16 updatedAt was 2026-11-16T16:32:00.000Z and .19 was 16:28:00.000Z. Failed intermediate builds prevented their metadata checks from running; checking HEAD^ alone missed the earlier high-water mark. Preview.20 restores a strictly newer timestamp (16:33 UTC), runs metadata checks before the build and checks the entire manifest history. Runtime update confirmation pending; do not edit the local database or reinstall for this confirmed metadata regression.
 
 ## OP-005 — Horizontal toolbar fails to fit on portrait monitors
 
