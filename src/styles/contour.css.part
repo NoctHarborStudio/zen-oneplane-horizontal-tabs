@@ -102,3 +102,9 @@
   }
 }
 
+
+    /* The web page must not paint apparent native controls through the
+       compact tab shelf. Keep the existing Unified Contour below it. */
+    #zen-appcontent-navbar-wrapper #nav-bar:has(#oneplane-tabs[data-op-overflow-row]) {
+      background:linear-gradient(to bottom,var(--op-surface-tint) 0,var(--op-surface-tint) calc(100% - 7px),transparent 100%)!important;
+    }

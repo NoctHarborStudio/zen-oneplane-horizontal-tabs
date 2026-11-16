@@ -35,10 +35,11 @@
     }
     const minTitle=32;
     const compactTitle=available>=title+2*gap?title:minTitle;
-    const cap=lane(compactTitle);
+    const compactLane=sideTitle=>Math.max(0,(available-sideTitle-2*gap)/2-2);
+    const cap=compactLane(compactTitle);
     // Prefer a title until it would prevent even one ordinary slot.
     const chosenTitle=cap<tab&&compactTitle>minTitle?minTitle:compactTitle;
-    const compactCap=lane(chosenTitle);
+    const compactCap=compactLane(chosenTitle);
     const left=[],right=[];
     if(compactCap>=tab){
       for(let i=boundary-1;i>=0;i--)if(!groups[i]&&widths[i]<=compactCap){left.push(i);break;}
@@ -70,4 +71,12 @@
     const l=Math.max(0,Math.min(1,(left+edge-x)/edge));
     const r=Math.max(0,Math.min(1,(x-(right-edge))/edge));
     return Math.round((r*r-l*l)*18);
+  }
+
+  export function centeredRowCorrection(windowWidth,left,right,rowCenter,rowWidth){
+    const min=left+rowWidth/2,max=windowWidth-right-rowWidth/2;
+    // If the edges overlap there is no exact safe midpoint; stay as close
+    // as possible to the real available center rather than crossing controls.
+    const target=min<=max?Math.max(min,Math.min(max,windowWidth/2)):(min+max)/2;
+    return Math.round(target-rowCenter);
   }

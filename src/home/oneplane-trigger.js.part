@@ -22,10 +22,15 @@
     island.addEventListener("click",onHomeTrigger);island.addEventListener("dblclick",stopHomeDoubleClick);island.addEventListener("pointerdown",stopHomePointer);
     window.addEventListener("OnePlane:StartupState",onHomeStartup);
   }
-  function onHomeStartup(){
+  async function onHomeStartup(){
     if(root.getAttribute("data-op-startup-ready")!=="true")return;
     window.removeEventListener("OnePlane:StartupState",onHomeStartup);
     if(dead||disposed||reloadingLayout||window.__oneplaneWorkspaceProjection||!hoverSupported())return;
+    // URL bar blur records an engagement using the native default engine.
+    const selected=browser.selectedTab;
+    try{if(Services.search&&!Services.search.isInitialized)await Services.search.init();}
+    catch(error){window.console.warn("[OnePlane] Startup search initialization:",error);return;}
+    if(dead||disposed||window.closed||!hoverSupported()||browser.selectedTab!==selected)return;
     // Both hosts use one window startup claim, not independent auto-open timers.
     homeLease?.showOnStartup?.();
   }

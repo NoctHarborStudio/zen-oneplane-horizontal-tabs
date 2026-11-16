@@ -99,6 +99,10 @@
       cascadePointer=null;
     }
     if (!hoverSupported() || draggedTab || root.hasAttribute("data-zr-startup-phase")) return;
+    if(event.target?.closest?.(".oneplane-title-island")===island){
+      if(hoverTab||indicatorHover)clearTabHover();
+      return;
+    }
     const hit = event.target?.closest?.(".oneplane-tab");
     if (hit && list.contains(hit)) {
       const point = {x:event.clientX,y:event.clientY};

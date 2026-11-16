@@ -1004,10 +1004,11 @@ function installTabStrip() {
     }
     const minTitle=32;
     const compactTitle=available>=title+2*gap?title:minTitle;
-    const cap=lane(compactTitle);
+    const compactLane=sideTitle=>Math.max(0,(available-sideTitle-2*gap)/2-2);
+    const cap=compactLane(compactTitle);
     // Prefer a title until it would prevent even one ordinary slot.
     const chosenTitle=cap<tab&&compactTitle>minTitle?minTitle:compactTitle;
-    const compactCap=lane(chosenTitle);
+    const compactCap=compactLane(chosenTitle);
     const left=[],right=[];
     if(compactCap>=tab){
       for(let i=boundary-1;i>=0;i--)if(!groups[i]&&widths[i]<=compactCap){left.push(i);break;}
@@ -1039,6 +1040,14 @@ function installTabStrip() {
     const l=Math.max(0,Math.min(1,(left+edge-x)/edge));
     const r=Math.max(0,Math.min(1,(x-(right-edge))/edge));
     return Math.round((r*r-l*l)*18);
+  }
+
+  function centeredRowCorrection(windowWidth,left,right,rowCenter,rowWidth){
+    const min=left+rowWidth/2,max=windowWidth-right-rowWidth/2;
+    // If the edges overlap there is no exact safe midpoint; stay as close
+    // as possible to the real available center rather than crossing controls.
+    const target=min<=max?Math.max(min,Math.min(max,windowWidth/2)):(min+max)/2;
+    return Math.round(target-rowCenter);
   }
   let adaptiveHeightDirty=false,overflowRevealAnimation=null;
   function mountLaneNodes(lane,nodes){
@@ -3979,7 +3988,10 @@ function installTabStrip() {
         const natural=stripOrderSnapshot.reduce((n,node)=>n+compactSlotWidth(node,tabWidth)+3,0)+(iconHome?32:180)+tabWidth+18;
         const fullBudget=2*Math.min(window.innerWidth/2-left-preferred-8,window.innerWidth/2-right)-8-2*dragRoom;
         const compactAddress=window.innerWidth<900||(fullBudget<natural&&left+preferred+8>=right);
-        const desired=adaptiveAddressWidth(preferred,window.innerWidth,left,16+dragRoom+4,8,compactAddress);
+        const pairReserve=16+3+tabWidth+2+dragRoom+4;
+        const canFitPair=window.innerWidth/2-right>=pairReserve;
+        const reserve=compactAddress&&canFitPair?pairReserve:16+dragRoom+4;
+        const desired=adaptiveAddressWidth(preferred,window.innerWidth,left,reserve,8,compactAddress);
         url.toggleAttribute("data-op-address-icon",desired<80);
         if(url.style.getPropertyValue("--op-url")!==desired+"px"){
           setLength(url,"--op-url",desired);
@@ -3992,7 +4004,7 @@ function installTabStrip() {
       const naturalTabsWidth=stripOrderSnapshot.reduce((n,node)=>n+compactSlotWidth(node,tabWidth)+3,0);
       const collapsedTabsWidth=Math.min(naturalTabsWidth,Math.max(0,rowWidth-tabWidth-3));
       const trailingReserve=Math.max(0,rowWidth-collapsedTabsWidth);
-      const available=Math.max(0,2*Math.min(window.innerWidth/2-left,window.innerWidth/2-right)-8-2*dragRoom);
+      const available=Math.max(0,2*Math.min(window.innerWidth/2-left,window.innerWidth/2-right)-4-2*dragRoom);
       const centered=wantsIsland;
       if(centered&&!frozen){
         row.removeAttribute("data-op-island-tight");
@@ -4019,6 +4031,11 @@ function installTabStrip() {
       const bias=toolbarCenterBias(left,right,trailingReserve,centered);
       setLength(leftSpacer,"--op-center-bias",bias.left);
       setLength(rightSpacer,"--op-center-bias",bias.right);
+      if(centered&&!frozen){
+        const rect=row.getBoundingClientRect(),previous=parseFloat(row.style.getPropertyValue("--op-center-correction"))||0;
+        const correction=centeredRowCorrection(window.innerWidth,left,right,rect.left+rect.width/2-previous,rect.width);
+        if(previous!==correction)row.style.setProperty("--op-center-correction",correction+"px");
+      }else if(!centered)row.style.removeProperty("--op-center-correction");
       // Cap leftward expansion at actual free space next to navigation.
       setLength(row, "--op-left-room", leftSpacer.getBoundingClientRect().width - 4);
       syncLaneScroll();
@@ -5363,7 +5380,7 @@ function installTabStrip() {
   }
   function indicatorTarget() {
     const s=row.getBoundingClientRect();
-    if(s.width<=0||s.height<=0||row.hasAttribute("data-op-lane-drag"))return null;
+    if(s.width<=0||s.height<=0||row.hasAttribute("data-op-lane-drag")||row.hasAttribute("data-op-overflow-row"))return null;
     const dragging=Boolean(dragNode && row.hasAttribute("data-op-dragging"));
     const homeOpen=row.hasAttribute("data-op-home-open");
     const item=dragging?dragNode:indicatorHover && list.contains(indicatorHover)?
@@ -5503,10 +5520,15 @@ function installTabStrip() {
     island.addEventListener("click",onHomeTrigger);island.addEventListener("dblclick",stopHomeDoubleClick);island.addEventListener("pointerdown",stopHomePointer);
     window.addEventListener("OnePlane:StartupState",onHomeStartup);
   }
-  function onHomeStartup(){
+  async function onHomeStartup(){
     if(root.getAttribute("data-op-startup-ready")!=="true")return;
     window.removeEventListener("OnePlane:StartupState",onHomeStartup);
     if(dead||disposed||reloadingLayout||window.__oneplaneWorkspaceProjection||!hoverSupported())return;
+    // URL bar blur records an engagement using the native default engine.
+    const selected=browser.selectedTab;
+    try{if(Services.search&&!Services.search.isInitialized)await Services.search.init();}
+    catch(error){window.console.warn("[OnePlane] Startup search initialization:",error);return;}
+    if(dead||disposed||window.closed||!hoverSupported()||browser.selectedTab!==selected)return;
     // Both hosts use one window startup claim, not independent auto-open timers.
     homeLease?.showOnStartup?.();
   }
@@ -5626,6 +5648,10 @@ function installTabStrip() {
       cascadePointer=null;
     }
     if (!hoverSupported() || draggedTab || root.hasAttribute("data-zr-startup-phase")) return;
+    if(event.target?.closest?.(".oneplane-title-island")===island){
+      if(hoverTab||indicatorHover)clearTabHover();
+      return;
+    }
     const hit = event.target?.closest?.(".oneplane-tab");
     if (hit && list.contains(hit)) {
       const point = {x:event.clientX,y:event.clientY};

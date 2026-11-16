@@ -17,7 +17,7 @@
   :root[oneplane-active="true"]:not([customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window]):has(#nav-bar-customization-target > #oneplane-tabs[data-ready="true"]) {
     --op-height: 34px;
     --op-window-drag-room: 16px;
-    @media(max-width:760px){--op-window-drag-room:8px;}
+    @media(max-width:760px){--op-window-drag-room:4px;}
     @media(max-width:480px){--op-window-drag-room:4px;}
     --op-top-row-height:calc(var(--op-height) + 18px);
     --op-tab: 36px;

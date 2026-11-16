@@ -1,3 +1,10 @@
+## 0.2.0-preview.52 — Compact toolbar polish
+
+- Prevent underlying web controls showing through the two-row tab shelf, retain the rear fade, and remove the scrollbar track and floating selection underline in compact mode while keeping scrolling and selected-card feedback.
+- Align upper tabs and Home vertically with native controls, restore Home hover/press/focus feedback, and correct the measured center. Reduce compact padding and reserve space for two ordinary top tabs when possible.
+- Wait for SearchService initialization before automatic Home startup blurs the native address editor; do not reopen Home after a tab change during the wait.
+- Native Zen visual and startup validation pending.
+
 ## 0.2.0-preview.51 — Home search handoff and regression checks
 
 - Keep the common search glyph throughout native cancellation, including the interval after Zen removes its new-tab marker.

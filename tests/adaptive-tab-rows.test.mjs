@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {planAdaptiveTabRows,adaptiveAddressWidth,visibleLaneDropIndex,laneScrollVelocity} from "../src/algorithms/tab-overflow.mjs";
+import {planAdaptiveTabRows,adaptiveAddressWidth,visibleLaneDropIndex,laneScrollVelocity,centeredRowCorrection} from "../src/algorithms/tab-overflow.mjs";
 test("wide layout keeps all slots in their original halves",()=>{
   const p=planAdaptiveTabRows([36,100,36,36], [false,true,false,false],2,700,180,36);
   assert.equal(p.mode,"wide");assert.deepEqual(p.topLeft,[0,1]);assert.deepEqual(p.topRight,[2,3]);assert.equal(p.hasSecondRow,false);
@@ -41,4 +41,16 @@ test("clipped lane hit testing excludes entirely invisible tabs",()=>{
   assert.deepEqual(visibleLaneDropIndex(slots,0,90,89),{index:3,before:false});
   assert.equal(visibleLaneDropIndex([{left:-60,right:-20}],0,90,5),null);
   assert.ok(laneScrollVelocity(2,0,200,32)<0);assert.equal(laneScrollVelocity(100,0,200,32),0);assert.ok(laneScrollVelocity(199,0,200,32)>0);
+});
+
+test("compact layout fits two ordinary tabs in a 116px center budget",()=>{
+  const widths=[36,100,36,36,100,36],groups=widths.map(w=>w>36);
+  const p=planAdaptiveTabRows(widths,groups,3,116,100,36);
+  assert.equal(p.title,32);assert.deepEqual(p.topLeft,[2]);assert.deepEqual(p.topRight,[3]);assert.deepEqual(p.lower,[0,1,4,5]);
+});
+test("measured center correction preserves the window midpoint when possible",()=>{
+  assert.equal(centeredRowCorrection(540,100,180,263,110),7);
+  assert.equal(centeredRowCorrection(540,100,180,277,110),-7);
+  assert.equal(centeredRowCorrection(540,100,180,270,110),0);
+  assert.equal(centeredRowCorrection(540,100,235,270,100),-15);
 });

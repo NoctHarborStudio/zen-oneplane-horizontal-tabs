@@ -47,7 +47,10 @@
         const natural=stripOrderSnapshot.reduce((n,node)=>n+compactSlotWidth(node,tabWidth)+3,0)+(iconHome?32:180)+tabWidth+18;
         const fullBudget=2*Math.min(window.innerWidth/2-left-preferred-8,window.innerWidth/2-right)-8-2*dragRoom;
         const compactAddress=window.innerWidth<900||(fullBudget<natural&&left+preferred+8>=right);
-        const desired=adaptiveAddressWidth(preferred,window.innerWidth,left,16+dragRoom+4,8,compactAddress);
+        const pairReserve=16+3+tabWidth+2+dragRoom+4;
+        const canFitPair=window.innerWidth/2-right>=pairReserve;
+        const reserve=compactAddress&&canFitPair?pairReserve:16+dragRoom+4;
+        const desired=adaptiveAddressWidth(preferred,window.innerWidth,left,reserve,8,compactAddress);
         url.toggleAttribute("data-op-address-icon",desired<80);
         if(url.style.getPropertyValue("--op-url")!==desired+"px"){
           setLength(url,"--op-url",desired);
@@ -60,7 +63,7 @@
       const naturalTabsWidth=stripOrderSnapshot.reduce((n,node)=>n+compactSlotWidth(node,tabWidth)+3,0);
       const collapsedTabsWidth=Math.min(naturalTabsWidth,Math.max(0,rowWidth-tabWidth-3));
       const trailingReserve=Math.max(0,rowWidth-collapsedTabsWidth);
-      const available=Math.max(0,2*Math.min(window.innerWidth/2-left,window.innerWidth/2-right)-8-2*dragRoom);
+      const available=Math.max(0,2*Math.min(window.innerWidth/2-left,window.innerWidth/2-right)-4-2*dragRoom);
       const centered=wantsIsland;
       if(centered&&!frozen){
         row.removeAttribute("data-op-island-tight");
@@ -87,6 +90,11 @@
       const bias=toolbarCenterBias(left,right,trailingReserve,centered);
       setLength(leftSpacer,"--op-center-bias",bias.left);
       setLength(rightSpacer,"--op-center-bias",bias.right);
+      if(centered&&!frozen){
+        const rect=row.getBoundingClientRect(),previous=parseFloat(row.style.getPropertyValue("--op-center-correction"))||0;
+        const correction=centeredRowCorrection(window.innerWidth,left,right,rect.left+rect.width/2-previous,rect.width);
+        if(previous!==correction)row.style.setProperty("--op-center-correction",correction+"px");
+      }else if(!centered)row.style.removeProperty("--op-center-correction");
       // Cap leftward expansion at actual free space next to navigation.
       setLength(row, "--op-left-room", leftSpacer.getBoundingClientRect().width - 4);
       syncLaneScroll();
