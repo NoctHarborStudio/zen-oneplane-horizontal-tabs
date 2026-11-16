@@ -126,3 +126,11 @@ User reports slider/cards still overlap during Split View drag. Previous mitigat
 ### OP-019 update (preview.21)
 
 First experimental Windows Display Engine: correct CSS/desktop/device coordinate boundaries, full-monitor edge classification, work-area geometry and compact source preview, guarded native positioning. Previous XUL desktop overlay removed. Runtime validation still pending; if native screen/placement is not verified, open ordinary native window. OP-018 and OP-020 remain open. Sine update delivery from .16 remains unconfirmed despite .20 metadata correction.
+
+### OP-019 update (preview.22)
+
+User confirmed screen classification improved in .21, but destination placement still on source, preview on source, and edge band too narrow. .22 stages native positioning and verifies monitor; compact target-screen popup, broader zones. Runtime verification pending.
+
+## OP-021 — returning a detached tab to toolbar accidentally splits
+
+Preview.21 report: top Split View claims tab strip on return. Preview.22 reserves expanded toolbar geometry during drag and explicitly cancels detached same-window return without changing tab order; direct reorder and content split retained. Live verification pending.

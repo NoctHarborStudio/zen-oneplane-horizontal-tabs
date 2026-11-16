@@ -1259,10 +1259,10 @@ function installTabStrip() {
        !displayContains(full,work.x+work.width-1,work.y+work.height-1))return null;
     // Classify on the physical display, not the inset work area. A taskbar
     // is part of the hit surface, but never part of the target window.
-    const edge=Math.max(16,Math.min(72,Math.round(Math.min(full.width,full.height)*.045)));
+    const horizontalEdge=Math.max(1,Math.round(full.width*.22)),verticalEdge=Math.max(1,Math.round(full.height*.18));
     const l=x-full.x,r=full.x+full.width-1-x,t=y-full.y,b=full.y+full.height-1-y;
-    const h=l<=edge?"left":r<=edge?"right":"";
-    const v=t<=edge?"top":b<=edge?"bottom":"";
+    const h=l<horizontalEdge?"left":r<horizontalEdge?"right":"";
+    const v=t<verticalEdge?"top":b<verticalEdge?"bottom":"";
     const {x:wx,y:wy,width:w,height:ht}=work,hw=Math.floor(w/2),hh=Math.floor(ht/2);
     let rect;
     if(h&&v)rect={x:h==="left"?wx:wx+hw,y:v==="top"?wy:wy+hh,width:h==="left"?hw:w-hw,height:v==="top"?hh:ht-hh,mode:h+"-"+v};
@@ -1287,11 +1287,19 @@ function installTabStrip() {
     const f=target.full;
     return {x:(target.x-f.x)/f.width,y:(target.y-f.y)/f.height,width:target.width/f.width,height:target.height/f.height};
   }
+  function displayReleaseMatches(sample,token,x,y,now){
+    return !!sample&&sample.token===token&&[x,y,now,sample.x,sample.y,sample.time].every(Number.isFinite)&&
+      now>=sample.time&&now-sample.time<=400&&Math.hypot(x-sample.x,y-sample.y)<=16;
+  }
+  function tabReturnZone(x,y,rect,height){
+    return !!rect&&[x,y,rect.left,rect.right,rect.top,height].every(Number.isFinite)&&
+      x>=rect.left&&x<rect.right&&y>=Math.max(0,rect.top)&&y<Math.max(0,rect.top)+Math.max(0,height);
+  }
   // Display Engine: Windows first. Gecko's chrome MouseEvent.screen and
   // nsIBaseWindow expose the native monitor and desktop/device pixel scales.
-  // No OS overlay windows or CSS-to-desktop guesses across DPI boundaries.
+  // A compact native panel is allowed on the target display; never a desktop-sized overlay.
   const DISPLAY_SNAP_PREF="zen.oneplane.experimental-display-snap";
-  let placementPreview=null,placementMap=null,placementArea=null,placementLabel=null,placementKey="";
+  let placementPreview=null,placementMap=null,placementArea=null,placementLabel=null,placementKey="",placementMonitor=null,placementSample=null,placementPopupPoint=null;
   const screenManager=()=>Cc["@mozilla.org/gfx/screenmanager;1"].getService(Ci.nsIScreenManager);
   function nativeBase(win){
     const owner=win.docShell.QueryInterface(Ci.nsIDocShellTreeItem).treeOwner;
@@ -1342,33 +1350,54 @@ function installTabStrip() {
     const x=event.screenX,y=event.screenY;
     return x>=window.screenX&&x<window.screenX+window.outerWidth&&y>=window.screenY&&y<window.screenY+window.outerHeight;
   }
-  function placementAt(event){
+  function placementAt(event,release=false){
     if(!displaySnapEnabled())return null;
     const p=displayEventPoint(event),rect=nativeWindowRect(window);
-    if(!p||!rect||displayContains(rect,p.x,p.y))return null;
-    return displaySnapTarget(p.full,p.work,p.x,p.y);
+    if(p&&rect)return displayContains(rect,p.x,p.y)?null:displaySnapTarget(p.full,p.work,p.x,p.y);
+    // Some native dragend events lose the screen/widget context. Only
+    // reuse a recent observation of the SAME gesture and release point.
+    const token=dragLifecycle.current()?.token;
+    if(release&&event?.isTrusted&&displayReleaseMatches(placementSample,token,event.screenX,event.screenY,window.performance.now()))
+      return placementSample.target;
+    return null;
   }
   function clearPlacementPreview(remove=false){
-    placementKey="";
+    placementKey="";placementSample=null;placementMonitor=null;placementPopupPoint=null;
     if(placementPreview){
-      if(placementPreview.matches(":popover-open"))try{placementPreview.hidePopover();}catch{}
-      placementPreview.hidden=true;
-      if(remove){placementPreview.remove();placementPreview=placementMap=placementArea=placementLabel=null;}
+      const popup=placementPreview;
+      try{if(popup.state!=="closed")popup.hidePopup();}catch{}
+      if(remove){popup.remove();placementPreview=placementMap=placementArea=placementLabel=null;}
     }
   }
   function showPlacementPreview(event,label){
-    const p=placementAt(event),fraction=displayPreviewFraction(p);
-    if(!p||!fraction){clearPlacementPreview();return;}
-    const key=[p.full.x,p.full.y,p.full.width,p.full.height,p.x,p.y,p.width,p.height,p.mode,label].join(":");
+    const p=placementAt(event),fraction=displayPreviewFraction(p),token=dragLifecycle.current()?.token;
+    if(!p||!fraction||token==null){clearPlacementPreview();return;}
+    placementSample={token,x:event.screenX,y:event.screenY,time:window.performance.now(),target:p};
+    const monitor=[p.full.x,p.full.y,p.full.width,p.full.height].join(":");
+    const key=[monitor,p.mode,label].join(":");
     if(key===placementKey)return;
     try{
       if(!placementPreview){
-        placementPreview=html("div","op-placement-preview");placementPreview.id="oneplane-placement-preview";
-        placementPreview.hidden=true;placementPreview.setAttribute("aria-hidden","true");
-        if(typeof placementPreview.showPopover==="function")placementPreview.setAttribute("popover","manual");
+        const set=document.getElementById("mainPopupSet");if(!set)return;
+        placementPreview=document.createXULElement("panel");placementPreview.id="oneplane-placement-preview";
+        for(const [k,v] of Object.entries({noautohide:"true",noautofocus:"true",mousethrough:"always",level:"top","aria-hidden":"true"}))placementPreview.setAttribute(k,v);
+        const content=html("div","op-placement-content");
         placementMap=html("div","op-placement-map");placementArea=html("div","op-placement-area");
         placementLabel=html("div","op-placement-label");
-        placementMap.append(placementArea);placementPreview.append(placementMap,placementLabel);root.append(placementPreview);
+        placementMap.append(placementArea);content.append(placementMap,placementLabel);placementPreview.append(content);set.append(placementPreview);
+        placementPreview.addEventListener("popupshown",()=>{
+          if(!placementSample||!dragLifecycle.owns(placementSample.token)){clearPlacementPreview(true);return;}
+          // If Gecko constrained the small popup to another monitor,
+          // hide it instead of misleading the user. The drop target is
+          // still valid independently of popup rendering.
+          try{
+            const r=placementPreview.getOuterScreenRect(),scale=window.devicePixelRatio/nativeBase(window).devicePixelsPerDesktopPixel;
+            const target=placementSample.target.full;
+            if(!r.width||!r.height||!displayContains(target,(r.x+r.width/2)*scale,(r.y+r.height/2)*scale)){
+              placementPreview.hidePopup();
+            }
+          }catch{try{placementPreview.hidePopup();}catch{}}
+        });
       }
       const ratio=p.full.width/p.full.height;
       placementMap.style.width=Math.round(Math.min(160,92*ratio))+"px";
@@ -1376,46 +1405,85 @@ function installTabStrip() {
       for(const [name,value] of Object.entries({left:fraction.x,top:fraction.y,width:fraction.width,height:fraction.height}))
         placementArea.style[name]=value*100+"%";
       const mode=p.mode==="maximize"?"Maximize":p.mode==="center"?"Centered":p.mode;
-      placementLabel.textContent=label+" · "+mode+" · "+p.width+" × "+p.height;
-      placementPreview.hidden=false;
-      if(typeof placementPreview.showPopover==="function"&&!placementPreview.matches(":popover-open"))placementPreview.showPopover();
-      placementKey=key;
-    }catch(error){clearPlacementPreview(true);console.warn("[OnePlane] Display preview:",error);}
+      placementLabel.textContent=label+" · "+mode;
+      // XULPopupElement takes CSS screen coordinates in the SOURCE
+      // document's scale, not destination desktop or CSS coordinates.
+      const scale=window.devicePixelRatio/nativeBase(window).devicePixelsPerDesktopPixel;
+      if(!Number.isFinite(scale)||scale<=0)return;
+      const x=Math.round((p.work.x+p.work.width/2)/scale-105);
+      const y=Math.round((p.work.y+Math.min(90,p.work.height*.12))/scale);
+      placementPopupPoint={x,y};
+      const changedMonitor=placementMonitor!==monitor;
+      placementMonitor=monitor;placementKey=key;
+      if(placementPreview.state==="open"){
+        if(changedMonitor)placementPreview.moveTo(x,y);
+      }else if(placementPreview.state==="showing"){
+        if(changedMonitor)placementPreview.addEventListener("popupshown",()=>{
+          if(placementSample&&placementPopupPoint&&placementPreview?.state==="open")placementPreview.moveTo(placementPopupPoint.x,placementPopupPoint.y);
+        },{once:true});
+      }else if(placementPreview.state==="hiding"){
+        placementPreview.addEventListener("popuphidden",()=>{
+          if(placementSample&&placementPopupPoint&&placementPreview?.state==="closed")placementPreview.openPopupAtScreen(placementPopupPoint.x,placementPopupPoint.y,false);
+        },{once:true});
+      }else placementPreview.openPopupAtScreen(x,y,false);
+    }catch(error){console.warn("[OnePlane] Display preview:",error);try{placementPreview?.hidePopup();}catch{}}
   }
-  function placeNativeWindow(win,target){
+  async function placeNativeWindow(win,target){
     if(!displaySnapEnabled()||!win||win.closed||!target)return false;
+    let interrupted=false;
+    const stop=()=>{interrupted=true;};
+    const wait=()=>new Promise(resolve=>window.setTimeout(resolve,100));
+    const alive=()=>!dead&&!win.closed&&!interrupted;
     try{
-      // Revalidate the monitor and taskbar after startup; never apply stale
-      // coordinates after a disconnect or display reconfiguration.
+      win.addEventListener("pointerdown",stop,true);win.addEventListener("keydown",stop,true);
       const full=target.full,work=target.work;
-      const screen=screenManager().screenForRect(full.x+Math.floor(full.width/2),full.y+Math.floor(full.height/2),1,1);
-      if(!displayRectEqual(full,screenRect(screen))||!displayRectEqual(work,screenRect(screen,true)))return false;
-      const base=nativeBase(win),scale=base.devicePixelsPerDesktopPixel;
-      if(typeof base.setPositionAndSize!=="function")return false;
-      // SetPositionAndSize expects layout-device pixels; AppWindow converts
-      // using its CURRENT widget desktop scale, then applies a desktop rect.
-      // For maximize first place a normal window fully inside the target.
-      const seed=target.mode==="maximize"?displaySnapTarget(full,work,full.x+Math.floor(full.width/2),full.y+Math.floor(full.height/2)):target;
-      const native=displayNativeRect(seed,scale);
-      if(!native)return false;
-      base.setPositionAndSize(native.x,native.y,native.width,native.height,Ci.nsIBaseWindow.eRepaint);
-      const actual=nativeWindowRect(win);
-      if(!actual||!displayContains(full,actual.x+Math.floor(actual.width/2),actual.y+Math.floor(actual.height/2)))return false;
-      if(target.mode==="maximize")win.maximize();
-      else {
-        // The OS can enforce a minimum browser size. Clamp once using the
-        // actual size if it fits; never repeatedly force a window resize.
-        if(actual.width>work.width||actual.height>work.height)return false;
-        const x=Math.max(work.x,Math.min(work.x+work.width-actual.width,actual.x));
-        const y=Math.max(work.y,Math.min(work.y+work.height-actual.height,actual.y));
-        if(x!==actual.x||y!==actual.y)base.setPositionDesktopPix(x,y);
+      const validTarget=()=>{
+        const screen=screenManager().screenForRect(full.x+Math.floor(full.width/2),full.y+Math.floor(full.height/2),1,1);
+        return displayRectEqual(full,screenRect(screen))&&displayRectEqual(work,screenRect(screen,true));
+      };
+      const onTarget=rect=>rect&&displayContains(full,rect.x+Math.floor(rect.width/2),rect.y+Math.floor(rect.height/2));
+      if(!validTarget())return false;
+      const base=nativeBase(win);
+      if(typeof base.setPositionDesktopPix!=="function"||typeof base.setSize!=="function")return false;
+      if(win.windowState===win.STATE_MAXIMIZED||win.windowState===win.STATE_MINIMIZED){win.restore();await wait();}
+      if(!alive())return false;
+      const seed=displaySnapTarget(full,work,full.x+Math.floor(full.width/2),full.y+Math.floor(full.height/2));
+      // First make a normal, monitor-sized seed, THEN use the API taking
+      // global desktop coordinates. Allow WM_DPICHANGED and startup
+      // geometry restoration to settle before sizing on the new display.
+      const size=(rect)=>{
+        const native=displayNativeRect(rect,base.devicePixelsPerDesktopPixel);
+        if(!native)throw Error("Invalid native display scale");
+        base.setSize(native.width,native.height,true);
+      };
+      size(seed);
+      for(let attempt=0;attempt<3;attempt++){
+        if(!alive()||!validTarget())return false;
+        base.setPositionDesktopPix(seed.x,seed.y);await wait();
+        if(onTarget(nativeWindowRect(win)))break;
+        if(attempt===2)return false;
       }
-      return true;
+      if(!alive()||!validTarget())return false;
+      if(target.mode==="maximize"){
+        win.maximize();await wait();
+        return alive()&&onTarget(nativeWindowRect(win))&&win.windowState===win.STATE_MAXIMIZED;
+      }
+      // Re-read the widget's scale after moving; use desktop position
+      // separately from size, and verify after the OS applies constraints.
+      size(target);base.setPositionDesktopPix(target.x,target.y);await wait();
+      if(!alive()||!validTarget())return false;
+      const actual=nativeWindowRect(win);
+      if(!onTarget(actual)||actual.width>work.width||actual.height>work.height)return false;
+      const x=Math.max(work.x,Math.min(work.x+work.width-actual.width,target.x));
+      const y=Math.max(work.y,Math.min(work.y+work.height-actual.height,target.y));
+      if(Math.abs(actual.x-x)>2||Math.abs(actual.y-y)>2){base.setPositionDesktopPix(x,y);await wait();}
+      return alive()&&onTarget(nativeWindowRect(win));
     }catch(error){console.warn("[OnePlane] Native display placement:",error);return false;}
+    finally{try{win.removeEventListener("pointerdown",stop,true);win.removeEventListener("keydown",stop,true);}catch{}}
   }
   function placeAfterStartup(win,target){
     if(!displaySnapEnabled()||!win||!target)return;
-    const apply=()=>{if(!dead&&!win.closed&&!placeNativeWindow(win,target))console.warn("[OnePlane] Placement not verified; native window kept.");};
+    const apply=async()=>{if(!dead&&!win.closed&&!await placeNativeWindow(win,target))console.warn("[OnePlane] Placement not verified; native window kept.");};
     if(win.gBrowserInit?.delayedStartupFinished){apply();return;}
     let timer=0,done=false;
     const cleanup=()=>{
@@ -1692,7 +1760,7 @@ function installTabStrip() {
       if(!event.isTrusted||event.button!==0||!d.entry.isConnected){cancelDrag();return;}
       const outside=Number.isFinite(event.screenX)&&Number.isFinite(event.screenY)&&
         !(event.screenX===0&&event.screenY===0)&&!pointInSourceWindow(event);
-      const point=outside?placementAt(event):null;
+      const point=outside?placementAt(event,true):null;
       if(!dragLifecycle.finish(d.token))return;
       cleanupDrag();
       if(!d.moved)return;
@@ -1748,8 +1816,9 @@ function installTabStrip() {
           const peer=window.gZenWindowSync.getItemFromWindow(window,startupTab.id);
           if(!peer||(peer.isEmpty&&!peer.pinned&&!peer.group&&peer.linkedBrowser?.currentURI?.spec==="about:blank"&&peer.linkedBrowser?.canGoBack===false&&peer.linkedBrowser?.canGoForward===false))child.gBrowser.removeTab(startupTab,{animate:false});
         }
-        const placed=!display||placeNativeWindow(child,display);
-        child.focus();status.textContent=placed?"":"Window opened; placement could not be verified.";
+        child.focus();
+        const placed=!display||await placeNativeWindow(child,display);
+        status.textContent=placed?"":"Window opened; placement could not be verified.";
       }catch(error){
         if(child&&!child.closed)delete child[PROJECTION];
         if(!destroyed)status.textContent="Could not open synced workspace. Check window sync settings.";
@@ -2405,7 +2474,7 @@ function installTabStrip() {
   let pointerSearch = null, dragSearch = null, restoreSearchTimer = 0;
   const blankDragImage = html("canvas");
   blankDragImage.width = blankDragImage.height = 1;
-  let dragHandled = false;
+  let dragHandled = false,dragDetachedOnce=false;
   let dragStartPoint = null;
   let dropMarker = null;
   let dragRevealTimer = 0;
@@ -2810,6 +2879,7 @@ function installTabStrip() {
     dragNode.toggleAttribute("data-op-detached", detached);
     row.toggleAttribute("data-op-inline-drag", !detached);
     if (detached) {
+      dragDetachedOnce=true;
       clearGroupPull();
       dragReentry = false;
       cancelInsertion();
@@ -2968,13 +3038,38 @@ function installTabStrip() {
     dragRevealTimer = 0;
     toolbarWrapper?.removeAttribute("oneplane-drag-hold");
   }
+  function toolbarDragReturnZone(event){
+    if(!toolbarWrapper)return false;
+    const rect=toolbarWrapper.getBoundingClientRect();
+    const measured=parseFloat(toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height"))||0;
+    const navHeight=navbar?.getBoundingClientRect().height||0;
+    // Reserve the actual expanded toolbar even while its compact height
+    // is still animating. Do not include the decorative fade.
+    return tabReturnZone(event.clientX,event.clientY,rect,Math.max(rect.height,measured,navHeight,36)+4);
+  }
+  function holdToolbarForReturn(){
+    toolbarWrapper.setAttribute("oneplane-drag-hold","true");
+    reconcilePanel();
+    if(dragRevealTimer)window.clearTimeout(dragRevealTimer);
+    dragRevealTimer=window.setTimeout(releaseDragReveal,500);
+    splitZone.removeAttribute("data-op-side");
+  }
   function revealForDrag(event) {
     const tab = readDraggedTab(event);
     if (!hoverSupported() || !tab || !toolbarWrapper) return;
-    const within = toolbarContainsPoint(event.clientX,event.clientY);
+    const within = toolbarDragReturnZone(event);
+    if(within)holdToolbarForReturn();
     if(tabOwner(tab)===window)clearPlacementPreview();
     else tabOwner(tab)?.[DRAG_CONTROLLER]?.preview?.(event);
     const local = tabOwner(tab) === window;
+    if(local&&dragDetachedOnce&&within){
+      // A carried tab returning to its own toolbar is a cancellation,
+      // not a top-edge split or a reorder. Leave native tab order intact.
+      event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";
+      clearLiveDrag();clearDropMarker();
+      if(dragImageMode==="content")positionGhost(event.clientX,event.clientY);
+      return;
+    }
     if (local && dragNode) {
       dragLastPoint = {x:event.clientX,y:event.clientY};
       if (within && dragImageMode !== "content" && dragImageMode !== "outside")
@@ -3026,7 +3121,12 @@ function installTabStrip() {
     previewStripDrag(event,tab);
   }
   function onToolbarDrop(event) {
-    if (toolbarContainsPoint(event.clientX,event.clientY) && readDraggedTab(event)) onStripDrop(event);
+    const tab=readDraggedTab(event);
+    if(!tab||!toolbarDragReturnZone(event))return;
+    if(tabOwner(tab)===window&&dragDetachedOnce){
+      event.preventDefault();event.stopImmediatePropagation();sourceHandled(tab);schedule();return;
+    }
+    onStripDrop(event);
   }
   function emptySplitTarget(tab) {
     return Boolean(tab?.hasAttribute("zen-empty-tab") ||
@@ -3079,7 +3179,7 @@ function installTabStrip() {
       dragNode?.style.removeProperty(name);
     hideGhost();
     dragGhost?.remove(); dragGhost = null; dragGhostBody = null;
-    dragPull = 0; dragLastPoint = null; dragReentry = false;
+    dragPull = 0; dragLastPoint = null; dragReentry = false;dragDetachedOnce=false;
     dragNode = null;
     dragImageMode = null;
     row.removeAttribute("data-op-inline-drag");
@@ -3127,7 +3227,7 @@ function installTabStrip() {
     groupPullLayout = null;
     draggedTab = tab;
     draggedGroup = group;
-    dragHandled = false;
+    dragHandled = false;dragDetachedOnce=false;
     dragStartPoint = { x: event.screenX, y: event.screenY };
     try {
       event.dataTransfer.mozSetDataAt(DRAG_TYPE, tab, 0);
@@ -3222,6 +3322,7 @@ function installTabStrip() {
     }
   }
   function splitSide(event) {
+    if(toolbarDragReturnZone(event))return "";
     const box = splitZone.getBoundingClientRect();
     if (box.width <= 0 || box.height <= 0) return "";
     const x = (event.clientX - box.left) / box.width;
@@ -3237,6 +3338,7 @@ function installTabStrip() {
     // Zen's native splitter does not accept its empty workspace tab.
     // Keep the start-page search instead of calling splitTabs with one
     // real tab (Zen filters the empty tab out).
+    if(toolbarDragReturnZone(event)){splitZone.removeAttribute("data-op-side");return;}
     const side = emptySplitTarget(browser.selectedTab) ? "" :
       isSplit(tab) ? "unsplit" : splitSide(event);
     splitZone.setAttribute("data-op-side", side);
@@ -3251,6 +3353,7 @@ function installTabStrip() {
         (tab === current && !isSplit(tab))) return;
     event.preventDefault();
     event.stopPropagation();
+    if(toolbarDragReturnZone(event)){sourceHandled(tab);schedule();return;}
     const side = splitSide(event);
     try {
       if (emptySplitTarget(current)) {
@@ -3282,13 +3385,15 @@ function installTabStrip() {
   function onDragEnd(event, tab) {
     const dt = event.dataTransfer;
     // Ignore late or duplicate dragend after cancel/handled drop.
+    const placement=placementAt(event,true);
+    const returned=dragDetachedOnce&&toolbarDragReturnZone(event);
     if(!finishNativeDragLifecycle(event,tab))return;
     const handled = dragHandled;
     const wasGroup = Boolean(draggedGroup);
     const start = dragStartPoint;
     draggedTab = null; draggedGroup = null; dragHandled = false; dragStartPoint = null;
     endDragVisual();
-    if (wasGroup || !start || handled || dt?.mozUserCancelled || dt?.dropEffect !== "none" ||
+    if (returned || wasGroup || !start || handled || dt?.mozUserCancelled || dt?.dropEffect !== "none" ||
         !validNativeTab(tab) || tabOwner(tab) !== window) return;
     // A cancelled drag or a drop within this window must never create
     // another window. screenX/Y are browser-chrome desktop CSS coordinates.
@@ -3304,7 +3409,7 @@ function installTabStrip() {
       // Native session adoption preserves the live browser, history, audio
       // and private-window state. Zen chooses its native window-sync mode.
       if (isSplit(tab) && !unsplitTab(tab)) return;
-      const p=placementAt(event);
+      const p=placement;
       const win=browser.replaceTabWithWindow(tab,{replaceLastTab:true});
       if(win&&p)placeAfterStartup(win,p);
     } catch (error) { console.error("[OnePlane] Detach tab:", error); }

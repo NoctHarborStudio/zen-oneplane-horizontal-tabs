@@ -11,7 +11,7 @@
       dragNode?.style.removeProperty(name);
     hideGhost();
     dragGhost?.remove(); dragGhost = null; dragGhostBody = null;
-    dragPull = 0; dragLastPoint = null; dragReentry = false;
+    dragPull = 0; dragLastPoint = null; dragReentry = false;dragDetachedOnce=false;
     dragNode = null;
     dragImageMode = null;
     row.removeAttribute("data-op-inline-drag");
@@ -59,7 +59,7 @@
     groupPullLayout = null;
     draggedTab = tab;
     draggedGroup = group;
-    dragHandled = false;
+    dragHandled = false;dragDetachedOnce=false;
     dragStartPoint = { x: event.screenX, y: event.screenY };
     try {
       event.dataTransfer.mozSetDataAt(DRAG_TYPE, tab, 0);

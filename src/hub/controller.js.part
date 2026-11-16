@@ -254,7 +254,7 @@
       if(!event.isTrusted||event.button!==0||!d.entry.isConnected){cancelDrag();return;}
       const outside=Number.isFinite(event.screenX)&&Number.isFinite(event.screenY)&&
         !(event.screenX===0&&event.screenY===0)&&!pointInSourceWindow(event);
-      const point=outside?placementAt(event):null;
+      const point=outside?placementAt(event,true):null;
       if(!dragLifecycle.finish(d.token))return;
       cleanupDrag();
       if(!d.moved)return;
@@ -310,8 +310,9 @@
           const peer=window.gZenWindowSync.getItemFromWindow(window,startupTab.id);
           if(!peer||(peer.isEmpty&&!peer.pinned&&!peer.group&&peer.linkedBrowser?.currentURI?.spec==="about:blank"&&peer.linkedBrowser?.canGoBack===false&&peer.linkedBrowser?.canGoForward===false))child.gBrowser.removeTab(startupTab,{animate:false});
         }
-        const placed=!display||placeNativeWindow(child,display);
-        child.focus();status.textContent=placed?"":"Window opened; placement could not be verified.";
+        child.focus();
+        const placed=!display||await placeNativeWindow(child,display);
+        status.textContent=placed?"":"Window opened; placement could not be verified.";
       }catch(error){
         if(child&&!child.closed)delete child[PROJECTION];
         if(!destroyed)status.textContent="Could not open synced workspace. Check window sync settings.";

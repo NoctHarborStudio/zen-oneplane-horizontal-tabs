@@ -1,4 +1,5 @@
   function splitSide(event) {
+    if(toolbarDragReturnZone(event))return "";
     const box = splitZone.getBoundingClientRect();
     if (box.width <= 0 || box.height <= 0) return "";
     const x = (event.clientX - box.left) / box.width;
@@ -14,6 +15,7 @@
     // Zen's native splitter does not accept its empty workspace tab.
     // Keep the start-page search instead of calling splitTabs with one
     // real tab (Zen filters the empty tab out).
+    if(toolbarDragReturnZone(event)){splitZone.removeAttribute("data-op-side");return;}
     const side = emptySplitTarget(browser.selectedTab) ? "" :
       isSplit(tab) ? "unsplit" : splitSide(event);
     splitZone.setAttribute("data-op-side", side);
@@ -28,6 +30,7 @@
         (tab === current && !isSplit(tab))) return;
     event.preventDefault();
     event.stopPropagation();
+    if(toolbarDragReturnZone(event)){sourceHandled(tab);schedule();return;}
     const side = splitSide(event);
     try {
       if (emptySplitTarget(current)) {

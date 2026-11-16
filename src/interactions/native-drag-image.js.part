@@ -67,6 +67,7 @@
     dragNode.toggleAttribute("data-op-detached", detached);
     row.toggleAttribute("data-op-inline-drag", !detached);
     if (detached) {
+      dragDetachedOnce=true;
       clearGroupPull();
       dragReentry = false;
       cancelInsertion();

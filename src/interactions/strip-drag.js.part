@@ -123,13 +123,38 @@
     dragRevealTimer = 0;
     toolbarWrapper?.removeAttribute("oneplane-drag-hold");
   }
+  function toolbarDragReturnZone(event){
+    if(!toolbarWrapper)return false;
+    const rect=toolbarWrapper.getBoundingClientRect();
+    const measured=parseFloat(toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height"))||0;
+    const navHeight=navbar?.getBoundingClientRect().height||0;
+    // Reserve the actual expanded toolbar even while its compact height
+    // is still animating. Do not include the decorative fade.
+    return tabReturnZone(event.clientX,event.clientY,rect,Math.max(rect.height,measured,navHeight,36)+4);
+  }
+  function holdToolbarForReturn(){
+    toolbarWrapper.setAttribute("oneplane-drag-hold","true");
+    reconcilePanel();
+    if(dragRevealTimer)window.clearTimeout(dragRevealTimer);
+    dragRevealTimer=window.setTimeout(releaseDragReveal,500);
+    splitZone.removeAttribute("data-op-side");
+  }
   function revealForDrag(event) {
     const tab = readDraggedTab(event);
     if (!hoverSupported() || !tab || !toolbarWrapper) return;
-    const within = toolbarContainsPoint(event.clientX,event.clientY);
+    const within = toolbarDragReturnZone(event);
+    if(within)holdToolbarForReturn();
     if(tabOwner(tab)===window)clearPlacementPreview();
     else tabOwner(tab)?.[DRAG_CONTROLLER]?.preview?.(event);
     const local = tabOwner(tab) === window;
+    if(local&&dragDetachedOnce&&within){
+      // A carried tab returning to its own toolbar is a cancellation,
+      // not a top-edge split or a reorder. Leave native tab order intact.
+      event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";
+      clearLiveDrag();clearDropMarker();
+      if(dragImageMode==="content")positionGhost(event.clientX,event.clientY);
+      return;
+    }
     if (local && dragNode) {
       dragLastPoint = {x:event.clientX,y:event.clientY};
       if (within && dragImageMode !== "content" && dragImageMode !== "outside")
@@ -181,5 +206,10 @@
     previewStripDrag(event,tab);
   }
   function onToolbarDrop(event) {
-    if (toolbarContainsPoint(event.clientX,event.clientY) && readDraggedTab(event)) onStripDrop(event);
+    const tab=readDraggedTab(event);
+    if(!tab||!toolbarDragReturnZone(event))return;
+    if(tabOwner(tab)===window&&dragDetachedOnce){
+      event.preventDefault();event.stopImmediatePropagation();sourceHandled(tab);schedule();return;
+    }
+    onStripDrop(event);
   }

@@ -60,10 +60,10 @@
 #oneplane-hub-panel .op-hub-space[data-op-dragging] {opacity:.65;cursor:grabbing;}
 #oneplane-hub-panel[inert] {pointer-events:none!important;}
 
-/* Compact source-window placement diagram. Never a desktop-sized popup. */
-#oneplane-placement-preview {position:fixed!important;inset:48px 16px auto auto!important;margin:0!important;display:flex;align-items:center;flex-direction:column;gap:7px;padding:10px!important;width:max-content;max-width:230px;box-sizing:border-box;color:light-dark(#262933,#e1e5ee);background:light-dark(#edf0f6,#252934);border:1px solid color-mix(in srgb,currentColor 22%,transparent);border-radius:9px;box-shadow:0 4px 16px #0003;z-index:2147483647;pointer-events:none!important;}
-#oneplane-placement-preview[hidden] {display:none!important;}
-#oneplane-placement-preview::backdrop {background:transparent;pointer-events:none;}
+/* Small target-monitor panel; no full-display XUL surface. */
+#oneplane-placement-preview {--panel-padding:0px;--panel-background:transparent;--panel-border-color:transparent;margin:0!important;padding:0!important;background:transparent!important;border:0!important;pointer-events:none!important;}
+#oneplane-placement-preview::part(content) {padding:0!important;background:transparent!important;border:0!important;}
+#oneplane-placement-preview .op-placement-content {display:flex;align-items:center;flex-direction:column;gap:7px;width:210px;box-sizing:border-box;padding:10px;color:light-dark(#262933,#e1e5ee);background:light-dark(#edf0f6,#252934);border:1px solid color-mix(in srgb,currentColor 22%,transparent);border-radius:9px;pointer-events:none!important;}
 #oneplane-placement-preview .op-placement-map {position:relative;overflow:hidden;box-sizing:content-box;background:color-mix(in srgb,currentColor 8%,transparent);outline:1px solid color-mix(in srgb,currentColor 30%,transparent);border-radius:3px;}
 #oneplane-placement-preview .op-placement-area {position:absolute;box-sizing:border-box;background:#769ef244;border:1px solid #91adf2;border-radius:2px;}
 #oneplane-placement-preview .op-placement-label {font:500 11px system-ui;text-align:center;overflow-wrap:anywhere;}

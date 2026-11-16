@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {displayContains,displayCssPoint,displayRectEqual,displaySnapTarget,displayNativeRect,displayPreviewFraction} from "../src/algorithms/display-placement.mjs";
+import {displayContains,displayCssPoint,displayRectEqual,displaySnapTarget,displayNativeRect,displayPreviewFraction,displayReleaseMatches,tabReturnZone} from "../src/algorithms/display-placement.mjs";
 const left={x:-2560,y:-200,width:2560,height:1440},work={x:-2560,y:-200,width:2560,height:1392};
 test("CSS points use event window scale, not target monitor scale",()=>{
   assert.deepEqual(displayCssPoint(-1600,400,1.5,1),{x:-2400,y:600});
@@ -38,4 +38,25 @@ test("invalid work-area and disconnected coordinates fail closed",()=>{
   assert.equal(displaySnapTarget(left,{...work,width:99999},-100,200),null);
   assert.equal(displaySnapTarget(left,work,100,200),null);
   assert.equal(displayNativeRect(work,NaN),null);
+});
+
+test("wide independent edge zones, center and corners",()=>{
+  assert.equal(displaySnapTarget(left,work,-480,400).mode,"right");
+  assert.equal(displaySnapTarget(left,work,-2200,400).mode,"left");
+  assert.equal(displaySnapTarget(left,work,-480,-100).mode,"right-top");
+  assert.equal(displaySnapTarget(left,work,-1280,-100).mode,"maximize");
+  assert.equal(displaySnapTarget(left,work,-1280,400).mode,"center");
+});
+test("cached release only matches current nearby fresh gesture",()=>{
+  const s={token:7,x:-800,y:400,time:100};
+  assert.equal(displayReleaseMatches(s,7,-805,405,180),true);
+  assert.equal(displayReleaseMatches(s,8,-805,405,180),false);
+  assert.equal(displayReleaseMatches(s,7,-900,405,180),false);
+  assert.equal(displayReleaseMatches(s,7,-805,405,501),false);
+});
+test("return zone reserves expanded toolbar while compact strip animates",()=>{
+  const r={left:0,right:1920,top:0};
+  assert.equal(tabReturnZone(800,24,r,70),true);
+  assert.equal(tabReturnZone(800,71,r,70),false);
+  assert.equal(tabReturnZone(-1,24,r,70),false);
 });

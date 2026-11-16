@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0-preview.22
+
+- Broaden monitor snap zones (22% horizontal, 18% vertical), move small placement preview to target display with CSS coordinate conversion and validation.
+- Stage native desktop position and post-DPI resize, verify target before maximize; narrowly scoped release fallback.
+- Reserve expanded tab toolbar during drag and cancel a detached tab's return instead of creating a top Split View. Preserve direct reordering and existing split animations.
+
 ## 0.2.0-preview.21
 
 - Extract Display Engine and pure desktop geometry; validate native event screen, handle full monitor vs work area, negative origins and DPI conversion.

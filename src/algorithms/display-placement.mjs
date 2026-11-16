@@ -16,10 +16,10 @@
        !displayContains(full,work.x+work.width-1,work.y+work.height-1))return null;
     // Classify on the physical display, not the inset work area. A taskbar
     // is part of the hit surface, but never part of the target window.
-    const edge=Math.max(16,Math.min(72,Math.round(Math.min(full.width,full.height)*.045)));
+    const horizontalEdge=Math.max(1,Math.round(full.width*.22)),verticalEdge=Math.max(1,Math.round(full.height*.18));
     const l=x-full.x,r=full.x+full.width-1-x,t=y-full.y,b=full.y+full.height-1-y;
-    const h=l<=edge?"left":r<=edge?"right":"";
-    const v=t<=edge?"top":b<=edge?"bottom":"";
+    const h=l<horizontalEdge?"left":r<horizontalEdge?"right":"";
+    const v=t<verticalEdge?"top":b<verticalEdge?"bottom":"";
     const {x:wx,y:wy,width:w,height:ht}=work,hw=Math.floor(w/2),hh=Math.floor(ht/2);
     let rect;
     if(h&&v)rect={x:h==="left"?wx:wx+hw,y:v==="top"?wy:wy+hh,width:h==="left"?hw:w-hw,height:v==="top"?hh:ht-hh,mode:h+"-"+v};
@@ -43,4 +43,12 @@
        !displayContains(target.full,target.x+target.width-1,target.y+target.height-1))return null;
     const f=target.full;
     return {x:(target.x-f.x)/f.width,y:(target.y-f.y)/f.height,width:target.width/f.width,height:target.height/f.height};
+  }
+  export function displayReleaseMatches(sample,token,x,y,now){
+    return !!sample&&sample.token===token&&[x,y,now,sample.x,sample.y,sample.time].every(Number.isFinite)&&
+      now>=sample.time&&now-sample.time<=400&&Math.hypot(x-sample.x,y-sample.y)<=16;
+  }
+  export function tabReturnZone(x,y,rect,height){
+    return !!rect&&[x,y,rect.left,rect.right,rect.top,height].every(Number.isFinite)&&
+      x>=rect.left&&x<rect.right&&y>=Math.max(0,rect.top)&&y<Math.max(0,rect.top)+Math.max(0,height);
   }

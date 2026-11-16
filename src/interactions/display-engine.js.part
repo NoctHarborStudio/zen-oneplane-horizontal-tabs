@@ -1,8 +1,8 @@
   // Display Engine: Windows first. Gecko's chrome MouseEvent.screen and
   // nsIBaseWindow expose the native monitor and desktop/device pixel scales.
-  // No OS overlay windows or CSS-to-desktop guesses across DPI boundaries.
+  // A compact native panel is allowed on the target display; never a desktop-sized overlay.
   const DISPLAY_SNAP_PREF="zen.oneplane.experimental-display-snap";
-  let placementPreview=null,placementMap=null,placementArea=null,placementLabel=null,placementKey="";
+  let placementPreview=null,placementMap=null,placementArea=null,placementLabel=null,placementKey="",placementMonitor=null,placementSample=null,placementPopupPoint=null;
   const screenManager=()=>Cc["@mozilla.org/gfx/screenmanager;1"].getService(Ci.nsIScreenManager);
   function nativeBase(win){
     const owner=win.docShell.QueryInterface(Ci.nsIDocShellTreeItem).treeOwner;
@@ -53,33 +53,54 @@
     const x=event.screenX,y=event.screenY;
     return x>=window.screenX&&x<window.screenX+window.outerWidth&&y>=window.screenY&&y<window.screenY+window.outerHeight;
   }
-  function placementAt(event){
+  function placementAt(event,release=false){
     if(!displaySnapEnabled())return null;
     const p=displayEventPoint(event),rect=nativeWindowRect(window);
-    if(!p||!rect||displayContains(rect,p.x,p.y))return null;
-    return displaySnapTarget(p.full,p.work,p.x,p.y);
+    if(p&&rect)return displayContains(rect,p.x,p.y)?null:displaySnapTarget(p.full,p.work,p.x,p.y);
+    // Some native dragend events lose the screen/widget context. Only
+    // reuse a recent observation of the SAME gesture and release point.
+    const token=dragLifecycle.current()?.token;
+    if(release&&event?.isTrusted&&displayReleaseMatches(placementSample,token,event.screenX,event.screenY,window.performance.now()))
+      return placementSample.target;
+    return null;
   }
   function clearPlacementPreview(remove=false){
-    placementKey="";
+    placementKey="";placementSample=null;placementMonitor=null;placementPopupPoint=null;
     if(placementPreview){
-      if(placementPreview.matches(":popover-open"))try{placementPreview.hidePopover();}catch{}
-      placementPreview.hidden=true;
-      if(remove){placementPreview.remove();placementPreview=placementMap=placementArea=placementLabel=null;}
+      const popup=placementPreview;
+      try{if(popup.state!=="closed")popup.hidePopup();}catch{}
+      if(remove){popup.remove();placementPreview=placementMap=placementArea=placementLabel=null;}
     }
   }
   function showPlacementPreview(event,label){
-    const p=placementAt(event),fraction=displayPreviewFraction(p);
-    if(!p||!fraction){clearPlacementPreview();return;}
-    const key=[p.full.x,p.full.y,p.full.width,p.full.height,p.x,p.y,p.width,p.height,p.mode,label].join(":");
+    const p=placementAt(event),fraction=displayPreviewFraction(p),token=dragLifecycle.current()?.token;
+    if(!p||!fraction||token==null){clearPlacementPreview();return;}
+    placementSample={token,x:event.screenX,y:event.screenY,time:window.performance.now(),target:p};
+    const monitor=[p.full.x,p.full.y,p.full.width,p.full.height].join(":");
+    const key=[monitor,p.mode,label].join(":");
     if(key===placementKey)return;
     try{
       if(!placementPreview){
-        placementPreview=html("div","op-placement-preview");placementPreview.id="oneplane-placement-preview";
-        placementPreview.hidden=true;placementPreview.setAttribute("aria-hidden","true");
-        if(typeof placementPreview.showPopover==="function")placementPreview.setAttribute("popover","manual");
+        const set=document.getElementById("mainPopupSet");if(!set)return;
+        placementPreview=document.createXULElement("panel");placementPreview.id="oneplane-placement-preview";
+        for(const [k,v] of Object.entries({noautohide:"true",noautofocus:"true",mousethrough:"always",level:"top","aria-hidden":"true"}))placementPreview.setAttribute(k,v);
+        const content=html("div","op-placement-content");
         placementMap=html("div","op-placement-map");placementArea=html("div","op-placement-area");
         placementLabel=html("div","op-placement-label");
-        placementMap.append(placementArea);placementPreview.append(placementMap,placementLabel);root.append(placementPreview);
+        placementMap.append(placementArea);content.append(placementMap,placementLabel);placementPreview.append(content);set.append(placementPreview);
+        placementPreview.addEventListener("popupshown",()=>{
+          if(!placementSample||!dragLifecycle.owns(placementSample.token)){clearPlacementPreview(true);return;}
+          // If Gecko constrained the small popup to another monitor,
+          // hide it instead of misleading the user. The drop target is
+          // still valid independently of popup rendering.
+          try{
+            const r=placementPreview.getOuterScreenRect(),scale=window.devicePixelRatio/nativeBase(window).devicePixelsPerDesktopPixel;
+            const target=placementSample.target.full;
+            if(!r.width||!r.height||!displayContains(target,(r.x+r.width/2)*scale,(r.y+r.height/2)*scale)){
+              placementPreview.hidePopup();
+            }
+          }catch{try{placementPreview.hidePopup();}catch{}}
+        });
       }
       const ratio=p.full.width/p.full.height;
       placementMap.style.width=Math.round(Math.min(160,92*ratio))+"px";
@@ -87,46 +108,85 @@
       for(const [name,value] of Object.entries({left:fraction.x,top:fraction.y,width:fraction.width,height:fraction.height}))
         placementArea.style[name]=value*100+"%";
       const mode=p.mode==="maximize"?"Maximize":p.mode==="center"?"Centered":p.mode;
-      placementLabel.textContent=label+" · "+mode+" · "+p.width+" × "+p.height;
-      placementPreview.hidden=false;
-      if(typeof placementPreview.showPopover==="function"&&!placementPreview.matches(":popover-open"))placementPreview.showPopover();
-      placementKey=key;
-    }catch(error){clearPlacementPreview(true);console.warn("[OnePlane] Display preview:",error);}
+      placementLabel.textContent=label+" · "+mode;
+      // XULPopupElement takes CSS screen coordinates in the SOURCE
+      // document's scale, not destination desktop or CSS coordinates.
+      const scale=window.devicePixelRatio/nativeBase(window).devicePixelsPerDesktopPixel;
+      if(!Number.isFinite(scale)||scale<=0)return;
+      const x=Math.round((p.work.x+p.work.width/2)/scale-105);
+      const y=Math.round((p.work.y+Math.min(90,p.work.height*.12))/scale);
+      placementPopupPoint={x,y};
+      const changedMonitor=placementMonitor!==monitor;
+      placementMonitor=monitor;placementKey=key;
+      if(placementPreview.state==="open"){
+        if(changedMonitor)placementPreview.moveTo(x,y);
+      }else if(placementPreview.state==="showing"){
+        if(changedMonitor)placementPreview.addEventListener("popupshown",()=>{
+          if(placementSample&&placementPopupPoint&&placementPreview?.state==="open")placementPreview.moveTo(placementPopupPoint.x,placementPopupPoint.y);
+        },{once:true});
+      }else if(placementPreview.state==="hiding"){
+        placementPreview.addEventListener("popuphidden",()=>{
+          if(placementSample&&placementPopupPoint&&placementPreview?.state==="closed")placementPreview.openPopupAtScreen(placementPopupPoint.x,placementPopupPoint.y,false);
+        },{once:true});
+      }else placementPreview.openPopupAtScreen(x,y,false);
+    }catch(error){console.warn("[OnePlane] Display preview:",error);try{placementPreview?.hidePopup();}catch{}}
   }
-  function placeNativeWindow(win,target){
+  async function placeNativeWindow(win,target){
     if(!displaySnapEnabled()||!win||win.closed||!target)return false;
+    let interrupted=false;
+    const stop=()=>{interrupted=true;};
+    const wait=()=>new Promise(resolve=>window.setTimeout(resolve,100));
+    const alive=()=>!dead&&!win.closed&&!interrupted;
     try{
-      // Revalidate the monitor and taskbar after startup; never apply stale
-      // coordinates after a disconnect or display reconfiguration.
+      win.addEventListener("pointerdown",stop,true);win.addEventListener("keydown",stop,true);
       const full=target.full,work=target.work;
-      const screen=screenManager().screenForRect(full.x+Math.floor(full.width/2),full.y+Math.floor(full.height/2),1,1);
-      if(!displayRectEqual(full,screenRect(screen))||!displayRectEqual(work,screenRect(screen,true)))return false;
-      const base=nativeBase(win),scale=base.devicePixelsPerDesktopPixel;
-      if(typeof base.setPositionAndSize!=="function")return false;
-      // SetPositionAndSize expects layout-device pixels; AppWindow converts
-      // using its CURRENT widget desktop scale, then applies a desktop rect.
-      // For maximize first place a normal window fully inside the target.
-      const seed=target.mode==="maximize"?displaySnapTarget(full,work,full.x+Math.floor(full.width/2),full.y+Math.floor(full.height/2)):target;
-      const native=displayNativeRect(seed,scale);
-      if(!native)return false;
-      base.setPositionAndSize(native.x,native.y,native.width,native.height,Ci.nsIBaseWindow.eRepaint);
-      const actual=nativeWindowRect(win);
-      if(!actual||!displayContains(full,actual.x+Math.floor(actual.width/2),actual.y+Math.floor(actual.height/2)))return false;
-      if(target.mode==="maximize")win.maximize();
-      else {
-        // The OS can enforce a minimum browser size. Clamp once using the
-        // actual size if it fits; never repeatedly force a window resize.
-        if(actual.width>work.width||actual.height>work.height)return false;
-        const x=Math.max(work.x,Math.min(work.x+work.width-actual.width,actual.x));
-        const y=Math.max(work.y,Math.min(work.y+work.height-actual.height,actual.y));
-        if(x!==actual.x||y!==actual.y)base.setPositionDesktopPix(x,y);
+      const validTarget=()=>{
+        const screen=screenManager().screenForRect(full.x+Math.floor(full.width/2),full.y+Math.floor(full.height/2),1,1);
+        return displayRectEqual(full,screenRect(screen))&&displayRectEqual(work,screenRect(screen,true));
+      };
+      const onTarget=rect=>rect&&displayContains(full,rect.x+Math.floor(rect.width/2),rect.y+Math.floor(rect.height/2));
+      if(!validTarget())return false;
+      const base=nativeBase(win);
+      if(typeof base.setPositionDesktopPix!=="function"||typeof base.setSize!=="function")return false;
+      if(win.windowState===win.STATE_MAXIMIZED||win.windowState===win.STATE_MINIMIZED){win.restore();await wait();}
+      if(!alive())return false;
+      const seed=displaySnapTarget(full,work,full.x+Math.floor(full.width/2),full.y+Math.floor(full.height/2));
+      // First make a normal, monitor-sized seed, THEN use the API taking
+      // global desktop coordinates. Allow WM_DPICHANGED and startup
+      // geometry restoration to settle before sizing on the new display.
+      const size=(rect)=>{
+        const native=displayNativeRect(rect,base.devicePixelsPerDesktopPixel);
+        if(!native)throw Error("Invalid native display scale");
+        base.setSize(native.width,native.height,true);
+      };
+      size(seed);
+      for(let attempt=0;attempt<3;attempt++){
+        if(!alive()||!validTarget())return false;
+        base.setPositionDesktopPix(seed.x,seed.y);await wait();
+        if(onTarget(nativeWindowRect(win)))break;
+        if(attempt===2)return false;
       }
-      return true;
+      if(!alive()||!validTarget())return false;
+      if(target.mode==="maximize"){
+        win.maximize();await wait();
+        return alive()&&onTarget(nativeWindowRect(win))&&win.windowState===win.STATE_MAXIMIZED;
+      }
+      // Re-read the widget's scale after moving; use desktop position
+      // separately from size, and verify after the OS applies constraints.
+      size(target);base.setPositionDesktopPix(target.x,target.y);await wait();
+      if(!alive()||!validTarget())return false;
+      const actual=nativeWindowRect(win);
+      if(!onTarget(actual)||actual.width>work.width||actual.height>work.height)return false;
+      const x=Math.max(work.x,Math.min(work.x+work.width-actual.width,target.x));
+      const y=Math.max(work.y,Math.min(work.y+work.height-actual.height,target.y));
+      if(Math.abs(actual.x-x)>2||Math.abs(actual.y-y)>2){base.setPositionDesktopPix(x,y);await wait();}
+      return alive()&&onTarget(nativeWindowRect(win));
     }catch(error){console.warn("[OnePlane] Native display placement:",error);return false;}
+    finally{try{win.removeEventListener("pointerdown",stop,true);win.removeEventListener("keydown",stop,true);}catch{}}
   }
   function placeAfterStartup(win,target){
     if(!displaySnapEnabled()||!win||!target)return;
-    const apply=()=>{if(!dead&&!win.closed&&!placeNativeWindow(win,target))console.warn("[OnePlane] Placement not verified; native window kept.");};
+    const apply=async()=>{if(!dead&&!win.closed&&!await placeNativeWindow(win,target))console.warn("[OnePlane] Placement not verified; native window kept.");};
     if(win.gBrowserInit?.delayedStartupFinished){apply();return;}
     let timer=0,done=false;
     const cleanup=()=>{

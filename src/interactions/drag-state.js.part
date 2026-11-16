@@ -14,7 +14,7 @@
   let pointerSearch = null, dragSearch = null, restoreSearchTimer = 0;
   const blankDragImage = html("canvas");
   blankDragImage.width = blankDragImage.height = 1;
-  let dragHandled = false;
+  let dragHandled = false,dragDetachedOnce=false;
   let dragStartPoint = null;
   let dropMarker = null;
   let dragRevealTimer = 0;
