@@ -460,144 +460,49 @@ function installTabStrip() {
     if(pending||restoring)return false;
     return /^(about:(blank|newtab|home|privatebrowsing))(?:[?#].*)?$/i.test(uri);
   }
-  function cascadeTiming(name,from,to,duration,anchor,left){
-    const opening=name==="opening";
-    const crossed=t=>opening?anchor+addressMotionSample(name,from,to,t).width>=left:
-      anchor+addressMotionSample(name,from,to,t).width<=left;
-    let lo=0,hi=1;
-    if(crossed(0))hi=0;
-    else if(!crossed(1))lo=1;
-    else for(let i=0;i<24;i++){
-      const m=(lo+hi)/2;
-      if(crossed(m))hi=m;else lo=m;
-    }
-    const crossing=(lo+hi)/2*duration;
-    if(opening){
-      const end=Math.min(duration,Math.max(Math.min(90,duration),crossing));
-      const start=Math.max(0,end-135);
-      return {delay:start,duration:Math.max(1,end-start)};
-    }
-    return {delay:crossing,duration:160};
+  function cascadeRevealSchedule(items,phase,anchor){
+    // Input is right-to-left. Only visible cards count. Keep the
+    // whole return bounded even for a crowded strip.
+    const span=phase?.duration??0;
+    const step=Math.min(32,240/Math.max(1,items.length-1));
+    let previous=-step;
+    return items.map(v=>{
+      let edge=0;
+      if(phase){
+        const crossed=t=>anchor+addressMotionSample(phase.name,phase.from,phase.to,t).width<=v.left;
+        let lo=0,hi=1;
+        if(crossed(0))hi=0;
+        else if(!crossed(1))lo=1;
+        else for(let i=0;i<16;i++){
+          const m=(lo+hi)/2;
+          if(crossed(m))hi=m;else lo=m;
+        }
+        edge=(lo+hi)/2*span;
+      }
+      const delay=Math.max(previous+step,edge);
+      previous=delay;
+      return {delay,duration:190};
+    });
   }
-  function cascadeKeyframes(opening,x,y,opacity){
-    const scale=(a,b)=>a.toFixed(4)+" "+b.toFixed(4);
-    if(!opening&&opacity>=.999&&Math.abs(x-1)<.001&&Math.abs(y-1)<.001)
-      return [{scale:"1 1",opacity:1},{scale:"1 1",opacity:1}];
-    return opening?[
-      {offset:0,scale:scale(x,y),opacity,easing:"cubic-bezier(.2,.5,.4,1)"},
-      {offset:.22,scale:scale(x*1.07,y*1.07),opacity,easing:"cubic-bezier(.45,0,.65,1)"},
-      {offset:1,scale:"0 0",opacity:0}
-    ]:[
-      {offset:0,scale:scale(x,y),opacity,easing:"cubic-bezier(.15,.7,.3,1)"},
-      {offset:.64,scale:"1.12 1.12",opacity:1,easing:"cubic-bezier(.3,0,.5,1)"},
+  function cascadeRevealFrames(v){
+    // Each edge grows at most half of its measured gap, minus a
+    // safety margin. Independent animations cannot cross each other.
+    // No shared quadratic timeline, width writes or moving partitions.
+    const grow=Math.max(0,Math.min(1.4,(v.leftGap-.8)/2,(v.rightGap-.8)/2));
+    const peakX=Math.min(1.10,1+2*grow/Math.max(1,v.width));
+    const scale=(x,y)=>x.toFixed(6)+" "+y.toFixed(6);
+    return [
+      {offset:0,scale:"0 0",opacity:0,easing:"cubic-bezier(.18,.7,.25,1)"},
+      {offset:.68,scale:scale(peakX,1.14),opacity:1,easing:"cubic-bezier(.3,0,.5,1)"},
       {offset:1,scale:"1 1",opacity:1}
     ];
   }
-  function cascadeSchedule(opening,items,phase,anchor){
-    const count=items.length;
-    if(!count)return [];
-    const span=phase?.duration??(opening?420:380);
-    // Stagger actual cards only; outlines and underline are followers.
-    // Bound total latency for large strips, not a fixed per-tab timer.
-    const step=Math.min(opening?28:36,(opening?Math.max(0,span-100):480)/Math.max(1,count-1));
-    let previous=-step;
-    return items.map((v,i)=>{
-      const edge=phase?cascadeTiming(phase.name,phase.from,phase.to,span,anchor,v.left):null;
-      let delay=Math.max(previous+step,edge?.delay??i*step);
-      if(opening)delay=Math.min(delay,Math.max(0,span-100-step*(count-i-1)));
-      else delay=Math.min(delay,span+480-step*(count-i-1));
-      previous=delay;
-      return {delay,duration:opening?Math.min(145,Math.max(1,span-delay)):190};
-    });
-  }
-  function cascadeSample(opening,v,t){
-    const clamp=x=>Math.max(0,Math.min(1,x));
-    const smooth=x=>{x=clamp(x);return x*x*(3-2*x);};
-    t=clamp(t);
-    const fromX=v.x,fromY=v.y,fromOpacity=v.opacity;
-    const dx=v.dx??0;
-    const ty=v.currentTy??v.ty;
-    const finalTy=v.finalTy??v.ty;
-    const openingX=Math.min(Math.max(peakLimit(v.width),fromX),fromX*1.045);
-    const openingY=Math.min(Math.max(1.23,fromY),fromY*1.045);
-    const motion=(x,y,opacity)=>({x,y,opacity,dx:dx*(1-smooth(t)),ty:ty+(finalTy-ty)*smooth(t)});
-    function peakLimit(width){return Math.min(1.10,1+2.8/Math.max(1,width));}
-    // Long cards retain a vertical spring, not a 20px horizontal bulge.
-    const peakX=peakLimit(v.width);
-    if(opening){
-      if(t<.20){
-        const k=smooth(t/.20);
-        return motion(fromX+(openingX-fromX)*k,fromY+(openingY-fromY)*k,fromOpacity);
-      }
-      const k=smooth((t-.20)/.80);
-      return motion(openingX*(1-k),openingY*(1-k),fromOpacity*(1-k*k));
-    }
-    if(t<.68){
-      const k=smooth(t/.68);
-      return motion(fromX+(peakX-fromX)*k,fromY+(1.14-fromY)*k,fromOpacity+(1-fromOpacity)*smooth(t/.45));
-    }
-    const k=smooth((t-.68)/.32);
-    return motion(peakX+(1-peakX)*k,1.14+(1-1.14)*k,1);
-  }
-  function cascadeFit(slots,values){
-    // A moving partition of adjacent slots allocates spare room to the
-    // growing card. Shared boundaries enforce separation; intersect with
-    // each card's group/viewport bounds to protect split and island edges.
-    // All returned edges are linear between the common WAAPI knots.
-    const n=slots.length,boundaries=[];
-    for(let i=0;i<n-1;i++){
-      const a=slots[i],b=slots[i+1];
-      const mid=(a.right+b.left)/2;
-      const excessA=(values[i].x-1)*a.width;
-      const excessB=(values[i+1].x-1)*b.width;
-      const shift=Math.max(-3,Math.min(3,(excessA-excessB)/4));
-      // A clipped lane may have a virtual slot extending under the
-      // island; its native overflow clip owns that separation.
-      boundaries.push(a.right>b.left&&a.region!==b.region?null:mid+shift);
-    }
-    return slots.map((v,i)=>{
-      const left=Math.max(v.min??-Infinity,i&&boundaries[i-1]!==null?boundaries[i-1]+.5:v.left-2);
-      const right=Math.min(v.max??Infinity,i<n-1&&boundaries[i]!==null?boundaries[i]-.5:v.right+2);
-      const center=(v.left+v.right)/2;
-      const width=Math.max(0,Math.min(v.width*values[i].x,right-left));
-      const desired=center+(values[i].dx??0);
-      const x=right>=left?Math.min(right-width/2,Math.max(left+width/2,desired)):center;
-      return {...values[i],x:width/Math.max(1,v.width),dx:x-center};
-    });
-  }
-  function cascadePlan(opening,slots,schedule){
-    const total=Math.max(1,...schedule.map(t=>t.delay+t.duration));
-    // Common knot times include each local impulse and its extrema;
-    // interpolate linearly so non-overlap holds between knots as well.
-    const times=new Set([0,total]);
-    for(const {delay,duration} of schedule)
-      for(const t of [0,.1,.2,.35,.45,.55,.68,.82,1])times.add(delay+duration*t);
-    const frames=slots.map(()=>[]);
-    for(const ms of [...times].sort((a,b)=>a-b)){
-      const values=slots.map((v,i)=>{
-        const t=schedule[i];
-        return cascadeSample(opening,v,(ms-t.delay)/t.duration);
-      });
-      const fitted=cascadeFit(slots,values);
-      for(let i=0;i<slots.length;i++){
-        const v=fitted[i];
-        frames[i].push({offset:ms/total,scale:v.x.toFixed(6)+" "+v.y.toFixed(6),
-          translate:(slots[i].tx+v.dx).toFixed(5)+"px "+v.ty.toFixed(5)+"px",
-          opacity:v.opacity});
-      }
-    }
-    return {total,frames};
-  }
-  // Bunny Cascade v2: a single geometry-aware timeline. Native tab slots
-  // are unchanged; no frame-by-frame JS layout or collision loop.
-  let cascadeState="idle",cascadeGeneration=0,cascadeHandoffFrame=0,cascadeHandoffTimer=0;
-  const cascadeAnimations=new Map(),cascadeFrozen=new Set(),cascadeBases=new Map();
+  // Bunny Cascade v3. Opening is a single visibility state; closing
+  // has three local keyframes per visible card. No animated custom
+  // properties, no slot locks, no repeated layout in the animation.
+  let cascadeState="idle",cascadeGeneration=0,cascadeHandoffFrame=0;
+  const cascadeAnimations=new Map();
   let cascadePointer=null;
-  function cascadeTranslate(node,css=window.getComputedStyle(node)){
-    const parts=css.translate==="none"?[]:css.translate.split(/\s+/);
-    const axis=(v,size)=>v?.endsWith("%")?parseFloat(v)*size/100:parseFloat(v)||0;
-    return [axis(parts[0],node.offsetWidth),axis(parts[1],node.offsetHeight)];
-  }
   function cancelCascadeAnimations(){
     for(const [node,anim] of cascadeAnimations){
       anim.cancel();
@@ -608,16 +513,7 @@ function installTabStrip() {
   }
   function cancelCascadeHandoff(){
     if(cascadeHandoffFrame)window.cancelAnimationFrame(cascadeHandoffFrame);
-    if(cascadeHandoffTimer)window.clearTimeout(cascadeHandoffTimer);
-    cascadeHandoffFrame=cascadeHandoffTimer=0;
-  }
-  function releaseCascadeSlots(){
-    for(const node of cascadeFrozen){
-      node.style.removeProperty("--op-cascade-width");
-      node.style.removeProperty("--op-cascade-translate");
-      node.removeAttribute("data-op-cascade-frozen");
-    }
-    cascadeFrozen.clear();cascadeBases.clear();
+    cascadeHandoffFrame=0;
   }
   function resetTabCascade(){
     cascadeGeneration++;
@@ -626,175 +522,113 @@ function installTabStrip() {
     cascadeState="idle";
     row.inert=false;
     cancelCascadeAnimations();
-    releaseCascadeSlots();
     if(!dead)refreshIndicator();
+  }
+  function hideTabCascade(){
+    if(cascadeState==="hidden")return;
+    cascadeGeneration++;
+    cancelCascadeHandoff();
+    if(panelLastPointer)cascadePointer={...panelLastPointer};
+    // Hide the entire row before cancelling fills or collapsing hover.
+    cascadeState="hidden";
+    row.setAttribute("data-op-cascade","hidden");
+    row.inert=true;
+    cancelCascadeAnimations();
+    hideIndicator();
+    clearTabHover();
+    islandTextAnimation?.cancel();
   }
   function finishCascadeHandoff(generation){
     if(dead||generation!==cascadeGeneration)return;
-    // Keep final pixels committed for a paint, then restore normal
-    // transitions before releasing any interrupted hover slot.
-    // New native tabs may have arrived during the reveal. Let their
-    // previously hidden mirrors fade in rather than flash at handoff.
-    const late=Array.from(row.querySelectorAll(".oneplane-tab,.oneplane-split-handle,.oneplane-title-island,.oneplane-new-tab"))
-      .filter(n=>n.offsetWidth>0&&!cascadeAnimations.has(n));
-    // Fully clipped slots need no animation; only late visible cards.
-    const visibleLate=late.filter(n=>{
-      const b=n.getBoundingClientRect(),r=row.getBoundingClientRect();
-      return b.right>r.left&&b.left<r.right;
-    });
-    cascadeState="settling";
-    row.setAttribute("data-op-cascade","settling");
-    cancelCascadeAnimations();
-    const lateJobs=[];
-    for(const node of visibleLate){
-      try{
-        const anim=node.animate([{opacity:0},{opacity:1}],{duration:110,fill:"both"});
-        cascadeAnimations.set(node,anim);lateJobs.push(anim.finished);
-      }catch{}
-    }
-    hideIndicator();
+    // Final fill is identical to normal style. Keep it for one paint;
+    // then restore hover without retargeting a stationary pointer.
     cascadeHandoffFrame=window.requestAnimationFrame(()=>{
       cascadeHandoffFrame=0;
       if(dead||generation!==cascadeGeneration)return;
-      const hadFrozen=cascadeFrozen.size>0;
-      releaseCascadeSlots();
-      const finish=()=>{
-        cascadeHandoffTimer=0;
-        if(dead||generation!==cascadeGeneration)return;
-        Promise.allSettled(lateJobs).then(()=>{
-          if(!dead&&generation===cascadeGeneration)resetTabCascade();
-        });
-      };
-      if(hadFrozen){
-        const speed=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab-speed"))||205;
-        cascadeHandoffTimer=window.setTimeout(finish,speed+34);
-      }else finish();
+      resetTabCascade();
     });
-  }
-  function settleTabCascade(opening,generation){
-    if(dead||generation!==cascadeGeneration)return;
-    if(!opening){
-      // One frame with the final native animation fill still attached.
-      cascadeHandoffFrame=window.requestAnimationFrame(()=>{
-        cascadeHandoffFrame=0;finishCascadeHandoff(generation);
-      });
-      return;
-    }
-    cascadeState="hidden";
-    row.setAttribute("data-op-cascade","hidden");
-    cancelCascadeAnimations();
-    clearTabHover();
-    releaseCascadeSlots();
-    hideIndicator();
-  }
-  function freezeCascadeSlots(nodes){
-    // Capture current *layout* width before disabling a running hover
-    // transition. Preserve the list/plus translation on the same paint.
-    const freeze=[list,plus,...nodes.filter(n=>n.classList.contains("oneplane-tab"))];
-    const snapshots=freeze.map(node=>{
-      const css=window.getComputedStyle(node);
-      const [tx,ty]=cascadeTranslate(node,css);
-      return {node,width:node.offsetWidth,tx,ty};
-    });
-    for(const {node,width,tx,ty} of snapshots){
-      if(node.classList.contains("oneplane-tab"))node.style.setProperty("--op-cascade-width",width+"px");
-      if(node===list||node===plus)node.style.setProperty("--op-cascade-translate",tx+"px "+ty+"px");
-      node.setAttribute("data-op-cascade-frozen","true");
-      cascadeFrozen.add(node);
-    }
   }
   function animateTabCascade(opening,phase=null){
     if(dead||!hoverSupported()){resetTabCascade();return;}
-    const previous=cascadeState;
-    if(opening&&previous==="hidden"||!opening&&previous==="idle")return;
-    if(row.hasAttribute("data-op-dragging"))return;
+    if(opening){hideTabCascade();return;}
+    if(cascadeState!=="hidden"||row.hasAttribute("data-op-dragging"))return;
+    if(!addressMotionEnabled()){resetTabCascade();return;}
     cancelCascadeHandoff();
     if(panelLastPointer)cascadePointer={...panelLastPointer};
-    cancelHoverTimer();
-    if(indicatorFrame)window.cancelAnimationFrame(indicatorFrame);
-    indicatorFrame=0;last=0;iv=0;
-    const all=Array.from(row.querySelectorAll(".oneplane-tab,.oneplane-split-handle,.oneplane-title-island,.oneplane-new-tab"));
-    const groups=Array.from(row.querySelectorAll(".oneplane-split-group"));
-    const viewport=row.getBoundingClientRect();
-    const slots=all.filter(n=>n.isConnected&&n.offsetWidth>0&&n.offsetHeight>0).map(node=>{
-      const rect=node.getBoundingClientRect(),css=window.getComputedStyle(node);
-      const [currentX,currentY]=cascadeTranslate(node,css);
-      const base=cascadeBases.get(node)??[currentX,currentY];
-      const hidden=previous!=="idle"&&previous!=="settling"&&!cascadeAnimations.has(node);
-      const values=css.scale==="none"?[1,1]:css.scale.split(/\s+/).map(Number);
-      const x=hidden?0:(Number.isFinite(values[0])?values[0]:1);
-      const y=hidden?0:(Number.isFinite(values[1])?values[1]:x);
-      const center=(rect.left+rect.right)/2-currentX+base[0];
-      const width=node.offsetWidth;
-      const group=node.closest(".oneplane-split-group");
-      const g=group?.getBoundingClientRect();
-      const lane=node.closest(".oneplane-island-lane");
-      const clip=(lane&&lane.offsetWidth>0?lane:node.closest(".oneplane-tab-list"))?.getBoundingClientRect()??viewport;
-      // A clipped card can participate if its unscaled slot intersects
-      // the viewport. Fully offscreen cards do not add stagger delay.
-      const visible=center+width/2>clip.left&&center-width/2<clip.right;
-      return {node,width,left:center-width/2,right:center+width/2,
-        min:g?g.left+1:-Infinity,max:g?g.right-1:Infinity,
-        region:lane&&lane.offsetWidth>0?lane:node.closest(".oneplane-tab-list")||row,
-        x,y,opacity:hidden?0:(parseFloat(css.opacity)||0),tx:base[0],ty:base[1],
-        dx:currentX-base[0],currentTy:currentY,
-        finalTy:!opening&&node.classList.contains("oneplane-tab")?0:base[1],visible};
-    }).filter(v=>v.visible).sort((a,b)=>a.left-b.left);
-    const outlines=groups.map(node=>({node,
-      alpha:previous==="idle"||previous==="settling"?1:parseFloat(window.getComputedStyle(node).getPropertyValue("--op-cascade-frame-alpha"))||0,
-      members:slots.filter(v=>node.contains(v.node))}));
-    if(opening&&(previous==="idle"||previous==="settling")&&!cascadeFrozen.size)freezeCascadeSlots(all);
     const generation=++cascadeGeneration;
-    cancelCascadeAnimations();
-    cascadeState=opening?"hiding":"showing";
-    row.setAttribute("data-op-cascade",cascadeState);
-    row.inert=true;
-    // Stop hover while preserving current slot dimensions. The active
-    // underline is restored once the normal geometry is stable.
-    hideIndicator();
-    islandTextAnimation?.cancel();
-    if(opening&&(previous==="idle"||previous==="settling"))clearTabHover();
-    if(!addressMotionEnabled()||!slots.length){settleTabCascade(opening,generation);return;}
-    const ordered=opening?slots:slots.slice().reverse();
+    // The hidden row retains its layout. All hover widths have already
+    // settled; read each visible slot once, before starting animations.
+    const viewport=row.getBoundingClientRect();
+    const laneBounds=new Map();
+    const bounds=node=>{
+      if(!laneBounds.has(node))laneBounds.set(node,node.getBoundingClientRect());
+      return laneBounds.get(node);
+    };
+    const slots=Array.from(row.querySelectorAll(".oneplane-tab,.oneplane-split-handle,.oneplane-title-island,.oneplane-new-tab"))
+      .filter(n=>n.isConnected&&n.offsetWidth>0&&n.offsetHeight>0).map(node=>{
+        const rect=node.getBoundingClientRect(),width=node.offsetWidth;
+        const lane=node.closest(".oneplane-island-lane");
+        const region=lane&&lane.offsetWidth>0?lane:node.closest(".oneplane-tab-list")||row;
+        const clip=region===row?viewport:bounds(region);
+        const group=node.closest(".oneplane-split-group");
+        const g=group?bounds(group):null;
+        return {node,width,left:rect.left,right:rect.right,region,group,
+          min:Math.max(clip.left,g?g.left: -Infinity),max:Math.min(clip.right,g?g.right:Infinity)};
+      }).filter(v=>v.right>v.min&&v.left<v.max).sort((a,b)=>a.left-b.left);
+    for(let i=0;i<slots.length;i++){
+      const v=slots[i],a=slots[i-1],b=slots[i+1];
+      v.leftGap=Math.min(2*(v.left-v.min),a&&a.region===v.region?v.left-a.right:2.8);
+      v.rightGap=Math.min(2*(v.max-v.right),b&&b.region===v.region?b.left-v.right:2.8);
+    }
+    if(!slots.length){resetTabCascade();return;}
+    const ordered=slots.slice().reverse();
     const anchor=parseFloat(url.style.getPropertyValue("--op-url-anchor-left"))||url.getBoundingClientRect().left;
-    const timings=cascadeSchedule(opening,ordered,phase,anchor);
-    const schedule=slots.map(v=>timings[ordered.indexOf(v)]);
-    const {total,frames}=cascadePlan(opening,slots,schedule);
-    const jobs=[];
-    const play=(node,keyframes,options,attr)=>{
+    const timings=cascadeRevealSchedule(ordered,phase,anchor);
+    const jobs=[],groupTiming=new Map();
+    cascadeState="showing";
+    row.setAttribute("data-op-cascade","showing");
+    row.inert=true;
+    // No spring solver during the cascade. The underline uses its
+    // selected card's delay, independent of when the last card settles.
+    refreshIndicator(true);
+    if(indicatorFrame)window.cancelAnimationFrame(indicatorFrame);
+    indicatorFrame=0;iv=0;last=0;
+    const start=phase&&addressAnimation?.startTime;
+    const play=(node,frames,timing,attr)=>{
       try{
         node.setAttribute(attr,"true");
-        const anim=node.animate(keyframes,{fill:"both",easing:"linear",...options});
+        const anim=node.animate(frames,{...timing,fill:"both",easing:"linear"});
         cascadeAnimations.set(node,anim);
-        const start=phase&&addressAnimation?.startTime;
         if(start!==null&&start!==undefined&&Number.isFinite(start))anim.startTime=start;
         jobs.push(anim.finished);
+        return true;
       }catch(error){
         node.removeAttribute(attr);
-        window.console.warn("[OnePlane] Tab cascade fallback:",error);
+        window.console.warn("[OnePlane] Tab reveal fallback:",error);
+        return false;
       }
     };
-    for(let i=0;i<slots.length;i++){
-      const v=slots[i];
-      cascadeBases.set(v.node,[v.tx,v.ty]);
-      play(v.node,frames[i],{duration:total},"data-op-cascade-member");
+    const selected=entries.get(browser.selectedTab)?.item;
+    for(let i=0;i<ordered.length;i++){
+      const v=ordered[i],timing=timings[i];
+      play(v.node,cascadeRevealFrames(v),timing,"data-op-cascade-member");
+      if(v.group&&!groupTiming.has(v.group))groupTiming.set(v.group,timing);
+      if(v.node===selected&&indicatorShown){
+        play(indicator,[{opacity:0},{opacity:1}],{delay:timing.delay+28,duration:105},"data-op-cascade-member");
+      }
     }
-    for(const {node,alpha,members} of outlines){
-      if(!members.length)continue;
-      const ts=members.map(v=>schedule[slots.indexOf(v)]);
-      const delay=Math.min(...ts.map(t=>t.delay));
-      const end=Math.max(...ts.map(t=>t.delay+t.duration));
-      play(node,[{"--op-cascade-frame-alpha":alpha},{"--op-cascade-frame-alpha":opening?0:1}],
-        {delay,duration:Math.max(1,end-delay)},"data-op-cascade-frame");
-    }
-    Promise.allSettled(jobs).then(()=>settleTabCascade(opening,generation));
+    // Fade the actual group, not its inherited background alpha.
+    // Children retain their individual bounce and the radius stays 8px.
+    for(const [group,timing] of groupTiming)
+      play(group,[{opacity:0},{opacity:1}],{delay:timing.delay,duration:85},"data-op-cascade-frame");
+    Promise.allSettled(jobs).then(()=>finishCascadeHandoff(generation));
   }
   function reconcileTabCascade(){
     if(dead||!hoverSupported()){if(cascadeState!=="idle")resetTabCascade();return;}
     if(addressTransition||addressSettling)return;
     const open=nativeInlineOpen(addressBar());
-    if(open&&(cascadeState==="idle"||cascadeState==="showing"||cascadeState==="settling"))animateTabCascade(true);
-    else if(!open&&(cascadeState==="hidden"||cascadeState==="hiding")){
+    if(open&&cascadeState!=="hidden")hideTabCascade();
+    else if(!open&&cascadeState==="hidden"){
       holdToolbarAfterDismiss();
       animateTabCascade(false);
     }

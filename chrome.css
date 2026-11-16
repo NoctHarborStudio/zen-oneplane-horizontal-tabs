@@ -1,8 +1,3 @@
-@property --op-cascade-frame-alpha {
-  syntax: "<number>";
-  inherits: true;
-  initial-value: 1;
-}
 /* Registered once by the stylesheet. Native WAAPI can interpolate
    selection opacity without a script callback on every display frame. */
 @property --op-url-selection-alpha {
@@ -685,13 +680,13 @@
       height: var(--op-height);
       box-sizing: border-box;
       border-radius: 8px !important;
-      background: color-mix(in srgb, var(--op-split-color) calc(13% * var(--op-cascade-frame-alpha,1)), transparent);
-      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--op-split-color) calc(75% * var(--op-cascade-frame-alpha,1)), transparent);
+      background: color-mix(in srgb, var(--op-split-color) 13%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--op-split-color) 75%, transparent);
       transition: background-color var(--op-tab-speed) ease, box-shadow var(--op-tab-speed) ease;
     }
     #oneplane-tabs .oneplane-split-group[data-op-split-active] {
-      background: color-mix(in srgb, var(--op-split-color) calc(24% * var(--op-cascade-frame-alpha,1)), transparent);
-      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--op-split-color) calc(100% * var(--op-cascade-frame-alpha,1)), transparent);
+      background: color-mix(in srgb, var(--op-split-color) 24%, transparent);
+      box-shadow: inset 0 0 0 1px var(--op-split-color);
     }
     #oneplane-tabs .oneplane-split-group .oneplane-tab {
       height: calc(var(--op-height) - 8px);
@@ -973,34 +968,20 @@
       #oneplane-tabs .oneplane-tab-audio i { animation: none !important; }
     }
 
-    /* A fixed slot remains in layout. Only paint geometry moves. */
-    #oneplane-tabs[data-op-cascade] { pointer-events: none !important; }
-    #oneplane-tabs[data-op-cascade]:not([data-op-cascade="settling"]) :is(.oneplane-tab,.oneplane-split-handle,.oneplane-title-island,.oneplane-new-tab,#oneplane-tab-indicator,.oneplane-tab-list) {
-      transform-origin: center;
-      transition: none !important;
-      pointer-events: none !important;
+    /* Opening hides one whole strip, without per-card animation or
+       changing layout. Bookmarks and other toolbar zones are untouched. */
+    #oneplane-tabs[data-op-cascade] { pointer-events:none !important; }
+    #oneplane-tabs[data-op-cascade="hidden"] {
+      visibility:hidden !important;
+      opacity:0 !important;
     }
-    #oneplane-tabs[data-op-cascade]:not([data-op-cascade="settling"]) :is(.oneplane-tab,.oneplane-split-handle,.oneplane-title-island,.oneplane-new-tab,#oneplane-tab-indicator):not([data-op-cascade-member]) {
-      opacity: 0 !important;
-    }
-    #oneplane-tabs[data-op-cascade] #oneplane-tab-indicator { opacity:0 !important; }
-    #oneplane-tabs [data-op-cascade-frozen].oneplane-tab {
-      width:var(--op-cascade-width) !important;
-      flex-basis:var(--op-cascade-width) !important;
-    }
-    /* Match Island Mode's more specific plus positioning. WAAPI still
-       owns translate during the cascade; this is only its base value. */
-    #oneplane-tabs[data-op-cascade] [data-op-cascade-frozen]:is(.oneplane-tab-list,.oneplane-new-tab),
-    #oneplane-tabs[data-op-show-island][data-op-cascade]:not([data-op-island-tight]) .oneplane-new-tab[data-op-cascade-frozen] {
-      translate:var(--op-cascade-translate);
-    }
-    /* The original split surface remains the only surface. */
-    #oneplane-tabs[data-op-cascade]:not([data-op-cascade="settling"]) .oneplane-split-group {
+    #oneplane-tabs[data-op-cascade] :is(.oneplane-tab,.oneplane-split-handle,.oneplane-title-island,.oneplane-new-tab,#oneplane-tab-indicator,.oneplane-tab-list,.oneplane-split-group) {
       transition:none !important;
-      --op-cascade-frame-alpha:0;
+      pointer-events:none !important;
     }
-    #oneplane-tabs[data-op-cascade]:not([data-op-cascade="settling"]) .oneplane-split-group[data-op-cascade-frame] {
-      --op-cascade-frame-alpha:1;
+    #oneplane-tabs[data-op-cascade="showing"] :is(.oneplane-tab,.oneplane-split-handle,.oneplane-title-island,.oneplane-new-tab,#oneplane-tab-indicator):not([data-op-cascade-member]),
+    #oneplane-tabs[data-op-cascade="showing"] .oneplane-split-group:not([data-op-cascade-frame]) {
+      opacity:0 !important;
     }
 
     /* Only active during a chrome tab drag; never intercept ordinary content. */

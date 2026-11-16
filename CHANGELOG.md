@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0-preview.9
+
+- Remove opening Bunny animation entirely: hide the complete tab strip (including title island, plus, indicator and split groups) with one visibility/opacity state, without layout removal or per-card animation.
+- Keep closing Bunny only; replace the quadratic shared timeline with three local scale/opacity keyframes per visible card. Limit horizontal overshoot using measured neighbor/group gaps, retain 114% vertical spring and right-to-left stagger. No slot locking, moving partitions or animated inherited CSS properties.
+- Return the selected-tab underline with its own card (28ms after card reveal starts), not after the entire strip. Group opacity animates directly with the original fixed 8px contour.
+- Preserve accepted address Fluid Wave unchanged. Regression tests cover keyframe budget, stagger and non-overlap. Live FPS validation pending.
+
 ## 0.2.0-preview.8
 
 - Bunny Cascade v2: calculate a shared native scale/translate/opacity timeline with collision-aware slot boundaries, a bounded horizontal overshoot and stronger vertical spring. Stagger the visible cards, including the Island Mode title; offscreen cards do not consume stagger slots.

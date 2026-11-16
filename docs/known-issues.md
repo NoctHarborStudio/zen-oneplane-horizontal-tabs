@@ -72,3 +72,16 @@
 
 - Reported on preview.7. Original container uses 8px radius; temporary ::before copied inherited radius and replaced background/outline. Exact computed-style conflict not measured.
 - Preview.8: remove temporary layer, animate alpha on the original surface and enforce consistent 8px radius. Live verification pending.
+
+## OP-011 — Severe Bunny Cascade performance regression
+
+- User reports whole-browser lag on preview.8 in both phases; previous fixes otherwise work technically. Bunny effect during opening is not useful visually.
+- Code analysis: common keyframe times multiplied by every visible card produce quadratic-size animation data. Group alpha animated an inherited CSS property feeding background and shadow painting. Slot snapshots and freeze/release add synchronous style/layout work. These are credible causes, not a captured profiler trace.
+- Preview.9 removes all opening card animations, replaces closing with three keyframes per card and uses group opacity. Synthetic keyframe counts: 8 cards 584→24; 16 cards 2320→48; 32 cards 9216→96; 64 cards 36864→192. Actual FPS unmeasured.
+- Status: mitigation published; live validation pending.
+
+## OP-012 — Active-tab underline appears after entire cascade
+
+- User reports the slider below the selected Steam tab is delayed until all cards reappear. Preview.8 deliberately hid indicator until final handoff.
+- Preview.9 schedules indicator opacity with the selected card's own delay (+28ms, 105ms fade), stops native spring during the cascade, and resumes normal indicator at handoff.
+- Status: mitigation published; live validation pending.

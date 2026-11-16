@@ -79,3 +79,8 @@ User approved the native address wave and requested the Bunny Cascade visual com
 ### Stabilization checkpoint — preview.8
 
 Bunny Cascade v2 addresses reported card overlaps, merged impulses, reveal flicker and group-radius discontinuity (OP-008/009/010). Preserve approved address wave. Validate before Hub; no changes to workspace or extension plan.
+
+
+### Stabilization checkpoint — preview.9
+
+User requests plain tab hiding during address opening, Bunny only on close, and early active-tab underline. Replace expensive shared timeline with linear-size local effects; validate real FPS before moving to Hub. Approved native address wave and other roadmap decisions remain unchanged.
