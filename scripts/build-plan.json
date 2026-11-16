@@ -74,6 +74,14 @@
       "kind": "esm-inline"
     },
     {
+      "path": "src/algorithms/drag-lifecycle.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/interactions/drag-engine.js.part",
+      "kind": "section"
+    },
+    {
       "path": "src/hub/controller.js.part",
       "kind": "section"
     },

@@ -1079,6 +1079,166 @@ function installTabStrip() {
     const w=Math.round(width*.72),ht=Math.round(height*.74);
     return {x:left+Math.floor((width-w)/2),y:top+Math.floor((height-ht)/2),width:w,height:ht,mode:"center"};
   }
+  // One owner/token per window, invalidated before callbacks run. A late
+  // pointerup, dragend or timeout cannot complete a cancelled/new gesture.
+  function createDragLifecycle(){
+    let active=null,sequence=0;
+    return {
+      current:()=>active,
+      begin(kind,handlers={}){
+        if(active) return null;
+        const token=++sequence;
+        active={kind,token,...handlers};return token;
+      },
+      owns(token,kind){return !!active&&active.token===token&&(!kind||active.kind===kind);},
+      finish(token){
+        if(!active||active.token!==token)return false;
+        active=null;return true;
+      },
+      cancel(reason,token=active?.token){
+        if(!active||active.token!==token)return false;
+        const previous=active;active=null;previous.onCancel?.(reason);return true;
+      }
+    };
+  }
+  function dragPointerSignal(event,pointerId){
+    if(event.pointerId!==pointerId)return "ignore";
+    if(event.type==="pointercancel"||event.type==="lostpointercapture")return "cancel";
+    if(event.type==="pointerup")return event.button===0?"drop":"cancel";
+    if(event.type==="pointermove"&&!(event.buttons&1))return "cancel";
+    return event.type==="pointermove"?"move":"ignore";
+  }
+  function dragInterruptionKey(event){
+    return event.key==="Escape"||event.key==="PrintScreen"||
+      ((event.metaKey||event.osKey)&&event.shiftKey&&String(event.key).toLowerCase()==="s");
+  }
+  // Drag Engine: lifecycle only. Geometry/rendering and native tab
+  // operations remain separate. No polling while idle.
+  const dragLifecycle=createDragLifecycle();
+  let nativeDragToken=null,dragWatchTimer=0,dragMissingSessions=0,dragFallbackTimer=0;
+  const dragService=()=>Cc["@mozilla.org/widget/dragservice;1"].getService(Ci.nsIDragService);
+  function stopNativeDragWatch(){
+    if(dragWatchTimer)window.clearTimeout(dragWatchTimer);
+    dragWatchTimer=0;dragMissingSessions=0;
+    if(dragFallbackTimer)window.clearTimeout(dragFallbackTimer);dragFallbackTimer=0;
+  }
+  function watchNativeDrag(token){
+    stopNativeDragWatch();
+    const check=()=>{
+      dragWatchTimer=0;
+      if(!dragLifecycle.owns(token,"tab"))return;
+      // A parent-process native session spans browser windows. A short
+      // grace period avoids transient gaps at native drag startup/teardown.
+      try{
+        const service=dragService();
+        if(typeof service.getCurrentSession==="function"){
+          if(service.getCurrentSession(window))dragMissingSessions=0;
+          else if(++dragMissingSessions>=3){dragLifecycle.cancel("native-session-ended",token);return;}
+        }
+      }catch{dragMissingSessions=0;}
+      if(dragLifecycle.owns(token,"tab"))dragWatchTimer=window.setTimeout(check,250);
+    };
+    dragWatchTimer=window.setTimeout(check,250);
+  }
+  function cancelNativeDrag(reason){
+    nativeDragToken=null;stopNativeDragWatch();
+    dragHandled=true;dragStartPoint=null;draggedTab=null;draggedGroup=null;
+    // Do not reopen the start-page search after an interrupted OS gesture.
+    dragSearch=null;pointerSearch=null;
+    if(restoreSearchTimer)window.clearTimeout(restoreSearchTimer);restoreSearchTimer=0;
+    try{endDragVisual();}finally{
+      // Remove the source's temporary shifts in other participating windows.
+      try{
+        const wins=Services.wm.getEnumerator("navigator:browser");
+        while(wins.hasMoreElements()){
+          const win=wins.getNext();
+          if(win!==window&&!win.closed)win[DRAG_CONTROLLER]?.clearIncoming?.();
+        }
+      }catch{}
+    }
+  }
+  function startNativeDragLifecycle(){
+    if(dragLifecycle.current())dragLifecycle.cancel("superseded");
+    nativeDragToken=dragLifecycle.begin("tab",{onCancel:cancelNativeDrag});
+    if(nativeDragToken!==null)watchNativeDrag(nativeDragToken);
+    return nativeDragToken!==null;
+  }
+  function finishNativeDragLifecycle(){
+    const token=nativeDragToken;nativeDragToken=null;stopNativeDragWatch();
+    return token!==null&&dragLifecycle.finish(token);
+  }
+  function cancelActiveDrag(reason){return dragLifecycle.cancel(reason);}
+  function installDragEngine(){
+    const capture=true,handlers=[];
+    const listen=(node,type,fn)=>{node.addEventListener(type,fn,capture);handlers.push([node,type,fn]);};
+    function pointer(event){
+      const current=dragLifecycle.current();
+      if(!current||current.kind!=="workspace"||!event.isTrusted)return;
+      const signal=dragPointerSignal(event,current.pointerId);
+      if(signal==="cancel")dragLifecycle.cancel(event.type,current.token);
+      else if(signal==="move")current.onMove?.(event);
+      else if(signal==="drop")current.onUp?.(event);
+    }
+    function freshPointer(event){
+      if(event.isTrusted&&dragLifecycle.current())cancelActiveDrag("new-pointerdown");
+    }
+    function mouseFallback(event){
+      if(!event.isTrusted)return;
+      const current=dragLifecycle.current();
+      if(current?.kind==="workspace"&&(event.type==="mouseup"||!(event.buttons&1)))
+        dragLifecycle.cancel("mouse-release-without-pointerup",current.token);
+      // Native HTML DnD owns its own button state: drag events often report
+      // buttons=0. Never infer a tab drop from mousemove.
+    }
+    function keyboard(event){
+      if(!event.isTrusted||!dragLifecycle.current()||!dragInterruptionKey(event))return;
+      const kind=dragLifecycle.current().kind;
+      cancelActiveDrag("keyboard-interruption");
+      if(event.key==="Escape"&&kind==="workspace"){event.preventDefault();event.stopImmediatePropagation();}
+      // Let Gecko/OS receive Escape for a native tab drag and screenshot keys.
+    }
+    function focusLost(event){
+      // Descendant focus transitions must not cancel an active gesture.
+      if(event.type==="blur"&&event.target!==window&&event.target!==document)return;
+      // Native DnD can move across windows without ending its OS session.
+      // Cancel the workspace pointer gesture immediately; for tab drag,
+      // hide the transient chrome and let its session watchdog/dragend own
+      // completion. Explicit OS interruption keys cancel both.
+      if(dragLifecycle.current()?.kind==="workspace")cancelActiveDrag("focus-lost");
+      else if(dragLifecycle.current()?.kind==="tab"){
+        clearPlacementPreview(true);
+        // Deactivation can also be an ordinary native cross-window drag.
+        // Do not commit/abort solely on focus change while the OS owns it.
+      }
+    }
+    function hidden(){if(document.hidden)cancelActiveDrag("document-hidden");}
+    function nativeEnd(event){
+      const current=dragLifecycle.current();
+      if(current?.kind!=="tab"||!event.isTrusted)return;
+      // The source node's own dragend/drop listeners must run first.
+      // A fallback timeout is token-scoped if they never run.
+      if(dragFallbackTimer)window.clearTimeout(dragFallbackTimer);
+      dragFallbackTimer=window.setTimeout(()=>{
+        dragFallbackTimer=0;
+        dragLifecycle.cancel("unhandled-native-end",current.token);
+      },0);
+    }
+    for(const type of ["pointermove","pointerup","pointercancel","lostpointercapture"])listen(window,type,pointer);
+    listen(window,"pointerdown",freshPointer);
+    listen(window,"mousemove",mouseFallback);listen(window,"mouseup",mouseFallback);
+    listen(window,"keydown",keyboard);
+    listen(window,"blur",focusLost);listen(window,"deactivate",focusLost);
+    listen(document,"visibilitychange",hidden);listen(window,"pagehide",()=>cancelActiveDrag("pagehide"));
+    listen(window,"dragend",nativeEnd);listen(window,"drop",nativeEnd);
+    return ()=>{
+      for(const [node,type,fn] of handlers)node.removeEventListener(type,fn,capture);
+      cancelActiveDrag("unload");stopNativeDragWatch();
+    };
+  }
+  let releaseDragEngine=()=>{};
+  // Cross-monitor geometry is still unvalidated on physical mixed-DPI displays.
+  // Keep the faulty native popup/forced placement disabled during Drag Engine stabilization.
+  const CROSS_MONITOR_SNAP_ENABLED=false;
   // Shared monitor work-area geometry and experimental chrome preview.
   let placementPreview=null,placementLabel=null,placementKey="";
   function desktopDisplayAt(x,y){
@@ -1101,6 +1261,7 @@ function installTabStrip() {
     if(remove){placementPreview?.remove();placementPreview=placementLabel=null;}
   }
   function showPlacementPreview(x,y,label){
+    if(!CROSS_MONITOR_SNAP_ENABLED){if(placementPreview)clearPlacementPreview(true);return;}
     if(pointInSourceWindow(x,y)){clearPlacementPreview();return;}
     const p=placementAt(x,y);if(!p){clearPlacementPreview();return;}
     const key=[p.x,p.y,p.width,p.height,p.mode,label].join(":");
@@ -1122,7 +1283,7 @@ function installTabStrip() {
     }catch(error){clearPlacementPreview(true);console.warn("[OnePlane] Snap preview unavailable:",error);}
   }
   function placeNativeWindow(win,p){
-    if(!win||win.closed||!p)return;
+    if(!CROSS_MONITOR_SNAP_ENABLED||!win||win.closed||!p)return;
     try{
       if(win.windowState===win.STATE_MAXIMIZED||win.windowState===win.STATE_MINIMIZED)win.restore();
       win.moveTo(p.x,p.y);win.resizeTo(p.width,p.height);
@@ -1130,7 +1291,7 @@ function installTabStrip() {
     }catch(error){console.warn("[OnePlane] Window placement:",error);}
   }
   function placeAfterStartup(win,p){
-    if(!win||!p)return;
+    if(!CROSS_MONITOR_SNAP_ENABLED||!win||!p)return;
     if(win.gBrowserInit?.delayedStartupFinished){placeNativeWindow(win,p);return;}
     let timer=0;
     const cleanup=()=>{Services.obs.removeObserver(observer,"browser-delayed-startup-finished");win.removeEventListener("unload",cleanup);if(timer)window.clearTimeout(timer);};
@@ -1270,10 +1431,6 @@ function installTabStrip() {
         if(space.active)entry.append(make("span","op-hub-current","•"));
         entry.addEventListener("click",()=>{if(window.performance.now()>=suppressClickUntil)void select(space.id);});
         entry.addEventListener("pointerdown",event=>beginDrag(event,space.id,entry));
-        entry.addEventListener("pointermove",moveDrag);
-        entry.addEventListener("pointerup",endDrag);
-        entry.addEventListener("pointercancel",cancelDrag);
-        entry.addEventListener("lostpointercapture",cancelDrag);
         entry.addEventListener("contextmenu",event=>{event.preventDefault();event.stopPropagation();if(!busy){confirmation=null;contextId=contextId===space.id?null:space.id;render();}});
         spaces.append(entry);
         if(contextId===space.id)spaces.append(workspaceMenu(space,snapshot));
@@ -1372,31 +1529,53 @@ function installTabStrip() {
       return hubOtherDisplay(source,dest,x,y)?hubSnapRect(dest,x,y):null;
     }
     function beginDrag(event,id,entry){
-      if(event.button!==0||busy||projectionBusy)return;
-      drag={id,entry,pointer:event.pointerId,x:event.screenX,y:event.screenY,moved:false};
-      try{entry.setPointerCapture(event.pointerId);}catch{drag=null;}
+      if(!event.isTrusted||event.button!==0||!(event.buttons&1)||busy||projectionBusy||destroyed||!open)return;
+      if(dragLifecycle.current())cancelActiveDrag("superseded");
+      const token=dragLifecycle.begin("workspace",{pointerId:event.pointerId,onMove:moveDrag,onUp:endDrag,onCancel:()=>cleanupDrag()});
+      if(token===null)return;
+      drag={id,entry,token,pointer:event.pointerId,x:event.screenX,y:event.screenY,moved:false};
+      try{entry.setPointerCapture(event.pointerId);}catch{dragLifecycle.cancel("capture-failed",token);}
     }
     function moveDrag(event){
-      if(!drag||event.pointerId!==drag.pointer)return;
+      if(!drag||!dragLifecycle.owns(drag.token,"workspace")||event.pointerId!==drag.pointer)return;
+      if(!(event.buttons&1)||!drag.entry.isConnected){cancelDrag();return;}
       if(!drag.moved&&Math.hypot(event.screenX-drag.x,event.screenY-drag.y)>=9){
         drag.moved=true;drag.entry.setAttribute("data-op-dragging","true");
-        status.textContent="Drag to another monitor and release.";
+        status.textContent="Drag outside the browser and release to open a synced window.";
       }
-      if(drag.moved){event.preventDefault();const label=manager()?.getWorkspaceFromId(drag.id)?.name||"Workspace";showDragBadge(event,label);showPlacementPreview(event.screenX,event.screenY,label); }
+      if(drag.moved){
+        event.preventDefault();
+        const label=manager()?.getWorkspaceFromId(drag.id)?.name||"Workspace";
+        showDragBadge(event,label);showPlacementPreview(event.screenX,event.screenY,label);
+      }
     }
-    function cancelDrag(event){
-      if(!drag||(event&&event.pointerId!==drag.pointer))return;
-      const d=drag;drag=null;hideDragBadge();clearPlacementPreview();d.entry.removeAttribute("data-op-dragging");
+    function cleanupDrag(){
+      const d=drag;drag=null;
+      hideDragBadge();clearPlacementPreview(true);
+      if(!d)return;
+      d.entry.removeAttribute("data-op-dragging");
       if(d.moved){suppressClickUntil=window.performance.now()+400;status.textContent="";}
       try{if(d.entry.hasPointerCapture(d.pointer))d.entry.releasePointerCapture(d.pointer);}catch{}
     }
+    function cancelDrag(){
+      if(drag){const token=drag.token;if(!dragLifecycle.cancel("workspace-cancel",token))cleanupDrag();}
+      else cleanupDrag();
+    }
     function endDrag(event){
-      if(!drag||event.pointerId!==drag.pointer)return;
-      const d=drag,point=monitorAt(event.screenX,event.screenY);cancelDrag(event);
+      if(!drag||event.pointerId!==drag.pointer||!dragLifecycle.owns(drag.token,"workspace"))return;
+      const d=drag;
+      if(!event.isTrusted||event.button!==0||!d.entry.isConnected){cancelDrag();return;}
+      const outside=Number.isFinite(event.screenX)&&Number.isFinite(event.screenY)&&
+        !(event.screenX===0&&event.screenY===0)&&!pointInSourceWindow(event.screenX,event.screenY);
+      const point=CROSS_MONITOR_SNAP_ENABLED&&outside?monitorAt(event.screenX,event.screenY):null;
+      if(!dragLifecycle.finish(d.token))return;
+      cleanupDrag();
       if(!d.moved)return;
       event.preventDefault();event.stopPropagation();
-      if(point)void project(d.id,point);
-      else status.textContent="Release on another monitor, or use Open in another window.";
+      // No forced monitor rectangle until the Display Engine is validated.
+      // A genuine external release still opens a normal native synced window.
+      if(outside)void project(d.id,point);
+      else status.textContent="Release outside the browser, or use Open in another window.";
     }
     async function project(id,display){
       if(projectionBusy||busy||destroyed)return;
@@ -1511,9 +1690,9 @@ function installTabStrip() {
       event.preventDefault();event.stopPropagation();
       if(drag){cancelDrag();return;}if(confirmation){confirmation=null;render();return;}if(contextId){contextId=null;render();return;}close(true);
     }
-    function changed(){if(open){if(!drag)render();scheduleHubGeometry();}}
+    function changed(){if(open){if(drag&&!manager()?.getWorkspaceFromId(drag.id))cancelDrag();if(!drag)render();scheduleHubGeometry();}}
     function onMode(){if(!supported())close(false,true);else if(open){setHold(true);changed();}}
-    function deactivate(){if(open&&!busy&&!drag&&!projectionBusy)close();}
+    function deactivate(){if(drag)cancelDrag();if(open&&!busy&&!projectionBusy)close();}
     function toggleMode(){
       const cmd=command();if(typeof cmd?.doCommand!=="function"||!open)return;
       setHold(true);
@@ -2045,7 +2224,7 @@ function installTabStrip() {
   }
   function onCompactChanged() {
     hub.onMode();
-    if(!hoverSupported())closeNativeTabMenu();
+    if(!hoverSupported()){cancelActiveDrag("unsupported-layout");closeNativeTabMenu();}
     if(hoverSupported())ensureWindowCaptions();
     else restoreWindowCaptions();
     if (!hoverSupported()) { clearHover(); clearTabHover(); releaseAddressHold(); clearAddressAnimation(); addressWasOpen = false; }
@@ -2804,6 +2983,7 @@ function installTabStrip() {
     const image = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
     if (!image) { event.preventDefault(); return; }
     cancelInsertion();
+    if(dragLifecycle.current())cancelActiveDrag("superseded");
     const grabbed = image.getBoundingClientRect();
     dragGrabRatio = Math.max(0,Math.min(1,(event.clientX-grabbed.left)/Math.max(1,grabbed.width)));
     dragGrabY = Math.max(0,Math.min(1,(event.clientY-grabbed.top)/Math.max(1,grabbed.height)));
@@ -2816,6 +2996,7 @@ function installTabStrip() {
       event.preventDefault();
       return;
     }
+    if(!startNativeDragLifecycle()){event.preventDefault();return;}
     dragSearch = pointerSearch?.tab === browser.selectedTab ? pointerSearch : readStartupSearch();
     pointerSearch = null;
     groupPullLayout = null;
@@ -2844,9 +3025,7 @@ function installTabStrip() {
       event.stopPropagation();
     } catch (error) {
       event.preventDefault();
-      endDragVisual();
-      draggedTab = null;
-      draggedGroup = null;
+      cancelActiveDrag("native-start-failed");
       console.error("[OnePlane] Tab drag start:", error);
     }
   }
@@ -2977,6 +3156,8 @@ function installTabStrip() {
   }
   function onDragEnd(event, tab) {
     const dt = event.dataTransfer;
+    // Ignore late or duplicate dragend after cancel/handled drop.
+    if(!finishNativeDragLifecycle())return;
     const handled = dragHandled;
     const wasGroup = Boolean(draggedGroup);
     const start = dragStartPoint;
@@ -3000,12 +3181,9 @@ function installTabStrip() {
       // Native session adoption preserves the live browser, history, audio
       // and private-window state. Zen chooses its native window-sync mode.
       if (isSplit(tab) && !unsplitTab(tab)) return;
-      const p=placementAt(x,y);
-      const win=browser.replaceTabWithWindow(tab, {
-        replaceLastTab: true, screenX:p?.x??x-40,screenY:p?.y??y-20,
-        outerWidth:p?.width??Math.min(window.outerWidth,1200),
-        outerHeight:p?.height??Math.min(window.outerHeight,850)
-      });
+      const p=CROSS_MONITOR_SNAP_ENABLED?placementAt(x,y):null;
+      const features=p?{screenX:p.x,screenY:p.y,outerWidth:p.width,outerHeight:p.height}:{};
+      const win=browser.replaceTabWithWindow(tab,{replaceLastTab:true,...features});
       if(win&&p)placeAfterStartup(win,p);
     } catch (error) { console.error("[OnePlane] Detach tab:", error); }
   }
@@ -3014,11 +3192,17 @@ function installTabStrip() {
     group: () => draggedGroup,
     outside: event => setDragImageMode("outside",event),
     preview: event => {if(draggedTab&&!draggedGroup)showPlacementPreview(event.screenX,event.screenY,"Tab");},
+    clearIncoming: () => {
+      if(draggedTab||dead)return;
+      clearLiveDrag();clearDropMarker();releaseDragReveal();refreshIndicator();
+    },
     markHandled: () => {
+      if(!finishNativeDragLifecycle())return;
       dragHandled = true;
       endDragVisual();
       draggedTab = null;
       draggedGroup = null;
+      dragStartPoint=null;
     }
   };
   window[DRAG_CONTROLLER] = dragController;
@@ -3570,6 +3754,7 @@ function installTabStrip() {
     clearHover();
     releaseAddressHold();
     clearTabHover();
+    releaseDragEngine();
     endDragVisual();
     cancelInsertion();
     draggedTab = null;
@@ -3649,6 +3834,7 @@ function installTabStrip() {
   try {
     url.after(row);
     hub.ensure();
+    releaseDragEngine=installDragEngine();
     try{releaseWorkspaceLinkScope=installWorkspaceLinkScope();}catch(error){console.warn("[OnePlane] Workspace link isolation:",error);}
     target.prepend(leftSpacer);
     row.after(rightSpacer);

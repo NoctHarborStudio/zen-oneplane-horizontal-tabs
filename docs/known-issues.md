@@ -110,3 +110,15 @@ Preview.13 user confirms workspace-local opening, Compact retention and existing
 ## OP-017 — cross-monitor drag and Hub speed
 
 User reports ghost duplication on re-entry, overlapping drag motion, missing monitor placement preview, unwanted startup New Tab and too-fast Hub. Preview.15–16 include single external drag image, bounded reinsertion, empty-page drop, snap-style monitor preview, carry badge, slower Hub and guarded startup cleanup. Runtime checks pending. True live two-window same-tab rendering is not implemented.
+
+## OP-018 — stale drag state after OS screenshot / lost release
+
+Reported in preview.16: a workspace drag survives system screenshot capture, preview stays on screen and the carried badge follows the pointer after release until a second click. Preview.17 separates gesture ownership from display placement, invalidates tokens before cleanup, cancels pointer gestures on missing primary button, capture loss, window blur/deactivation, OS screenshot shortcut, new pointer press and teardown. Native tab drag uses native dragend/drop fallback and a bounded active-only session check. Live Windows test pending; do not mark fixed yet.
+
+## OP-019 — mixed-DPI monitor preview/placement
+
+Preview.16 user reports opaque oversized preview, incorrect side/corner/monitor, and maximized drop opening an off-screen window. Likely coordinate-unit and popup/window contract mismatch; not yet measured on actual displays. Preview.17 disables custom Snap preview/forced placement temporarily; ordinary native window opening remains. Display & Snap Engine is the next dedicated milestone, not fixed in preview.17.
+
+## OP-020 — remaining Split View drag overlap
+
+User reports slider/cards still overlap during Split View drag. Previous mitigation did not resolve it. User explicitly requested deferral rather than another animation rewrite; leave Split View logic/animation unchanged until Fluid UI/final polish.

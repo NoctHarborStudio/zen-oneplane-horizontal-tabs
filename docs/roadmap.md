@@ -105,3 +105,11 @@ Implemented experimental native synced-window projection, cross-display pointer 
 ## Preview.15–16 — drag feedback and live projection distinction
 
 Cross-monitor placement now has a Snap-style OnePlane preview, fixed center target, workspace carry badge and work-area geometry. Live simultaneous same-tab rendering (scroll, media playback and input) remains an architectural milestone distinct from Zen's focus-driven docshell transfer. Investigate a single authoritative browser surface with remote view/input, DRM, cross-origin and accessibility, avoiding duplicate playback or session state. No arbitrary page input forwarding or duplicate sessions introduced.
+
+## Preview.17 — stabilization order agreed after preview.16 feedback
+
+1. Drag Engine: one tokenized gesture per window, explicit cancel/finish, event ownership and complete cleanup on interrupted input. Keep Split View visuals unchanged; temporarily disable broken external Snap preview and forced placement. Validate real screenshot interruption, native drag and workspace drag before next milestone.
+2. Display & Snap Engine: investigate native Windows Snap feasibility and correct monitor coordinate spaces/DPI, work area, corner classification, one preview/commit geometry and actual window placement. Re-enable only after runtime tests.
+3. Finish Workspace Engine (Free designation, rename/icon/color/order and safe native management).
+4. Research Live Workspace Projection feasibility, without duplicating page sessions or audio.
+5. Memory Management (600s, multiwindow safety); Extension Dock; Portrait Mode; Library; interactions/integration and Fluid UI. Defer remaining Split View overlap (OP-020) to final animation polish as requested.

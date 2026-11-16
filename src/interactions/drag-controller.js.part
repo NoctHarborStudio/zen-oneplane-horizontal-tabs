@@ -40,6 +40,7 @@
     const image = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
     if (!image) { event.preventDefault(); return; }
     cancelInsertion();
+    if(dragLifecycle.current())cancelActiveDrag("superseded");
     const grabbed = image.getBoundingClientRect();
     dragGrabRatio = Math.max(0,Math.min(1,(event.clientX-grabbed.left)/Math.max(1,grabbed.width)));
     dragGrabY = Math.max(0,Math.min(1,(event.clientY-grabbed.top)/Math.max(1,grabbed.height)));
@@ -52,6 +53,7 @@
       event.preventDefault();
       return;
     }
+    if(!startNativeDragLifecycle()){event.preventDefault();return;}
     dragSearch = pointerSearch?.tab === browser.selectedTab ? pointerSearch : readStartupSearch();
     pointerSearch = null;
     groupPullLayout = null;
@@ -80,9 +82,7 @@
       event.stopPropagation();
     } catch (error) {
       event.preventDefault();
-      endDragVisual();
-      draggedTab = null;
-      draggedGroup = null;
+      cancelActiveDrag("native-start-failed");
       console.error("[OnePlane] Tab drag start:", error);
     }
   }

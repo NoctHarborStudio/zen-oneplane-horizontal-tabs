@@ -1,3 +1,6 @@
+  // Cross-monitor geometry is still unvalidated on physical mixed-DPI displays.
+  // Keep the faulty native popup/forced placement disabled during Drag Engine stabilization.
+  const CROSS_MONITOR_SNAP_ENABLED=false;
   // Shared monitor work-area geometry and experimental chrome preview.
   let placementPreview=null,placementLabel=null,placementKey="";
   function desktopDisplayAt(x,y){
@@ -20,6 +23,7 @@
     if(remove){placementPreview?.remove();placementPreview=placementLabel=null;}
   }
   function showPlacementPreview(x,y,label){
+    if(!CROSS_MONITOR_SNAP_ENABLED){if(placementPreview)clearPlacementPreview(true);return;}
     if(pointInSourceWindow(x,y)){clearPlacementPreview();return;}
     const p=placementAt(x,y);if(!p){clearPlacementPreview();return;}
     const key=[p.x,p.y,p.width,p.height,p.mode,label].join(":");
@@ -41,7 +45,7 @@
     }catch(error){clearPlacementPreview(true);console.warn("[OnePlane] Snap preview unavailable:",error);}
   }
   function placeNativeWindow(win,p){
-    if(!win||win.closed||!p)return;
+    if(!CROSS_MONITOR_SNAP_ENABLED||!win||win.closed||!p)return;
     try{
       if(win.windowState===win.STATE_MAXIMIZED||win.windowState===win.STATE_MINIMIZED)win.restore();
       win.moveTo(p.x,p.y);win.resizeTo(p.width,p.height);
@@ -49,7 +53,7 @@
     }catch(error){console.warn("[OnePlane] Window placement:",error);}
   }
   function placeAfterStartup(win,p){
-    if(!win||!p)return;
+    if(!CROSS_MONITOR_SNAP_ENABLED||!win||!p)return;
     if(win.gBrowserInit?.delayedStartupFinished){placeNativeWindow(win,p);return;}
     let timer=0;
     const cleanup=()=>{Services.obs.removeObserver(observer,"browser-delayed-startup-finished");win.removeEventListener("unload",cleanup);if(timer)window.clearTimeout(timer);};
@@ -189,10 +193,6 @@
         if(space.active)entry.append(make("span","op-hub-current","•"));
         entry.addEventListener("click",()=>{if(window.performance.now()>=suppressClickUntil)void select(space.id);});
         entry.addEventListener("pointerdown",event=>beginDrag(event,space.id,entry));
-        entry.addEventListener("pointermove",moveDrag);
-        entry.addEventListener("pointerup",endDrag);
-        entry.addEventListener("pointercancel",cancelDrag);
-        entry.addEventListener("lostpointercapture",cancelDrag);
         entry.addEventListener("contextmenu",event=>{event.preventDefault();event.stopPropagation();if(!busy){confirmation=null;contextId=contextId===space.id?null:space.id;render();}});
         spaces.append(entry);
         if(contextId===space.id)spaces.append(workspaceMenu(space,snapshot));
@@ -291,31 +291,53 @@
       return hubOtherDisplay(source,dest,x,y)?hubSnapRect(dest,x,y):null;
     }
     function beginDrag(event,id,entry){
-      if(event.button!==0||busy||projectionBusy)return;
-      drag={id,entry,pointer:event.pointerId,x:event.screenX,y:event.screenY,moved:false};
-      try{entry.setPointerCapture(event.pointerId);}catch{drag=null;}
+      if(!event.isTrusted||event.button!==0||!(event.buttons&1)||busy||projectionBusy||destroyed||!open)return;
+      if(dragLifecycle.current())cancelActiveDrag("superseded");
+      const token=dragLifecycle.begin("workspace",{pointerId:event.pointerId,onMove:moveDrag,onUp:endDrag,onCancel:()=>cleanupDrag()});
+      if(token===null)return;
+      drag={id,entry,token,pointer:event.pointerId,x:event.screenX,y:event.screenY,moved:false};
+      try{entry.setPointerCapture(event.pointerId);}catch{dragLifecycle.cancel("capture-failed",token);}
     }
     function moveDrag(event){
-      if(!drag||event.pointerId!==drag.pointer)return;
+      if(!drag||!dragLifecycle.owns(drag.token,"workspace")||event.pointerId!==drag.pointer)return;
+      if(!(event.buttons&1)||!drag.entry.isConnected){cancelDrag();return;}
       if(!drag.moved&&Math.hypot(event.screenX-drag.x,event.screenY-drag.y)>=9){
         drag.moved=true;drag.entry.setAttribute("data-op-dragging","true");
-        status.textContent="Drag to another monitor and release.";
+        status.textContent="Drag outside the browser and release to open a synced window.";
       }
-      if(drag.moved){event.preventDefault();const label=manager()?.getWorkspaceFromId(drag.id)?.name||"Workspace";showDragBadge(event,label);showPlacementPreview(event.screenX,event.screenY,label); }
+      if(drag.moved){
+        event.preventDefault();
+        const label=manager()?.getWorkspaceFromId(drag.id)?.name||"Workspace";
+        showDragBadge(event,label);showPlacementPreview(event.screenX,event.screenY,label);
+      }
     }
-    function cancelDrag(event){
-      if(!drag||(event&&event.pointerId!==drag.pointer))return;
-      const d=drag;drag=null;hideDragBadge();clearPlacementPreview();d.entry.removeAttribute("data-op-dragging");
+    function cleanupDrag(){
+      const d=drag;drag=null;
+      hideDragBadge();clearPlacementPreview(true);
+      if(!d)return;
+      d.entry.removeAttribute("data-op-dragging");
       if(d.moved){suppressClickUntil=window.performance.now()+400;status.textContent="";}
       try{if(d.entry.hasPointerCapture(d.pointer))d.entry.releasePointerCapture(d.pointer);}catch{}
     }
+    function cancelDrag(){
+      if(drag){const token=drag.token;if(!dragLifecycle.cancel("workspace-cancel",token))cleanupDrag();}
+      else cleanupDrag();
+    }
     function endDrag(event){
-      if(!drag||event.pointerId!==drag.pointer)return;
-      const d=drag,point=monitorAt(event.screenX,event.screenY);cancelDrag(event);
+      if(!drag||event.pointerId!==drag.pointer||!dragLifecycle.owns(drag.token,"workspace"))return;
+      const d=drag;
+      if(!event.isTrusted||event.button!==0||!d.entry.isConnected){cancelDrag();return;}
+      const outside=Number.isFinite(event.screenX)&&Number.isFinite(event.screenY)&&
+        !(event.screenX===0&&event.screenY===0)&&!pointInSourceWindow(event.screenX,event.screenY);
+      const point=CROSS_MONITOR_SNAP_ENABLED&&outside?monitorAt(event.screenX,event.screenY):null;
+      if(!dragLifecycle.finish(d.token))return;
+      cleanupDrag();
       if(!d.moved)return;
       event.preventDefault();event.stopPropagation();
-      if(point)void project(d.id,point);
-      else status.textContent="Release on another monitor, or use Open in another window.";
+      // No forced monitor rectangle until the Display Engine is validated.
+      // A genuine external release still opens a normal native synced window.
+      if(outside)void project(d.id,point);
+      else status.textContent="Release outside the browser, or use Open in another window.";
     }
     async function project(id,display){
       if(projectionBusy||busy||destroyed)return;
@@ -430,9 +452,9 @@
       event.preventDefault();event.stopPropagation();
       if(drag){cancelDrag();return;}if(confirmation){confirmation=null;render();return;}if(contextId){contextId=null;render();return;}close(true);
     }
-    function changed(){if(open){if(!drag)render();scheduleHubGeometry();}}
+    function changed(){if(open){if(drag&&!manager()?.getWorkspaceFromId(drag.id))cancelDrag();if(!drag)render();scheduleHubGeometry();}}
     function onMode(){if(!supported())close(false,true);else if(open){setHold(true);changed();}}
-    function deactivate(){if(open&&!busy&&!drag&&!projectionBusy)close();}
+    function deactivate(){if(drag)cancelDrag();if(open&&!busy&&!projectionBusy)close();}
     function toggleMode(){
       const cmd=command();if(typeof cmd?.doCommand!=="function"||!open)return;
       setHold(true);

@@ -1,0 +1,124 @@
+  // Drag Engine: lifecycle only. Geometry/rendering and native tab
+  // operations remain separate. No polling while idle.
+  const dragLifecycle=createDragLifecycle();
+  let nativeDragToken=null,dragWatchTimer=0,dragMissingSessions=0,dragFallbackTimer=0;
+  const dragService=()=>Cc["@mozilla.org/widget/dragservice;1"].getService(Ci.nsIDragService);
+  function stopNativeDragWatch(){
+    if(dragWatchTimer)window.clearTimeout(dragWatchTimer);
+    dragWatchTimer=0;dragMissingSessions=0;
+    if(dragFallbackTimer)window.clearTimeout(dragFallbackTimer);dragFallbackTimer=0;
+  }
+  function watchNativeDrag(token){
+    stopNativeDragWatch();
+    const check=()=>{
+      dragWatchTimer=0;
+      if(!dragLifecycle.owns(token,"tab"))return;
+      // A parent-process native session spans browser windows. A short
+      // grace period avoids transient gaps at native drag startup/teardown.
+      try{
+        const service=dragService();
+        if(typeof service.getCurrentSession==="function"){
+          if(service.getCurrentSession(window))dragMissingSessions=0;
+          else if(++dragMissingSessions>=3){dragLifecycle.cancel("native-session-ended",token);return;}
+        }
+      }catch{dragMissingSessions=0;}
+      if(dragLifecycle.owns(token,"tab"))dragWatchTimer=window.setTimeout(check,250);
+    };
+    dragWatchTimer=window.setTimeout(check,250);
+  }
+  function cancelNativeDrag(reason){
+    nativeDragToken=null;stopNativeDragWatch();
+    dragHandled=true;dragStartPoint=null;draggedTab=null;draggedGroup=null;
+    // Do not reopen the start-page search after an interrupted OS gesture.
+    dragSearch=null;pointerSearch=null;
+    if(restoreSearchTimer)window.clearTimeout(restoreSearchTimer);restoreSearchTimer=0;
+    try{endDragVisual();}finally{
+      // Remove the source's temporary shifts in other participating windows.
+      try{
+        const wins=Services.wm.getEnumerator("navigator:browser");
+        while(wins.hasMoreElements()){
+          const win=wins.getNext();
+          if(win!==window&&!win.closed)win[DRAG_CONTROLLER]?.clearIncoming?.();
+        }
+      }catch{}
+    }
+  }
+  function startNativeDragLifecycle(){
+    if(dragLifecycle.current())dragLifecycle.cancel("superseded");
+    nativeDragToken=dragLifecycle.begin("tab",{onCancel:cancelNativeDrag});
+    if(nativeDragToken!==null)watchNativeDrag(nativeDragToken);
+    return nativeDragToken!==null;
+  }
+  function finishNativeDragLifecycle(){
+    const token=nativeDragToken;nativeDragToken=null;stopNativeDragWatch();
+    return token!==null&&dragLifecycle.finish(token);
+  }
+  function cancelActiveDrag(reason){return dragLifecycle.cancel(reason);}
+  function installDragEngine(){
+    const capture=true,handlers=[];
+    const listen=(node,type,fn)=>{node.addEventListener(type,fn,capture);handlers.push([node,type,fn]);};
+    function pointer(event){
+      const current=dragLifecycle.current();
+      if(!current||current.kind!=="workspace"||!event.isTrusted)return;
+      const signal=dragPointerSignal(event,current.pointerId);
+      if(signal==="cancel")dragLifecycle.cancel(event.type,current.token);
+      else if(signal==="move")current.onMove?.(event);
+      else if(signal==="drop")current.onUp?.(event);
+    }
+    function freshPointer(event){
+      if(event.isTrusted&&dragLifecycle.current())cancelActiveDrag("new-pointerdown");
+    }
+    function mouseFallback(event){
+      if(!event.isTrusted)return;
+      const current=dragLifecycle.current();
+      if(current?.kind==="workspace"&&(event.type==="mouseup"||!(event.buttons&1)))
+        dragLifecycle.cancel("mouse-release-without-pointerup",current.token);
+      // Native HTML DnD owns its own button state: drag events often report
+      // buttons=0. Never infer a tab drop from mousemove.
+    }
+    function keyboard(event){
+      if(!event.isTrusted||!dragLifecycle.current()||!dragInterruptionKey(event))return;
+      const kind=dragLifecycle.current().kind;
+      cancelActiveDrag("keyboard-interruption");
+      if(event.key==="Escape"&&kind==="workspace"){event.preventDefault();event.stopImmediatePropagation();}
+      // Let Gecko/OS receive Escape for a native tab drag and screenshot keys.
+    }
+    function focusLost(event){
+      // Descendant focus transitions must not cancel an active gesture.
+      if(event.type==="blur"&&event.target!==window&&event.target!==document)return;
+      // Native DnD can move across windows without ending its OS session.
+      // Cancel the workspace pointer gesture immediately; for tab drag,
+      // hide the transient chrome and let its session watchdog/dragend own
+      // completion. Explicit OS interruption keys cancel both.
+      if(dragLifecycle.current()?.kind==="workspace")cancelActiveDrag("focus-lost");
+      else if(dragLifecycle.current()?.kind==="tab"){
+        clearPlacementPreview(true);
+        // Deactivation can also be an ordinary native cross-window drag.
+        // Do not commit/abort solely on focus change while the OS owns it.
+      }
+    }
+    function hidden(){if(document.hidden)cancelActiveDrag("document-hidden");}
+    function nativeEnd(event){
+      const current=dragLifecycle.current();
+      if(current?.kind!=="tab"||!event.isTrusted)return;
+      // The source node's own dragend/drop listeners must run first.
+      // A fallback timeout is token-scoped if they never run.
+      if(dragFallbackTimer)window.clearTimeout(dragFallbackTimer);
+      dragFallbackTimer=window.setTimeout(()=>{
+        dragFallbackTimer=0;
+        dragLifecycle.cancel("unhandled-native-end",current.token);
+      },0);
+    }
+    for(const type of ["pointermove","pointerup","pointercancel","lostpointercapture"])listen(window,type,pointer);
+    listen(window,"pointerdown",freshPointer);
+    listen(window,"mousemove",mouseFallback);listen(window,"mouseup",mouseFallback);
+    listen(window,"keydown",keyboard);
+    listen(window,"blur",focusLost);listen(window,"deactivate",focusLost);
+    listen(document,"visibilitychange",hidden);listen(window,"pagehide",()=>cancelActiveDrag("pagehide"));
+    listen(window,"dragend",nativeEnd);listen(window,"drop",nativeEnd);
+    return ()=>{
+      for(const [node,type,fn] of handlers)node.removeEventListener(type,fn,capture);
+      cancelActiveDrag("unload");stopNativeDragWatch();
+    };
+  }
+  let releaseDragEngine=()=>{};

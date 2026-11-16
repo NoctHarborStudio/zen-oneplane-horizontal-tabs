@@ -109,7 +109,7 @@
   }
   function onCompactChanged() {
     hub.onMode();
-    if(!hoverSupported())closeNativeTabMenu();
+    if(!hoverSupported()){cancelActiveDrag("unsupported-layout");closeNativeTabMenu();}
     if(hoverSupported())ensureWindowCaptions();
     else restoreWindowCaptions();
     if (!hoverSupported()) { clearHover(); clearTabHover(); releaseAddressHold(); clearAddressAnimation(); addressWasOpen = false; }

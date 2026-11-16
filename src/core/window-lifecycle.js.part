@@ -29,6 +29,7 @@
     clearHover();
     releaseAddressHold();
     clearTabHover();
+    releaseDragEngine();
     endDragVisual();
     cancelInsertion();
     draggedTab = null;
@@ -108,6 +109,7 @@
   try {
     url.after(row);
     hub.ensure();
+    releaseDragEngine=installDragEngine();
     try{releaseWorkspaceLinkScope=installWorkspaceLinkScope();}catch(error){console.warn("[OnePlane] Workspace link isolation:",error);}
     target.prepend(leftSpacer);
     row.after(rightSpacer);

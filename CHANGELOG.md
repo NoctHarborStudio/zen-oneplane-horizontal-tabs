@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0-preview.17
+
+- Extract shared tokenized Drag Engine and cancel/finish ownership for workspace and native tab gestures; clear stale visuals and ignore late input.
+- Global pointer-release/capture/focus/keyboard cleanup, native dragend fallback and active-only native session watchdog.
+- Temporarily disable faulty external Snap popup and forced monitor placement; normal native window opening remains. Display Engine next.
+- Record unresolved Split View overlap without changing its animation. Live validation pending.
+
 ## 0.2.0-preview.16
 
 - Add a visible workspace carry badge inside the source window; stabilize center placement preview.
