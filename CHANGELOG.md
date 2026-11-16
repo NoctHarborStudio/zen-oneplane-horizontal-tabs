@@ -1,3 +1,8 @@
+## 0.2.0-preview.51 — Home search handoff and regression checks
+
+- Keep the common search glyph throughout native cancellation, including the interval after Zen removes its new-tab marker.
+- Update stale window geometry tests for preview.49's client-area policy and current resize lifecycle. No window drag behavior changed.
+
 ## 0.2.0-preview.50 — Continuous Home search handoff
 
 - Unify the collapsed Home search, native search input and return shell: same glass, border, radius, header typography, icon footprint and placeholder. Remove the redundant New tab hint.

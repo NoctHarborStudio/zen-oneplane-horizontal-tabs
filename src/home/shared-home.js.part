@@ -205,11 +205,11 @@ function acquireZenHome(win, services) {
 #urlbar[data-zr-home-search][zen-floating-urlbar="true"] #urlbar-input::placeholder{
   color:var(--zh-search-label)!important;opacity:1!important;font:var(--zh-search-font)!important;
 }
-#urlbar[data-zr-home-search][zen-floating-urlbar="true"][zen-newtab]:not([searchmode]) > .urlbar-input-container::before{
+#urlbar[data-zr-home-search][zen-floating-urlbar="true"]:not([searchmode]) > .urlbar-input-container::before{
   content:"";display:block;width:17px;height:17px;flex:0 0 17px;background:var(--zh-search-label);
   mask:var(--zh-search-icon) center/contain no-repeat;pointer-events:none;
 }
-#urlbar[data-zr-home-search][zen-floating-urlbar="true"][zen-newtab]:not([searchmode]) #identity-box{display:none!important}
+#urlbar[data-zr-home-search][zen-floating-urlbar="true"]:not([searchmode]) #identity-box{display:none!important}
 #urlbar[data-zr-home-search][zen-floating-urlbar="true"] .urlbarView{
   background:transparent!important;border:0!important;outline:0!important;box-shadow:none!important;border-radius:0 0 14px 14px!important;
   flex-shrink:0!important;

@@ -13,9 +13,9 @@ test("plus follows actual right slots and preserves expansion room",()=>{
  assert.equal(calc([36,100]),145);assert.equal(calc([36,36],144),225);
  assert.ok(tabs.includes("left:min(calc(100% - var(--op-tab))"));
 });
-test("native draggable Home backdrop excludes interactive content",()=>{
- assert.ok(home.includes("font:menu;-moz-window-dragging:drag"));
- assert.ok(home.includes(".zh-content,button,input,summary,a,[draggable=true]){-moz-window-dragging:no-drag!important}"));
+test("Home backdrop and all its content remain client area",()=>{
+ assert.ok(home.includes("#zen-shared-home,#zen-shared-home *{-moz-window-dragging:no-drag!important}"));
+ assert.doesNotMatch(home,/-moz-window-dragging:\s*drag\b/);
  assert.ok(!home.includes("moveTo("));
 });
 test("toolbar drag spaces have nonzero dimensions, controls stay non-draggable",()=>{
@@ -32,6 +32,6 @@ test("window resize and native size mode reflow are lifecycle-owned",()=>{
  }
  const code=visibility.slice(visibility.indexOf("function onWindowGeometryChanged("),visibility.indexOf("function onCompactChanged("));
  const calls=[];
- const run=new Function("calls",code+'let dead=false,hoverTab={},addressTransition=null,addressSettling=false,cascadeState="hidden";const row={hasAttribute:()=>false};function clearTabHover(){calls.push("hover")}function nativeInlineOpen(){return false}function addressBar(){}function resetTabCascade(){calls.push("cascade")}function onCompactChanged(){calls.push("layout")}function schedule(){calls.push("sync")}onWindowGeometryChanged();')(calls);
- assert.deepEqual(calls,["hover","cascade","layout","sync"]);
+ const run=new Function("calls",code+'let dead=false,hoverTab={},addressTransition=null,addressSettling=false,cascadeState="hidden";const row={hasAttribute:()=>false};function clearTabHover(){calls.push("hover")}function nativeInlineOpen(){return false}function addressBar(){}function resetTabCascade(){calls.push("cascade")}function movePageActions(){calls.push("actions")}function centerToolbar(){calls.push("center")}function onCompactChanged(){calls.push("layout")}function schedule(){calls.push("sync")}function revealSelectedInStrip(){calls.push("reveal")}const window={requestAnimationFrame(fn){fn()}};onWindowGeometryChanged();')(calls);
+ assert.deepEqual(calls,["hover","cascade","actions","center","layout","sync","reveal"]);
 });
