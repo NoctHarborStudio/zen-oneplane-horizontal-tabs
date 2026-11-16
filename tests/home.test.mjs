@@ -46,6 +46,7 @@ test("Home native search preserves surface on cancel and ignores stale close",()
  const run=new Function("win","panel","content",code+`
  let open=true,searchToken=null,searchBar=null,searchFrame=0,searchMotion=null,searchTimer=0,closed=0;
  let searchGeometry=null,searchLastHeight=0,searchCurrentHeight=0,searchClosing=false,searchReturn=null,searchReturnFrame=0;
+ let searchInput=null,searchOriginalPlaceholder=null,searchSessionLabel=null;const doc={getElementById:()=>null};
  function close(){open=false;closed++;finishSearchVisual()}
  function leaveHome(){close()}
  function ensurePrimaryHome(){}
@@ -63,7 +64,7 @@ test("Home native search preserves surface on cancel and ignores stale close",()
  a.search();bar.removeAttribute("zen-newtab");a.onSearchClosed({detail:{closeSeq:42,onElementPicked:true}});assert.equal(a.closed,1);
  const geometry=a.homeSearchGeometry({left:10,top:100,width:600,height:56},1000,800);
  assert.deepEqual(geometry,{left:12,top:100,width:600,header:56,room:684});
- assert.equal(a.homeSearchGeometry({left:20,top:500,width:600,height:56},1000,800).top,324);
+ assert.equal(a.homeSearchGeometry({left:20,top:500,width:600,height:56},1000,800).top,500);
  assert.equal(a.homeSearchGeometry({left:20,top:100,width:600,height:56},350,800).width,326);
  assert.equal(a.revealValue(56,400,0),56);
  assert.equal(a.revealValue(56,400,1),400);
@@ -220,7 +221,7 @@ test("Home icons request larger cached sizes and use local Steam vector",()=>{
  assert.ok(icons("https://notgmail.com/",30).startsWith("page-icon:"));
 });
 test("Home search uses single scoped glass frame and actual height reveal",()=>{
- assert.ok(core.includes('visibility:hidden;pointer-events:none;transition:none'));
+ assert.ok(core.includes('[data-zh-search-ready] .zh-search{visibility:hidden}'));
  assert.ok(core.includes('background:var(--zh-glass)!important;border:1px solid var(--zh-stroke)!important'));
  assert.ok(core.includes('height:var(--zh-reveal-height,var(--zh-search-header,56px))!important'));
  assert.ok(core.includes('clip-path:none!important;transform:none!important;translate:none!important;scale:1!important'));
@@ -239,22 +240,23 @@ test("Home search waits for a real result height and animates both directions",(
  const win={requestAnimationFrame(fn){queue.set(++seq,fn);return seq;},cancelAnimationFrame(id){queue.delete(id);},matchMedia:()=>({matches:false})};
  const run=new Function("win","bar",code+`
  let open=true,searchToken={},searchBar=bar,searchFrame=0,searchClosing=false,searchLastHeight=56,searchCurrentHeight=56,searchGeometry={header:56,room:600};
+ const panel={hasAttribute:k=>attrsMock.has(k),setAttribute:(k,v)=>attrsMock.set(k,v)};const attrsMock=new Map();
  function nativeSearchOpen(){return true}
  function finishSearchMotion(){bar.removeAttribute("data-zr-home-search-motion")}
- return {start:()=>startSearchMorph(searchToken,searchGeometry),close:()=>{searchClosing=true;animateSearchHeight(searchToken,400,56,230,true,()=>{})},get current(){return searchCurrentHeight}};
+ return {start:()=>startSearchMorph(searchToken,searchGeometry),close:()=>{searchClosing=true;animateSearchHeight(searchToken,400,56,460,true,()=>{})},get current(){return searchCurrentHeight}};
  `);
  const a=run(win,bar);
  const frame=now=>{const jobs=[...queue.values()];queue.clear();for(const fn of jobs)fn(now)};
  a.start();frame(0);frame(16);assert.equal(a.current,56);
  height=400;frame(32);assert.equal(a.current,56);
  frame(48);frame(150);assert.ok(a.current>56&&a.current<400);
- frame(400);assert.equal(a.current,400);
- a.close();frame(416);frame(500);assert.ok(a.current>56&&a.current<400);
- frame(700);assert.equal(a.current,56);
+ frame(400);assert.ok(a.current>56&&a.current<400);frame(640);assert.equal(a.current,400);
+ a.close();frame(656);frame(750);assert.ok(a.current>56&&a.current<400);
+ frame(1120);assert.equal(a.current,56);
 });
 test("Home search closing preserves native ownership and has blur fallback",()=>{
  assert.ok(core.includes("bar._zenHandleUrlbarClose(false,false)"));
- assert.ok(core.includes("animateSearchHeight(token,from,g.header,230,true"));
+ assert.ok(core.includes("animateSearchHeight(token,from,g.header,460,true"));
  assert.ok(core.includes("function animateSearchReturn()"));
  assert.ok(core.includes('panel.removeAttribute("data-zh-return")'));
  assert.ok(core.includes("if(detail.onElementPicked||detail.onSwitch)leaveHome();"));
@@ -278,4 +280,16 @@ test("Home is entirely client area; native toolbar gaps retain window drag",()=>
  assert.doesNotMatch(core,/-moz-window-dragging:\s*drag\b/);
  assert.match(toolbar,/#oneplane-center-start, #oneplane-center-end\s*\{[^}]*-moz-window-dragging:\s*drag\s*!important/);
  assert.ok(layout.includes(core),"generated bundle must contain the updated Home source");
+});
+
+test("Home search handoff shares header tokens, exact anchor and no New tab label",()=>{
+ assert.ok(core.includes("--zh-search-glass:"));
+ assert.ok(core.includes("font:var(--zh-search-font)"));
+ assert.ok(core.includes('data-zr-home-search-motion="prepare"][zen-floating-urlbar="true"]{opacity:0!important}'));
+ assert.ok(core.includes('[data-zh-search-ready] .zh-search{visibility:hidden}'));
+ assert.ok(core.includes('panel.removeAttribute("data-zh-search-ready")'));
+ assert.ok(!core.includes('html("span","","New tab")'));
+ assert.ok(!core.includes("shell.style.opacity="));
+ assert.ok(core.includes("round?280:560"));
+ assert.ok(core.includes("eased=t*t*(3-2*t)"));
 });

@@ -69,10 +69,31 @@ function acquireZenHome(win, services) {
    Only the native toolbar's dedicated gaps own window dragging. */
 #zen-shared-home,#zen-shared-home *{-moz-window-dragging:no-drag!important}
 #zen-shared-home .zh-content{width:min(100%,720px);margin:auto;transition:opacity 180ms ease,translate 220ms cubic-bezier(.2,.75,.25,1)}
-#zen-shared-home .zh-search{display:flex;align-items:center;gap:12px;width:100%;height:56px;padding:0 19px;border:1px solid color-mix(in srgb,currentColor 12%,transparent);background:color-mix(in srgb,currentColor 5%,transparent);border-radius:14px;text-align:start}
-#zen-shared-home .zh-search:hover{background:color-mix(in srgb,currentColor 9%,transparent)}
-#zen-shared-home .zh-search svg{width:17px;height:17px;opacity:.7}
-#zen-shared-home .zh-search span:last-child{margin-inline-start:auto;opacity:.55;font-size:10px}
+/* The collapsed button, native editor and cancellation fallback share
+   these exact tokens. No separate hover/focus frame at the handoff. */
+:root{
+  --zh-search-color:var(--toolbox-textcolor,var(--toolbar-color,currentColor));
+  --zh-search-glass:color-mix(in srgb,var(--zh-search-color) 8%,transparent);
+  --zh-search-stroke:color-mix(in srgb,var(--zh-search-color) 14%,transparent);
+  --zh-search-label:color-mix(in srgb,var(--zh-search-color) 76%,transparent);
+  --zh-search-radius:14px;
+  --zh-search-font:400 14px system-ui,sans-serif;
+  --zh-search-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='m16 16 4 4'/%3E%3C/svg%3E");
+}
+#zen-shared-home .zh-search,#zen-home-search-return .zh-return-header{
+  display:flex;align-items:center;gap:12px;padding:0 19px;
+  font:var(--zh-search-font);color:var(--zh-search-label);text-align:start;white-space:nowrap;
+}
+#zen-shared-home .zh-search{
+  width:100%;height:56px;border:1px solid var(--zh-search-stroke);
+  background:var(--zh-search-glass);border-radius:var(--zh-search-radius);
+  transition:none;
+}
+#zen-shared-home .zh-search:hover{background:var(--zh-search-glass)}
+#zen-shared-home .zh-search svg,#zen-home-search-return .zh-return-header svg{width:17px;height:17px;flex:none;opacity:1}
+#zen-shared-home .zh-search span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+#zen-shared-home .zh-search:focus-visible{outline-offset:2px}
+@media(prefers-reduced-transparency:reduce){:root{--zh-search-glass:light-dark(#f4f4f8,#252632)}}
 #zen-shared-home .zh-section{margin-block-start:36px}
 #zen-shared-home h3{font-size:13px;font-weight:500;opacity:.68;margin:0 0 14px}
 #zen-shared-home .zh-pins{display:flex;flex-wrap:wrap;justify-content:center;gap:12px}
@@ -127,11 +148,15 @@ function acquireZenHome(win, services) {
 #zen-shared-home .zh-pin[data-drop]{outline:1px solid AccentColor;border-radius:14px}
 /* One surface: the Home button is replaced by the real native editor.
    No overlapping dummy bar and no separate native background silhouette. */
-#zen-shared-home[data-zh-search] .zh-content{opacity:0;visibility:hidden;pointer-events:none;transition:none}
+#zen-shared-home[data-zh-search] .zh-content{pointer-events:none;transition:none}
+#zen-shared-home .zh-section,#zen-shared-home .zh-footer{transition:opacity 240ms ease}
+#zen-shared-home[data-zh-search] .zh-section,#zen-shared-home[data-zh-search] .zh-footer{opacity:0;pointer-events:none}
+#zen-shared-home[data-zh-search-ready] .zh-search{visibility:hidden}
+#zen-shared-home[data-zh-search] .zh-search{outline:none!important}
 @property --zh-reveal-height{syntax:"<length>";inherits:false;initial-value:56px}
 #urlbar[data-zr-home-search][zen-floating-urlbar="true"]{
-  --zh-glass:color-mix(in srgb,var(--toolbox-textcolor,var(--toolbar-color,currentColor)) 8%,transparent);
-  --zh-stroke:color-mix(in srgb,var(--toolbox-textcolor,var(--toolbar-color,currentColor)) 14%,transparent);
+  --zh-glass:var(--zh-search-glass);
+  --zh-stroke:var(--zh-search-stroke);
   --urlbar-background-color:transparent!important;
   --urlbar-background-color-focus:transparent!important;
   --zen-urlbar-background-base:transparent!important;
@@ -146,14 +171,14 @@ function acquireZenHome(win, services) {
   --urlbar-container-padding:0px!important;
   position:fixed!important;inset:auto!important;
   left:clamp(12px,var(--zh-search-left,12px),max(12px,calc(100vw - var(--zh-search-width,720px) - 12px)))!important;
-  top:clamp(12px,var(--zh-search-top,80px),max(12px,calc(100vh - 180px)))!important;
+  top:var(--zh-search-top,80px)!important;
   width:min(var(--zh-search-width,720px),calc(100vw - 24px))!important;
   min-width:0!important;max-width:none!important;
   height:auto!important;min-height:0!important;max-height:var(--zh-search-room,calc(100vh - 96px))!important;
   margin:0!important;padding:0!important;box-sizing:border-box!important;
   position-anchor:none!important;position-area:none!important;
   background:var(--zh-glass)!important;border:1px solid var(--zh-stroke)!important;
-  border-radius:14px!important;outline:0!important;box-shadow:none!important;
+  border-radius:var(--zh-search-radius)!important;outline:0!important;box-shadow:none!important;
   overflow:clip!important;clip-path:none!important;transform:none!important;translate:none!important;scale:1!important;
   animation:none!important;transition:none!important;opacity:1!important;
 }
@@ -165,8 +190,26 @@ function acquireZenHome(win, services) {
 #urlbar[data-zr-home-search][zen-floating-urlbar="true"] > .urlbar-input-container{
   box-sizing:border-box!important;min-height:calc(var(--zh-search-header,56px) - 2px)!important;height:calc(var(--zh-search-header,56px) - 2px)!important;
   max-height:calc(var(--zh-search-header,56px) - 2px)!important;flex-shrink:0!important;
-  background:transparent!important;margin:0!important;padding:0 18px!important;border:0!important;outline:0!important;box-shadow:none!important;border-radius:14px!important;
+  background:transparent!important;margin:0!important;padding:0 19px!important;border:0!important;outline:0!important;box-shadow:none!important;border-radius:var(--zh-search-radius)!important;
+  gap:12px!important;align-items:center!important;
 }
+/* Use the same header typography and icon footprint as the Home button.
+   Native search mode controls remain available when a mode is selected. */
+#urlbar[data-zr-home-search][zen-floating-urlbar="true"] .urlbar-input-box{
+  margin:0!important;padding:0!important;min-width:0!important;font:var(--zh-search-font)!important;
+}
+#urlbar[data-zr-home-search][zen-floating-urlbar="true"] #urlbar-input{
+  margin:0!important;padding:0!important;font:var(--zh-search-font)!important;
+  color:var(--zh-search-color)!important;
+}
+#urlbar[data-zr-home-search][zen-floating-urlbar="true"] #urlbar-input::placeholder{
+  color:var(--zh-search-label)!important;opacity:1!important;font:var(--zh-search-font)!important;
+}
+#urlbar[data-zr-home-search][zen-floating-urlbar="true"][zen-newtab]:not([searchmode]) > .urlbar-input-container::before{
+  content:"";display:block;width:17px;height:17px;flex:0 0 17px;background:var(--zh-search-label);
+  mask:var(--zh-search-icon) center/contain no-repeat;pointer-events:none;
+}
+#urlbar[data-zr-home-search][zen-floating-urlbar="true"][zen-newtab]:not([searchmode]) #identity-box{display:none!important}
 #urlbar[data-zr-home-search][zen-floating-urlbar="true"] .urlbarView{
   background:transparent!important;border:0!important;outline:0!important;box-shadow:none!important;border-radius:0 0 14px 14px!important;
   flex-shrink:0!important;
@@ -183,24 +226,21 @@ function acquireZenHome(win, services) {
 #urlbar[data-zr-home-search-motion="run"][zen-floating-urlbar="true"]{
   height:var(--zh-reveal-height,var(--zh-search-header,56px))!important;
 }
+/* Keep the original button painted until the real editor is ready.
+   Both changes happen in the same frame, so there is no blank handoff. */
+#urlbar[data-zr-home-search-motion="prepare"][zen-floating-urlbar="true"]{opacity:0!important}
 #urlbar[data-zr-home-search-motion="prepare"][zen-floating-urlbar="true"] .urlbarView{opacity:0!important}
 #urlbar[data-zr-home-search-motion="run"][zen-floating-urlbar="true"] .urlbarView{opacity:var(--zh-results-alpha,1)!important}
 #urlbar[data-zr-home-search-motion="closed"][zen-floating-urlbar="true"]{opacity:0!important}
+#urlbar[data-zr-home-search][data-zh-closing] .urlbarView{pointer-events:none!important}
 #zen-home-search-return{
   position:fixed;z-index:2147483000;box-sizing:border-box;overflow:hidden;pointer-events:none;
-  background:color-mix(in srgb,var(--toolbox-textcolor,var(--toolbar-color,currentColor)) 8%,transparent);
-  border:1px solid color-mix(in srgb,var(--toolbox-textcolor,var(--toolbar-color,currentColor)) 14%,transparent);
-  border-radius:14px;color:var(--toolbox-textcolor,var(--toolbar-color,currentColor));font:menu;
+  background:var(--zh-search-glass);border:1px solid var(--zh-search-stroke);
+  border-radius:var(--zh-search-radius);color:var(--zh-search-label);font:var(--zh-search-font);
 }
-#zen-home-search-return .zh-return-header{display:flex;align-items:center;gap:12px;padding:0 19px;box-sizing:border-box;white-space:nowrap}
-#zen-home-search-return .zh-return-header svg{width:17px;height:17px;opacity:.7;flex:none}
-#zen-shared-home[data-zh-return] .zh-content{visibility:visible;opacity:1;transition:none;pointer-events:none}
+#zen-home-search-return .zh-return-header{box-sizing:border-box}
 #zen-shared-home[data-zh-return] .zh-search{visibility:hidden}
-#zen-shared-home[data-zh-return] .zh-section,#zen-shared-home[data-zh-return] .zh-footer{animation:zh-picker-enter 220ms ease both}
-@media(prefers-reduced-transparency:reduce){#zen-home-search-return{background:light-dark(#f4f4f8,#252632)}}
-@media(prefers-reduced-transparency:reduce){
-  #urlbar[data-zr-home-search][zen-floating-urlbar="true"]{--zh-glass:light-dark(#f4f4f8,#252632)}
-}
+#zen-shared-home[data-zh-return] .zh-section,#zen-shared-home[data-zh-return] .zh-footer{opacity:1}
 @media(max-width:600px){#zen-shared-home{padding:62px 16px 20px}#zen-shared-home .zh-pin{flex-basis:calc((100% - 24px)/3)}#zen-shared-home .zh-tile{height:84px}#zen-shared-home .zh-space{flex-basis:120px}}
 @media(prefers-reduced-motion:reduce){#zen-shared-home *{transition:none!important;animation:none!important}#zen-shared-home .zh-suggestion:active,#zen-shared-home .zh-suggestion:hover .zh-suggestion-plus{scale:1}}
 `;
@@ -210,6 +250,7 @@ function acquireZenHome(win, services) {
   let open=false,editing=false,dead=false,switching=false,adding=false,dragId=null,focusHome=null,oldInert=false,covered=false,motion=null,searchToken=null,startupHome=false,homeOnPlaceholder=false;
   let searchFrame=0,searchMotion=null,searchTimer=0,searchBar=null;
   let searchGeometry=null,searchLastHeight=0,searchCurrentHeight=0,searchClosing=false,searchReturn=null,searchReturnFrame=0;
+  let searchInput=null,searchOriginalPlaceholder=null,searchSessionLabel=null;
   let pinScrollTop=0,pinCustom=false,pinViewMode="home";
   const leases=new Set(),cleanups=[];
   function listen(node,type,fn,options){node.addEventListener(type,fn,options);cleanups.push(()=>node.removeEventListener(type,fn,options));}
@@ -277,21 +318,25 @@ function acquireZenHome(win, services) {
     if(searchReturnFrame)win.cancelAnimationFrame(searchReturnFrame);searchReturnFrame=0;
     searchReturn?.remove();searchReturn=null;
     if(searchBar){
-      searchBar.removeAttribute("data-zr-home-search");
+      searchBar.removeAttribute("data-zr-home-search");searchBar.removeAttribute("data-zh-closing");
       for(const key of ["left","top","width","header","room"])searchBar.style?.removeProperty("--zh-search-"+key);
     }
+    if(searchInput&&searchInput.getAttribute("placeholder")===searchSessionLabel){
+      if(searchOriginalPlaceholder===null)searchInput.removeAttribute("placeholder");
+      else searchInput.setAttribute("placeholder",searchOriginalPlaceholder);
+    }
+    searchInput=null;searchOriginalPlaceholder=null;searchSessionLabel=null;
     searchBar=null;searchToken=null;searchGeometry=null;searchLastHeight=0;searchCurrentHeight=0;searchClosing=false;
-    panel.removeAttribute("data-zh-search");panel.removeAttribute("data-zh-return");content.removeAttribute("inert");
+    panel.removeAttribute("data-zh-search");panel.removeAttribute("data-zh-search-ready");panel.removeAttribute("data-zh-return");content.removeAttribute("inert");
   }
   function homeSearchGeometry(from,viewportWidth,viewportHeight){
     if(!from||!(from.width>0)||!(from.height>0))return null;
     const w=Math.max(24,Number(viewportWidth)||1280),h=Math.max(24,Number(viewportHeight)||800);
     const width=Math.min(from.width,Math.max(1,w-24)),header=from.height;
     const left=Math.min(Math.max(12,from.left+(from.width-width)/2),Math.max(12,w-width-12));
-    // Align with the original search field whenever space permits. If the
-    // field is low, reserve a usable results area before the window edge.
-    const desired=Math.min(460,Math.max(header+80,h*.67));
-    const top=Math.min(Math.max(12,from.top),Math.max(12,h-desired-16));
+    // Keep the original header position. Results scroll in the remaining
+    // viewport instead of moving the entire interface on activation.
+    const top=Math.min(Math.max(12,from.top),Math.max(12,h-header-16));
     return {left,top,width,header,room:Math.max(header,h-top-16)};
   }
   function applySearchGeometry(bar,geometry){
@@ -302,7 +347,7 @@ function acquireZenHome(win, services) {
   // interpolating a registered custom property. The only per-frame work
   // is writing two values to this one search surface; no layout reads.
   function revealValue(from,to,progress){
-    const t=Math.max(0,Math.min(1,progress)),eased=1-Math.pow(1-t,3);
+    const t=Math.max(0,Math.min(1,progress)),eased=t*t*(3-2*t);
     return from+(to-from)*eased;
   }
   function paintSearchHeight(bar,height,alpha){
@@ -326,7 +371,7 @@ function acquireZenHome(win, services) {
     const bar=searchBar;if(!bar)return;
     bar.setAttribute("data-zr-home-search-motion","run");
     const header=searchGeometry?.header||56;
-    const alpha=h=>Math.min(1,Math.max(0,(h-header)/100));
+    const alpha=h=>Math.min(1,Math.max(0,(h-header)/Math.max(120,Math.abs(to-from)*.55)));
     paintSearchHeight(bar,from,alpha(from));
     let start=null;
     const tick=now=>{
@@ -340,9 +385,11 @@ function acquireZenHome(win, services) {
     searchFrame=win.requestAnimationFrame(tick);
   }
   function startSearchMorph(token,geometry){
-    if(!searchBar||!geometry||win.matchMedia("(prefers-reduced-motion: reduce)").matches){finishSearchMotion();return;}
-    // The field stays visible at its original height while waiting for
-    // native/Smart Search rows, rather than revealing a full popup late.
+    if(!searchBar||!geometry||win.matchMedia("(prefers-reduced-motion: reduce)").matches){
+      panel.setAttribute("data-zh-search-ready","");finishSearchMotion();return;
+    }
+    // Keep the source visible until the native floating box is ready.
+    // Then reveal the results from the same header without a flash.
     let attempts=0;
     const step=()=>{
       searchFrame=0;
@@ -350,10 +397,14 @@ function acquireZenHome(win, services) {
       const bar=searchBar;
       if(bar.hasAttribute("open")&&bar.getAttribute("zen-floating-urlbar")==="true"){
         const target=naturalSearchHeight(bar,geometry);
+        if(!panel.hasAttribute("data-zh-search-ready")){
+          panel.setAttribute("data-zh-search-ready","");
+          bar.setAttribute("data-zr-home-search-motion","run");
+        }
         if(target>geometry.header+8){
           searchLastHeight=target;
           const reveal=(from,to,round)=>{
-            animateSearchHeight(token,from,to,round?160:340,false,()=>{
+            animateSearchHeight(token,from,to,round?280:560,false,()=>{
               const latest=naturalSearchHeight(bar,geometry);
               searchLastHeight=latest;
               if(Math.abs(latest-to)>5&&round<2){reveal(to,latest,round+1);return;}
@@ -364,14 +415,15 @@ function acquireZenHome(win, services) {
         }
       }
       if(++attempts<120&&nativeSearchOpen(bar))searchFrame=win.requestAnimationFrame(step);
-      else finishSearchMotion();
+      else{panel.setAttribute("data-zh-search-ready","");finishSearchMotion();}
     };
     searchFrame=win.requestAnimationFrame(step);
   }
   function search(){
     if(!open||searchToken||nativeSearchOpen(win.gURLBar))return;
     const bar=win.gURLBar;if(!bar)return;
-    const from=content.querySelector(".zh-search")?.getBoundingClientRect();
+    const source=content.querySelector(".zh-search");
+    const from=source?.getBoundingClientRect();
     const geometry=homeSearchGeometry(from,win.innerWidth,win.innerHeight);
     const token={};searchToken=token;searchBar=bar;searchGeometry=geometry;
     searchLastHeight=searchCurrentHeight=geometry?.header||56;
@@ -385,6 +437,12 @@ function acquireZenHome(win, services) {
     try{
       if(win.gZenUIManager?.handleNewTab(false,false,"tab",true,token)!==true){
         finishSearchVisual();win.console.warn("[Zen Home] floating search unavailable");return;
+      }
+      searchInput=bar.inputField||doc.getElementById("urlbar-input");
+      if(searchInput){
+        searchOriginalPlaceholder=searchInput.getAttribute("placeholder");
+        searchSessionLabel=source?.querySelector("span")?.textContent||"Search or enter address";
+        searchInput.setAttribute("placeholder",searchSessionLabel);
       }
       startSearchMorph(token,geometry);
     }catch(error){finishSearchVisual();win.console.warn("[Zen Home] native search",error);}
@@ -405,8 +463,8 @@ function acquireZenHome(win, services) {
     const token=searchToken,bar=searchBar,g=searchGeometry;
     if(bar.getAttribute("zen-floating-urlbar")!=="true")return false;
     const from=Math.max(g.header,Math.min(g.room,bar.getBoundingClientRect().height||searchCurrentHeight||g.header));
-    searchClosing=true;searchLastHeight=from;
-    animateSearchHeight(token,from,g.header,230,true,()=>{
+    searchClosing=true;searchLastHeight=from;bar.setAttribute("data-zh-closing","");
+    animateSearchHeight(token,from,g.header,460,true,()=>{
       // Keep the native header collapsed until Zen acknowledges closure.
       finishNativeCancel();
       if(searchToken===token){
@@ -417,7 +475,8 @@ function acquireZenHome(win, services) {
     return true;
   }
   function animateSearchReturn(){
-    if(!searchToken||!searchGeometry||searchReturn)return;
+    if(!searchToken||searchReturn)return;
+    if(!searchGeometry){finishSearchVisual();return;}
     if(win.matchMedia("(prefers-reduced-motion: reduce)").matches){finishSearchVisual();return;}
     const g=searchGeometry,bar=searchBar;
     // Zen may destroy the top-layer popover before notifying us (blur,
@@ -433,21 +492,20 @@ function acquireZenHome(win, services) {
     const header=html("div","zh-return-header");
     const icon=source?.querySelector("svg")?.cloneNode(true);
     if(icon)header.append(icon);
-    header.append(html("span","","Search or enter a URL"));shell.append(header);
+    header.append(html("span","",source?.querySelector("span")?.textContent||"Search or enter address"));shell.append(header);
     const dest=source?.getBoundingClientRect()||{left:g.left,top:g.top,width:g.width,height:g.header};
     Object.assign(shell.style,{left:g.left+"px",top:g.top+"px",width:g.width+"px",height:height+"px"});
-    header.style.height=g.header+"px";root.append(shell);searchReturn=shell;
-    panel.setAttribute("data-zh-return","");
+    header.style.height=Math.max(0,g.header-2)+"px";root.append(shell);searchReturn=shell;
+    panel.setAttribute("data-zh-search-ready","");panel.setAttribute("data-zh-return","");
     const token=searchToken;let start=null;
     const tick=now=>{
       searchReturnFrame=0;if(!open||searchToken!==token||searchReturn!==shell)return;
       if(start===null)start=now;
-      const p=Math.min(1,(now-start)/(searchClosing?120:240));
+      const p=Math.min(1,(now-start)/(searchClosing?80:460));
       shell.style.height=revealValue(height,dest.height,p)+"px";
       shell.style.top=revealValue(g.top,dest.top,p)+"px";
       shell.style.left=revealValue(g.left,dest.left,p)+"px";
       shell.style.width=revealValue(g.width,dest.width,p)+"px";
-      shell.style.opacity=String(1-Math.max(0,(p-.8)/.2));
       if(p<1)searchReturnFrame=win.requestAnimationFrame(tick);
       else{finishSearchVisual();content.querySelector(".zh-search")?.focus({preventScroll:true});}
     };
@@ -600,7 +658,7 @@ function acquireZenHome(win, services) {
     return typeof transition?.run==="function"?transition.run(native):native();
   }
   function render(){
-    if(!open||dead)return;
+    if(!open||dead||searchToken)return;
     const oldGrid=content.querySelector(".zh-recommendations");
     if(adding&&oldGrid)pinScrollTop=oldGrid.scrollTop;
     const nextMode=adding?(pinCustom?"custom-url":"add-pin"):(editing?"customize":"home");
@@ -613,7 +671,7 @@ function acquireZenHome(win, services) {
     const searchButton=button("zh-search","",search),svg=doc.createElementNS("http://www.w3.org/2000/svg","svg");
     svg.setAttribute("viewBox","0 0 24 24");svg.setAttribute("fill","none");svg.setAttribute("stroke","currentColor");svg.setAttribute("stroke-width","1.6");
     for(const [tag,attrs] of [["circle",{cx:10.5,cy:10.5,r:6.5}],["path",{d:"m16 16 4 4"}]]){const node=doc.createElementNS("http://www.w3.org/2000/svg",tag);for(const [k,v] of Object.entries(attrs))node.setAttribute(k,v);svg.append(node);}
-    searchButton.append(svg,html("span","","Search or enter a URL"),html("span","","New tab"));if(animateMode)searchButton.setAttribute("data-zh-enter","");content.append(searchButton);
+    searchButton.append(svg,html("span","","Search or enter address"));if(animateMode)searchButton.setAttribute("data-zh-enter","");content.append(searchButton);
     const section=html("section","zh-section"),grid=html("div","zh-pins"),items=load();section.append(html("h3","","Pinned"),grid);if(animateMode)section.setAttribute("data-zh-enter","");
     if(!items.length)grid.append(html("div","zh-empty",editing?"Add a pinned site to get started.":"Click Customize Home to add your first pinned site."));
     for(const [index,item] of items.entries()){
@@ -704,7 +762,7 @@ function acquireZenHome(win, services) {
     listen(win,"resize",()=>{
       if(!searchToken||!searchBar)return;
       if(searchClosing||searchReturn){finishNativeCancel();finishSearchVisual();return;}
-      finishSearchMotion();
+      panel.setAttribute("data-zh-search-ready","");finishSearchMotion();
       const from=content.querySelector(".zh-search")?.getBoundingClientRect();
       searchGeometry=homeSearchGeometry(from,win.innerWidth,win.innerHeight);
       applySearchGeometry(searchBar,searchGeometry);

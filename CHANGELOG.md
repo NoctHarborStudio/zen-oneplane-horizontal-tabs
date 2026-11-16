@@ -1,3 +1,10 @@
+## 0.2.0-preview.50 — Continuous Home search handoff
+
+- Unify the collapsed Home search, native search input and return shell: same glass, border, radius, header typography, icon footprint and placeholder. Remove the redundant New tab hint.
+- Keep the source header visible until native floating search is ready; switch both in the same frame. Preserve the source position and constrain results to the remaining viewport. Fade surrounding Home sections without shifting layout.
+- Slow the actual height reveal to 560ms and reverse to 460ms with smoothstep easing; no final fade-to-zero on return. Keep source geometry stable during search. Preserve native search modes and result selection.
+- Preserve preview.48/49 window dragging fixes. Live Zen visual verification pending.
+
 ## 0.2.0-preview.49 — Toolbar-only window dragging
 
 - Restore the entire Home surface to client-area hit testing, including blank space, so clicking or dragging there cannot move the browser window. Keep native window dragging on the dedicated upper toolbar gaps and preserve tab drag and Home search cancellation.
