@@ -78,7 +78,7 @@
         opacity: 1 !important;
         pointer-events: auto !important;
       }
-      #zen-appcontent-navbar-wrapper #urlbar-container[data-op-empty] #urlbar:not([focused="true"], [open], [zen-floating-urlbar="true"]) {
+      #zen-appcontent-navbar-wrapper #urlbar-container:is([data-op-empty],[data-op-home]) #urlbar:not([focused="true"], [open], [zen-floating-urlbar="true"]) {
         opacity: 0 !important;
         pointer-events: none !important;
       }

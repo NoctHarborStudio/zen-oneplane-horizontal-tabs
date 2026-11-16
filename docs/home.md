@@ -15,3 +15,7 @@ OnePlane adapter alone holds its Compact toolbar via `oneplane-home-hold`. Addre
 
 ## Deferred
 Search in place, auto-open on startup, widgets/folders, portrait-native trigger, and Extension Dock relocation. No extension change in this preview.
+
+## Preview.34 — live feedback
+
+Empty Pinned now points to Customize Home. The center search calls native `gZenUIManager.handleNewTab(false,false,"tab",true,token)` instead of closing Home first. Native search cancellation preserves the surface; matching `ZenURLBarClosed` with selection or native TabSelect/TabOpen closes it. Escape passes through while native search is active. The host adapter collapses the inline URL slot using independent `data-op-home`, preserves native floating search, and separates native selection from mirrored `data-selected`/split-active state. Indicator fallback has no selected-tab target on Home; hover/drag still work. Test search opening, Escape and outside cancellation, repeated sessions, selecting current/existing/new results, Home exit, both Compact states and split selection. Native runtime not verified by automated tests.

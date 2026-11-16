@@ -1,6 +1,7 @@
   function sync() {
     frame = 0;
     if (dead) return;
+    const homeOpen=row.hasAttribute("data-op-home-open");
     // Respect the current workspace and native visibility.
     const tabs = Array.from(browser.visibleTabs || browser.tabs || []).filter(
       tab => !tab.closing && !tab.hidden && !tab.hasAttribute("zen-empty-tab")
@@ -32,7 +33,7 @@
       if (!splitColors.has(group)) splitColors.set(group, splitPalette[nextSplitColor++ % splitPalette.length]);
       const entry = splitEntries.get(group);
       entry.box.style.setProperty("--op-split-color", splitColors.get(group));
-      entry.box.toggleAttribute("data-op-split-active", group === splitGroup(browser.selectedTab));
+      entry.box.toggleAttribute("data-op-split-active", !homeOpen && group === splitGroup(browser.selectedTab));
       groupItems.set(group, []);
     }
     for (let index = 0; index < tabs.length; index++) {
@@ -44,12 +45,13 @@
         splitMeasureObserver.observe(entry.item);
       }
       const label = tab.label || tab.getAttribute("label") || "New tab";
-      const selected = tab === browser.selectedTab;
+      const nativeSelected = tab === browser.selectedTab;
+      const selected = !homeOpen && nativeSelected;
       entry.item.toggleAttribute("data-selected", selected);
       const group = splitGroup(tab);
       const split = isSplit(tab);
       entry.item.toggleAttribute("data-op-split", split);
-      entry.item.toggleAttribute("data-op-split-active", split && Boolean(group && group === splitGroup(browser.selectedTab)));
+      entry.item.toggleAttribute("data-op-split-active", !homeOpen && split && Boolean(group && group === splitGroup(browser.selectedTab)));
       // First/last flags are assigned after groups are laid out in visual order.
       entry.item.removeAttribute("data-op-split-prev");
       entry.item.removeAttribute("data-op-split-next");
@@ -57,7 +59,7 @@
       else entry.item.style.removeProperty("--op-split-color");
       entry.item.toggleAttribute("data-pinned", Boolean(tab.pinned));
       entry.item.toggleAttribute("data-busy", tab.hasAttribute("busy"));
-      entry.item.toggleAttribute("data-unloaded", !selected && (tab.hasAttribute("pending") || tab.hasAttribute("discarded")));
+      entry.item.toggleAttribute("data-unloaded", !nativeSelected && (tab.hasAttribute("pending") || tab.hasAttribute("discarded")));
       const muted = tab.hasAttribute("muted");
       const audible = tab.hasAttribute("soundplaying") || tab.hasAttribute("soundplaying-scheduledremoval");
       entry.item.toggleAttribute("data-audio", audible && !muted);

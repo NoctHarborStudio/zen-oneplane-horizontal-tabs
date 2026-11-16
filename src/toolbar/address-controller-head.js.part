@@ -33,7 +33,7 @@
   }
   function addressWidths() {
     const base = parseFloat(window.getComputedStyle(url).getPropertyValue("--op-url")) || 180;
-    const compact = url.hasAttribute("data-op-empty") ? 0 : (addressCompactWidth || base);
+    const compact = (url.hasAttribute("data-op-empty") || url.hasAttribute("data-op-home")) ? 0 : (addressCompactWidth || base);
     const bar = addressBar();
     const anchor = url.getBoundingClientRect();
     const left = anchor.left + (addressAnchor?.dx || 0);
@@ -65,7 +65,7 @@
   function rememberCompactAddress() {
     const bar = addressBar();
     if (!bar || inlinePopoverPresent(bar) ||
-        bar.hasAttribute("zen-floating-urlbar") || url.hasAttribute("data-op-empty")) return;
+        bar.hasAttribute("zen-floating-urlbar") || url.hasAttribute("data-op-empty") || url.hasAttribute("data-op-home")) return;
     const box = bar.getBoundingClientRect();
     const anchor = url.getBoundingClientRect();
     if (box.width > 0 && box.height > 0) {

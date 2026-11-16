@@ -29,7 +29,8 @@
     try {
       bar?.view?.close();
       bar?.blur();
-      browser.selectedBrowser?.focus();
+      if(row.hasAttribute("data-op-home-open"))document.getElementById("zen-shared-home")?.querySelector(".zh-search")?.focus({preventScroll:true});
+      else browser.selectedBrowser?.focus();
     } finally {
       releaseShield();
     }

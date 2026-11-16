@@ -11,7 +11,11 @@
     if(!homeLease)return;
     homeUnsubscribe=homeLease.subscribe(open=>{
       row.toggleAttribute("data-op-home-open",open);island.setAttribute("aria-expanded",String(open));
+      url.toggleAttribute("data-op-home",open);
       toolbarWrapper?.toggleAttribute("oneplane-home-hold",open);
+      // Update the mirror and geometry without changing native tab selection.
+      if(open){clearTabHover();hideIndicator();}
+      centerToolbar();schedule();scheduleGeometry();refreshIndicator();
       if(open){clearHomeIdle();homeIdle=true;}else markHomeTitleActivity();
       refreshIslandTitle();reconcilePanel();
     });
@@ -27,6 +31,7 @@
   function destroyHome(){
     clearHomeIdle();homeUnsubscribe?.();homeUnsubscribe=null;
     island.removeEventListener("click",onHomeTrigger);island.removeEventListener("dblclick",stopHomeDoubleClick);island.removeEventListener("pointerdown",stopHomePointer);
+    url.removeAttribute("data-op-home");
     toolbarWrapper?.removeAttribute("oneplane-home-hold");homeLease?.release();homeLease=null;
   }
 

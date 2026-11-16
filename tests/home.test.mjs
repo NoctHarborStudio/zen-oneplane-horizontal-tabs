@@ -40,3 +40,25 @@ test("Home leases share one instance and only the last release tears down",()=>{
  b.release();assert.equal(win.__zenSharedHomeV1,undefined);assert.equal(host.children.length,1);assert.equal(observers.size,0);
  win.__zenSharedHomeV1={apiVersion:2};assert.equal(acquire(win,services),null);
 });
+
+test("Home native search keeps surface open until a matching committed close",()=>{
+ const code=extract("  function searchActive(","  function move(");
+ const run=new Function("win",code+`
+ let open=true,searchToken=null,closed=0;
+ function close(){open=false;closed++}
+ return {search,searchActive,onSearchClosed,get closed(){return closed},get token(){return searchToken}};
+ `);
+ const calls=[],attrs=new Set(),bar={view:{isOpen:false},hasAttribute:k=>attrs.has(k)};
+ const win={gURLBar:bar,gZenUIManager:{handleNewTab(...args){calls.push(args.slice(0,4));args[4].id=42;attrs.add("zen-newtab");return true}},console:{warn(){}}};
+ const a=run(win);a.search();assert.deepEqual(calls,[[false,false,"tab",true]]);assert.equal(a.closed,0);
+ assert.equal(a.searchActive(),true);a.search();assert.equal(calls.length,1);
+ a.onSearchClosed({detail:{closeSeq:41,onElementPicked:true}});assert.equal(a.closed,0);
+ attrs.clear();a.onSearchClosed({detail:{closeSeq:42,onElementPicked:false}});assert.equal(a.closed,0);assert.equal(a.token,null);
+ a.search();attrs.clear();a.onSearchClosed({detail:{closeSeq:42,onElementPicked:true}});assert.equal(a.closed,1);
+});
+test("Home visual selection does not mutate native selected tab",()=>{
+ assert.ok(layout.includes("const selected = !homeOpen && nativeSelected;"));
+ assert.ok(layout.includes("homeOpen?null:entries.get(browser.selectedTab)?.item"));
+ assert.ok(layout.includes('url.toggleAttribute("data-op-home",open)'));
+ assert.ok(core.includes("Click Customize Home to add your first pinned site."));
+});

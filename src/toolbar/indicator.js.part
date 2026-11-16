@@ -2,8 +2,9 @@
     const s=row.getBoundingClientRect();
     if(s.width<=0||s.height<=0)return null;
     const dragging=Boolean(dragNode && row.hasAttribute("data-op-dragging"));
+    const homeOpen=row.hasAttribute("data-op-home-open");
     const item=dragging?dragNode:indicatorHover && list.contains(indicatorHover)?
-      indicatorHover:entries.get(browser.selectedTab)?.item;
+      indicatorHover:homeOpen?null:entries.get(browser.selectedTab)?.item;
     if(!item||!list.contains(item)||item.hasAttribute("data-op-detached")||
         item.closest(".oneplane-split-group[data-op-detached]"))return null;
     if(dragging && (dragImageMode!=="inline" || dragPull>=.62))return null;

@@ -308,7 +308,7 @@
     }
     /* A true empty tab has no visible inline address slot. A floating
        search on a real page must not change the toolbar's anchor width. */
-    #nav-bar-customization-target > #urlbar-container[data-op-empty] {
+    #nav-bar-customization-target > #urlbar-container:is([data-op-empty],[data-op-home]) {
       flex: 0 0 0px !important;
       width: 0px !important;
       min-width: 0px !important;
@@ -326,9 +326,14 @@
          is unchanged, and its open/close cannot shift the center strip. */
       transition: none !important;
     }
-    #urlbar-container[data-op-empty] #urlbar:not([focused="true"], [open], [zen-floating-urlbar="true"]) {
+    #urlbar-container:is([data-op-empty],[data-op-home]) #urlbar:not([focused="true"], [open], [zen-floating-urlbar="true"]) {
       opacity: 0 !important;
       pointer-events: none !important;
+    }
+    #nav-bar-customization-target > #urlbar-container[data-op-home] #urlbar:not([focused="true"], [open], [zen-floating-urlbar="true"], [zen-newtab]) {
+      visibility:hidden !important;
+      opacity:0 !important;
+      pointer-events:none !important;
     }
     #urlbar-container #urlbar[breakout-extend]:not([zen-floating-urlbar="true"]),
     #urlbar-container #urlbar[data-op-url-animating]:popover-open:not([zen-floating-urlbar="true"]) {
@@ -382,7 +387,7 @@
     #urlbar-container:is([data-op-url-phase="opening"], [data-op-url-phase="closing-wave"], [data-op-url-phase="settling"]) #urlbar:not([zen-floating-urlbar="true"]) .urlbarView {
       pointer-events: none !important;
     }
-    #nav-bar-customization-target > #urlbar-container[data-op-empty]:is([data-op-url-phase="closing-wave"], [data-op-url-phase="settling"]) {
+    #nav-bar-customization-target > #urlbar-container:is([data-op-empty],[data-op-home]):is([data-op-url-phase="closing-wave"], [data-op-url-phase="settling"]) {
       flex-basis: 0px !important;
       width: 0px !important;
       min-width: 0px !important;
@@ -1260,7 +1265,7 @@
         opacity: 1 !important;
         pointer-events: auto !important;
       }
-      #zen-appcontent-navbar-wrapper #urlbar-container[data-op-empty] #urlbar:not([focused="true"], [open], [zen-floating-urlbar="true"]) {
+      #zen-appcontent-navbar-wrapper #urlbar-container:is([data-op-empty],[data-op-home]) #urlbar:not([focused="true"], [open], [zen-floating-urlbar="true"]) {
         opacity: 0 !important;
         pointer-events: none !important;
       }

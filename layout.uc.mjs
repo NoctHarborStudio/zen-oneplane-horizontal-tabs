@@ -149,7 +149,7 @@ function acquireZenHome(win, services) {
   const panel=html("div");panel.id="zen-shared-home";panel.hidden=true;
   panel.setAttribute("role","region");panel.setAttribute("aria-label","Home");
   const content=html("main","zh-content");panel.append(content);
-  let open=false,editing=false,dead=false,switching=false,adding=false,dragId=null,focusHome=null,oldInert=false,covered=false,motion=null;
+  let open=false,editing=false,dead=false,switching=false,adding=false,dragId=null,focusHome=null,oldInert=false,covered=false,motion=null,searchToken=null;
   const leases=new Set(),cleanups=[];
   function listen(node,type,fn,options){node.addEventListener(type,fn,options);cleanups.push(()=>node.removeEventListener(type,fn,options));}
   const button=(cls,label,fn)=>{const n=html("button",cls,label);n.type="button";n.addEventListener("click",fn);return n;};
@@ -160,15 +160,35 @@ function acquireZenHome(win, services) {
   function restore(){if(!covered)return;covered=false;panels.removeAttribute("data-zr-home-covered");if(!oldInert)panels.removeAttribute("inert");host.removeAttribute("data-zr-home-host");}
   function stopMotion(){motion?.cancel();motion=null;}
   function close(restoreFocus=false){
-    if(!open)return;open=false;editing=false;adding=false;dragId=null;stopMotion();panel.hidden=true;restore();notify();
+    if(!open)return;open=false;editing=false;adding=false;dragId=null;searchToken=null;stopMotion();panel.hidden=true;restore();notify();
     if(restoreFocus)try{if(focusHome?.isConnected)focusHome.focus({preventScroll:true});else browser.selectedBrowser?.focus();}catch{}
     focusHome=null;
   }
   function navigate(item){
     close();try{win.openTrustedLinkIn(item.url,"tab");}catch(error){win.console.warn("[Zen Home] shortcut navigation",error);}
   }
+  // Keep Home mounted under Zen's real floating new-tab search. The
+  // controller owns the search session; a rejected/cancelled query is not navigation.
+  function searchActive(){
+    const bar=win.gURLBar;
+    return Boolean(bar&&(bar.view?.isOpen||bar.hasAttribute("zen-newtab")||bar.hasAttribute("open")||bar.hasAttribute("focused")));
+  }
   function search(){
-    close();try{const cmd=doc.getElementById("cmd_newNavigatorTab");if(typeof cmd?.doCommand==="function")cmd.doCommand();else win.BrowserCommands?.openTab();}catch(error){win.console.warn("[Zen Home] native search",error);}
+    if(!open||win.gURLBar?.view?.isOpen||win.gURLBar?.hasAttribute("zen-newtab"))return;
+    const token={};searchToken=token;
+    try{
+      if(win.gZenUIManager?.handleNewTab(false,false,"tab",true,token)!==true){
+        searchToken=null;win.console.warn("[Zen Home] floating search unavailable");
+      }
+    }catch(error){searchToken=null;win.console.warn("[Zen Home] native search",error);}
+  }
+  function onSearchClosed(event){
+    if(!open)return;
+    const detail=event.detail;
+    // A late close notification from another session must not dismiss Home.
+    if(!searchToken||detail?.closeSeq!==searchToken.id)return;
+    searchToken=null;
+    if(detail.onElementPicked||detail.onSwitch)close();
   }
   function move(id,targetId){
     const items=load(),from=items.findIndex(x=>x.id===id),to=items.findIndex(x=>x.id===targetId);
@@ -197,7 +217,7 @@ function acquireZenHome(win, services) {
     for(const [tag,attrs] of [["circle",{cx:10.5,cy:10.5,r:6.5}],["path",{d:"m16 16 4 4"}]]){const node=doc.createElementNS("http://www.w3.org/2000/svg",tag);for(const [k,v] of Object.entries(attrs))node.setAttribute(k,v);svg.append(node);}
     searchButton.append(svg,html("span","","Search or enter a URL"),html("span","","New tab"));content.append(searchButton);
     const section=html("section","zh-section"),grid=html("div","zh-pins"),items=load();section.append(html("h3","","Pinned"),grid);
-    if(!items.length)grid.append(html("div","zh-empty","No pinned sites yet"));
+    if(!items.length)grid.append(html("div","zh-empty",editing?"Add a pinned site to get started.":"Click Customize Home to add your first pinned site."));
     for(const [index,item] of items.entries()){
       const card=html("div","zh-pin"),tile=button("zh-tile","",()=>{if(!editing)navigate(item);});
       tile.title=item.title;const img=html("img");img.alt="";img.draggable=false;img.src="page-icon:"+item.url;
@@ -271,11 +291,12 @@ function acquireZenHome(win, services) {
     listen(browser.tabContainer,"TabOpen",()=>{if(!switching)close();});
     listen(win,"ZenWorkspaceDataChanged",()=>{if(open&&!switching)render();});
     listen(win,"ZenWorkspacesUIUpdate",()=>{if(open&&!switching)render();});
-    listen(win,"keydown",e=>{if(open&&e.key==="Escape"&&!win.gURLBar?.view?.isOpen){e.preventDefault();e.stopPropagation();if(editing){editing=false;adding=false;render();}else close(true);}},true);
+    listen(win,"ZenURLBarClosed",onSearchClosed);
+    listen(win,"keydown",e=>{if(open&&e.key==="Escape"&&!searchActive()){e.preventDefault();e.stopPropagation();if(editing){editing=false;adding=false;render();}else close(true);}},true);
     const stateObserver=new win.MutationObserver(()=>{if(open&&!allowed())close();});
     stateObserver.observe(root,{attributes:true,attributeFilter:["customizing","inDOMFullscreen","inFullscreen","popup-window"]});cleanups.push(()=>stateObserver.disconnect());
     listen(win,"unload",destroy,{once:true});
-    const progress={onLocationChange(b,wp){if(open&&!switching&&b===browser.selectedBrowser&&wp?.isTopLevel)close();}};
+    const progress={onLocationChange(b,wp){if(open&&!switching&&!searchActive()&&b===browser.selectedBrowser&&wp?.isTopLevel)close();}};
     if(typeof browser.addTabsProgressListener==="function"){browser.addTabsProgressListener(progress);cleanups.push(()=>browser.removeTabsProgressListener(progress));}
     win[KEY]=registry;return registry.acquire();
   }catch(error){destroy();win.console.warn("[Zen Home] init",error);return null;}
@@ -437,7 +458,8 @@ function installTabStrip() {
     try {
       bar?.view?.close();
       bar?.blur();
-      browser.selectedBrowser?.focus();
+      if(row.hasAttribute("data-op-home-open"))document.getElementById("zen-shared-home")?.querySelector(".zh-search")?.focus({preventScroll:true});
+      else browser.selectedBrowser?.focus();
     } finally {
       releaseShield();
     }
@@ -512,7 +534,7 @@ function installTabStrip() {
   }
   function addressWidths() {
     const base = parseFloat(window.getComputedStyle(url).getPropertyValue("--op-url")) || 180;
-    const compact = url.hasAttribute("data-op-empty") ? 0 : (addressCompactWidth || base);
+    const compact = (url.hasAttribute("data-op-empty") || url.hasAttribute("data-op-home")) ? 0 : (addressCompactWidth || base);
     const bar = addressBar();
     const anchor = url.getBoundingClientRect();
     const left = anchor.left + (addressAnchor?.dx || 0);
@@ -544,7 +566,7 @@ function installTabStrip() {
   function rememberCompactAddress() {
     const bar = addressBar();
     if (!bar || inlinePopoverPresent(bar) ||
-        bar.hasAttribute("zen-floating-urlbar") || url.hasAttribute("data-op-empty")) return;
+        bar.hasAttribute("zen-floating-urlbar") || url.hasAttribute("data-op-empty") || url.hasAttribute("data-op-home")) return;
     const box = bar.getBoundingClientRect();
     const anchor = url.getBoundingClientRect();
     if (box.width > 0 && box.height > 0) {
@@ -4432,8 +4454,9 @@ function installTabStrip() {
     const s=row.getBoundingClientRect();
     if(s.width<=0||s.height<=0)return null;
     const dragging=Boolean(dragNode && row.hasAttribute("data-op-dragging"));
+    const homeOpen=row.hasAttribute("data-op-home-open");
     const item=dragging?dragNode:indicatorHover && list.contains(indicatorHover)?
-      indicatorHover:entries.get(browser.selectedTab)?.item;
+      indicatorHover:homeOpen?null:entries.get(browser.selectedTab)?.item;
     if(!item||!list.contains(item)||item.hasAttribute("data-op-detached")||
         item.closest(".oneplane-split-group[data-op-detached]"))return null;
     if(dragging && (dragImageMode!=="inline" || dragPull>=.62))return null;
@@ -4552,7 +4575,11 @@ function installTabStrip() {
     if(!homeLease)return;
     homeUnsubscribe=homeLease.subscribe(open=>{
       row.toggleAttribute("data-op-home-open",open);island.setAttribute("aria-expanded",String(open));
+      url.toggleAttribute("data-op-home",open);
       toolbarWrapper?.toggleAttribute("oneplane-home-hold",open);
+      // Update the mirror and geometry without changing native tab selection.
+      if(open){clearTabHover();hideIndicator();}
+      centerToolbar();schedule();scheduleGeometry();refreshIndicator();
       if(open){clearHomeIdle();homeIdle=true;}else markHomeTitleActivity();
       refreshIslandTitle();reconcilePanel();
     });
@@ -4568,6 +4595,7 @@ function installTabStrip() {
   function destroyHome(){
     clearHomeIdle();homeUnsubscribe?.();homeUnsubscribe=null;
     island.removeEventListener("click",onHomeTrigger);island.removeEventListener("dblclick",stopHomeDoubleClick);island.removeEventListener("pointerdown",stopHomePointer);
+    url.removeAttribute("data-op-home");
     toolbarWrapper?.removeAttribute("oneplane-home-hold");homeLease?.release();homeLease=null;
   }
 
@@ -4814,6 +4842,7 @@ function installTabStrip() {
   function sync() {
     frame = 0;
     if (dead) return;
+    const homeOpen=row.hasAttribute("data-op-home-open");
     // Respect the current workspace and native visibility.
     const tabs = Array.from(browser.visibleTabs || browser.tabs || []).filter(
       tab => !tab.closing && !tab.hidden && !tab.hasAttribute("zen-empty-tab")
@@ -4845,7 +4874,7 @@ function installTabStrip() {
       if (!splitColors.has(group)) splitColors.set(group, splitPalette[nextSplitColor++ % splitPalette.length]);
       const entry = splitEntries.get(group);
       entry.box.style.setProperty("--op-split-color", splitColors.get(group));
-      entry.box.toggleAttribute("data-op-split-active", group === splitGroup(browser.selectedTab));
+      entry.box.toggleAttribute("data-op-split-active", !homeOpen && group === splitGroup(browser.selectedTab));
       groupItems.set(group, []);
     }
     for (let index = 0; index < tabs.length; index++) {
@@ -4857,12 +4886,13 @@ function installTabStrip() {
         splitMeasureObserver.observe(entry.item);
       }
       const label = tab.label || tab.getAttribute("label") || "New tab";
-      const selected = tab === browser.selectedTab;
+      const nativeSelected = tab === browser.selectedTab;
+      const selected = !homeOpen && nativeSelected;
       entry.item.toggleAttribute("data-selected", selected);
       const group = splitGroup(tab);
       const split = isSplit(tab);
       entry.item.toggleAttribute("data-op-split", split);
-      entry.item.toggleAttribute("data-op-split-active", split && Boolean(group && group === splitGroup(browser.selectedTab)));
+      entry.item.toggleAttribute("data-op-split-active", !homeOpen && split && Boolean(group && group === splitGroup(browser.selectedTab)));
       // First/last flags are assigned after groups are laid out in visual order.
       entry.item.removeAttribute("data-op-split-prev");
       entry.item.removeAttribute("data-op-split-next");
@@ -4870,7 +4900,7 @@ function installTabStrip() {
       else entry.item.style.removeProperty("--op-split-color");
       entry.item.toggleAttribute("data-pinned", Boolean(tab.pinned));
       entry.item.toggleAttribute("data-busy", tab.hasAttribute("busy"));
-      entry.item.toggleAttribute("data-unloaded", !selected && (tab.hasAttribute("pending") || tab.hasAttribute("discarded")));
+      entry.item.toggleAttribute("data-unloaded", !nativeSelected && (tab.hasAttribute("pending") || tab.hasAttribute("discarded")));
       const muted = tab.hasAttribute("muted");
       const audible = tab.hasAttribute("soundplaying") || tab.hasAttribute("soundplaying-scheduledremoval");
       entry.item.toggleAttribute("data-audio", audible && !muted);

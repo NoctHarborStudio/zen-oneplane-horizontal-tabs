@@ -74,7 +74,7 @@ function acquireZenHome(win, services) {
   const panel=html("div");panel.id="zen-shared-home";panel.hidden=true;
   panel.setAttribute("role","region");panel.setAttribute("aria-label","Home");
   const content=html("main","zh-content");panel.append(content);
-  let open=false,editing=false,dead=false,switching=false,adding=false,dragId=null,focusHome=null,oldInert=false,covered=false,motion=null;
+  let open=false,editing=false,dead=false,switching=false,adding=false,dragId=null,focusHome=null,oldInert=false,covered=false,motion=null,searchToken=null;
   const leases=new Set(),cleanups=[];
   function listen(node,type,fn,options){node.addEventListener(type,fn,options);cleanups.push(()=>node.removeEventListener(type,fn,options));}
   const button=(cls,label,fn)=>{const n=html("button",cls,label);n.type="button";n.addEventListener("click",fn);return n;};
@@ -85,15 +85,35 @@ function acquireZenHome(win, services) {
   function restore(){if(!covered)return;covered=false;panels.removeAttribute("data-zr-home-covered");if(!oldInert)panels.removeAttribute("inert");host.removeAttribute("data-zr-home-host");}
   function stopMotion(){motion?.cancel();motion=null;}
   function close(restoreFocus=false){
-    if(!open)return;open=false;editing=false;adding=false;dragId=null;stopMotion();panel.hidden=true;restore();notify();
+    if(!open)return;open=false;editing=false;adding=false;dragId=null;searchToken=null;stopMotion();panel.hidden=true;restore();notify();
     if(restoreFocus)try{if(focusHome?.isConnected)focusHome.focus({preventScroll:true});else browser.selectedBrowser?.focus();}catch{}
     focusHome=null;
   }
   function navigate(item){
     close();try{win.openTrustedLinkIn(item.url,"tab");}catch(error){win.console.warn("[Zen Home] shortcut navigation",error);}
   }
+  // Keep Home mounted under Zen's real floating new-tab search. The
+  // controller owns the search session; a rejected/cancelled query is not navigation.
+  function searchActive(){
+    const bar=win.gURLBar;
+    return Boolean(bar&&(bar.view?.isOpen||bar.hasAttribute("zen-newtab")||bar.hasAttribute("open")||bar.hasAttribute("focused")));
+  }
   function search(){
-    close();try{const cmd=doc.getElementById("cmd_newNavigatorTab");if(typeof cmd?.doCommand==="function")cmd.doCommand();else win.BrowserCommands?.openTab();}catch(error){win.console.warn("[Zen Home] native search",error);}
+    if(!open||win.gURLBar?.view?.isOpen||win.gURLBar?.hasAttribute("zen-newtab"))return;
+    const token={};searchToken=token;
+    try{
+      if(win.gZenUIManager?.handleNewTab(false,false,"tab",true,token)!==true){
+        searchToken=null;win.console.warn("[Zen Home] floating search unavailable");
+      }
+    }catch(error){searchToken=null;win.console.warn("[Zen Home] native search",error);}
+  }
+  function onSearchClosed(event){
+    if(!open)return;
+    const detail=event.detail;
+    // A late close notification from another session must not dismiss Home.
+    if(!searchToken||detail?.closeSeq!==searchToken.id)return;
+    searchToken=null;
+    if(detail.onElementPicked||detail.onSwitch)close();
   }
   function move(id,targetId){
     const items=load(),from=items.findIndex(x=>x.id===id),to=items.findIndex(x=>x.id===targetId);
@@ -122,7 +142,7 @@ function acquireZenHome(win, services) {
     for(const [tag,attrs] of [["circle",{cx:10.5,cy:10.5,r:6.5}],["path",{d:"m16 16 4 4"}]]){const node=doc.createElementNS("http://www.w3.org/2000/svg",tag);for(const [k,v] of Object.entries(attrs))node.setAttribute(k,v);svg.append(node);}
     searchButton.append(svg,html("span","","Search or enter a URL"),html("span","","New tab"));content.append(searchButton);
     const section=html("section","zh-section"),grid=html("div","zh-pins"),items=load();section.append(html("h3","","Pinned"),grid);
-    if(!items.length)grid.append(html("div","zh-empty","No pinned sites yet"));
+    if(!items.length)grid.append(html("div","zh-empty",editing?"Add a pinned site to get started.":"Click Customize Home to add your first pinned site."));
     for(const [index,item] of items.entries()){
       const card=html("div","zh-pin"),tile=button("zh-tile","",()=>{if(!editing)navigate(item);});
       tile.title=item.title;const img=html("img");img.alt="";img.draggable=false;img.src="page-icon:"+item.url;
@@ -196,11 +216,12 @@ function acquireZenHome(win, services) {
     listen(browser.tabContainer,"TabOpen",()=>{if(!switching)close();});
     listen(win,"ZenWorkspaceDataChanged",()=>{if(open&&!switching)render();});
     listen(win,"ZenWorkspacesUIUpdate",()=>{if(open&&!switching)render();});
-    listen(win,"keydown",e=>{if(open&&e.key==="Escape"&&!win.gURLBar?.view?.isOpen){e.preventDefault();e.stopPropagation();if(editing){editing=false;adding=false;render();}else close(true);}},true);
+    listen(win,"ZenURLBarClosed",onSearchClosed);
+    listen(win,"keydown",e=>{if(open&&e.key==="Escape"&&!searchActive()){e.preventDefault();e.stopPropagation();if(editing){editing=false;adding=false;render();}else close(true);}},true);
     const stateObserver=new win.MutationObserver(()=>{if(open&&!allowed())close();});
     stateObserver.observe(root,{attributes:true,attributeFilter:["customizing","inDOMFullscreen","inFullscreen","popup-window"]});cleanups.push(()=>stateObserver.disconnect());
     listen(win,"unload",destroy,{once:true});
-    const progress={onLocationChange(b,wp){if(open&&!switching&&b===browser.selectedBrowser&&wp?.isTopLevel)close();}};
+    const progress={onLocationChange(b,wp){if(open&&!switching&&!searchActive()&&b===browser.selectedBrowser&&wp?.isTopLevel)close();}};
     if(typeof browser.addTabsProgressListener==="function"){browser.addTabsProgressListener(progress);cleanups.push(()=>browser.removeTabsProgressListener(progress));}
     win[KEY]=registry;return registry.acquire();
   }catch(error){destroy();win.console.warn("[Zen Home] init",error);return null;}

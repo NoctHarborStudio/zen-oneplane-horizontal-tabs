@@ -1,3 +1,9 @@
+## 0.2.0-preview.34 — Home search and visual state
+
+- Keep Home visible under Zen's native floating search; cancellation returns to Home, committed search/tab selection returns to browsing. Match native close session token.
+- Empty Pinned explains Customize Home. Hide selected-tab/split-group highlighting and compact URL slot while Home is open without changing native selection; restore on close. Hover/drag indicators stay available.
+- Real Zen validation pending.
+
 ## 0.2.0-preview.33 — Home foundation
 
 - Shared per-window Home controller and OnePlane trigger, native background, shortcuts and customization, workspace/search bridge.
