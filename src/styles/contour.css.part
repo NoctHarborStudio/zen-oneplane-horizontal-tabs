@@ -27,6 +27,20 @@
       opacity: 1 !important;
       translate: 0 0;
     }
+    /* Home has no page-wide drag rectangle. The already measured Fade is
+       the native handle, including its rear ramp. Gecko's native region
+       does not require DOM pointer events on this decorative element.
+       Do not add a new hit layer or change ordinary web-page interaction. */
+    #zen-appcontent-navbar-wrapper[oneplane-home-hold][data-op-panel-open],
+    #zen-appcontent-navbar-wrapper[oneplane-home-hold][data-op-panel-open] :is(#zen-appcontent-navbar-container,#nav-bar,#nav-bar-customization-target,#PersonalToolbar,#personal-bookmarks,#PlacesToolbar,#PlacesToolbarItems) {
+      -moz-window-dragging: default !important;
+    }
+    &:not(:has(#zen-shared-home[data-zh-search], #zen-shared-home[data-zh-return])) #zen-appcontent-navbar-wrapper[oneplane-home-hold][data-op-panel-open]:not(:has(#urlbar[focused="true"], #urlbar[open], #oneplane-url-dismiss[data-pressed])) > #oneplane-toolbar-surface {
+      -moz-window-dragging: drag !important;
+    }
+    #zen-appcontent-navbar-wrapper[oneplane-home-hold] #PersonalToolbar :is(toolbarbutton,button,input,menupopup,panel) {
+      -moz-window-dragging: no-drag !important;
+    }
     #zen-appcontent-navbar-wrapper > #zen-appcontent-navbar-container {
       opacity: 0 !important;
       translate: 0 calc(-1 * var(--op-panel-travel));

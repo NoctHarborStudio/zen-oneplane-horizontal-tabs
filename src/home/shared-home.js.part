@@ -65,9 +65,11 @@ function acquireZenHome(win, services) {
 #zen-shared-home button,#zen-shared-home input{font:inherit;color:inherit}
 #zen-shared-home button{appearance:none;cursor:pointer;border:0;background:none;padding:0}
 #zen-shared-home button:focus-visible,#zen-shared-home input:focus-visible{outline:2px solid AccentColor;outline-offset:3px}
-/* Home is a client-area surface, including its blank background.
-   Only the native toolbar's dedicated gaps own window dragging. */
-#zen-shared-home,#zen-shared-home *{-moz-window-dragging:no-drag!important}
+/* Gecko subtracts every explicit no-drag rectangle from all drag rectangles.
+   A full-screen Home no-drag box erases the overlapping toolbar. Default
+   contributes neither region; only real Home controls subtract their boxes. */
+#zen-shared-home,#zen-shared-home *{-moz-window-dragging:default!important}
+#zen-shared-home :is(button,input,textarea,select,summary,a,[draggable=true],.zh-recommendations){-moz-window-dragging:no-drag!important}
 #zen-shared-home .zh-content{width:min(100%,720px);margin:auto;transition:opacity 180ms ease,translate 220ms cubic-bezier(.2,.75,.25,1)}
 /* The collapsed button, native editor and cancellation fallback share
    these exact tokens. No separate hover/focus frame at the handoff. */

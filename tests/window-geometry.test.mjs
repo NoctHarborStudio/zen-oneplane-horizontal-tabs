@@ -13,8 +13,10 @@ test("plus follows actual right slots and preserves expansion room",()=>{
  assert.equal(calc([36,100]),145);assert.equal(calc([36,36],144),225);
  assert.ok(tabs.includes("left:min(calc(100% - var(--op-tab))"));
 });
-test("Home backdrop and all its content remain client area",()=>{
- assert.ok(home.includes("#zen-shared-home,#zen-shared-home *{-moz-window-dragging:no-drag!important}"));
+test("Home backdrop does not subtract the overlapping native drag region",()=>{
+ assert.ok(home.includes("#zen-shared-home,#zen-shared-home *{-moz-window-dragging:default!important}"));
+ assert.ok(home.includes("#zen-shared-home :is(button,input,textarea,select,summary,a,[draggable=true],.zh-recommendations){-moz-window-dragging:no-drag!important}"));
+ assert.ok(!home.includes("#zen-shared-home,#zen-shared-home *{-moz-window-dragging:no-drag!important}"));
  assert.doesNotMatch(home,/-moz-window-dragging:\s*drag\b/);
  assert.ok(!home.includes("moveTo("));
 });
@@ -40,4 +42,17 @@ test("compact lane padding and hidden tracks override the wide lane cascade",()=
  assert.ok(tabs.includes("padding-block-end:0!important;"));
  assert.ok(tabs.includes("padding-inline:1px!important;"));
  assert.ok(tabs.includes(".oneplane-island-lane {scrollbar-width:none!important;}"));
+});
+
+
+test("Home Fade is a scoped native drag region with no extra DOM hit layer",()=>{
+ const contour=readFileSync(new URL("../src/styles/contour.css.part",import.meta.url),"utf8");
+ const surface=readFileSync(new URL("../src/layout/surface.js.part",import.meta.url),"utf8");
+ const css=readFileSync(new URL("../chrome.css",import.meta.url),"utf8");
+ assert.match(contour,/&:not\(:has\(#zen-shared-home\[data-zh-search\], #zen-shared-home\[data-zh-return\]\)\) #zen-appcontent-navbar-wrapper\[oneplane-home-hold\]\[data-op-panel-open\]:not\(:has\([^\n]+\)\) > #oneplane-toolbar-surface \{\s*-moz-window-dragging: drag !important;/);
+ assert.ok(contour.includes("var(--op-contour-height, 0px)"));
+ assert.ok(surface.includes('"pointer-events": "none"'));
+ assert.ok(base.includes(":not(#oneplane-center-start,#oneplane-center-end)"));
+ assert.match(contour,/#PersonalToolbar :is\(toolbarbutton,button,input,menupopup,panel\) \{\s*-moz-window-dragging: no-drag !important;/);
+ assert.ok(css.includes(contour));
 });

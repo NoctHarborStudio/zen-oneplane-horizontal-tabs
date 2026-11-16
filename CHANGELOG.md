@@ -1,3 +1,9 @@
+## 0.2.0-preview.54 — Native drag on Home toolbar Fade
+
+- Fix preview.49's full-window no-drag subtraction: Home background and noninteractive descendants are neutral in Gecko; real Home controls alone exclude drag.
+- Use the existing measured Unified Contour/Fade surface as the native window handle while Home and its toolbar are open. Keep actual controls and search cancellation protected; no new hit layer, synthetic mouse movement or web-page behavior change.
+- Update drag-ownership regressions and generated files. Live Windows/Zen verification pending.
+
 ## 0.2.0-preview.53 — Compact cascade and startup tests
 
 - Ensure compact lane padding and scrollbar visibility override the more-specific wide lane CSS. Update the existing geometry regression and add startup SearchService readiness/selection-race tests.
