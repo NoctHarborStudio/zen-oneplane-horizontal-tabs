@@ -56,3 +56,12 @@ test("Home Fade is a scoped native drag region with no extra DOM hit layer",()=>
  assert.match(contour,/#PersonalToolbar :is\(toolbarbutton,button,input,menupopup,panel\) \{\s*-moz-window-dragging: no-drag !important;/);
  assert.ok(css.includes(contour));
 });
+
+test("resting strip gaps are native window drag regions without disabling tab drop targets",()=>{
+ assert.ok(base.includes(":not(#oneplane-center-start,#oneplane-center-end):not(#oneplane-tabs)"));
+ assert.match(tabs,/#oneplane-tabs:not\(\[data-op-dragging\],\[data-op-lane-drag\],\[data-op-island-incoming\],\[data-op-cascade\]\) :is\(\.oneplane-tab-list,\.oneplane-island-lane\) \{\s*-moz-window-dragging:drag!important;/);
+ assert.match(tabs,/#oneplane-tabs:is\(\[data-op-dragging\],\[data-op-lane-drag\],\[data-op-island-incoming\],\[data-op-cascade\]\) :is\(\.oneplane-tab-list,\.oneplane-island-lane\) \{\s*-moz-window-dragging:no-drag!important;/);
+ assert.match(tabs,/#oneplane-tabs :is\(\.oneplane-tab,\.oneplane-split-group,\.oneplane-title-island,\.oneplane-new-tab,\.oneplane-overflow-slider,button,input\) \{\s*-moz-window-dragging:no-drag!important;/);
+ assert.ok(tabs.includes("height:6px;min-width:0;"));
+ assert.ok(tabs.includes("height:2px;border:0;border-radius:999px;"));
+});
