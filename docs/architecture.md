@@ -21,17 +21,22 @@ Ordered source sections preserve the original shared window closure. Pure geomet
 
 Remove Compact Mode from the common activation selector and split capability checks from visibility mode. Compact on = overlay/autohide. Compact off = in-flow persistent horizontal toolbar. Preserve native fallback in fullscreen, customization and narrow windows. Test actual Zen before adding Hub.
 
-## Workspace model
+## Workspace model (revised)
 
-Free is a normal native workspace designated by stable UUID, default on ordinary cold startup; do not override command-line space routing, private/unsynced windows or restored data without checking compatibility. Work and Study are optional user-editable templates, not Firefox profiles. Use Zen's native workspace switch and persistence; no close/recreate on switch. Do not delete Zen Basics or other user folders automatically. Containers are separate optional identity isolation. Define migration, startup and last-space behavior explicitly before implementing.
+Exactly one mandatory Free space, designated by stable native Zen UUID. No predefined Work/Study templates, no automatic creation of other spaces. Users create and organize their own native spaces. Free is the ordinary cold-start destination, not an always-resident or shared workspace. Preserve existing spaces and tabs; migration must be non-destructive. Explicit command-line space routing and private/unsynced windows take precedence. See [roadmap.md](roadmap.md) for persistence, memory policy and extensions design.
 
 ## Delivery
 
-1. Source split, pure algorithm tests and reproducible build (this release).
-2. Extract stateful controllers and remove dependence on Compact Mode for OnePlane activation.
-3. Native context menu and Hub shell.
-4. Free/Work/Study over native Zen Spaces.
-5. Essentials, pinned and folders; then movement and native actions.
+1. Source split and deterministic build (done).
+2. Independent compact/persistent layout (done, user tested).
+3. Hub shell and native context menu.
+4. Native workspace engine: Free plus user-created spaces.
+5. Workspace memory policy and safe unloading.
+6. Extension placement and native pin/unpin controls.
+7. Essentials, pins, folders and interactions.
+8. Fluid address animation, integration, stabilization.
+
+See [roadmap.md](roadmap.md) for acceptance criteria and sequencing. Preview numbers are provisional.
 
 Build locally with npm run build, verify with npm run verify, commit sources and generated artifacts atomically. CI checks parity, syntax, algorithms, stable manifest identity, monotonically increasing version/timestamp and served archive. Runtime smoke testing in Zen remains required.
 

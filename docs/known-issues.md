@@ -6,7 +6,7 @@
 - Trigger: click a pending/discarded tab. Intermittent one-frame toolbar/UI displacement; difficult to capture.
 - Suspected code paths: the lazy linked browser's provisional about:blank URI collapses the compact address slot via data-op-empty; native page actions can also change measured widths during selection.
 - Preview.2 mitigation: explicit native empty-tab remains authoritative; suppress provisional blank classification for pending/discarded or recently activated unloaded tabs (bounded 1.5s guard); defer geometry recentering through the existing 180ms switch window.
-- Status: mitigation shipped; **not confirmed fixed** in live Zen. Check repeated restoration, Ctrl+Tab, new empty tabs, both toolbar modes, and genuine navigation to about:blank. If still reproducible, instrument tab selection, URL slot width, native flags, and layout measurements per animation frame.
+- Status: **fixed in the user's live test on 0.2.0-preview.3** (preview.2 runtime). Keep regression coverage for restoration, Ctrl+Tab, true empty tabs and both toolbar modes. Reopen if reproducible.
 
 ## OP-002 — Address opening animation is not fluid / low apparent frame rate
 
