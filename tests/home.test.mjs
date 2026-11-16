@@ -48,7 +48,7 @@ test("Home native search preserves surface on cancel and ignores stale close",()
  function close(){open=false;closed++;finishSearchVisual()}
  function leaveHome(){close()}
  function ensurePrimaryHome(){}
- return {search,searchActive,onSearchClosed,morphFrames,observeSearch,get closed(){return closed},get token(){return searchToken}};
+ return {search,searchActive,onSearchClosed,homeSearchGeometry,revealFrames,observeSearch,get closed(){return closed},get token(){return searchToken}};
  `);
  const calls=[],node=()=>({attrs:new Map(),setAttribute(k,v){this.attrs.set(k,v)},removeAttribute(k){this.attrs.delete(k)},hasAttribute(k){return this.attrs.has(k)},getAttribute(k){return this.attrs.get(k)},querySelector(){return {getBoundingClientRect:()=>({left:20,top:40,width:600,height:56})}}});
  const panel=node(),content=node(),bar=node();bar.view={isOpen:false};
@@ -60,11 +60,12 @@ test("Home native search preserves surface on cancel and ignores stale close",()
  bar.removeAttribute("zen-newtab");a.onSearchClosed({detail:{closeSeq:42,onElementPicked:false}});assert.equal(a.closed,0);assert.equal(a.token,null);
  assert.equal(panel.hasAttribute("data-zh-search"),false);assert.equal(content.hasAttribute("inert"),false);
  a.search();bar.removeAttribute("zen-newtab");a.onSearchClosed({detail:{closeSeq:42,onElementPicked:true}});assert.equal(a.closed,1);
- const frames=a.morphFrames({left:10,top:100,width:600,height:56},{left:0,top:50,width:800,height:400});
- assert.equal(frames[0]["--zh-morph-x"],"-90px");assert.equal(frames[0]["--zh-morph-y"],"50px");
- assert.equal(frames[0]["--zh-morph-sx"],"0.75");assert.equal(frames[0]["--zh-morph-cut"],"344px");
- assert.equal(frames.at(-1)["--zh-morph-cut"],"0px");
- assert.equal(a.morphFrames({width:0,height:0},{width:800,height:400}),null);
+ const geometry=a.homeSearchGeometry({left:10,top:100,width:600,height:56},1000,800);
+ assert.deepEqual(geometry,{left:12,top:100,width:600,header:56,room:684});
+ assert.equal(a.homeSearchGeometry({left:20,top:500,width:600,height:56},1000,800).top,324);
+ assert.equal(a.homeSearchGeometry({left:20,top:100,width:600,height:56},350,800).width,326);
+ assert.deepEqual(a.revealFrames(56,400),[{"--zh-reveal-height":"56px"},{"--zh-reveal-height":"400px"}]);
+ assert.equal(a.revealFrames(0,400),null);
 });
 test("Startup uses existing readiness handshake and one shared claim",()=>{
  assert.ok(layout.includes('window.addEventListener("OnePlane:StartupState",onHomeStartup)'));
@@ -203,4 +204,21 @@ test("Home is primary: repeated clicks, Escape, background opens and real naviga
 test("Home button invokes idempotent show instead of toggle",()=>{
  assert.ok(layout.includes("homeLease?.show();"));assert.ok(!layout.includes("homeLease?.toggle();"));
  assert.ok(core.includes("toggle:()=>!released&&show()"));
+});
+
+test("Home icons request larger cached sizes and use local Steam vector",()=>{
+ const icons=new Function("win",extract("  const steamVector=","  const style=")+"return homeIconURL;")({URL,devicePixelRatio:2});
+ assert.equal(icons("https://example.com/path#part",30),"page-icon:https://example.com/path#size=96");
+ assert.equal(icons("https://example.com/",23),"page-icon:https://example.com/#size=48");
+ assert.ok(icons("https://steamcommunity.com/",30).startsWith("data:image/svg+xml,"));
+ assert.ok(icons("https://store.steampowered.com/",30).startsWith("data:image/svg+xml,"));
+ assert.ok(icons("https://notsteampowered.com/",30).startsWith("page-icon:"));
+});
+test("Home search uses single scoped glass frame and actual height reveal",()=>{
+ assert.ok(core.includes('visibility:hidden;pointer-events:none;transition:none'));
+ assert.ok(core.includes('background:var(--zh-glass)!important;border:1px solid var(--zh-stroke)!important'));
+ assert.ok(core.includes('height:var(--zh-reveal-height)!important'));
+ assert.ok(core.includes('clip-path:none!important;transform:none!important;translate:none!important;scale:1!important'));
+ assert.ok(!core.includes("--zh-morph-cut"));
+ assert.ok(core.includes('searchBar.style?.removeProperty("--zh-search-"+key)'));
 });

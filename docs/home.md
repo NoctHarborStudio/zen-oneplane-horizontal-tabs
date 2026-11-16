@@ -49,3 +49,7 @@ The compact picker now mounts the bounded recommendation list (up to 16), uses n
 ## 0.2.0-preview.45 — native window dragging
 
 Blank Home background is a native Gecko window-drag region. Home content and controls retain no-drag semantics. Toolbar gaps are actual draggable areas, not 1px pointer-transparent spacers. No JavaScript window dragging or changes to the Home state machine.
+
+## 0.2.0-preview.46 — Home search surface and icon quality
+
+Home-origin floating search now uses a scoped root glass surface with one border and radius, aligned to the source field (clamped to leave viewport space for results). Native background child and view backgrounds are transparent; native scale/translate/clip are neutralized only in this session. The old clipped morph is replaced with a measured actual-height reveal. Source content is hidden before opening; cancellation restores Home and removes the session attributes and geometry properties. Resize remeasures the hidden source without restarting the animation. Smart Search remains a native provider. Higher-resolution Places page-icon requests are sized for the card and DPR, with an embedded Steam SVG from Simple Icons (CC0) for Steam-owned domains. No pin data migration. Test actual glass rendering, corners, results height, resize, light theme, reduced motion/transparency, native cancel and non-Home search in Zen.

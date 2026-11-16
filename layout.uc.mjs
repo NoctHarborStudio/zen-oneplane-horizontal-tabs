@@ -106,6 +106,21 @@ function acquireZenHome(win, services) {
     }
     return result;
   }
+  // Prefer high-resolution cached Places icons; use a local scalable Steam
+  // mark where the tab favicon is commonly a 16px bitmap. Simple Icons (CC0).
+  const steamVector="data:image/svg+xml,"+encodeURIComponent("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><defs><linearGradient id=\"s\" x1=\"0\" y1=\"0\" x2=\"0.4\" y2=\"1\"><stop stop-color=\"#102139\"/><stop offset=\"1\" stop-color=\"#176a9b\"/></linearGradient></defs><circle cx=\"12\" cy=\"12\" r=\"11.9\" fill=\"#eaf4ff\"/><path fill=\"url(#s)\" d=\"M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012H7.54zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.253 0-2.265-1.014-2.265-2.265z\"/></svg>");
+  function homeIconURL(value,cssSize=30){
+    const url=new win.URL(value);
+    const host=url.hostname.toLowerCase();
+    if(/(?:^|\.)(?:steampowered\.com|steamcommunity\.com)$/.test(host))return steamVector;
+    url.hash="";
+    const preferred=Math.min(192,Math.max(cssSize>=30?96:48,Math.ceil(cssSize*(Number(win.devicePixelRatio)||1))));
+    return "page-icon:"+url.href+"#size="+preferred;
+  }
+  function setHomeIcon(img,url,size){
+    img.src=homeIconURL(url,size);
+    if(img.src===steamVector)img.addEventListener("error",()=>{const page=new win.URL(url);page.hash="";img.src="page-icon:"+page.href+"#size=96";},{once:true});
+  }
   const style=html("style");style.id="zen-shared-home-style";
   style.textContent=`
 #zen-tabbox-wrapper[data-zr-home-host]{position:relative!important}
@@ -175,20 +190,64 @@ function acquireZenHome(win, services) {
 #zen-shared-home .zh-form input{width:100%;padding:9px 12px;border:1px solid color-mix(in srgb,currentColor 15%,transparent);border-radius:8px;background:color-mix(in srgb,currentColor 6%,transparent)}
 #zen-shared-home .zh-error{font-size:11px;color:light-dark(#a22,#ffb2b2)}
 #zen-shared-home .zh-pin[data-drop]{outline:1px solid AccentColor;border-radius:14px}
-#zen-shared-home[data-zh-search] .zh-content{opacity:0;translate:0 5px;pointer-events:none}
-@property --zh-morph-x{syntax:"<length>";inherits:false;initial-value:0px}
-@property --zh-morph-y{syntax:"<length>";inherits:false;initial-value:0px}
-@property --zh-morph-sx{syntax:"<number>";inherits:false;initial-value:1}
-@property --zh-morph-cut{syntax:"<length>";inherits:false;initial-value:0px}
-@property --zh-morph-alpha{syntax:"<number>";inherits:false;initial-value:1}
-#urlbar[data-zr-home-search][zen-floating-urlbar="true"]{animation:none!important;transition:none!important}
+/* One surface: the Home button is replaced by the real native editor.
+   No overlapping dummy bar and no separate native background silhouette. */
+#zen-shared-home[data-zh-search] .zh-content{opacity:0;visibility:hidden;pointer-events:none;transition:none}
+@property --zh-reveal-height{syntax:"<length>";inherits:false;initial-value:56px}
+#urlbar[data-zr-home-search][zen-floating-urlbar="true"]{
+  --zh-glass:color-mix(in srgb,var(--toolbox-textcolor,var(--toolbar-color,currentColor)) 8%,transparent);
+  --zh-stroke:color-mix(in srgb,var(--toolbox-textcolor,var(--toolbar-color,currentColor)) 14%,transparent);
+  --urlbar-background-color:transparent!important;
+  --urlbar-background-color-focus:transparent!important;
+  --zen-urlbar-background-base:transparent!important;
+  --zen-urlbar-background-transparent:transparent!important;
+  --urlbar-background-overhang-open:0px!important;
+  --urlbar-input-growth-open-inline:0px!important;
+  --urlbar-input-growth-open-block:0px!important;
+  --urlbar-background-border-radius:14px!important;
+  --urlbar-background-border-top-radius-open:14px!important;
+  --urlbar-container-height:var(--zh-search-header,56px)!important;
+  --urlbar-margin-inline:0px!important;
+  --urlbar-container-padding:0px!important;
+  position:fixed!important;inset:auto!important;
+  left:clamp(12px,var(--zh-search-left,12px),max(12px,calc(100vw - var(--zh-search-width,720px) - 12px)))!important;
+  top:clamp(12px,var(--zh-search-top,80px),max(12px,calc(100vh - 180px)))!important;
+  width:min(var(--zh-search-width,720px),calc(100vw - 24px))!important;
+  min-width:0!important;max-width:none!important;
+  height:auto!important;min-height:0!important;max-height:var(--zh-search-room,calc(100vh - 96px))!important;
+  margin:0!important;padding:0!important;box-sizing:border-box!important;
+  position-anchor:none!important;position-area:none!important;
+  background:var(--zh-glass)!important;border:1px solid var(--zh-stroke)!important;
+  border-radius:14px!important;outline:0!important;box-shadow:none!important;
+  overflow:clip!important;clip-path:none!important;transform:none!important;translate:none!important;scale:1!important;
+  animation:none!important;transition:none!important;opacity:1!important;
+}
+#urlbar[data-zr-home-search][zen-floating-urlbar="true"] > .urlbar-background,
+#urlbar[data-zr-home-search][zen-floating-urlbar="true"] .urlbarView-background{
+  background:transparent!important;border:0!important;outline:0!important;box-shadow:none!important;backdrop-filter:none!important;
+  inset:0!important;margin:0!important;transform:none!important;scale:1!important;border-radius:14px!important;
+}
+#urlbar[data-zr-home-search][zen-floating-urlbar="true"] > .urlbar-input-container{
+  box-sizing:border-box!important;min-height:calc(var(--zh-search-header,56px) - 2px)!important;height:calc(var(--zh-search-header,56px) - 2px)!important;
+  max-height:calc(var(--zh-search-header,56px) - 2px)!important;flex-shrink:0!important;
+  background:transparent!important;margin:0!important;padding:0 18px!important;border:0!important;outline:0!important;box-shadow:none!important;border-radius:14px!important;
+}
+#urlbar[data-zr-home-search][zen-floating-urlbar="true"] .urlbarView{
+  background:transparent!important;border:0!important;outline:0!important;box-shadow:none!important;border-radius:0 0 14px 14px!important;
+  flex-shrink:0!important;
+}
+#urlbar[data-zr-home-search][zen-floating-urlbar="true"] #urlbar-results,
+#urlbar[data-zr-home-search][zen-floating-urlbar="true"] #urlbar-results[data-zr-smart-grid]{
+  max-height:max(56px,calc(var(--zh-search-room,calc(100vh - 96px)) - var(--zh-search-header,56px) - 40px))!important;
+  overflow-y:auto!important;scrollbar-width:thin;
+}
+#urlbar[data-zr-home-search][zen-floating-urlbar="true"] #urlbar-results .urlbarView-row{
+  --urlbarview-row-min-height:40px;
+}
 #urlbar[data-zr-home-search-motion="prepare"][zen-floating-urlbar="true"]{opacity:0!important}
-#urlbar[data-zr-home-search-motion="run"][zen-floating-urlbar="true"]{
-  transform-origin:center top!important;
-  translate:calc(-50% + var(--zh-morph-x)) var(--zh-morph-y)!important;
-  scale:var(--zh-morph-sx) 1!important;
-  clip-path:inset(0 0 var(--zh-morph-cut) 0 round 14px)!important;
-  opacity:var(--zh-morph-alpha)!important;
+#urlbar[data-zr-home-search-motion="run"][zen-floating-urlbar="true"]{height:var(--zh-reveal-height)!important}
+@media(prefers-reduced-transparency:reduce){
+  #urlbar[data-zr-home-search][zen-floating-urlbar="true"]{--zh-glass:light-dark(#f4f4f8,#252632)}
 }
 @media(max-width:600px){#zen-shared-home{padding:62px 16px 20px}#zen-shared-home .zh-pin{flex-basis:calc((100% - 24px)/3)}#zen-shared-home .zh-tile{height:84px}#zen-shared-home .zh-space{flex-basis:120px}}
 @media(prefers-reduced-motion:reduce){#zen-shared-home *{transition:none!important;animation:none!important}#zen-shared-home .zh-suggestion:active,#zen-shared-home .zh-suggestion:hover .zh-suggestion-plus{scale:1}}
@@ -260,33 +319,48 @@ function acquireZenHome(win, services) {
   function finishSearchVisual(){
     finishSearchMotion();
     if(searchTimer)win.clearTimeout(searchTimer);searchTimer=0;
-    searchBar?.removeAttribute("data-zr-home-search");searchBar=null;searchToken=null;
+    if(searchBar){
+      searchBar.removeAttribute("data-zr-home-search");
+      for(const key of ["left","top","width","header","room"])searchBar.style?.removeProperty("--zh-search-"+key);
+    }
+    searchBar=null;searchToken=null;
     panel.removeAttribute("data-zh-search");content.removeAttribute("inert");
   }
-  function morphFrames(from,to){
-    if(!from||!to||from.width<=0||from.height<=0||to.width<=0||to.height<=0)return null;
-    const x=from.left+from.width/2-(to.left+to.width/2),y=from.top-to.top;
-    const sx=Math.max(.35,Math.min(1.8,from.width/to.width)),cut=Math.max(0,to.height-from.height);
-    return [
-      {"--zh-morph-x":x+"px","--zh-morph-y":y+"px","--zh-morph-sx":String(sx),"--zh-morph-cut":cut+"px","--zh-morph-alpha":".28",offset:0},
-      {"--zh-morph-x":x*.20+"px","--zh-morph-y":y*.20+"px","--zh-morph-sx":String(1+(sx-1)*.20),"--zh-morph-cut":cut*.72+"px","--zh-morph-alpha":"1",offset:.42},
-      {"--zh-morph-x":"0px","--zh-morph-y":"0px","--zh-morph-sx":"1","--zh-morph-cut":"0px","--zh-morph-alpha":"1",offset:1}
-    ];
+  function homeSearchGeometry(from,viewportWidth,viewportHeight){
+    if(!from||!(from.width>0)||!(from.height>0))return null;
+    const w=Math.max(24,Number(viewportWidth)||1280),h=Math.max(24,Number(viewportHeight)||800);
+    const width=Math.min(from.width,Math.max(1,w-24)),header=from.height;
+    const left=Math.min(Math.max(12,from.left+(from.width-width)/2),Math.max(12,w-width-12));
+    // Align with the original search field whenever space permits. If the
+    // field is low, reserve a usable results area before the window edge.
+    const desired=Math.min(460,Math.max(header+80,h*.67));
+    const top=Math.min(Math.max(12,from.top),Math.max(12,h-desired-16));
+    return {left,top,width,header,room:Math.max(header,h-top-16)};
   }
-  function startSearchMorph(token,from){
-    if(!searchBar||!from||win.matchMedia("(prefers-reduced-motion: reduce)").matches){finishSearchMotion();return;}
-    // Bounded wait for the native floating box; never animate the inline anchor.
+  function applySearchGeometry(bar,geometry){
+    if(!geometry)return;
+    for(const [key,value] of Object.entries(geometry))bar.style?.setProperty("--zh-search-"+key,value+"px");
+  }
+  function revealFrames(header,height){
+    if(!(header>0)||!(height>0))return null;
+    const start=Math.min(header,height);
+    return [{"--zh-reveal-height":start+"px"},{"--zh-reveal-height":height+"px"}];
+  }
+  function startSearchMorph(token,geometry){
+    if(!searchBar||!geometry||win.matchMedia("(prefers-reduced-motion: reduce)").matches){finishSearchMotion();return;}
+    // Measure the final native box AFTER applying our permanent geometry.
+    // Animate its actual height, so the border/radius never detach from it.
     let attempts=0;
     const step=()=>{
       searchFrame=0;
       if(!open||searchToken!==token||!searchBar)return;
       const bar=searchBar;
       if(bar.hasAttribute("open")&&bar.getAttribute("zen-floating-urlbar")==="true"){
-        const box=bar.getBoundingClientRect(),frames=morphFrames(from,box);
+        const box=bar.getBoundingClientRect(),frames=revealFrames(geometry.header,box.height);
         if(frames&&typeof bar.animate==="function"){
           try{
             bar.setAttribute("data-zr-home-search-motion","run");
-            const a=bar.animate(frames,{duration:400,easing:"cubic-bezier(.2,.75,.22,1)",fill:"both"});
+            const a=bar.animate(frames,{duration:300,easing:"cubic-bezier(.2,.75,.25,1)",fill:"both"});
             searchMotion=a;
             a.finished.then(()=>{if(searchMotion===a)finishSearchMotion();},()=>{});
             return;
@@ -302,15 +376,18 @@ function acquireZenHome(win, services) {
     if(!open||searchToken||nativeSearchOpen(win.gURLBar))return;
     const bar=win.gURLBar;if(!bar)return;
     const from=content.querySelector(".zh-search")?.getBoundingClientRect();
+    const geometry=homeSearchGeometry(from,win.innerWidth,win.innerHeight);
     const token={};searchToken=token;searchBar=bar;
+    applySearchGeometry(bar,geometry);
     bar.setAttribute("data-zr-home-search","");
-    if(from&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches)bar.setAttribute("data-zr-home-search-motion","prepare");
+    if(geometry&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches)bar.setAttribute("data-zr-home-search-motion","prepare");
+    // Hide the original Home content before native search can paint.
+    panel.setAttribute("data-zh-search","");content.setAttribute("inert","");
     try{
       if(win.gZenUIManager?.handleNewTab(false,false,"tab",true,token)!==true){
         finishSearchVisual();win.console.warn("[Zen Home] floating search unavailable");return;
       }
-      panel.setAttribute("data-zh-search","");content.setAttribute("inert","");
-      startSearchMorph(token,from);
+      startSearchMorph(token,geometry);
     }catch(error){finishSearchVisual();win.console.warn("[Zen Home] native search",error);}
   }
   function onSearchClosed(event){
@@ -431,7 +508,7 @@ function acquireZenHome(win, services) {
         (rows[Math.min(index,rows.length-1)]||content.querySelector(".zh-custom-link"))?.focus({preventScroll:true});
       });
       row.title=item.url;row.setAttribute("aria-label","Pin "+item.title);
-      const img=html("img");img.alt="";img.draggable=false;img.src="page-icon:"+item.url;
+      const img=html("img");img.alt="";img.draggable=false;setHomeIcon(img,item.url,23);
       const copy=html("span","zh-suggestion-copy"),domain=new win.URL(item.url).hostname;
       copy.append(html("span","",item.title),html("small","",domain+" · "+item.source));
       row.append(img,copy,html("span","zh-suggestion-plus","+"));grid.append(row);
@@ -477,8 +554,8 @@ function acquireZenHome(win, services) {
     if(!items.length)grid.append(html("div","zh-empty",editing?"Add a pinned site to get started.":"Click Customize Home to add your first pinned site."));
     for(const [index,item] of items.entries()){
       const card=html("div","zh-pin"),tile=button("zh-tile","",()=>{if(!editing)navigate(item);});
-      tile.title=item.title;const img=html("img");img.alt="";img.draggable=false;img.src="page-icon:"+item.url;
-      img.addEventListener("error",()=>{img.hidden=true;});tile.append(img,html("span","",item.title));card.append(tile);
+      tile.title=item.title;const img=html("img");img.alt="";img.draggable=false;setHomeIcon(img,item.url,30);
+      tile.append(img,html("span","",item.title));card.append(tile);
       if(editing){
         tile.disabled=true;
         const remove=button("zh-remove","×",()=>save(load().filter(x=>x.id!==item.id)));remove.setAttribute("aria-label","Remove "+item.title);card.append(remove);
@@ -560,6 +637,12 @@ function acquireZenHome(win, services) {
     listen(win,"ZenWorkspaceDataChanged",()=>{if(open&&!switching)render();});
     listen(win,"ZenWorkspacesUIUpdate",()=>{if(open&&!switching)refreshWorkspaceSelection();});
     listen(win,"ZenURLBarClosed",onSearchClosed);
+    listen(win,"resize",()=>{
+      if(!searchToken||!searchBar)return;
+      finishSearchMotion();
+      const from=content.querySelector(".zh-search")?.getBoundingClientRect();
+      applySearchGeometry(searchBar,homeSearchGeometry(from,win.innerWidth,win.innerHeight));
+    });
     if(win.gURLBar){
       const searchObserver=new win.MutationObserver(observeSearch);
       searchObserver.observe(win.gURLBar,{attributes:true,attributeFilter:["open","zen-newtab","focused","zen-floating-urlbar","popover-open"]});

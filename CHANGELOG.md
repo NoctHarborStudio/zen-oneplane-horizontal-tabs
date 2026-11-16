@@ -1,3 +1,10 @@
+## 0.2.0-preview.46 — Home glass search and sharper icons
+
+- Match the native floating search to the Home field's width and position, with viewport bounds. Render one translucent rounded frame; neutralize the opaque native background and competing transforms only for Home sessions.
+- Replace the clip/scale morph with a 300ms actual-height reveal. Hide the Home source before opening, restore on cancellation, and release all session CSS variables. Preserve Smart Search data and native input.
+- Request larger cached favicons and use an embedded scalable Steam mark (Simple Icons, CC0, trademark remains with Valve). No remote icon request by the mod.
+- Native browser visual verification pending.
+
 ## 0.2.0-preview.44 — Scrollable Home pin picker
 
 - Replace recommendation pagination with a native vertical scrollbar and a fixed two-row viewport. Three columns on wide windows, two or one on narrow windows; Workspaces and Done stay outside the scroll region.
