@@ -1,3 +1,10 @@
+## 0.2.0-preview.47 — Home search open/close motion and Gmail icon
+
+- Keep the original-size search header visible while waiting for actual native results; reveal with a bounded 340ms height animation and result fade. Handle late result-height changes.
+- Reverse the real native search height on Escape or captured blank Home clicks; use a visual-only return shell for native cancellation/blur, leaving native result selection and session ownership untouched.
+- Add a local Gmail SVG and restore original cached favicon fallback plus a generic icon on failure.
+- Runtime Zen visual validation pending.
+
 ## 0.2.0-preview.46 — Home glass search and sharper icons
 
 - Match the native floating search to the Home field's width and position, with viewport bounds. Render one translucent rounded frame; neutralize the opaque native background and competing transforms only for Home sessions.

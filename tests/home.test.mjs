@@ -45,10 +45,11 @@ test("Home native search preserves surface on cancel and ignores stale close",()
  const code=extract("  function searchActive(","  function move(");
  const run=new Function("win","panel","content",code+`
  let open=true,searchToken=null,searchBar=null,searchFrame=0,searchMotion=null,searchTimer=0,closed=0;
+ let searchGeometry=null,searchLastHeight=0,searchCurrentHeight=0,searchClosing=false,searchReturn=null,searchReturnFrame=0;
  function close(){open=false;closed++;finishSearchVisual()}
  function leaveHome(){close()}
  function ensurePrimaryHome(){}
- return {search,searchActive,onSearchClosed,homeSearchGeometry,revealFrames,observeSearch,get closed(){return closed},get token(){return searchToken}};
+ return {search,searchActive,onSearchClosed,homeSearchGeometry,revealValue,observeSearch,get closed(){return closed},get token(){return searchToken}};
  `);
  const calls=[],node=()=>({attrs:new Map(),setAttribute(k,v){this.attrs.set(k,v)},removeAttribute(k){this.attrs.delete(k)},hasAttribute(k){return this.attrs.has(k)},getAttribute(k){return this.attrs.get(k)},querySelector(){return {getBoundingClientRect:()=>({left:20,top:40,width:600,height:56})}}});
  const panel=node(),content=node(),bar=node();bar.view={isOpen:false};
@@ -64,8 +65,9 @@ test("Home native search preserves surface on cancel and ignores stale close",()
  assert.deepEqual(geometry,{left:12,top:100,width:600,header:56,room:684});
  assert.equal(a.homeSearchGeometry({left:20,top:500,width:600,height:56},1000,800).top,324);
  assert.equal(a.homeSearchGeometry({left:20,top:100,width:600,height:56},350,800).width,326);
- assert.deepEqual(a.revealFrames(56,400),[{"--zh-reveal-height":"56px"},{"--zh-reveal-height":"400px"}]);
- assert.equal(a.revealFrames(0,400),null);
+ assert.equal(a.revealValue(56,400,0),56);
+ assert.equal(a.revealValue(56,400,1),400);
+ assert.ok(a.revealValue(400,56,.5)>56&&a.revealValue(400,56,.5)<400);
 });
 test("Startup uses existing readiness handshake and one shared claim",()=>{
  assert.ok(layout.includes('window.addEventListener("OnePlane:StartupState",onHomeStartup)'));
@@ -213,12 +215,58 @@ test("Home icons request larger cached sizes and use local Steam vector",()=>{
  assert.ok(icons("https://steamcommunity.com/",30).startsWith("data:image/svg+xml,"));
  assert.ok(icons("https://store.steampowered.com/",30).startsWith("data:image/svg+xml,"));
  assert.ok(icons("https://notsteampowered.com/",30).startsWith("page-icon:"));
+ assert.ok(icons("https://mail.google.com/mail/u/0/#inbox",30).startsWith("data:image/svg+xml,"));
+ assert.ok(icons("https://gmail.com/",23).startsWith("data:image/svg+xml,"));
+ assert.ok(icons("https://notgmail.com/",30).startsWith("page-icon:"));
 });
 test("Home search uses single scoped glass frame and actual height reveal",()=>{
  assert.ok(core.includes('visibility:hidden;pointer-events:none;transition:none'));
  assert.ok(core.includes('background:var(--zh-glass)!important;border:1px solid var(--zh-stroke)!important'));
- assert.ok(core.includes('height:var(--zh-reveal-height)!important'));
+ assert.ok(core.includes('height:var(--zh-reveal-height,var(--zh-search-header,56px))!important'));
  assert.ok(core.includes('clip-path:none!important;transform:none!important;translate:none!important;scale:1!important'));
  assert.ok(!core.includes("--zh-morph-cut"));
  assert.ok(core.includes('searchBar.style?.removeProperty("--zh-search-"+key)'));
+});
+
+test("Home search waits for a real result height and animates both directions",()=>{
+ const code=extract("  function revealValue(","  function search(){");
+ const queue=new Map(),attrs=new Map(),styles=new Map();
+ let seq=0,height=56;
+ const bar={style:{setProperty:(k,v)=>styles.set(k,v),removeProperty:k=>styles.delete(k)},
+  setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k),getAttribute:k=>attrs.get(k),hasAttribute:k=>attrs.has(k),
+  getBoundingClientRect:()=>({height:attrs.has("data-zr-home-search-motion")?Number.parseFloat(styles.get("--zh-reveal-height"))||56:height})};
+ bar.setAttribute("open","");bar.setAttribute("zen-floating-urlbar","true");bar.setAttribute("data-zr-home-search-motion","prepare");
+ const win={requestAnimationFrame(fn){queue.set(++seq,fn);return seq;},cancelAnimationFrame(id){queue.delete(id);},matchMedia:()=>({matches:false})};
+ const run=new Function("win","bar",code+`
+ let open=true,searchToken={},searchBar=bar,searchFrame=0,searchClosing=false,searchLastHeight=56,searchCurrentHeight=56,searchGeometry={header:56,room:600};
+ function nativeSearchOpen(){return true}
+ function finishSearchMotion(){bar.removeAttribute("data-zr-home-search-motion")}
+ return {start:()=>startSearchMorph(searchToken,searchGeometry),close:()=>{searchClosing=true;animateSearchHeight(searchToken,400,56,230,true,()=>{})},get current(){return searchCurrentHeight}};
+ `);
+ const a=run(win,bar);
+ const frame=now=>{const jobs=[...queue.values()];queue.clear();for(const fn of jobs)fn(now)};
+ a.start();frame(0);frame(16);assert.equal(a.current,56);
+ height=400;frame(32);assert.equal(a.current,56);
+ frame(48);frame(150);assert.ok(a.current>56&&a.current<400);
+ frame(400);assert.equal(a.current,400);
+ a.close();frame(416);frame(500);assert.ok(a.current>56&&a.current<400);
+ frame(700);assert.equal(a.current,56);
+});
+test("Home search closing preserves native ownership and has blur fallback",()=>{
+ assert.ok(core.includes("bar._zenHandleUrlbarClose(false,false)"));
+ assert.ok(core.includes("animateSearchHeight(token,from,g.header,230,true"));
+ assert.ok(core.includes("function animateSearchReturn()"));
+ assert.ok(core.includes('panel.removeAttribute("data-zh-return")'));
+ assert.ok(core.includes("if(detail.onElementPicked||detail.onSwitch)leaveHome();"));
+ assert.ok(core.includes('searchReturn?.remove()'));
+});
+test("Home icon error fallback retains original cache URI before generic",()=>{
+ const make=new Function("win",extract("  const steamVector=","  const style=")+"return setHomeIcon;")({URL,devicePixelRatio:1});
+ const listeners=new Map(),img={src:"",addEventListener:(k,fn)=>listeners.set(k,fn),removeEventListener:k=>listeners.delete(k)};
+ const uri="https://example.com/#account";make(img,uri,30);
+ assert.equal(img.src,"page-icon:https://example.com/#size=96");
+ listeners.get("error")();assert.equal(img.src,"page-icon:"+uri);
+ listeners.get("error")();assert.equal(img.src,"page-icon:https://example.com/");
+ listeners.get("error")();assert.ok(img.src.startsWith("data:image/svg+xml,"));
+ listeners.get("error")();assert.equal(listeners.has("error"),false);
 });

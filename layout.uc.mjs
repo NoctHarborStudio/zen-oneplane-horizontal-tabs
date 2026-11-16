@@ -109,17 +109,26 @@ function acquireZenHome(win, services) {
   // Prefer high-resolution cached Places icons; use a local scalable Steam
   // mark where the tab favicon is commonly a 16px bitmap. Simple Icons (CC0).
   const steamVector="data:image/svg+xml,"+encodeURIComponent("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><defs><linearGradient id=\"s\" x1=\"0\" y1=\"0\" x2=\"0.4\" y2=\"1\"><stop stop-color=\"#102139\"/><stop offset=\"1\" stop-color=\"#176a9b\"/></linearGradient></defs><circle cx=\"12\" cy=\"12\" r=\"11.9\" fill=\"#eaf4ff\"/><path fill=\"url(#s)\" d=\"M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012H7.54zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.253 0-2.265-1.014-2.265-2.265z\"/></svg>");
+  const gmailVector="data:image/svg+xml,"+encodeURIComponent("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 48 48\"><path fill=\"#4285f4\" d=\"M3 16l9 7v15H6a3 3 0 0 1-3-3z\"/><path fill=\"#34a853\" d=\"M45 16l-9 7v15h6a3 3 0 0 0 3-3z\"/><path fill=\"#fbbc04\" d=\"M36 11.75l3.6-2.7A3.38 3.38 0 0 1 45 11.75V16l-9 7z\"/><path fill=\"#ea4335\" d=\"M12 11.75l12 9 12-9V23l-12 9-12-9z\"/><path fill=\"#c5221f\" d=\"M3 11.75a3.38 3.38 0 0 1 5.4-2.7l3.6 2.7V23l-9-7z\"/></svg>");
+  const genericVector="data:image/svg+xml,"+encodeURIComponent("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#969cac\" stroke-width=\"1.6\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><ellipse cx=\"12\" cy=\"12\" rx=\"4\" ry=\"9\"/><path d=\"M3 12h18M5 7h14M5 17h14\"/></svg>");
   function homeIconURL(value,cssSize=30){
     const url=new win.URL(value);
     const host=url.hostname.toLowerCase();
     if(/(?:^|\.)(?:steampowered\.com|steamcommunity\.com)$/.test(host))return steamVector;
+    if(host==="mail.google.com"||/(?:^|\.)gmail\.com$/.test(host))return gmailVector;
     url.hash="";
     const preferred=Math.min(192,Math.max(cssSize>=30?96:48,Math.ceil(cssSize*(Number(win.devicePixelRatio)||1))));
     return "page-icon:"+url.href+"#size="+preferred;
   }
   function setHomeIcon(img,url,size){
-    img.src=homeIconURL(url,size);
-    if(img.src===steamVector)img.addEventListener("error",()=>{const page=new win.URL(url);page.hash="";img.src="page-icon:"+page.href+"#size=96";},{once:true});
+    const page=new win.URL(url);page.hash="";
+    const candidates=[...new Set([homeIconURL(url,size),"page-icon:"+url,"page-icon:"+page.href,genericVector])];
+    let index=0;
+    const retry=()=>{
+      if(++index<candidates.length)img.src=candidates[index];
+      else img.removeEventListener("error",retry);
+    };
+    img.addEventListener("error",retry);img.src=candidates[0];
   }
   const style=html("style");style.id="zen-shared-home-style";
   style.textContent=`
@@ -244,8 +253,25 @@ function acquireZenHome(win, services) {
 #urlbar[data-zr-home-search][zen-floating-urlbar="true"] #urlbar-results .urlbarView-row{
   --urlbarview-row-min-height:40px;
 }
-#urlbar[data-zr-home-search-motion="prepare"][zen-floating-urlbar="true"]{opacity:0!important}
-#urlbar[data-zr-home-search-motion="run"][zen-floating-urlbar="true"]{height:var(--zh-reveal-height)!important}
+#urlbar[data-zr-home-search-motion="prepare"][zen-floating-urlbar="true"],
+#urlbar[data-zr-home-search-motion="run"][zen-floating-urlbar="true"]{
+  height:var(--zh-reveal-height,var(--zh-search-header,56px))!important;
+}
+#urlbar[data-zr-home-search-motion="prepare"][zen-floating-urlbar="true"] .urlbarView{opacity:0!important}
+#urlbar[data-zr-home-search-motion="run"][zen-floating-urlbar="true"] .urlbarView{opacity:var(--zh-results-alpha,1)!important}
+#urlbar[data-zr-home-search-motion="closed"][zen-floating-urlbar="true"]{opacity:0!important}
+#zen-home-search-return{
+  position:fixed;z-index:2147483000;box-sizing:border-box;overflow:hidden;pointer-events:none;
+  background:color-mix(in srgb,var(--toolbox-textcolor,var(--toolbar-color,currentColor)) 8%,transparent);
+  border:1px solid color-mix(in srgb,var(--toolbox-textcolor,var(--toolbar-color,currentColor)) 14%,transparent);
+  border-radius:14px;color:var(--toolbox-textcolor,var(--toolbar-color,currentColor));font:menu;
+}
+#zen-home-search-return .zh-return-header{display:flex;align-items:center;gap:12px;padding:0 19px;box-sizing:border-box;white-space:nowrap}
+#zen-home-search-return .zh-return-header svg{width:17px;height:17px;opacity:.7;flex:none}
+#zen-shared-home[data-zh-return] .zh-content{visibility:visible;opacity:1;transition:none;pointer-events:none}
+#zen-shared-home[data-zh-return] .zh-search{visibility:hidden}
+#zen-shared-home[data-zh-return] .zh-section,#zen-shared-home[data-zh-return] .zh-footer{animation:zh-picker-enter 220ms ease both}
+@media(prefers-reduced-transparency:reduce){#zen-home-search-return{background:light-dark(#f4f4f8,#252632)}}
 @media(prefers-reduced-transparency:reduce){
   #urlbar[data-zr-home-search][zen-floating-urlbar="true"]{--zh-glass:light-dark(#f4f4f8,#252632)}
 }
@@ -257,6 +283,7 @@ function acquireZenHome(win, services) {
   const content=html("main","zh-content");panel.append(content);
   let open=false,editing=false,dead=false,switching=false,adding=false,dragId=null,focusHome=null,oldInert=false,covered=false,motion=null,searchToken=null,startupHome=false,homeOnPlaceholder=false;
   let searchFrame=0,searchMotion=null,searchTimer=0,searchBar=null;
+  let searchGeometry=null,searchLastHeight=0,searchCurrentHeight=0,searchClosing=false,searchReturn=null,searchReturnFrame=0;
   let pinScrollTop=0,pinCustom=false,pinViewMode="home";
   const leases=new Set(),cleanups=[];
   function listen(node,type,fn,options){node.addEventListener(type,fn,options);cleanups.push(()=>node.removeEventListener(type,fn,options));}
@@ -314,17 +341,21 @@ function acquireZenHome(win, services) {
     searchFrame=0;
     const a=searchMotion;searchMotion=null;
     searchBar?.removeAttribute("data-zr-home-search-motion");
+    searchBar?.style?.removeProperty("--zh-reveal-height");
+    searchBar?.style?.removeProperty("--zh-results-alpha");
     try{a?.cancel();}catch{}
   }
   function finishSearchVisual(){
     finishSearchMotion();
     if(searchTimer)win.clearTimeout(searchTimer);searchTimer=0;
+    if(searchReturnFrame)win.cancelAnimationFrame(searchReturnFrame);searchReturnFrame=0;
+    searchReturn?.remove();searchReturn=null;
     if(searchBar){
       searchBar.removeAttribute("data-zr-home-search");
       for(const key of ["left","top","width","header","room"])searchBar.style?.removeProperty("--zh-search-"+key);
     }
-    searchBar=null;searchToken=null;
-    panel.removeAttribute("data-zh-search");content.removeAttribute("inert");
+    searchBar=null;searchToken=null;searchGeometry=null;searchLastHeight=0;searchCurrentHeight=0;searchClosing=false;
+    panel.removeAttribute("data-zh-search");panel.removeAttribute("data-zh-return");content.removeAttribute("inert");
   }
   function homeSearchGeometry(from,viewportWidth,viewportHeight){
     if(!from||!(from.width>0)||!(from.height>0))return null;
@@ -341,33 +372,72 @@ function acquireZenHome(win, services) {
     if(!geometry)return;
     for(const [key,value] of Object.entries(geometry))bar.style?.setProperty("--zh-search-"+key,value+"px");
   }
-  function revealFrames(header,height){
-    if(!(header>0)||!(height>0))return null;
-    const start=Math.min(header,height);
-    return [{"--zh-reveal-height":start+"px"},{"--zh-reveal-height":height+"px"}];
+  // Use an explicit bounded frame driver instead of depending on Gecko
+  // interpolating a registered custom property. The only per-frame work
+  // is writing two values to this one search surface; no layout reads.
+  function revealValue(from,to,progress){
+    const t=Math.max(0,Math.min(1,progress)),eased=1-Math.pow(1-t,3);
+    return from+(to-from)*eased;
+  }
+  function paintSearchHeight(bar,height,alpha){
+    searchCurrentHeight=height;
+    bar.style?.setProperty("--zh-reveal-height",height+"px");
+    bar.style?.setProperty("--zh-results-alpha",String(Math.max(0,Math.min(1,alpha))));
+  }
+  function naturalSearchHeight(bar,geometry){
+    // Remove the height constraint for this synchronous measurement only;
+    // restore before painting. Unlike measuring the prepared header, this
+    // includes the asynchronous native results and the actual box border.
+    const phase=bar.getAttribute("data-zr-home-search-motion");
+    bar.removeAttribute("data-zr-home-search-motion");
+    const h=bar.getBoundingClientRect().height;
+    if(phase)bar.setAttribute("data-zr-home-search-motion",phase);
+    return Math.max(geometry.header,Math.min(geometry.room,h||geometry.header));
+  }
+  function animateSearchHeight(token,from,to,duration,closing,done){
+    if(searchFrame)win.cancelAnimationFrame(searchFrame);
+    searchFrame=0;
+    const bar=searchBar;if(!bar)return;
+    bar.setAttribute("data-zr-home-search-motion","run");
+    const header=searchGeometry?.header||56;
+    const alpha=h=>Math.min(1,Math.max(0,(h-header)/100));
+    paintSearchHeight(bar,from,alpha(from));
+    let start=null;
+    const tick=now=>{
+      searchFrame=0;
+      if(!open||searchToken!==token||searchBar!==bar||searchClosing!==closing)return;
+      if(start===null)start=now;
+      const p=Math.min(1,(now-start)/duration),height=revealValue(from,to,p);
+      paintSearchHeight(bar,height,alpha(height));
+      if(p<1)searchFrame=win.requestAnimationFrame(tick);else done();
+    };
+    searchFrame=win.requestAnimationFrame(tick);
   }
   function startSearchMorph(token,geometry){
     if(!searchBar||!geometry||win.matchMedia("(prefers-reduced-motion: reduce)").matches){finishSearchMotion();return;}
-    // Measure the final native box AFTER applying our permanent geometry.
-    // Animate its actual height, so the border/radius never detach from it.
+    // The field stays visible at its original height while waiting for
+    // native/Smart Search rows, rather than revealing a full popup late.
     let attempts=0;
     const step=()=>{
       searchFrame=0;
-      if(!open||searchToken!==token||!searchBar)return;
+      if(!open||searchToken!==token||!searchBar||searchClosing)return;
       const bar=searchBar;
       if(bar.hasAttribute("open")&&bar.getAttribute("zen-floating-urlbar")==="true"){
-        const box=bar.getBoundingClientRect(),frames=revealFrames(geometry.header,box.height);
-        if(frames&&typeof bar.animate==="function"){
-          try{
-            bar.setAttribute("data-zr-home-search-motion","run");
-            const a=bar.animate(frames,{duration:300,easing:"cubic-bezier(.2,.75,.25,1)",fill:"both"});
-            searchMotion=a;
-            a.finished.then(()=>{if(searchMotion===a)finishSearchMotion();},()=>{});
-            return;
-          }catch(error){win.console.warn("[Zen Home] search motion",error);}
+        const target=naturalSearchHeight(bar,geometry);
+        if(target>geometry.header+8){
+          searchLastHeight=target;
+          const reveal=(from,to,round)=>{
+            animateSearchHeight(token,from,to,round?160:340,false,()=>{
+              const latest=naturalSearchHeight(bar,geometry);
+              searchLastHeight=latest;
+              if(Math.abs(latest-to)>5&&round<2){reveal(to,latest,round+1);return;}
+              finishSearchMotion();
+            });
+          };
+          reveal(geometry.header,target,0);return;
         }
       }
-      if(++attempts<12&&nativeSearchOpen(bar))searchFrame=win.requestAnimationFrame(step);
+      if(++attempts<120&&nativeSearchOpen(bar))searchFrame=win.requestAnimationFrame(step);
       else finishSearchMotion();
     };
     searchFrame=win.requestAnimationFrame(step);
@@ -377,11 +447,14 @@ function acquireZenHome(win, services) {
     const bar=win.gURLBar;if(!bar)return;
     const from=content.querySelector(".zh-search")?.getBoundingClientRect();
     const geometry=homeSearchGeometry(from,win.innerWidth,win.innerHeight);
-    const token={};searchToken=token;searchBar=bar;
+    const token={};searchToken=token;searchBar=bar;searchGeometry=geometry;
+    searchLastHeight=searchCurrentHeight=geometry?.header||56;
     applySearchGeometry(bar,geometry);
     bar.setAttribute("data-zr-home-search","");
-    if(geometry&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches)bar.setAttribute("data-zr-home-search-motion","prepare");
-    // Hide the original Home content before native search can paint.
+    if(geometry&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches){
+      paintSearchHeight(bar,geometry.header,0);
+      bar.setAttribute("data-zr-home-search-motion","prepare");
+    }
     panel.setAttribute("data-zh-search","");content.setAttribute("inert","");
     try{
       if(win.gZenUIManager?.handleNewTab(false,false,"tab",true,token)!==true){
@@ -390,22 +463,87 @@ function acquireZenHome(win, services) {
       startSearchMorph(token,geometry);
     }catch(error){finishSearchVisual();win.console.warn("[Zen Home] native search",error);}
   }
+  function finishNativeCancel(){
+    const bar=searchBar;
+    // Use Zen's own session closure; do not replace its provider or patch
+    // its methods. Native cancellation still runs even if animation fails.
+    try{
+      if(typeof bar?._zenHandleUrlbarClose==="function")bar._zenHandleUrlbarClose(false,false);
+      else bar?.view?.close();
+      bar?.blur?.();
+    }catch(error){win.console.warn("[Zen Home] search cancel",error);finishSearchVisual();}
+  }
+  function cancelHomeSearch(){
+    if(!searchToken||!searchBar||!searchGeometry||searchClosing||!nativeSearchOpen(searchBar))return false;
+    if(win.matchMedia("(prefers-reduced-motion: reduce)").matches)return false;
+    const token=searchToken,bar=searchBar,g=searchGeometry;
+    if(bar.getAttribute("zen-floating-urlbar")!=="true")return false;
+    const from=Math.max(g.header,Math.min(g.room,bar.getBoundingClientRect().height||searchCurrentHeight||g.header));
+    searchClosing=true;searchLastHeight=from;
+    animateSearchHeight(token,from,g.header,230,true,()=>{
+      // Keep the native header collapsed until Zen acknowledges closure.
+      finishNativeCancel();
+      if(searchToken===token){
+        if(searchTimer)win.clearTimeout(searchTimer);
+        searchTimer=win.setTimeout(()=>{if(searchToken===token)finishSearchVisual();},500);
+      }
+    });
+    return true;
+  }
+  function animateSearchReturn(){
+    if(!searchToken||!searchGeometry||searchReturn)return;
+    if(win.matchMedia("(prefers-reduced-motion: reduce)").matches){finishSearchVisual();return;}
+    const g=searchGeometry,bar=searchBar;
+    // Zen may destroy the top-layer popover before notifying us (blur,
+    // outside click). A non-interactive glass header is the visual-only
+    // fallback; it never duplicates the native editable input or results.
+    const from=searchClosing?searchCurrentHeight:(bar?.getAttribute("zen-floating-urlbar")==="true"?bar.getBoundingClientRect().height:searchLastHeight);
+    const height=Math.max(g.header,Math.min(g.room,from||searchLastHeight||g.header));
+    finishSearchMotion();
+    if(searchTimer)win.clearTimeout(searchTimer);searchTimer=0;
+    if(bar)bar.setAttribute("data-zr-home-search-motion","closed");
+    const shell=html("div");shell.id="zen-home-search-return";shell.setAttribute("aria-hidden","true");
+    const source=content.querySelector(".zh-search");
+    const header=html("div","zh-return-header");
+    const icon=source?.querySelector("svg")?.cloneNode(true);
+    if(icon)header.append(icon);
+    header.append(html("span","","Search or enter a URL"));shell.append(header);
+    const dest=source?.getBoundingClientRect()||{left:g.left,top:g.top,width:g.width,height:g.header};
+    Object.assign(shell.style,{left:g.left+"px",top:g.top+"px",width:g.width+"px",height:height+"px"});
+    header.style.height=g.header+"px";root.append(shell);searchReturn=shell;
+    panel.setAttribute("data-zh-return","");
+    const token=searchToken;let start=null;
+    const tick=now=>{
+      searchReturnFrame=0;if(!open||searchToken!==token||searchReturn!==shell)return;
+      if(start===null)start=now;
+      const p=Math.min(1,(now-start)/(searchClosing?120:240));
+      shell.style.height=revealValue(height,dest.height,p)+"px";
+      shell.style.top=revealValue(g.top,dest.top,p)+"px";
+      shell.style.left=revealValue(g.left,dest.left,p)+"px";
+      shell.style.width=revealValue(g.width,dest.width,p)+"px";
+      shell.style.opacity=String(1-Math.max(0,(p-.8)/.2));
+      if(p<1)searchReturnFrame=win.requestAnimationFrame(tick);
+      else{finishSearchVisual();content.querySelector(".zh-search")?.focus({preventScroll:true});}
+    };
+    searchReturnFrame=win.requestAnimationFrame(tick);
+  }
   function onSearchClosed(event){
     if(!open){ensurePrimaryHome();return;}
     const detail=event.detail;
     if(!searchToken||detail?.closeSeq!==searchToken.id)return;
     if(detail.onElementPicked||detail.onSwitch)leaveHome();
-    else finishSearchVisual();
+    else animateSearchReturn();
   }
   function observeSearch(){
     if(!searchToken||!searchBar){if(!open)ensurePrimaryHome();return;}
+    if(searchReturn)return;
     if(nativeSearchOpen(searchBar)){
       if(searchTimer)win.clearTimeout(searchTimer);searchTimer=0;return;
     }
-    // Allow Zen's token-bearing event to run first; recover on outside cancel.
+    // Native close can omit its event. Recover without leaving Home hidden.
     if(!searchTimer)searchTimer=win.setTimeout(()=>{
-      searchTimer=0;if(searchToken&&!nativeSearchOpen(searchBar))finishSearchVisual();
-    },160);
+      searchTimer=0;if(searchToken&&!nativeSearchOpen(searchBar))animateSearchReturn();
+    },32);
   }
   function move(id,targetId){
     const items=load(),from=items.findIndex(x=>x.id===id),to=items.findIndex(x=>x.id===targetId);
@@ -639,11 +777,22 @@ function acquireZenHome(win, services) {
     listen(win,"ZenURLBarClosed",onSearchClosed);
     listen(win,"resize",()=>{
       if(!searchToken||!searchBar)return;
+      if(searchClosing||searchReturn){finishNativeCancel();finishSearchVisual();return;}
       finishSearchMotion();
       const from=content.querySelector(".zh-search")?.getBoundingClientRect();
-      applySearchGeometry(searchBar,homeSearchGeometry(from,win.innerWidth,win.innerHeight));
+      searchGeometry=homeSearchGeometry(from,win.innerWidth,win.innerHeight);
+      applySearchGeometry(searchBar,searchGeometry);
     });
     if(win.gURLBar){
+      // Remember the latest painted height for native blur/popover teardown.
+      if(typeof win.ResizeObserver==="function"){
+        const sizes=new win.ResizeObserver(()=>{
+          if(searchToken&&!searchClosing&&!searchReturn&&searchBar?.getAttribute("zen-floating-urlbar")==="true"&&nativeSearchOpen(searchBar)){
+            const h=searchBar.getBoundingClientRect().height;
+            if(h>0)searchLastHeight=h;
+          }
+        });sizes.observe(win.gURLBar);cleanups.push(()=>sizes.disconnect());
+      }
       const searchObserver=new win.MutationObserver(observeSearch);
       searchObserver.observe(win.gURLBar,{attributes:true,attributeFilter:["open","zen-newtab","focused","zen-floating-urlbar","popover-open"]});
       cleanups.push(()=>searchObserver.disconnect());
@@ -653,7 +802,16 @@ function acquireZenHome(win, services) {
       if(!open)return;
       if(e.target?.closest?.("#PlacesToolbarItems .bookmark-item:not([container]),#OtherBookmarks .bookmark-item:not([container]),#back-button,#forward-button,#reload-button,#stop-reload-button"))leaveHome();
     },true);
-    listen(win,"keydown",e=>{if(open&&e.key==="Escape"&&!searchActive()){e.preventDefault();e.stopPropagation();if(adding&&pinCustom){pinCustom=false;render();content.querySelector(".zh-suggestion, .zh-custom-link")?.focus({preventScroll:true});}else if(adding){leavePinPicker();}else if(editing){editing=false;render();}else content.querySelector(".zh-search")?.focus({preventScroll:true});}},true);
+    listen(win,"keydown",e=>{
+      if(open&&e.key==="Escape"&&searchToken&&!searchReturn){
+        // Do not swallow Escape belonging to an autocomplete sub-popup or
+        // search mode picker; ordinary Home search cancellation folds first.
+        if(!e.defaultPrevented&&!e.altKey&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&
+           !searchBar?.searchMode&&!searchBar?.hasAttribute("has-popup-open")&&
+           (searchClosing||cancelHomeSearch())){e.preventDefault();e.stopImmediatePropagation();return;}
+      }
+      if(open&&e.key==="Escape"&&!searchActive()){e.preventDefault();e.stopPropagation();if(adding&&pinCustom){pinCustom=false;render();content.querySelector(".zh-suggestion, .zh-custom-link")?.focus({preventScroll:true});}else if(adding){leavePinPicker();}else if(editing){editing=false;render();}else content.querySelector(".zh-search")?.focus({preventScroll:true});}},true);
+    listen(panel,"pointerdown",e=>{if(e.target===panel&&searchToken&&!searchClosing&&cancelHomeSearch()){e.preventDefault();e.stopPropagation();}},true);
     const stateObserver=new win.MutationObserver(()=>{if(open&&!allowed())close();else if(!open)ensurePrimaryHome();});
     stateObserver.observe(root,{attributes:true,attributeFilter:["customizing","inDOMFullscreen","inFullscreen","popup-window","data-op-startup-ready"]});cleanups.push(()=>stateObserver.disconnect());
     listen(win,"unload",destroy,{once:true});
