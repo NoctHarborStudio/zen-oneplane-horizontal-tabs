@@ -1,3 +1,7 @@
+## 0.2.0-preview.58 — Home footer return
+
+- Use the footer's resting opacity when animating Customize back into view, not its search-hidden opacity.
+
 ## 0.2.0-preview.57 — Progressive Home card return
 
 - Reveal individual pinned and workspace cards as their own row becomes uncovered, with smooth opacity, clipping and a subtle 6px rise. Headings and footer follow the same edge-driven motion. No abrupt final opacity reset.

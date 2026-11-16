@@ -487,7 +487,8 @@ function acquireZenHome(win, services) {
     for(const node of content.querySelectorAll(".zh-section h3,.zh-pin,.zh-pins .zh-empty,.zh-editbar,.zh-space,.zh-footer")){
       const rect=node.getBoundingClientRect();
       if(rect.height<=0||rect.bottom<=bounds.top||rect.top>=bounds.bottom)continue;
-      const base=Number.parseFloat(win.getComputedStyle(node).opacity);
+      // Footer itself is hidden by data-zh-search; its resting opacity is 1.
+      const base=node.classList.contains("zh-footer")?1:Number.parseFloat(win.getComputedStyle(node).opacity);
       parts.push({node,top:rect.top,height:rect.height,base:Number.isFinite(base)?base:1,last:null});
     }
     return parts;

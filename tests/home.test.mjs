@@ -336,3 +336,7 @@ test("Home close reuses an unchanged snapshot and avoids unnecessary geometry wr
  assert.ok(core.includes("maxFrameGap:Math.round(maxFrameGap)"));
  assert.ok(core.includes('if(part.last===key)continue'));
 });
+
+test("Home footer return uses resting opacity rather than search-hidden opacity",()=>{
+ assert.ok(core.includes('node.classList.contains("zh-footer")?1:'));
+});
