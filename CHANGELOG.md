@@ -1,3 +1,9 @@
+## 0.2.0-preview.42 — Compact Home Add Pin mode
+
+- Show only three recommended sites per page, with previous/next navigation. Add mode replaces the search and existing pinned grid, retaining Workspaces and a single Done control.
+- Custom URL entry replaces the recommendations instead of expanding the page; Escape/Done return through the editing states. Existing pins remain saved.
+- Responsive short/narrow layout; no changes to Smart Search or tab lanes.
+
 ## 0.2.0-preview.41 — Independent tab lanes
 
 - Native thin horizontal scrollbars and wheel/trackpad scrolling for each overflowing lane around Home, without scrolling the opposite lane or the web page. Keep the left lane initially aligned toward Home and hide indicators outside their viewport.

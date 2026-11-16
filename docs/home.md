@@ -33,3 +33,7 @@ Home invokes the optional window-local `__zenRefinedWorkspaceTransition.run(nati
 ## 0.2.0-preview.39 — recommended pins
 
 Add Pin is available only in Customize. The portable core reads native Places toolbar bookmark nodes in display order, then visible native tabs ordered by last activity. Exact normalized URLs are deduplicated and already pinned URLs omitted; HTTP(S) only, up to 16 suggestions. No history query, remote suggestions, or external icon fetch. Clicking a suggestion saves its title and URL immediately while retaining the picker. Manual URL entry is optional and falls back to the domain as title. Escape closes the picker before leaving customization. Search styling is deferred. Test actual Places toolbar node data, pending tabs, multiple pins, duplicate filtering, persistence, and narrow layouts in Zen.
+
+## 0.2.0-preview.42 — Compact Add Pin
+
+Add Pin is a dedicated substate of Customize. It replaces the search and existing pinned grid with a compact recommendation picker, displays at most three cards per page, retains Workspaces and one footer Done. Page index clamps after additions; custom URL form replaces recommendations rather than expanding the page. Done returns to Customize, Escape returns from custom form to recommendations first. Existing pin data remains unchanged. Verify short/portrait windows and real browser focus.

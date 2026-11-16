@@ -120,3 +120,21 @@ test("Home pin picker uses native sources and manual title is optional",()=>{
  assert.ok(core.includes('button("zh-small zh-add-pin","+ Add Pin"'));
  assert.ok(core.includes('if(editing){'));
 });
+
+test("Add Pin recommendation pages contain at most three entries and clamp after pinning",()=>{
+ const page=new Function(extract("  function pinPageSlice(","  function leavePinPicker(")+"return pinPageSlice")();
+ assert.deepEqual(page([1,2,3,4,5,6,7],0),{index:0,pages:3,items:[1,2,3]});
+ assert.deepEqual(page([1,2,3,4,5,6,7],1),{index:1,pages:3,items:[4,5,6]});
+ assert.deepEqual(page([1,2,3,4,5,6],2),{index:1,pages:2,items:[4,5,6]});
+ assert.deepEqual(page([],10),{index:0,pages:1,items:[]});
+ assert.equal(page([1,2,3],-1).index,0);
+});
+test("Add Pin replaces search and pinned grid but retains shared workspaces and footer",()=>{
+ const render=extract("  function render()","  function show(");
+ assert.ok(render.indexOf("if(adding){")<render.indexOf('button("zh-search"'));
+ assert.ok(render.indexOf("}else{")<render.indexOf('button("zh-search"'));
+ assert.ok(render.includes("if(adding){leavePinPicker();return;}"));
+ assert.ok(render.indexOf("const manager=win.gZenWorkspaces")>render.indexOf("content.append(section);\n    }"));
+ assert.ok(core.includes("for(const item of page.items)"));
+ assert.ok(core.includes('grid-template-columns:repeat(3,minmax(0,1fr))'));
+});
