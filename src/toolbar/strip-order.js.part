@@ -12,6 +12,7 @@
   function applyStripPartition(plan){
     if(leftLane.parentElement!==list)list.append(leftLane,rightLane,bottomLane);
     const active=document.activeElement;
+    const selected=entries.get(browser.selectedTab)?.item,previousLane=selected?.closest(".oneplane-island-lane");
     mountLaneNodes(leftLane,plan.topLeft.map(i=>stripOrderSnapshot[i]));
     mountLaneNodes(rightLane,plan.topRight.map(i=>stripOrderSnapshot[i]));
     mountLaneNodes(bottomLane,plan.lower.map(i=>stripOrderSnapshot[i]));
@@ -26,6 +27,7 @@
       scheduleGeometry();scheduleContour();
     }
     if(active&&list.contains(active)&&document.activeElement!==active)active.focus?.({preventScroll:true});
+    if(selected&&previousLane!==selected.closest(".oneplane-island-lane")&&!row.hasAttribute("data-op-home-open"))window.requestAnimationFrame(revealSelectedInStrip);
   }
   function placeStripOrder(order) {
     if(row.hasAttribute("data-op-dragging"))return;

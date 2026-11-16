@@ -56,6 +56,11 @@
     return Array.from(group?.tabs || []).filter(validNativeTab);
   }
   function dropTarget(event) {
+    if(useLaneDrop()){
+      const tab=readDraggedTab(event),owner=tabOwner(tab),group=owner?.[DRAG_CONTROLLER]?.group();
+      const source=owner===window?(group?splitEntries.get(group)?.box:entries.get(tab)?.item):null;
+      return laneDropTarget(laneAtPoint({x:event.clientX,y:event.clientY}),event.clientX,isStripNode(source)?source:null);
+    }
     const children = stripNodes();
     if (!children.length) return null;
     let element = event.target?.closest?.(".oneplane-split-group, .oneplane-tab");

@@ -32,9 +32,10 @@
       --op-drag-x: 0px;
       transform: translateX(var(--op-drag-x));
     }
-    #oneplane-tabs[data-op-inline-drag] .oneplane-tab-list {
+    #oneplane-tabs[data-op-inline-drag]:not([data-op-lane-drag]) .oneplane-tab-list {
       overflow: visible !important;
     }
+    #oneplane-tabs [data-op-lane-ghost] {opacity:0!important;pointer-events:none!important;}
     #oneplane-tabs [data-op-drag-follow] {
       position: relative;
       z-index: 12 !important;

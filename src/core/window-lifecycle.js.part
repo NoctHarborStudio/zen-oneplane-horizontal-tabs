@@ -50,7 +50,7 @@
     splitZone.removeEventListener("dragover", onSplitDragOver);
     splitZone.removeEventListener("drop", onSplitDrop);
     splitZone.remove();
-    for(const lane of [list,leftLane,rightLane]){
+    for(const lane of [list,leftLane,rightLane,bottomLane]){
       lane.removeEventListener("scroll",refreshIndicator);
       lane.removeEventListener("wheel",onLaneWheel);
     }
@@ -68,6 +68,7 @@
     try { browser.removeProgressListener(progressListener); } catch {}
     url.removeAttribute("data-op-empty");
     url.removeAttribute("data-op-url-ready");
+    url.style.removeProperty("--op-url");
     for (const name of ["--op-url-expanded-width", "--op-url-compact-width", "--op-url-anchor-left", "--op-url-anchor-top", "--op-url-header-height"]) url.style.removeProperty(name);
     toolbarWrapper?.style.removeProperty("--op-measured-toolbar-height");
     surface.remove();
@@ -149,7 +150,7 @@
     applyHoverMode();
     sync();
     try { browser.addProgressListener(progressListener); } catch {}
-    for(const lane of [list,leftLane,rightLane]){
+    for(const lane of [list,leftLane,rightLane,bottomLane]){
       lane.addEventListener("scroll",refreshIndicator,{passive:true});
       lane.addEventListener("wheel",onLaneWheel,{passive:false});
     }

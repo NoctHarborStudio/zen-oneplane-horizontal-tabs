@@ -66,6 +66,7 @@
       entry.item.toggleAttribute("data-muted", muted);
       entry.audio.title = muted ? "Tab muted" : audible ? "Playing audio" : "";
       entry.button.setAttribute("aria-selected", String(selected));
+      entry.button.title=label;
       entry.button.setAttribute("aria-label", label + (split ? ", Split View" : "") + (muted ? ", muted" : audible ? ", playing audio" : ""));
       if (entry.title.textContent !== label) entry.title.textContent = label;
       const src = favicon(tab);
@@ -102,7 +103,7 @@
     // Count each actual visible tab, including split members, but never
     // the group wrapper, handle or plus. Use rendered order, not native
     // indexes, because a split can collect non-adjacent native tabs.
-    const visualTabs = Array.from(list.querySelectorAll(".oneplane-tab"));
+    const visualTabs=stripNodes().flatMap(n=>n.classList.contains("oneplane-tab")?[n]:Array.from(n.querySelectorAll(".oneplane-tab")));
     row.toggleAttribute("data-op-small-strip", visualTabs.length <= 3);
     for (let i = 0; i < visualTabs.length; i++) {
       visualTabs[i].toggleAttribute("data-op-first", i === 0);

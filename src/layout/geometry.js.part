@@ -40,10 +40,13 @@
       const dragRoom=parseFloat(style.getPropertyValue("--op-window-drag-room"))||4;
       const wantsIsland=row.hasAttribute("data-op-show-island");
       const iconHome=row.hasAttribute("data-op-home-icon");
-      const frozen=row.hasAttribute("data-op-dragging")||row.hasAttribute("data-op-island-incoming")||cascadeState!=="idle";
+      const frozen=row.hasAttribute("data-op-dragging")||row.hasAttribute("data-op-island-incoming")||row.hasAttribute("data-op-lane-drag")||cascadeState==="hiding"||cascadeState==="showing";
       if(!frozen){
         const preferred=prefs.getIntPref("zen.oneplane.address-width",180);
-        const desired=adaptiveAddressWidth(preferred,window.innerWidth,left,16+dragRoom+4);
+        const natural=stripOrderSnapshot.reduce((n,node)=>n+compactSlotWidth(node,tabWidth)+3,0)+(iconHome?32:180)+tabWidth+18;
+        const fullBudget=2*Math.min(window.innerWidth/2-left-preferred-8,window.innerWidth/2-right)-8-2*dragRoom;
+        const compactAddress=window.innerWidth<900||(fullBudget<natural&&left+preferred+8>=right);
+        const desired=adaptiveAddressWidth(preferred,window.innerWidth,left,16+dragRoom+4,8,compactAddress);
         if(url.style.getPropertyValue("--op-url")!==desired+"px"){
           setLength(url,"--op-url",desired);
           addressCompactWidth=0;addressAnchor=null;alignAddressStart();

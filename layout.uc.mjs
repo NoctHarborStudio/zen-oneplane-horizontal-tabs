@@ -715,10 +715,24 @@ function installTabStrip() {
     return {mode:chosenTitle===minTitle&&compactCap<tab?"ultra":"compact",title:chosenTitle,
       topLeft:left,topRight:right,lower,hasSecondRow:lower.length>0||!topPlus,topPlus};
   }
-  function adaptiveAddressWidth(preferred,windowWidth,leftWithoutAddress,centerReserve,margin=8){
+  function adaptiveAddressWidth(preferred,windowWidth,leftWithoutAddress,centerReserve,margin=8,forceCompact=false){
     const budget=Math.max(0,Math.floor(windowWidth/2-leftWithoutAddress-centerReserve-margin));
-    const desired=budget<preferred?Math.round(preferred*.7):preferred;
+    const desired=forceCompact||budget<preferred?Math.round(preferred*.7):preferred;
     return Math.max(36,Math.min(desired,budget));
+  }
+
+  function visibleLaneDropIndex(slots,left,right,x){
+    const visible=slots.map((s,index)=>({index,left:Math.max(left,s.left),right:Math.min(right,s.right)}))
+      .filter(s=>s.right>s.left);
+    if(!visible.length)return null;
+    for(const s of visible)if(x<(s.left+s.right)/2)return {index:s.index,before:true};
+    return {index:visible.at(-1).index,before:false};
+  }
+  function laneScrollVelocity(x,left,right,edge=32){
+    if(!(edge>0))return 0;
+    const l=Math.max(0,Math.min(1,(left+edge-x)/edge));
+    const r=Math.max(0,Math.min(1,(x-(right-edge))/edge));
+    return Math.round((r*r-l*l)*18);
   }
   let adaptiveHeightDirty=false;
   function mountLaneNodes(lane,nodes){
@@ -734,6 +748,7 @@ function installTabStrip() {
   function applyStripPartition(plan){
     if(leftLane.parentElement!==list)list.append(leftLane,rightLane,bottomLane);
     const active=document.activeElement;
+    const selected=entries.get(browser.selectedTab)?.item,previousLane=selected?.closest(".oneplane-island-lane");
     mountLaneNodes(leftLane,plan.topLeft.map(i=>stripOrderSnapshot[i]));
     mountLaneNodes(rightLane,plan.topRight.map(i=>stripOrderSnapshot[i]));
     mountLaneNodes(bottomLane,plan.lower.map(i=>stripOrderSnapshot[i]));
@@ -748,6 +763,7 @@ function installTabStrip() {
       scheduleGeometry();scheduleContour();
     }
     if(active&&list.contains(active)&&document.activeElement!==active)active.focus?.({preventScroll:true});
+    if(selected&&previousLane!==selected.closest(".oneplane-island-lane")&&!row.hasAttribute("data-op-home-open"))window.requestAnimationFrame(revealSelectedInStrip);
   }
   function placeStripOrder(order) {
     if(row.hasAttribute("data-op-dragging"))return;
@@ -1179,7 +1195,7 @@ function installTabStrip() {
     row.inert=false;
     cancelCascadeAnimations();
     setBookmarkWave(null);
-    if(!dead){refreshIndicator();scheduleContour();}
+    if(!dead){refreshIndicator();scheduleGeometry();scheduleContour();}
   }
   function settleHidden(generation){
     if(dead||generation!==cascadeGeneration)return;
@@ -3646,10 +3662,13 @@ function installTabStrip() {
       const dragRoom=parseFloat(style.getPropertyValue("--op-window-drag-room"))||4;
       const wantsIsland=row.hasAttribute("data-op-show-island");
       const iconHome=row.hasAttribute("data-op-home-icon");
-      const frozen=row.hasAttribute("data-op-dragging")||row.hasAttribute("data-op-island-incoming")||cascadeState!=="idle";
+      const frozen=row.hasAttribute("data-op-dragging")||row.hasAttribute("data-op-island-incoming")||row.hasAttribute("data-op-lane-drag")||cascadeState==="hiding"||cascadeState==="showing";
       if(!frozen){
         const preferred=prefs.getIntPref("zen.oneplane.address-width",180);
-        const desired=adaptiveAddressWidth(preferred,window.innerWidth,left,16+dragRoom+4);
+        const natural=stripOrderSnapshot.reduce((n,node)=>n+compactSlotWidth(node,tabWidth)+3,0)+(iconHome?32:180)+tabWidth+18;
+        const fullBudget=2*Math.min(window.innerWidth/2-left-preferred-8,window.innerWidth/2-right)-8-2*dragRoom;
+        const compactAddress=window.innerWidth<900||(fullBudget<natural&&left+preferred+8>=right);
+        const desired=adaptiveAddressWidth(preferred,window.innerWidth,left,16+dragRoom+4,8,compactAddress);
         if(url.style.getPropertyValue("--op-url")!==desired+"px"){
           setLength(url,"--op-url",desired);
           addressCompactWidth=0;addressAnchor=null;alignAddressStart();
@@ -3869,8 +3888,16 @@ function installTabStrip() {
   function onWindowGeometryChanged(){
     if(dead)return;
     if(!row.hasAttribute("data-op-dragging")&&hoverTab)clearTabHover();
-    if(!nativeInlineOpen(addressBar())&&!addressTransition&&!addressSettling&&cascadeState!=="idle")resetTabCascade();
+    if(addressTransition){
+      const closing=addressTransition.name==="closing-wave";clearAddressAnimation();
+      if(closing)finishDismissUrl();
+    }
+    if(cascadeState==="hiding"||cascadeState==="showing"||!nativeInlineOpen(addressBar())&&cascadeState!=="idle"){
+      resetTabCascade();
+      if(nativeInlineOpen(addressBar())){row.inert=true;settleHidden(++cascadeGeneration);}
+    }
     movePageActions();
+    centerToolbar();
     onCompactChanged();
     schedule();
   }
@@ -4003,6 +4030,11 @@ function installTabStrip() {
     return Array.from(group?.tabs || []).filter(validNativeTab);
   }
   function dropTarget(event) {
+    if(useLaneDrop()){
+      const tab=readDraggedTab(event),owner=tabOwner(tab),group=owner?.[DRAG_CONTROLLER]?.group();
+      const source=owner===window?(group?splitEntries.get(group)?.box:entries.get(tab)?.item):null;
+      return laneDropTarget(laneAtPoint({x:event.clientX,y:event.clientY}),event.clientX,isStripNode(source)?source:null);
+    }
     const children = stripNodes();
     if (!children.length) return null;
     let element = event.target?.closest?.(".oneplane-split-group, .oneplane-tab");
@@ -4051,6 +4083,7 @@ function installTabStrip() {
     return { element: node, native: group || tab, group, tab };
   }
   function clearLiveDrag() {
+    clearLaneDrag();
     liveDragTarget = null;
     for (const node of dragShifted) {
       node.style.removeProperty("--op-drag-x");
@@ -4371,10 +4404,94 @@ function installTabStrip() {
     if (atEdge || event.target === window || event.target === document || event.target === root)
       setDragImageMode("outside",event);
   }
+  // Use painted lane rectangles, not offscreen native-order slots.
+  function useLaneDrop(){
+    return row.hasAttribute("data-op-overflow-row")||row.hasAttribute("data-op-lane-drag")||
+      (hasCenteredIsland()?[leftLane,rightLane]:[list]).some(l=>l.clientWidth>0&&l.scrollWidth>l.clientWidth+1);
+  }
+  function laneAtPoint(point){
+    const lanes=hasCenteredIsland()?[leftLane,rightLane,...(bottomLane.hidden?[]:[bottomLane])]:[list];
+    return lanes.find(lane=>{
+      const b=lane.getBoundingClientRect();
+      return b.width>0&&b.height>0&&point.y>=b.top&&point.y<b.bottom&&point.x>=b.left-5&&point.x<=b.right+5;
+    })||null;
+  }
+  function laneDropTarget(lane,x,source=null){
+    if(!lane)return null;
+    const clip=lane.getBoundingClientRect(),nodes=laneNodes(lane).filter(n=>n!==source);
+    const slots=nodes.map(node=>({node,rect:node.getBoundingClientRect()}));
+    const picked=visibleLaneDropIndex(slots.map(s=>({left:s.rect.left,right:s.rect.right})),clip.left,clip.right,x);
+    if(picked)return {...nativeSlot(slots[picked.index].node),before:picked.before};
+    if(!nodes.length){
+      const all=stripNodes().filter(n=>n!==source);
+      if(!all.length)return null;
+      const tabWidth=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab"))||36;
+      const boundary=islandBoundary(all.map(n=>compactSlotWidth(n,tabWidth)),tabWidth+3);
+      if(lane===leftLane&&all[boundary])return {...nativeSlot(all[boundary]),before:true};
+      if(lane===rightLane&&all[boundary-1])return {...nativeSlot(all[boundary-1]),before:false};
+      return {...nativeSlot(all.at(-1)),before:false};
+    }
+    return null;
+  }
+  let laneDragFrame=0,laneDragPoint=null,laneDragSource=null,laneDragViewport=null,laneDragLast=0;
+  function stopLaneAutoscroll(){
+    if(laneDragFrame)window.cancelAnimationFrame(laneDragFrame);
+    laneDragFrame=0;laneDragPoint=null;laneDragSource=null;laneDragViewport=null;laneDragLast=0;
+  }
+  function paintLaneDrop(dest){
+    clearDropMarker();
+    if(dest?.native){dropMarker=dest.element;dropMarker.setAttribute(dest.before?"data-op-drop-before":"data-op-drop-after","true");}
+    liveDragTarget=dest;
+  }
+  function laneAutoStep(now){
+    laneDragFrame=0;
+    const lane=laneDragViewport,point=laneDragPoint;
+    if(dead||!lane||!point||!row.hasAttribute("data-op-lane-drag"))return;
+    const clip=lane.getBoundingClientRect(),edge=Math.min(42,clip.width/3);
+    const velocity=laneScrollVelocity(point.x,clip.left,clip.right,edge);
+    const dt=laneDragLast?Math.min(32,now-laneDragLast):16;laneDragLast=now;
+    if(velocity){
+      const before=lane.scrollLeft;
+      lane.scrollLeft+=velocity*dt/16;
+      if(Math.abs(lane.scrollLeft-before)>.1)paintLaneDrop(laneDropTarget(lane,point.x,laneDragSource));
+    }
+    laneDragFrame=window.requestAnimationFrame(laneAutoStep);
+  }
+  function clearLaneDrag(){
+    stopLaneAutoscroll();
+    const active=row.hasAttribute("data-op-lane-drag");
+    row.removeAttribute("data-op-lane-drag");
+    dragNode?.removeAttribute("data-op-lane-ghost");
+    if(active&&dragImageMode==="inline")hideGhost();
+  }
+  function showLaneGhost(event,pull=0){
+    if(!dragNode)return;
+    makeDragGhost();
+    if(!dragGhost||!dragGhostBody)return;
+    dragNode.setAttribute("data-op-lane-ghost","true");
+    dragGhost.hidden=false;
+    positionGhost(event.clientX,event.clientY);
+    dragGhostBody.style.transform=pull?"scale("+Math.max(.12,1-.8*pull)+")":"";
+  }
+  function previewLaneDrag(event,tab,entry){
+    if(dragShifted.size||row.hasAttribute("data-op-live-drag"))clearLiveDrag();
+    row.setAttribute("data-op-lane-drag","true");
+    const local=tabOwner(tab)===window,source=local&&isStripNode(entry)?entry:null;
+    const lane=laneAtPoint({x:event.clientX,y:event.clientY});
+    const dest=laneDropTarget(lane,event.clientX,source);
+    paintLaneDrop(dest);
+    if(local&&entry===dragNode&&dragImageMode==="inline")showLaneGhost(event);
+    if(lane&&lane.scrollWidth>lane.clientWidth+1){
+      laneDragViewport=lane;laneDragPoint={x:event.clientX,y:event.clientY};laneDragSource=source;
+      if(!laneDragFrame){laneDragLast=0;laneDragFrame=window.requestAnimationFrame(laneAutoStep);}
+    }else stopLaneAutoscroll();
+    return dest;
+  }
   function previewStripDrag(event, tab) {
     const owner = tabOwner(tab);
     const group = owner?.[DRAG_CONTROLLER]?.group();
     const entry = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
+    if(useLaneDrop())return previewLaneDrag(event,tab,entry);
     if(owner!==window && row.hasAttribute("data-op-show-island") &&
         !row.hasAttribute("data-op-island-incoming")){
       row.setAttribute("data-op-island-incoming","true");
@@ -4473,6 +4590,7 @@ function installTabStrip() {
   function onStripDragLeave(event) {
     if (event.relatedTarget instanceof Node && row.contains(event.relatedTarget)) return;
     if (toolbarContainsPoint(event.clientX,event.clientY)) return;
+    stopLaneAutoscroll();
     // The window capture listener owns pull and image transitions.
     // Do not erase a group's visual position mid-extraction.
     if (!(groupPullLayout && dragImageMode === "inline")) clearLiveDrag();
@@ -4503,7 +4621,8 @@ function installTabStrip() {
     const navHeight=navbar?.getBoundingClientRect().height||0;
     // Reserve the actual expanded toolbar even while its compact height
     // is still animating. Do not include the decorative fade.
-    return tabReturnZone(event.clientX,event.clientY,rect,Math.max(rect.height,measured,navHeight,36)+4);
+    const stripBottom=row.getBoundingClientRect().bottom;
+    return tabReturnZone(event.clientX,event.clientY,rect,Math.max(rect.height,measured,navHeight,stripBottom-rect.top,36)+4);
   }
   function holdToolbarForReturn(){
     toolbarWrapper.setAttribute("oneplane-drag-hold","true");
@@ -4531,8 +4650,8 @@ function installTabStrip() {
     if (local && dragNode) {
       dragLastPoint = {x:event.clientX,y:event.clientY};
       if (within && dragImageMode !== "content" && dragImageMode !== "outside")
-        dragEdge = toolbarWrapper.getBoundingClientRect().bottom;
-      const p = Math.max(0,Math.min(1,(event.clientY-(dragEdge-15))/PULL_DISTANCE));
+        dragEdge = Math.max(toolbarWrapper.getBoundingClientRect().bottom,row.getBoundingClientRect().bottom,navbar?.getBoundingClientRect().bottom||0);
+      const p = within?0:Math.max(0,Math.min(1,(event.clientY-dragEdge)/PULL_DISTANCE));
       const lateralExit = event.clientX < toolbarWrapper.getBoundingClientRect().left ||
                           event.clientX > toolbarWrapper.getBoundingClientRect().right;
       const threshold = dragImageMode === "content" || dragImageMode === "outside" ? .72 : .96;
@@ -4550,6 +4669,10 @@ function installTabStrip() {
       }
       if (p === 0) dragReentry = false;
       if (p > 0 && !dragReentry) {
+        if(useLaneDrop()){
+          clearLiveDrag();clearDropMarker();setPull(p);row.setAttribute("data-op-lane-drag","true");showLaneGhost(event,p);
+          return;
+        }
         if (draggedGroup) captureGroupPull(event);
         if (groupPullLayout) row.setAttribute("data-op-group-pull","true");
         else clearLiveDrag();
@@ -4630,6 +4753,7 @@ function installTabStrip() {
     const search = dragSearch;
     dragSearch = null; pointerSearch = null;
     clearGroupPull();
+    dragNode?.removeAttribute("data-op-lane-ghost");
     dragNode?.removeAttribute("data-op-detached");
     dragNode?.removeAttribute("data-op-drag-follow");
     dragNode?.removeAttribute("data-op-pulling");
@@ -4740,6 +4864,10 @@ function installTabStrip() {
     const group = source?.group();
     if (owner === window && dragNode) { setDragImageMode("inline",event); setPull(0); }
     const dest = previewStripDrag(event, tab) || dropTarget(event);
+    if(!dest?.native){
+      if(owner===window)source?.markHandled();
+      clearLiveDrag();clearDropMarker();return;
+    }
     row.setAttribute("data-op-drag-commit", "true");
     try {
       if (group) {
@@ -4919,7 +5047,7 @@ function installTabStrip() {
   }
   function indicatorTarget() {
     const s=row.getBoundingClientRect();
-    if(s.width<=0||s.height<=0)return null;
+    if(s.width<=0||s.height<=0||row.hasAttribute("data-op-lane-drag"))return null;
     const dragging=Boolean(dragNode && row.hasAttribute("data-op-dragging"));
     const homeOpen=row.hasAttribute("data-op-home-open");
     const item=dragging?dragNode:indicatorHover && list.contains(indicatorHover)?
@@ -5155,10 +5283,10 @@ function installTabStrip() {
     }, hoverDelay());
   }
   function pointOverTabStrip(event) {
-    const a = list.getBoundingClientRect();
-    return a.width > 0 && a.height > 0 &&
-      event.clientX >= a.left - 3 && event.clientX <= a.right + 3 &&
-      event.clientY >= a.top - 2 && event.clientY <= a.bottom + 2;
+    return [list,...(bottomLane.hidden?[]:[bottomLane])].some(l=>{
+      const a=l.getBoundingClientRect();
+      return a.width>0&&a.height>0&&event.clientX>=a.left-3&&event.clientX<=a.right+3&&event.clientY>=a.top-2&&event.clientY<=a.bottom+2;
+    });
   }
   function releaseIndicatorHover() {
     if(!indicatorHover||indicatorReturnTimer)return;
@@ -5336,7 +5464,8 @@ function installTabStrip() {
     handle.addEventListener("keydown", event => {
       if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
       const before = event.key === "ArrowLeft";
-      const other = before ? box.previousElementSibling : box.nextElementSibling;
+      const slots=stripNodes(),index=slots.indexOf(box);
+      const other=slots[index+(before?-1:1)];
       if (!other) return;
       const native = [...splitEntries].find(([, entry]) => entry.box === other)?.[0] || tabFromItem(other);
       if (!native) return;
@@ -5416,6 +5545,7 @@ function installTabStrip() {
       entry.item.toggleAttribute("data-muted", muted);
       entry.audio.title = muted ? "Tab muted" : audible ? "Playing audio" : "";
       entry.button.setAttribute("aria-selected", String(selected));
+      entry.button.title=label;
       entry.button.setAttribute("aria-label", label + (split ? ", Split View" : "") + (muted ? ", muted" : audible ? ", playing audio" : ""));
       if (entry.title.textContent !== label) entry.title.textContent = label;
       const src = favicon(tab);
@@ -5452,7 +5582,7 @@ function installTabStrip() {
     // Count each actual visible tab, including split members, but never
     // the group wrapper, handle or plus. Use rendered order, not native
     // indexes, because a split can collect non-adjacent native tabs.
-    const visualTabs = Array.from(list.querySelectorAll(".oneplane-tab"));
+    const visualTabs=stripNodes().flatMap(n=>n.classList.contains("oneplane-tab")?[n]:Array.from(n.querySelectorAll(".oneplane-tab")));
     row.toggleAttribute("data-op-small-strip", visualTabs.length <= 3);
     for (let i = 0; i < visualTabs.length; i++) {
       visualTabs[i].toggleAttribute("data-op-first", i === 0);
@@ -5568,7 +5698,7 @@ function installTabStrip() {
     splitZone.removeEventListener("dragover", onSplitDragOver);
     splitZone.removeEventListener("drop", onSplitDrop);
     splitZone.remove();
-    for(const lane of [list,leftLane,rightLane]){
+    for(const lane of [list,leftLane,rightLane,bottomLane]){
       lane.removeEventListener("scroll",refreshIndicator);
       lane.removeEventListener("wheel",onLaneWheel);
     }
@@ -5586,6 +5716,7 @@ function installTabStrip() {
     try { browser.removeProgressListener(progressListener); } catch {}
     url.removeAttribute("data-op-empty");
     url.removeAttribute("data-op-url-ready");
+    url.style.removeProperty("--op-url");
     for (const name of ["--op-url-expanded-width", "--op-url-compact-width", "--op-url-anchor-left", "--op-url-anchor-top", "--op-url-header-height"]) url.style.removeProperty(name);
     toolbarWrapper?.style.removeProperty("--op-measured-toolbar-height");
     surface.remove();
@@ -5667,7 +5798,7 @@ function installTabStrip() {
     applyHoverMode();
     sync();
     try { browser.addProgressListener(progressListener); } catch {}
-    for(const lane of [list,leftLane,rightLane]){
+    for(const lane of [list,leftLane,rightLane,bottomLane]){
       lane.addEventListener("scroll",refreshIndicator,{passive:true});
       lane.addEventListener("wheel",onLaneWheel,{passive:false});
     }

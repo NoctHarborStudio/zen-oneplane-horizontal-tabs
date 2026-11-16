@@ -4,6 +4,7 @@
     const search = dragSearch;
     dragSearch = null; pointerSearch = null;
     clearGroupPull();
+    dragNode?.removeAttribute("data-op-lane-ghost");
     dragNode?.removeAttribute("data-op-detached");
     dragNode?.removeAttribute("data-op-drag-follow");
     dragNode?.removeAttribute("data-op-pulling");
@@ -114,6 +115,10 @@
     const group = source?.group();
     if (owner === window && dragNode) { setDragImageMode("inline",event); setPull(0); }
     const dest = previewStripDrag(event, tab) || dropTarget(event);
+    if(!dest?.native){
+      if(owner===window)source?.markHandled();
+      clearLiveDrag();clearDropMarker();return;
+    }
     row.setAttribute("data-op-drag-commit", "true");
     try {
       if (group) {

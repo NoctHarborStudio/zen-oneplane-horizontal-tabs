@@ -87,7 +87,8 @@
     handle.addEventListener("keydown", event => {
       if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
       const before = event.key === "ArrowLeft";
-      const other = before ? box.previousElementSibling : box.nextElementSibling;
+      const slots=stripNodes(),index=slots.indexOf(box);
+      const other=slots[index+(before?-1:1)];
       if (!other) return;
       const native = [...splitEntries].find(([, entry]) => entry.box === other)?.[0] || tabFromItem(other);
       if (!native) return;

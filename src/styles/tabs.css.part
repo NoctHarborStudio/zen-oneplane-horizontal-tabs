@@ -353,3 +353,6 @@
       overflow-x:auto!important;overflow-y:hidden!important;
     }
     #oneplane-tabs[data-op-overflow-row] .oneplane-tab-list {padding-inline-end:0!important;}
+    #oneplane-tabs[data-op-lane-drag] .oneplane-tab-list {clip-path:none!important;}
+    #oneplane-tabs[data-op-lane-drag] .oneplane-island-lane {overflow-x:auto!important;overflow-y:hidden!important;}
+    #oneplane-tabs[data-op-lane-drag]:not([data-op-show-island]) .oneplane-tab-list {overflow-x:auto!important;overflow-y:hidden!important;}

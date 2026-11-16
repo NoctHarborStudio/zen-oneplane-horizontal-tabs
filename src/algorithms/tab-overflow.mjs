@@ -52,8 +52,22 @@
     return {mode:chosenTitle===minTitle&&compactCap<tab?"ultra":"compact",title:chosenTitle,
       topLeft:left,topRight:right,lower,hasSecondRow:lower.length>0||!topPlus,topPlus};
   }
-  export function adaptiveAddressWidth(preferred,windowWidth,leftWithoutAddress,centerReserve,margin=8){
+  export function adaptiveAddressWidth(preferred,windowWidth,leftWithoutAddress,centerReserve,margin=8,forceCompact=false){
     const budget=Math.max(0,Math.floor(windowWidth/2-leftWithoutAddress-centerReserve-margin));
-    const desired=budget<preferred?Math.round(preferred*.7):preferred;
+    const desired=forceCompact||budget<preferred?Math.round(preferred*.7):preferred;
     return Math.max(36,Math.min(desired,budget));
+  }
+
+  export function visibleLaneDropIndex(slots,left,right,x){
+    const visible=slots.map((s,index)=>({index,left:Math.max(left,s.left),right:Math.min(right,s.right)}))
+      .filter(s=>s.right>s.left);
+    if(!visible.length)return null;
+    for(const s of visible)if(x<(s.left+s.right)/2)return {index:s.index,before:true};
+    return {index:visible.at(-1).index,before:false};
+  }
+  export function laneScrollVelocity(x,left,right,edge=32){
+    if(!(edge>0))return 0;
+    const l=Math.max(0,Math.min(1,(left+edge-x)/edge));
+    const r=Math.max(0,Math.min(1,(x-(right-edge))/edge));
+    return Math.round((r*r-l*l)*18);
   }

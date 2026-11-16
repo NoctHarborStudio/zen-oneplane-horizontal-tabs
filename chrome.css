@@ -793,6 +793,9 @@
       overflow-x:auto!important;overflow-y:hidden!important;
     }
     #oneplane-tabs[data-op-overflow-row] .oneplane-tab-list {padding-inline-end:0!important;}
+    #oneplane-tabs[data-op-lane-drag] .oneplane-tab-list {clip-path:none!important;}
+    #oneplane-tabs[data-op-lane-drag] .oneplane-island-lane {overflow-x:auto!important;overflow-y:hidden!important;}
+    #oneplane-tabs[data-op-lane-drag]:not([data-op-show-island]) .oneplane-tab-list {overflow-x:auto!important;overflow-y:hidden!important;}
     /* A real flex wrapper, with one shared surface and a dedicated handle.
        Its 25px overhead is included in collapsed-strip centering. */
     #oneplane-tabs .oneplane-split-group {
@@ -932,9 +935,10 @@
       --op-drag-x: 0px;
       transform: translateX(var(--op-drag-x));
     }
-    #oneplane-tabs[data-op-inline-drag] .oneplane-tab-list {
+    #oneplane-tabs[data-op-inline-drag]:not([data-op-lane-drag]) .oneplane-tab-list {
       overflow: visible !important;
     }
+    #oneplane-tabs [data-op-lane-ghost] {opacity:0!important;pointer-events:none!important;}
     #oneplane-tabs [data-op-drag-follow] {
       position: relative;
       z-index: 12 !important;

@@ -118,8 +118,16 @@
   function onWindowGeometryChanged(){
     if(dead)return;
     if(!row.hasAttribute("data-op-dragging")&&hoverTab)clearTabHover();
-    if(!nativeInlineOpen(addressBar())&&!addressTransition&&!addressSettling&&cascadeState!=="idle")resetTabCascade();
+    if(addressTransition){
+      const closing=addressTransition.name==="closing-wave";clearAddressAnimation();
+      if(closing)finishDismissUrl();
+    }
+    if(cascadeState==="hiding"||cascadeState==="showing"||!nativeInlineOpen(addressBar())&&cascadeState!=="idle"){
+      resetTabCascade();
+      if(nativeInlineOpen(addressBar())){row.inert=true;settleHidden(++cascadeGeneration);}
+    }
     movePageActions();
+    centerToolbar();
     onCompactChanged();
     schedule();
   }
