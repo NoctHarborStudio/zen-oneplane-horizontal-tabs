@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {displayContains,displayCssPoint,displayRectEqual,displaySnapTarget,displayNativeRect,displayPreviewFraction,displayReleaseMatches,tabReturnZone,displayStartupFeatures} from "../src/algorithms/display-placement.mjs";
+import {displayContains,displayCssPoint,displayRectEqual,displaySnapTarget,displayNativeRect,displayPreviewFraction,displayReleaseMatches,tabReturnZone,displayStartupFeatures,displayPlacementMatches} from "../src/algorithms/display-placement.mjs";
 const left={x:-2560,y:-200,width:2560,height:1440},work={x:-2560,y:-200,width:2560,height:1392};
 test("CSS points use event window scale, not target monitor scale",()=>{
   assert.deepEqual(displayCssPoint(-1600,400,1.5,1),{x:-2400,y:600});
@@ -61,20 +61,39 @@ test("return zone reserves expanded toolbar while compact strip animates",()=>{
   assert.equal(tabReturnZone(-1,24,r,70),false);
 });
 
-test("native startup seed uses opener position scale and destination size scale",()=>{
+test("native startup uses selected right-half rectangle rather than the center seed",()=>{
   const target=displaySnapTarget(left,work,-1,400);
   const f=displayStartupFeatures(target,1.5,1.25);
-  assert.deepEqual(f,{left:-1365,top:29,outerWidth:1229,outerHeight:724});
-  const x=Math.round(f.left*1.5),y=Math.round(f.top*1.5);
-  assert.ok(displayContains(work,x,y));
-  assert.ok(displayContains(work,x+Math.round(f.outerWidth*1.25)-1,y+Math.round(f.outerHeight*1.25)-1));
+  assert.deepEqual(f,{left:-853,top:-133,outerWidth:1024,outerHeight:1114});
   assert.equal(displayStartupFeatures(target,0,1),null);
 });
-test("startup seed is stable across snap modes and handles positive and vertical monitors",()=>{
+test("each snap mode has its own startup rectangle, including maximize work area",()=>{
   const d={x:1920,y:-1080,width:1920,height:1080};
-  const a=displaySnapTarget(d,d,2500,-1079),b=displaySnapTarget(d,d,3839,-500);
-  assert.deepEqual(displayStartupFeatures(a,1,2),displayStartupFeatures(b,1,2));
-  const f=displayStartupFeatures(a,1,2);
-  assert.ok(f.left>=d.x&&f.top>=d.y);
-  assert.ok(f.left+f.outerWidth*2<=d.x+d.width&&f.top+f.outerHeight*2<=d.y+d.height);
+  const modes=new Set();
+  for(const x of [d.x,d.x+960,d.x+1919])for(const y of [d.y,d.y+540,d.y+1079]){
+    const p=displaySnapTarget(d,d,x,y),f=displayStartupFeatures(p,1,2);
+    assert.deepEqual({x:f.left,y:f.top,width:f.outerWidth*2,height:f.outerHeight*2},
+      {x:p.x,y:p.y,width:p.width,height:p.height});
+    modes.add(JSON.stringify(f));
+  }
+  assert.equal(modes.size,9);
+});
+test("startup position uses opener scale and size includes opener zoom",()=>{
+  const p=displaySnapTarget(left,work,-1,400);
+  assert.deepEqual(displayStartupFeatures(p,2,1.25,1.6),
+    {left:-640,top:-100,outerWidth:640,outerHeight:696});
+  assert.equal(displayStartupFeatures({...p,x:500},1,1),null);
+});
+test("same-monitor centered seed is not a successful side, quarter or maximize placement",()=>{
+  const center=displaySnapTarget(left,work,-1280,400);
+  for(const p of [displaySnapTarget(left,work,-1,400),displaySnapTarget(left,work,-2559,-199),displaySnapTarget(left,work,-1280,-199)]){
+    assert.equal(displayPlacementMatches(p,center,false),false);
+  }
+  const side=displaySnapTarget(left,work,-1,400);
+  assert.equal(displayPlacementMatches(side,{...side,x:side.x+2,width:side.width-2}),true);
+  assert.equal(displayPlacementMatches(side,{...side,width:side.width+30}),false);
+  const max=displaySnapTarget(left,work,-1280,-199);
+  assert.equal(displayPlacementMatches(max,max,false),false);
+  assert.equal(displayPlacementMatches(max,max,true),true);
+  assert.equal(displayPlacementMatches(max,{...max,x:0},true),false);
 });

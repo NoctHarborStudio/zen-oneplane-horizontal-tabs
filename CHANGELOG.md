@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0-preview.24
+
+- Create native windows with the selected final snap rectangle rather than the uniform center seed; maximize independently of workspace initialization.
+- Verify selected position and size, add bounded resize fallback and preserve working target-monitor selection. No preview or animation changes.
+
 ## 0.2.0-preview.23
 
 - Seed native workspace/tab window creation on verified target monitor using converted opener position and destination size features; retain post-startup snap verification and bounded native move fallback.

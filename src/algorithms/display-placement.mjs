@@ -52,17 +52,22 @@
     return !!rect&&[x,y,rect.left,rect.right,rect.top,height].every(Number.isFinite)&&
       x>=rect.left&&x<rect.right&&y>=Math.max(0,rect.top)&&y<Math.max(0,rect.top)+Math.max(0,height);
   }
-  // nsWindowWatcher converts position using opener CSS->desktop scale,
-  // and outer size using the destination widget CSS scale (plus opener zoom).
-  // Use a centered normal seed even for maximize/quarters, avoiding startup
-  // minimum-size/restore clamping across the display boundary.
+  // Native creation uses the selected rectangle, not a uniform center seed.
+  // For maximize, start at the work area and apply native maximize separately.
   export function displayStartupFeatures(target,openerScale,destinationScale,openerZoom=1){
     const w=target?.work;
-    if(!w||!displayContains(w,w.x,w.y)||
-       ![openerScale,destinationScale,openerZoom].every(n=>Number.isFinite(n)&&n>0))return null;
-    const width=Math.round(w.width*.60),height=Math.round(w.height*.65);
-    const x=w.x+Math.floor((w.width-width)/2),y=w.y+Math.floor((w.height-height)/2);
-    return {left:Math.round(x/openerScale),top:Math.round(y/openerScale),
-      outerWidth:Math.max(1,Math.round(width/(destinationScale*openerZoom))),
-      outerHeight:Math.max(1,Math.round(height/(destinationScale*openerZoom)))};
+    if(!w||!displayContains(w,target.x,target.y)||
+       !displayContains(w,target.x+target.width-1,target.y+target.height-1)||
+       ![openerScale,destinationScale,openerZoom].every(n=>Number.isFinite(n)&&n>0)||
+       !Number.isFinite(target.width)||!Number.isFinite(target.height)||target.width<=0||target.height<=0)return null;
+    return {left:Math.round(target.x/openerScale),top:Math.round(target.y/openerScale),
+      outerWidth:Math.max(1,Math.round(target.width/(destinationScale*openerZoom))),
+      outerHeight:Math.max(1,Math.round(target.height/(destinationScale*openerZoom)))};
+  }
+  export function displayPlacementMatches(target,actual,maximized=false,tolerance=8){
+    if(!target?.full||!actual||![actual.x,actual.y,actual.width,actual.height,tolerance].every(Number.isFinite)||
+       actual.width<=0||actual.height<=0||tolerance<0||
+       !displayContains(target.full,actual.x+actual.width/2,actual.y+actual.height/2))return false;
+    if(target.mode==="maximize")return maximized;
+    return !maximized&&["x","y","width","height"].every(k=>Number.isFinite(target[k])&&Math.abs(actual[k]-target[k])<=tolerance);
   }

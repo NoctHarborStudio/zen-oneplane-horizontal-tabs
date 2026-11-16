@@ -282,7 +282,7 @@
       let child=null;
       try{
         const {BrowserWindowTracker}=ChromeUtils.importESModule("resource:///modules/BrowserWindowTracker.sys.mjs");
-        // Supply a converted target-monitor seed at native window creation,
+        // Supply the final snap rectangle at native window creation,
         // before Zen can restore the opener monitor geometry.
         const seed=display?nativeStartupFeatures(display):null;
         if(display&&!seed){status.textContent="Target monitor changed. Try the drop again.";return;}
@@ -293,6 +293,7 @@
         child=BrowserWindowTracker.openWindow(options);
         if(!child)throw Error("Native window did not open");
         child[PROJECTION]={source:window,id};
+        const placementTask=display?placeAfterStartup(child,display):Promise.resolve(true);
         let startupTab=null;
         const captureStartup=()=>{if(!startupTab)startupTab=child.gBrowser?.selectedTab||null;};
         captureStartup();child.addEventListener("DOMContentLoaded",captureStartup,{once:true});
@@ -318,7 +319,7 @@
           const peer=window.gZenWindowSync.getItemFromWindow(window,startupTab.id);
           if(!peer||(peer.isEmpty&&!peer.pinned&&!peer.group&&peer.linkedBrowser?.currentURI?.spec==="about:blank"&&peer.linkedBrowser?.canGoBack===false&&peer.linkedBrowser?.canGoForward===false))child.gBrowser.removeTab(startupTab,{animate:false});
         }
-        const placed=!display||await placeNativeWindow(child,display);
+        const placed=await placementTask;
         if(placed&&!child.closed)child.focus();
         status.textContent=placed?"":"Window opened; placement could not be verified.";
       }catch(error){

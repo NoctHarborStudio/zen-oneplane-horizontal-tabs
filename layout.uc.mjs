@@ -1295,19 +1295,24 @@ function installTabStrip() {
     return !!rect&&[x,y,rect.left,rect.right,rect.top,height].every(Number.isFinite)&&
       x>=rect.left&&x<rect.right&&y>=Math.max(0,rect.top)&&y<Math.max(0,rect.top)+Math.max(0,height);
   }
-  // nsWindowWatcher converts position using opener CSS->desktop scale,
-  // and outer size using the destination widget CSS scale (plus opener zoom).
-  // Use a centered normal seed even for maximize/quarters, avoiding startup
-  // minimum-size/restore clamping across the display boundary.
+  // Native creation uses the selected rectangle, not a uniform center seed.
+  // For maximize, start at the work area and apply native maximize separately.
   function displayStartupFeatures(target,openerScale,destinationScale,openerZoom=1){
     const w=target?.work;
-    if(!w||!displayContains(w,w.x,w.y)||
-       ![openerScale,destinationScale,openerZoom].every(n=>Number.isFinite(n)&&n>0))return null;
-    const width=Math.round(w.width*.60),height=Math.round(w.height*.65);
-    const x=w.x+Math.floor((w.width-width)/2),y=w.y+Math.floor((w.height-height)/2);
-    return {left:Math.round(x/openerScale),top:Math.round(y/openerScale),
-      outerWidth:Math.max(1,Math.round(width/(destinationScale*openerZoom))),
-      outerHeight:Math.max(1,Math.round(height/(destinationScale*openerZoom)))};
+    if(!w||!displayContains(w,target.x,target.y)||
+       !displayContains(w,target.x+target.width-1,target.y+target.height-1)||
+       ![openerScale,destinationScale,openerZoom].every(n=>Number.isFinite(n)&&n>0)||
+       !Number.isFinite(target.width)||!Number.isFinite(target.height)||target.width<=0||target.height<=0)return null;
+    return {left:Math.round(target.x/openerScale),top:Math.round(target.y/openerScale),
+      outerWidth:Math.max(1,Math.round(target.width/(destinationScale*openerZoom))),
+      outerHeight:Math.max(1,Math.round(target.height/(destinationScale*openerZoom)))};
+  }
+  function displayPlacementMatches(target,actual,maximized=false,tolerance=8){
+    if(!target?.full||!actual||![actual.x,actual.y,actual.width,actual.height,tolerance].every(Number.isFinite)||
+       actual.width<=0||actual.height<=0||tolerance<0||
+       !displayContains(target.full,actual.x+actual.width/2,actual.y+actual.height/2))return false;
+    if(target.mode==="maximize")return maximized;
+    return !maximized&&["x","y","width","height"].every(k=>Number.isFinite(target[k])&&Math.abs(actual[k]-target[k])<=tolerance);
   }
   // Display Engine: Windows first. Gecko's chrome MouseEvent.screen and
   // nsIBaseWindow expose the native monitor and desktop/device pixel scales.
@@ -1460,7 +1465,7 @@ function installTabStrip() {
     }catch(error){console.warn("[OnePlane] Startup display features:",error);return null;}
   }
   function logPlacement(stage,target,actual=null,extra=null){
-    console.info("[OnePlane] Display placement "+stage,JSON.stringify({target:target?.full,mode:target?.mode,actual,extra}));
+    console.info("[OnePlane] Display placement "+stage,JSON.stringify({target:target?.full,rect:target?{x:target.x,y:target.y,width:target.width,height:target.height}:null,mode:target?.mode,actual,extra}));
   }
   async function placeNativeWindow(win,target){
     if(!displaySnapEnabled()||!win||win.closed||!target)return false;
@@ -1468,38 +1473,48 @@ function installTabStrip() {
     const stop=event=>{if(event.isTrusted)interrupted=true;};
     const wait=()=>new Promise(resolve=>window.setTimeout(resolve,120));
     const alive=()=>!dead&&!win.closed&&!interrupted;
+    const stateMax=()=>win.windowState===win.STATE_MAXIMIZED;
+    const matches=()=>displayPlacementMatches(target,nativeWindowRect(win),stateMax());
+    const validTarget=()=>!!targetScreen(target);
     try{
       win.addEventListener("pointerdown",stop,true);win.addEventListener("keydown",stop,true);
       const full=target.full,work=target.work;
-      const validTarget=()=>!!targetScreen(target);
       const onTarget=rect=>rect&&displayContains(full,rect.x+Math.floor(rect.width/2),rect.y+Math.floor(rect.height/2));
       if(!validTarget()){logPlacement("target-disconnected",target);return false;}
-      logPlacement("before",target,nativeWindowRect(win));
+      logPlacement("before",target,nativeWindowRect(win),win.windowState);
+      if(matches()){logPlacement("already-matched",target,nativeWindowRect(win));return true;}
+      // Maximize a correctly positioned window directly; do not make this
+      // depend on a subsequent resize, tab loading or a workspace switch.
+      if(target.mode==="maximize"&&onTarget(nativeWindowRect(win))&&win.windowState!==win.STATE_MINIMIZED){
+        win.maximize();await wait();
+        if(!alive())return false;
+        if(matches()){logPlacement("maximize",target,nativeWindowRect(win),win.windowState);return true;}
+      }
       const base=nativeBase(win);
-      if(typeof base.setPositionDesktopPix!=="function"||typeof base.setSize!=="function")return false;
-      if(win.windowState===win.STATE_MAXIMIZED||win.windowState===win.STATE_MINIMIZED){win.restore();await wait();}
+      if(stateMax()||win.windowState===win.STATE_MINIMIZED){win.restore();await wait();}
       if(!alive())return false;
       const seed=displaySnapTarget(full,work,full.x+Math.floor(full.width/2),full.y+Math.floor(full.height/2));
-      // First make a normal, monitor-sized seed, THEN use the API taking
-      // global desktop coordinates. Allow WM_DPICHANGED and startup
-      // geometry restoration to settle before sizing on the new display.
-      const size=(rect)=>{
-        const native=displayNativeRect(rect,base.devicePixelsPerDesktopPixel);
-        if(!native)throw Error("Invalid native display scale");
-        base.setSize(native.width,native.height,true);
-      };
+      function nativeSize(rect){
+        const n=displayNativeRect(rect,base.devicePixelsPerDesktopPixel);
+        if(!n)throw Error("Invalid native display scale");
+        base.setSize(n.width,n.height,true);
+      }
+      function cssApply(rect,resize=true){
+        const scale=win.devicePixelRatio/base.devicePixelsPerDesktopPixel;
+        if(!Number.isFinite(scale)||scale<=0)throw Error("Invalid CSS display scale");
+        if(resize)win.resizeTo(Math.round(rect.width/scale),Math.round(rect.height/scale));
+        win.moveTo(Math.round(rect.x/scale),Math.round(rect.y/scale));
+      }
+      // Retain .23's working monitor-selection path, but only use the
+      // center seed for recovering an off-monitor window.
       if(!onTarget(nativeWindowRect(win))){
-        size(seed);
+        try{nativeSize(seed);}catch{cssApply(seed);}
         for(let attempt=0;attempt<4;attempt++){
           if(!alive()||!validTarget())return false;
-          // Native API first; if the backend ignores the move, use the
-          // chrome window's CSS move API with the CHILD's current scale.
-          if(attempt<2)base.setPositionDesktopPix(seed.x,seed.y);
-          else{
-            const scale=win.devicePixelRatio/base.devicePixelsPerDesktopPixel;
-            if(!Number.isFinite(scale)||scale<=0)return false;
-            win.moveTo(Math.round(seed.x/scale),Math.round(seed.y/scale));
-          }
+          try{
+            if(attempt<2)base.setPositionDesktopPix(seed.x,seed.y);
+            else cssApply(seed,false);
+          }catch{cssApply(seed,false);}
           await wait();
           const actual=nativeWindowRect(win);
           logPlacement("move-"+(attempt+1),target,actual);
@@ -1510,38 +1525,67 @@ function installTabStrip() {
       if(!alive()||!validTarget())return false;
       if(target.mode==="maximize"){
         win.maximize();await wait();
-        const actual=nativeWindowRect(win);
-        logPlacement("maximize",target,actual,win.windowState);
-        return alive()&&onTarget(actual)&&win.windowState===win.STATE_MAXIMIZED;
+        logPlacement("maximize",target,nativeWindowRect(win),win.windowState);
+        return alive()&&matches();
       }
-      // Re-read the widget's scale after moving; use desktop position
-      // separately from size, and verify after the OS applies constraints.
-      size(target);base.setPositionDesktopPix(target.x,target.y);await wait();
-      if(!alive()||!validTarget())return false;
+      for(let attempt=0;attempt<2;attempt++){
+        if(!alive()||!validTarget())return false;
+        try{
+          if(attempt===0){nativeSize(target);base.setPositionDesktopPix(target.x,target.y);}
+          else cssApply(target);
+        }catch{cssApply(target);}
+        await wait();
+        if(!alive())return false;
+        const actual=nativeWindowRect(win);
+        logPlacement("size-"+(attempt+1),target,actual);
+        if(matches())return true;
+      }
+      // An OS minimum size may make the exact quarter impossible. Keep
+      // the real window/tab intact, but do not call this a successful snap.
       const actual=nativeWindowRect(win);
-      if(!onTarget(actual)||actual.width>work.width||actual.height>work.height)return false;
-      const x=Math.max(work.x,Math.min(work.x+work.width-actual.width,target.x));
-      const y=Math.max(work.y,Math.min(work.y+work.height-actual.height,target.y));
-      if(Math.abs(actual.x-x)>2||Math.abs(actual.y-y)>2){base.setPositionDesktopPix(x,y);await wait();}
-      const final=nativeWindowRect(win);logPlacement("final",target,final);
-      return alive()&&onTarget(final)&&displayContains(work,final.x,final.y)&&displayContains(work,final.x+final.width-1,final.y+final.height-1);
+      if(alive()&&onTarget(actual)&&actual.width<=work.width&&actual.height<=work.height){
+        const x=Math.max(work.x,Math.min(work.x+work.width-actual.width,target.x));
+        const y=Math.max(work.y,Math.min(work.y+work.height-actual.height,target.y));
+        if(Math.abs(actual.x-x)>2||Math.abs(actual.y-y)>2)try{base.setPositionDesktopPix(x,y);}catch{}
+      }
+      logPlacement("size-unverified",target,nativeWindowRect(win));
+      return false;
     }catch(error){logPlacement("exception",target,nativeWindowRect(win),String(error));console.warn("[OnePlane] Native display placement:",error);return false;}
     finally{try{win.removeEventListener("pointerdown",stop,true);win.removeEventListener("keydown",stop,true);}catch{}}
   }
+  // Both creation paths schedule this immediately. Native window placement
+  // must finish even when workspace initialization or activation fails.
+  // Cancel on genuine interaction, close, teardown or startup timeout.
   function placeAfterStartup(win,target){
-    if(!displaySnapEnabled()||!win||!target)return;
-    const apply=async()=>{if(!dead&&!win.closed&&!await placeNativeWindow(win,target))console.warn("[OnePlane] Placement not verified; native window kept.");};
-    if(win.gBrowserInit?.delayedStartupFinished){apply();return;}
-    let timer=0,done=false;
-    const cleanup=()=>{
-      if(done)return;done=true;Services.obs.removeObserver(observer,"browser-delayed-startup-finished");
-      win.removeEventListener("unload",cleanup);window.removeEventListener("unload",cleanup);
-      if(timer)window.clearTimeout(timer);
-    };
-    const observer=subject=>{if(subject===win){cleanup();apply();}};
-    Services.obs.addObserver(observer,"browser-delayed-startup-finished");
-    win.addEventListener("unload",cleanup,{once:true});window.addEventListener("unload",cleanup,{once:true});
-    timer=window.setTimeout(cleanup,15000);
+    if(!displaySnapEnabled()||!win||!target)return Promise.resolve(false);
+    return new Promise(resolve=>{
+      let timer=0,done=false;
+      const cleanup=()=>{
+        if(done)return false;done=true;
+        try{Services.obs.removeObserver(observer,"browser-delayed-startup-finished");}catch{}
+        win.removeEventListener("unload",cancel);window.removeEventListener("unload",cancel);
+        win.removeEventListener("pointerdown",input,true);win.removeEventListener("keydown",input,true);
+        if(timer)window.clearTimeout(timer);
+        return true;
+      };
+      const cancel=()=>{if(cleanup())resolve(false);};
+      const input=event=>{if(event.isTrusted)cancel();};
+      const apply=async()=>{
+        if(!cleanup())return;
+        if(dead||win.closed){resolve(false);return;}
+        const ok=await placeNativeWindow(win,target);
+        if(!ok)console.warn("[OnePlane] Placement not verified; native window kept.");
+        resolve(ok);
+      };
+      const observer=subject=>{if(subject===win)void apply();};
+      if(win.gBrowserInit?.delayedStartupFinished){void apply();return;}
+      Services.obs.addObserver(observer,"browser-delayed-startup-finished");
+      win.addEventListener("unload",cancel,{once:true});window.addEventListener("unload",cancel,{once:true});
+      win.addEventListener("pointerdown",input,true);win.addEventListener("keydown",input,true);
+      timer=window.setTimeout(()=>{logPlacement("startup-timeout",target);cancel();},15000);
+      // Check again after installing the observer, avoiding a missed signal.
+      if(win.gBrowserInit?.delayedStartupFinished)void apply();
+    });
   }
   function onSourceDrag(event){
     if(!draggedTab||draggedGroup||(!event.screenX&&!event.screenY))return;
@@ -1835,7 +1879,7 @@ function installTabStrip() {
       let child=null;
       try{
         const {BrowserWindowTracker}=ChromeUtils.importESModule("resource:///modules/BrowserWindowTracker.sys.mjs");
-        // Supply a converted target-monitor seed at native window creation,
+        // Supply the final snap rectangle at native window creation,
         // before Zen can restore the opener monitor geometry.
         const seed=display?nativeStartupFeatures(display):null;
         if(display&&!seed){status.textContent="Target monitor changed. Try the drop again.";return;}
@@ -1846,6 +1890,7 @@ function installTabStrip() {
         child=BrowserWindowTracker.openWindow(options);
         if(!child)throw Error("Native window did not open");
         child[PROJECTION]={source:window,id};
+        const placementTask=display?placeAfterStartup(child,display):Promise.resolve(true);
         let startupTab=null;
         const captureStartup=()=>{if(!startupTab)startupTab=child.gBrowser?.selectedTab||null;};
         captureStartup();child.addEventListener("DOMContentLoaded",captureStartup,{once:true});
@@ -1871,7 +1916,7 @@ function installTabStrip() {
           const peer=window.gZenWindowSync.getItemFromWindow(window,startupTab.id);
           if(!peer||(peer.isEmpty&&!peer.pinned&&!peer.group&&peer.linkedBrowser?.currentURI?.spec==="about:blank"&&peer.linkedBrowser?.canGoBack===false&&peer.linkedBrowser?.canGoForward===false))child.gBrowser.removeTab(startupTab,{animate:false});
         }
-        const placed=!display||await placeNativeWindow(child,display);
+        const placed=await placementTask;
         if(placed&&!child.closed)child.focus();
         status.textContent=placed?"":"Window opened; placement could not be verified.";
       }catch(error){

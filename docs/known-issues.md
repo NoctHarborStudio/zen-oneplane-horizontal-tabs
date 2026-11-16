@@ -138,3 +138,7 @@ Preview.21 report: top Split View claims tab strip on return. Preview.22 reserve
 ### OP-019 update (preview.23)
 
 Persistent primary-monitor placement reported in .22. Pass converted target geometry directly to native window creation, then verify final placement, bounded chrome move fallback, refuse unknown external targets instead of silently opening on source; log local placement diagnostics. Real monitor test pending.
+
+### OP-019 update (preview.24)
+
+User confirms correct monitor in .23, but all snap modes retain the centered startup seed. .24 uses the selected target rectangle at window creation and independent native maximization/verification. Exact failure of the old post-startup path not confirmed without console logs. Runtime confirmation pending.
