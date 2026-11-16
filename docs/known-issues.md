@@ -35,7 +35,7 @@
 ## OP-005 — Horizontal toolbar fails to fit on portrait monitors
 
 - Reported on the 0.2.0-preview.3 baseline. On a portrait monitor the OnePlane menu has too little horizontal space and works very poorly. Portrait mode was not included in earlier live testing.
-- First proposed mitigation: portrait-only adaptive two-row icon layout when the primary row cannot fit its icons. Keep one row if it fits; use measured available width, not only monitor orientation. Audit the current 900px CSS/JS activation boundary and overflow behavior.
+- First proposed mitigation: portrait-only adaptive two-row icon layout when the primary row cannot fit its icons. Keep one primary icon row if it fits; use measured available width, not only monitor orientation. The separate planned lower-left Extension Dock is not itself the portrait wrap solution; exact combined row geometry remains unresolved. Audit the current 900px CSS/JS activation boundary and overflow behavior.
 - Acceptance: no inaccessible icons, clipped controls or overlapping navigation; maintain Hub/extension access, tab interactions, address expansion, bookmarks, captions and compact/persistent behavior. Validate resize, scaling, high icon counts and orientation changes. Decide exact row contents during prototype.
 - Landscape overflow/redesign is explicitly deferred; do not change it as part of this issue.
 - Status: open; proposed design only, not implemented or tested.

@@ -32,8 +32,8 @@ Exactly one mandatory Free space, designated by stable native Zen UUID. No prede
 3. Hub shell and native context menu.
 4. Native workspace engine: Free plus user-created spaces.
 5. Workspace memory policy: 600-second inactivity timeout and on-demand tab restoration.
-6. Extension placement beside Hub at the far left of the primary toolbar and native pin/unpin controls.
-7. Portrait responsive layout: adaptive second icon row when required (OP-005); landscape redesign deferred.
+6. Extension Dock in a separate lower-left strip beneath Hub, navigation and address; native pin/unpin, order and overflow.
+7. Portrait responsive layout: adaptive second icon row when required (OP-005); exact relationship to the existing lower dock/bookmark strip still to be prototyped; landscape redesign deferred.
 8. Essentials, pins, folders and interactions.
 9. Fluid address animation, integration, stabilization.
 
@@ -45,3 +45,8 @@ Build locally with npm run build, verify with npm run verify, commit sources and
 ## Preview.2 — independent layout
 
 The common activation scope no longer depends on Compact Mode. The native mode is user-owned and changes only visibility/layout: overlay versus persistent in-flow. The persistent toolbar uses a solid background, no overlay gradient into page content. Native caption controls are rescued only if the manager puts them in the hidden toolbox, and restored on unload. Existing source sections remain transitional. See [OP-001](known-issues.md) for the reported unloaded-tab flicker mitigation.
+
+
+## Toolbar composition contract
+
+The upper row owns Hub, navigation, address, centered tabs and system buttons. The separate lower-left strip owns the native extension manager and pinned extension widgets, starting under Hub and extending below the full navigation/address group. Center bookmarks remain distinct. The layout controller measures both zones; Compact Mode reveals/hides the composite toolbar and persistent mode reserves its measured height. Do not clone extension actions or create independent blur layers. Portrait wrapping is an additional responsive policy, not a replacement for the dock. The exact row geometry and overflow thresholds require a prototype and live tests.
