@@ -82,6 +82,14 @@
       "kind": "section"
     },
     {
+      "path": "src/algorithms/display-placement.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/interactions/display-engine.js.part",
+      "kind": "section"
+    },
+    {
       "path": "src/hub/controller.js.part",
       "kind": "section"
     },

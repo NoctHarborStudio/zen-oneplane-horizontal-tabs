@@ -534,5 +534,11 @@
     "property": "zen.refined.bookmarks.stable-background",
     "label": "Stabilize OnePlane background during bookmark hover",
     "defaultValue": true
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.oneplane.experimental-display-snap",
+    "label": "Experimental Windows monitor placement",
+    "defaultValue": true
   }
 ]

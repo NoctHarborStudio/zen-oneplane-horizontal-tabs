@@ -1241,74 +1241,198 @@ function installTabStrip() {
     };
   }
   let releaseDragEngine=()=>{};
-  // Cross-monitor geometry is still unvalidated on physical mixed-DPI displays.
-  // Keep the faulty native popup/forced placement disabled during Drag Engine stabilization.
-  const CROSS_MONITOR_SNAP_ENABLED=false;
-  // Shared monitor work-area geometry and experimental chrome preview.
-  let placementPreview=null,placementLabel=null,placementKey="";
-  function desktopDisplayAt(x,y){
-    if(!Number.isFinite(x)||!Number.isFinite(y))return null;
+  // All geometry below is in global desktop pixels; no CSS coordinates.
+  function displayContains(rect,x,y){
+    return !!rect&&[rect.x,rect.y,rect.width,rect.height,x,y].every(Number.isFinite)&&
+      rect.width>0&&rect.height>0&&x>=rect.x&&x<rect.x+rect.width&&y>=rect.y&&y<rect.y+rect.height;
+  }
+  function displayCssPoint(x,y,cssToDevice,desktopToDevice){
+    if(![x,y,cssToDevice,desktopToDevice].every(Number.isFinite)||cssToDevice<=0||desktopToDevice<=0)return null;
+    const scale=cssToDevice/desktopToDevice;
+    return {x:Math.round(x*scale),y:Math.round(y*scale)};
+  }
+  function displayRectEqual(a,b){
+    return !!a&&!!b&&["x","y","width","height"].every(k=>a[k]===b[k]);
+  }
+  function displaySnapTarget(full,work,x,y){
+    if(!displayContains(full,x,y)||!displayContains(full,work?.x,work?.y)||
+       !displayContains(full,work.x+work.width-1,work.y+work.height-1))return null;
+    // Classify on the physical display, not the inset work area. A taskbar
+    // is part of the hit surface, but never part of the target window.
+    const edge=Math.max(16,Math.min(72,Math.round(Math.min(full.width,full.height)*.045)));
+    const l=x-full.x,r=full.x+full.width-1-x,t=y-full.y,b=full.y+full.height-1-y;
+    const h=l<=edge?"left":r<=edge?"right":"";
+    const v=t<=edge?"top":b<=edge?"bottom":"";
+    const {x:wx,y:wy,width:w,height:ht}=work,hw=Math.floor(w/2),hh=Math.floor(ht/2);
+    let rect;
+    if(h&&v)rect={x:h==="left"?wx:wx+hw,y:v==="top"?wy:wy+hh,width:h==="left"?hw:w-hw,height:v==="top"?hh:ht-hh,mode:h+"-"+v};
+    else if(v==="top")rect={...work,mode:"maximize"};
+    else if(h)rect={x:h==="left"?wx:wx+hw,y:wy,width:h==="left"?hw:w-hw,height:ht,mode:h};
+    else if(v==="bottom")rect={x:wx,y:wy+hh,width:w,height:ht-hh,mode:"bottom"};
+    else {
+      const width=Math.round(w*.72),height=Math.round(ht*.74);
+      rect={x:wx+Math.floor((w-width)/2),y:wy+Math.floor((ht-height)/2),width,height,mode:"center"};
+    }
+    return {...rect,full:{...full},work:{...work}};
+  }
+  function displayNativeRect(rect,desktopToDevice){
+    if(!rect||![rect.x,rect.y,rect.width,rect.height,desktopToDevice].every(Number.isFinite)||
+       rect.width<=0||rect.height<=0||desktopToDevice<=0)return null;
+    return {x:Math.round(rect.x*desktopToDevice),y:Math.round(rect.y*desktopToDevice),
+      width:Math.round(rect.width*desktopToDevice),height:Math.round(rect.height*desktopToDevice)};
+  }
+  function displayPreviewFraction(target){
+    if(!target||!displayContains(target.full,target.x,target.y)||
+       !displayContains(target.full,target.x+target.width-1,target.y+target.height-1))return null;
+    const f=target.full;
+    return {x:(target.x-f.x)/f.width,y:(target.y-f.y)/f.height,width:target.width/f.width,height:target.height/f.height};
+  }
+  // Display Engine: Windows first. Gecko's chrome MouseEvent.screen and
+  // nsIBaseWindow expose the native monitor and desktop/device pixel scales.
+  // No OS overlay windows or CSS-to-desktop guesses across DPI boundaries.
+  const DISPLAY_SNAP_PREF="zen.oneplane.experimental-display-snap";
+  let placementPreview=null,placementMap=null,placementArea=null,placementLabel=null,placementKey="";
+  const screenManager=()=>Cc["@mozilla.org/gfx/screenmanager;1"].getService(Ci.nsIScreenManager);
+  function nativeBase(win){
+    const owner=win.docShell.QueryInterface(Ci.nsIDocShellTreeItem).treeOwner;
+    try{return owner.QueryInterface(Ci.nsIBaseWindow);}
+    catch{return owner.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIBaseWindow);}
+  }
+  function displaySnapEnabled(){
+    return Services.appinfo.OS==="WINNT"&&prefs.getBoolPref(DISPLAY_SNAP_PREF,true);
+  }
+  function screenRect(screen,work=false){
+    if(!screen)return null;
+    const l={},t={},w={},h={};
+    if(work)screen.GetAvailRectDisplayPix(l,t,w,h);else screen.GetRectDisplayPix(l,t,w,h);
+    const rect={x:l.value,y:t.value,width:w.value,height:h.value};
+    return displayContains(rect,rect.x,rect.y)?rect:null;
+  }
+  function nativeWindowRect(win){
     try{
-      const sm=Cc["@mozilla.org/gfx/screenmanager;1"].getService(Ci.nsIScreenManager);
-      const s=sm.screenForRect(Math.round(x),Math.round(y),1,1),l={},t={},w={},h={};
-      s.GetAvailRectDisplayPix(l,t,w,h);
-      const d={x:l.value,y:t.value,width:w.value,height:h.value};
-      return x>=d.x&&x<d.x+d.width&&y>=d.y&&y<d.y+d.height?d:null;
+      const base=nativeBase(win),x={},y={},w={},h={},scale=base.devicePixelsPerDesktopPixel;
+      if(!Number.isFinite(scale)||scale<=0)return null;
+      base.getPositionAndSize(x,y,w,h);
+      const rect={x:Math.round(x.value/scale),y:Math.round(y.value/scale),width:Math.round(w.value/scale),height:Math.round(h.value/scale)};
+      return displayContains(rect,rect.x,rect.y)?rect:null;
     }catch{return null;}
   }
-  function placementAt(x,y){const d=desktopDisplayAt(x,y);return d?hubSnapRect(d,x,y):null;}
-  function pointInSourceWindow(x,y){
+  function displayEventPoint(event){
+    if(!displaySnapEnabled()||!event?.isTrusted)return null;
+    try{
+      const eventWin=event.view?.gBrowser?event.view:event.target?.ownerDocument?.defaultView;
+      const source=eventWin?.gBrowser?eventWin:window;
+      const base=nativeBase(source);
+      const point=displayCssPoint(event.screenX,event.screenY,source.devicePixelRatio,base.devicePixelsPerDesktopPixel);
+      if(!point)return null;
+      // Gecko's screen getter uses the same CSS->desktop conversion as
+      // MouseEvent::ScreenPointDesktopPix. Validate it against our result.
+      const resolved=event.screen;
+      if(!resolved)return null;
+      const full=screenRect(resolved),work=screenRect(resolved,true);
+      if(!displayContains(full,point.x,point.y)||!work)return null;
+      const checked=screenRect(screenManager().screenForRect(point.x,point.y,1,1));
+      if(!displayRectEqual(full,checked))return null;
+      return {...point,full,work};
+    }catch{return null;}
+  }
+  function pointInSourceWindow(event){
+    const p=displayEventPoint(event),rect=nativeWindowRect(window);
+    if(p&&rect)return displayContains(rect,p.x,p.y);
+    const x=event.screenX,y=event.screenY;
     return x>=window.screenX&&x<window.screenX+window.outerWidth&&y>=window.screenY&&y<window.screenY+window.outerHeight;
+  }
+  function placementAt(event){
+    if(!displaySnapEnabled())return null;
+    const p=displayEventPoint(event),rect=nativeWindowRect(window);
+    if(!p||!rect||displayContains(rect,p.x,p.y))return null;
+    return displaySnapTarget(p.full,p.work,p.x,p.y);
   }
   function clearPlacementPreview(remove=false){
     placementKey="";
-    if(placementPreview&&(placementPreview.state==="open"||placementPreview.state==="showing"))try{placementPreview.hidePopup();}catch{}
-    if(remove){placementPreview?.remove();placementPreview=placementLabel=null;}
+    if(placementPreview){
+      if(placementPreview.matches(":popover-open"))try{placementPreview.hidePopover();}catch{}
+      placementPreview.hidden=true;
+      if(remove){placementPreview.remove();placementPreview=placementMap=placementArea=placementLabel=null;}
+    }
   }
-  function showPlacementPreview(x,y,label){
-    if(!CROSS_MONITOR_SNAP_ENABLED){if(placementPreview)clearPlacementPreview(true);return;}
-    if(pointInSourceWindow(x,y)){clearPlacementPreview();return;}
-    const p=placementAt(x,y);if(!p){clearPlacementPreview();return;}
-    const key=[p.x,p.y,p.width,p.height,p.mode,label].join(":");
+  function showPlacementPreview(event,label){
+    const p=placementAt(event),fraction=displayPreviewFraction(p);
+    if(!p||!fraction){clearPlacementPreview();return;}
+    const key=[p.full.x,p.full.y,p.full.width,p.full.height,p.x,p.y,p.width,p.height,p.mode,label].join(":");
     if(key===placementKey)return;
-    placementKey=key;
     try{
       if(!placementPreview){
-        const set=document.getElementById("mainPopupSet");if(!set)return;
-        placementPreview=document.createXULElement("panel");placementPreview.id="oneplane-placement-preview";
-        for(const [k,v] of Object.entries({noautohide:"true",noautofocus:"true",mousethrough:"always",level:"top","aria-hidden":"true"}))placementPreview.setAttribute(k,v);
-        placementLabel=html("div","op-placement-label");placementPreview.append(placementLabel);set.append(placementPreview);
+        placementPreview=html("div","op-placement-preview");placementPreview.id="oneplane-placement-preview";
+        placementPreview.hidden=true;placementPreview.setAttribute("aria-hidden","true");
+        if(typeof placementPreview.showPopover==="function")placementPreview.setAttribute("popover","manual");
+        placementMap=html("div","op-placement-map");placementArea=html("div","op-placement-area");
+        placementLabel=html("div","op-placement-label");
+        placementMap.append(placementArea);placementPreview.append(placementMap,placementLabel);root.append(placementPreview);
       }
-      placementLabel.textContent=label+" · "+(p.mode==="maximize"?"Full screen":p.mode==="center"?"Window":p.mode);
-      const inset=8,w=Math.max(1,p.width-2*inset),h=Math.max(1,p.height-2*inset);
-      placementPreview.style.width=w+"px";placementPreview.style.height=h+"px";
-      placementLabel.style.width=w+"px";placementLabel.style.height=h+"px";
-      if(placementPreview.state==="open"){placementPreview.sizeTo(w,h);placementPreview.moveTo(p.x+inset,p.y+inset);}
-      else if(placementPreview.state!=="showing")placementPreview.openPopupAtScreen(p.x+inset,p.y+inset,false);
-    }catch(error){clearPlacementPreview(true);console.warn("[OnePlane] Snap preview unavailable:",error);}
+      const ratio=p.full.width/p.full.height;
+      placementMap.style.width=Math.round(Math.min(160,92*ratio))+"px";
+      placementMap.style.height=Math.round(Math.min(92,160/ratio))+"px";
+      for(const [name,value] of Object.entries({left:fraction.x,top:fraction.y,width:fraction.width,height:fraction.height}))
+        placementArea.style[name]=value*100+"%";
+      const mode=p.mode==="maximize"?"Maximize":p.mode==="center"?"Centered":p.mode;
+      placementLabel.textContent=label+" · "+mode+" · "+p.width+" × "+p.height;
+      placementPreview.hidden=false;
+      if(typeof placementPreview.showPopover==="function"&&!placementPreview.matches(":popover-open"))placementPreview.showPopover();
+      placementKey=key;
+    }catch(error){clearPlacementPreview(true);console.warn("[OnePlane] Display preview:",error);}
   }
-  function placeNativeWindow(win,p){
-    if(!CROSS_MONITOR_SNAP_ENABLED||!win||win.closed||!p)return;
+  function placeNativeWindow(win,target){
+    if(!displaySnapEnabled()||!win||win.closed||!target)return false;
     try{
-      if(win.windowState===win.STATE_MAXIMIZED||win.windowState===win.STATE_MINIMIZED)win.restore();
-      win.moveTo(p.x,p.y);win.resizeTo(p.width,p.height);
-      if(p.mode==="maximize")win.maximize();
-    }catch(error){console.warn("[OnePlane] Window placement:",error);}
+      // Revalidate the monitor and taskbar after startup; never apply stale
+      // coordinates after a disconnect or display reconfiguration.
+      const full=target.full,work=target.work;
+      const screen=screenManager().screenForRect(full.x+Math.floor(full.width/2),full.y+Math.floor(full.height/2),1,1);
+      if(!displayRectEqual(full,screenRect(screen))||!displayRectEqual(work,screenRect(screen,true)))return false;
+      const base=nativeBase(win),scale=base.devicePixelsPerDesktopPixel;
+      if(typeof base.setPositionAndSize!=="function")return false;
+      // SetPositionAndSize expects layout-device pixels; AppWindow converts
+      // using its CURRENT widget desktop scale, then applies a desktop rect.
+      // For maximize first place a normal window fully inside the target.
+      const seed=target.mode==="maximize"?displaySnapTarget(full,work,full.x+Math.floor(full.width/2),full.y+Math.floor(full.height/2)):target;
+      const native=displayNativeRect(seed,scale);
+      if(!native)return false;
+      base.setPositionAndSize(native.x,native.y,native.width,native.height,Ci.nsIBaseWindow.eRepaint);
+      const actual=nativeWindowRect(win);
+      if(!actual||!displayContains(full,actual.x+Math.floor(actual.width/2),actual.y+Math.floor(actual.height/2)))return false;
+      if(target.mode==="maximize")win.maximize();
+      else {
+        // The OS can enforce a minimum browser size. Clamp once using the
+        // actual size if it fits; never repeatedly force a window resize.
+        if(actual.width>work.width||actual.height>work.height)return false;
+        const x=Math.max(work.x,Math.min(work.x+work.width-actual.width,actual.x));
+        const y=Math.max(work.y,Math.min(work.y+work.height-actual.height,actual.y));
+        if(x!==actual.x||y!==actual.y)base.setPositionDesktopPix(x,y);
+      }
+      return true;
+    }catch(error){console.warn("[OnePlane] Native display placement:",error);return false;}
   }
-  function placeAfterStartup(win,p){
-    if(!CROSS_MONITOR_SNAP_ENABLED||!win||!p)return;
-    if(win.gBrowserInit?.delayedStartupFinished){placeNativeWindow(win,p);return;}
-    let timer=0;
-    const cleanup=()=>{Services.obs.removeObserver(observer,"browser-delayed-startup-finished");win.removeEventListener("unload",cleanup);if(timer)window.clearTimeout(timer);};
-    const observer=subject=>{if(subject===win){cleanup();placeNativeWindow(win,p);}};
-    Services.obs.addObserver(observer,"browser-delayed-startup-finished");win.addEventListener("unload",cleanup,{once:true});
+  function placeAfterStartup(win,target){
+    if(!displaySnapEnabled()||!win||!target)return;
+    const apply=()=>{if(!dead&&!win.closed&&!placeNativeWindow(win,target))console.warn("[OnePlane] Placement not verified; native window kept.");};
+    if(win.gBrowserInit?.delayedStartupFinished){apply();return;}
+    let timer=0,done=false;
+    const cleanup=()=>{
+      if(done)return;done=true;Services.obs.removeObserver(observer,"browser-delayed-startup-finished");
+      win.removeEventListener("unload",cleanup);window.removeEventListener("unload",cleanup);
+      if(timer)window.clearTimeout(timer);
+    };
+    const observer=subject=>{if(subject===win){cleanup();apply();}};
+    Services.obs.addObserver(observer,"browser-delayed-startup-finished");
+    win.addEventListener("unload",cleanup,{once:true});window.addEventListener("unload",cleanup,{once:true});
     timer=window.setTimeout(cleanup,15000);
   }
   function onSourceDrag(event){
     if(!draggedTab||draggedGroup||(!event.screenX&&!event.screenY))return;
-    if(!pointInSourceWindow(event.screenX,event.screenY)){
+    if(!pointInSourceWindow(event)){
       if(dragImageMode!=="outside")setDragImageMode("outside",event);
-      showPlacementPreview(event.screenX,event.screenY,"Tab");
+      showPlacementPreview(event,"Tab");
     }else clearPlacementPreview();
   }
 
@@ -1348,7 +1472,7 @@ function installTabStrip() {
       if(dragBadge){if(dragBadge.matches(":popover-open"))dragBadge.hidePopover();dragBadge.hidden=true;if(remove){dragBadge.remove();dragBadge=null;}}
     }
     function showDragBadge(event,label){
-      if(!pointInSourceWindow(event.screenX,event.screenY)){hideDragBadge();return;}
+      if(!pointInSourceWindow(event)){hideDragBadge();return;}
       if(!dragBadge){dragBadge=make("div","op-hub-drag-badge");dragBadge.id="oneplane-workspace-drag-badge";dragBadge.setAttribute("aria-hidden","true");dragBadge.hidden=true;if(typeof dragBadge.showPopover==="function")dragBadge.setAttribute("popover","manual");root.append(dragBadge);}
       dragBadge.textContent=label;dragBadgePoint={x:event.clientX+16,y:event.clientY+16};
       if(dragBadgeFrame)return;
@@ -1529,10 +1653,6 @@ function installTabStrip() {
       return !!manager()?.currentWindowIsSyncing&&!!window.gZenWindowSync&&
         prefs.getBoolPref("zen.window-sync.enabled",true)&&!prefs.getBoolPref("zen.window-sync.sync-only-pinned-tabs",true);
     }
-    function monitorAt(x,y){
-      const source=desktopDisplayAt(window.screenX+window.outerWidth/2,window.screenY+window.outerHeight/2),dest=desktopDisplayAt(x,y);
-      return hubOtherDisplay(source,dest,x,y)?hubSnapRect(dest,x,y):null;
-    }
     function beginDrag(event,id,entry){
       if(!event.isTrusted||event.button!==0||!(event.buttons&1)||busy||projectionBusy||destroyed||!open)return;
       if(dragLifecycle.current())cancelActiveDrag("superseded");
@@ -1551,7 +1671,7 @@ function installTabStrip() {
       if(drag.moved){
         event.preventDefault();
         const label=manager()?.getWorkspaceFromId(drag.id)?.name||"Workspace";
-        showDragBadge(event,label);showPlacementPreview(event.screenX,event.screenY,label);
+        showDragBadge(event,label);showPlacementPreview(event,label);
       }
     }
     function cleanupDrag(){
@@ -1571,14 +1691,14 @@ function installTabStrip() {
       const d=drag;
       if(!event.isTrusted||event.button!==0||!d.entry.isConnected){cancelDrag();return;}
       const outside=Number.isFinite(event.screenX)&&Number.isFinite(event.screenY)&&
-        !(event.screenX===0&&event.screenY===0)&&!pointInSourceWindow(event.screenX,event.screenY);
-      const point=CROSS_MONITOR_SNAP_ENABLED&&outside?monitorAt(event.screenX,event.screenY):null;
+        !(event.screenX===0&&event.screenY===0)&&!pointInSourceWindow(event);
+      const point=outside?placementAt(event):null;
       if(!dragLifecycle.finish(d.token))return;
       cleanupDrag();
       if(!d.moved)return;
       event.preventDefault();event.stopPropagation();
-      // No forced monitor rectangle until the Display Engine is validated.
-      // A genuine external release still opens a normal native synced window.
+      // A genuine external release opens a native synced window. If the
+      // screen coordinate contract cannot be verified, retain native placement.
       if(outside)void project(d.id,point);
       else status.textContent="Release outside the browser, or use Open in another window.";
     }
@@ -1597,9 +1717,9 @@ function installTabStrip() {
       let child=null;
       try{
         const {BrowserWindowTracker}=ChromeUtils.importESModule("resource:///modules/BrowserWindowTracker.sys.mjs");
-        const features=display?`left=${display.x},top=${display.y},width=${display.width},height=${display.height}`:undefined;
+        // Never pass desktop pixels to CSS-based startup window features.
         const args=Cc["@mozilla.org/supports-string;1"].createInstance(Ci.nsISupportsString);args.data="about:blank";
-        const options={openerWindow:window,private:false,zenSyncedWindow:!prefs.getBoolPref("zen.window-sync.prefer-unsynced-windows",false),features,args};
+        const options={openerWindow:window,private:false,zenSyncedWindow:!prefs.getBoolPref("zen.window-sync.prefer-unsynced-windows",false),args};
         child=BrowserWindowTracker.openWindow(options);
         if(!child)throw Error("Native window did not open");
         child[PROJECTION]={source:window,id};
@@ -1628,8 +1748,8 @@ function installTabStrip() {
           const peer=window.gZenWindowSync.getItemFromWindow(window,startupTab.id);
           if(!peer||(peer.isEmpty&&!peer.pinned&&!peer.group&&peer.linkedBrowser?.currentURI?.spec==="about:blank"&&peer.linkedBrowser?.canGoBack===false&&peer.linkedBrowser?.canGoForward===false))child.gBrowser.removeTab(startupTab,{animate:false});
         }
-        if(display)placeNativeWindow(child,display);
-        child.focus();status.textContent="";
+        const placed=!display||placeNativeWindow(child,display);
+        child.focus();status.textContent=placed?"":"Window opened; placement could not be verified.";
       }catch(error){
         if(child&&!child.closed)delete child[PROJECTION];
         if(!destroyed)status.textContent="Could not open synced workspace. Check window sync settings.";
@@ -3175,9 +3295,7 @@ function installTabStrip() {
     const x = event.screenX, y = event.screenY;
     if (!Number.isFinite(x) || !Number.isFinite(y) || (x === 0 && y === 0) ||
         Math.hypot(x-start.x,y-start.y) < 12) return;
-    const left = window.screenX, top = window.screenY;
-    const inside = x >= left && x < left + window.outerWidth &&
-      y >= top && y < top + window.outerHeight;
+    const inside=pointInSourceWindow(event);
     if (inside) {
       if(!toolbarContainsPoint(event.clientX,event.clientY)&&emptySplitTarget(browser.selectedTab))browser.selectedTab=tab;
       return;
@@ -3186,9 +3304,8 @@ function installTabStrip() {
       // Native session adoption preserves the live browser, history, audio
       // and private-window state. Zen chooses its native window-sync mode.
       if (isSplit(tab) && !unsplitTab(tab)) return;
-      const p=CROSS_MONITOR_SNAP_ENABLED?placementAt(x,y):null;
-      const features=p?{screenX:p.x,screenY:p.y,outerWidth:p.width,outerHeight:p.height}:{};
-      const win=browser.replaceTabWithWindow(tab,{replaceLastTab:true,...features});
+      const p=placementAt(event);
+      const win=browser.replaceTabWithWindow(tab,{replaceLastTab:true});
       if(win&&p)placeAfterStartup(win,p);
     } catch (error) { console.error("[OnePlane] Detach tab:", error); }
   }
@@ -3196,7 +3313,7 @@ function installTabStrip() {
     source: () => draggedTab,
     group: () => draggedGroup,
     outside: event => setDragImageMode("outside",event),
-    preview: event => {if(draggedTab&&!draggedGroup)showPlacementPreview(event.screenX,event.screenY,"Tab");},
+    preview: event => {if(draggedTab&&!draggedGroup)showPlacementPreview(event,"Tab");},
     clearIncoming: () => {
       if(draggedTab||dead)return;
       clearLiveDrag();clearDropMarker();releaseDragReveal();refreshIndicator();

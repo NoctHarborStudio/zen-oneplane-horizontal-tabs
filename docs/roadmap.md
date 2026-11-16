@@ -113,3 +113,7 @@ Cross-monitor placement now has a Snap-style OnePlane preview, fixed center targ
 3. Finish Workspace Engine (Free designation, rename/icon/color/order and safe native management).
 4. Research Live Workspace Projection feasibility, without duplicating page sessions or audio.
 5. Memory Management (600s, multiwindow safety); Extension Dock; Portrait Mode; Library; interactions/integration and Fluid UI. Defer remaining Split View overlap (OP-020) to final animation polish as requested.
+
+## Preview.21 — Display & Snap Engine first implementation
+
+Separate display geometry and runtime adapter. Windows chrome native monitor validation, work-area snap, small source-window map and guarded native placement. True desktop-wide visual overlay and native shell Snap semantics deferred pending physical-monitor verification. Drag Engine live test remains open; do not advance to Workspace Engine until this gate is reviewed.

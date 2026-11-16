@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0-preview.21
+
+- Extract Display Engine and pure desktop geometry; validate native event screen, handle full monitor vs work area, negative origins and DPI conversion.
+- Replace desktop-sized popup with small source-window snap diagram. Place native windows after startup via base-window device/desktop API, validate target and use OS maximize; safe native fallback.
+- Add experimental Windows placement preference and geometry tests. Drag Engine live validation and actual Windows shell overlay still pending.
+
 ## 0.2.0-preview.20
 
 - Repair Sine update timestamp regression: new updatedAt exceeds preview.16 and intervening publications. No browser runtime changes from preview.19.

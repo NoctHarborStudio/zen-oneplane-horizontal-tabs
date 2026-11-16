@@ -14,9 +14,7 @@
     const x = event.screenX, y = event.screenY;
     if (!Number.isFinite(x) || !Number.isFinite(y) || (x === 0 && y === 0) ||
         Math.hypot(x-start.x,y-start.y) < 12) return;
-    const left = window.screenX, top = window.screenY;
-    const inside = x >= left && x < left + window.outerWidth &&
-      y >= top && y < top + window.outerHeight;
+    const inside=pointInSourceWindow(event);
     if (inside) {
       if(!toolbarContainsPoint(event.clientX,event.clientY)&&emptySplitTarget(browser.selectedTab))browser.selectedTab=tab;
       return;
@@ -25,9 +23,8 @@
       // Native session adoption preserves the live browser, history, audio
       // and private-window state. Zen chooses its native window-sync mode.
       if (isSplit(tab) && !unsplitTab(tab)) return;
-      const p=CROSS_MONITOR_SNAP_ENABLED?placementAt(x,y):null;
-      const features=p?{screenX:p.x,screenY:p.y,outerWidth:p.width,outerHeight:p.height}:{};
-      const win=browser.replaceTabWithWindow(tab,{replaceLastTab:true,...features});
+      const p=placementAt(event);
+      const win=browser.replaceTabWithWindow(tab,{replaceLastTab:true});
       if(win&&p)placeAfterStartup(win,p);
     } catch (error) { console.error("[OnePlane] Detach tab:", error); }
   }
@@ -35,7 +32,7 @@
     source: () => draggedTab,
     group: () => draggedGroup,
     outside: event => setDragImageMode("outside",event),
-    preview: event => {if(draggedTab&&!draggedGroup)showPlacementPreview(event.screenX,event.screenY,"Tab");},
+    preview: event => {if(draggedTab&&!draggedGroup)showPlacementPreview(event,"Tab");},
     clearIncoming: () => {
       if(draggedTab||dead)return;
       clearLiveDrag();clearDropMarker();releaseDragReveal();refreshIndicator();

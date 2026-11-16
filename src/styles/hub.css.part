@@ -60,10 +60,13 @@
 #oneplane-hub-panel .op-hub-space[data-op-dragging] {opacity:.65;cursor:grabbing;}
 #oneplane-hub-panel[inert] {pointer-events:none!important;}
 
-/* Experimental cross-screen preview. */
-#oneplane-placement-preview { --panel-padding:0px; --panel-background:transparent; --panel-border-color:transparent; pointer-events:none !important; margin:0 !important; padding:0 !important; background:transparent !important; border:0 !important; }
-#oneplane-placement-preview::part(content) {padding:0 !important;background:transparent !important;border:0 !important;}
-#oneplane-placement-preview .op-placement-label {display:grid;place-items:center;box-sizing:border-box;pointer-events:none!important;border:2px solid #91adf2;border-radius:12px;background:#769ef233;color:white;font:600 15px system-ui;text-shadow:0 1px 4px #000;}
+/* Compact source-window placement diagram. Never a desktop-sized popup. */
+#oneplane-placement-preview {position:fixed!important;inset:48px 16px auto auto!important;margin:0!important;display:flex;align-items:center;flex-direction:column;gap:7px;padding:10px!important;width:max-content;max-width:230px;box-sizing:border-box;color:light-dark(#262933,#e1e5ee);background:light-dark(#edf0f6,#252934);border:1px solid color-mix(in srgb,currentColor 22%,transparent);border-radius:9px;box-shadow:0 4px 16px #0003;z-index:2147483647;pointer-events:none!important;}
+#oneplane-placement-preview[hidden] {display:none!important;}
+#oneplane-placement-preview::backdrop {background:transparent;pointer-events:none;}
+#oneplane-placement-preview .op-placement-map {position:relative;overflow:hidden;box-sizing:content-box;background:color-mix(in srgb,currentColor 8%,transparent);outline:1px solid color-mix(in srgb,currentColor 30%,transparent);border-radius:3px;}
+#oneplane-placement-preview .op-placement-area {position:absolute;box-sizing:border-box;background:#769ef244;border:1px solid #91adf2;border-radius:2px;}
+#oneplane-placement-preview .op-placement-label {font:500 11px system-ui;text-align:center;overflow-wrap:anywhere;}
 #oneplane-hub-panel .op-hub-space[data-op-dragging] {background:color-mix(in srgb,currentColor 18%,transparent);outline:1px solid color-mix(in srgb,currentColor 35%,transparent);}
 
 #oneplane-workspace-drag-badge {position:fixed!important;inset:0 auto auto 0!important;margin:0!important;box-sizing:border-box;max-width:160px;padding:9px 13px;border-radius:8px;border:1px solid color-mix(in srgb,currentColor 35%,transparent);background:light-dark(#e9edf5,#353946);color:light-dark(#24262e,#edf0f6);box-shadow:0 4px 14px #0004;pointer-events:none!important;z-index:2147483647;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font:600 13px system-ui;}

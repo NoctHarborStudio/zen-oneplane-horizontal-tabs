@@ -1,74 +1,3 @@
-  // Cross-monitor geometry is still unvalidated on physical mixed-DPI displays.
-  // Keep the faulty native popup/forced placement disabled during Drag Engine stabilization.
-  const CROSS_MONITOR_SNAP_ENABLED=false;
-  // Shared monitor work-area geometry and experimental chrome preview.
-  let placementPreview=null,placementLabel=null,placementKey="";
-  function desktopDisplayAt(x,y){
-    if(!Number.isFinite(x)||!Number.isFinite(y))return null;
-    try{
-      const sm=Cc["@mozilla.org/gfx/screenmanager;1"].getService(Ci.nsIScreenManager);
-      const s=sm.screenForRect(Math.round(x),Math.round(y),1,1),l={},t={},w={},h={};
-      s.GetAvailRectDisplayPix(l,t,w,h);
-      const d={x:l.value,y:t.value,width:w.value,height:h.value};
-      return x>=d.x&&x<d.x+d.width&&y>=d.y&&y<d.y+d.height?d:null;
-    }catch{return null;}
-  }
-  function placementAt(x,y){const d=desktopDisplayAt(x,y);return d?hubSnapRect(d,x,y):null;}
-  function pointInSourceWindow(x,y){
-    return x>=window.screenX&&x<window.screenX+window.outerWidth&&y>=window.screenY&&y<window.screenY+window.outerHeight;
-  }
-  function clearPlacementPreview(remove=false){
-    placementKey="";
-    if(placementPreview&&(placementPreview.state==="open"||placementPreview.state==="showing"))try{placementPreview.hidePopup();}catch{}
-    if(remove){placementPreview?.remove();placementPreview=placementLabel=null;}
-  }
-  function showPlacementPreview(x,y,label){
-    if(!CROSS_MONITOR_SNAP_ENABLED){if(placementPreview)clearPlacementPreview(true);return;}
-    if(pointInSourceWindow(x,y)){clearPlacementPreview();return;}
-    const p=placementAt(x,y);if(!p){clearPlacementPreview();return;}
-    const key=[p.x,p.y,p.width,p.height,p.mode,label].join(":");
-    if(key===placementKey)return;
-    placementKey=key;
-    try{
-      if(!placementPreview){
-        const set=document.getElementById("mainPopupSet");if(!set)return;
-        placementPreview=document.createXULElement("panel");placementPreview.id="oneplane-placement-preview";
-        for(const [k,v] of Object.entries({noautohide:"true",noautofocus:"true",mousethrough:"always",level:"top","aria-hidden":"true"}))placementPreview.setAttribute(k,v);
-        placementLabel=html("div","op-placement-label");placementPreview.append(placementLabel);set.append(placementPreview);
-      }
-      placementLabel.textContent=label+" · "+(p.mode==="maximize"?"Full screen":p.mode==="center"?"Window":p.mode);
-      const inset=8,w=Math.max(1,p.width-2*inset),h=Math.max(1,p.height-2*inset);
-      placementPreview.style.width=w+"px";placementPreview.style.height=h+"px";
-      placementLabel.style.width=w+"px";placementLabel.style.height=h+"px";
-      if(placementPreview.state==="open"){placementPreview.sizeTo(w,h);placementPreview.moveTo(p.x+inset,p.y+inset);}
-      else if(placementPreview.state!=="showing")placementPreview.openPopupAtScreen(p.x+inset,p.y+inset,false);
-    }catch(error){clearPlacementPreview(true);console.warn("[OnePlane] Snap preview unavailable:",error);}
-  }
-  function placeNativeWindow(win,p){
-    if(!CROSS_MONITOR_SNAP_ENABLED||!win||win.closed||!p)return;
-    try{
-      if(win.windowState===win.STATE_MAXIMIZED||win.windowState===win.STATE_MINIMIZED)win.restore();
-      win.moveTo(p.x,p.y);win.resizeTo(p.width,p.height);
-      if(p.mode==="maximize")win.maximize();
-    }catch(error){console.warn("[OnePlane] Window placement:",error);}
-  }
-  function placeAfterStartup(win,p){
-    if(!CROSS_MONITOR_SNAP_ENABLED||!win||!p)return;
-    if(win.gBrowserInit?.delayedStartupFinished){placeNativeWindow(win,p);return;}
-    let timer=0;
-    const cleanup=()=>{Services.obs.removeObserver(observer,"browser-delayed-startup-finished");win.removeEventListener("unload",cleanup);if(timer)window.clearTimeout(timer);};
-    const observer=subject=>{if(subject===win){cleanup();placeNativeWindow(win,p);}};
-    Services.obs.addObserver(observer,"browser-delayed-startup-finished");win.addEventListener("unload",cleanup,{once:true});
-    timer=window.setTimeout(cleanup,15000);
-  }
-  function onSourceDrag(event){
-    if(!draggedTab||draggedGroup||(!event.screenX&&!event.screenY))return;
-    if(!pointInSourceWindow(event.screenX,event.screenY)){
-      if(dragImageMode!=="outside")setDragImageMode("outside",event);
-      showPlacementPreview(event.screenX,event.screenY,"Tab");
-    }else clearPlacementPreview();
-  }
-
   // Native Hub, window-scoped. Zen owns all workspace/session state.
   function createHubController({target,root,toolbarWrapper,supported,hold,switchGuard}) {
     const button=html("button","op-hub-trigger");
@@ -105,7 +34,7 @@
       if(dragBadge){if(dragBadge.matches(":popover-open"))dragBadge.hidePopover();dragBadge.hidden=true;if(remove){dragBadge.remove();dragBadge=null;}}
     }
     function showDragBadge(event,label){
-      if(!pointInSourceWindow(event.screenX,event.screenY)){hideDragBadge();return;}
+      if(!pointInSourceWindow(event)){hideDragBadge();return;}
       if(!dragBadge){dragBadge=make("div","op-hub-drag-badge");dragBadge.id="oneplane-workspace-drag-badge";dragBadge.setAttribute("aria-hidden","true");dragBadge.hidden=true;if(typeof dragBadge.showPopover==="function")dragBadge.setAttribute("popover","manual");root.append(dragBadge);}
       dragBadge.textContent=label;dragBadgePoint={x:event.clientX+16,y:event.clientY+16};
       if(dragBadgeFrame)return;
@@ -286,10 +215,6 @@
       return !!manager()?.currentWindowIsSyncing&&!!window.gZenWindowSync&&
         prefs.getBoolPref("zen.window-sync.enabled",true)&&!prefs.getBoolPref("zen.window-sync.sync-only-pinned-tabs",true);
     }
-    function monitorAt(x,y){
-      const source=desktopDisplayAt(window.screenX+window.outerWidth/2,window.screenY+window.outerHeight/2),dest=desktopDisplayAt(x,y);
-      return hubOtherDisplay(source,dest,x,y)?hubSnapRect(dest,x,y):null;
-    }
     function beginDrag(event,id,entry){
       if(!event.isTrusted||event.button!==0||!(event.buttons&1)||busy||projectionBusy||destroyed||!open)return;
       if(dragLifecycle.current())cancelActiveDrag("superseded");
@@ -308,7 +233,7 @@
       if(drag.moved){
         event.preventDefault();
         const label=manager()?.getWorkspaceFromId(drag.id)?.name||"Workspace";
-        showDragBadge(event,label);showPlacementPreview(event.screenX,event.screenY,label);
+        showDragBadge(event,label);showPlacementPreview(event,label);
       }
     }
     function cleanupDrag(){
@@ -328,14 +253,14 @@
       const d=drag;
       if(!event.isTrusted||event.button!==0||!d.entry.isConnected){cancelDrag();return;}
       const outside=Number.isFinite(event.screenX)&&Number.isFinite(event.screenY)&&
-        !(event.screenX===0&&event.screenY===0)&&!pointInSourceWindow(event.screenX,event.screenY);
-      const point=CROSS_MONITOR_SNAP_ENABLED&&outside?monitorAt(event.screenX,event.screenY):null;
+        !(event.screenX===0&&event.screenY===0)&&!pointInSourceWindow(event);
+      const point=outside?placementAt(event):null;
       if(!dragLifecycle.finish(d.token))return;
       cleanupDrag();
       if(!d.moved)return;
       event.preventDefault();event.stopPropagation();
-      // No forced monitor rectangle until the Display Engine is validated.
-      // A genuine external release still opens a normal native synced window.
+      // A genuine external release opens a native synced window. If the
+      // screen coordinate contract cannot be verified, retain native placement.
       if(outside)void project(d.id,point);
       else status.textContent="Release outside the browser, or use Open in another window.";
     }
@@ -354,9 +279,9 @@
       let child=null;
       try{
         const {BrowserWindowTracker}=ChromeUtils.importESModule("resource:///modules/BrowserWindowTracker.sys.mjs");
-        const features=display?`left=${display.x},top=${display.y},width=${display.width},height=${display.height}`:undefined;
+        // Never pass desktop pixels to CSS-based startup window features.
         const args=Cc["@mozilla.org/supports-string;1"].createInstance(Ci.nsISupportsString);args.data="about:blank";
-        const options={openerWindow:window,private:false,zenSyncedWindow:!prefs.getBoolPref("zen.window-sync.prefer-unsynced-windows",false),features,args};
+        const options={openerWindow:window,private:false,zenSyncedWindow:!prefs.getBoolPref("zen.window-sync.prefer-unsynced-windows",false),args};
         child=BrowserWindowTracker.openWindow(options);
         if(!child)throw Error("Native window did not open");
         child[PROJECTION]={source:window,id};
@@ -385,8 +310,8 @@
           const peer=window.gZenWindowSync.getItemFromWindow(window,startupTab.id);
           if(!peer||(peer.isEmpty&&!peer.pinned&&!peer.group&&peer.linkedBrowser?.currentURI?.spec==="about:blank"&&peer.linkedBrowser?.canGoBack===false&&peer.linkedBrowser?.canGoForward===false))child.gBrowser.removeTab(startupTab,{animate:false});
         }
-        if(display)placeNativeWindow(child,display);
-        child.focus();status.textContent="";
+        const placed=!display||placeNativeWindow(child,display);
+        child.focus();status.textContent=placed?"":"Window opened; placement could not be verified.";
       }catch(error){
         if(child&&!child.closed)delete child[PROJECTION];
         if(!destroyed)status.textContent="Could not open synced workspace. Check window sync settings.";

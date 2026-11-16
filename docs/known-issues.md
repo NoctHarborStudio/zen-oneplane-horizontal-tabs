@@ -122,3 +122,7 @@ Preview.16 user reports opaque oversized preview, incorrect side/corner/monitor,
 ## OP-020 — remaining Split View drag overlap
 
 User reports slider/cards still overlap during Split View drag. Previous mitigation did not resolve it. User explicitly requested deferral rather than another animation rewrite; leave Split View logic/animation unchanged until Fluid UI/final polish.
+
+### OP-019 update (preview.21)
+
+First experimental Windows Display Engine: correct CSS/desktop/device coordinate boundaries, full-monitor edge classification, work-area geometry and compact source preview, guarded native positioning. Previous XUL desktop overlay removed. Runtime validation still pending; if native screen/placement is not verified, open ordinary native window. OP-018 and OP-020 remain open. Sine update delivery from .16 remains unconfirmed despite .20 metadata correction.
