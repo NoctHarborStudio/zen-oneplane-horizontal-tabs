@@ -11,7 +11,7 @@
     const hadTitle=Boolean(islandTitle.textContent);
     islandTitle.textContent=title;
     island.title=title;
-    if(hadTitle && title && !reducedMotion.matches &&
+    if(cascadeState==="idle" && hadTitle && title && !reducedMotion.matches &&
         prefs.getIntPref("zen.oneplane.animation-duration",160)!==0)
       islandTextAnimation=islandTitle.animate([{opacity:.35,translate:"0 2px"},{opacity:1,translate:"0 0"}],
         {duration:150,easing:"ease-out"});
@@ -77,7 +77,14 @@
     refreshIslandTitle();
   }
   function trackTabPointer(event) {
-    if (cascadeState!=="idle" || !hoverSupported() || event.pointerType === "touch" || draggedTab || root.hasAttribute("data-zr-startup-phase")) return;
+    if(event.pointerType==="touch")return;
+    const pointNow={x:event.clientX,y:event.clientY};
+    if(cascadeState!=="idle"){cascadePointer=pointNow;return;}
+    if(cascadePointer){
+      if(Math.hypot(pointNow.x-cascadePointer.x,pointNow.y-cascadePointer.y)<1)return;
+      cascadePointer=null;
+    }
+    if (!hoverSupported() || draggedTab || root.hasAttribute("data-zr-startup-phase")) return;
     const hit = event.target?.closest?.(".oneplane-tab");
     if (hit && list.contains(hit)) {
       const point = {x:event.clientX,y:event.clientY};

@@ -74,3 +74,8 @@ User confirmed startup strip jump (OP-006) and Compact Mode button (OP-007) fixe
 ### Stabilization checkpoint — preview.7
 
 User approved the native address wave and requested the Bunny Cascade visual companion in both hover modes before Hub. Preserve the accepted address trajectory. Validate the new cascade (Expand/Island, native dismissal, rapid reversal, Split View and optional Zen Refined startup) before beginning Hub. No workspace or Extension Dock changes.
+
+
+### Stabilization checkpoint — preview.8
+
+Bunny Cascade v2 addresses reported card overlaps, merged impulses, reveal flicker and group-radius discontinuity (OP-008/009/010). Preserve approved address wave. Validate before Hub; no changes to workspace or extension plan.

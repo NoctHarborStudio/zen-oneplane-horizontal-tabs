@@ -116,7 +116,7 @@
     if (!dead && !frame) frame = window.requestAnimationFrame(sync);
   }
   function revealSelectedInStrip(){
-    if(dead)return;
+    if(dead||cascadeState!=="idle")return;
     const item=entries.get(browser.selectedTab)?.item;
     if(!item||!list.contains(item))return;
     // Never scroll ancestors (native toolbar, page, or window).

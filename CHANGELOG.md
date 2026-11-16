@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0-preview.8
+
+- Bunny Cascade v2: calculate a shared native scale/translate/opacity timeline with collision-aware slot boundaries, a bounded horizontal overshoot and stronger vertical spring. Stagger the visible cards, including the Island Mode title; offscreen cards do not consume stagger slots.
+- Preserve current hover slot widths and list translation during hiding; avoid late hover retargets and indicator jumps, and stage the reveal-to-hover handoff. Fade late-arriving cards rather than showing them immediately at handoff.
+- Split View uses its original surface throughout, with fixed 8px radius and animated background/outline alpha; remove the temporary pseudo-element.
+- Keep accepted Fluid Wave unchanged; regression tests cover gaps, wide cards, stagger and reversal. Visual confirmation pending for OP-008/009/010.
+
 ## 0.2.0-preview.7
 
 - Add Bunny Cascade for inline address search: each tab shrinks into its own center as the address edge advances, then springs back (112% overshoot, 160ms) as the edge retreats. Use native WAAPI scale/opacity, no per-frame layout loop.

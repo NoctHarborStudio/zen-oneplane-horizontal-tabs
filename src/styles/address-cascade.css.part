@@ -1,40 +1,30 @@
-    /* No flex/grid or slot dimension changes during Bunny Cascade. */
+    /* A fixed slot remains in layout. Only paint geometry moves. */
     #oneplane-tabs[data-op-cascade] { pointer-events: none !important; }
-    #oneplane-tabs[data-op-cascade] :is(.oneplane-tab,.oneplane-split-handle,.oneplane-title-island,.oneplane-new-tab,#oneplane-tab-indicator) {
+    #oneplane-tabs[data-op-cascade]:not([data-op-cascade="settling"]) :is(.oneplane-tab,.oneplane-split-handle,.oneplane-title-island,.oneplane-new-tab,#oneplane-tab-indicator,.oneplane-tab-list) {
       transform-origin: center;
       transition: none !important;
       pointer-events: none !important;
     }
-    #oneplane-tabs[data-op-cascade] :is(.oneplane-tab,.oneplane-split-handle,.oneplane-title-island,.oneplane-new-tab,#oneplane-tab-indicator):not([data-op-cascade-member]) {
+    #oneplane-tabs[data-op-cascade]:not([data-op-cascade="settling"]) :is(.oneplane-tab,.oneplane-split-handle,.oneplane-title-island,.oneplane-new-tab,#oneplane-tab-indicator):not([data-op-cascade-member]) {
       opacity: 0 !important;
     }
-    /* Separate the split frame from its independent member animations. */
-    #oneplane-tabs[data-op-cascade] .oneplane-split-group {
-      background: transparent !important;
-      box-shadow: none !important;
-      transition: none !important;
-      --op-cascade-frame-alpha: 0;
+    #oneplane-tabs[data-op-cascade] #oneplane-tab-indicator { opacity:0 !important; }
+    #oneplane-tabs [data-op-cascade-frozen].oneplane-tab {
+      width:var(--op-cascade-width) !important;
+      flex-basis:var(--op-cascade-width) !important;
     }
-    #oneplane-tabs[data-op-cascade] .oneplane-split-group[data-op-cascade-frame] {
-      --op-cascade-frame-alpha: 1;
+    /* Match Island Mode's more specific plus positioning. WAAPI still
+       owns translate during the cascade; this is only its base value. */
+    #oneplane-tabs[data-op-cascade] [data-op-cascade-frozen]:is(.oneplane-tab-list,.oneplane-new-tab),
+    #oneplane-tabs[data-op-show-island][data-op-cascade]:not([data-op-island-tight]) .oneplane-new-tab[data-op-cascade-frozen] {
+      translate:var(--op-cascade-translate);
     }
-    #oneplane-tabs[data-op-cascade] .oneplane-split-group::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      border-radius: inherit;
-      background: color-mix(in srgb, var(--op-split-color) 13%, transparent);
-      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--op-split-color) 75%, transparent);
-      opacity: var(--op-cascade-frame-alpha);
-      pointer-events: none;
-      z-index: 0;
+    /* The original split surface remains the only surface. */
+    #oneplane-tabs[data-op-cascade]:not([data-op-cascade="settling"]) .oneplane-split-group {
+      transition:none !important;
+      --op-cascade-frame-alpha:0;
     }
-    #oneplane-tabs[data-op-cascade] .oneplane-split-group[data-op-split-active]::before {
-      background: color-mix(in srgb, var(--op-split-color) 24%, transparent);
-      box-shadow: inset 0 0 0 1px var(--op-split-color);
-    }
-    #oneplane-tabs[data-op-cascade] .oneplane-split-group > :is(.oneplane-tab,.oneplane-split-handle) {
-      position: relative;
-      z-index: 1;
+    #oneplane-tabs[data-op-cascade]:not([data-op-cascade="settling"]) .oneplane-split-group[data-op-cascade-frame] {
+      --op-cascade-frame-alpha:1;
     }
 
