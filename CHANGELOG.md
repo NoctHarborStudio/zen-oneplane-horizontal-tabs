@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-preview.31
+
+- Add Liquid Wave for the inline address editor: expand width and reveal the native result surface together, with a smooth left-to-right wave (420ms). Reverse the wave and width together on outside-click dismissal (380ms), including interrupted opening/reopening.
+- Smooth Compact Mode panel reveal/hide: move the shared background and controls together by 10px while fading in/out (300/420ms). Keep the long Unified Contour visible during closing instead of clipping it immediately.
+- Keep the selected static Fade settings, native bookmark layout, floating search, page position and reduced-motion support. The collapsed hit strip remains native; hidden controls do not receive pointer input.
+
 ## 0.1.0-preview.30
 
 - Use Unified Contour: a solid rounded bookmark shelf without its own feather, and a full-width vertical fade beginning at the bottom of the upper toolbar row. Composite the two shapes into one alpha mask before applying global transparency.

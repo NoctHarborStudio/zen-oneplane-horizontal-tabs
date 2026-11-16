@@ -14,11 +14,12 @@
     --op-speed: 160ms;
     --op-tab-speed: 205ms;
     --op-tab-ease: cubic-bezier(.2, .75, .2, 1);
-    --op-url-open-speed: 265ms;
-    --op-url-close-speed: 290ms;
+    --op-url-open-speed: 420ms;
+    --op-url-close-speed: 380ms;
     --op-url-ease: cubic-bezier(.22, .72, .2, 1);
-    --op-panel-open-speed: 230ms;
-    --op-panel-close-speed: 340ms;
+    --op-panel-open-speed: 300ms;
+    --op-panel-close-speed: 420ms;
+    --op-panel-travel: 10px;
     --op-panel-ease: cubic-bezier(.22, .72, .2, 1);
     @media (-moz-pref("zen.oneplane.tab-width", 32)) { --op-tab: 32px; }
     @media (-moz-pref("zen.oneplane.tab-width", 44)) { --op-tab: 44px; }
@@ -333,10 +334,10 @@
       transition: none !important;
       animation: none !important;
     }
-    #urlbar-container:is([data-op-url-phase="opening"], [data-op-url-phase="closing-results"], [data-op-url-phase="closing-width"], [data-op-url-phase="settling"]) #urlbar:not([zen-floating-urlbar="true"]) .urlbarView {
+    #urlbar-container:is([data-op-url-phase="opening"], [data-op-url-phase="closing-wave"], [data-op-url-phase="settling"]) #urlbar:not([zen-floating-urlbar="true"]) .urlbarView {
       pointer-events: none !important;
     }
-    #nav-bar-customization-target > #urlbar-container[data-op-empty]:is([data-op-url-phase="closing-width"], [data-op-url-phase="settling"]) {
+    #nav-bar-customization-target > #urlbar-container[data-op-empty]:is([data-op-url-phase="closing-wave"], [data-op-url-phase="settling"]) {
       flex-basis: 0px !important;
       width: 0px !important;
       min-width: 0px !important;
@@ -1035,7 +1036,10 @@
       height: max(2px, var(--zen-element-separation, 0px)) !important;
       --op-panel-motion: var(--op-panel-close-speed);
       transition: height var(--op-panel-motion) var(--op-panel-ease) !important;
-      overflow: clip;
+      /* Do not clip the long gradient when closing starts. Its own
+         opacity/translation transition owns visual disappearance. */
+      overflow: visible !important;
+      contain: none !important;
     }
     /* Native Zen offsets the web view when an in-flow toolbar expands.
        Our overlay has no such offset; neutralize it only while OnePlane runs. */
@@ -1045,6 +1049,11 @@
       margin-top: 0 !important;
     }
     #zen-appcontent-navbar-wrapper:not(:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], [oneplane-url-hold], [oneplane-drag-hold], :hover)) #zen-appcontent-navbar-container {
+      pointer-events: none !important;
+    }
+    /* Offscreen descendants must not keep :hover alive outside the
+       collapsed native hit strip. Leave native floating search alone. */
+    #zen-appcontent-navbar-wrapper:not(:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], [oneplane-url-hold], [oneplane-drag-hold], :hover)) #zen-appcontent-navbar-container :not(#urlbar[zen-floating-urlbar="true"], #urlbar[zen-floating-urlbar="true"] *) {
       pointer-events: none !important;
     }
     /* Frosted native toolbar; retain native reveal animation and popup states. */
@@ -1083,15 +1092,24 @@
       mask-size: 100% var(--op-contour-height, 100%) !important;
       box-shadow: none !important;
       opacity: 0;
-      transition: opacity var(--op-panel-motion) var(--op-panel-ease) !important;
+      translate: 0 calc(-1 * var(--op-panel-travel));
+      transition: opacity var(--op-panel-motion) var(--op-panel-ease),
+        translate var(--op-panel-motion) var(--op-panel-ease) !important;
     }
     #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], [oneplane-url-hold], [oneplane-drag-hold], :hover) > #oneplane-toolbar-surface {
       opacity: 1 !important;
+      translate: 0 0;
     }
     #zen-appcontent-navbar-wrapper > #zen-appcontent-navbar-container {
-      transition: opacity var(--op-panel-motion) var(--op-panel-ease) !important;
+      opacity: 0;
+      translate: 0 calc(-1 * var(--op-panel-travel));
+      transition: opacity var(--op-panel-motion) var(--op-panel-ease),
+        translate var(--op-panel-motion) var(--op-panel-ease) !important;
       position: relative !important;
       z-index: 1 !important;
+    }
+    #zen-appcontent-navbar-wrapper:is([zen-has-hover], [has-popup-menu], [zen-compact-mode-active], [oneplane-hover-lock], [oneplane-url-hold], [oneplane-drag-hold], :hover) > #zen-appcontent-navbar-container {
+      translate: none;
     }
     #zen-appcontent-navbar-wrapper #nav-bar,
     #zen-appcontent-navbar-wrapper #PersonalToolbar {

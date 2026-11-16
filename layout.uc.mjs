@@ -264,9 +264,8 @@ function installTabStrip() {
   let addressVisual = null;
   let addressCompactWidth = 0;
   let addressAnchor = null;
-  const ADDRESS_WIDTH_OPEN = 265, ADDRESS_RESULTS_OPEN = 220;
-  const ADDRESS_RESULTS_OFFSET = 45;
-  const ADDRESS_WIDTH_CLOSE = 290, ADDRESS_RESULTS_CLOSE = 165;
+  const ADDRESS_WAVE_OPEN = 420, ADDRESS_WAVE_CLOSE = 380;
+  const ADDRESS_WAVE_SPREAD = .24;
   let addressSettling = false;
   let addressSettleTimer = 0;
   const addressEase = t => 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 3);
@@ -346,24 +345,54 @@ function installTabStrip() {
     bar?.style.removeProperty("--op-url-live-width");
     bar?.style.removeProperty("--op-url-live-clip");
   }
+  function addressWaveDepth(progress,x){
+    const t=Math.max(0,Math.min(1,(progress-ADDRESS_WAVE_SPREAD*x)/(1-ADDRESS_WAVE_SPREAD)));
+    return t*t*(3-2*t);
+  }
+  function addressWaveClip(width,height,header,progress,radius=8){
+    width=Math.max(1,width);height=Math.max(1,height);
+    header=Math.min(height,Math.max(1,header));
+    const r=Math.min(radius,width/2,header/2);
+    const depth=x=>header+(height-header)*addressWaveDepth(progress,x);
+    if(progress<=0 || progress>=1 || height-header<.5){
+      const bottom=progress>=1?0:Math.max(0,height-header);
+      return "inset(0px 0px "+bottom.toFixed(2)+"px 0px round var(--op-url-radius))";
+    }
+    const f=n=>n.toFixed(2);
+    const left=depth(0),right=depth(1);
+    let path="M"+f(r)+" 0 H"+f(width-r)+" Q"+f(width)+" 0 "+f(width)+" "+f(r)+
+      " V"+f(right-r)+" Q"+f(width)+" "+f(right)+" "+f(width-r)+" "+f(depth((width-r)/width));
+    for(let i=1;i<=24;i++){
+      const x=(width-r)-(width-2*r)*i/24;
+      path+=" L"+f(x)+" "+f(depth(x/width));
+    }
+    path+=" Q0 "+f(left)+" 0 "+f(left-r)+" V"+f(r)+" Q0 0 "+f(r)+" 0 Z";
+    return 'path("'+path+'")';
+  }
+  function addressWaveDuration(from,to,full,duration){
+    const fraction=Math.max(Math.abs(to.reveal-from.reveal),
+      Math.abs(to.width-from.width)/Math.max(1,full.expanded-full.compact));
+    return Math.max(80,duration*Math.min(1,fraction));
+  }
   function drawAddress(width, reveal) {
     const bar = addressBar();
     if (!bar) return;
     addressVisual = { width, reveal };
     // The native popover background includes both the header and results.
-    // Animate its real width and clip the results until width is ready.
+    // Reveal the actual shared surface with a left-to-right liquid wave
+    // while its width grows, instead of waiting for width to finish.
     bar.setAttribute("data-op-url-animating", "true");
     bar.style.setProperty("--op-url-live-width", Math.max(1, width).toFixed(2) + "px");
     const bounds = bar.getBoundingClientRect();
     const input = bar.querySelector(".urlbar-input-container");
-    const view = bar.querySelector(".urlbarView");
     const inputBottom = input?.getBoundingClientRect().bottom || bounds.top + 30;
     const header = Math.max(1, addressAnchor?.height || inputBottom - bounds.top);
-    const full = Math.max(header, bounds.height,
-      (view?.getBoundingClientRect().bottom || bounds.bottom) - bounds.top);
-    const visible = header + (full - header) * reveal;
+    // Clip coordinates belong to the real popover's border box.
+    // Never make the wave extend into page content outside that box.
+    const full = Math.max(header,bounds.height);
+    const radius=parseFloat(window.getComputedStyle(bar).getPropertyValue("--op-url-radius"))||8;
     bar.style.setProperty("--op-url-live-clip",
-      "inset(0px 0px " + Math.max(0,bounds.height - visible).toFixed(2) + "px 0px round var(--op-url-radius))");
+      addressWaveClip(bounds.width,full,header,reveal,radius));
   }
   function beginAddressPhase(name, from, to, duration) {
     addressTransition = { name, from, to, duration, start: null };
@@ -385,19 +414,17 @@ function installTabStrip() {
     if (a.start === null) a.start = now;
     const elapsed = now - a.start;
     const t = Math.min(1, elapsed / a.duration);
-    const eased = addressEase(t);
-    const horizontal = a.name === "opening" ? addressEase(elapsed / ADDRESS_WIDTH_OPEN) : eased;
-    const vertical = a.name === "opening"
-      ? addressEase((elapsed - ADDRESS_RESULTS_OFFSET) / ADDRESS_RESULTS_OPEN) : eased;
+    // Same timeline for both axes. Closing reverses the opening curve;
+    // the right side of the result surface retreats before the left.
+    const horizontal = a.name === "opening" ? addressEase(t) : 1-addressEase(1-t);
+    const vertical = t;
     drawAddress(a.from.width + (a.to.width - a.from.width) * horizontal,
       a.from.reveal + (a.to.reveal - a.from.reveal) * vertical);
     if (t < 1) {
       addressAnimationFrame = window.requestAnimationFrame(stepAddress);
       return;
     }
-    if (a.name === "closing-results") {
-      beginAddressPhase("closing-width", a.to, { width: addressWidths().compact, reveal: 0 }, ADDRESS_WIDTH_CLOSE);
-    } else if (a.name === "closing-width") {
+    if (a.name === "closing-wave") {
       // Native focus and popover-close notifications can arrive separately.
       // Hold the last compact frame until the real popover has closed;
       // otherwise the expanded fallback width flashes for a frame.
@@ -451,7 +478,7 @@ function installTabStrip() {
     // mutation is delivered. Start at the actual compact target, not a
     // potentially fully expanded placeholder.
     beginAddressPhase("opening", { width: widths.compact, reveal: 0 },
-      { width: widths.expanded, reveal: 1 }, Math.max(ADDRESS_WIDTH_OPEN, ADDRESS_RESULTS_OFFSET + ADDRESS_RESULTS_OPEN));
+      { width: widths.expanded, reveal: 1 }, ADDRESS_WAVE_OPEN);
   }
   function startAddressClose() {
     const bar = addressBar();
@@ -463,13 +490,9 @@ function installTabStrip() {
     if (addressAnimationFrame) window.cancelAnimationFrame(addressAnimationFrame);
     addressAnimationFrame = 0;
     // Reverse an interrupted opening from its current visual position.
-    if (from.reveal > .01) {
-      beginAddressPhase("closing-results", from,
-        { width: from.width, reveal: 0 }, Math.max(65, ADDRESS_RESULTS_CLOSE * from.reveal));
-    } else {
-      beginAddressPhase("closing-width", from,
-        { width: widths.compact, reveal: 0 }, ADDRESS_WIDTH_CLOSE);
-    }
+    // Shrink the width and the result wave together, in one phase.
+    const to={width:widths.compact,reveal:0};
+    beginAddressPhase("closing-wave",from,to,addressWaveDuration(from,to,widths,ADDRESS_WAVE_CLOSE));
     return true;
   }
   function onAddressMutation() {
@@ -489,9 +512,8 @@ function installTabStrip() {
     addressSettleTimer = 0;
     if (addressAnimationFrame) window.cancelAnimationFrame(addressAnimationFrame);
     addressAnimationFrame = 0;
-    const width = addressWidths().expanded;
-    beginAddressPhase("opening", from, { width, reveal: 1 },
-      Math.max(ADDRESS_WIDTH_OPEN, ADDRESS_RESULTS_OFFSET + ADDRESS_RESULTS_OPEN));
+    const widths=addressWidths(),to={width:widths.expanded,reveal:1};
+    beginAddressPhase("opening",from,to,addressWaveDuration(from,to,widths,ADDRESS_WAVE_OPEN));
   }
   function alignAddressStart() {
     if (addressFrame) return;
@@ -626,11 +648,16 @@ function installTabStrip() {
     const wrapper=toolbarWrapper.getBoundingClientRect();
     const nav=navbar?.getBoundingClientRect();
     if(wrapper.width<=0||!nav||nav.height<=0)return;
+    // The mask and controls share panel travel. Measure the unshifted
+    // geometry, otherwise an in-flight reveal would distort the shelf.
+    const container=document.getElementById("zen-appcontent-navbar-container");
+    const translation=container?window.getComputedStyle(container).translate:"none";
+    const shiftY=translation&&translation!=="none"?(parseFloat(translation.split(/\s+/)[1])||0):0;
     const width=Math.max(1,Math.round(wrapper.width));
     const settings=contourSettings();
     // Keep the top short. Include the bottom of the actual tab row
     // (including its reserved hover room), not the bookmarks row.
-    const base=Math.max(1,Math.round(Math.max(nav.bottom,row.getBoundingClientRect().bottom)-wrapper.top-5));
+    const base=Math.max(1,Math.round(Math.max(nav.bottom,row.getBoundingClientRect().bottom)-wrapper.top-shiftY-5));
     let left=null,right=null,deep=base;
     if(bookmarks && !bookmarks.hidden && !bookmarks.collapsed){
       const style=window.getComputedStyle(bookmarks);
@@ -649,7 +676,7 @@ function installTabStrip() {
           if(r<=l)continue;
           left=left===null?l:Math.min(left,l);
           right=right===null?r:Math.max(right,r);
-          deep=Math.max(deep,b.bottom-wrapper.top+settings.padding);
+          deep=Math.max(deep,b.bottom-wrapper.top-shiftY+settings.padding);
         }
       }
     }
