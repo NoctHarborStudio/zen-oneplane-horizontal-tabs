@@ -20,6 +20,14 @@
       refreshIslandTitle();reconcilePanel();
     });
     island.addEventListener("click",onHomeTrigger);island.addEventListener("dblclick",stopHomeDoubleClick);island.addEventListener("pointerdown",stopHomePointer);
+    window.addEventListener("OnePlane:StartupState",onHomeStartup);
+  }
+  function onHomeStartup(){
+    if(root.getAttribute("data-op-startup-ready")!=="true")return;
+    window.removeEventListener("OnePlane:StartupState",onHomeStartup);
+    if(dead||disposed||reloadingLayout||window.__oneplaneWorkspaceProjection||!hoverSupported())return;
+    // Both hosts use one window startup claim, not independent auto-open timers.
+    homeLease?.showOnStartup?.();
   }
   function stopHomeDoubleClick(e){e.preventDefault();e.stopPropagation();}
   function stopHomePointer(e){e.stopPropagation();}
@@ -30,6 +38,7 @@
   }
   function destroyHome(){
     clearHomeIdle();homeUnsubscribe?.();homeUnsubscribe=null;
+    window.removeEventListener("OnePlane:StartupState",onHomeStartup);
     island.removeEventListener("click",onHomeTrigger);island.removeEventListener("dblclick",stopHomeDoubleClick);island.removeEventListener("pointerdown",stopHomePointer);
     url.removeAttribute("data-op-home");
     toolbarWrapper?.removeAttribute("oneplane-home-hold");homeLease?.release();homeLease=null;

@@ -1,3 +1,10 @@
+## 0.2.0-preview.36 — Home startup and search morph
+
+- Open Home once per normal supported window after session/workspace restoration and OnePlane readiness. Preserve native tabs and avoid reopening on live reload or workspace projection.
+- Increase Home content width to 720px, search height to 56px, shortcut height to 102px; increase spacing and workspace size with responsive fallback.
+- Home-origin floating native search gets a geometry-based 400ms opening morph and fades Home content out/in; preserve native results, cancellation, keyboard handling and reduced motion.
+- Runtime Zen verification pending.
+
 ## 0.2.0-preview.34 — Home search and visual state
 
 - Keep Home visible under Zen's native floating search; cancellation returns to Home, committed search/tab selection returns to browsing. Match native close session token.
