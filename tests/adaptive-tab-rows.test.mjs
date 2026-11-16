@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {planAdaptiveTabRows,adaptiveAddressWidth,visibleLaneDropIndex,laneScrollVelocity,centeredRowCorrection} from "../src/algorithms/tab-overflow.mjs";
+import {planAdaptiveTabRows,adaptiveAddressWidth,visibleLaneDropIndex,laneScrollVelocity,centeredRowCorrection,reclaimAddressWidth} from "../src/algorithms/tab-overflow.mjs";
 test("wide layout keeps all slots in their original halves",()=>{
   const p=planAdaptiveTabRows([36,100,36,36], [false,true,false,false],2,700,180,36);
   assert.equal(p.mode,"wide");assert.deepEqual(p.topLeft,[0,1]);assert.deepEqual(p.topRight,[2,3]);assert.equal(p.hasSecondRow,false);
@@ -74,4 +74,28 @@ test("compact allocation stays inside each measured lane at all widths",()=>{
    const cap=Math.max(0,(w-p.title-6)/2-2);
    for(const ids of [p.topLeft,p.topRight])assert.ok(ids.reduce((s,i)=>s+widths[i],0)+Math.max(0,ids.length-1)*3<=cap);
  }
+});
+
+test("address reclaims real spare pixels without changing the four upper tabs or title",()=>{
+ const widths=[36,36,100,36,36,100,36,36,36,36,36,36],groups=widths.map(w=>w>36);
+ const plan=w=>{
+   const available=Math.max(0,2*Math.min(960/2-125-w-8,960/2-260)-4-32);
+   const title=Math.max(100,Math.min(180,available-90));
+   return planAdaptiveTabRows(widths,groups,6,available,title,36,3,12);
+ };
+ const baseline=126,desired=reclaimAddressWidth(180,baseline,plan);
+ assert.ok(desired>baseline&&desired<=180);
+ const original=plan(baseline),actual=plan(desired);
+ assert.equal(actual.title,original.title);assert.equal(actual.mode,original.mode);
+ assert.deepEqual(actual.topLeft,original.topLeft);assert.deepEqual(actual.topRight,original.topRight);
+ assert.deepEqual(actual.lower,original.lower);assert.equal(actual.topPlus,original.topPlus);
+ assert.deepEqual(plan(desired+4),actual);
+});
+test("address expansion stops before changing title, slots, rows or plus",()=>{
+ const p={mode:"compact",title:180,topPlus:false,hasSecondRow:true,topLeft:[1,2],topRight:[3,4]};
+ const fit=w=>w<=160?p:{...p,title:32};
+ assert.equal(reclaimAddressWidth(180,126,fit),156);
+ assert.equal(reclaimAddressWidth(180,126,w=>w<=126?p:{...p,topLeft:[2]}),126);
+ assert.equal(reclaimAddressWidth(180,126,()=>p),180);
+ assert.equal(reclaimAddressWidth(140,140,()=>p),140);
 });

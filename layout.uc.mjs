@@ -1226,6 +1226,28 @@ function installTabStrip() {
     const t=duration>0?Math.max(0,Math.min(1,elapsed/duration)):1;
     return t===1?target:start+(target-start)*(1-(1-t)**3);
   }
+
+  // Spend only the surplus around a centered strip. The compact width
+  // is a starting point, not a hard cap. Keep the configured preference
+  // as the ceiling and preserve title, native slots, plus and row count.
+  function reclaimAddressWidth(preferred,baseline,planAtWidth,safety=4){
+    const low=Math.round(baseline),limit=Math.max(low,Math.floor(preferred));
+    if(limit<=low)return low;
+    const reference=planAtWidth(low);
+    const same=(a,b)=>a.length===b.length&&a.every((v,i)=>v===b[i]);
+    const preserves=p=>p.mode===reference.mode&&p.title===reference.title&&
+      p.topPlus===reference.topPlus&&p.hasSecondRow===reference.hasSecondRow&&
+      same(p.topLeft,reference.topLeft)&&same(p.topRight,reference.topRight);
+    const fits=w=>preserves(planAtWidth(w))&&preserves(planAtWidth(w+Math.max(0,safety)));
+    // A conservative bounded search: extra room is optional. Never
+    // return a width unless its actual and padded plans both fit.
+    let l=low,h=limit;
+    while(l<h){
+      const mid=Math.ceil((l+h)/2);
+      if(fits(mid))l=mid;else h=mid-1;
+    }
+    return l;
+  }
   let adaptiveHeightDirty=false,overflowRevealAnimation=null;
   function mountLaneNodes(lane,nodes){
     for(let i=0;i<nodes.length;i++){
@@ -4161,6 +4183,17 @@ function installTabStrip() {
       const wantsIsland=row.hasAttribute("data-op-show-island");
       const iconHome=row.hasAttribute("data-op-home-icon");
       const frozen=row.hasAttribute("data-op-dragging")||row.hasAttribute("data-op-island-incoming")||row.hasAttribute("data-op-lane-drag")||cascadeState==="hiding"||cascadeState==="showing";
+      // Use the very same collapsed geometry for address budgeting and
+      // the final partition; painted hover widths never enter the plan.
+      const widths=stripOrderSnapshot.map(n=>compactSlotWidth(n,tabWidth));
+      const groups=stripOrderSnapshot.map(n=>n.classList.contains("oneplane-split-group"));
+      const boundary=islandBoundary(widths,tabWidth+3);
+      const returnReserve=row.hasAttribute("data-op-adaptive-compact")?12:0;
+      const availableAt=leftEdge=>Math.max(0,2*Math.min(window.innerWidth/2-leftEdge,window.innerWidth/2-right)-4-2*dragRoom);
+      const planAt=available=>{
+        const title=iconHome?32:Math.max(100,Math.min(180,available-2*(tabWidth+9)));
+        return planAdaptiveTabRows(widths,groups,boundary,available,title,tabWidth,3,returnReserve);
+      };
       if(!frozen){
         const preferred=prefs.getIntPref("zen.oneplane.address-width",180);
         const natural=stripOrderSnapshot.reduce((n,node)=>n+compactSlotWidth(node,tabWidth)+3,0)+(iconHome?32:180)+tabWidth+18;
@@ -4171,7 +4204,14 @@ function installTabStrip() {
         const singleReserve=16+3+tabWidth+2+dragRoom+4;
         const canFit=reserve=>window.innerWidth/2-right>=reserve&&window.innerWidth/2-left-36-8>=reserve;
         const reserve=compactAddress?(canFit(pairReserve)?pairReserve:canFit(singleReserve)?singleReserve:16+dragRoom+4):16+dragRoom+4;
-        const desired=adaptiveAddressWidth(preferred,window.innerWidth,left,reserve,8,compactAddress);
+        const baseline=adaptiveAddressWidth(preferred,window.innerWidth,left,reserve,8,compactAddress);
+        const addressHidden=url.hasAttribute("data-op-empty")||url.hasAttribute("data-op-home");
+        const urlStyle=window.getComputedStyle(url);
+        const addressMargins=(parseFloat(urlStyle.marginLeft)||0)+(parseFloat(urlStyle.marginRight)||0);
+        // Only reclaim actual spare width, including native margins and
+        // drag-room. Do not move Home, remove upper tabs or change rows.
+        const desired=wantsIsland&&!addressHidden?
+          reclaimAddressWidth(preferred,baseline,w=>planAt(availableAt(left+w+addressMargins))):baseline;
         url.toggleAttribute("data-op-address-icon",desired<80);
         if(url.style.getPropertyValue("--op-url")!==desired+"px"){
           setLength(url,"--op-url",desired);
@@ -4184,15 +4224,11 @@ function installTabStrip() {
       const naturalTabsWidth=stripOrderSnapshot.reduce((n,node)=>n+compactSlotWidth(node,tabWidth)+3,0);
       const collapsedTabsWidth=Math.min(naturalTabsWidth,Math.max(0,rowWidth-tabWidth-3));
       const trailingReserve=Math.max(0,rowWidth-collapsedTabsWidth);
-      const available=Math.max(0,2*Math.min(window.innerWidth/2-left,window.innerWidth/2-right)-4-2*dragRoom);
+      const available=availableAt(left);
       const centered=wantsIsland;
       if(centered&&!frozen){
         row.removeAttribute("data-op-island-tight");
-        const widths=stripOrderSnapshot.map(n=>compactSlotWidth(n,tabWidth));
-        const groups=stripOrderSnapshot.map(n=>n.classList.contains("oneplane-split-group"));
-        const boundary=islandBoundary(widths,tabWidth+3);
-        const title=iconHome?32:Math.max(100,Math.min(180,available-2*(tabWidth+9)));
-        const layout=planAdaptiveTabRows(widths,groups,boundary,available,title,tabWidth,3,row.hasAttribute("data-op-adaptive-compact")?12:0);
+        const layout=planAt(available);
         applyStripPartition(layout);
         row.toggleAttribute("data-op-island-compact",!iconHome&&layout.title===32);
         const widthOf=indices=>indices.reduce((n,i)=>n+widths[i]+3,6);

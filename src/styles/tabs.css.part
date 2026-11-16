@@ -403,17 +403,17 @@
       -moz-window-dragging:no-drag!important;
     }
     #oneplane-tabs .oneplane-overflow-slider::-moz-range-track {
-      height:2px;border:0;border-radius:999px;
-      background:color-mix(in srgb,currentColor 18%,transparent);
+      height:1px;border:0;border-radius:999px;
+      background:color-mix(in srgb,currentColor 12%,transparent);
     }
     #oneplane-tabs .oneplane-overflow-slider::-moz-range-progress {background:transparent;}
     #oneplane-tabs .oneplane-overflow-slider::-moz-range-thumb {
-      width:var(--op-scroll-thumb,30px);height:4px;box-sizing:border-box;
-      border:0;border-radius:999px;background:color-mix(in srgb,currentColor 60%,transparent);
+      width:var(--op-scroll-thumb,30px);height:2px;box-sizing:border-box;
+      border:0;border-radius:999px;background:color-mix(in srgb,currentColor 34%,transparent);
       transition:height 120ms ease,background-color 120ms ease;
     }
     #oneplane-tabs .oneplane-overflow-slider:is(:hover,:focus-visible,:active)::-moz-range-thumb {
-      height:6px;background:color-mix(in srgb,currentColor 88%,transparent);
+      height:3px;background:color-mix(in srgb,currentColor 58%,transparent);
     }
     #oneplane-tabs .oneplane-overflow-slider:focus-visible {outline:1px solid AccentColor;outline-offset:1px;border-radius:5px;}
     #oneplane-tabs:is([data-op-cascade],[data-op-dragging],[data-op-island-incoming]) .oneplane-overflow-slider {visibility:hidden;pointer-events:none!important;}

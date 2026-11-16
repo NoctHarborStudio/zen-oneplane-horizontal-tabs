@@ -63,5 +63,15 @@ test("resting strip gaps are native window drag regions without disabling tab dr
  assert.match(tabs,/#oneplane-tabs:is\(\[data-op-dragging\],\[data-op-lane-drag\],\[data-op-island-incoming\],\[data-op-cascade\]\) :is\(\.oneplane-tab-list,\.oneplane-island-lane\) \{\s*-moz-window-dragging:no-drag!important;/);
  assert.match(tabs,/#oneplane-tabs :is\(\.oneplane-tab,\.oneplane-split-group,\.oneplane-title-island,\.oneplane-new-tab,\.oneplane-overflow-slider,button,input\) \{\s*-moz-window-dragging:no-drag!important;/);
  assert.ok(tabs.includes("height:6px;min-width:0;"));
- assert.ok(tabs.includes("height:2px;border:0;border-radius:999px;"));
+ assert.ok(tabs.includes("height:1px;border:0;border-radius:999px;"));
+ assert.ok(tabs.includes("height:2px;box-sizing:border-box;"));
+ assert.ok(tabs.includes("currentColor 34%,transparent"));
+ assert.ok(tabs.includes("height:3px;background:color-mix(in srgb,currentColor 58%"));
+});
+
+test("address uses shared actual partition budget and retains native margins",()=>{
+ assert.ok(source.includes("reclaimAddressWidth(preferred,baseline,w=>planAt(availableAt(left+w+addressMargins)))"));
+ assert.ok(source.includes("const layout=planAt(available);"));
+ assert.ok(source.includes("const addressMargins="));
+ assert.ok(source.includes("wantsIsland&&!addressHidden?"));
 });

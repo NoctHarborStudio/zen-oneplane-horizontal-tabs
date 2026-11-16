@@ -106,3 +106,25 @@
     const t=duration>0?Math.max(0,Math.min(1,elapsed/duration)):1;
     return t===1?target:start+(target-start)*(1-(1-t)**3);
   }
+
+  // Spend only the surplus around a centered strip. The compact width
+  // is a starting point, not a hard cap. Keep the configured preference
+  // as the ceiling and preserve title, native slots, plus and row count.
+  export function reclaimAddressWidth(preferred,baseline,planAtWidth,safety=4){
+    const low=Math.round(baseline),limit=Math.max(low,Math.floor(preferred));
+    if(limit<=low)return low;
+    const reference=planAtWidth(low);
+    const same=(a,b)=>a.length===b.length&&a.every((v,i)=>v===b[i]);
+    const preserves=p=>p.mode===reference.mode&&p.title===reference.title&&
+      p.topPlus===reference.topPlus&&p.hasSecondRow===reference.hasSecondRow&&
+      same(p.topLeft,reference.topLeft)&&same(p.topRight,reference.topRight);
+    const fits=w=>preserves(planAtWidth(w))&&preserves(planAtWidth(w+Math.max(0,safety)));
+    // A conservative bounded search: extra room is optional. Never
+    // return a width unless its actual and padded plans both fit.
+    let l=low,h=limit;
+    while(l<h){
+      const mid=Math.ceil((l+h)/2);
+      if(fits(mid))l=mid;else h=mid-1;
+    }
+    return l;
+  }

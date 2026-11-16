@@ -1,3 +1,9 @@
+## 0.2.0-preview.60 — Subtle overflow slider and adaptive address slack
+
+- Reduce the visible overflow track to 1px and thumb to 2px (3px on hover), with lower contrast. Keep the 6px input hit area and existing smooth scroll behavior.
+- Restore unused address width up to the configured preference whenever the measured centered strip can retain its title, upper slots, plus placement and row count. Include native margins, drag-room and an extra 4px guard. Keep the existing compact fallback when space is genuinely limited.
+- Add layout and style regression coverage. Native Zen visual validation pending.
+
 ## 0.2.0-preview.59 — Four upper tabs and smoother overflow
 
 - Keep up to two ordinary tabs on each side of the fixed Home center when the measured budget allows; never move part of a Split View group upstairs. Keep the full title when possible and preserve the wide strip. Reserve enough address space for the extra pair.
