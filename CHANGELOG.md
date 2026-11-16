@@ -12,6 +12,11 @@
 
 # Changelog
 
+## 0.2.0-preview.35
+
+- Move the original Trash card via shared pointer drag lifecycle and empty spacer; remove native drag image and post-drop clones. Animate lift, absorption and return.
+- Fix Windows Free startup claim without hiddenDOMWindow. Preserve concurrent Home changes, native transfer, filtering and projection.
+
 ## 0.2.0-preview.32
 
 - Center Trash header controls; replace native age select with inline choices that retain filter state.

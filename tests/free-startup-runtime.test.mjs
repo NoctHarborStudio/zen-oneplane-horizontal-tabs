@@ -10,7 +10,7 @@ function harness(stored="",names=["Space"],projection=false){
     async createAndSaveWorkspace(name){calls.push("create");const ws={name,uuid:"new"};entries.push(ws);return ws;},
     async reorderWorkspace(){calls.push("reorder");},async changeWorkspaceWithID(id){calls.push(id);this.activeWorkspace=id;}};
   const window={gZenWorkspaces:native,closed:false,__oneplaneWorkspaceProjection:projection};
-  const run=runInNewContext(s.slice(a,b)+"\ninitializeFreeAtStartup",{window,disposed:false,Services:{appShell:{hiddenDOMWindow:host}},prefs:{getStringPref:(k,f)=>map.get(k)||f,setStringPref:(k,v)=>map.set(k,v)},console:{info(){},warn(){}}});
+  const run=runInNewContext(s.slice(a,b)+"\ninitializeFreeAtStartup",{window,disposed:false,Services:{prefs:{getDefaultBranch:()=>({getBoolPref:(k,f)=>host[k]??f,setBoolPref:(k,v)=>host[k]=v})}},prefs:{getStringPref:(k,f)=>map.get(k)||f,setStringPref:(k,v)=>map.set(k,v)},console:{info(){},warn(){}}});
   return {run,calls,native,entries};
 }
 test("first normal startup creates Free without renaming existing spaces",async()=>{

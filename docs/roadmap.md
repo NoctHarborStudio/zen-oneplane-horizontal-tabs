@@ -153,3 +153,7 @@ User confirms bottom drawer, Clear and native drag restore to Free/Space work. F
 - Preview.33: portable Home core and OnePlane host; validate in Zen before porting identical source to Refined. Both hosts use one window lease registry and shared shortcut preference.
 - After Home stabilizes, add independent Zen Refined trigger. Test both install/unload orders.
 - Extension Dock: investigate right-to-left relocation of native pinned extensions and manager, overflow and portrait. No change in this rollout.
+
+## Preview.35 — real Trash card and Free startup
+
+User rejects native ghost/doubled drag image. Move the original Trash row with shared pointer lifecycle, empty spacer and bounded lift/absorption/return; no clone or native drag image. Preserve native restore, filter and virtualization. Windows console confirms hiddenDOMWindow fails during Free startup; use process-local default-branch claim instead. Runtime verification pending.

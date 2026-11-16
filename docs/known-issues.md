@@ -178,3 +178,7 @@ Approved prototype implemented; runtime verification pending. Trash restore via 
 ### Preview.32 Trash polish
 
 User confirms .31 drawer/clear/drag restoration; reports uneven header and native age selection dismisses Hub. Inline picker and aligned controls address suspected native popup deactivation; exact event sequence unlogged. Fluid lift/suction visuals require live verification; native transfer unchanged. No cross-window transfer change.
+
+### Preview.35 — user-reported double Trash card and Free startup
+
+Screenshot confirms native drag image duplicates the card; user wants actual card extraction. Replace with shared pointer-driven real row; no ghost. Console confirms hiddenDOMWindow NS_ERROR_FAILURE; replace process claim storage. Visual and cold-start verification required. Zen Refined Smart Search .22 logs report provider ready and 12 results; no change here.

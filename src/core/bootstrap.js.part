@@ -32,10 +32,12 @@ async function initializeFreeAtStartup(){
   try{
     const native=window.gZenWorkspaces;
     if(window.__oneplaneWorkspaceProjection||!native?.workspaceEnabled||native.privateWindowOrDisabled||!native.currentWindowIsSyncing)return;
-    const host=Services.appShell.hiddenDOMWindow;
-    const key="__oneplaneFreeStartupClaim";
-    if(!host||host[key])return;
-    host[key]=true;
+    // Default-branch prefs are process-local and not saved in prefs.js.
+    // Unlike hiddenDOMWindow, this works in Windows browser chrome.
+    const runtime=Services.prefs.getDefaultBranch("");
+    const key="zen.oneplane.runtime.free-startup-claimed";
+    if(runtime.getBoolPref(key,false))return;
+    runtime.setBoolPref(key,true);
     const snapshot=native.getWorkspaces().map(s=>({id:s.uuid,name:typeof s.name==="string"?s.name:""}));
     const stored=prefs.getStringPref("zen.oneplane.free-space-id","");
     const trash=prefs.getStringPref("zen.oneplane.trash-space-id","");

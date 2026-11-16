@@ -60,7 +60,7 @@
     const listen=(node,type,fn)=>{node.addEventListener(type,fn,capture);handlers.push([node,type,fn]);};
     function pointer(event){
       const current=dragLifecycle.current();
-      if(!current||current.kind!=="workspace"||!event.isTrusted)return;
+      if(!current||!["workspace","trash"].includes(current.kind)||!event.isTrusted)return;
       const signal=dragPointerSignal(event,current.pointerId);
       if(signal==="cancel")dragLifecycle.cancel(event.type,current.token);
       else if(signal==="move")current.onMove?.(event);
@@ -72,7 +72,7 @@
     function mouseFallback(event){
       if(!event.isTrusted)return;
       const current=dragLifecycle.current();
-      if(current?.kind==="workspace"&&(event.type==="mouseup"||!(event.buttons&1)))
+      if(["workspace","trash"].includes(current?.kind)&&(event.type==="mouseup"||!(event.buttons&1)))
         dragLifecycle.cancel("mouse-release-without-pointerup",current.token);
       // Native HTML DnD owns its own button state: drag events often report
       // buttons=0. Never infer a tab drop from mousemove.
@@ -81,7 +81,7 @@
       if(!event.isTrusted||!dragLifecycle.current()||!dragInterruptionKey(event))return;
       const kind=dragLifecycle.current().kind;
       cancelActiveDrag("keyboard-interruption");
-      if(event.key==="Escape"&&kind==="workspace"){event.preventDefault();event.stopImmediatePropagation();}
+      if(event.key==="Escape"&&["workspace","trash"].includes(kind)){event.preventDefault();event.stopImmediatePropagation();}
       // Let Gecko/OS receive Escape for a native tab drag and screenshot keys.
     }
     function focusLost(event){
@@ -91,7 +91,7 @@
       // Cancel the workspace pointer gesture immediately; for tab drag,
       // hide the transient chrome and let its session watchdog/dragend own
       // completion. Explicit OS interruption keys cancel both.
-      if(dragLifecycle.current()?.kind==="workspace")cancelActiveDrag("focus-lost");
+      if(["workspace","trash"].includes(dragLifecycle.current()?.kind))cancelActiveDrag("focus-lost");
       else if(dragLifecycle.current()?.kind==="tab"){
         clearPlacementPreview(true);
         // Deactivation can also be an ordinary native cross-window drag.

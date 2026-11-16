@@ -1649,9 +1649,6 @@
 #oneplane-hub-panel .op-hub-trash-rows {box-sizing:content-box;}
 #oneplane-hub-panel .op-hub-trash-item {display:flex;align-items:center;gap:7px;height:50px;box-sizing:border-box;margin:0 0 4px;padding:6px;border:1px solid transparent;border-radius:7px;background:color-mix(in srgb,currentColor 6%,transparent);transition:background 200ms,transform 220ms,opacity 200ms;user-select:none;overflow:hidden;}
 #oneplane-hub-panel .op-hub-trash-item:hover {background:color-mix(in srgb,currentColor 11%,transparent);}
-#oneplane-hub-panel .op-hub-trash-item[draggable="true"] {cursor:grab;}
-#oneplane-hub-panel .op-hub-trash-item[draggable="true"]:active {transform:scale(1.025);}
-#oneplane-hub-panel .op-hub-trash-item[data-op-trash-dragging] {opacity:.28;transform:scale(.97);}
 #oneplane-hub-panel .op-hub-trash-site-icon {display:grid;place-items:center;flex:0 0 22px;height:22px;border-radius:4px;font-size:16px;opacity:.9;}
 #oneplane-hub-panel .op-hub-trash-site-icon img {width:18px;height:18px;object-fit:contain;pointer-events:none;}
 #oneplane-hub-panel .op-hub-trash-copy {min-width:0;flex:1;display:flex;flex-direction:column;gap:3px;}
@@ -1660,7 +1657,6 @@
 #oneplane-hub-panel .op-hub-trash-url,#oneplane-hub-panel .op-hub-trash-date {font-size:10px;opacity:.65;}
 #oneplane-hub-panel .op-hub-trash-date {white-space:nowrap;font-variant-numeric:tabular-nums;}
 #oneplane-hub-panel .op-hub-trash-confirm:not(:empty),#oneplane-hub-panel .op-hub-trash-notice:not(:empty) {padding:4px 7px;}
-#oneplane-hub-panel .op-hub-trash-ghost {position:fixed;z-index:2;margin:0;transform:scale(1.04);opacity:1;pointer-events:none;background:var(--op-hub-bg,Canvas);border-color:AccentColor;box-shadow:0 4px 14px #0004;}
 #oneplane-hub-panel .op-hub-space[data-op-trash-target] {background:color-mix(in srgb,AccentColor 24%,transparent);outline:1px solid AccentColor;transform:scale(1.015);}
 #oneplane-hub-panel .op-hub-color {width:100%;min-height:28px;border:0;background:transparent;}
 #oneplane-hub-panel .op-hub-edit .op-hub-name {width:100%;}
@@ -1693,8 +1689,12 @@
 #oneplane-hub-panel .op-hub-age-option {display:flex;align-items:center;justify-content:space-between;min-height:28px;width:100%;margin:0;border:0;border-radius:5px;padding:4px 7px;background:transparent;color:inherit;font:inherit;font-size:11px;text-align:start;cursor:pointer;}
 #oneplane-hub-panel .op-hub-age-option:is(:hover,[aria-pressed="true"]) {background:color-mix(in srgb,currentColor 13%,transparent);}
 #oneplane-hub-panel .op-hub-age-option[aria-pressed="true"]::after {content:"✓";color:AccentColor;}
-#oneplane-hub-panel .op-hub-trash-flight {position:absolute;z-index:3;pointer-events:none!important;transform-origin:center;margin:0;opacity:1;background:var(--op-hub-bg,Canvas);border-color:AccentColor;box-shadow:0 4px 12px #0004;transition:none;}
 @container (max-width: 235px) {
   #oneplane-hub-panel [data-op-trash-open] .op-hub-trash-head {height:70px;}
   #oneplane-hub-panel [data-op-trash-open] .op-hub-trash-tools {top:54px;}
 }
+
+/* Actual Trash card moves in the Hub; the spacer is empty. */
+#oneplane-hub-panel .op-hub-trash-item[data-op-trash-draggable] {cursor:grab;touch-action:none;}
+#oneplane-hub-panel .op-hub-trash-placeholder {height:54px;box-sizing:border-box;pointer-events:none;}
+#oneplane-hub-panel .op-hub-trash-item[data-op-trash-floating] {position:absolute;z-index:3;margin:0;pointer-events:none!important;cursor:grabbing;opacity:1;background:var(--op-hub-bg,Canvas);border-color:AccentColor;box-shadow:0 5px 16px #0005;transform-origin:center;transition:none;will-change:translate,scale;}

@@ -84,3 +84,7 @@ Implement approved prototype in native Hub. One Plane Hub label, separated Free 
 ## Preview.32 — aligned header, inline age menu and Fluid Trash
 
 Replace native select with in-document age choices (no separate popup/deactivation), explicit selected age, Escape/outside dismissal inside Hub, preserve selection across renders. Header controls share a vertical center, narrow fallback. Native drag transfer unchanged; source card squash/lift, single native drag image, short post-drop clone converges into destination or returns to source on in-Hub cancel. No persistent cursor ghost; outside-Hub cancellation has no flight. Reduced-motion and close/teardown cleanup respected. Virtual list and timer unchanged. Physical Zen verification pending.
+
+## Preview.35 — single actual card drag
+
+Replace Trash native HTML drag with shared pointer lifecycle (trash owner). The original row leaves list flow, empty spacer preserves its virtual slot; reparent same row into Hub, translate once per frame, squash/stretch lift and absorb/return on release. Native move commits once before absorption, rendering frozen until completion. Escape, capture loss, focus loss, new gesture and unload release visual state. No clone, drag image or cross-monitor ghost. Free startup uses a default-branch in-process claim because Windows hiddenDOMWindow throws NS_ERROR_FAILURE. Existing projection, tab drag and safe transfer unchanged. Actual Zen test pending.

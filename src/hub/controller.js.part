@@ -71,7 +71,7 @@
     panel.append(content);
     let destroyed=false,busy=false,open=false,contextId=null;
     let trashOpen=false,purgePlan=null,trashDrag=null,editId=null;
-    let trashData=[],trashAllowed=false,trashAgeTimer=0,trashFrame=0,trashRangeKey="",trashTarget=null,trashGhost=null,trashFlight=null;
+    let trashData=[],trashAllowed=false,trashAgeTimer=0,trashFrame=0,trashRangeKey="",trashTarget=null;
     let trashAge="all";
     const TRASH_ROW_HEIGHT=54;
     const FREE_PREF="zen.oneplane.free-space-id",TRASH_PREF="zen.oneplane.trash-space-id",COLOR_PREF="zen.oneplane.workspace-colors",TRASH_TIME="oneplane-trashed-at";
@@ -118,7 +118,7 @@
       }catch{done();}
     }
     function close(restoreFocus=false,immediate=false){
-      const wasVisible=!panel.hidden;contextId=null;confirmation=null;editId=null;finishTrashDrag();stopTrashFlight();setTrashAgeOpen(false);purgePlan=null;open=false;stopTrashUpdates();
+      const wasVisible=!panel.hidden;contextId=null;confirmation=null;editId=null;finishTrashDrag();setTrashAgeOpen(false);purgePlan=null;open=false;stopTrashUpdates();
       if(drag)cancelDrag();
       if(geometryFrame)window.cancelAnimationFrame(geometryFrame);geometryFrame=0;
       button.setAttribute("aria-expanded","false");
@@ -171,9 +171,6 @@
         const icon=make("span","op-hub-icon",space.icon||Array.from(space.name)[0]?.toUpperCase()||"·");icon.setAttribute("aria-hidden","true");
         const accent=workspaceColor(space.id);if(accent)icon.style.setProperty("--op-space-accent",accent);
         if(space.id===freeId())entry.setAttribute("data-op-free","true");
-        entry.addEventListener("dragover",event=>trashRestoreOver(event,space.id));
-        entry.addEventListener("drop",event=>void trashRestoreDrop(event,space.id));
-        entry.addEventListener("dragleave",event=>{if(trashTarget===entry&&!entry.contains(event.relatedTarget))clearTrashTarget();});
         entry.append(icon,make("span","op-hub-label",space.name));
         if(space.id===freeId()){
           const lock=make("span","op-hub-lock","");lock.title="Default workspace";lock.setAttribute("aria-label","Protected default workspace");
@@ -376,74 +373,136 @@
         purgePlan=null;
       });
     }
-    const TRASH_DRAG_TYPE="application/x-oneplane-trash-tab";
+    function trashMotionEnabled(){
+      return !window.matchMedia("(prefers-reduced-motion: reduce)").matches&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0;
+    }
     function clearTrashTarget(){
       trashTarget?.removeAttribute("data-op-trash-target");trashTarget=null;
     }
     function finishTrashDrag(){
-      trashDrag?.lift?.cancel();trashDrag?.row?.removeAttribute("data-op-trash-dragging");trashDrag=null;
-      clearTrashTarget();
-      trashGhost?.remove();trashGhost=null;
+      const d=trashDrag;trashDrag=null;clearTrashTarget();
+      if(!d)return;
+      if(dragLifecycle.owns(d.token,"trash"))dragLifecycle.finish(d.token);
+      if(d.frame)window.cancelAnimationFrame(d.frame);
+      d.animation?.cancel();
+      try{if(panel.hasPointerCapture(d.pointer))panel.releasePointerCapture(d.pointer);}catch{}
+      // Restore the actual row to its original list slot; never clone it.
+      d.row.removeAttribute("data-op-trash-floating");
+      d.row.removeAttribute("data-op-trash-settling");
+      for(const k of ["left","top","width","height","translate","scale"])d.row.style.removeProperty(k);
+      if(d.placeholder?.isConnected)d.placeholder.replaceWith(d.row);
+      else if(d.moved)d.row.remove();
+      if(d.moved)suppressClickUntil=window.performance.now()+400;
     }
-    function trashRestoreOver(event,id){
-      if(!trashDrag||!event.isTrusted||!Array.from(event.dataTransfer?.types||[]).includes(TRASH_DRAG_TYPE)||id===trashId())return;
-      event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";
-      const target=event.currentTarget;
-      if(trashTarget!==target){clearTrashTarget();trashTarget=target;target.setAttribute("data-op-trash-target","true");}
+    function cancelTrashDrag(){
+      finishTrashDrag();
+      if(open&&!destroyed)render();
     }
-    async function trashRestoreDrop(event,id){
-      if(!trashDrag||!event.isTrusted||event.dataTransfer?.getData(TRASH_DRAG_TYPE)!==trashDrag.token)return;
+    function beginTrashDrag(event,tab,row){
+      if(!event.isTrusted||event.button!==0||!(event.buttons&1)||!open||!trashOpen||busy||projectionBusy||destroyed||
+        !trashAllowed||!singleWindow()||!hubTrashTabEligible(tab)||tab===browser.selectedTab)return;
+      if(trashDrag?.settling)finishTrashDrag();
+      else if(trashDrag)return;
+      if(dragLifecycle.current())cancelActiveDrag("superseded");
       event.preventDefault();event.stopPropagation();
-      const d=trashDrag,tab=d.tab,card=d.row.cloneNode(true),rect=d.rect;
-      const release={x:event.clientX,y:event.clientY};
-      finishTrashDrag();await restoreTrashTab(tab,id);
-      if(!open||trashTabs().includes(tab)||!trashMotionEnabled())return;
-      const target=Array.from(panel.querySelectorAll(".op-hub-space")).find(n=>n.dataset.workspaceId===id);
-      if(target)animateTrashFlight(card,rect,release,target,true);
+      const token=dragLifecycle.begin("trash",{pointerId:event.pointerId,onMove:moveTrashDrag,onUp:endTrashDrag,onCancel:cancelTrashDrag});
+      if(token===null)return;
+      const rect=row.getBoundingClientRect();
+      trashDrag={tab,row,token,pointer:event.pointerId,rect,x:event.clientX,y:event.clientY,point:null,moved:false,frame:0,animation:null,placeholder:null,dx:0,dy:0,settling:false};
+      try{panel.setPointerCapture(event.pointerId);}catch{dragLifecycle.cancel("trash-capture-failed",token);}
     }
-    function trashMotionEnabled(){
-      return !window.matchMedia("(prefers-reduced-motion: reduce)").matches&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0;
+    function trashDestination(x,y){
+      const bounds=panel.getBoundingClientRect();
+      if(x<bounds.left||x>bounds.right||y<bounds.top||y>bounds.bottom)return null;
+      const hit=document.elementFromPoint(x,y)?.closest(".op-hub-space");
+      return hit&&panel.contains(hit)&&!hit.disabled&&hit.dataset.workspaceId!==trashId()?hit:null;
     }
-    function stopTrashFlight(){
-      const f=trashFlight;trashFlight=null;
-      if(f){f.animation?.cancel();f.node.remove();}
+    function liftTrashRow(d){
+      // The sole moving element is the real card. An empty spacer retains
+      // its 54px virtual-list slot while the card is out of document flow.
+      const p=panel.getBoundingClientRect();
+      d.placeholder=make("div","op-hub-trash-placeholder");
+      d.placeholder.setAttribute("aria-hidden","true");
+      d.row.before(d.placeholder);
+      d.baseX=d.rect.left-p.left+panel.scrollLeft;
+      d.baseY=d.rect.top-p.top+panel.scrollTop;
+      d.row.style.left=d.baseX+"px";d.row.style.top=d.baseY+"px";
+      d.row.style.width=d.rect.width+"px";d.row.style.height=d.rect.height+"px";
+      d.row.setAttribute("data-op-trash-floating","true");
+      panel.append(d.row);d.moved=true;
+      if(trashMotionEnabled())try{
+        d.animation=d.row.animate([
+          {scale:"1",offset:0},{scale:"1.12 .84",offset:.26},
+          {scale:".94 1.12",offset:.5},{scale:"1.06 .97",offset:.75},{scale:"1.04",offset:1}
+        ],{duration:360,easing:"linear",fill:"forwards"});
+      }catch{}
     }
-    function animateTrashFlight(card,rect,release,target,absorbed){
-      if(!open||!trashMotionEnabled()||!target?.isConnected)return;
-      stopTrashFlight();
-      // Single short-lived post-drag clone inside Hub, never an additional
-      // cursor follower during native drag.
-      const panelRect=panel.getBoundingClientRect(),dest=target.getBoundingClientRect();
-      const geometry=hubTrashFlightGeometry(rect,release,dest,panelRect);
-      if(!geometry)return;
-      const {x,y,dx,dy}=geometry;
-      card.removeAttribute("data-op-trash-dragging");card.classList.remove("op-hub-trash-ghost");
-      card.classList.add("op-hub-trash-flight");card.draggable=false;card.setAttribute("aria-hidden","true");card.inert=true;
-      card.style.width=rect.width+"px";card.style.height=rect.height+"px";
-      card.style.left=(x-panelRect.left+panel.scrollLeft)+"px";card.style.top=(y-panelRect.top+panel.scrollTop)+"px";
-      panel.append(card);
-      const f={node:card,animation:null};trashFlight=f;
-      const tx=(a,b,sx,sy)=>"translate("+a+"px,"+b+"px) scale("+sx+","+sy+")";
+    function positionTrashRow(d,event){
+      if(trashDrag!==d||!d.moved||d.settling)return;
+      const p=panel.getBoundingClientRect();
+      // Bound the card to the Hub so moving outside cannot expand its
+      // scrollable area or leave any floating element over the page.
+      const grabX=d.x-d.rect.left,grabY=d.y-d.rect.top;
+      const left=Math.max(p.left,Math.min(p.right-d.rect.width,event.clientX-grabX));
+      const top=Math.max(p.top,Math.min(p.bottom-d.rect.height,event.clientY-grabY));
+      d.dx=left-p.left+panel.scrollLeft-d.baseX;
+      d.dy=top-p.top+panel.scrollTop-d.baseY;
+      d.row.style.translate=d.dx+"px "+d.dy+"px";
+      const target=trashDestination(event.clientX,event.clientY);
+      if(target!==trashTarget){clearTrashTarget();trashTarget=target;target?.setAttribute("data-op-trash-target","true");}
+    }
+    function moveTrashDrag(event){
+      const d=trashDrag;
+      if(!d||d.settling||!dragLifecycle.owns(d.token,"trash"))return;
+      if(!d.row.isConnected||!singleWindow()){dragLifecycle.cancel("trash-invalid",d.token);return;}
+      if(!d.moved&&Math.hypot(event.clientX-d.x,event.clientY-d.y)<6)return;
+      event.preventDefault();event.stopPropagation();
+      if(!d.moved)liftTrashRow(d);
+      d.point={clientX:event.clientX,clientY:event.clientY};
+      if(!d.frame)d.frame=window.requestAnimationFrame(()=>{d.frame=0;if(d.point)positionTrashRow(d,d.point);});
+    }
+    async function endTrashDrag(event){
+      const d=trashDrag;
+      if(!d||!dragLifecycle.owns(d.token,"trash")||!dragLifecycle.finish(d.token))return;
+      if(d.frame)window.cancelAnimationFrame(d.frame);d.frame=0;
+      if(!d.moved){finishTrashDrag();return;}
+      event.preventDefault();event.stopPropagation();
+      positionTrashRow(d,event);
+      const target=trashDestination(event.clientX,event.clientY),id=target?.dataset.workspaceId;
+      d.settling=true;clearTrashTarget();
+      try{if(panel.hasPointerCapture(d.pointer))panel.releasePointerCapture(d.pointer);}catch{}
+      // Commit native transfer once at release. Rendering remains frozen
+      // until the SAME visual card has finished its absorption.
+      if(id)await restoreTrashTab(d.tab,id);
+      if(trashDrag!==d)return;
+      const moved=!!id&&d.tab.getAttribute("zen-workspace-id")===id&&!trashTabs().includes(d.tab);
+      const destination=moved?target:d.placeholder;
+      if(!open||!destination?.isConnected||!trashMotionEnabled()){finishTrashDrag();if(open)render();return;}
+      const dest=destination.getBoundingClientRect(),p=panel.getBoundingClientRect();
+      const tx=dest.left+dest.width/2-d.rect.width/2-p.left+panel.scrollLeft-d.baseX;
+      const ty=dest.top+dest.height/2-d.rect.height/2-p.top+panel.scrollTop-d.baseY;
+      const pos=(x,y)=>x+"px "+y+"px";
+      const start=window.getComputedStyle(d.row).scale||"1";
+      d.animation?.cancel();d.row.setAttribute("data-op-trash-settling","true");
       try{
-        const frames=absorbed?[
-          {transform:tx(0,0,1.04,1.04),opacity:1,offset:0},
-          {transform:tx(dx*.32,dy*.32,1.14,.84),opacity:1,offset:.26},
-          {transform:tx(dx*.88,dy*.88,.48,.68),opacity:.9,offset:.68},
-          {transform:tx(dx,dy,.07,.12),opacity:0,offset:1}
+        d.animation=d.row.animate(moved?[
+          {translate:pos(d.dx,d.dy),scale:start,opacity:1,offset:0},
+          {translate:pos(d.dx+(tx-d.dx)*.3,d.dy+(ty-d.dy)*.3),scale:"1.14 .83",opacity:1,offset:.25},
+          {translate:pos(d.dx+(tx-d.dx)*.85,d.dy+(ty-d.dy)*.85),scale:".45 .65",opacity:.95,offset:.72},
+          {translate:pos(tx,ty),scale:".05 .1",opacity:0,offset:1}
         ]:[
-          {transform:tx(0,0,1.04,1.04),opacity:1,offset:0},
-          {transform:tx(dx*.86,dy*.86,.85,1.12),opacity:1,offset:.6},
-          {transform:tx(dx,dy,1.04,.97),opacity:.95,offset:.85},
-          {transform:tx(dx,dy,1,1),opacity:0,offset:1}
-        ];
-        f.animation=card.animate(frames,{duration:absorbed?420:360,easing:"cubic-bezier(.22,.75,.2,1)",fill:"both"});
-        f.animation.finished.then(()=>{
-          if(trashFlight!==f)return;stopTrashFlight();
-          if(absorbed&&open&&target.isConnected)try{target.animate([
-            {transform:"scale(1.035,.94)"},{transform:"scale(.99,1.045)"},{transform:"scale(1)"}],
-            {duration:260,easing:"ease-out"});}catch{}
-        },()=>{if(trashFlight===f)stopTrashFlight();});
-      }catch{stopTrashFlight();}
+          {translate:pos(d.dx,d.dy),scale:start,offset:0},
+          {translate:pos(tx,ty),scale:".94 1.08",offset:.7},
+          {translate:pos(tx,ty),scale:"1",offset:1}
+        ],{duration:moved?420:340,easing:"cubic-bezier(.22,.75,.2,1)",fill:"both"});
+        await d.animation.finished;
+      }catch{}
+      if(trashDrag!==d)return;
+      finishTrashDrag();if(open)render();
+      if(moved&&open&&trashMotionEnabled()){
+        const entry=Array.from(panel.querySelectorAll(".op-hub-space")).find(n=>n.dataset.workspaceId===id);
+        try{entry?.animate([{scale:"1.035 .94"},{scale:".99 1.045"},{scale:"1"}],{duration:240,easing:"ease-out"});}catch{}
+      }
     }
     function purgeEligible(tab){
       return hubTrashTabEligible(tab)&&!tab.pinned&&tab!==browser.selectedTab&&
@@ -492,45 +551,16 @@
       const image=tab.getAttribute("image");
       // Browser-owned favicon URI only; avoid new HTTP requests from chrome.
       if(image&&/^(?:data:image\/|moz-anno:|page-icon:|chrome:|resource:)/i.test(image)){
-        const img=make("img","");img.alt="";img.src=image;img.addEventListener("error",()=>{img.remove();icon.textContent="◎";},{once:true});icon.append(img);
+        const img=make("img","");img.alt="";img.draggable=false;img.src=image;img.addEventListener("error",()=>{img.remove();icon.textContent="◎";},{once:true});icon.append(img);
       }else icon.textContent="◎";
       const copy=make("span","op-hub-trash-copy"),title=make("span","op-hub-trash-site-title",tab.label||"Tab"),link=make("span","op-hub-trash-url",trashTabUrl(tab)||"No address");
       copy.append(title,link);
       const age=make("span","op-hub-trash-date",hubTrashRelativeAge(stamp,Date.now()));age._stamp=stamp;
       row.append(icon,copy,age);row.title=stamp?new Date(stamp).toLocaleString():"Unknown date";
-      row.draggable=trashAllowed&&hubTrashTabEligible(tab)&&tab!==browser.selectedTab;
-      row.addEventListener("dragstart",event=>{
-        if(!event.isTrusted||!row.draggable||!event.dataTransfer||!singleWindow()){event.preventDefault();return;}
-        stopTrashFlight();setTrashAgeOpen(false);
-        const token=Services.uuid.generateUUID().toString(),rect=row.getBoundingClientRect();trashDrag={tab,token,row,rect,lift:null};
-        event.dataTransfer.setData(TRASH_DRAG_TYPE,token);event.dataTransfer.effectAllowed="move";
-        // One native drag image, not an extra cursor-following overlay.
-        // Clone the card within the visible top-layer panel for Gecko.
-        try{
-          trashGhost=row.cloneNode(true);
-          trashGhost.classList.add("op-hub-trash-ghost");trashGhost.draggable=false;
-          trashGhost.style.width=rect.width+"px";trashGhost.style.left=rect.left+"px";trashGhost.style.top=rect.top+"px";
-          panel.append(trashGhost);event.dataTransfer.setDragImage(trashGhost,Math.min(20,rect.width/2),rect.height/2);
-          const ghost=trashGhost;window.requestAnimationFrame(()=>{ghost.remove();if(trashGhost===ghost)trashGhost=null;});
-        }catch{trashGhost?.remove();trashGhost=null;}
-        row.setAttribute("data-op-trash-dragging","true");
-        if(trashMotionEnabled())try{trashDrag.lift=row.animate([
-          {transform:"scale(1)",opacity:1,offset:0},
-          {transform:"scale(1.10,.88)",opacity:.85,offset:.28},
-          {transform:"scale(.91,1.07)",opacity:.48,offset:.58},
-          {transform:"scale(.97)",opacity:.28,offset:1}
-        ],{duration:340,easing:"ease-out"});}catch{}
-      });
-      row.addEventListener("dragend",event=>{
-        const d=trashDrag;if(d?.row!==row)return;
-        const card=row.cloneNode(true),rect=d.rect,release={x:event.clientX,y:event.clientY};
-        finishTrashDrag();
-        if(!open)return;
-        if(row.isConnected&&trashTabs().includes(tab)){
-          if(trashMotionEnabled())animateTrashFlight(card,rect,release,row,false);
-          updateTrashAges();scheduleTrashRows();
-        }else renderTrash();
-      });
+      row.draggable=false;
+      row.toggleAttribute("data-op-trash-draggable",trashAllowed&&hubTrashTabEligible(tab)&&tab!==browser.selectedTab);
+      row.addEventListener("dragstart",event=>event.preventDefault());
+      row.addEventListener("pointerdown",event=>beginTrashDrag(event,tab,row));
       return row;
     }
     function stopTrashUpdates(){
@@ -564,7 +594,7 @@
       trashToggle.setAttribute("aria-expanded",String(trashOpen));
       trashToggle.setAttribute("aria-label",(trashOpen?"Collapse":"Expand")+" Trash ("+tabs.length+" tabs)");
       trashPanel.toggleAttribute("data-op-trash-open",trashOpen);trashDrawer.inert=!trashOpen;trashTools.inert=!trashOpen;
-      if(!trashOpen){setTrashAgeOpen(false);stopTrashFlight();}
+      if(!trashOpen)setTrashAgeOpen(false);
       if(!open||!trashOpen){stopTrashUpdates();return;}
       trashAllowed=!busy&&canManage()&&singleWindow();
       trashData=tabs.map(tab=>({tab,stamp:trashStamp(tab)})).sort((a,b)=>b.stamp-a.stamp);
@@ -591,7 +621,7 @@
         prefs.getBoolPref("zen.window-sync.enabled",true)&&!prefs.getBoolPref("zen.window-sync.sync-only-pinned-tabs",true);
     }
     function beginDrag(event,id,entry){
-      if(!event.isTrusted||event.button!==0||!(event.buttons&1)||busy||projectionBusy||destroyed||!open)return;
+      if(!event.isTrusted||event.button!==0||!(event.buttons&1)||busy||projectionBusy||destroyed||!open||trashDrag)return;
       if(dragLifecycle.current())cancelActiveDrag("superseded");
       const token=dragLifecycle.begin("workspace",{pointerId:event.pointerId,onMove:moveDrag,onUp:endDrag,onCancel:()=>cleanupDrag()});
       if(token===null)return;
@@ -964,7 +994,7 @@
       if(!open||event.key!=="Escape")return;
       event.preventDefault();event.stopPropagation();
       if(!ageMenu.hidden){setTrashAgeOpen(false);ageSelect.focus({preventScroll:true});return;}
-      if(trashDrag){finishTrashDrag();renderTrash();return;}if(drag){cancelDrag();return;}if(confirmation){confirmation=null;render();return;}if(contextId){contextId=null;render();return;}close(true);
+      if(trashDrag){cancelTrashDrag();return;}if(drag){cancelDrag();return;}if(confirmation){confirmation=null;render();return;}if(contextId){contextId=null;render();return;}close(true);
     }
     function changed(){if(open){if(drag&&!manager()?.getWorkspaceFromId(drag.id))cancelDrag();if(!drag&&!trashDrag&&!editId)render();scheduleHubGeometry();}}
     function onMode(){if(!supported())close(false,true);else if(open){setHold(true);changed();}}
