@@ -31,3 +31,11 @@
 - Sine 2.3.3 compares updatedAt, skips disabled/no-updates mods, and processes the installed list sequentially without a per-mod catch in updateMods. Its fetch helper uses ordinary fetch without explicit cache bypass. The crossed-arrow icon is also used for enabled updates; the highlighted button state and tooltip distinguish opt-out.
 - Next diagnostic: inspect only the local OnePlane entry in chrome/sine-mods/mods.json (version, updatedAt, homepage, enabled, no-updates, origin), and browser console errors during manual update. A stale response or failure in another mod is possible, but unconfirmed.
 - Status: open; repository-side metadata is valid. Do not alter the local database blindly or mark this fixed merely by bumping versions.
+
+## OP-005 — Horizontal toolbar fails to fit on portrait monitors
+
+- Reported on the 0.2.0-preview.3 baseline. On a portrait monitor the OnePlane menu has too little horizontal space and works very poorly. Portrait mode was not included in earlier live testing.
+- First proposed mitigation: portrait-only adaptive two-row icon layout when the primary row cannot fit its icons. Keep one row if it fits; use measured available width, not only monitor orientation. Audit the current 900px CSS/JS activation boundary and overflow behavior.
+- Acceptance: no inaccessible icons, clipped controls or overlapping navigation; maintain Hub/extension access, tab interactions, address expansion, bookmarks, captions and compact/persistent behavior. Validate resize, scaling, high icon counts and orientation changes. Decide exact row contents during prototype.
+- Landscape overflow/redesign is explicitly deferred; do not change it as part of this issue.
+- Status: open; proposed design only, not implemented or tested.

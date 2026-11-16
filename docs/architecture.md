@@ -31,10 +31,11 @@ Exactly one mandatory Free space, designated by stable native Zen UUID. No prede
 2. Independent compact/persistent layout (done, user tested).
 3. Hub shell and native context menu.
 4. Native workspace engine: Free plus user-created spaces.
-5. Workspace memory policy and safe unloading.
-6. Extension placement and native pin/unpin controls.
-7. Essentials, pins, folders and interactions.
-8. Fluid address animation, integration, stabilization.
+5. Workspace memory policy: 600-second inactivity timeout and on-demand tab restoration.
+6. Extension placement beside Hub at the far left of the primary toolbar and native pin/unpin controls.
+7. Portrait responsive layout: adaptive second icon row when required (OP-005); landscape redesign deferred.
+8. Essentials, pins, folders and interactions.
+9. Fluid address animation, integration, stabilization.
 
 See [roadmap.md](roadmap.md) for acceptance criteria and sequencing. Preview numbers are provisional.
 
