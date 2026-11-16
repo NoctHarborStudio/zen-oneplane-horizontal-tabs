@@ -4,6 +4,11 @@
   let geometryFrame = 0;
   let geometryObserver = null;
   let centering=false;
+  // The plus follows the occupied right lane, not the symmetric row's
+  // far edge. Keep the existing expansion reserve in Expand mode.
+  function rightPlusOffset(widths, expansion=0){
+    return 3+widths.reduce((sum,w)=>sum+Math.max(0,w)+3,0)+Math.max(0,expansion);
+  }
   function centerToolbar(){
     if(centering||!hoverSupported()||!toolbarWrapper)return;
     centering=true;
@@ -38,7 +43,8 @@
       // In Island Mode the row has symmetric halves around the fixed
       // center. Neither the hovered title nor the scroll positions affect it.
       const wantsIsland = row.hasAttribute("data-op-show-island");
-      const available = Math.max(0,2*Math.min(window.innerWidth/2-left,window.innerWidth/2-right)-8);
+      const dragRoom=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-window-drag-room"))||16;
+      const available = Math.max(0,2*Math.min(window.innerWidth/2-left,window.innerWidth/2-right)-8-2*dragRoom);
       const iconHome=row.hasAttribute("data-op-home-icon");
       const minIslandRoom = 32+2*(tabWidth+9);
       const compactTitle=wantsIsland&&!iconHome&&available<100+2*(tabWidth+9);
@@ -51,9 +57,10 @@
         const laneWidth=lane=>Array.from(lane.children).reduce((sum,n)=>sum+compactSlotWidth(n,tabWidth)+3,6);
         const expandReserve=iconHome&&row.getAttribute("data-op-hover-mode")==="expand"?Math.max(0,(parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab-open"))||180)-tabWidth):0;
         const half=Math.max(laneWidth(leftLane),laneWidth(rightLane)+tabWidth+3,tabWidth+9)+expandReserve;
+        setLength(row,"--op-right-plus-offset",rightPlusOffset(Array.from(rightLane.children,n=>compactSlotWidth(n,tabWidth)),expandReserve));
         setLength(row,"--op-island-width",titleWidth);
         setLength(row,"--op-island-row-width",Math.min(available,titleWidth+6+2*half));
-      }
+      }else row.style.removeProperty("--op-right-plus-offset");
       const bias=toolbarCenterBias(left,right,trailingReserve,centered);
       setLength(leftSpacer,"--op-center-bias",bias.left);
       setLength(rightSpacer,"--op-center-bias",bias.right);

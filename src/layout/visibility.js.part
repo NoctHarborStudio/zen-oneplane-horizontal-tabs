@@ -113,6 +113,16 @@
   function leaveWindow(event) {
     if (event.relatedTarget === null) {panelLastPointer=null;clearHover();}
   }
+  // Native maximize/restore and monitor DPI changes can resize the
+  // toolbar without a new pointer movement. Reconcile the current layout
+  // and stale visual state, never synthesize a window move.
+  function onWindowGeometryChanged(){
+    if(dead)return;
+    if(!row.hasAttribute("data-op-dragging")&&hoverTab)clearTabHover();
+    if(!nativeInlineOpen(addressBar())&&!addressTransition&&!addressSettling&&cascadeState!=="idle")resetTabCascade();
+    onCompactChanged();
+    schedule();
+  }
   function onCompactChanged() {
     hub.onMode();
     if(!hoverSupported()){cancelActiveDrag("unsupported-layout");closeNativeTabMenu();}

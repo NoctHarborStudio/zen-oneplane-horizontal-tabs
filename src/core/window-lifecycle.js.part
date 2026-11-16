@@ -82,7 +82,8 @@
     window.removeEventListener("deactivate", onWindowDeactivate);
     window.removeEventListener("ZenCompactMode:Toggled", onCompactChanged);
     window.removeEventListener("ZenCompactMode:LayoutUpdate", onCompactChanged);
-    window.removeEventListener("resize", onCompactChanged);
+    window.removeEventListener("resize", onWindowGeometryChanged);
+    window.removeEventListener("sizemodechange", onWindowGeometryChanged);
     addressObserver?.disconnect();
     clearAddressAnimation();
     addressBar()?.removeEventListener("pointerdown", onAddressInput, true);
@@ -218,7 +219,8 @@
     window.addEventListener("deactivate", onWindowDeactivate);
     window.addEventListener("ZenCompactMode:Toggled", onCompactChanged);
     window.addEventListener("ZenCompactMode:LayoutUpdate", onCompactChanged);
-    window.addEventListener("resize", onCompactChanged);
+    window.addEventListener("resize", onWindowGeometryChanged);
+    window.addEventListener("sizemodechange", onWindowGeometryChanged);
     row.setAttribute("data-ready", "true");
   } catch (error) {
     destroy();

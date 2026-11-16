@@ -111,11 +111,13 @@ function acquireZenHome(win, services) {
 #zen-tabbox-wrapper[data-zr-home-host]{position:relative!important}
 #tabbrowser-tabpanels[data-zr-home-covered],#tabbrowser-tabpanels[data-zr-home-covered] browser{visibility:hidden!important;pointer-events:none!important}
 #zen-shared-home[hidden]{display:none!important}
-#zen-shared-home{position:absolute;inset:0;z-index:4;display:flex;align-items:safe center;justify-content:center;overflow:auto;box-sizing:border-box;padding:72px 24px 32px;background:transparent;color:var(--toolbox-textcolor,currentColor);font:menu;-moz-window-dragging:no-drag;scrollbar-width:thin}
+#zen-shared-home{position:absolute;inset:0;z-index:4;display:flex;align-items:safe center;justify-content:center;overflow:auto;box-sizing:border-box;padding:72px 24px 32px;background:transparent;color:var(--toolbox-textcolor,currentColor);font:menu;-moz-window-dragging:drag;scrollbar-width:thin}
 #zen-shared-home *{box-sizing:border-box}
 #zen-shared-home button,#zen-shared-home input{font:inherit;color:inherit}
 #zen-shared-home button{appearance:none;cursor:pointer;border:0;background:none;padding:0}
 #zen-shared-home button:focus-visible,#zen-shared-home input:focus-visible{outline:2px solid AccentColor;outline-offset:3px}
+/* Native non-client dragging only on the blank Home background. */
+#zen-shared-home :is(.zh-content,button,input,summary,a,[draggable=true]){-moz-window-dragging:no-drag!important}
 #zen-shared-home .zh-content{width:min(100%,720px);margin:auto;transition:opacity 180ms ease,translate 220ms cubic-bezier(.2,.75,.25,1)}
 #zen-shared-home .zh-search{display:flex;align-items:center;gap:12px;width:100%;height:56px;padding:0 19px;border:1px solid color-mix(in srgb,currentColor 12%,transparent);background:color-mix(in srgb,currentColor 5%,transparent);border-radius:14px;text-align:start}
 #zen-shared-home .zh-search:hover{background:color-mix(in srgb,currentColor 9%,transparent)}
@@ -3511,6 +3513,11 @@ function installTabStrip() {
   let geometryFrame = 0;
   let geometryObserver = null;
   let centering=false;
+  // The plus follows the occupied right lane, not the symmetric row's
+  // far edge. Keep the existing expansion reserve in Expand mode.
+  function rightPlusOffset(widths, expansion=0){
+    return 3+widths.reduce((sum,w)=>sum+Math.max(0,w)+3,0)+Math.max(0,expansion);
+  }
   function centerToolbar(){
     if(centering||!hoverSupported()||!toolbarWrapper)return;
     centering=true;
@@ -3545,7 +3552,8 @@ function installTabStrip() {
       // In Island Mode the row has symmetric halves around the fixed
       // center. Neither the hovered title nor the scroll positions affect it.
       const wantsIsland = row.hasAttribute("data-op-show-island");
-      const available = Math.max(0,2*Math.min(window.innerWidth/2-left,window.innerWidth/2-right)-8);
+      const dragRoom=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-window-drag-room"))||16;
+      const available = Math.max(0,2*Math.min(window.innerWidth/2-left,window.innerWidth/2-right)-8-2*dragRoom);
       const iconHome=row.hasAttribute("data-op-home-icon");
       const minIslandRoom = 32+2*(tabWidth+9);
       const compactTitle=wantsIsland&&!iconHome&&available<100+2*(tabWidth+9);
@@ -3558,9 +3566,10 @@ function installTabStrip() {
         const laneWidth=lane=>Array.from(lane.children).reduce((sum,n)=>sum+compactSlotWidth(n,tabWidth)+3,6);
         const expandReserve=iconHome&&row.getAttribute("data-op-hover-mode")==="expand"?Math.max(0,(parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab-open"))||180)-tabWidth):0;
         const half=Math.max(laneWidth(leftLane),laneWidth(rightLane)+tabWidth+3,tabWidth+9)+expandReserve;
+        setLength(row,"--op-right-plus-offset",rightPlusOffset(Array.from(rightLane.children,n=>compactSlotWidth(n,tabWidth)),expandReserve));
         setLength(row,"--op-island-width",titleWidth);
         setLength(row,"--op-island-row-width",Math.min(available,titleWidth+6+2*half));
-      }
+      }else row.style.removeProperty("--op-right-plus-offset");
       const bias=toolbarCenterBias(left,right,trailingReserve,centered);
       setLength(leftSpacer,"--op-center-bias",bias.left);
       setLength(rightSpacer,"--op-center-bias",bias.right);
@@ -3738,6 +3747,16 @@ function installTabStrip() {
   }
   function leaveWindow(event) {
     if (event.relatedTarget === null) {panelLastPointer=null;clearHover();}
+  }
+  // Native maximize/restore and monitor DPI changes can resize the
+  // toolbar without a new pointer movement. Reconcile the current layout
+  // and stale visual state, never synthesize a window move.
+  function onWindowGeometryChanged(){
+    if(dead)return;
+    if(!row.hasAttribute("data-op-dragging")&&hoverTab)clearTabHover();
+    if(!nativeInlineOpen(addressBar())&&!addressTransition&&!addressSettling&&cascadeState!=="idle")resetTabCascade();
+    onCompactChanged();
+    schedule();
   }
   function onCompactChanged() {
     hub.onMode();
@@ -5465,7 +5484,8 @@ function installTabStrip() {
     window.removeEventListener("deactivate", onWindowDeactivate);
     window.removeEventListener("ZenCompactMode:Toggled", onCompactChanged);
     window.removeEventListener("ZenCompactMode:LayoutUpdate", onCompactChanged);
-    window.removeEventListener("resize", onCompactChanged);
+    window.removeEventListener("resize", onWindowGeometryChanged);
+    window.removeEventListener("sizemodechange", onWindowGeometryChanged);
     addressObserver?.disconnect();
     clearAddressAnimation();
     addressBar()?.removeEventListener("pointerdown", onAddressInput, true);
@@ -5601,7 +5621,8 @@ function installTabStrip() {
     window.addEventListener("deactivate", onWindowDeactivate);
     window.addEventListener("ZenCompactMode:Toggled", onCompactChanged);
     window.addEventListener("ZenCompactMode:LayoutUpdate", onCompactChanged);
-    window.addEventListener("resize", onCompactChanged);
+    window.addEventListener("resize", onWindowGeometryChanged);
+    window.addEventListener("sizemodechange", onWindowGeometryChanged);
     row.setAttribute("data-ready", "true");
   } catch (error) {
     destroy();

@@ -45,3 +45,7 @@ Home trigger calls show(); legacy toggle is also idempotent. Plain Escape return
 ## 0.2.0-preview.44 — Scrollable Add Pin
 
 The compact picker now mounts the bounded recommendation list (up to 16), uses native vertical overflow with a fixed two-row viewport, and removes pagination controls. Three columns on wide windows, two on narrow windows and one at very narrow widths. Row height reduces on short windows. Only the recommendation grid scrolls; the picker controls, Workspaces and Done remain outside it. Store scroll offset before preference-driven rendering, clamp/restore after attaching the new grid, and reset when exiting the picker. Motion runs on mode transitions, not on every pin update; card hover/press transitions honor reduced motion. Test actual scrolling, focus, and compact geometry in Zen.
+
+## 0.2.0-preview.45 — native window dragging
+
+Blank Home background is a native Gecko window-drag region. Home content and controls retain no-drag semantics. Toolbar gaps are actual draggable areas, not 1px pointer-transparent spacers. No JavaScript window dragging or changes to the Home state machine.

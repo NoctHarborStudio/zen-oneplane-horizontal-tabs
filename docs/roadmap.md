@@ -170,3 +170,7 @@ First stage: native independent horizontal lane scrolling and center-facing init
 ## 0.2.0-preview.43 — primary Home surface
 
 User accepted Home, startup and workspace transitions. Fix repeat Home click exposing empty native background; Home is now an idempotent destination and replaces ordinary empty native tab surfaces. Preserve latest Add Pin UI and native special-window paths. Validate repeated clicks, Escape, background tabs, closing last real tab, pending tab selection, search cancellation and projection in Zen.
+
+## 0.2.0-preview.45 — window drag and New Tab alignment
+
+User reports Home is now primary, but window cannot be dragged from Home and the plus can separate from tabs after moving the window. Use native non-client CSS drag regions on blank Home and toolbar spacers (16px minimum); exclude interactive content, preserve native Snap and tab drag. Clamp plus to occupied right lane and available width; reconcile after native size-mode and resize changes. User console confirms successful startup, 6+6 Smart Search and Center Assembly; generic Object { message } exceptions have no trace and remain unattributed. Validate physical Windows monitor drag, restore/maximize, Snap, mixed DPI, crowded lanes and both hover modes. No speculative global exception interception.

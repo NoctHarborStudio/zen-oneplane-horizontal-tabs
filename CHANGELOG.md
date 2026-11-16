@@ -54,6 +54,12 @@
 
 # Changelog
 
+## 0.2.0-preview.45
+
+- Enable native window dragging on the empty Home background and real toolbar drag gaps, excluding interactive controls. Preserve Windows maximize/restore/Snap and native tab drag ownership.
+- Anchor the New Tab plus to the occupied right tab lane, capped by the available row width; retain expansion room in Expand mode. Reconcile geometry on resize and native size-mode changes.
+- Live Windows drag and mixed-DPI verification pending; generic console exceptions lack a stack and are not attributed to these fixes.
+
 ## 0.2.0-preview.43
 
 - Make Home an idempotent primary destination instead of a toggle. Repeated Home clicks and plain Escape no longer uncover empty transparent background. Empty ordinary native tabs return to Home; real page navigation exits. Background TabOpen does not dismiss Home. Preserve projection startup, private and fullscreen/customization paths, native search cancellation, current Add Pin and workspace transition.

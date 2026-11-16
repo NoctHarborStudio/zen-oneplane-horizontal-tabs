@@ -95,7 +95,10 @@
       margin-inline-end:calc(var(--op-tab) + 3px);
     }
     #oneplane-tabs[data-op-show-island]:not([data-op-island-tight]) .oneplane-new-tab {
-      position:absolute;right:0;top:calc(50% - var(--op-hover-bottom-pad)/2);translate:0 -50%;
+      position:absolute;right:auto;
+      left:min(calc(100% - var(--op-tab)),calc(50% + var(--op-island-width,180px) / 2 + 3px + var(--op-right-plus-offset,100%)));
+      top:calc(50% - var(--op-hover-bottom-pad)/2);translate:0 -50%;
+      z-index:3;
     }
     #oneplane-tabs[data-op-show-island]:not([data-op-island-tight]) .oneplane-title-island {
       position:absolute;display:flex;align-items:center;justify-content:center;
