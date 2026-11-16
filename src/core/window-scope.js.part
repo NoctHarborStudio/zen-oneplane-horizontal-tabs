@@ -43,6 +43,10 @@ function installTabStrip() {
   const bottomLane = html("div","oneplane-island-lane oneplane-overflow-lane");
   bottomLane.hidden=true;
   bottomLane.setAttribute("role","group");bottomLane.setAttribute("aria-label","Overflow tabs");
+  bottomLane.id="oneplane-overflow-tabs";
+  const overflowSlider=html("input","oneplane-overflow-slider");
+  overflowSlider.type="range";overflowSlider.min="0";overflowSlider.max="1000";overflowSlider.step="1";overflowSlider.value="0";overflowSlider.hidden=true;
+  overflowSlider.setAttribute("aria-label","Scroll overflow tabs");overflowSlider.setAttribute("aria-controls",bottomLane.id);
   const island = html("button","oneplane-title-island");
   island.type="button";island.disabled=true;island.setAttribute("aria-label","Toggle Home");island.setAttribute("aria-expanded","false");
   const homeGlyph=document.createElementNS("http://www.w3.org/2000/svg","svg");
@@ -50,4 +54,4 @@ function installTabStrip() {
   const homePath=document.createElementNS("http://www.w3.org/2000/svg","path");homePath.setAttribute("d","m3 10 9-7 9 7v10h-6v-7H9v7H3z");homeGlyph.append(homePath);island.append(homeGlyph);
   const islandTitle = html("span","oneplane-island-title");
   island.append(islandTitle);
-  row.append(list, plus, indicator, island);
+  row.append(list, plus, indicator, island, overflowSlider);

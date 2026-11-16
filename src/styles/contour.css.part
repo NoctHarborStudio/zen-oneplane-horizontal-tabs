@@ -64,6 +64,13 @@
       box-shadow: none !important;
       border-block-end-color: transparent !important;
     }
+    /* The compact backing must be inside the active root scope to
+       override the important transparent default. The contour still
+       owns the fade below the shelf and bookmarks. */
+    #zen-appcontent-navbar-wrapper #nav-bar:has(#oneplane-tabs[data-op-overflow-row]) {
+      background:var(--op-surface-tint)!important;
+      background-image:none!important;
+    }
     /* Persistent mode: normal flow, same UI, no fade over the page. */
     &:not([zen-compact-mode="true"]) {
       #zen-appcontent-navbar-wrapper {
@@ -115,10 +122,3 @@
     }
   }
 }
-
-
-    /* The web page must not paint apparent native controls through the
-       compact tab shelf. Keep the existing Unified Contour below it. */
-    #zen-appcontent-navbar-wrapper #nav-bar:has(#oneplane-tabs[data-op-overflow-row]) {
-      background:linear-gradient(to bottom,var(--op-surface-tint) 0,var(--op-surface-tint) calc(100% - 7px),transparent 100%)!important;
-    }

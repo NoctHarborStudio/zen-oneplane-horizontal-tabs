@@ -391,3 +391,28 @@
       #oneplane-tabs .oneplane-title-island[data-op-home-enabled] > svg {scale:1!important;transition:none!important;}
     }
     #oneplane-tabs[data-op-show-island] {left:var(--op-center-correction,0px);}
+
+    /* Real range control in the existing bottom hover reserve. */
+    #oneplane-tabs .oneplane-overflow-slider {display:none;}
+    #oneplane-tabs[data-op-overflow-row] .oneplane-overflow-slider:not([hidden]) {
+      display:block;position:absolute;left:50%;bottom:0;translate:-50% 0;
+      width:max(0px,calc(var(--op-overflow-width,100%) - 2 * (var(--op-tab) + 3px)));
+      height:10px;min-width:0;box-sizing:border-box;margin:0;padding:0;
+      appearance:none;background:transparent;border:0;outline:0;
+      color:inherit;cursor:ew-resize;z-index:16;direction:ltr;
+      -moz-window-dragging:no-drag!important;
+    }
+    #oneplane-tabs .oneplane-overflow-slider::-moz-range-track {
+      height:3px;border:0;border-radius:999px;
+      background:color-mix(in srgb,currentColor 18%,transparent);
+    }
+    #oneplane-tabs .oneplane-overflow-slider::-moz-range-progress {background:transparent;}
+    #oneplane-tabs .oneplane-overflow-slider::-moz-range-thumb {
+      width:var(--op-scroll-thumb,30px);height:5px;box-sizing:border-box;
+      border:0;border-radius:999px;background:color-mix(in srgb,currentColor 60%,transparent);
+    }
+    #oneplane-tabs .oneplane-overflow-slider:is(:hover,:focus-visible,:active)::-moz-range-thumb {
+      height:7px;background:color-mix(in srgb,currentColor 88%,transparent);
+    }
+    #oneplane-tabs .oneplane-overflow-slider:focus-visible {outline:1px solid AccentColor;outline-offset:1px;border-radius:5px;}
+    #oneplane-tabs:is([data-op-cascade],[data-op-dragging],[data-op-island-incoming]) .oneplane-overflow-slider {visibility:hidden;pointer-events:none!important;}

@@ -168,3 +168,64 @@
   }
   function onNewTabClick() { clearTabHover(); }
 
+
+  let overflowSliderFrame=0,overflowSliderUntil=0;
+  function refreshOverflowSlider(){
+    if(dead)return;
+    const m=overflowScrollMetrics(bottomLane.clientWidth,bottomLane.scrollWidth,bottomLane.scrollLeft);
+    overflowSlider.hidden=bottomLane.hidden||!row.hasAttribute("data-op-overflow-row")||!m.visible;
+    if(overflowSlider.hidden)return;
+    const width=m.thumb.toFixed(2)+"px";
+    if(overflowSlider.style.getPropertyValue("--op-scroll-thumb")!==width)overflowSlider.style.setProperty("--op-scroll-thumb",width);
+    if(Number(overflowSlider.value)!==m.value)overflowSlider.value=String(m.value);
+    const label=Math.round(m.position*100)+"% scrolled";
+    if(overflowSlider.getAttribute("aria-valuetext")!==label)overflowSlider.setAttribute("aria-valuetext",label);
+  }
+  function onOverflowSliderInput(){
+    if(dead||bottomLane.hidden||cascadeState!=="idle"||row.hasAttribute("data-op-dragging"))return;
+    const m=overflowScrollMetrics(bottomLane.clientWidth,bottomLane.scrollWidth,bottomLane.scrollLeft);
+    bottomLane.scrollLeft=m.max*Number(overflowSlider.value)/1000;
+    refreshOverflowSlider();
+  }
+  function onOverflowSliderWheel(event){
+    if(event.ctrlKey||event.metaKey||cascadeState!=="idle"||row.hasAttribute("data-op-dragging"))return;
+    const m=overflowScrollMetrics(bottomLane.clientWidth,bottomLane.scrollWidth,bottomLane.scrollLeft);
+    if(!m.visible)return;
+    const raw=Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.deltaY;
+    if(!raw)return;
+    event.preventDefault();event.stopPropagation();
+    bottomLane.scrollLeft+=raw*(event.deltaMode===1?32:event.deltaMode===2?bottomLane.clientWidth:1);
+    refreshOverflowSlider();
+  }
+  function onOverflowSliderEnter(){if(hoverTab||indicatorHover)clearTabHover();}
+  function onOverflowSliderDragStart(event){event.preventDefault();event.stopPropagation();}
+  function tickOverflowSlider(now){
+    overflowSliderFrame=0;if(dead)return;
+    refreshOverflowSlider();
+    if(!bottomLane.hidden&&now<overflowSliderUntil)overflowSliderFrame=window.requestAnimationFrame(tickOverflowSlider);
+  }
+  function onOverflowWidthTransition(event){
+    if(bottomLane.hidden||!["width","flex-basis","max-width"].includes(event.propertyName))return;
+    if(event.type==="transitionrun"){
+      overflowSliderUntil=window.performance.now()+500;
+      if(!overflowSliderFrame)overflowSliderFrame=window.requestAnimationFrame(tickOverflowSlider);
+    }else refreshOverflowSlider();
+  }
+  function mountOverflowSlider(){
+    overflowSlider.addEventListener("input",onOverflowSliderInput);
+    overflowSlider.addEventListener("wheel",onOverflowSliderWheel,{passive:false});
+    overflowSlider.addEventListener("pointerenter",onOverflowSliderEnter);
+    overflowSlider.addEventListener("dragstart",onOverflowSliderDragStart);
+    bottomLane.addEventListener("scroll",refreshOverflowSlider,{passive:true});
+    for(const type of ["transitionrun","transitionend","transitioncancel"])bottomLane.addEventListener(type,onOverflowWidthTransition);
+  }
+  function destroyOverflowSlider(){
+    if(overflowSliderFrame)window.cancelAnimationFrame(overflowSliderFrame);
+    overflowSliderFrame=0;
+    overflowSlider.removeEventListener("input",onOverflowSliderInput);
+    overflowSlider.removeEventListener("wheel",onOverflowSliderWheel);
+    overflowSlider.removeEventListener("pointerenter",onOverflowSliderEnter);
+    overflowSlider.removeEventListener("dragstart",onOverflowSliderDragStart);
+    bottomLane.removeEventListener("scroll",refreshOverflowSlider);
+    for(const type of ["transitionrun","transitionend","transitioncancel"])bottomLane.removeEventListener(type,onOverflowWidthTransition);
+  }

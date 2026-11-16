@@ -80,3 +80,10 @@
     const target=min<=max?Math.max(min,Math.min(max,windowWidth/2)):(min+max)/2;
     return Math.round(target-rowCenter);
   }
+
+  export function overflowScrollMetrics(viewport,content,offset){
+    const max=Math.max(0,content-viewport),visible=viewport>0&&max>1;
+    const position=visible?Math.max(0,Math.min(1,offset/max)):0;
+    return {visible,max,position,value:Math.round(position*1000),
+      thumb:visible?Math.min(viewport,Math.max(20,viewport*viewport/content)):0};
+  }

@@ -1,3 +1,9 @@
+## 0.2.0-preview.55 — Visible overflow scrubber and opaque shelf
+
+- Separate native range for the lower lane; proportional thumb and position, pointer, keyboard and wheel, hidden when all tabs fit. Keep existing row height and plus placement.
+- Correct the compact backing selector inside the active root, retaining the rear contour fade. Preserve preview.54 Home toolbar window dragging.
+- Update real scroll geometry during bounded width transitions and clean up on unload. Native visual verification pending.
+
 ## 0.2.0-preview.54 — Native drag on Home toolbar Fade
 
 - Fix preview.49's full-window no-drag subtraction: Home background and noninteractive descendants are neutral in Gecko; real Home controls alone exclude drag.

@@ -98,6 +98,7 @@
       // Cap leftward expansion at actual free space next to navigation.
       setLength(row, "--op-left-room", leftSpacer.getBoundingClientRect().width - 4);
       syncLaneScroll();
+      refreshOverflowSlider();
     } finally {centering=false;}
   }
   function scheduleGeometry(){

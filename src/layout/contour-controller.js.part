@@ -38,7 +38,8 @@
     const settings=contourSettings();
     // Keep the top short. Include the bottom of the actual tab row
     // (including its reserved hover room), not the bookmarks row.
-    const base=Math.max(1,Math.round(Math.max(nav.bottom,row.getBoundingClientRect().bottom)-wrapper.top-shiftY-5));
+    const compactRows=row.hasAttribute("data-op-overflow-row");
+    const base=Math.max(1,Math.round(Math.max(nav.bottom,row.getBoundingClientRect().bottom)-wrapper.top-shiftY-(compactRows?0:5)));
     let left=null,right=null,deep=base;
     if(bookmarks && !bookmarks.hidden && !bookmarks.collapsed){
       const style=window.getComputedStyle(bookmarks);

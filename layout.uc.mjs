@@ -934,6 +934,10 @@ function installTabStrip() {
   const bottomLane = html("div","oneplane-island-lane oneplane-overflow-lane");
   bottomLane.hidden=true;
   bottomLane.setAttribute("role","group");bottomLane.setAttribute("aria-label","Overflow tabs");
+  bottomLane.id="oneplane-overflow-tabs";
+  const overflowSlider=html("input","oneplane-overflow-slider");
+  overflowSlider.type="range";overflowSlider.min="0";overflowSlider.max="1000";overflowSlider.step="1";overflowSlider.value="0";overflowSlider.hidden=true;
+  overflowSlider.setAttribute("aria-label","Scroll overflow tabs");overflowSlider.setAttribute("aria-controls",bottomLane.id);
   const island = html("button","oneplane-title-island");
   island.type="button";island.disabled=true;island.setAttribute("aria-label","Toggle Home");island.setAttribute("aria-expanded","false");
   const homeGlyph=document.createElementNS("http://www.w3.org/2000/svg","svg");
@@ -941,7 +945,7 @@ function installTabStrip() {
   const homePath=document.createElementNS("http://www.w3.org/2000/svg","path");homePath.setAttribute("d","m3 10 9-7 9 7v10h-6v-7H9v7H3z");homeGlyph.append(homePath);island.append(homeGlyph);
   const islandTitle = html("span","oneplane-island-title");
   island.append(islandTitle);
-  row.append(list, plus, indicator, island);
+  row.append(list, plus, indicator, island, overflowSlider);
   let stripOrderSnapshot=[];
   function stripNodes() {
     // The painted row order is not the native order once overflow is active.
@@ -1050,6 +1054,13 @@ function installTabStrip() {
     // as possible to the real available center rather than crossing controls.
     const target=min<=max?Math.max(min,Math.min(max,windowWidth/2)):(min+max)/2;
     return Math.round(target-rowCenter);
+  }
+
+  function overflowScrollMetrics(viewport,content,offset){
+    const max=Math.max(0,content-viewport),visible=viewport>0&&max>1;
+    const position=visible?Math.max(0,Math.min(1,offset/max)):0;
+    return {visible,max,position,value:Math.round(position*1000),
+      thumb:visible?Math.min(viewport,Math.max(20,viewport*viewport/content)):0};
   }
   let adaptiveHeightDirty=false,overflowRevealAnimation=null;
   function mountLaneNodes(lane,nodes){
@@ -3879,7 +3890,8 @@ function installTabStrip() {
     const settings=contourSettings();
     // Keep the top short. Include the bottom of the actual tab row
     // (including its reserved hover room), not the bookmarks row.
-    const base=Math.max(1,Math.round(Math.max(nav.bottom,row.getBoundingClientRect().bottom)-wrapper.top-shiftY-5));
+    const compactRows=row.hasAttribute("data-op-overflow-row");
+    const base=Math.max(1,Math.round(Math.max(nav.bottom,row.getBoundingClientRect().bottom)-wrapper.top-shiftY-(compactRows?0:5)));
     let left=null,right=null,deep=base;
     if(bookmarks && !bookmarks.hidden && !bookmarks.collapsed){
       const style=window.getComputedStyle(bookmarks);
@@ -4041,6 +4053,7 @@ function installTabStrip() {
       // Cap leftward expansion at actual free space next to navigation.
       setLength(row, "--op-left-room", leftSpacer.getBoundingClientRect().width - 4);
       syncLaneScroll();
+      refreshOverflowSlider();
     } finally {centering=false;}
   }
   function scheduleGeometry(){
@@ -5719,6 +5732,67 @@ function installTabStrip() {
   }
   function onNewTabClick() { clearTabHover(); }
 
+
+  let overflowSliderFrame=0,overflowSliderUntil=0;
+  function refreshOverflowSlider(){
+    if(dead)return;
+    const m=overflowScrollMetrics(bottomLane.clientWidth,bottomLane.scrollWidth,bottomLane.scrollLeft);
+    overflowSlider.hidden=bottomLane.hidden||!row.hasAttribute("data-op-overflow-row")||!m.visible;
+    if(overflowSlider.hidden)return;
+    const width=m.thumb.toFixed(2)+"px";
+    if(overflowSlider.style.getPropertyValue("--op-scroll-thumb")!==width)overflowSlider.style.setProperty("--op-scroll-thumb",width);
+    if(Number(overflowSlider.value)!==m.value)overflowSlider.value=String(m.value);
+    const label=Math.round(m.position*100)+"% scrolled";
+    if(overflowSlider.getAttribute("aria-valuetext")!==label)overflowSlider.setAttribute("aria-valuetext",label);
+  }
+  function onOverflowSliderInput(){
+    if(dead||bottomLane.hidden||cascadeState!=="idle"||row.hasAttribute("data-op-dragging"))return;
+    const m=overflowScrollMetrics(bottomLane.clientWidth,bottomLane.scrollWidth,bottomLane.scrollLeft);
+    bottomLane.scrollLeft=m.max*Number(overflowSlider.value)/1000;
+    refreshOverflowSlider();
+  }
+  function onOverflowSliderWheel(event){
+    if(event.ctrlKey||event.metaKey||cascadeState!=="idle"||row.hasAttribute("data-op-dragging"))return;
+    const m=overflowScrollMetrics(bottomLane.clientWidth,bottomLane.scrollWidth,bottomLane.scrollLeft);
+    if(!m.visible)return;
+    const raw=Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.deltaY;
+    if(!raw)return;
+    event.preventDefault();event.stopPropagation();
+    bottomLane.scrollLeft+=raw*(event.deltaMode===1?32:event.deltaMode===2?bottomLane.clientWidth:1);
+    refreshOverflowSlider();
+  }
+  function onOverflowSliderEnter(){if(hoverTab||indicatorHover)clearTabHover();}
+  function onOverflowSliderDragStart(event){event.preventDefault();event.stopPropagation();}
+  function tickOverflowSlider(now){
+    overflowSliderFrame=0;if(dead)return;
+    refreshOverflowSlider();
+    if(!bottomLane.hidden&&now<overflowSliderUntil)overflowSliderFrame=window.requestAnimationFrame(tickOverflowSlider);
+  }
+  function onOverflowWidthTransition(event){
+    if(bottomLane.hidden||!["width","flex-basis","max-width"].includes(event.propertyName))return;
+    if(event.type==="transitionrun"){
+      overflowSliderUntil=window.performance.now()+500;
+      if(!overflowSliderFrame)overflowSliderFrame=window.requestAnimationFrame(tickOverflowSlider);
+    }else refreshOverflowSlider();
+  }
+  function mountOverflowSlider(){
+    overflowSlider.addEventListener("input",onOverflowSliderInput);
+    overflowSlider.addEventListener("wheel",onOverflowSliderWheel,{passive:false});
+    overflowSlider.addEventListener("pointerenter",onOverflowSliderEnter);
+    overflowSlider.addEventListener("dragstart",onOverflowSliderDragStart);
+    bottomLane.addEventListener("scroll",refreshOverflowSlider,{passive:true});
+    for(const type of ["transitionrun","transitionend","transitioncancel"])bottomLane.addEventListener(type,onOverflowWidthTransition);
+  }
+  function destroyOverflowSlider(){
+    if(overflowSliderFrame)window.cancelAnimationFrame(overflowSliderFrame);
+    overflowSliderFrame=0;
+    overflowSlider.removeEventListener("input",onOverflowSliderInput);
+    overflowSlider.removeEventListener("wheel",onOverflowSliderWheel);
+    overflowSlider.removeEventListener("pointerenter",onOverflowSliderEnter);
+    overflowSlider.removeEventListener("dragstart",onOverflowSliderDragStart);
+    bottomLane.removeEventListener("scroll",refreshOverflowSlider);
+    for(const type of ["transitionrun","transitionend","transitioncancel"])bottomLane.removeEventListener(type,onOverflowWidthTransition);
+  }
   function favicon(tab) {
     const local=t=>{
       const sources=[t.getAttribute("image"),t.querySelector(".tab-icon-image")?.getAttribute("src")];
@@ -5994,6 +6068,7 @@ function installTabStrip() {
     if (dead) return;
     dead = true;
     destroyHome();
+    destroyOverflowSlider();
     overflowRevealAnimation?.cancel();overflowRevealAnimation=null;
     resetTabCascade();
     if (frame) window.cancelAnimationFrame(frame);
@@ -6160,6 +6235,7 @@ function installTabStrip() {
     row.addEventListener("focusout", blurTab);
     plus.addEventListener("pointerleave", leaveTabPointer);
     plus.addEventListener("click", onNewTabClick);
+    mountOverflowSlider();
     for (const event of events) browser.tabContainer.addEventListener(event, schedule);
     browser.tabContainer.addEventListener("TabSelect", onSelect);
     for(const event of ["TabOpen","TabClose"])browser.tabContainer.addEventListener(event,onTabOpenOrClose,true);

@@ -2,6 +2,7 @@
     if (dead) return;
     dead = true;
     destroyHome();
+    destroyOverflowSlider();
     overflowRevealAnimation?.cancel();overflowRevealAnimation=null;
     resetTabCascade();
     if (frame) window.cancelAnimationFrame(frame);
@@ -168,6 +169,7 @@
     row.addEventListener("focusout", blurTab);
     plus.addEventListener("pointerleave", leaveTabPointer);
     plus.addEventListener("click", onNewTabClick);
+    mountOverflowSlider();
     for (const event of events) browser.tabContainer.addEventListener(event, schedule);
     browser.tabContainer.addEventListener("TabSelect", onSelect);
     for(const event of ["TabOpen","TabClose"])browser.tabContainer.addEventListener(event,onTabOpenOrClose,true);
