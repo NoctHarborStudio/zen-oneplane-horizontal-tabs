@@ -317,8 +317,8 @@ test("Home cards reveal continuously as the search edge clears each row",()=>{
 });
 test("Home closes with a frozen native results layer and no early full Home opacity",()=>{
  assert.ok(core.includes("function freezeSearchResults(view,barRect)"));
- assert.ok(core.includes('const target=html(src?"img":"div")'));
- assert.ok(core.includes('if(frozen)shell.append(frozen.node)'));
+ assert.ok(core.includes('const target=html(tag);styleCopy(target,style)'));
+ assert.ok(core.includes('shell.append(frozen.node)'));
  assert.ok(core.includes('captureSearchSnapshot();\n    animateSearchReturn(reason,true);'));
  assert.ok(core.includes('opacity:calc(var(--zh-return-alpha,0) * var(--zh-return-base,1))'));
  assert.ok(core.includes('paintReturnParts(parts,top+h,p,finalBottom)'));
@@ -331,7 +331,7 @@ test("Home close reuses an unchanged snapshot and avoids unnecessary geometry wr
  assert.ok(core.includes("if(searchSnapshot&&!searchSnapshotDirty)return;"));
  assert.ok(core.includes('searchSnapshotDirty=true;'));
  assert.ok(core.includes('searchSnapshotView?.removeEventListener("scroll",scheduleSearchSnapshot,true)'));
- assert.ok(core.includes("const measured=live?bar?.getBoundingClientRect():searchLastRect;"));
+ assert.ok(core.includes("const measured=live?bar?.getBoundingClientRect():(searchLastRect||searchSnapshot?.rect);"));
  assert.ok(core.includes('if(moveTop)shell.style.top=top+"px";'));
  assert.ok(core.includes("maxFrameGap:Math.round(maxFrameGap)"));
  assert.ok(core.includes('if(part.last===key)continue'));
@@ -339,4 +339,29 @@ test("Home close reuses an unchanged snapshot and avoids unnecessary geometry wr
 
 test("Home footer return uses resting opacity rather than search-hidden opacity",()=>{
  assert.ok(core.includes('node.classList.contains("zh-footer")?1:'));
+});
+
+test("Home snapshot keeps both timeline rails stable and copies resolved borders and context paint",()=>{
+ assert.ok(core.includes('#urlbar[data-zr-home-search][zen-floating-urlbar="true"] #urlbar-results[data-zr-smart-grid][data-zr-timeline] > .urlbarView-row[data-zr-rail]::after'));
+ assert.ok(core.includes("animation:none!important;background-position:center bottom,center!important;opacity:.43!important"));
+ const props=new Function(extract("  const snapshotProperties=","  function snapshotNow(")+"return snapshotProperties")();
+ for(const key of ["border-top-width","border-top-style","border-top-color","border-bottom-color","background-position-x","background-position-y","-moz-context-properties","fill","stroke","grid-row-start"])assert.ok(props.includes(key),key);
+ const text=new Function(extract("  function snapshotPseudoText(","  function searchLog(")+"return snapshotPseudoText")();
+ const node={getAttribute:()=> "Recent tabs"};
+ assert.equal(text("none",node),null);
+ assert.equal(text('""',node),"");
+ assert.equal(text("attr(data-zr-first)",node),"Recent tabs");
+});
+test("Home snapshot excludes native teardown and logs pre-animation delay",()=>{
+ const ready=new Function(extract("  function snapshotReady(","  function snapshotPseudoText(")+"return snapshotReady")();
+ const attrs=new Map([["zen-newtab",""],["zen-floating-urlbar","true"]]);
+ const bar={view:{isOpen:true},hasAttribute:k=>attrs.has(k),getAttribute:k=>attrs.get(k)};
+ assert.equal(ready(bar),true);
+ attrs.delete("zen-newtab");assert.equal(ready(bar),false);
+ attrs.set("zen-newtab","");bar.view.isOpen=false;assert.equal(ready(bar),false);
+ assert.ok(core.includes("attributeOldValue:true"));
+ assert.ok(core.includes('listen(win,"focusout"'));
+ assert.ok(core.includes("snapshotAge:frozen?"));
+ assert.ok(core.includes("handoffMs:Math.round(snapshotNow()-handoffStarted)"));
+ assert.ok(core.includes("firstFrameDelay:Math.round(firstFrameDelay)"));
 });

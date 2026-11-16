@@ -1,3 +1,10 @@
+## 0.2.0-preview.61 — Stable Smart Search collapse handoff
+
+- Stabilize chronological rails inside Home; avoid independent delayed dot animations during the shared reveal. Ordinary Smart Search retains its timeline animation.
+- Freeze resolved border sides, background layers, grid tracks and context SVG paint, keeping result border-box geometry and pseudo-elements in the closing copy.
+- Ignore native teardown and identical attribute writes when invalidating the snapshot. Capture before blur and preserve last live geometry.
+- Add rail/pseudo counts, snapshot age, capture time, handoff time and first-frame delay diagnostics. Preserve preview.60 tab-bar improvements.
+
 ## 0.2.0-preview.60 — Subtle overflow slider and adaptive address slack
 
 - Reduce the visible overflow track to 1px and thumb to 2px (3px on hover), with lower contrast. Keep the 6px input hit area and existing smooth scroll behavior.

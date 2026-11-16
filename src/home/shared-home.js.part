@@ -224,6 +224,11 @@ function acquireZenHome(win, services) {
 #urlbar[data-zr-home-search][zen-floating-urlbar="true"] #urlbar-results .urlbarView-row{
   --urlbarview-row-min-height:40px;
 }
+/* Home already animates the whole result view. Keep both chronological
+   rails stable; ordinary non-Home search retains its own timeline motion. */
+#urlbar[data-zr-home-search][zen-floating-urlbar="true"] #urlbar-results[data-zr-smart-grid][data-zr-timeline] > .urlbarView-row[data-zr-rail]::after{
+  animation:none!important;background-position:center bottom,center!important;opacity:.43!important;
+}
 #urlbar[data-zr-home-search-motion="prepare"][zen-floating-urlbar="true"],
 #urlbar[data-zr-home-search-motion="run"][zen-floating-urlbar="true"]{
   height:var(--zh-reveal-height,var(--zh-search-header,56px))!important;
@@ -464,7 +469,21 @@ function acquireZenHome(win, services) {
   }
   // Freeze the visual result tree only: no native custom elements,
   // event handlers, selectable IDs or interactive links.
-  const snapshotProperties=("display position box-sizing width height min-width min-height max-width max-height inset top right bottom left margin padding border border-radius outline background background-color background-image background-size background-position background-repeat color opacity font font-family font-size font-weight font-style font-variant-numeric line-height letter-spacing text-align text-overflow white-space overflow overflow-x overflow-y overflow-wrap direction align-items align-self align-content justify-items justify-self justify-content flex flex-direction flex-wrap flex-grow flex-shrink flex-basis order gap row-gap column-gap grid grid-template-columns grid-template-rows grid-auto-rows grid-auto-columns grid-auto-flow grid-row grid-column vertical-align object-fit list-style-image fill stroke mask-image mask-size mask-position mask-repeat transform transform-origin scale translate visibility z-index").split(" ");
+  // Resolved longhands preserve one-sided separators and multi-layer
+  // pseudo-elements. Mixed border shorthands were empty in the old copy.
+  const snapshotProperties=("display position box-sizing width height min-width min-height max-width max-height top right bottom left margin-top margin-right margin-bottom margin-left padding-top padding-right padding-bottom padding-left border-top-width border-right-width border-bottom-width border-left-width border-top-style border-right-style border-bottom-style border-left-style border-top-color border-right-color border-bottom-color border-left-color border-top-left-radius border-top-right-radius border-bottom-right-radius border-bottom-left-radius outline-width outline-style outline-color outline-offset box-shadow background-color background-image background-size background-position background-position-x background-position-y background-repeat background-origin background-clip color opacity font-family font-size font-weight font-style font-stretch font-variant-numeric font-feature-settings line-height letter-spacing text-align text-overflow white-space overflow-x overflow-y overflow-wrap direction writing-mode align-items align-self align-content justify-items justify-self justify-content flex-direction flex-wrap flex-grow flex-shrink flex-basis order row-gap column-gap grid-template-columns grid-template-rows grid-auto-rows grid-auto-columns grid-auto-flow grid-row-start grid-row-end grid-column-start grid-column-end vertical-align object-fit object-position list-style-image fill stroke -moz-context-properties mask-image mask-size mask-position mask-repeat transform transform-origin scale translate visibility z-index scrollbar-width scrollbar-color").split(" ");
+  function snapshotNow(){return win.performance?.now?.()??Date.now();}
+  function snapshotReady(bar){
+    // Zen removes zen-newtab before notifying Home of cancellation.
+    // Preserve the last live grid instead of copying its teardown state.
+    return Boolean(bar?.hasAttribute("zen-newtab")&&bar.view?.isOpen&&bar.getAttribute("zen-floating-urlbar")==="true");
+  }
+  function snapshotPseudoText(value,source){
+    if(!value||value==="none"||value==="normal")return null;
+    const attr=value.match(/^attr\(([^)]+)\)$/);
+    return attr?source.getAttribute(attr[1])||"":value.replace(/^["']|["']$/g,"");
+  }
+
   function searchLog(event,fields={}){
     win.console.info?.("[Zen Home] search "+event,fields);
   }
@@ -506,7 +525,7 @@ function acquireZenHome(win, services) {
   function freezeSearchResults(view,barRect){
     const rect=view.getBoundingClientRect();
     if(!(rect.width>0&&rect.height>0))return null;
-    const scroll=[];let budget=900;
+    const scroll=[];let budget=900,pseudos=0,rails=0;
     function styleCopy(target,style){
       for(const key of snapshotProperties){
         const value=style.getPropertyValue(key);
@@ -515,11 +534,10 @@ function acquireZenHome(win, services) {
       for(const key of ["animation","transition","pointer-events"])target.style.setProperty(key,"none","important");
     }
     function pseudo(source,target,which){
-      const style=win.getComputedStyle(source,which),value=style.content;
-      if(!value||value==="none"||value==="normal")return;
-      const n=html("span");styleCopy(n,style);
-      const attr=value.match(/^attr\(([^)]+)\)$/);
-      n.textContent=attr?source.getAttribute(attr[1])||"":value.replace(/^["']|["']$/g,"");
+      const style=win.getComputedStyle(source,which),label=snapshotPseudoText(style.content,source);
+      if(label===null||style.display==="none")return;
+      const n=html("span");styleCopy(n,style);n.textContent=label;pseudos++;
+      if(which==="::after"&&source.hasAttribute("data-zr-rail"))rails++;
       if(which==="::before")target.prepend(n);else target.append(n);
     }
     function copy(source){
@@ -528,10 +546,12 @@ function acquireZenHome(win, services) {
       if(style.display==="none"||style.visibility==="collapse"||source.hidden)return null;
       const image=source.localName==="img"||source.localName==="image";
       const src=image&&(source.currentSrc||source.getAttribute("src"));
-      const target=html(src?"img":"div");styleCopy(target,style);
-      if(src){target.src=src;target.alt="";target.draggable=false;}
+      const tag=src?"img":(!image&&["span","b","strong","em","small"].includes(source.localName)?source.localName:"div");
+      const target=html(tag);styleCopy(target,style);
+      if(src){target.src=src;target.alt="";target.draggable=false;target.style.setProperty("-moz-context-properties",style.getPropertyValue("-moz-context-properties")||"fill, stroke");}
       else if(image&&style.listStyleImage&&style.listStyleImage!=="none"){
         Object.assign(target.style,{backgroundImage:style.listStyleImage,backgroundSize:"contain",backgroundRepeat:"no-repeat",backgroundPosition:"center"});
+        target.style.setProperty("-moz-context-properties",style.getPropertyValue("-moz-context-properties")||"fill, stroke");
       }
       if(!image){
         for(const child of source.childNodes){
@@ -546,23 +566,23 @@ function acquireZenHome(win, services) {
     const frozen=copy(view);if(!frozen||budget<0)return null;
     const holder=html("div","zh-return-results");
     Object.assign(holder.style,{left:(rect.left-barRect.left-1)+"px",top:(rect.top-barRect.top-1)+"px",width:rect.width+"px",height:rect.height+"px"});
-    Object.assign(frozen.style,{position:"relative",inset:"auto",margin:"0",width:"100%",height:"100%",opacity:"1"});
+    Object.assign(frozen.style,{position:"relative",inset:"auto",margin:"0",boxSizing:"border-box",width:rect.width+"px",height:rect.height+"px",opacity:"1"});
     holder.append(frozen);
-    return {node:holder,scroll,rows:view.querySelectorAll(".urlbarView-row:not([hidden])").length};
+    return {node:holder,scroll,rows:view.querySelectorAll(".urlbarView-row:not([hidden])").length,pseudos,rails,rect:{left:barRect.left,top:barRect.top,width:barRect.width,height:barRect.height}};
   }
   function captureSearchSnapshot(){
     if(!searchToken||!searchBar||searchClosing||searchReturn||!searchGeometry||
-       searchBar.getAttribute("zen-floating-urlbar")!=="true"||!nativeSearchOpen(searchBar))return;
+       !snapshotReady(searchBar))return;
     if(searchSnapshot&&!searchSnapshotDirty)return;
     try{
       const view=searchBar.querySelector?.(".urlbarView");
       if(!view?.querySelector(".urlbarView-row:not([hidden])"))return;
-      const frozen=freezeSearchResults(view,searchBar.getBoundingClientRect());
-      if(frozen?.rows){searchSnapshot=frozen;searchSnapshotDirty=false;}
+      const began=snapshotNow(),frozen=freezeSearchResults(view,searchBar.getBoundingClientRect());
+      if(frozen?.rows){frozen.capturedAt=snapshotNow();frozen.captureMs=frozen.capturedAt-began;searchSnapshot=frozen;searchSnapshotDirty=false;}
     }catch(error){searchLog("snapshot unavailable",{reason:error?.name||"Error"});}
   }
   function scheduleSearchSnapshot(){
-    if(!searchToken||searchClosing||searchReturn)return;
+    if(!searchToken||searchClosing||searchReturn||!snapshotReady(searchBar))return;
     searchSnapshotDirty=true;
     if(searchSnapshotTimer)return;
     searchSnapshotTimer=win.setTimeout(()=>{searchSnapshotTimer=0;captureSearchSnapshot();},80);
@@ -571,8 +591,11 @@ function acquireZenHome(win, services) {
     if(win.matchMedia("(prefers-reduced-motion: reduce)").matches||!searchBar||!win.MutationObserver)return;
     const view=searchBar.querySelector?.(".urlbarView");if(!view)return;
     searchSnapshotView=view;view.addEventListener("scroll",scheduleSearchSnapshot,true);
-    searchSnapshotObserver=new win.MutationObserver(scheduleSearchSnapshot);
-    searchSnapshotObserver.observe(view,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:["hidden","src","selected","style","data-zr-group","data-zr-cell","data-zr-smart-grid","data-zr-first","data-zr-rail","data-zr-narrow"]});
+    searchSnapshotObserver=new win.MutationObserver(records=>{
+      // Identical attribute writes from a query refresh are not visual changes.
+      if(records.some(r=>r.type!=="attributes"||r.oldValue!==r.target.getAttribute(r.attributeName)))scheduleSearchSnapshot();
+    });
+    searchSnapshotObserver.observe(view,{subtree:true,childList:true,characterData:true,attributes:true,attributeOldValue:true,attributeFilter:["hidden","src","selected","style","stale","data-zr-group","data-zr-cell","data-zr-first","data-zr-rail","data-zr-column","data-zr-top","data-zr-narrow","data-zr-smart-grid","data-zr-timeline"]});
     scheduleSearchSnapshot();
   }
   function stopSearchSnapshot(){
@@ -604,10 +627,13 @@ function acquireZenHome(win, services) {
   function animateSearchReturn(reason="native-close",live=false){
     if(!searchToken||searchReturn)return;
     if(!searchGeometry||win.matchMedia("(prefers-reduced-motion: reduce)").matches){finishSearchVisual();return;}
-    const g=searchGeometry,bar=searchBar;
-    const measured=live?bar?.getBoundingClientRect():searchLastRect;
+    const handoffStarted=snapshotNow(),g=searchGeometry,bar=searchBar;
+    captureSearchSnapshot();
+    const measured=live?bar?.getBoundingClientRect():(searchLastRect||searchSnapshot?.rect);
     const height=Math.max(g.header,Math.min(g.room,measured?.height||searchLastHeight||g.header));
     const startBox={left:measured?.left??g.left,top:measured?.top??g.top,width:measured?.width||g.width};
+    const resultAlpha=live?Number.parseFloat(win.getComputedStyle(bar.querySelector(".urlbarView")||bar).opacity):1;
+    const initialAlpha=Math.max(0,Math.min(1,Number.isFinite(resultAlpha)?resultAlpha:1));
     searchClosing=true;
     finishSearchMotion();
     if(searchTimer)win.clearTimeout(searchTimer);searchTimer=0;
@@ -621,7 +647,7 @@ function acquireZenHome(win, services) {
     Object.assign(shell.style,{left:startBox.left+"px",top:startBox.top+"px",width:startBox.width+"px",height:height+"px"});
     header.style.height=Math.max(0,g.header-2)+"px";
     const frozen=searchSnapshot;
-    if(frozen)shell.append(frozen.node);
+    if(frozen){frozen.node.style.opacity=String(initialAlpha);shell.append(frozen.node);}
     root.append(shell);searchReturn=shell;
     if(frozen)for(const s of frozen.scroll){s.node.scrollTop=s.top;s.node.scrollLeft=s.left;}
     searchReturnParts=prepareReturnParts();
@@ -632,23 +658,23 @@ function acquireZenHome(win, services) {
     paintReturnParts(parts,startBox.top+height,0,finalBottom);
     panel.setAttribute("data-zh-search-ready","");panel.setAttribute("data-zh-return","");
     const duration=height>dest.height+8?460:180;
-    searchLog("close-start",{reason,rows:frozen?.rows||0,height:Math.round(height),header:Math.round(dest.height),duration,parts:parts.length,snapshotDirty:searchSnapshotDirty});
-    const token=searchToken;let start=null,previous=null,maxFrameGap=0;
+    searchLog("close-start",{reason,rows:frozen?.rows||0,rails:frozen?.rails||0,pseudos:frozen?.pseudos||0,height:Math.round(height),header:Math.round(dest.height),duration,parts:parts.length,snapshotDirty:searchSnapshotDirty,snapshotAge:frozen?Math.round(snapshotNow()-frozen.capturedAt):null,captureMs:frozen?Math.round(frozen.captureMs):null,handoffMs:Math.round(snapshotNow()-handoffStarted)});
+    const token=searchToken;let start=null,previous=null,maxFrameGap=0,firstFrameDelay=0;
     const moveTop=Math.abs(startBox.top-dest.top)>.1,moveLeft=Math.abs(startBox.left-dest.left)>.1,moveWidth=Math.abs(startBox.width-dest.width)>.1;
     const tick=now=>{
       searchReturnFrame=0;if(!open||searchToken!==token||searchReturn!==shell)return;
-      if(start===null)start=now;
+      if(start===null){start=now;firstFrameDelay=Math.max(0,snapshotNow()-handoffStarted);}
       if(previous!==null)maxFrameGap=Math.max(maxFrameGap,now-previous);previous=now;
       const p=Math.min(1,(now-start)/duration),h=revealValue(height,dest.height,p),top=revealValue(startBox.top,dest.top,p);
       shell.style.height=h+"px";
       if(moveTop)shell.style.top=top+"px";
       if(moveLeft)shell.style.left=revealValue(startBox.left,dest.left,p)+"px";
       if(moveWidth)shell.style.width=revealValue(startBox.width,dest.width,p)+"px";
-      if(frozen)frozen.node.style.opacity=String(Math.min(1,Math.max(0,(h-dest.height)/80)));
+      if(frozen)frozen.node.style.opacity=String(initialAlpha*Math.min(1,Math.max(0,(h-dest.height)/80)));
       paintReturnParts(parts,top+h,p,finalBottom);
       if(p<1)searchReturnFrame=win.requestAnimationFrame(tick);
       else{
-        searchLog("close-finish",{reason,rows:frozen?.rows||0,elapsed:Math.round(now-start),maxFrameGap:Math.round(maxFrameGap)});
+        searchLog("close-finish",{reason,rows:frozen?.rows||0,elapsed:Math.round(now-start),maxFrameGap:Math.round(maxFrameGap),firstFrameDelay:Math.round(firstFrameDelay)});
         finishSearchVisual();content.querySelector(".zh-search")?.focus({preventScroll:true});
       }
     };
@@ -914,7 +940,7 @@ function acquireZenHome(win, services) {
       // Remember the latest painted height for native blur/popover teardown.
       if(typeof win.ResizeObserver==="function"){
         const sizes=new win.ResizeObserver(()=>{
-          if(searchToken&&!searchClosing&&!searchReturn&&searchBar?.getAttribute("zen-floating-urlbar")==="true"&&nativeSearchOpen(searchBar)){
+          if(searchToken&&!searchClosing&&!searchReturn&&snapshotReady(searchBar)){
             const rect=searchBar.getBoundingClientRect();
             if(rect.height>0){searchLastHeight=rect.height;searchLastRect=rect;}
           }
@@ -941,6 +967,9 @@ function acquireZenHome(win, services) {
       if(open&&e.key==="Escape"&&!searchActive()){e.preventDefault();e.stopPropagation();if(adding&&pinCustom){pinCustom=false;render();content.querySelector(".zh-suggestion, .zh-custom-link")?.focus({preventScroll:true});}else if(adding){leavePinPicker();}else if(editing){editing=false;render();}else content.querySelector(".zh-search")?.focus({preventScroll:true});}},true);
     listen(win,"pointerdown",e=>{
       if(searchToken&&!searchClosing&&!searchReturn&&searchBar&&!searchBar.contains?.(e.target))captureSearchSnapshot();
+    },true);
+    listen(win,"focusout",e=>{
+      if(searchToken&&!searchClosing&&!searchReturn&&searchBar?.contains?.(e.target))captureSearchSnapshot();
     },true);
     listen(panel,"pointerdown",e=>{if(e.target===panel&&searchToken&&!searchClosing&&cancelHomeSearch("home-background")){e.preventDefault();e.stopPropagation();}},true);
     const stateObserver=new win.MutationObserver(()=>{if(open&&!allowed())close();else if(!open)ensurePrimaryHome();});
