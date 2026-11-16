@@ -162,3 +162,7 @@ User reports .28 generally works. Search appears when projecting inactive Work, 
 ## OP-022 — floating search surface color/translucency
 
 User reports near-black native floating search mismatches muted blue-gray OnePlane toolbar. Approved shared visual pipeline in OnePlane and Zen Refined, including standalone compatibility; not implemented yet. See roadmap.
+
+### OP-019 user acceptance (preview.29)
+
+User confirms the previously failing workspace projection/search now appears correctly. Accept the tested behavior; do not claim exhaustive mixed-DPI, disconnect, cancellation or simultaneous live-page validation. A missing Center Assembly animation on projected window creation is separately tracked in Zen Refined, not a placement regression.
