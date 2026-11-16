@@ -38,5 +38,5 @@
     if(h)return {x:h==="left"?left:left+hw,y:top,width:h==="left"?hw:width-hw,height,mode:h};
     if(v==="bottom")return {x:left,y:top+hh,width,height:height-hh,mode:"bottom"};
     const w=Math.round(width*.72),ht=Math.round(height*.74);
-    return {x:Math.max(left,Math.min(right-w,Math.round(x-w/2))),y:Math.max(top,Math.min(bottom-ht,Math.round(y-ht/2))),width:w,height:ht,mode:"center"};
+    return {x:left+Math.floor((width-w)/2),y:top+Math.floor((height-ht)/2),width:w,height:ht,mode:"center"};
   }

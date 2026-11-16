@@ -1590,3 +1590,7 @@
 #oneplane-placement-preview::part(content) {padding:0 !important;background:transparent !important;border:0 !important;}
 #oneplane-placement-preview .op-placement-label {display:grid;place-items:center;box-sizing:border-box;pointer-events:none!important;border:2px solid #91adf2;border-radius:12px;background:#769ef233;color:white;font:600 15px system-ui;text-shadow:0 1px 4px #000;}
 #oneplane-hub-panel .op-hub-space[data-op-dragging] {background:color-mix(in srgb,currentColor 18%,transparent);outline:1px solid color-mix(in srgb,currentColor 35%,transparent);}
+
+#oneplane-workspace-drag-badge {position:fixed!important;inset:0 auto auto 0!important;margin:0!important;box-sizing:border-box;max-width:160px;padding:9px 13px;border-radius:8px;border:1px solid color-mix(in srgb,currentColor 35%,transparent);background:light-dark(#e9edf5,#353946);color:light-dark(#24262e,#edf0f6);box-shadow:0 4px 14px #0004;pointer-events:none!important;z-index:2147483647;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font:600 13px system-ui;}
+#oneplane-workspace-drag-badge[hidden] {display:none!important;}
+#oneplane-workspace-drag-badge::backdrop {pointer-events:none;background:transparent;}

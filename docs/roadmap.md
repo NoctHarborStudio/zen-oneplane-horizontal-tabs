@@ -101,3 +101,7 @@ Add to Workspace Engine after native management and before final integration. Dr
 ## Preview.14 projection prototype
 
 Implemented experimental native synced-window projection, cross-display pointer release, context action and guarded Return. All-tab native sync is required, no independent session or forced changes to sync settings. Runtime validation pending (especially mixed DPI and close). No timed discard yet.
+
+## Preview.15–16 — drag feedback and live projection distinction
+
+Cross-monitor placement now has a Snap-style OnePlane preview, fixed center target, workspace carry badge and work-area geometry. Live simultaneous same-tab rendering (scroll, media playback and input) remains an architectural milestone distinct from Zen's focus-driven docshell transfer. Investigate a single authoritative browser surface with remote view/input, DRM, cross-origin and accessibility, avoiding duplicate playback or session state. No arbitrary page input forwarding or duplicate sessions introduced.

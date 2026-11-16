@@ -39,5 +39,5 @@ test("snap zones stay inside work area with negative coordinates",()=>{
   assert.deepEqual(hubSnapRect(d,-960,45),{x:-1920,y:40,width:1920,height:1040,mode:"maximize"});
   assert.deepEqual(hubSnapRect(d,-1915,500),{x:-1920,y:40,width:960,height:1040,mode:"left"});
   assert.deepEqual(hubSnapRect(d,-5,1070),{x:-960,y:560,width:960,height:520,mode:"right-bottom"});
-  const c=hubSnapRect(d,-960,600);assert.equal(c.mode,"center");assert.ok(c.x>=d.x&&c.x+c.width<=d.x+d.width&&c.y>=d.y&&c.y+c.height<=d.y+d.height);
+  const c=hubSnapRect(d,-960,600);assert.equal(c.mode,"center");assert.deepEqual(c,hubSnapRect(d,-800,650));assert.ok(c.x>=d.x&&c.x+c.width<=d.x+d.width&&c.y>=d.y&&c.y+c.height<=d.y+d.height);
 });

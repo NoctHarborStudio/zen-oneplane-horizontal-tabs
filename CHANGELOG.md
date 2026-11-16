@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0-preview.16
+
+- Add a visible workspace carry badge inside the source window; stabilize center placement preview.
+- Protect all pre-existing synced tab IDs during projection startup cleanup and check the source peer.
+- Record live same-tab rendering as a separate milestone. Live validation pending.
+
 ## 0.2.0-preview.15
 
 - Latch native drag image after external transition, clamp reinsertion scale, remove delayed live slot transforms; drop onto empty workspace selects dragged tab.

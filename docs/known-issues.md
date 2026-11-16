@@ -106,3 +106,7 @@
 ## OP-016 — Hub continuity and synced favicon
 
 Preview.13 user confirms workspace-local opening, Compact retention and existing animations; trigger accepted. Reports background mismatch, closing after select/create, auto-switch after create, uncentered Delete, system confirmation and no Hub motion. Synced second monitor shows a dot for newly opened tab. Preview.14 mitigations and experimental projection require live verification.
+
+## OP-017 — cross-monitor drag and Hub speed
+
+User reports ghost duplication on re-entry, overlapping drag motion, missing monitor placement preview, unwanted startup New Tab and too-fast Hub. Preview.15–16 include single external drag image, bounded reinsertion, empty-page drop, snap-style monitor preview, carry badge, slower Hub and guarded startup cleanup. Runtime checks pending. True live two-window same-tab rendering is not implemented.

@@ -1077,7 +1077,7 @@ function installTabStrip() {
     if(h)return {x:h==="left"?left:left+hw,y:top,width:h==="left"?hw:width-hw,height,mode:h};
     if(v==="bottom")return {x:left,y:top+hh,width,height:height-hh,mode:"bottom"};
     const w=Math.round(width*.72),ht=Math.round(height*.74);
-    return {x:Math.max(left,Math.min(right-w,Math.round(x-w/2))),y:Math.max(top,Math.min(bottom-ht,Math.round(y-ht/2))),width:w,height:ht,mode:"center"};
+    return {x:left+Math.floor((width-w)/2),y:top+Math.floor((height-ht)/2),width:w,height:ht,mode:"center"};
   }
   // Shared monitor work-area geometry and experimental chrome preview.
   let placementPreview=null,placementLabel=null,placementKey="";
@@ -1176,6 +1176,21 @@ function installTabStrip() {
     let destroyed=false,busy=false,open=false,contextId=null;
     let geometryFrame=0,motion=null,confirmation=null,drag=null,suppressClickUntil=0,projectionBusy=false;
     const PROJECTION="__oneplaneWorkspaceProjection";
+    let dragBadge=null,dragBadgeFrame=0,dragBadgePoint=null;
+    function hideDragBadge(remove=false){
+      if(dragBadgeFrame)window.cancelAnimationFrame(dragBadgeFrame);dragBadgeFrame=0;dragBadgePoint=null;
+      if(dragBadge){if(dragBadge.matches(":popover-open"))dragBadge.hidePopover();dragBadge.hidden=true;if(remove){dragBadge.remove();dragBadge=null;}}
+    }
+    function showDragBadge(event,label){
+      if(!pointInSourceWindow(event.screenX,event.screenY)){hideDragBadge();return;}
+      if(!dragBadge){dragBadge=make("div","op-hub-drag-badge");dragBadge.id="oneplane-workspace-drag-badge";dragBadge.setAttribute("aria-hidden","true");dragBadge.hidden=true;if(typeof dragBadge.showPopover==="function")dragBadge.setAttribute("popover","manual");root.append(dragBadge);}
+      dragBadge.textContent=label;dragBadgePoint={x:event.clientX+16,y:event.clientY+16};
+      if(dragBadgeFrame)return;
+      dragBadgeFrame=window.requestAnimationFrame(()=>{dragBadgeFrame=0;if(!drag||!dragBadgePoint)return;
+        const p=dragBadgePoint;dragBadge.style.transform="translate("+Math.max(0,Math.min(window.innerWidth-165,p.x))+"px,"+Math.max(0,Math.min(window.innerHeight-42,p.y))+"px)";
+        dragBadge.hidden=false;if(typeof dragBadge.showPopover==="function"&&!dragBadge.matches(":popover-open"))try{dragBadge.showPopover();}catch{}
+      });
+    }
     const manager=()=>window.gZenWorkspaces;
     const command=()=>document.getElementById("cmd_toggleCompactModeIgnoreHover");
     function setHold(value){toolbarWrapper?.toggleAttribute("oneplane-hub-hold",value);hold();}
@@ -1367,11 +1382,11 @@ function installTabStrip() {
         drag.moved=true;drag.entry.setAttribute("data-op-dragging","true");
         status.textContent="Drag to another monitor and release.";
       }
-      if(drag.moved){event.preventDefault();showPlacementPreview(event.screenX,event.screenY,manager()?.getWorkspaceFromId(drag.id)?.name||"Workspace");}
+      if(drag.moved){event.preventDefault();const label=manager()?.getWorkspaceFromId(drag.id)?.name||"Workspace";showDragBadge(event,label);showPlacementPreview(event.screenX,event.screenY,label); }
     }
     function cancelDrag(event){
       if(!drag||(event&&event.pointerId!==drag.pointer))return;
-      const d=drag;drag=null;clearPlacementPreview();d.entry.removeAttribute("data-op-dragging");
+      const d=drag;drag=null;hideDragBadge();clearPlacementPreview();d.entry.removeAttribute("data-op-dragging");
       if(d.moved){suppressClickUntil=window.performance.now()+400;status.textContent="";}
       try{if(d.entry.hasPointerCapture(d.pointer))d.entry.releasePointerCapture(d.pointer);}catch{}
     }
@@ -1388,6 +1403,12 @@ function installTabStrip() {
       if(!canProject()){status.textContent="Enable native window sync for all tabs to use this feature.";return;}
       const native=manager();
       if(!native.getWorkspaceFromId(id))return;
+      const preexistingIds=new Set();let identifiable=true;
+      try{const wins=Services.wm.getEnumerator("navigator:browser");while(wins.hasMoreElements()){
+        const win=wins.getNext();if(win.closed||win.gZenWindowSync!==window.gZenWindowSync||!win.gZenWorkspaces?.currentWindowIsSyncing)continue;
+        const tabs=win.gZenWorkspaces.allStoredTabs;if(!Array.isArray(tabs)){identifiable=false;break;}
+        for(const tab of tabs){if(tab.hasAttribute("zen-empty-tab"))continue;if(!tab.id)identifiable=false;else preexistingIds.add(tab.id);}
+      }}catch{identifiable=false;}
       projectionBusy=true;status.textContent="Opening workspace…";render();
       let child=null;
       try{
@@ -1416,10 +1437,12 @@ function installTabStrip() {
         await child.gZenWorkspaces.changeWorkspaceWithID(id);
         if(child.gZenWorkspaces.activeWorkspace!==id)throw Error("Workspace not activated");
         // Only the exact untouched projection startup tab, never arbitrary New Tab.
-        if(startupTab&&startupTab!==child.gBrowser.selectedTab&&!startupTab.closing&&!startupTab.pinned&&!startupTab.group&&
+        if(identifiable&&startupTab?.id&&!preexistingIds.has(startupTab.id)&&startupTab!==child.gBrowser.selectedTab&&!startupTab.closing&&!startupTab.pinned&&!startupTab.group&&
           !startupTab.hasAttribute("zen-essential")&&!startupTab.hasAttribute("zen-empty-tab")&&startupTab.isEmpty&&
           startupTab.linkedBrowser?.currentURI?.spec==="about:blank"&&startupTab.linkedBrowser?.canGoBack===false&&startupTab.linkedBrowser?.canGoForward===false){
-          child.gBrowser.removeTab(startupTab,{animate:false});
+          // The source peer must also be untouched; otherwise keep the tab.
+          const peer=window.gZenWindowSync.getItemFromWindow(window,startupTab.id);
+          if(!peer||(peer.isEmpty&&!peer.pinned&&!peer.group&&peer.linkedBrowser?.currentURI?.spec==="about:blank"&&peer.linkedBrowser?.canGoBack===false&&peer.linkedBrowser?.canGoForward===false))child.gBrowser.removeTab(startupTab,{animate:false});
         }
         if(display)placeNativeWindow(child,display);
         child.focus();status.textContent="";
@@ -1505,7 +1528,7 @@ function installTabStrip() {
     window.addEventListener("pointerdown",onOutside,true);
     for(const event of ["ZenWorkspaceDataChanged","ZenWorkspacesUIUpdate","ZenCompactMode:Toggled","ZenCompactMode:LayoutUpdate"])listeners.push([window,event,changed]);
     for(const [node,event,fn] of listeners)node.addEventListener(event,fn);
-    function destroy(){if(destroyed)return;destroyed=true;close(false,true);clearPlacementPreview(true);window.removeEventListener("pointerdown",onOutside,true);for(const [node,event,fn] of listeners)node.removeEventListener(event,fn);panel.remove();button.remove();}
+    function destroy(){if(destroyed)return;destroyed=true;close(false,true);hideDragBadge(true);clearPlacementPreview(true);window.removeEventListener("pointerdown",onOutside,true);for(const [node,event,fn] of listeners)node.removeEventListener(event,fn);panel.remove();button.remove();}
     return {ensure,close,onMode,destroy};
   }
   const hub=createHubController({target,root,toolbarWrapper,supported:hoverSupported,hold:reconcilePanel,switchGuard:guardPanelSwitch});
