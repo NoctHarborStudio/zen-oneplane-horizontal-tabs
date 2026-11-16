@@ -1,0 +1,2 @@
+  // One visual state for the wrapper, tint and controls. Native flags
+  // can disappear/reappear during a native tab selection transaction.

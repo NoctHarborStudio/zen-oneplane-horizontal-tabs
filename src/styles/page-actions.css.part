@@ -1,0 +1,36 @@
+    /* Page actions remain native popup anchors; their new location is to the right of the tabs. */
+    #oneplane-page-actions {
+      display: flex !important;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: 2px;
+      min-width: 0;
+      padding-inline: 4px;
+      -moz-window-dragging: no-drag;
+    }
+    #oneplane-page-actions > :is(#translations-button, #zen-site-data-icon-button, #urlbar-zoom-button):not([hidden]) {
+      display: flex !important;
+      align-items: center;
+      justify-content: center;
+      visibility: visible !important;
+      opacity: 1 !important;
+      flex: 0 0 auto;
+      width: 28px !important;
+      height: 28px !important;
+      min-width: 28px !important;
+      padding: 4px !important;
+      border-radius: 7px;
+      box-sizing: border-box;
+      color: var(--toolbar-color, currentColor);
+    }
+    #oneplane-page-actions > #urlbar-zoom-button:not([hidden]) {
+      width: auto !important;
+      min-width: 28px !important;
+      padding-inline: 6px !important;
+      font-size: 11px !important;
+    }
+    #oneplane-page-actions > [hidden] { display: none !important; }
+    #oneplane-page-actions > :is(#translations-button, #zen-site-data-icon-button, #urlbar-zoom-button):hover {
+      background: color-mix(in srgb, currentColor 12%, transparent);
+    }
+

@@ -1,0 +1,23 @@
+    /* Only active during a chrome tab drag; never intercept ordinary content. */
+    #oneplane-split-drop[data-op-dragging] {
+      display: block !important;
+      position: absolute !important;
+      inset: 0 !important;
+      z-index: 101 !important;
+      pointer-events: auto !important;
+      background: transparent !important;
+    }
+    #oneplane-split-drop .oneplane-split-preview {
+      display: none;
+      position: absolute;
+      border: 2px solid #9db9ff;
+      border-radius: 10px;
+      background: rgba(112, 150, 255, .22);
+      pointer-events: none;
+      box-sizing: border-box;
+    }
+    #oneplane-split-drop[data-op-side="left"] .oneplane-split-preview { display: block; inset: 4px 50% 4px 4px; }
+    #oneplane-split-drop[data-op-side="right"] .oneplane-split-preview { display: block; inset: 4px 4px 4px 50%; }
+    #oneplane-split-drop[data-op-side="top"] .oneplane-split-preview { display: block; inset: 4px 4px 50% 4px; }
+    #oneplane-split-drop[data-op-side="bottom"] .oneplane-split-preview { display: block; inset: 50% 4px 4px 4px; }
+

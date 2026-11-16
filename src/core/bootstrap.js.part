@@ -1,0 +1,75 @@
+function cleanup() {
+  if (disposed) return;
+  disposed = true;
+  root.removeAttribute("oneplane-active");
+  removeTabStrip?.();
+  removeTabStrip = null;
+  if (startupObserver) {
+    Services.obs.removeObserver(startupObserver, "browser-delayed-startup-finished");
+    startupObserver = null;
+  }
+  window.removeEventListener("beforeunload", markClosing, true);
+  window.removeEventListener("unload", cleanup);
+  const wasApplied = applied;
+  applied = false;
+  if (window[CONTROLLER] === controller) delete window[CONTROLLER];
+  if (!wasApplied) return;
+  try {
+    const manager = window.gZenCompactModeManager;
+    if (!closing && manager?.preference === true && !originalCompact) {
+      manager.preference = false;
+    }
+    if (!otherActiveWindow()) restorePrefs();
+    if (!closing) window.dispatchEvent(new CustomEvent("ZenCompactMode:LayoutUpdate"));
+  } catch (error) {
+    console.error("[OnePlane] Could not completely restore layout:", error);
+  }
+}
+
+const controller = { get active() { return applied && !disposed; }, cleanup };
+
+async function activate() {
+  try {
+    await window.SessionStore?.promiseAllWindowsRestored;
+    await window.gZenWorkspaces?.promiseInitialized;
+    if (disposed || window.closed || root.hasAttribute("popup-window")) return;
+    const manager = window.gZenCompactModeManager;
+    if (!manager || typeof manager.hideToolbar !== "function") {
+      throw new Error("Unsupported Zen Compact Mode API.");
+    }
+    const hadBackup = prefs.prefHasUserValue(KEY);
+    const saved = snapshot();
+    originalCompact = hadBackup ? saved[STARTUP].value : manager.preference;
+    applied = true;
+    for (const [name, value] of Object.entries(TARGET)) {
+      if (prefs.getBoolPref(name) !== value) prefs.setBoolPref(name, value);
+    }
+    manager.hideToolbar();
+    if (!manager.preference) manager.preference = true;
+    removeTabStrip = installTabStrip();
+    // Native state changes and animations remain owned by Zen.
+    root.setAttribute("oneplane-active", "true");
+  } catch (error) {
+    console.error("[OnePlane] Layout activation failed:", error);
+    cleanup();
+  }
+}
+
+if (!root.hasAttribute("popup-window") && typeof window.addUnloadListener === "function") {
+  window[CONTROLLER]?.cleanup();
+  window[CONTROLLER] = controller;
+  window.addEventListener("beforeunload", markClosing, true);
+  window.addEventListener("unload", cleanup, { once: true });
+  window.addUnloadListener(cleanup);
+  if (window.gBrowserInit?.delayedStartupFinished) {
+    void activate();
+  } else {
+    startupObserver = subject => {
+      if (subject !== window) return;
+      Services.obs.removeObserver(startupObserver, "browser-delayed-startup-finished");
+      startupObserver = null;
+      void activate();
+    };
+    Services.obs.addObserver(startupObserver, "browser-delayed-startup-finished");
+  }
+}

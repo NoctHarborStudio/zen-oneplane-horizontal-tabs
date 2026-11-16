@@ -1,0 +1,45 @@
+    /* The native separator can be effectively zero-width with separation=0.
+       Give it a real hit target and draw a handle, without adding layout gaps. */
+    #tabbrowser-tabpanels[zen-split-view] .zen-split-view-splitter[orient="vertical"] {
+      width: 12px !important;
+      right: auto !important;
+      translate: -50% 0;
+      cursor: ew-resize !important;
+      z-index: 5;
+    }
+    #tabbrowser-tabpanels[zen-split-view] .zen-split-view-splitter[orient="horizontal"] {
+      height: 12px !important;
+      bottom: auto !important;
+      translate: 0 -50%;
+      cursor: ns-resize !important;
+      z-index: 5;
+    }
+    #tabbrowser-tabpanels[zen-split-view] .zen-split-view-splitter::after {
+      content: "";
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: light-dark(#687180, #c4ccdc);
+      opacity: .68;
+      border-radius: 99px;
+      box-shadow: 0 0 0 2px light-dark(#e3e6ed, #292d36);
+      pointer-events: none;
+      transition: opacity 150ms ease;
+    }
+    #tabbrowser-tabpanels[zen-split-view] .zen-split-view-splitter[orient="vertical"]::after { width: 4px; height: 34px; }
+    #tabbrowser-tabpanels[zen-split-view] .zen-split-view-splitter[orient="horizontal"]::after { width: 34px; height: 4px; }
+    #tabbrowser-tabpanels[zen-split-view] .zen-split-view-splitter:hover::after,
+    #tabbrowser-tabpanels[zen-split-resizing] .zen-split-view-splitter::after { opacity: 1; }
+
+    #oneplane-split-drop[data-op-side="unsplit"] .oneplane-split-preview {
+      display: grid; place-items: center; inset: 4px;
+      background: rgba(112,150,255,.12);
+    }
+    #oneplane-split-drop[data-op-side="unsplit"] .oneplane-split-preview::after {
+      content: "Remove from Split View";
+      padding: 10px 16px; border-radius: 8px;
+      background: #292e3a; color: #e0e8fc; font-size: 14px;
+    }
+    #oneplane-tabs .oneplane-tab[data-op-drop-before] { box-shadow: inset 3px 0 #a9c1ff !important; }
+    #oneplane-tabs .oneplane-tab[data-op-drop-after] { box-shadow: inset -3px 0 #a9c1ff !important; }
+    #oneplane-tabs[data-op-dragging] { cursor: grabbing; }

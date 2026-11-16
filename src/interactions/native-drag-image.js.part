@@ -1,0 +1,100 @@
+  function updateNativeDragImage(image, x, y, event) {
+    try {
+      const session = Cc["@mozilla.org/widget/dragservice;1"]
+        .getService(Ci.nsIDragService).getCurrentSession(window);
+      if (session?.updateDragImage) session.updateDragImage(image,x,y);
+      else if (event?.dataTransfer?.updateDragImage) event.dataTransfer.updateDragImage(image,x,y);
+      else return false;
+      return true;
+    } catch (error) { console.error("[OnePlane] Drag image transition:",error); return false; }
+  }
+  function cancelInsertion() {
+    const animation = dragInsertAnimation;
+    dragInsertAnimation = null;
+    if (animation) animation.cancel();
+    dragInsertNode?.removeAttribute("data-op-reinsert");
+    dragInsertNode = null;
+  }
+  function animateInsertion(event) {
+    cancelInsertion();
+    if (!dragNode || reducedMotion.matches ||
+        prefs.getIntPref("zen.oneplane.animation-duration",160) === 0) return;
+    const node = dragNode;
+    dragInsertNode = node;
+    node.setAttribute("data-op-reinsert","true");
+    const rect = node.getBoundingClientRect();
+    const dy = Math.max(-12,Math.min(34,event.clientY-(rect.top+rect.height/2)));
+    // Animate the real card (not just its icon), using individual transforms
+    // so horizontal tracking and native drop/slot positioning stay independent.
+    const animation = node.animate([
+      {translate:"0 "+dy+"px",scale:".78 1.06",offset:0},
+      {translate:"0 -4px",scale:"1.16 .72",offset:.30},
+      {translate:"0 2px",scale:".94 1.14",offset:.56},
+      {translate:"0 -1px",scale:"1.04 .97",offset:.78},
+      {translate:"0 0",scale:"1 1",offset:1}
+    ],{duration:240,easing:"linear"});
+    dragInsertAnimation=animation;
+    animation.onfinish=animation.oncancel=()=>{
+      if (dragInsertAnimation !== animation) return;
+      dragInsertAnimation=null; dragInsertNode=null;
+      node.removeAttribute("data-op-reinsert");
+    };
+  }
+  function setDragImageMode(mode, event) {
+    if (!dragNode || mode === dragImageMode) return;
+    const previous = dragImageMode;
+    if (mode === "outside") {
+      // Only the OS drag image is painted beyond this browser window.
+      makeDragGhost();
+      if (!dragGhost) return;
+      hideGhost();
+      const p = dragLastPoint || {x:window.innerWidth/2,y:dragEdge+PULL_DISTANCE};
+      positionGhost(Math.max(20,Math.min(window.innerWidth-20,p.x)),
+                    Math.max(20,Math.min(window.innerHeight-20,p.y)));
+      dragGhost.hidden = false;
+      const box = dragGhostBody.getBoundingClientRect();
+      const ok = updateNativeDragImage(dragGhostBody,Math.round(box.width/2),Math.round(box.height/2),event);
+      hideGhost();
+      if (!ok) { if (previous === "content") showGhost(event,false); return; }
+    } else if (previous === "outside") {
+      // Clear the OS image BEFORE displaying our local animated card.
+      if (!updateNativeDragImage(blankDragImage,0,0,event)) return;
+    }
+    dragImageMode = mode;
+    const detached = mode === "content" || mode === "outside";
+    dragNode.toggleAttribute("data-op-detached", detached);
+    row.toggleAttribute("data-op-inline-drag", !detached);
+    if (detached) {
+      clearGroupPull();
+      dragReentry = false;
+      cancelInsertion();
+      setPull(0);
+      clearLiveDrag();
+      if (mode === "content") showGhost(event,previous === "inline");
+    } else {
+      hideGhost();
+      setPull(0);
+      if (previous !== "inline") {
+        dragReentry = true;
+        try { animateInsertion(event); } catch (error) {
+          cancelInsertion();
+          console.error("[OnePlane] Insertion animation:",error);
+        }
+      }
+    }
+    if (draggedTab && !draggedGroup) measureSplitGroup(splitGroup(draggedTab));
+    refreshIndicator();
+    refreshIslandTitle();
+  }
+  function followLocalSource(event, node) {
+    const rect = unshiftedRect(node);
+    shiftDragNode(node, event.clientX - rect.width * dragGrabRatio - rect.left, true);
+  }
+  function onWindowDragLeave(event) {
+    if (!draggedTab || !dragNode || event.relatedTarget instanceof Node) return;
+    // Internal strip -> page crossings must not turn on the OS ghost.
+    const x = event.clientX, y = event.clientY;
+    const atEdge = x <= 1 || y <= 1 || x >= window.innerWidth-1 || y >= window.innerHeight-1;
+    if (atEdge || event.target === window || event.target === document || event.target === root)
+      setDragImageMode("outside",event);
+  }

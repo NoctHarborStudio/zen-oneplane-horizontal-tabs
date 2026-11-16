@@ -1,0 +1,53 @@
+    /* Keep the page fixed in place. Native hover states still drive reveal,
+       but the toolbar is out of document flow and overlays web content. */
+    #zen-appcontent-wrapper {
+      position: relative !important;
+    }
+    #zen-appcontent-navbar-wrapper {
+      position: absolute !important;
+      inset: 0 0 auto 0 !important;
+      width: 100% !important;
+      flex: none !important;
+      min-height: max(2px, var(--zen-element-separation, 0px)) !important;
+      height: max(2px, var(--zen-element-separation, 0px)) !important;
+      --op-panel-motion: var(--op-panel-close-speed);
+      transition: height var(--op-panel-motion) var(--op-panel-ease) !important;
+      /* Do not clip the long gradient when closing starts. Its own
+         opacity/translation transition owns visual disappearance. */
+      overflow: visible !important;
+      contain: none !important;
+    }
+    /* Native Zen offsets the web view when an in-flow toolbar expands.
+       Our overlay has no such offset; neutralize it only while OnePlane runs. */
+    #tabbrowser-tabpanels[has-toolbar-hovered]
+      .browserSidebarContainer:is(.deck-selected, [zen-split="true"]) .browserContainer {
+      --zen-browser-container-margin-top-fix: 0px !important;
+      margin-top: 0 !important;
+    }
+    #zen-appcontent-navbar-wrapper:not([data-op-panel-open]) #zen-appcontent-navbar-container {
+      pointer-events: none !important;
+    }
+    /* Offscreen descendants must not keep :hover alive outside the
+       collapsed native hit strip. Leave native floating search alone. */
+    #zen-appcontent-navbar-wrapper:not([data-op-panel-open]) #zen-appcontent-navbar-container :not(#urlbar[zen-floating-urlbar="true"], #urlbar[zen-floating-urlbar="true"] *) {
+      pointer-events: none !important;
+    }
+    /* Frosted native toolbar; retain native reveal animation and popup states. */
+    #zen-appcontent-navbar-wrapper[data-op-panel-open] {
+      --op-panel-motion: var(--op-panel-open-speed);
+      height: max(var(--zen-toolbar-height-with-bookmarks, var(--op-height)), var(--op-measured-toolbar-height, 0px)) !important;
+      overflow: visible !important;
+      contain: none !important;
+    }
+    #zen-appcontent-navbar-wrapper[data-op-panel-open] #zen-appcontent-navbar-container {
+      opacity: 1 !important;
+      pointer-events: auto !important;
+    }
+    #zen-appcontent-navbar-wrapper[data-op-panel-open] #urlbar {
+      opacity: 1 !important;
+      pointer-events: auto !important;
+    }
+    #zen-appcontent-navbar-wrapper:not([data-op-panel-open]) #urlbar:not([zen-floating-urlbar="true"], [breakout-extend], :popover-open) {
+      opacity:0 !important;
+      pointer-events:none !important;
+    }

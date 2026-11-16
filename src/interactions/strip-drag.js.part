@@ -1,0 +1,179 @@
+  function previewStripDrag(event, tab) {
+    const owner = tabOwner(tab);
+    const group = owner?.[DRAG_CONTROLLER]?.group();
+    const entry = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
+    if(owner!==window && row.hasAttribute("data-op-show-island") &&
+        !row.hasAttribute("data-op-island-incoming")){
+      row.setAttribute("data-op-island-incoming","true");
+      scheduleGeometry();
+    }
+    const nodes = stripNodes();
+    if (!nodes.length) { clearLiveDrag(); return null; }
+    const slots = nodes.map(node => ({ node, rect: unshiftedRect(node) }));
+    const local = owner === window && isStripNode(entry);
+    const inline = owner === window && dragImageMode === "inline" && entry === dragNode;
+    const memberGroup = !local && owner === window && splitGroup(tab);
+    if (memberGroup) {
+      const own = slots.find(slot => slot.node === splitEntries.get(memberGroup)?.box);
+      if (own && event.clientX >= own.rect.left && event.clientX <= own.rect.right) {
+        clearLiveDrag();
+        if (inline) followLocalSource(event, entry);
+        return { ...nativeSlot(own.node), before: false };
+      }
+    }
+    const moving = local ? slots.find(slot => slot.node === entry) : null;
+    const rest = slots.filter(slot => slot !== moving);
+    if (!rest.length) {
+      clearLiveDrag();
+      if (inline) followLocalSource(event, entry);
+      return null;
+    }
+    const found = dragSlotIndex(rest, event.clientX);
+    const index = found < 0 ? rest.length : found;
+    const target = rest[Math.min(index, rest.length - 1)];
+    const dest = { ...nativeSlot(target.node), before: index < rest.length };
+    if (!dest.native) { clearLiveDrag(); return null; }
+
+    row.setAttribute("data-op-live-drag", "true");
+    const gap = parseFloat(window.getComputedStyle(list).columnGap) || 3;
+    const base = slots[0].rect.left;
+    const incomingWidth = Math.max(1, parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab")) || 36);
+    // Only the actual source follows the pointer. Neighbors glide into
+    // their future slots without painting an additional placeholder.
+    const order = rest.slice();
+    if (moving) order.splice(index, 0, moving);
+    else order.splice(index, 0, { node: null, rect: { width: incomingWidth } });
+    const used = new Set();
+    const lanes=islandSlotPositions(order.map(slot=>slot.rect.width),gap);
+    const positions=lanes?.positions||[];
+    if(!lanes){
+      let left=base;
+      for(const slot of order){positions.push(left);left+=slot.rect.width+gap;}
+    }
+    // An elastic buffer follows the pointer before crossing the 8px
+    // reorder hysteresis. Neighboring slots yield as a chain, with
+    // decreasing pressure farther from the dragged item. The dragged
+    // card has resistance at the edges of its slot, not a free overlap.
+    let pressure = 0, direction = 0, followX = null;
+    if (inline && moving) {
+      const slotLeft = positions[index], width = moving.rect.width;
+      const rawDelta = event.clientX - width*dragGrabRatio - slotLeft;
+      direction = Math.sign(rawDelta);
+      // The island is an immovable boundary. Do not yield toward it.
+      if(lanes && ((index<lanes.boundary && direction>0) ||
+          (index>=lanes.boundary && direction<0))) direction=0;
+      const maxYield = Math.min(15,Math.max(8,width*.33));
+      pressure = maxYield * (1-Math.exp(-Math.abs(rawDelta)/18));
+      followX = slotLeft + direction * Math.min(Math.abs(rawDelta),pressure);
+    }
+    for (let i=0;i<order.length;i++) {
+      const slot=order[i];
+      if (!slot.node) continue;
+      if (slot === moving && inline) {
+        if (followX !== null) shiftDragNode(slot.node,followX-slot.rect.left,true);
+        else followLocalSource(event,slot.node);
+      } else {
+        // Shift the whole chain equally for the first neighbor; the
+        // same displacement keeps the existing gaps from collapsing.
+        const sameLane=!lanes || (i<lanes.boundary)===(index<lanes.boundary);
+        const onSide = sameLane && (direction > 0 ? i > index : direction < 0 && i < index);
+        const elastic = onSide ? direction*pressure : 0;
+        shiftDragNode(slot.node,positions[i]-slot.rect.left+elastic);
+      }
+      used.add(slot.node);
+    }
+    // Incoming tabs retain the original native group until successful drop.
+    row.style.setProperty("--op-drag-incoming", (moving ? 0 : incomingWidth + gap) + "px");
+    shiftDragNode(plus,!lanes && direction > 0 ? pressure : 0);
+    used.add(plus);
+    if (inline && !moving) { followLocalSource(event,entry); used.add(entry); }
+    for (const node of [...dragShifted]) {
+      if (used.has(node)) continue;
+      node.style.removeProperty("--op-drag-x");
+      node.removeAttribute("data-op-drag-follow");
+      dragShifted.delete(node);
+    }
+    liveDragTarget = dest;
+    refreshIndicator();
+    return dest;
+  }
+  function onStripDragLeave(event) {
+    if (event.relatedTarget instanceof Node && row.contains(event.relatedTarget)) return;
+    if (toolbarContainsPoint(event.clientX,event.clientY)) return;
+    // The window capture listener owns pull and image transitions.
+    // Do not erase a group's visual position mid-extraction.
+    if (!(groupPullLayout && dragImageMode === "inline")) clearLiveDrag();
+    clearDropMarker();
+  }
+  function clearDropMarker() {
+    dropMarker?.removeAttribute("data-op-drop-before");
+    dropMarker?.removeAttribute("data-op-drop-after");
+    dropMarker = null;
+  }
+  function markDrop(event) {
+    clearDropMarker();
+    const dest = dropTarget(event);
+    if (!dest?.native || dest.group === draggedGroup && draggedGroup) return;
+    if (!draggedGroup && draggedTab && dest.group && splitGroup(draggedTab) === dest.group) return;
+    dropMarker = dest.element;
+    dropMarker.setAttribute(dest.before ? "data-op-drop-before" : "data-op-drop-after", "true");
+  }
+  function releaseDragReveal() {
+    if (dragRevealTimer) window.clearTimeout(dragRevealTimer);
+    dragRevealTimer = 0;
+    toolbarWrapper?.removeAttribute("oneplane-drag-hold");
+  }
+  function revealForDrag(event) {
+    const tab = readDraggedTab(event);
+    if (!hoverSupported() || !tab || !toolbarWrapper) return;
+    const within = toolbarContainsPoint(event.clientX,event.clientY);
+    const local = tabOwner(tab) === window;
+    if (local && dragNode) {
+      dragLastPoint = {x:event.clientX,y:event.clientY};
+      if (within && dragImageMode !== "content" && dragImageMode !== "outside")
+        dragEdge = toolbarWrapper.getBoundingClientRect().bottom;
+      const p = Math.max(0,Math.min(1,(event.clientY-(dragEdge-15))/PULL_DISTANCE));
+      const lateralExit = event.clientX < toolbarWrapper.getBoundingClientRect().left ||
+                          event.clientX > toolbarWrapper.getBoundingClientRect().right;
+      const threshold = dragImageMode === "content" || dragImageMode === "outside" ? .72 : .96;
+      const detach = p >= threshold || lateralExit;
+      setDragImageMode(detach ? "content" : "inline",event);
+      if (dragImageMode === "content") {
+        positionGhost(event.clientX,event.clientY);
+        clearLiveDrag(); releaseDragReveal();
+        return;
+      }
+      if (dragImageMode === "outside") return;
+      if (p === 0) dragReentry = false;
+      if (p > 0 && !dragReentry) {
+        if (draggedGroup) captureGroupPull(event);
+        if (groupPullLayout) row.setAttribute("data-op-group-pull","true");
+        else clearLiveDrag();
+        setPull(p);
+        if (!previewGroupPull(event)) followLocalSource(event,dragNode);
+        toolbarWrapper.setAttribute("oneplane-drag-hold","true");
+        if (dragRevealTimer) window.clearTimeout(dragRevealTimer);
+        dragRevealTimer = window.setTimeout(releaseDragReveal,500);
+        if (within) { event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect="move"; }
+        return;
+      }
+      clearGroupPull();
+      setPull(0);
+    } else if (!local) tabOwner(tab)?.[DRAG_CONTROLLER]?.outside(event);
+    if (!within && !(local && dragReentry && dragImageMode === "inline")) {
+      clearLiveDrag(); releaseDragReveal(); return;
+    }
+    toolbarWrapper.setAttribute("oneplane-drag-hold", "true");
+    if (dragRevealTimer) window.clearTimeout(dragRevealTimer);
+    dragRevealTimer = window.setTimeout(releaseDragReveal, 500);
+    if (within) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = "move";
+    }
+    clearDropMarker();
+    previewStripDrag(event,tab);
+  }
+  function onToolbarDrop(event) {
+    if (toolbarContainsPoint(event.clientX,event.clientY) && readDraggedTab(event)) onStripDrop(event);
+  }

@@ -1,0 +1,150 @@
+  function endDragVisual() {
+    const search = dragSearch;
+    dragSearch = null; pointerSearch = null;
+    clearGroupPull();
+    dragNode?.removeAttribute("data-op-detached");
+    dragNode?.removeAttribute("data-op-drag-follow");
+    dragNode?.removeAttribute("data-op-pulling");
+    for (const name of ["--op-pull-width","--op-pull-y","--op-pull-scale-y","--op-pull-scale-x","--op-pull-gap"])
+      dragNode?.style.removeProperty(name);
+    hideGhost();
+    dragGhost?.remove(); dragGhost = null; dragGhostBody = null;
+    dragPull = 0; dragLastPoint = null; dragReentry = false;
+    dragNode = null;
+    dragImageMode = null;
+    row.removeAttribute("data-op-inline-drag");
+    releaseDragReveal();
+    clearLiveDrag();
+    clearDropMarker();
+    row.removeAttribute("data-op-dragging");
+    if(!dead){applyHoverMode();scheduleGeometry();schedule();}
+    for (const entry of splitEntries.values()) entry.box.removeAttribute("data-op-group-dragging");
+    splitZone.removeAttribute("data-op-dragging");
+    splitZone.removeAttribute("data-op-side");
+    refreshIndicator();
+    refreshIslandTitle();
+    restoreStartupSearch(search);
+  }
+  function sourceHandled(tab) {
+    const source = tabOwner(tab)?.[DRAG_CONTROLLER];
+    source?.markHandled();
+  }
+  function onDragStart(event, tab, group = null) {
+    if (!hoverSupported() || !validNativeTab(tab) || !event.dataTransfer) {
+      event.preventDefault();
+      return;
+    }
+    const image = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
+    if (!image) { event.preventDefault(); return; }
+    cancelInsertion();
+    const grabbed = image.getBoundingClientRect();
+    dragGrabRatio = Math.max(0,Math.min(1,(event.clientX-grabbed.left)/Math.max(1,grabbed.width)));
+    dragGrabY = Math.max(0,Math.min(1,(event.clientY-grabbed.top)/Math.max(1,grabbed.height)));
+    const compactWidth = parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab")) || 36;
+    dragWidth = group ? (22 + image.querySelectorAll(".oneplane-tab").length*(compactWidth+3)) : compactWidth;
+    dragEdge = toolbarWrapper?.getBoundingClientRect().bottom || grabbed.bottom;
+    dragLastPoint = {x:event.clientX,y:event.clientY};
+    clearTabHover();
+    if (group && (splitGroup(tab) !== group || groupMembers(group).length < 2)) {
+      event.preventDefault();
+      return;
+    }
+    dragSearch = pointerSearch?.tab === browser.selectedTab ? pointerSearch : readStartupSearch();
+    pointerSearch = null;
+    groupPullLayout = null;
+    draggedTab = tab;
+    draggedGroup = group;
+    dragHandled = false;
+    dragStartPoint = { x: event.screenX, y: event.screenY };
+    try {
+      event.dataTransfer.mozSetDataAt(DRAG_TYPE, tab, 0);
+      event.dataTransfer.effectAllowed = "move";
+      dragNode = image;
+      dragImageMode = "inline";
+      event.dataTransfer.setDragImage(blankDragImage, 0, 0);
+      row.setAttribute("data-op-dragging", "true");
+      scheduleGeometry();
+      row.setAttribute("data-op-inline-drag", "true");
+      image.setAttribute("data-op-drag-follow","true");
+      makeDragGhost(); hideGhost();
+      if (group) image.setAttribute("data-op-group-dragging", "true");
+      if (!group && (browser.selectedTab !== tab || isSplit(tab)) && window.gZenViewSplitter?.splitTabs) {
+        splitZone.setAttribute("data-op-dragging", "true");
+      }
+      previewStripDrag(event,tab);
+      refreshIndicator();
+      refreshIslandTitle();
+      event.stopPropagation();
+    } catch (error) {
+      event.preventDefault();
+      endDragVisual();
+      draggedTab = null;
+      draggedGroup = null;
+      console.error("[OnePlane] Tab drag start:", error);
+    }
+  }
+  function onStripDragOver(event) {
+    const tab = readDraggedTab(event);
+    if (!tab) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "move";
+    clearDropMarker();
+    previewStripDrag(event, tab);
+  }
+  function moveNativeNextTo(element, dest) {
+    if (!element || !dest?.native || element === dest.native) return false;
+    const method = dest.before ? "moveTabBefore" : "moveTabAfter";
+    if (typeof browser[method] !== "function") return false;
+    browser[method](element, dest.native);
+    return true;
+  }
+  function onStripDrop(event) {
+    const tab = readDraggedTab(event);
+    if (!tab) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const owner = tabOwner(tab);
+    const source = owner?.[DRAG_CONTROLLER];
+    const group = source?.group();
+    if (owner === window && dragNode) { setDragImageMode("inline",event); setPull(0); }
+    const dest = previewStripDrag(event, tab) || dropTarget(event);
+    row.setAttribute("data-op-drag-commit", "true");
+    try {
+      if (group) {
+        // Zen exposes a real tab-group object. Moving that object keeps the
+        // grid, live browser instances and the selected pane intact.
+        if (owner === window && splitGroup(tab) === group && dest?.native !== group) {
+          moveNativeNextTo(group, dest);
+        }
+        source?.markHandled();
+        schedule();
+        return;
+      }
+      if (dest?.tab === tab || (owner === window && dest?.group && splitGroup(tab) === dest.group)) {
+        source?.markHandled();
+        return;
+      }
+      if (isSplit(tab) && !unsplitTab(tab)) { source?.markHandled(); return; }
+      if (owner === window) {
+        // Dropping a member beyond its original group detaches only that
+        // member. Never insert an ordinary tab inside another split group.
+        moveNativeNextTo(tab, dest);
+        source?.markHandled();
+      } else {
+        const all = Array.from(browser.tabs);
+        const boundary = dest?.group ? groupMembers(dest.group) : dest?.tab ? [dest.tab] : [];
+        const index = boundary.length
+          ? all.indexOf(dest.before ? boundary[0] : boundary.at(-1)) + (dest.before ? 0 : 1)
+          : all.length;
+        const adopted = browser.adoptTab(tab, { tabIndex: Math.max(0, index), selectTab: true });
+        if (adopted) source?.markHandled();
+      }
+      schedule();
+    } catch (error) {
+      console.error("[OnePlane] Tab or split group move:", error);
+    } finally {
+      clearDropMarker();
+      finishStripCommit();
+    }
+  }

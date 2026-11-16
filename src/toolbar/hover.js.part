@@ -1,0 +1,117 @@
+  let islandTextAnimation = null;
+  function refreshIslandTitle(){
+    if(dead || !row.hasAttribute("data-op-show-island")) return;
+    const item=dragNode && row.hasAttribute("data-op-dragging")?dragNode:
+      indicatorHover && list.contains(indicatorHover)?indicatorHover:entries.get(browser.selectedTab)?.item;
+    const title=item?.classList.contains("oneplane-split-group")?
+      Array.from(item.querySelectorAll(".oneplane-tab-title")).map(n=>n.textContent).filter(Boolean).join(" · "):
+      item?.querySelector(".oneplane-tab-title")?.textContent || "";
+    if(islandTitle.textContent===title) return;
+    islandTextAnimation?.cancel();
+    const hadTitle=Boolean(islandTitle.textContent);
+    islandTitle.textContent=title;
+    island.title=title;
+    if(hadTitle && title && !reducedMotion.matches &&
+        prefs.getIntPref("zen.oneplane.animation-duration",160)!==0)
+      islandTextAnimation=islandTitle.animate([{opacity:.35,translate:"0 2px"},{opacity:1,translate:"0 0"}],
+        {duration:150,easing:"ease-out"});
+  }
+  function applyHoverMode(){
+    if(dead || row.hasAttribute("data-op-dragging")) return;
+    const mode=prefs.getIntPref("zen.oneplane.hover-mode",0)===1?"island":"expand";
+    const show=mode==="island" && prefs.getBoolPref("zen.oneplane.show-center-island",true);
+    if(row.getAttribute("data-op-hover-mode")===mode && row.hasAttribute("data-op-show-island")===show) return;
+    clearTabHover();
+    row.setAttribute("data-op-hover-mode",mode);
+    row.toggleAttribute("data-op-show-island",show);
+    if(!show) row.removeAttribute("data-op-island-tight");
+    placeStripOrder(stripNodes());
+    refreshIslandTitle();
+    scheduleGeometry();
+    schedule();
+  }
+  const hoverModePreferenceObserver={observe(){applyHoverMode();}};
+  function selectHover(item, x = null) {
+    if (!item || !list.contains(item)) return;
+    cancelHoverTimer();
+    hoverX = x;
+    if (hoverTab !== item) {
+      hoverTab?.removeAttribute("data-op-expanded");
+      hoverTab?.removeAttribute("data-op-hovered");
+      hoverTab = item;
+      item.setAttribute("data-op-hovered", "true");
+      item.toggleAttribute("data-op-expanded",row.getAttribute("data-op-hover-mode")!=="island");
+    }
+    indicatorHover = item;
+    refreshIndicator();
+    refreshIslandTitle();
+  }
+  function clearTabHover() {
+    cancelHoverTimer();
+    hoverTab?.removeAttribute("data-op-expanded");
+    hoverTab?.removeAttribute("data-op-hovered");
+    hoverTab = null; hoverX = null; lastHoverPointer = null; indicatorHover = null;
+    refreshIndicator();
+    refreshIslandTitle();
+  }
+  function queueTabCollapse() {
+    if (!hoverTab || hoverTimer) return;
+    hoverTimer = window.setTimeout(() => {
+      hoverTimer = 0;
+      // Keep the plus stationary until the pointer actually leaves it.
+      if (plus.matches(":hover") || plus.matches(":active")) return;
+      clearTabHover();
+    }, hoverDelay());
+  }
+  function pointOverTabStrip(event) {
+    const a = list.getBoundingClientRect();
+    return a.width > 0 && a.height > 0 &&
+      event.clientX >= a.left - 3 && event.clientX <= a.right + 3 &&
+      event.clientY >= a.top - 2 && event.clientY <= a.bottom + 2;
+  }
+  function releaseIndicatorHover() {
+    if (!indicatorHover) return;
+    indicatorHover = null;
+    hoverX = null;
+    refreshIndicator();
+    refreshIslandTitle();
+  }
+  function trackTabPointer(event) {
+    if (!hoverSupported() || event.pointerType === "touch" || draggedTab) return;
+    const hit = event.target?.closest?.(".oneplane-tab");
+    if (hit && list.contains(hit)) {
+      const point = {x:event.clientX,y:event.clientY};
+      // Ignore synthetic retargets from geometry changes under a stationary mouse.
+      if (hoverTab && hoverTab !== hit && lastHoverPointer &&
+          Math.hypot(point.x-lastHoverPointer.x,point.y-lastHoverPointer.y) < 1) return;
+      lastHoverPointer = point;
+      selectHover(hit,event.clientX); return;
+    }
+    if (event.target === plus || (event.target instanceof Node && plus.contains(event.target))) {
+      releaseIndicatorHover();
+      cancelHoverTimer(); return;
+    }
+    // Gaps, split handles and group padding are part of the same hover
+    // session. Do not briefly retarget the selected tab in these areas.
+    if (pointOverTabStrip(event)) {
+      cancelHoverTimer(); return;
+    }
+    releaseIndicatorHover();
+    queueTabCollapse();
+  }
+  function focusTab(event) {
+    const item = event.target?.closest?.(".oneplane-tab");
+    if (item && event.target.matches(":focus-visible")) selectHover(item);
+  }
+  function blurTab(event) {
+    if (!row.contains(event.relatedTarget) && !row.matches(":hover")) queueTabCollapse();
+  }
+  function leaveTabPointer(event) {
+    // The translated strip can extend beyond the row's original box.
+    // A pointerleave from the plus or row is not necessarily a departure.
+    if (event && pointOverTabStrip(event)) return;
+    releaseIndicatorHover();
+    queueTabCollapse();
+  }
+  function onNewTabClick() { clearTabHover(); }
+

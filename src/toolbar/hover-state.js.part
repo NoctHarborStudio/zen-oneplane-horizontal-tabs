@@ -1,0 +1,13 @@
+  // Single hover target; preserve momentum across tabs and short gaps.
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const clamp = (x, min, max) => Math.max(min, Math.min(max, x));
+  let hoverTab = null, hoverX = null, hoverTimer = 0, indicatorFrame = 0;
+  let lastHoverPointer = null, indicatorHover = null;
+  let indicatorShown = false, ix = 0, iy = 0, iw = 14, ih = 3, iv = 0, last = 0, until = 0;
+  const hoverDelay = () => reducedMotion.matches ? 0 :
+    clamp(prefs.getIntPref("zen.oneplane.hover-close-delay", 260), 0, 600);
+
+  function cancelHoverTimer() {
+    if (hoverTimer) window.clearTimeout(hoverTimer);
+    hoverTimer = 0;
+  }

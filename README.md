@@ -42,3 +42,8 @@ This project is exclusively about horizontal tabs and the integrated top toolbar
 ## License
 
 [MIT](LICENSE). Independent community project; not affiliated with Zen Browser.
+
+
+## Development (0.2 source migration)
+
+Edit the source sections in `src/`, not the generated root script and stylesheet. Run `npm run build` and `npm run verify` with Node 20+. No npm dependencies are required. See [architecture and migration plan](docs/architecture.md) and [source layout](src/README.md). Preview 0.2.0-preview.1 preserves the exact runtime of 0.1.0-preview.32; persistent mode and Hub are not yet implemented.

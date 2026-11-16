@@ -1,0 +1,98 @@
+  function contourCandidates(){
+    if(!bookmarks)return [];
+    const items=document.getElementById("PlacesToolbarItems");
+    const result=items?Array.from(items.children):[];
+    const chevron=document.getElementById("PlacesChevron");
+    if(chevron && bookmarks.contains(chevron))result.push(chevron);
+    // Also cover native toolbar controls (e.g. Other Bookmarks) that
+    // are placed beside the Places strip, not inside it.
+    for(const node of bookmarks.querySelectorAll("toolbarbutton.bookmark-item, #OtherBookmarks")){
+      if(!items?.contains(node) && !result.includes(node))result.push(node);
+    }
+    return result;
+  }
+  function observeContourNodes(){
+    if(!contourResize)return;
+    const wanted=new Set(contourCandidates());
+    for(const node of contourObserved)if(!wanted.has(node)){
+      contourResize.unobserve(node);contourObserved.delete(node);
+    }
+    for(const node of wanted)if(!contourObserved.has(node)){
+      contourResize.observe(node);contourObserved.add(node);
+    }
+  }
+  function paintContour(){
+    if(dead||!toolbarWrapper||!hoverSupported())return;
+    // A switch can briefly hide or resize native bookmark controls.
+    // Retain the last valid mask until the native layout settles.
+    if(contourKey && window.performance.now()<panelSwitchUntil)return;
+    const wrapper=toolbarWrapper.getBoundingClientRect();
+    const nav=navbar?.getBoundingClientRect();
+    if(wrapper.width<=0||!nav||nav.height<=0)return;
+    // The mask and controls share panel travel. Measure the unshifted
+    // geometry, otherwise an in-flight reveal would distort the shelf.
+    const container=document.getElementById("zen-appcontent-navbar-container");
+    const translation=container?window.getComputedStyle(container).translate:"none";
+    const shiftY=translation&&translation!=="none"?(parseFloat(translation.split(/\s+/)[1])||0):0;
+    const width=Math.max(1,Math.round(wrapper.width));
+    const settings=contourSettings();
+    // Keep the top short. Include the bottom of the actual tab row
+    // (including its reserved hover room), not the bookmarks row.
+    const base=Math.max(1,Math.round(Math.max(nav.bottom,row.getBoundingClientRect().bottom)-wrapper.top-shiftY-5));
+    let left=null,right=null,deep=base;
+    if(bookmarks && !bookmarks.hidden && !bookmarks.collapsed){
+      const style=window.getComputedStyle(bookmarks);
+      const bm=bookmarks.getBoundingClientRect();
+      if(style.display!=="none" && style.visibility==="visible" && bm.height>1){
+        for(const node of contourCandidates()){
+          if(node.hidden||node.collapsed||node.getAttribute("hidden")==="true"||
+            node.getAttribute("collapsed")==="true")continue;
+          const s=window.getComputedStyle(node);
+          if(s.display==="none"||s.visibility!=="visible"||Number(s.opacity)===0)continue;
+          const b=node.getBoundingClientRect();
+          if(b.width<1||b.height<1||b.right<=bm.left||b.left>=bm.right||
+            b.bottom<=bm.top||b.top>=bm.bottom)continue;
+          const l=Math.max(0,b.left-wrapper.left,bm.left-wrapper.left);
+          const r=Math.min(width,b.right-wrapper.left,bm.right-wrapper.left);
+          if(r<=l)continue;
+          left=left===null?l:Math.min(left,l);
+          right=right===null?r:Math.max(right,r);
+          deep=Math.max(deep,b.bottom-wrapper.top-shiftY+settings.padding);
+        }
+      }
+    }
+    // Only visible items contribute. A full bookmark row naturally
+    // extends its lower contour beyond the window instead of folding
+    // the shoulders back through the edge bookmarks.
+    if(left!==null){
+      left=Math.floor(left-settings.padding);
+      right=Math.ceil(right+settings.padding);
+      deep=Math.ceil(deep);
+      if(deep<=base){left=right=null;deep=base;}
+    }
+    // The fade begins at the bottom of the TOP row, not the window
+    // top or bookmark shelf. Only the rear ramp extends below that row.
+    const height=Math.max(1,Math.ceil(Math.max(deep,base+settings.length)+1));
+    const key=[width,height,base,deep,left,right,...Object.values(settings)].join(":");
+    if(key===contourKey)return;
+    contourKey=key;
+    surface.style.setProperty("--op-contour-height",height+"px");
+    surface.style.setProperty("--op-contour-mask",contourImage(width,height,base,deep,left,right,settings));
+  }
+  function stepContour(now){
+    contourFrame=0;
+    if(dead)return;
+    paintContour();
+    if(now<contourUntil && hoverSupported())contourFrame=window.requestAnimationFrame(stepContour);
+  }
+  function scheduleContour(){
+    if(!dead&&!contourFrame)contourFrame=window.requestAnimationFrame(stepContour);
+  }
+  function onContourTransition(event){
+    if(!contourObserved.has(event.target))return;
+    if(!/^(margin|width|height|scale|translate|transform|padding)/.test(event.propertyName||""))return;
+    // Magnetic Bookmarks can move through CSS transforms without a
+    // resize notification. Follow only while its short transition runs.
+    contourUntil=window.performance.now()+360;
+    scheduleContour();
+  }

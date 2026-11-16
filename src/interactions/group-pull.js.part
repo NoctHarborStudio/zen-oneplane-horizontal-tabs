@@ -1,0 +1,82 @@
+  function islandSlotPositions(widths,gap){
+    if(!hasCenteredIsland()) return null;
+    const boundary=Math.min(leftLane.children.length,widths.length);
+    const l=leftLane.getBoundingClientRect(),r=rightLane.getBoundingClientRect();
+    return {boundary,positions:lanePositions(widths,boundary,l.right-3,r.left+3,gap)};
+  }
+  function previewGroupPull(event) {
+    const state = groupPullLayout;
+    if (!state || !dragNode) return false;
+    const {order,index,gap} = state;
+    // Freeze the visual reorder slot, rather than reverting to the
+    // original DOM position while the group shrinks.
+    let center = state.center + (event.clientX-state.pointerX)*.4;
+    const source = unshiftedRect(dragNode);
+    const rects=order.map(unshiftedRect);
+    const lanes=islandSlotPositions(rects.map(r=>r.width),gap);
+    if(lanes){
+      // Keep the whole group and its neighbours on their respective
+      // sides of the fixed title. Preserve the captured center where
+      // possible, without pushing the near edge into the island.
+      const anchored=lanes.positions[index]+source.width/2;
+      let delta=center-anchored;
+      delta=index<lanes.boundary?Math.min(0,delta):Math.max(0,delta);
+      const laneWidth=(index<lanes.boundary?leftLane:rightLane).getBoundingClientRect().width;
+      delta=Math.max(-laneWidth/2,Math.min(laneWidth/2,delta));
+      for(let i=0;i<order.length;i++){
+        if((i<lanes.boundary)===(index<lanes.boundary))lanes.positions[i]+=delta;
+      }
+      center=lanes.positions[index]+source.width/2;
+    }
+    let left = center-source.width/2, right = center+source.width/2;
+    row.setAttribute("data-op-group-pull","true");
+    shiftDragNode(dragNode,left-source.left,true);
+    // Shrink the full-size group artwork as a single object, not the
+    // individual flex children. The invisible source only reserves space.
+    makeDragGhost();
+    if (dragGhost && dragGhostBody) {
+      const sx = Math.max(.05,1-.95*dragPull);
+      const sy = Math.max(.12,1.055-.91*dragPull);
+      positionGhost(center,state.centerY+17*dragPull);
+      dragGhostBody.style.transform = "scale("+sx+","+sy+")";
+      dragGhost.hidden = false;
+    }
+    if(lanes){
+      for(let i=0;i<order.length;i++) if(i!==index)
+        shiftDragNode(order[i],lanes.positions[i]-rects[i].left);
+      shiftDragNode(plus,0);
+    }else{
+      for(let i=index-1;i>=0;i--){
+        const node=order[i], rect=rects[i];
+        left-=gap+rect.width;
+        shiftDragNode(node,left-rect.left);
+      }
+      for(let i=index+1;i<order.length;i++){
+        const node=order[i], rect=rects[i];
+        right+=gap;
+        shiftDragNode(node,right-rect.left);
+        right+=rect.width;
+      }
+      shiftDragNode(plus,right+gap-unshiftedRect(plus).left);
+    }
+    refreshIndicator();
+    return true;
+  }
+  function clearGroupPull() {
+    if (!groupPullLayout && !row.hasAttribute("data-op-group-pull")) return;
+    groupPullLayout = null;
+    row.removeAttribute("data-op-group-pull");
+    hideGhost();
+  }
+  function setPull(progress) {
+    if (!dragNode) return;
+    dragPull = progress;
+    dragNode.toggleAttribute("data-op-pulling", progress > 0);
+    dragNode.style.setProperty("--op-pull-width", Math.max(0,dragWidth*(1-.95*progress)).toFixed(2)+"px");
+    dragNode.style.setProperty("--op-pull-y", (17*progress).toFixed(2)+"px");
+    dragNode.style.setProperty("--op-pull-scale-y", String(Math.max(.12,1.055-.91*progress)));
+    dragNode.style.setProperty("--op-pull-scale-x", String(Math.max(.08,1.055-.98*progress)));
+    dragNode.style.setProperty("--op-pull-gap", (-3*progress).toFixed(2)+"px");
+    if (draggedTab && !draggedGroup) measureSplitGroup(splitGroup(draggedTab));
+    refreshIndicator();
+  }

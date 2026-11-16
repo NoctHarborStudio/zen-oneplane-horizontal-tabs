@@ -1,0 +1,169 @@
+  function drawAddress(width, reveal) {
+    const bar = addressBar();
+    if (!bar) return;
+    addressVisual = { width, reveal };
+    // The native popover background includes both the header and results.
+    // Reveal the actual shared surface with a left-to-right liquid wave
+    // while its width grows, instead of waiting for width to finish.
+    bar.setAttribute("data-op-url-animating", "true");
+    bar.style.setProperty("--op-url-live-width", Math.max(1, width).toFixed(2) + "px");
+    const bounds = bar.getBoundingClientRect();
+    const input = bar.querySelector(".urlbar-input-container");
+    const inputBottom = input?.getBoundingClientRect().bottom || bounds.top + 30;
+    const header = Math.max(1, addressAnchor?.height || inputBottom - bounds.top);
+    // Clip coordinates belong to the real popover's border box.
+    // Never make the wave extend into page content outside that box.
+    const full = Math.max(header,bounds.height);
+    const radius=parseFloat(window.getComputedStyle(bar).getPropertyValue("--op-url-radius"))||8;
+    bar.style.setProperty("--op-url-live-clip",
+      addressWaveClip(bounds.width,full,header,reveal,radius));
+  }
+  function beginAddressPhase(name, from, to, duration) {
+    addressTransition = { name, from, to, duration, start: null };
+    url.setAttribute("data-op-url-phase", name);
+    root.toggleAttribute("oneplane-address-unblur", name.startsWith("closing"));
+    drawAddress(from.width, from.reveal);
+    if (!addressAnimationFrame) addressAnimationFrame = window.requestAnimationFrame(stepAddress);
+  }
+  function stepAddress(now) {
+    addressAnimationFrame = 0;
+    const a = addressTransition;
+    if (!a || dead) return;
+    if (!nativeInlineOpen(addressBar()) || !addressMotionEnabled()) {
+      const closing = a.name.startsWith("closing");
+      clearAddressAnimation();
+      if (closing && nativeInlineOpen(addressBar())) finishDismissUrl();
+      return;
+    }
+    if (a.start === null) a.start = now;
+    const elapsed = now - a.start;
+    const t = Math.min(1, elapsed / a.duration);
+    // Same timeline for both axes. Closing reverses the opening curve;
+    // the right side of the result surface retreats before the left.
+    const horizontal = a.name === "opening" ? addressEase(t) : 1-addressEase(1-t);
+    const vertical = t;
+    drawAddress(a.from.width + (a.to.width - a.from.width) * horizontal,
+      a.from.reveal + (a.to.reveal - a.from.reveal) * vertical);
+    if (t < 1) {
+      addressAnimationFrame = window.requestAnimationFrame(stepAddress);
+      return;
+    }
+    if (a.name === "closing-wave") {
+      // Native focus and popover-close notifications can arrive separately.
+      // Hold the last compact frame until the real popover has closed;
+      // otherwise the expanded fallback width flashes for a frame.
+      addressTransition = null;
+      addressSettling = true;
+      url.setAttribute("data-op-url-phase", "settling");
+      finishDismissUrl();
+      if (!addressSettling) return;
+      if (!inlinePopoverPresent(addressBar())) {
+        clearAddressAnimation();
+        addressWasOpen = false;
+      } else {
+        addressSettleTimer = window.setTimeout(() => {
+          if (dead || !addressSettling) return;
+          // Fail open if native closure was blocked, rather than leaving the
+          // editor clipped indefinitely.
+          clearAddressAnimation();
+          addressWasOpen = nativeInlineOpen(addressBar());
+        }, 600);
+      }
+    } else {
+      clearAddressAnimation();
+    }
+  }
+  function updateAddressAnimation() {
+    const bar = addressBar();
+    const open = nativeInlineOpen(bar);
+    if (addressSettling) {
+      if (!inlinePopoverPresent(bar)) {
+        clearAddressAnimation();
+        addressWasOpen = false;
+      }
+      return;
+    }
+    if (open && !addressTransition) addressWidths();
+    if (!open || !addressMotionEnabled()) {
+      if (addressTransition) {
+        const closing = addressTransition.name.startsWith("closing");
+        clearAddressAnimation();
+        if (closing && open) finishDismissUrl();
+      }
+      addressWasOpen = open;
+      url.toggleAttribute("data-op-url-ready", open);
+      return;
+    }
+    if (addressWasOpen) return;
+    addressWasOpen = true;
+    url.removeAttribute("data-op-url-ready");
+    const widths = addressWidths();
+    // Zen may have already expanded the placeholder before its popover
+    // mutation is delivered. Start at the actual compact target, not a
+    // potentially fully expanded placeholder.
+    beginAddressPhase("opening", { width: widths.compact, reveal: 0 },
+      { width: widths.expanded, reveal: 1 }, ADDRESS_WAVE_OPEN);
+  }
+  function startAddressClose() {
+    const bar = addressBar();
+    if (!nativeInlineOpen(bar) || !addressMotionEnabled()) return false;
+    if (addressSettling || addressTransition?.name.startsWith("closing")) return true;
+    holdToolbarAfterDismiss();
+    const widths = addressWidths();
+    const from = addressVisual || { width: widths.expanded, reveal: 1 };
+    if (addressAnimationFrame) window.cancelAnimationFrame(addressAnimationFrame);
+    addressAnimationFrame = 0;
+    // Reverse an interrupted opening from its current visual position.
+    // Shrink the width and the result wave together, in one phase.
+    const to={width:widths.compact,reveal:0};
+    beginAddressPhase("closing-wave",from,to,addressWaveDuration(from,to,widths,ADDRESS_WAVE_CLOSE));
+    return true;
+  }
+  function onAddressMutation() {
+    if (dead) return;
+    updateAddressAnimation();
+    alignAddressStart();
+  }
+  function onAddressInput() {
+    // Typing or clicking the real input during closing reverses the close.
+    if (!addressSettling && !addressTransition?.name.startsWith("closing")) {
+      rememberCompactAddress();
+      return;
+    }
+    const from = addressVisual || { width: addressWidths().compact, reveal: 0 };
+    addressSettling = false;
+    if (addressSettleTimer) window.clearTimeout(addressSettleTimer);
+    addressSettleTimer = 0;
+    if (addressAnimationFrame) window.cancelAnimationFrame(addressAnimationFrame);
+    addressAnimationFrame = 0;
+    const widths=addressWidths(),to={width:widths.expanded,reveal:1};
+    beginAddressPhase("opening",from,to,addressWaveDuration(from,to,widths,ADDRESS_WAVE_OPEN));
+  }
+  function alignAddressStart() {
+    if (addressFrame) return;
+    addressFrame = window.requestAnimationFrame(() => {
+      addressFrame = 0;
+      const bar = document.getElementById("urlbar");
+      const input = addressInput();
+      updateEmptyAddress();
+      rememberCompactAddress();
+      if (!bar?.hasAttribute("focused") && !bar?.hasAttribute("open") && input) {
+        input.scrollLeft = 0;
+      }
+    });
+  }
+  function updateEmptyAddress() {
+    const tab = browser.selectedTab;
+    const spec = tab?.linkedBrowser?.currentURI?.spec || "";
+    const empty = Boolean(tab?.hasAttribute("zen-empty-tab")) ||
+      /^(about:(blank|newtab|home|privatebrowsing))(?:[?#].*)?$/i.test(spec);
+    url.toggleAttribute("data-op-empty", empty);
+  }
+  const progressListener = {
+    onLocationChange() { updateEmptyAddress(); alignAddressStart(); }
+  };
+  const actionObserver = new MutationObserver(() => {
+    if (!dead) { movePageActions(); alignAddressStart(); }
+  });
+
+

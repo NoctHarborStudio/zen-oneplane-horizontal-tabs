@@ -1,0 +1,37 @@
+  // Keep native page actions and popup anchors, moving only their actual nodes.
+  const actions = document.createXULElement("hbox");
+  actions.id = "oneplane-page-actions";
+  actions.setAttribute("skipintoolbarset", "true");
+  actions.setAttribute("removable", "false");
+  actions.setAttribute("align", "center");
+  const actionIds = ["translations-button", "zen-site-data-icon-button", "urlbar-zoom-button"];
+  const actionHomes = new Map();
+  function movePageActions() {
+    if (root.hasAttribute("customizing")) return;
+    if (actions.parentElement !== target || actions !== target.lastElementChild) {
+      target.append(actions);
+    }
+    for (const id of actionIds) {
+      const node = document.getElementById(id);
+      if (!node || node.parentElement === actions) continue;
+      if (!url.contains(node)) continue;
+      const anchor = document.createComment("OnePlane original position: " + id);
+      node.before(anchor);
+      actionHomes.set(node, anchor);
+      if (typeof actions.moveBefore === "function") actions.moveBefore(node, null);
+      else actions.append(node);
+    }
+  }
+  function restorePageActions() {
+    for (const [node, anchor] of actionHomes) {
+      if (anchor.parentNode && node.parentElement === actions) {
+        const parent = anchor.parentNode;
+        if (typeof parent.moveBefore === "function") parent.moveBefore(node, anchor);
+        else parent.insertBefore(node, anchor);
+      }
+      anchor.remove();
+    }
+    actionHomes.clear();
+    actions.remove();
+  }
+

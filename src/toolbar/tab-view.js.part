@@ -1,0 +1,77 @@
+  function favicon(tab) {
+    const src = tab.querySelector(".tab-icon-image")?.getAttribute("src")
+      || tab.getAttribute("image") || "";
+    // Only local browser icon resources; never fetch a remote icon directly.
+    if (/^(data:image\/|chrome:|resource:|moz-anno:|page-icon:|blob:)/i.test(src)) return src;
+    const page = tab.linkedBrowser?.currentURI?.spec || "";
+    return /^https?:/i.test(page) ? "page-icon:" + page : "";
+  }
+
+  function createEntry(tab) {
+    const item = html("div", "oneplane-tab");
+    const button = html("button", "oneplane-tab-select");
+    button.type = "button";
+    button.draggable = true;
+    button.setAttribute("role", "tab");
+    const icon = html("span", "oneplane-tab-icon");
+    const img = html("img");
+    img.alt = "";
+    img.draggable = false;
+    img.addEventListener("error", () => { img.hidden = true; });
+    icon.append(img);
+    const audio = html("span", "oneplane-tab-audio");
+    audio.setAttribute("aria-hidden", "true");
+    for (let i = 0; i < 3; i++) audio.append(html("i"));
+    const title = html("span", "oneplane-tab-title");
+    button.append(icon, title);
+    button.addEventListener("click", () => {
+      if (!tab.closing) browser.selectedTab = tab;
+    });
+    item.addEventListener("auxclick", event => {
+      if (event.button === 1 && !tab.closing) {
+        event.preventDefault();
+        browser.removeTab(tab, { animate: true });
+      }
+    });
+    item.addEventListener("dragstart", event => onDragStart(event, tab));
+    item.addEventListener("dragend", event => onDragEnd(event, tab));
+    item.append(button, audio);
+    return { item, button, title, img, audio, src: null };
+  }
+
+  function createSplitEntry(group) {
+    const box = html("div", "oneplane-split-group");
+    box.setAttribute("role", "group");
+    const handle = html("button", "oneplane-split-handle");
+    handle.type = "button";
+    handle.draggable = true;
+    handle.title = "Move entire Split View";
+    handle.setAttribute("aria-label", "Move entire Split View");
+    for (let i = 0; i < 6; i++) handle.append(html("i"));
+    handle.addEventListener("dragstart", event => {
+      const member = groupMembers(group)[0];
+      if (member) onDragStart(event, member, group);
+      else event.preventDefault();
+    });
+    handle.addEventListener("dragend", event => onDragEnd(event, draggedTab));
+    handle.addEventListener("click", event => {
+      event.stopPropagation();
+      const member = groupMembers(group)[0];
+      if (member && splitGroup(browser.selectedTab) !== group) browser.selectedTab = member;
+    });
+    // Keyboard alternative to drag. Move the whole group one top-level slot.
+    handle.addEventListener("keydown", event => {
+      if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+      const before = event.key === "ArrowLeft";
+      const other = before ? box.previousElementSibling : box.nextElementSibling;
+      if (!other) return;
+      const native = [...splitEntries].find(([, entry]) => entry.box === other)?.[0] || tabFromItem(other);
+      if (!native) return;
+      event.preventDefault();
+      event.stopPropagation();
+      moveNativeNextTo(group, { native, before });
+      schedule();
+    });
+    box.append(handle);
+    return {box, handle};
+  }

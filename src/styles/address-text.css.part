@@ -1,0 +1,10 @@
+    /* Address text: preserve the left edge, fade only overflowing right text. */
+    #urlbar:not([focused]) :is(.urlbar-input, #urlbar-input) {
+      mask-image: none !important;
+      text-align: start !important;
+    }
+    #urlbar:not([focused])[textoverflow] :is(.urlbar-input, #urlbar-input) {
+      mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 2ch), transparent 100%) !important;
+    }
+    #urlbar[focused] :is(.urlbar-input, #urlbar-input) { mask-image: none !important; }
+

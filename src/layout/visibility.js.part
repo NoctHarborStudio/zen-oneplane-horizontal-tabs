@@ -1,0 +1,107 @@
+  function reconcilePanel(){
+    if(panelTimer)window.clearTimeout(panelTimer);
+    panelTimer=0;
+    if(!toolbarWrapper)return;
+    if(!hoverSupported()){
+      toolbarWrapper.removeAttribute("data-op-panel-open");
+      panelCloseSince=null;
+      return;
+    }
+    const open=toolbarWrapper.hasAttribute("data-op-panel-open");
+    const direct=pointerInside||PANEL_HOLD_FLAGS.some(a=>toolbarWrapper.hasAttribute(a));
+    const native=PANEL_NATIVE_FLAGS.some(a=>toolbarWrapper.hasAttribute(a));
+    const state=panelDecision(open,direct,native,window.performance.now(),panelSwitchUntil,panelCloseSince);
+    panelCloseSince=state.closeSince;
+    if(open!==state.open){
+      toolbarWrapper.toggleAttribute("data-op-panel-open",state.open);
+      if(state.open)scheduleContour();
+      else clearTabHover();
+    }
+    if(state.wait>0)panelTimer=window.setTimeout(reconcilePanel,Math.ceil(state.wait)+1);
+  }
+  function guardPanelSwitch(){
+    if(!hoverSupported())return;
+    panelSwitchUntil=window.performance.now()+PANEL_SWITCH_GRACE;
+    if(panelSwitchTimer)window.clearTimeout(panelSwitchTimer);
+    panelSwitchTimer=window.setTimeout(()=>{
+      panelSwitchTimer=0;
+      reconcilePanel();
+      scheduleGeometry();
+      scheduleContour();
+    },PANEL_SWITCH_GRACE+1);
+    reconcilePanel();
+  }
+  let hoverObserver = null;
+  let modeObserver = null;
+  let addressHoldTimer = 0;
+  const ADDRESS_DISMISS_HOLD_MS = 2000;
+
+  function releaseAddressHold() {
+    if (addressHoldTimer) window.clearTimeout(addressHoldTimer);
+    addressHoldTimer = 0;
+    toolbarWrapper?.removeAttribute("oneplane-url-hold");
+  }
+  function holdToolbarAfterDismiss() {
+    if (!hoverSupported() || !toolbarWrapper) return;
+    releaseAddressHold();
+    toolbarWrapper.setAttribute("oneplane-url-hold", "true");
+    addressHoldTimer = window.setTimeout(() => {
+      addressHoldTimer = 0;
+      toolbarWrapper.removeAttribute("oneplane-url-hold");
+      // Normal hover/popup state remains authoritative after the hold.
+      if (pointerInside) maintainHover();
+    }, ADDRESS_DISMISS_HOLD_MS);
+  }
+  function onWindowDeactivate() {
+    clearHover();
+    releaseAddressHold();
+    clearAddressAnimation();
+  }
+  function hoverSupported() {
+    return !dead && root.hasAttribute("oneplane-active") &&
+      root.getAttribute("zen-compact-mode") === "true" &&
+      !root.hasAttribute("customizing") && !root.hasAttribute("inDOMFullscreen") &&
+      !root.hasAttribute("inFullscreen") && window.innerWidth >= 900;
+  }
+  function clearHover() {
+    pointerInside = false;
+    toolbarWrapper?.removeAttribute("oneplane-hover-lock");
+    reconcilePanel();
+  }
+  function maintainHover() {
+    if (!hoverSupported() || !pointerInside || !toolbarWrapper) return;
+    toolbarWrapper.setAttribute("oneplane-hover-lock", "true");
+    reconcilePanel();
+  }
+  function trackPointer(event) {
+    if (!hoverSupported() || !toolbarWrapper) { clearHover(); return; }
+    if(event.pointerType==="touch")return;
+    const point={x:event.clientX,y:event.clientY};
+    const moved=!panelLastPointer || Math.hypot(point.x-panelLastPointer.x,point.y-panelLastPointer.y)>=1;
+    panelLastPointer=point;
+    // Gecko can synthesize hover retargets when a tab changes layout
+    // under a stationary pointer. They must not open/close the panel.
+    if(!moved && window.performance.now()<panelSwitchUntil)return;
+    const rect=toolbarWrapper.getBoundingClientRect();
+    const open=toolbarWrapper.hasAttribute("data-op-panel-open");
+    const measured=parseFloat(toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height"))||0;
+    const height=open?Math.max(rect.height,measured):Math.max(2,Math.min(rect.height,8));
+    const inside=point.x>=rect.left && point.x<rect.right &&
+      point.y>=rect.top && point.y<rect.top+height;
+    if(!inside){if(pointerInside)clearHover();return;}
+    // Ignore synthetic enter events from descendants outside the
+    // collapsed native hit strip; actual motion/edge hover can reopen.
+    if(!open&&!moved&&!pointerInside)return;
+    pointerInside=true;
+    maintainHover();
+  }
+  function leaveWindow(event) {
+    if (event.relatedTarget === null) {panelLastPointer=null;clearHover();}
+  }
+  function onCompactChanged() {
+    if (!hoverSupported()) { clearHover(); clearTabHover(); releaseAddressHold(); clearAddressAnimation(); addressWasOpen = false; }
+    else if (nativeInlineOpen(addressBar()) && !addressTransition && !addressSettling) addressWidths();
+    reconcilePanel();
+    scheduleGeometry();
+  }
+

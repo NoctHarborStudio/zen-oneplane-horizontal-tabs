@@ -1,0 +1,57 @@
+  function splitSide(event) {
+    const box = splitZone.getBoundingClientRect();
+    if (box.width <= 0 || box.height <= 0) return "";
+    const x = (event.clientX - box.left) / box.width;
+    const y = (event.clientY - box.top) / box.height;
+    const sides = [["left", x], ["right", 1-x], ["top", y], ["bottom", 1-y]];
+    sides.sort((a,b) => a[1]-b[1]);
+    return sides[0][1] <= .25 ? sides[0][0] : "";
+  }
+  function onSplitDragOver(event) {
+    const tab = readDraggedTab(event);
+    if (!tab || tabOwner(tab) !== window || draggedGroup ||
+        (tab === browser.selectedTab && !isSplit(tab))) return;
+    // Zen's native splitter does not accept its empty workspace tab.
+    // Keep the start-page search instead of calling splitTabs with one
+    // real tab (Zen filters the empty tab out).
+    const side = emptySplitTarget(browser.selectedTab) ? "" :
+      isSplit(tab) ? "unsplit" : splitSide(event);
+    splitZone.setAttribute("data-op-side", side);
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = side ? "move" : "none";
+  }
+  function onSplitDrop(event) {
+    const tab = readDraggedTab(event);
+    const current = browser.selectedTab;
+    if (!tab || tabOwner(tab) !== window || draggedGroup ||
+        (tab === current && !isSplit(tab))) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const side = splitSide(event);
+    try {
+      if (emptySplitTarget(current)) {
+        // Reject an unsupported split without changing the selected tab.
+        sourceHandled(tab);
+        return;
+      }
+      if (isSplit(tab)) {
+        unsplitTab(tab);
+        schedule();
+      } else if (side && validNativeTab(current) && !tab.hasAttribute("zen-empty-tab")) {
+        const first = side === "left" || side === "top";
+        const grid = side === "left" || side === "right" ? "vsep" : "hsep";
+        // Mirror ZenViewSplitter's native drop order: selecting the
+        // dragged tab first restores its pending browser. Keep the old
+        // selected tab as the other pane, and let Zen own the session.
+        browser.selectedTab = tab;
+        const result = window.gZenViewSplitter?.splitTabs(first ? [tab,current] : [current,tab], grid, first ? 0 : 1);
+        if (!result && validNativeTab(current)) browser.selectedTab = current;
+        schedule();
+      }
+      sourceHandled(tab);
+    } catch (error) {
+      if (validNativeTab(current) && browser.selectedTab !== current) browser.selectedTab = current;
+      console.error("[OnePlane] Split View:", error);
+    } finally { endDragVisual(); }
+  }

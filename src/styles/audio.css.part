@@ -1,0 +1,6 @@
+@keyframes oneplane-audio-wave {
+  0% { transform: scaleY(.32); }
+  45% { transform: scaleY(1); }
+  100% { transform: scaleY(.48); }
+}
+

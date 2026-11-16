@@ -1,0 +1,38 @@
+  function emptySplitTarget(tab) {
+    return Boolean(tab?.hasAttribute("zen-empty-tab") ||
+      (dragSearch?.tab === tab && dragSearch.empty));
+  }
+  function readStartupSearch() {
+    const tab = browser.selectedTab, bar = window.gURLBar;
+    if (!tab || !bar) return null;
+    const empty = tab.hasAttribute("zen-empty-tab") ||
+      /^(about:(blank|newtab|home|privatebrowsing))(?:[?#].*)?$/i.test(tab.linkedBrowser?.currentURI?.spec || "");
+    if (!empty || !(bar.hasAttribute("zen-newtab") || bar.hasAttribute("zen-floating-urlbar")) ||
+        !(bar.hasAttribute("open") || bar.hasAttribute("focused") || bar.view?.isOpen)) return null;
+    return {tab,empty,query:bar.value || "",newtab:bar.hasAttribute("zen-newtab")};
+  }
+  function rememberStartupSearch(event) {
+    if (event.button !== 0) return;
+    pointerSearch = readStartupSearch();
+  }
+  function restoreStartupSearch(state) {
+    if (!state || dead) return;
+    if (restoreSearchTimer) window.clearTimeout(restoreSearchTimer);
+    restoreSearchTimer = window.setTimeout(()=>{
+      restoreSearchTimer=0;
+      if (dead || browser.selectedTab !== state.tab || !validNativeTab(state.tab)) return;
+      const bar=window.gURLBar;
+      if (!bar || bar.hasAttribute("open") || bar.hasAttribute("focused") || bar.view?.isOpen) return;
+      try {
+        if (state.newtab && typeof window.gZenUIManager?.handleNewTab === "function") {
+          // Native Zen new-tab search, without toggling an already-open popup.
+          if (!bar.hasAttribute("zen-newtab")) window.gZenUIManager.handleNewTab(false,false,"tab",true);
+          else { bar.search(state.query); document.getElementById("Browser:OpenLocation")?.doCommand(); }
+          if (state.query && bar.value!==state.query) bar.search(state.query);
+        } else {
+          bar.search(state.query);
+          document.getElementById("Browser:OpenLocation")?.doCommand();
+        }
+      } catch(error) { console.error("[OnePlane] Restore startup search:",error); }
+    },80);
+  }

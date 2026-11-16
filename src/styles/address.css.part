@@ -1,0 +1,240 @@
+    #nav-bar-customization-target > #urlbar-container {
+      flex: 0 0 var(--op-url) !important;
+      width: var(--op-url) !important;
+      min-width: 100px !important;
+      max-width: none !important;
+      margin-inline: 4px !important;
+      padding-block: 0 !important;
+      align-items: center !important;
+      height: var(--op-height) !important;
+      /* The top-layer popover alone expands. Keep its layout anchor
+         compact, including during native focus/close notifications. */
+      transition: none !important;
+    }
+    /* Paint the same real box in compact and top-layer states. The native
+       background child is transparent, so its state-dependent inset,
+       margins, scale or theme radius cannot change the visible silhouette. */
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) {
+      --zen-urlbar-background-base: var(--op-url-surface) !important;
+      --zen-urlbar-background-transparent: var(--op-url-surface) !important;
+      --urlbar-background-color: var(--op-url-surface) !important;
+      --urlbar-background-color-focus: var(--op-url-surface) !important;
+      --urlbar-background-border-radius: var(--op-url-radius) !important;
+      --urlbar-background-border-top-radius-open: var(--op-url-radius) !important;
+      --urlbar-background-overhang-open: 0px !important;
+      --urlbar-margin-block-start-open: 0px !important;
+      --urlbar-height: var(--op-url-header-height) !important;
+      --urlbar-container-height: var(--op-url-header-height) !important;
+      --urlbar-margin-inline: 0px !important;
+      --urlbar-component-gap: 6px !important;
+      box-sizing: border-box !important;
+      background: var(--op-url-surface) !important;
+      border: 0 !important;
+      outline: 0 !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      border-radius: var(--op-url-radius) !important;
+      border-start-start-radius: var(--op-url-radius) !important;
+      border-start-end-radius: var(--op-url-radius) !important;
+      border-end-start-radius: var(--op-url-radius) !important;
+      border-end-end-radius: var(--op-url-radius) !important;
+      clip-path: inset(0 round var(--op-url-radius)) !important;
+      color-scheme: inherit !important;
+      scale: 1 !important;
+      transform: none !important;
+      animation: none !important;
+      transition: none !important;
+      box-shadow: none !important;
+      backdrop-filter: none !important;
+      overflow: clip !important;
+    }
+    #urlbar-container #urlbar:not([breakout-extend], [zen-floating-urlbar="true"], :popover-open) {
+      position: relative !important;
+      inset: auto !important;
+      flex: 1 1 auto !important;
+      width: 100% !important;
+      min-width: 0 !important;
+      height: var(--op-url-header-height) !important;
+      min-height: var(--op-url-header-height) !important;
+      max-height: var(--op-url-header-height) !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) > .urlbar-background {
+      background: transparent !important;
+      inset: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 0 !important;
+      scale: 1 !important;
+      transform: none !important;
+      outline: none !important;
+      box-shadow: none !important;
+      backdrop-filter: none !important;
+      border-radius: var(--op-url-radius) !important;
+      transition: none !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) > .urlbar-input-container {
+      box-sizing: border-box !important;
+      flex: 0 0 auto !important;
+      width: 100% !important;
+      height: var(--op-url-header-height) !important;
+      min-height: var(--op-url-header-height) !important;
+      max-height: var(--op-url-header-height) !important;
+      align-items: center !important;
+      padding: 0 8px !important;
+      gap: 6px !important;
+      margin: 0 !important;
+      border: 0 !important;
+      outline: 0 !important;
+      border-radius: var(--op-url-radius) !important;
+      background: transparent !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) .urlbar-input-box {
+      flex: 1 1 0 !important;
+      min-width: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      align-items: center !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) #urlbar-input {
+      margin: 0 !important;
+      padding: 0 !important;
+      font-size: 13px !important;
+      font-weight: 400 !important;
+      line-height: normal !important;
+      color: var(--toolbar-color, currentColor) !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) #identity-box {
+      order: 999 !important;
+      align-items: center !important;
+      height: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) #identity-icon-box {
+      margin: 0 !important;
+      padding: 0 4px !important;
+      min-width: 24px !important;
+      width: 24px !important;
+      flex: 0 0 24px !important;
+      box-sizing: border-box !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) :is(#identity-icon, #identity-icon-box > image) {
+      width: 16px !important;
+      height: 16px !important;
+      margin: 0 !important;
+    }
+    /* Keep the real Zen copy-link action at a fixed leading position.
+       Hide only the invalid/search identity icon; valid site security
+       and permission controls remain reachable on the trailing side. */
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) #zen-copy-url-button {
+      display: flex !important;
+      order: -100 !important;
+      flex: 0 0 24px !important;
+      width: 24px !important;
+      min-width: 24px !important;
+      height: 24px !important;
+      padding: 4px !important;
+      margin: 0 !important;
+      align-items: center !important;
+      justify-content: center !important;
+      box-sizing: border-box !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      cursor: pointer !important;
+      background: transparent !important;
+      border-radius: 5px !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) #zen-copy-url-button[disabled] {
+      opacity: .35 !important;
+      cursor: default !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) #zen-copy-url-button:not([disabled]):hover {
+      background: color-mix(in srgb, currentColor 12%, transparent) !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) #identity-box[pageproxystate="invalid"] #identity-icon-box {
+      display: none !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) #searchmode-switcher:not([open]) {
+      display: none !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) .urlbarView {
+      border-radius: 0 0 var(--op-url-radius) var(--op-url-radius) !important;
+      background: transparent !important;
+    }
+    #urlbar-container #urlbar:not([zen-floating-urlbar="true"]) #urlbar-results .urlbarView-row {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+    /* A floating search is a top-layer popover, not an inline address.
+       Zen can open it over an existing page (New Tab / Ctrl+T), before a
+       new tab exists. Collapse its anchor regardless of the current URI. */
+    #nav-bar-customization-target > #urlbar-container[data-op-empty]:not(:has(#urlbar:is([focused="true"], [open]):not([zen-floating-urlbar="true"]))),
+    #nav-bar-customization-target > #urlbar-container:has(#urlbar[zen-floating-urlbar="true"]) {
+      flex: 0 0 0px !important;
+      width: 0px !important;
+      min-width: 0px !important;
+      max-width: 0px !important;
+      margin-inline: 0 !important;
+      padding-inline: 0 !important;
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      overflow: visible !important;
+    }
+    #nav-bar-customization-target > #urlbar-container:has(#urlbar[zen-floating-urlbar="true"]) {
+      /* The native floating search keeps its own width and position.
+         Do not animate the empty placeholder or reserve horizontal space. */
+      transition: none !important;
+    }
+    #urlbar-container[data-op-empty] #urlbar:not([focused="true"], [open], [zen-floating-urlbar="true"]) {
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+    #urlbar-container #urlbar[breakout-extend]:not([zen-floating-urlbar="true"]),
+    #urlbar-container #urlbar[data-op-url-animating]:popover-open:not([zen-floating-urlbar="true"]) {
+      position: fixed !important;
+      inset: auto !important;
+      left: var(--op-url-anchor-left, 110px) !important;
+      top: var(--op-url-anchor-top, 3px) !important;
+      margin: 0 !important;
+      width: var(--op-url-live-width, var(--op-url-compact-width)) !important;
+      min-width: 0 !important;
+      max-width: none !important;
+      min-height: var(--op-url-header-height) !important;
+      max-height: none !important;
+      box-sizing: border-box !important;
+      position-anchor: none !important;
+      position-area: none !important;
+      clip-path: inset(0 0 max(0px, calc(100% - var(--op-url-header-height))) 0 round var(--op-url-radius)) !important;
+    }
+    #urlbar-container[data-op-url-ready] #urlbar[breakout-extend]:not([zen-floating-urlbar="true"]) {
+      width: var(--op-url-live-width, var(--op-url-expanded-width)) !important;
+      clip-path: inset(0 round var(--op-url-radius)) !important;
+    }
+    /* Nebula keeps the web surface blurred as long as native [open] is
+       present. During our deferred closing, release that effect immediately. */
+    &[oneplane-address-unblur] #browser:has(#urlbar[open]) .browserStack {
+      filter: none !important;
+      scale: 1 !important;
+      opacity: 1 !important;
+      transition: filter 170ms ease-out, scale 170ms ease-out, opacity 170ms ease-out !important;
+    }
+    /* The real top-layer element must be animated explicitly. Native
+       popover positioning and search behavior are otherwise untouched. */
+    #urlbar-container #urlbar[data-op-url-animating]:not([zen-floating-urlbar="true"]),
+    #urlbar-container[data-op-url-ready] #urlbar[data-op-url-animating]:not([zen-floating-urlbar="true"]) {
+      width: var(--op-url-live-width, var(--op-url-compact-width)) !important;
+      clip-path: var(--op-url-live-clip, inset(0 round var(--op-url-radius))) !important;
+      transition: none !important;
+      animation: none !important;
+    }
+    #urlbar-container:is([data-op-url-phase="opening"], [data-op-url-phase="closing-wave"], [data-op-url-phase="settling"]) #urlbar:not([zen-floating-urlbar="true"]) .urlbarView {
+      pointer-events: none !important;
+    }
+    #nav-bar-customization-target > #urlbar-container[data-op-empty]:is([data-op-url-phase="closing-wave"], [data-op-url-phase="settling"]) {
+      flex-basis: 0px !important;
+      width: 0px !important;
+      min-width: 0px !important;
+    }
+

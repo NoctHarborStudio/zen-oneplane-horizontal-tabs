@@ -141,3 +141,8 @@ The inline address popover uses a pixel-coordinate clip path with a rounded head
 ## Stable panel visibility (preview.32)
 
 One visual latch (data-op-panel-open) drives height, opacity, translation and hit testing instead of raw native hover/popup selectors and :hover. Native signals still request visibility, but transient native-only opens during the 180ms tab transaction are deferred; a previously open panel waits through this window and a 100ms close hysteresis. Genuine pointer entry and explicit address/drag holds open immediately. Stationary pointer retargets during tab transactions do not update hover. The native manager is no longer repeatedly forced to re-add its hover flag. The contour is retained during tab settling; the geometry observer excludes the animated wrapper. Selected-tab scrolling is local to its lane or list. These changes address code-level flicker risks, not a reproduced live browser trace.
+
+
+## 0.2 source migration (preview.1)
+
+See [architecture.md](architecture.md). This release splits source and introduces a deterministic build and pure-function tests. The shipped JS/CSS are byte-identical to preview.32. Stateful controller boundaries, persistent mode and Hub are subsequent milestones.

@@ -1,0 +1,89 @@
+  function makeDragGhost() {
+    if (dragGhost || !dragNode) return;
+    dragGhost = html("div", "oneplane-bunny-ghost");
+    dragGhost.setAttribute("aria-hidden", "true");
+    dragGhostBody = html("div", "oneplane-bunny-card");
+    const members = draggedGroup ? Array.from(dragNode.querySelectorAll(".oneplane-tab")) : [dragNode];
+    if (draggedGroup) {
+      // Reproduce the actual compact Split View surface, its accent,
+      // six-dot handle, member cards and selected member. No interactive
+      // elements or IDs from the original toolbar are copied.
+      dragGhostBody.setAttribute("data-op-bunny-group","true");
+      dragGhostBody.toggleAttribute("data-op-bunny-active",dragNode.hasAttribute("data-op-split-active"));
+      dragGhostBody.style.setProperty("--op-bunny-accent",
+        dragNode.style.getPropertyValue("--op-split-color") || "#8eafff");
+      const style = window.getComputedStyle(row);
+      dragGhostBody.style.setProperty("--op-bunny-tab-width",style.getPropertyValue("--op-tab").trim() || "36px");
+      dragGhostBody.style.setProperty("--op-bunny-height",style.getPropertyValue("--op-height").trim() || "34px");
+      const handle = html("span","oneplane-bunny-handle");
+      for(let i=0;i<6;i++) handle.append(html("i"));
+      dragGhostBody.append(handle);
+    }
+    for (const member of members) {
+      const icon = html("span", "oneplane-bunny-icon");
+      icon.toggleAttribute("data-op-bunny-unloaded",member.hasAttribute("data-unloaded") && !member.hasAttribute("data-selected"));
+      const original = member.querySelector(".oneplane-tab-icon img:not([hidden])");
+      if (original?.getAttribute("src")) {
+        const img = html("img");
+        img.src = original.getAttribute("src"); img.alt = ""; img.draggable = false;
+        icon.append(img);
+      } else icon.textContent = "•";
+      if (draggedGroup) {
+        const card = html("span","oneplane-bunny-member");
+        card.toggleAttribute("data-op-bunny-selected",member.hasAttribute("data-selected"));
+        card.append(icon); dragGhostBody.append(card);
+      } else dragGhostBody.append(icon);
+    }
+    dragGhost.append(dragGhostBody);
+    root.append(dragGhost);
+  }
+  function positionGhost(x, y) {
+    if (!dragGhost) return;
+    dragGhost.style.left = x + "px";
+    dragGhost.style.top = y + "px";
+  }
+  function hideGhost() {
+    dragGhostAnimation?.cancel(); dragGhostAnimation = null;
+    if (dragGhost) dragGhost.hidden = true;
+    if (dragGhostBody) dragGhostBody.style.removeProperty("transform");
+  }
+  function showGhost(event, bounce) {
+    makeDragGhost();
+    if (!dragGhost) return;
+    positionGhost(event.clientX, event.clientY);
+    dragGhostBody.style.removeProperty("transform");
+    dragGhost.hidden = false;
+    if (bounce && !reducedMotion.matches && prefs.getIntPref("zen.oneplane.animation-duration",160) !== 0) {
+      dragGhostAnimation?.cancel();
+      dragGhostAnimation = dragGhostBody.animate([
+        {transform:"translateY(-8px) scale(.34,.45)",offset:0},
+        {transform:"translateY(5px) scale(1.22,.91)",offset:.24},
+        {transform:"translateY(-3px) scale(.96,1.15)",offset:.43},
+        {transform:"translateY(2px) scale(1.07,.95)",offset:.64},
+        {transform:"translateY(-1px) scale(.99,1.03)",offset:.83},
+        {transform:"translateY(0) scale(1)",offset:1}
+      ], {duration:360,easing:"linear"});
+    }
+  }
+  function captureGroupPull(event) {
+    if (groupPullLayout || !draggedGroup || !isStripNode(dragNode)) return;
+    const nodes = stripNodes();
+    const order = nodes.filter(node=>node!==dragNode);
+    const target = liveDragTarget?.element;
+    const targetIndex = order.indexOf(target);
+    const index = targetIndex < 0 ? nodes.indexOf(dragNode) :
+      targetIndex + (liveDragTarget.before ? 0 : 1);
+    order.splice(Math.max(0,index),0,dragNode);
+    const bounds = dragNode.getBoundingClientRect();
+    groupPullLayout = {
+      order, index:order.indexOf(dragNode),
+      center:(bounds.left+bounds.right)/2,
+      centerY:(bounds.top+bounds.bottom)/2,
+      pointerX:event.clientX,
+      gap:parseFloat(window.getComputedStyle(list).columnGap)||3
+    };
+  }
+  function hasCenteredIsland(){
+    return row.hasAttribute("data-op-show-island") && !row.hasAttribute("data-op-island-tight") &&
+      leftLane.parentElement===list;
+  }

@@ -1,0 +1,7 @@
+  // Native Compact Mode may clear its hover flag during a tab expansion or
+  // while entering a bookmarks row. Keep the entire visible toolbar interactive.
+  let pointerInside = false;
+  let panelTimer=0, panelSwitchTimer=0, panelSwitchUntil=0, panelCloseSince=null;
+  let panelLastPointer=null;
+  const PANEL_NATIVE_FLAGS=["zen-has-hover","has-popup-menu","zen-compact-mode-active"];
+  const PANEL_HOLD_FLAGS=["oneplane-url-hold","oneplane-drag-hold"];

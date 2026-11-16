@@ -1,0 +1,12 @@
+  function stripNodes() {
+    return leftLane.parentElement === list ?
+      [...leftLane.children,...rightLane.children] : Array.from(list.children);
+  }
+  function isStripNode(node) {
+    return Boolean(node && (node.parentElement === list ||
+      node.parentElement === leftLane || node.parentElement === rightLane));
+  }
+  function compactSlotWidth(node, tabWidth) {
+    return node.classList.contains("oneplane-split-group") ?
+      22 + node.querySelectorAll(".oneplane-tab").length*(tabWidth+3) : tabWidth;
+  }

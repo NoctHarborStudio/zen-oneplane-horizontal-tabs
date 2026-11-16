@@ -1,0 +1,21 @@
+  function placeStripOrder(order) {
+    const useLanes=row.hasAttribute("data-op-show-island");
+    // Preserve the native drag source DOM parent. Both lanes stay in
+    // place during a drag; only visual slot transforms change.
+    if(row.hasAttribute("data-op-dragging")) return;
+    if(useLanes){
+      if(leftLane.parentElement!==list) list.append(leftLane,rightLane);
+      const tabWidth=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab"))||36;
+      const boundary=islandBoundary(order.map(n=>compactSlotWidth(n,tabWidth)),tabWidth+3);
+      for(const [lane,nodes] of [[leftLane,order.slice(0,boundary)],[rightLane,order.slice(boundary)]]){
+        for(let i=0;i<nodes.length;i++)
+          if(lane.children[i]!==nodes[i]) lane.insertBefore(nodes[i],lane.children[i]||null);
+      }
+    }else{
+      for(let i=0;i<order.length;i++)
+        if(list.children[i]!==order[i]) list.insertBefore(order[i],list.children[i]||null);
+      leftLane.remove();rightLane.remove();
+    }
+  }
+
+

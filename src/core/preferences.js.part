@@ -1,0 +1,75 @@
+/* OnePlane — local, reversible Zen layout configuration.
+ * Runs only in browser.xhtml via Sine; no network or page access.
+ */
+// Services and SessionStore are native browser-chrome globals.
+
+const KEY = "zen.oneplane.original-layout";
+const CONTROLLER = "__oneplaneLayoutController";
+const TARGET = {
+  "zen.view.use-single-toolbar": false,
+  "zen.tabs.vertical.right-side": false,
+  "zen.view.sidebar-expanded": true,
+  "zen.view.compact.hide-tabbar": false,
+  "zen.view.compact.hide-toolbar": true,
+};
+const STARTUP = "zen.view.compact.enable-at-startup";
+const root = document.documentElement;
+const prefs = Services.prefs;
+let disposed = false;
+let applied = false;
+let originalCompact = false;
+let closing = false;
+let startupObserver = null;
+let removeTabStrip = null;
+
+function snapshot() {
+  const raw = prefs.getStringPref(KEY, "");
+  if (raw) {
+    const saved = JSON.parse(raw);
+    if (Object.keys({...TARGET, [STARTUP]: true}).every(name =>
+      typeof saved[name]?.value === "boolean" && typeof saved[name]?.user === "boolean")) {
+      return saved;
+    }
+    throw new Error("Invalid OnePlane layout backup; refusing to overwrite it.");
+  }
+  const saved = {};
+  for (const name of [...Object.keys(TARGET), STARTUP]) {
+    if (prefs.getPrefType(name) !== prefs.PREF_BOOL) {
+      throw new Error("Unsupported Zen preference: " + name);
+    }
+    saved[name] = { value: prefs.getBoolPref(name), user: prefs.prefHasUserValue(name) };
+  }
+  prefs.setStringPref(KEY, JSON.stringify(saved));
+  return saved;
+}
+
+function otherActiveWindow() {
+  const windows = Services.wm.getEnumerator("navigator:browser");
+  while (windows.hasMoreElements()) {
+    const other = windows.getNext();
+    if (other !== window && !other.closed && other[CONTROLLER]?.active) return true;
+  }
+  return false;
+}
+
+function restorePrefs() {
+  const raw = prefs.getStringPref(KEY, "");
+  if (!raw) return;
+  const saved = JSON.parse(raw);
+  for (const name of [...Object.keys(TARGET), STARTUP]) {
+    const original = saved[name];
+    if (!original || typeof original.value !== "boolean" || typeof original.user !== "boolean") continue;
+    // Do not overwrite settings changed by the user while the mod was active.
+    const expected = name === STARTUP ? true : TARGET[name];
+    if (name !== STARTUP && prefs.getBoolPref(name) !== expected) continue;
+    if (original.user) prefs.setBoolPref(name, original.value);
+    else prefs.clearUserPref(name);
+  }
+  prefs.clearUserPref(KEY);
+}
+
+function markClosing(event) {
+  if (event.target === document) closing = true;
+}
+
+

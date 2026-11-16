@@ -1,0 +1,31 @@
+  const entries = new Map();
+  const splitEntries = new Map();
+  function measureSplitGroup(group) {
+    const entry = splitEntries.get(group);
+    if (!entry || !entry.box.isConnected) return;
+    const members = Array.from(entry.box.children).filter(node => node.classList.contains("oneplane-tab"));
+    const gap = 3;
+    const widths = members.reduce((total, node) => {
+      const style = window.getComputedStyle(node);
+      // Hover scale is purely visual and must not change group layout.
+      return total + node.offsetWidth + (parseFloat(style.marginInlineEnd) || 0);
+    }, 0);
+    const width = 22 + widths + gap * members.length;
+    const next = Math.max(0,width).toFixed(2) + "px";
+    if (entry.box.style.getPropertyValue("--op-split-measured") !== next)
+      entry.box.style.setProperty("--op-split-measured", next);
+  }
+  const splitMeasureObserver = new ResizeObserver(records => {
+    const groups = new Set();
+    for (const {target: node} of records) {
+      const tab = tabFromItem(node);
+      const group = splitGroup(tab);
+      if (group) groups.add(group);
+    }
+    for (const group of groups) measureSplitGroup(group);
+  });
+  const splitColors = new WeakMap();
+  const splitPalette = ["#8eafff", "#74d6b6", "#d6a5ff", "#efba78", "#ed8fa9"];
+  let nextSplitColor = 0;
+  let frame = 0;
+  let dead = false;

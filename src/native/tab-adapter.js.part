@@ -1,0 +1,72 @@
+  function privateState(win) {
+    try {
+      return ChromeUtils.importESModule("resource://gre/modules/PrivateBrowsingUtils.sys.mjs")
+        .PrivateBrowsingUtils.isWindowPrivate(win);
+    } catch { return null; }
+  }
+  function tabOwner(tab) { return tab?.ownerDocument?.defaultView || null; }
+  function validNativeTab(tab) {
+    const owner = tabOwner(tab);
+    return Boolean(owner?.gBrowser && !owner.closed && !tab.closing &&
+      Array.from(owner.gBrowser.tabs).includes(tab));
+  }
+  function readDraggedTab(event) {
+    const dt = event.dataTransfer;
+    if (!dt || !Array.from(dt.types || []).includes(DRAG_TYPE)) return null;
+    try {
+      let tab = null;
+      try { tab = dt.mozGetDataAt(DRAG_TYPE, 0); } catch {}
+      // Some dragover events expose types but not data until drop. During
+      // that protected phase, resolve only an active chrome drag controller.
+      if (!tab && event.type === "dragover" && event.isTrusted) {
+        const windows = Services.wm.getEnumerator("navigator:browser");
+        while (windows.hasMoreElements()) {
+          const candidate = windows.getNext()?.[DRAG_CONTROLLER]?.source();
+          if (candidate && validNativeTab(candidate)) { tab = candidate; break; }
+        }
+      }
+      const owner = tabOwner(tab);
+      if (!validNativeTab(tab) || owner?.[DRAG_CONTROLLER]?.source() !== tab) return null;
+      // Moving the native group as a unit is supported within one window.
+      // Individual members can still be adopted by another window.
+      if (owner !== window && owner?.[DRAG_CONTROLLER]?.group()) return null;
+      const ours = privateState(window), theirs = privateState(owner);
+      if (owner !== window && (ours === null || theirs === null || ours !== theirs)) return null;
+      return tab;
+    } catch { return null; }
+  }
+  function splitGroup(tab) {
+    const group = tab?.group;
+    return group?.hasAttribute("split-view-group") ? group : null;
+  }
+  function isSplit(tab) { return Boolean(tab?.splitView || tab?.hasAttribute("split-view") || splitGroup(tab)); }
+  function unsplitTab(tab) {
+    const owner = tabOwner(tab);
+    if (!isSplit(tab)) return true;
+    const splitter = owner?.gZenViewSplitter;
+    if (typeof splitter?.removeTabFromGroup !== "function") return false;
+    splitter.removeTabFromGroup(tab, undefined, { forUnsplit: true });
+    return !isSplit(tab);
+  }
+  function tabFromItem(item) {
+    for (const [tab, entry] of entries) if (entry.item === item) return tab;
+    return null;
+  }
+  function groupMembers(group) {
+    return Array.from(group?.tabs || []).filter(validNativeTab);
+  }
+  function dropTarget(event) {
+    const children = stripNodes();
+    if (!children.length) return null;
+    let element = event.target?.closest?.(".oneplane-split-group, .oneplane-tab");
+    // The entire group is atomic for strip drops, including its internal tabs.
+    element = element?.closest?.(".oneplane-split-group") || element;
+    if (!isStripNode(element)) {
+      element = children.find(child => event.clientX < child.getBoundingClientRect().right) || children.at(-1);
+    }
+    const box = element.getBoundingClientRect();
+    const group = [...splitEntries].find(([, entry]) => entry.box === element)?.[0];
+    const tab = group ? null : tabFromItem(element);
+    const before = event.clientX < (box.left + box.right) / 2;
+    return { element, native: group || tab, group, tab, before };
+  }

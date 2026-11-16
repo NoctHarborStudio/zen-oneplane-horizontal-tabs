@@ -1,0 +1,29 @@
+  // Only OnePlane's chrome UI accepts this custom flavor. Do not advertise
+  // Firefox's native tab drag flavor without its private drag bookkeeping.
+  const DRAG_TYPE = "application/x-oneplane-native-tab";
+  const DRAG_CONTROLLER = "__oneplaneTabDrag";
+  let draggedTab = null;
+  let draggedGroup = null;
+  let dragNode = null, dragImageMode = null, dragGrabRatio = .5, dragGrabY = .5;
+  const PULL_DISTANCE = 37, REORDER_BUFFER = 8;
+  let dragGhost = null, dragGhostBody = null, dragPull = 0, dragEdge = 0, dragWidth = 0;
+  let dragGhostAnimation = null;
+  let dragLastPoint = null;
+  let dragReentry = false, dragInsertAnimation = null, dragInsertNode = null;
+  let groupPullLayout = null;
+  let pointerSearch = null, dragSearch = null, restoreSearchTimer = 0;
+  const blankDragImage = html("canvas");
+  blankDragImage.width = blankDragImage.height = 1;
+  let dragHandled = false;
+  let dragStartPoint = null;
+  let dropMarker = null;
+  let dragRevealTimer = 0;
+  let liveDragTarget = null;
+  let dragCommitFrame = 0;
+  const dragShifted = new Set();
+  const splitZone = html("div");
+  splitZone.id = "oneplane-split-drop";
+  splitZone.setAttribute("aria-hidden", "true");
+  const splitPreview = html("div", "oneplane-split-preview");
+  splitZone.append(splitPreview);
+

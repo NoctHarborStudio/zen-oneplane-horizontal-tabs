@@ -1,0 +1,193 @@
+  function destroy() {
+    if (dead) return;
+    dead = true;
+    if (frame) window.cancelAnimationFrame(frame);
+    if (dragCommitFrame) window.cancelAnimationFrame(dragCommitFrame);
+    dragCommitFrame = 0;
+    tabObserver.disconnect();
+    splitMeasureObserver.disconnect();
+    workspaceObserver.disconnect();
+    toolbarObserver.disconnect();
+    actionObserver.disconnect();
+    geometryObserver?.disconnect();
+    contourResize?.disconnect();
+    contourObserver?.disconnect();
+    prefs.removeObserver(contourPrefPrefix,contourPreferenceObserver);
+    contourObserved.clear();
+    if(contourFrame)window.cancelAnimationFrame(contourFrame);
+    contourFrame=0;
+    if(bookmarks)for(const event of ["transitionrun","transitionend","transitioncancel"])
+      bookmarks.removeEventListener(event,onContourTransition,true);
+    hoverObserver?.disconnect();
+    modeObserver?.disconnect();
+    if(panelTimer)window.clearTimeout(panelTimer);
+    if(panelSwitchTimer)window.clearTimeout(panelSwitchTimer);
+    panelTimer=panelSwitchTimer=0;
+    toolbarWrapper?.removeAttribute("data-op-panel-open");
+    if (geometryFrame) window.cancelAnimationFrame(geometryFrame);
+    clearHover();
+    releaseAddressHold();
+    clearTabHover();
+    endDragVisual();
+    cancelInsertion();
+    draggedTab = null;
+    draggedGroup = null;
+    if (window[DRAG_CONTROLLER] === dragController) delete window[DRAG_CONTROLLER];
+    window.removeEventListener("dragover", revealForDrag, true);
+    window.removeEventListener("drop", onToolbarDrop, true);
+    window.removeEventListener("dragleave", onWindowDragLeave, true);
+    window.removeEventListener("dragexit", onWindowDragLeave, true);
+    row.removeEventListener("pointerdown", rememberStartupSearch, true);
+    if (restoreSearchTimer) window.clearTimeout(restoreSearchTimer);
+    restoreSearchTimer=0;
+    row.removeEventListener("dragover", onStripDragOver);
+    row.removeEventListener("drop", onStripDrop);
+    row.removeEventListener("dragleave", onStripDragLeave);
+    splitZone.removeEventListener("dragover", onSplitDragOver);
+    splitZone.removeEventListener("drop", onSplitDrop);
+    splitZone.remove();
+    for(const lane of [list,leftLane,rightLane]) lane.removeEventListener("scroll",refreshIndicator);
+    islandTextAnimation?.cancel();
+    prefs.removeObserver("zen.oneplane.hover-mode",hoverModePreferenceObserver);
+    prefs.removeObserver("zen.oneplane.show-center-island",hoverModePreferenceObserver);
+    prefs.removeObserver("zen.oneplane.tab-indicator", indicatorPreferenceObserver);
+    window.removeEventListener("pointermove", trackTabPointer, true);
+    window.removeEventListener("deactivate", clearTabHover);
+    row.removeEventListener("pointerleave", leaveTabPointer);
+    row.removeEventListener("focusin", focusTab);
+    row.removeEventListener("focusout", blurTab);
+    plus.removeEventListener("pointerleave", leaveTabPointer);
+    plus.removeEventListener("click", onNewTabClick);
+    try { browser.removeProgressListener(progressListener); } catch {}
+    url.removeAttribute("data-op-empty");
+    url.removeAttribute("data-op-url-ready");
+    for (const name of ["--op-url-expanded-width", "--op-url-compact-width", "--op-url-anchor-left", "--op-url-anchor-top", "--op-url-header-height"]) url.style.removeProperty(name);
+    toolbarWrapper?.style.removeProperty("--op-measured-toolbar-height");
+    surface.remove();
+    leftSpacer.remove();
+    rightSpacer.remove();
+    window.removeEventListener("pointermove", trackPointer, true);
+    toolbarWrapper?.removeEventListener("pointerover", trackPointer);
+    document.documentElement.removeEventListener("mouseleave", leaveWindow);
+    window.removeEventListener("deactivate", onWindowDeactivate);
+    window.removeEventListener("ZenCompactMode:Toggled", onCompactChanged);
+    window.removeEventListener("resize", onCompactChanged);
+    addressObserver?.disconnect();
+    clearAddressAnimation();
+    addressBar()?.removeEventListener("pointerdown", onAddressInput, true);
+    addressBar()?.removeEventListener("input", onAddressInput, true);
+    addressBar()?.removeEventListener("toggle", onAddressMutation);
+    if (addressFrame) window.cancelAnimationFrame(addressFrame);
+    releaseShield();
+    shield.remove();
+    url.removeEventListener("focusout", onAddressMutation);
+    restorePageActions();
+    for (const event of events) browser.tabContainer.removeEventListener(event, schedule);
+    browser.tabContainer.removeEventListener("TabSelect", onSelect);
+    for(const event of ["TabOpen","TabClose"])browser.tabContainer.removeEventListener(event,onTabOpenOrClose,true);
+    window.removeEventListener("ZenWorkspaceDataChanged", schedule);
+    window.removeEventListener("ZenViewSplitter:SplitViewActivated", schedule);
+    window.removeEventListener("ZenViewSplitter:SplitViewDeactivated", schedule);
+    window.removeEventListener("aftercustomization", schedule);
+    row.remove();
+    entries.clear();
+    splitEntries.clear();
+  }
+
+  try {
+    url.after(row);
+    target.prepend(leftSpacer);
+    row.after(rightSpacer);
+    tabbox.append(shield, splitZone);
+    window.addEventListener("dragover", revealForDrag, true);
+    window.addEventListener("drop", onToolbarDrop, true);
+    window.addEventListener("dragleave", onWindowDragLeave, true);
+    window.addEventListener("dragexit", onWindowDragLeave, true);
+    row.addEventListener("pointerdown", rememberStartupSearch, true);
+    row.addEventListener("dragover", onStripDragOver);
+    row.addEventListener("drop", onStripDrop);
+    row.addEventListener("dragleave", onStripDragLeave);
+    splitZone.addEventListener("dragover", onSplitDragOver);
+    splitZone.addEventListener("drop", onSplitDrop);
+    toolbarWrapper?.prepend(surface);
+    movePageActions();
+    const bar = document.getElementById("urlbar");
+    if (bar) {
+      addressObserver = new MutationObserver(onAddressMutation);
+      bar.addEventListener("pointerdown", onAddressInput, true);
+      bar.addEventListener("input", onAddressInput, true);
+      bar.addEventListener("toggle", onAddressMutation);
+      addressObserver.observe(bar, { attributes: true, attributeFilter: ["focused", "open", "textoverflow", "pageproxystate", "zen-floating-urlbar", "breakout-extend", "popover-open"] });
+    }
+    url.addEventListener("focusout", onAddressMutation);
+    actionObserver.observe(url, { subtree: true, childList: true });
+    alignAddressStart();
+    applyHoverMode();
+    sync();
+    try { browser.addProgressListener(progressListener); } catch {}
+    for(const lane of [list,leftLane,rightLane]) lane.addEventListener("scroll",refreshIndicator);
+    prefs.addObserver("zen.oneplane.hover-mode",hoverModePreferenceObserver);
+    prefs.addObserver("zen.oneplane.show-center-island",hoverModePreferenceObserver);
+    prefs.addObserver("zen.oneplane.tab-indicator", indicatorPreferenceObserver);
+    window.addEventListener("pointermove", trackTabPointer, true);
+    window.addEventListener("deactivate", clearTabHover);
+    row.addEventListener("pointerleave", leaveTabPointer);
+    row.addEventListener("focusin", focusTab);
+    row.addEventListener("focusout", blurTab);
+    plus.addEventListener("pointerleave", leaveTabPointer);
+    plus.addEventListener("click", onNewTabClick);
+    for (const event of events) browser.tabContainer.addEventListener(event, schedule);
+    browser.tabContainer.addEventListener("TabSelect", onSelect);
+    for(const event of ["TabOpen","TabClose"])browser.tabContainer.addEventListener(event,onTabOpenOrClose,true);
+    window.addEventListener("ZenWorkspaceDataChanged", schedule);
+    window.addEventListener("ZenViewSplitter:SplitViewActivated", schedule);
+    window.addEventListener("ZenViewSplitter:SplitViewDeactivated", schedule);
+    window.addEventListener("aftercustomization", schedule);
+    tabObserver.observe(browser.tabContainer, {
+      subtree: true, childList: true, attributes: true,
+      attributeFilter: ["label", "image", "selected", "hidden", "busy", "pinned", "active", "zen-workspace-id", "pending", "discarded", "soundplaying", "soundplaying-scheduledremoval", "muted", "zen-empty-tab", "split-view", "split-view-group"]
+    });
+    const wrapper = document.getElementById("zen-tabs-wrapper");
+    if (wrapper && !browser.tabContainer.contains(wrapper)) {
+      workspaceObserver.observe(wrapper, { subtree: true, childList: true, attributes: true, attributeFilter: ["active", "hidden"] });
+    }
+    toolbarObserver.observe(target, { childList: true });
+    geometryObserver = new ResizeObserver(scheduleGeometry);
+    observeGeometry();
+    if(bookmarks){
+      contourResize=new ResizeObserver(scheduleContour);
+      observeContourNodes();
+      contourObserver=new MutationObserver(records=>{
+        if(records.some(r=>r.type==="childList"))observeContourNodes();
+        if(records.some(r=>r.type==="childList"||r.target===bookmarks||
+          contourObserved.has(r.target)||r.target.id==="PlacesToolbarItems"||
+          r.target.id==="PlacesToolbar"||r.target.id==="personal-bookmarks"))scheduleContour();
+      });
+      contourObserver.observe(bookmarks,{subtree:true,childList:true,attributes:true,
+        attributeFilter:["hidden","collapsed","style","class","label","overflowed","data-zr-bm-active","data-zr-bm-room"]});
+      for(const event of ["transitionrun","transitionend","transitioncancel"])
+        bookmarks.addEventListener(event,onContourTransition,true);
+    }
+    prefs.addObserver(contourPrefPrefix,contourPreferenceObserver);
+    scheduleContour();
+    if (toolbarWrapper) {
+      hoverObserver = new MutationObserver(reconcilePanel);
+      hoverObserver.observe(toolbarWrapper, { attributes: true, attributeFilter: [...PANEL_NATIVE_FLAGS,...PANEL_HOLD_FLAGS] });
+      window.requestAnimationFrame(reconcilePanel);
+      toolbarWrapper.addEventListener("pointerover", trackPointer);
+    }
+    modeObserver = new MutationObserver(onCompactChanged);
+    modeObserver.observe(root, { attributes: true, attributeFilter: ["oneplane-active", "zen-compact-mode", "customizing", "inDOMFullscreen", "inFullscreen"] });
+    window.addEventListener("pointermove", trackPointer, true);
+    document.documentElement.addEventListener("mouseleave", leaveWindow);
+    window.addEventListener("deactivate", onWindowDeactivate);
+    window.addEventListener("ZenCompactMode:Toggled", onCompactChanged);
+    window.addEventListener("resize", onCompactChanged);
+    row.setAttribute("data-ready", "true");
+  } catch (error) {
+    destroy();
+    throw error;
+  }
+  return destroy;
+}
+

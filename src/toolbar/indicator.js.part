@@ -1,0 +1,110 @@
+  function indicatorTarget() {
+    const s=row.getBoundingClientRect();
+    if(s.width<=0||s.height<=0)return null;
+    const dragging=Boolean(dragNode && row.hasAttribute("data-op-dragging"));
+    const item=dragging?dragNode:indicatorHover && list.contains(indicatorHover)?
+      indicatorHover:entries.get(browser.selectedTab)?.item;
+    if(!item||!list.contains(item)||item.hasAttribute("data-op-detached")||
+        item.closest(".oneplane-split-group[data-op-detached]"))return null;
+    if(dragging && (dragImageMode!=="inline" || dragPull>=.62))return null;
+    // For a shrinking group use the visible ghost rather than its
+    // invisible layout placeholder when determining vertical clearance.
+    const visual=dragging && dragPull>0 && draggedGroup && dragGhost &&
+      !dragGhost.hidden && dragGhostBody ? dragGhostBody : item;
+    let a=visual.getBoundingClientRect(),center=(a.left+a.right)/2;
+    if(a.width<=0)return null;
+    let w=clamp(a.width*.14,12,18),h=3;
+    if(dragging){
+      if(draggedGroup){
+        const members=Array.from(item.querySelectorAll(".oneplane-tab"));
+        if(dragPull===0 && members.length){
+          const first=members[0].getBoundingClientRect(),last=members.at(-1).getBoundingClientRect();
+          center=(first.left+last.right)/2;
+          w=Math.max(12,last.right-first.left-4);
+        }else{
+          center+=10*(1-dragPull);
+          w=Math.max(12,dragWidth-22-4);
+        }
+      }
+      const factor=pullIndicatorFactor(dragPull);
+      // Collapse before the descending card can intersect the underline.
+      const clearance=s.bottom-a.bottom-2;
+      const visibility=Math.min(factor,clamp(clearance/5,0,1));
+      if(visibility<.015)return null;
+      w*=visibility;h*=visibility;
+      return {x:center-s.left-row.clientLeft,y:Math.min(s.height-2,a.bottom-s.top+3),
+        w,h,drag:true,pulling:dragPull>0};
+    }
+    const bias=item!==indicatorHover||hoverX===null?0:
+      clamp((hoverX-center)/Math.max(1,a.width/2),-1,1);
+    return {x:center-s.left-row.clientLeft+bias*Math.min(12,a.width*.12),
+      y:Math.min(s.height-2,a.bottom-s.top+2),w,h};
+  }
+  function paintIndicator() {
+    const tail = clamp(iv * .0035, -5, 5);
+    indicator.style.width = iw.toFixed(2) + "px";
+    indicator.style.height = ih.toFixed(2) + "px";
+    indicator.style.transform = "translate3d(" + (ix - iw / 2 - tail).toFixed(2) +
+      "px," + (iy - ih / 2).toFixed(2) + "px,0)";
+  }
+  function tickIndicator(now) {
+    indicatorFrame = 0;
+    const p = indicatorTarget();
+    if (dead || !p || !indicatorShown) { hideIndicator(); return; }
+    const dt = last ? clamp((now - last) / 1000, .001, .05) : 1 / 60;
+    last = now;
+    if(p.drag){
+      // Track the painted drag card directly, with no horizontal spring
+      // lag. The width expands quickly on pickup, but collapses without
+      // lag during the pull so the indicator cannot cross the card.
+      ix=p.x;iy=p.y;iv=0;
+      const blend=reducedMotion.matches||p.pulling?1:1-Math.exp(-28*dt);
+      iw+=(p.w-iw)*blend;ih=p.h;
+    } else if (reducedMotion.matches) {
+      ix = p.x; iy = p.y; iv = 0; iw = p.w; ih = p.h;
+    } else {
+      const steps = Math.max(1, Math.ceil(dt * 120)), step = dt / steps;
+      for (let i = 0; i < steps; i++) {
+        iv += (p.x - ix) * 350 * step;
+        iv *= Math.exp(-23 * step);
+        ix += iv * step;
+      }
+      const stretch = Math.min(18, Math.abs(iv) * .025);
+      const blend = 1 - Math.exp(-24 * dt);
+      iw += (p.w + stretch - iw) * blend;
+      ih += (3 - stretch * .035 - ih) * blend;
+      iy += (p.y - iy) * (1 - Math.exp(-30 * dt));
+    }
+    paintIndicator();
+    if (p.drag || (!reducedMotion.matches && (now < until || Math.abs(ix-p.x) > .08 ||
+        Math.abs(iy-p.y) > .08 || Math.abs(iv) > .2 || Math.abs(iw-p.w) > .08 ||
+        Math.abs(ih-p.h) > .04))) {
+      indicatorFrame = window.requestAnimationFrame(tickIndicator);
+    }
+  }
+  function scheduleIndicator() {
+    if (!indicatorShown || dead) return;
+    until = window.performance.now() + 450;
+    if (!indicatorFrame) { last = 0; indicatorFrame = window.requestAnimationFrame(tickIndicator); }
+  }
+  const indicatorPreferenceObserver = { observe() { refreshIndicator(); } };
+  function hideIndicator() {
+    indicatorShown = false;
+    indicator.removeAttribute("data-visible");
+    if (indicatorFrame) window.cancelAnimationFrame(indicatorFrame);
+    indicatorFrame = 0; iv = 0; last = 0;
+  }
+  function refreshIndicator() {
+    if (dead || !prefs.getBoolPref("zen.oneplane.tab-indicator", true)) {
+      hideIndicator(); return;
+    }
+    const p = indicatorTarget();
+    if (!p) { hideIndicator(); return; }
+    if (!indicatorShown) {
+      ix=p.x; iy=p.y; iw=p.w; ih=p.h; iv=0;
+      paintIndicator();
+      indicatorShown=true;
+      indicator.setAttribute("data-visible","true");
+    }
+    scheduleIndicator();
+  }

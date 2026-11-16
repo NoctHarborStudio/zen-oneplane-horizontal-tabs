@@ -1,0 +1,105 @@
+/* OnePlane — native toolbar tab view. No fixed-position overlay. */
+#oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss, #oneplane-center-start, #oneplane-center-end, #oneplane-toolbar-surface, #oneplane-split-drop { display: none !important; }
+@media (min-width: 900px) {
+  :root[oneplane-active="true"][zen-compact-mode="true"]:not([customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window]):has(#nav-bar-customization-target > #oneplane-tabs[data-ready="true"]) {
+    --op-height: 34px;
+    --op-tab: 36px;
+    --op-tab-open: 180px;
+    --op-url: 180px;
+    --op-url-expanded-width: calc(100vw - 220px);
+    --op-url-radius: 8px;
+    --op-url-header-height: calc(var(--op-height) - 4px);
+    --op-url-compact-width: var(--op-url);
+    --op-url-surface: light-dark(#e0e4ec, #30343e);
+    --op-speed: 160ms;
+    --op-tab-speed: 205ms;
+    --op-tab-ease: cubic-bezier(.2, .75, .2, 1);
+    --op-url-open-speed: 420ms;
+    --op-url-close-speed: 380ms;
+    --op-url-ease: cubic-bezier(.22, .72, .2, 1);
+    --op-panel-open-speed: 300ms;
+    --op-panel-close-speed: 420ms;
+    --op-panel-travel: 10px;
+    --op-panel-ease: cubic-bezier(.22, .72, .2, 1);
+    @media (-moz-pref("zen.oneplane.tab-width", 32)) { --op-tab: 32px; }
+    @media (-moz-pref("zen.oneplane.tab-width", 44)) { --op-tab: 44px; }
+    @media (-moz-pref("zen.oneplane.expanded-tab-width", 140)) { --op-tab-open: 140px; }
+    @media (-moz-pref("zen.oneplane.expanded-tab-width", 240)) { --op-tab-open: 240px; }
+    @media (-moz-pref("zen.oneplane.address-width", 140)) { --op-url: 140px; }
+    @media (-moz-pref("zen.oneplane.address-width", 220)) { --op-url: 220px; }
+    @media (-moz-pref("zen.oneplane.animation-duration", 0)) {
+      --op-speed: 0ms; --op-tab-speed: 0ms;
+      --op-url-open-speed: 0ms; --op-url-close-speed: 0ms;
+      --op-panel-open-speed: 0ms; --op-panel-close-speed: 0ms;
+    }
+    @media (-moz-pref("zen.oneplane.animation-duration", 100)) { --op-speed: 100ms; --op-tab-speed: 160ms; }
+    @media (-moz-pref("zen.oneplane.animation-duration", 250)) { --op-speed: 250ms; --op-tab-speed: 300ms; }
+    @media (prefers-reduced-motion: reduce) {
+      --op-speed: 0ms; --op-tab-speed: 0ms;
+      --op-url-open-speed: 0ms; --op-url-close-speed: 0ms;
+      --op-panel-open-speed: 0ms; --op-panel-close-speed: 0ms;
+    }
+
+    /* Keep the original tab model and native sidebar DOM intact. */
+    #navigator-toolbox {
+      position: fixed !important;
+      inset: 0 auto auto 0 !important;
+      width: 1px !important;
+      height: 1px !important;
+      min-width: 0 !important;
+      min-height: 0 !important;
+      max-width: 1px !important;
+      max-height: 1px !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      overflow: hidden !important;
+      opacity: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      translate: none !important;
+    }
+    #zen-sidebar-splitter { display: none !important; }
+
+    #nav-bar {
+      min-height:calc(var(--op-height) + 18px) !important;
+    }
+    #nav-bar-customization-target {
+      min-height:calc(var(--op-height) + 18px) !important;
+      display: flex !important;
+      align-items: center !important;
+      min-width: 0 !important;
+      overflow: visible !important;
+    }
+    /* Three zones: left navigation, truly centered tabs, right page/window controls. */
+    #nav-bar-customization-target > * { order: 100 !important; }
+    #nav-bar-customization-target > toolbarspring { display: none !important; }
+    #nav-bar-customization-target > :is(#sidebar-button, #sidebar-toggle-button) { order: 0 !important; }
+    #nav-bar-customization-target > #oneplane-center-start { order: 35 !important; }
+    #nav-bar-customization-target > #back-button { order: 20 !important; }
+    #nav-bar-customization-target > #forward-button { order: 21 !important; }
+    #nav-bar-customization-target > :is(#stop-reload-button, #reload-button) { order: 22 !important; }
+    #nav-bar-customization-target > #home-button { order: 23 !important; }
+    #nav-bar-customization-target > :is(#back-button, #forward-button, #stop-reload-button, #reload-button, #home-button) {
+      margin-inline: 0 !important;
+      flex: 0 0 auto !important;
+    }
+    #nav-bar-customization-target > #urlbar-container { order: 30 !important; }
+    #nav-bar-customization-target > #oneplane-tabs { order: 40 !important; }
+    #nav-bar-customization-target > #oneplane-center-end { order: 50 !important; }
+    #nav-bar-customization-target > #oneplane-page-actions { order: 110 !important; }
+    #oneplane-center-start, #oneplane-center-end {
+      display: block !important;
+      flex: 1 1 var(--op-center-bias, 0px) !important;
+      width: 0;
+      min-width: 0;
+      height: 1px;
+      pointer-events: none;
+    }
+    #PersonalToolbar #personal-bookmarks, #PersonalToolbar #PlacesToolbar {
+      flex: 1 1 auto !important;
+      min-width: 0 !important;
+    }
+    #PersonalToolbar #PlacesToolbarItems {
+      justify-content: center !important;
+      flex: 1 1 auto !important;
+    }

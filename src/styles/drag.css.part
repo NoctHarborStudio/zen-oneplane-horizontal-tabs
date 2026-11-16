@@ -1,0 +1,198 @@
+    /* The actual mirror follows the pointer inside the toolbar. Outside,
+       switch the OS image and hide the source until native drop. */
+    #oneplane-tabs :is(.oneplane-tab-list,.oneplane-island-lane) > :is(.oneplane-tab, .oneplane-split-group),
+    #oneplane-tabs .oneplane-new-tab {
+      transform: translateX(var(--op-drag-x, 0px));
+    }
+    #oneplane-tabs :is(.oneplane-tab-list,.oneplane-island-lane) > .oneplane-tab {
+      transition: width var(--op-tab-speed) var(--op-tab-ease),
+        flex-basis var(--op-tab-speed) var(--op-tab-ease), background-color var(--op-tab-speed) ease,
+        transform 170ms cubic-bezier(.22,.72,.2,1), opacity 120ms ease,
+        margin-inline-end var(--op-tab-speed) var(--op-tab-ease),
+        scale var(--op-tab-speed) var(--op-tab-ease), translate var(--op-tab-speed) var(--op-tab-ease);
+    }
+    #oneplane-tabs :is(.oneplane-tab-list,.oneplane-island-lane) > .oneplane-split-group {
+      /* Width is measured from already-animated members, not animated twice. */
+      max-width: none;
+      transition: background-color var(--op-tab-speed) ease, box-shadow var(--op-tab-speed) ease,
+        transform 170ms cubic-bezier(.22,.72,.2,1), opacity 120ms ease,
+        margin-inline-end var(--op-tab-speed) var(--op-tab-ease);
+    }
+    #oneplane-tabs .oneplane-new-tab {
+      transition: translate var(--op-tab-speed) var(--op-tab-ease), transform 170ms cubic-bezier(.22,.72,.2,1);
+    }
+    #oneplane-tabs .oneplane-tab-list {
+      padding-inline-end: var(--op-drag-incoming, 0px);
+    }
+    #oneplane-tabs[data-op-drag-commit] :is(.oneplane-tab-list,.oneplane-island-lane) > :is(.oneplane-tab, .oneplane-split-group),
+    #oneplane-tabs[data-op-drag-commit] .oneplane-new-tab {
+      transition: none !important;
+    }
+    #oneplane-tabs .oneplane-split-group > .oneplane-tab {
+      --op-drag-x: 0px;
+      transform: translateX(var(--op-drag-x));
+    }
+    #oneplane-tabs[data-op-inline-drag] .oneplane-tab-list {
+      overflow: visible !important;
+    }
+    #oneplane-tabs [data-op-drag-follow] {
+      position: relative;
+      z-index: 12 !important;
+      transition: width var(--op-tab-speed) var(--op-tab-ease),
+        flex-basis var(--op-tab-speed) var(--op-tab-ease),
+        background-color var(--op-tab-speed) ease, opacity 120ms ease !important;
+      opacity: 1 !important;
+      pointer-events: none !important;
+      cursor: grabbing;
+    }
+    #oneplane-tabs .oneplane-split-group:has([data-op-drag-follow]) { z-index: 11; }
+    #oneplane-tabs .oneplane-tab {
+      transition: width var(--op-tab-speed) var(--op-tab-ease),
+        flex-basis var(--op-tab-speed) var(--op-tab-ease), background-color var(--op-tab-speed) ease,
+        transform 170ms cubic-bezier(.22,.72,.2,1), opacity 120ms ease,
+        margin-inline-end var(--op-tab-speed) var(--op-tab-ease),
+        scale var(--op-tab-speed) var(--op-tab-ease), translate var(--op-tab-speed) var(--op-tab-ease);
+    }
+    /* The card visibly grows into the spare vertical space of the row.
+       Keep horizontal overhang below half the 3px slot gap at every
+       supported width, and keep the independent drag transform untouched. */
+    #oneplane-tabs .oneplane-tab { scale: 1; translate: 0 0; transform-origin: center; }
+    #oneplane-tabs .oneplane-tab-icon img {
+      scale: 1;
+      transition: scale var(--op-tab-speed) var(--op-tab-ease);
+    }
+    #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) {
+      scale: 1.02 1.20;
+      translate: 0 7px;
+      z-index: 2;
+    }
+    #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) .oneplane-tab-icon img {
+      scale: 1.28;
+    }
+    /* Split members stay within their shared frame. A small in-frame
+       lift and a larger favicon are preferable to stretching the group. */
+    #oneplane-tabs:not([data-op-dragging]) .oneplane-split-group .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) {
+      scale:1 1.05;
+      translate:0 1px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered],
+      #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered] .oneplane-tab-icon img { scale: 1 !important; translate: none !important; }
+    }
+    @media (-moz-pref("zen.oneplane.animation-duration", 0)) {
+      #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered],
+      #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered] .oneplane-tab-icon img { scale: 1 !important; translate: none !important; }
+    }
+    #oneplane-tabs[data-op-hover-mode="island"] .oneplane-tab[data-op-hovered] {
+      background: color-mix(in srgb, currentColor 19%, transparent);
+    }
+    #oneplane-tabs[data-op-hover-mode="island"] .oneplane-split-group .oneplane-tab[data-op-hovered] {
+      background: color-mix(in srgb, var(--op-split-color) 27%, transparent);
+    }
+    #oneplane-tabs[data-op-dragging] .oneplane-tab:not([data-op-reinsert]) {
+      scale: 1;
+      translate: none;
+    }
+    #oneplane-tabs[data-op-dragging] .oneplane-tab {
+      width: var(--op-tab) !important;
+      flex-basis: var(--op-tab) !important;
+    }
+    #oneplane-tabs[data-op-dragging] :is(.oneplane-tab, .oneplane-split-group)[data-op-detached] {
+      opacity: 0 !important;
+      width: 0 !important;
+      flex-basis: 0px !important;
+      min-width: 0 !important;
+      max-width: 0 !important;
+      margin-inline-end: -3px !important;
+      padding-inline: 0 !important;
+      overflow: hidden !important;
+      pointer-events: none !important;
+      transition: width var(--op-tab-speed) var(--op-tab-ease),
+        flex-basis var(--op-tab-speed) var(--op-tab-ease),
+        max-width var(--op-tab-speed) var(--op-tab-ease),
+        margin-inline-end var(--op-tab-speed) var(--op-tab-ease),
+        padding-inline var(--op-tab-speed) var(--op-tab-ease),
+        opacity 100ms ease !important;
+    }
+    #oneplane-tabs[data-op-dragging] .oneplane-tab[data-op-drag-follow] {
+      transition: width var(--op-tab-speed) var(--op-tab-ease),
+        flex-basis var(--op-tab-speed) var(--op-tab-ease), opacity 120ms ease !important;
+    }
+    #oneplane-tabs[data-op-dragging] .oneplane-split-group[data-op-drag-follow] {
+      transition: background-color var(--op-tab-speed) ease, opacity 120ms ease !important;
+    }
+    /* Pointer-driven squash: the layout slot shrinks with the painted source. */
+    #oneplane-tabs[data-op-dragging] [data-op-pulling]:not([data-op-detached]) {
+      width: var(--op-pull-width) !important;
+      flex: 0 0 var(--op-pull-width) !important;
+      min-width: 0 !important;
+      max-width: var(--op-pull-width) !important;
+      margin-inline-end: var(--op-pull-gap,0px) !important;
+      transform: translateX(var(--op-drag-x,0px)) translateY(var(--op-pull-y,0px))
+        scaleY(var(--op-pull-scale-y,1)) !important;
+      transform-origin: center bottom;
+      overflow: hidden !important;
+      transition: none !important;
+    }
+    #oneplane-tabs[data-op-dragging] [data-op-pulling]:not([data-op-detached]) .oneplane-tab-icon {
+      transform: scaleX(var(--op-pull-scale-x,1));
+    }
+    #oneplane-tabs[data-op-dragging] [data-op-drag-follow]:not([data-op-detached]) {
+      background: light-dark(#dce1ed,#424653) !important;
+      box-shadow: inset 0 0 0 1px light-dark(#929bad,#939bad), 0 3px 10px #0004 !important;
+    }
+    #oneplane-tabs[data-op-dragging] [data-op-drag-follow] .oneplane-tab-icon,
+    #oneplane-tabs[data-op-dragging] [data-op-drag-follow] .oneplane-tab-icon img {
+      opacity: 1 !important;
+      filter: none !important;
+      transition: none !important;
+    }
+    /* Unloaded tabs stay half-strength throughout pickup and carriage.
+       Only the icon is dimmed; the drag card remains opaque. */
+    #oneplane-tabs[data-op-dragging] .oneplane-tab[data-unloaded]:not([data-selected])[data-op-drag-follow] .oneplane-tab-icon,
+    #oneplane-tabs[data-op-dragging] .oneplane-split-group[data-op-drag-follow] .oneplane-tab[data-unloaded]:not([data-selected]) .oneplane-tab-icon {
+      opacity: .5 !important;
+      filter: grayscale(.5) !important;
+      transition: none !important;
+    }
+    /* A single pointer-driven geometry pass positions all neighbors.
+       Transitions here would lag behind the moving group and overlap it. */
+    #oneplane-tabs[data-op-group-pull] :is(.oneplane-tab-list,.oneplane-island-lane) > :is(.oneplane-tab,.oneplane-split-group),
+    #oneplane-tabs[data-op-group-pull] .oneplane-new-tab {
+      transition: none !important;
+    }
+    #oneplane-tabs[data-op-group-pull] .oneplane-split-group[data-op-pulling] {
+      visibility: hidden !important;
+      padding-inline: 0 !important;
+    }
+    #oneplane-tabs[data-op-dragging] .oneplane-split-group[data-op-drag-follow]:not([data-op-detached]) {
+      background: color-mix(in srgb, var(--op-split-color) 13%, light-dark(#e9edf5,#222631)) !important;
+      box-shadow: inset 0 0 0 1px var(--op-split-color), 0 3px 10px #0004 !important;
+    }
+    #oneplane-tabs[data-op-dragging] .oneplane-split-group[data-op-split-active][data-op-drag-follow]:not([data-op-detached]) {
+      background: color-mix(in srgb, var(--op-split-color) 24%, light-dark(#e9edf5,#222631)) !important;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #oneplane-tabs .oneplane-tab-icon { transition: none !important; }
+    }
+    @media (-moz-pref("zen.oneplane.animation-duration", 0)) {
+      #oneplane-tabs .oneplane-tab-icon { transition: none !important; }
+    }
+    /* The slot opens immediately; the card itself springs into it. */
+    #oneplane-tabs [data-op-reinsert] {
+      transform-origin: center center !important;
+      transition: none !important;
+      will-change: scale, translate;
+      z-index: 12 !important;
+    }
+    #oneplane-tabs[data-op-dragging] [data-op-detached] { visibility: hidden !important; }
+    #oneplane-tabs[data-op-dragging] .oneplane-tab-title { max-width: 0 !important; opacity: 0 !important; }
+    #oneplane-tabs[data-op-dragging] .oneplane-tab-select { gap: 0 !important; padding-inline: 0 !important; }
+    @media (prefers-reduced-motion: reduce) {
+      #oneplane-tabs :is(.oneplane-tab-list,.oneplane-island-lane) > :is(.oneplane-tab, .oneplane-split-group),
+      #oneplane-tabs .oneplane-new-tab { transition: none !important; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #oneplane-tabs .oneplane-tab-audio i { animation: none !important; }
+    }
+

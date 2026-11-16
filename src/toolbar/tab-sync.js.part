@@ -1,0 +1,150 @@
+  function sync() {
+    frame = 0;
+    if (dead) return;
+    // Respect the current workspace and native visibility.
+    const tabs = Array.from(browser.visibleTabs || browser.tabs || []).filter(
+      tab => !tab.closing && !tab.hidden && !tab.hasAttribute("zen-empty-tab")
+    );
+    const count = String(tabs.length);
+    if (row.style.getPropertyValue("--op-tab-count") !== count) {
+      row.style.setProperty("--op-tab-count", count);
+      scheduleGeometry();
+    }
+    updateEmptyAddress();
+    const keep = new Set(tabs);
+    for (const [tab, entry] of entries) {
+      if (!keep.has(tab)) {
+        if (hoverTab === entry.item) clearTabHover();
+        splitMeasureObserver.unobserve(entry.item);
+        entry.item.remove(); entries.delete(tab);
+      }
+    }
+    const groups = [...new Set(tabs.map(splitGroup).filter(Boolean))];
+    const groupCount = String(groups.length);
+    if (row.style.getPropertyValue("--op-split-count") !== groupCount) {
+      row.style.setProperty("--op-split-count", groupCount);
+      scheduleGeometry();
+    }
+    const order = [];
+    const groupItems = new Map();
+    for (const group of groups) {
+      if (!splitEntries.has(group)) splitEntries.set(group, createSplitEntry(group));
+      if (!splitColors.has(group)) splitColors.set(group, splitPalette[nextSplitColor++ % splitPalette.length]);
+      const entry = splitEntries.get(group);
+      entry.box.style.setProperty("--op-split-color", splitColors.get(group));
+      entry.box.toggleAttribute("data-op-split-active", group === splitGroup(browser.selectedTab));
+      groupItems.set(group, []);
+    }
+    for (let index = 0; index < tabs.length; index++) {
+      const tab = tabs[index];
+      let entry = entries.get(tab);
+      if (!entry) {
+        entry = createEntry(tab);
+        entries.set(tab, entry);
+        splitMeasureObserver.observe(entry.item);
+      }
+      const label = tab.label || tab.getAttribute("label") || "New tab";
+      const selected = tab === browser.selectedTab;
+      entry.item.toggleAttribute("data-selected", selected);
+      const group = splitGroup(tab);
+      const split = isSplit(tab);
+      entry.item.toggleAttribute("data-op-split", split);
+      entry.item.toggleAttribute("data-op-split-active", split && Boolean(group && group === splitGroup(browser.selectedTab)));
+      // First/last flags are assigned after groups are laid out in visual order.
+      entry.item.removeAttribute("data-op-split-prev");
+      entry.item.removeAttribute("data-op-split-next");
+      if (split) entry.item.style.setProperty("--op-split-color", splitColors.get(group) || splitPalette[0]);
+      else entry.item.style.removeProperty("--op-split-color");
+      entry.item.toggleAttribute("data-pinned", Boolean(tab.pinned));
+      entry.item.toggleAttribute("data-busy", tab.hasAttribute("busy"));
+      entry.item.toggleAttribute("data-unloaded", !selected && (tab.hasAttribute("pending") || tab.hasAttribute("discarded")));
+      const muted = tab.hasAttribute("muted");
+      const audible = tab.hasAttribute("soundplaying") || tab.hasAttribute("soundplaying-scheduledremoval");
+      entry.item.toggleAttribute("data-audio", audible && !muted);
+      entry.item.toggleAttribute("data-muted", muted);
+      entry.audio.title = muted ? "Tab muted" : audible ? "Playing audio" : "";
+      entry.button.setAttribute("aria-selected", String(selected));
+      entry.button.setAttribute("aria-label", label + (split ? ", Split View" : "") + (muted ? ", muted" : audible ? ", playing audio" : ""));
+      if (entry.title.textContent !== label) entry.title.textContent = label;
+      const src = favicon(tab);
+      if (entry.src !== src) {
+        entry.src = src;
+        entry.img.hidden = !src;
+        if (src) entry.img.setAttribute("src", src);
+        else entry.img.removeAttribute("src");
+      }
+      if (group && splitEntries.has(group)) {
+        const members = groupItems.get(group);
+        if (!members.length) order.push(splitEntries.get(group).box);
+        members.push(entry.item);
+      } else {
+        order.push(entry.item);
+      }
+    }
+    // Reparent the mirrored UI only when membership actually changes.
+    // Native tabs and their native Split View containers are not reparented.
+    for (const [group, items] of groupItems) {
+      const entry = splitEntries.get(group);
+      entry.box.setAttribute("aria-label", "Split View, " + items.length + " tabs");
+      entry.box.style.setProperty("--op-split-members", String(items.length));
+      for (let i = 0; i < items.length; i++) {
+        const node = items[i];
+        if (entry.box.children[i + 1] !== node) entry.box.insertBefore(node, entry.box.children[i + 1] || null);
+      }
+    }
+    placeStripOrder(order);
+    for (const [group, entry] of splitEntries) {
+      if (!groupItems.has(group)) { entry.box.remove(); splitEntries.delete(group); }
+      else measureSplitGroup(group);
+    }
+    // Count each actual visible tab, including split members, but never
+    // the group wrapper, handle or plus. Use rendered order, not native
+    // indexes, because a split can collect non-adjacent native tabs.
+    const visualTabs = Array.from(list.querySelectorAll(".oneplane-tab"));
+    row.toggleAttribute("data-op-small-strip", visualTabs.length <= 3);
+    for (let i = 0; i < visualTabs.length; i++) {
+      visualTabs[i].toggleAttribute("data-op-first", i === 0);
+      visualTabs[i].toggleAttribute("data-op-last", i === visualTabs.length - 1);
+    }
+    refreshIndicator();
+    refreshIslandTitle();
+    scheduleGeometry();
+  }
+
+  function schedule() {
+    if (!dead && !frame) frame = window.requestAnimationFrame(sync);
+  }
+  function revealSelectedInStrip(){
+    if(dead)return;
+    const item=entries.get(browser.selectedTab)?.item;
+    if(!item||!list.contains(item))return;
+    // Never scroll ancestors (native toolbar, page, or window).
+    const viewport=item.closest(".oneplane-island-lane")||list;
+    if(viewport.scrollWidth<=viewport.clientWidth+1)return;
+    const a=item.getBoundingClientRect(),b=viewport.getBoundingClientRect();
+    const delta=a.left<b.left?a.left-b.left:a.right>b.right?a.right-b.right:0;
+    if(Math.abs(delta)>1)viewport.scrollLeft+=delta;
+  }
+  function onSelect() {
+    guardPanelSwitch();
+    updateEmptyAddress();
+    schedule();
+    alignAddressStart();
+    window.requestAnimationFrame(revealSelectedInStrip);
+  }
+  function onTabOpenOrClose(){
+    guardPanelSwitch();
+    schedule();
+  }
+  const events = ["TabOpen", "TabClose", "TabMove", "TabAttrModified", "TabPinned", "TabUnpinned", "TabShow", "TabHide", "TabBrowserInserted", "TabBrowserDiscarded", "ZenTabRemovedFromSplit"];
+  const tabObserver = new MutationObserver(schedule);
+  const workspaceObserver = new MutationObserver(schedule);
+  const toolbarObserver = new MutationObserver(() => {
+    if (dead || root.hasAttribute("customizing")) return;
+    if (url.parentElement === target && row.parentElement !== target) url.after(row);
+    if (leftSpacer.parentElement !== target) target.prepend(leftSpacer);
+    if (rightSpacer.parentElement !== target) row.after(rightSpacer);
+    movePageActions();
+    observeGeometry();
+  });
+

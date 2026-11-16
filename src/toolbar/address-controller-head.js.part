@@ -1,0 +1,79 @@
+  let addressSettling = false;
+  let addressSettleTimer = 0;
+  const addressEase = t => 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 3);
+
+  function addressBar() { return document.getElementById("urlbar"); }
+  function nativeInlineOpen(bar) {
+    return Boolean(bar && bar.hasAttribute("breakout-extend") &&
+      !bar.hasAttribute("zen-floating-urlbar") &&
+      (bar.hasAttribute("open") || bar.hasAttribute("focused")));
+  }
+  function inlinePopoverPresent(bar) {
+    return Boolean(bar && !bar.hasAttribute("zen-floating-urlbar") &&
+      (bar.hasAttribute("breakout-extend") || bar.matches(":popover-open")));
+  }
+  function addressMotionEnabled() {
+    return hoverSupported() &&
+      prefs.getIntPref("zen.oneplane.animation-duration", 160) !== 0 &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+  function addressWidths() {
+    const base = parseFloat(window.getComputedStyle(url).getPropertyValue("--op-url")) || 180;
+    const compact = url.hasAttribute("data-op-empty") ? 0 : (addressCompactWidth || base);
+    const bar = addressBar();
+    const anchor = url.getBoundingClientRect();
+    const left = anchor.left + (addressAnchor?.dx || 0);
+    const top = anchor.top + (addressAnchor?.dy || 0);
+    url.style.setProperty("--op-url-anchor-left", left.toFixed(2) + "px");
+    url.style.setProperty("--op-url-anchor-top", top.toFixed(2) + "px");
+    url.style.setProperty("--op-url-header-height", Math.max(24, addressAnchor?.height || anchor.height || 30).toFixed(2) + "px");
+    // Zen has several caption containers, including hidden sidebar copies.
+    // Prefer the live right-hand group; never cover the minimize button.
+    const groups = Array.from(document.querySelectorAll(".titlebar-buttonbox-container"));
+    let nativeGroup;
+    try { nativeGroup = window.gZenVerticalTabsManager?.actualWindowButtons; } catch {}
+    if (nativeGroup && !groups.includes(nativeGroup)) groups.unshift(nativeGroup);
+    let right = window.innerWidth;
+    for (const group of groups) {
+      const box = group.getBoundingClientRect();
+      const style = window.getComputedStyle(group);
+      if (box.width > 0 && box.height > 0 && box.left > window.innerWidth / 2 &&
+          box.right <= window.innerWidth + 2 && style.visibility === "visible" &&
+          style.display !== "none" && Number(style.opacity || 1) > 0) {
+        right = Math.min(right, box.left);
+      }
+    }
+    const expanded = Math.max(compact, right - Math.max(0, left) - 6);
+    url.style.setProperty("--op-url-expanded-width", expanded.toFixed(2) + "px");
+    url.style.setProperty("--op-url-compact-width", Math.max(1, compact).toFixed(2) + "px");
+    return { compact, expanded };
+  }
+  function rememberCompactAddress() {
+    const bar = addressBar();
+    if (!bar || inlinePopoverPresent(bar) ||
+        bar.hasAttribute("zen-floating-urlbar") || url.hasAttribute("data-op-empty")) return;
+    const box = bar.getBoundingClientRect();
+    const anchor = url.getBoundingClientRect();
+    if (box.width > 0 && box.height > 0) {
+      addressCompactWidth = box.width;
+      addressAnchor = { dx: box.left - anchor.left, dy: box.top - anchor.top,
+        height: box.height };
+      addressWidths();
+    }
+  }
+  function clearAddressAnimation() {
+    if (addressAnimationFrame) window.cancelAnimationFrame(addressAnimationFrame);
+    addressAnimationFrame = 0;
+    addressTransition = null;
+    addressVisual = null;
+    addressSettling = false;
+    if (addressSettleTimer) window.clearTimeout(addressSettleTimer);
+    addressSettleTimer = 0;
+    url.removeAttribute("data-op-url-phase");
+    url.toggleAttribute("data-op-url-ready", nativeInlineOpen(addressBar()));
+    root.removeAttribute("oneplane-address-unblur");
+    const bar = addressBar();
+    bar?.removeAttribute("data-op-url-animating");
+    bar?.style.removeProperty("--op-url-live-width");
+    bar?.style.removeProperty("--op-url-live-clip");
+  }

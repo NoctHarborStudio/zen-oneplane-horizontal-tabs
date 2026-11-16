@@ -1,0 +1,14 @@
+  const contourDefaults={transparency:4,strength:100,length:69,hold:30,curve:65,radius:24,padding:0};
+  const contourPrefPrefix="zen.oneplane.fade-";
+  let contourFrame=0, contourUntil=0, contourKey="";
+  let contourResize=null, contourObserver=null;
+  const contourObserved=new Set();
+  function contourSettings(){
+    const read=(name,min,max)=>Math.max(min,Math.min(max,
+      prefs.getIntPref(contourPrefPrefix+name,contourDefaults[name])));
+    const length=read("length",10,160);
+    return {transparency:read("transparency",0,40),strength:read("strength",0,100),
+      length,hold:Math.min(length-1,read("hold",0,45)),curve:read("curve",25,300),
+      radius:read("radius",4,24),padding:read("padding",0,20)};
+  }
+  const contourPreferenceObserver={observe(){scheduleContour();}};

@@ -1,0 +1,41 @@
+// The horizontal strip is a view of native tabs, not a second tab session.
+function installTabStrip() {
+  const browser = window.gBrowser;
+  const target = document.getElementById("nav-bar-customization-target");
+  const url = document.getElementById("urlbar-container");
+  if (!browser?.tabContainer || !target || url?.parentElement !== target) {
+    throw new Error("OnePlane: native toolbar or tabs not available");
+  }
+
+  const html = (tag, cls) => {
+    const node = document.createElementNS("http://www.w3.org/1999/xhtml", tag);
+    if (cls) node.className = cls;
+    return node;
+  };
+  const row = html("div");
+  row.id = "oneplane-tabs";
+  row.setAttribute("skipintoolbarset", "true");
+  row.setAttribute("removable", "false");
+  const list = html("div", "oneplane-tab-list");
+  list.setAttribute("role", "tablist");
+  list.setAttribute("aria-label", "Browser tabs");
+  const plus = html("button", "oneplane-new-tab");
+  plus.type = "button";
+  plus.textContent = "+";
+  plus.title = "New tab";
+  plus.setAttribute("aria-label", "New tab");
+  plus.addEventListener("click", () => {
+    const command = document.getElementById("cmd_newNavigatorTab");
+    if (typeof command?.doCommand === "function") command.doCommand();
+    else window.BrowserCommands?.openTab();
+  });
+  const indicator = html("div");
+  indicator.id = "oneplane-tab-indicator";
+  indicator.setAttribute("aria-hidden", "true");
+  const leftLane = html("div","oneplane-island-lane oneplane-island-left");
+  const rightLane = html("div","oneplane-island-lane oneplane-island-right");
+  const island = html("div","oneplane-title-island");
+  island.setAttribute("aria-hidden","true");
+  const islandTitle = html("span","oneplane-island-title");
+  island.append(islandTitle);
+  row.append(list, plus, indicator, island);

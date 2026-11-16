@@ -1,0 +1,42 @@
+  function onDragEnd(event, tab) {
+    const dt = event.dataTransfer;
+    const handled = dragHandled;
+    const wasGroup = Boolean(draggedGroup);
+    const start = dragStartPoint;
+    draggedTab = null; draggedGroup = null; dragHandled = false; dragStartPoint = null;
+    endDragVisual();
+    if (wasGroup || !start || handled || dt?.mozUserCancelled || dt?.dropEffect !== "none" ||
+        !validNativeTab(tab) || tabOwner(tab) !== window) return;
+    // A cancelled drag or a drop within this window must never create
+    // another window. screenX/Y are browser-chrome desktop CSS coordinates.
+    const x = event.screenX, y = event.screenY;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || (x === 0 && y === 0) ||
+        Math.hypot(x-start.x,y-start.y) < 12) return;
+    const left = window.screenX, top = window.screenY;
+    const inside = x >= left && x < left + window.outerWidth &&
+      y >= top && y < top + window.outerHeight;
+    if (inside) return;
+    try {
+      // Native session adoption preserves the live browser, history, audio
+      // and private-window state. Zen chooses its native window-sync mode.
+      if (isSplit(tab) && !unsplitTab(tab)) return;
+      browser.replaceTabWithWindow(tab, {
+        replaceLastTab: true, screenX: x - 40, screenY: y - 20,
+        outerWidth: Math.min(window.outerWidth, 1200),
+        outerHeight: Math.min(window.outerHeight, 850)
+      });
+    } catch (error) { console.error("[OnePlane] Detach tab:", error); }
+  }
+  const dragController = {
+    source: () => draggedTab,
+    group: () => draggedGroup,
+    outside: event => setDragImageMode("outside",event),
+    markHandled: () => {
+      dragHandled = true;
+      endDragVisual();
+      draggedTab = null;
+      draggedGroup = null;
+    }
+  };
+  window[DRAG_CONTROLLER] = dragController;
+

@@ -1,0 +1,235 @@
+{
+  "schema": 1,
+  "javascript": [
+    {
+      "path": "src/core/preferences.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/core/window-scope.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/toolbar/strip-geometry.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/algorithms/island-boundary.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/toolbar/strip-order.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/toolbar/page-actions.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/toolbar/address-shield.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/toolbar/address-state.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/algorithms/address-spread.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/toolbar/address-controller-head.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/algorithms/address-wave.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/toolbar/address-controller.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/layout/surface.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/layout/contour-settings.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/algorithms/contour.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/layout/contour-controller.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/layout/geometry.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/layout/visibility-state.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/algorithms/panel-timing.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/layout/visibility-note.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/algorithms/panel-decision.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/layout/visibility.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/toolbar/tab-state.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/interactions/drag-state.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/native/tab-adapter.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/interactions/reorder.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/interactions/bunny-ghost.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/algorithms/lane-positions.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/interactions/group-pull.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/interactions/native-drag-image.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/interactions/strip-drag.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/interactions/startup-search.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/interactions/drag-controller.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/interactions/split-drop.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/interactions/drag-end.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/toolbar/hover-state.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/algorithms/pull-indicator.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/toolbar/indicator.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/toolbar/hover.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/toolbar/tab-view.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/toolbar/tab-sync.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/core/window-lifecycle.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/core/bootstrap.js.part",
+      "kind": "section"
+    }
+  ],
+  "stylesheet": [
+    {
+      "path": "src/styles/base.css.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/styles/address.css.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/styles/tabs.css.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/styles/split-groups.css.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/styles/split-handles.css.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/styles/drag.css.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/styles/split-drop.css.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/styles/address-text.css.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/styles/page-actions.css.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/styles/address-shield.css.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/styles/panel.css.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/styles/contour.css.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/styles/audio.css.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/styles/bunny.css.part",
+      "kind": "section"
+    }
+  ]
+}

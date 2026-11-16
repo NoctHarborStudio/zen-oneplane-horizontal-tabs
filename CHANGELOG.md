@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0-preview.1
+
+- Introduce ordered source sections for core, native adapter, layout, toolbar, interactions and CSS; extract eight independently importable pure algorithm modules.
+- Add a dependency-free deterministic Node build, build parity verification and five regression test suites.
+- Keep the shipped JS and CSS byte-identical to 0.1.0-preview.32. No behavior, settings or Sine entry changes.
+- Document the staged persistent-layout and OnePlane Hub architecture. Stateful controllers still share the original window closure at this migration stage.
+
 ## 0.1.0-preview.32
 
 - Stabilize Compact Mode visibility with one visual state for the surface and controls, a 180ms tab-switch settling window and 100ms close hysteresis. Do not restart the panel transition on transient native hover flags or stationary-pointer retargets.

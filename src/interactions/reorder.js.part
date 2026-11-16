@@ -1,0 +1,70 @@
+  // Keep native drag-and-drop alive: do not move/remove the source DOM node
+  // until drop. Visually reorder its slot and animate the other slots instead.
+  function unshiftedRect(node) {
+    const rect = node.getBoundingClientRect();
+    let x = 0;
+    try {
+      const transform = window.getComputedStyle(node).transform;
+      if (transform && transform !== "none") x = new DOMMatrixReadOnly(transform).m41;
+    } catch {}
+    // CSS individual scale can be animated during reinsertion; do not use
+    // the painted width as the slot width or the reorder thresholds drift.
+    const width = node.offsetWidth;
+    const center = (rect.left + rect.right)/2 - x;
+    return { left: center-width/2, right: center+width/2, width };
+  }
+  function dragSlotIndex(slots, x) {
+    const midpoint = slot => (slot.rect.left + slot.rect.right) / 2;
+    // Keep the current insertion boundary until the pointer crosses an
+    // additional 8 CSS pixels. Do not chase the animated neighbors.
+    const old = slots.findIndex(slot => nativeSlot(slot.node).native === liveDragTarget?.native);
+    if (old >= 0) {
+      let i = old + (liveDragTarget.before ? 0 : 1);
+      while (i < slots.length && x > midpoint(slots[i]) + REORDER_BUFFER) i++;
+      while (i > 0 && x < midpoint(slots[i - 1]) - REORDER_BUFFER) i--;
+      return i;
+    }
+    return slots.findIndex(slot => x < midpoint(slot));
+  }
+  function nativeSlot(node) {
+    const group = [...splitEntries].find(([, entry]) => entry.box === node)?.[0];
+    const tab = group ? null : tabFromItem(node);
+    return { element: node, native: group || tab, group, tab };
+  }
+  function clearLiveDrag() {
+    liveDragTarget = null;
+    for (const node of dragShifted) {
+      node.style.removeProperty("--op-drag-x");
+      node.removeAttribute("data-op-drag-follow");
+    }
+    dragShifted.clear();
+    row.removeAttribute("data-op-live-drag");
+    if(row.hasAttribute("data-op-island-incoming")){
+      row.removeAttribute("data-op-island-incoming");
+      scheduleGeometry();
+    }
+    row.style.removeProperty("--op-drag-incoming");
+  }
+  function finishStripCommit() {
+    // The visual slots already occupy their destination. Apply the native
+    // order and remove transforms together, without a second transition.
+    clearLiveDrag();
+    if (frame) window.cancelAnimationFrame(frame);
+    frame = 0;
+    sync();
+    if (dragCommitFrame) window.cancelAnimationFrame(dragCommitFrame);
+    dragCommitFrame = window.requestAnimationFrame(() => {
+      dragCommitFrame = 0;
+      row.removeAttribute("data-op-drag-commit");
+    });
+  }
+  function shiftDragNode(node, x, follow = false) {
+    node.style.setProperty("--op-drag-x", x.toFixed(2) + "px");
+    node.toggleAttribute("data-op-drag-follow", follow);
+    dragShifted.add(node);
+  }
+  function toolbarContainsPoint(x, y) {
+    const rect = toolbarWrapper?.getBoundingClientRect();
+    return Boolean(rect && x >= rect.left && x < rect.right &&
+      y >= rect.top && y <= Math.max(rect.top + 8, rect.bottom));
+  }
