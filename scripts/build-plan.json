@@ -46,11 +46,19 @@
       "kind": "esm-inline"
     },
     {
+      "path": "src/algorithms/address-empty.mjs",
+      "kind": "esm-inline"
+    },
+    {
       "path": "src/toolbar/address-controller.js.part",
       "kind": "section"
     },
     {
       "path": "src/layout/surface.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/native/window-captions.js.part",
       "kind": "section"
     },
     {

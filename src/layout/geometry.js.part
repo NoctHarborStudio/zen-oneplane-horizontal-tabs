@@ -9,6 +9,8 @@
       geometryFrame = 0;
       if (dead || !root.hasAttribute("oneplane-active") || !toolbarWrapper) return;
       if (window.innerWidth < 900 || root.hasAttribute("customizing")) return;
+      if(toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
+         window.performance.now()<panelSwitchUntil)return;
       const targetRect = target.getBoundingClientRect();
       // Center the collapsed tabs against the WINDOW, not the remaining toolbar.
       // Native window buttons and all left/right controls consume edge space.

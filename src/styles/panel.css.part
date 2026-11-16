@@ -24,12 +24,12 @@
       --zen-browser-container-margin-top-fix: 0px !important;
       margin-top: 0 !important;
     }
-    #zen-appcontent-navbar-wrapper:not([data-op-panel-open]) #zen-appcontent-navbar-container {
+    &[zen-compact-mode="true"] #zen-appcontent-navbar-wrapper:not([data-op-panel-open]) #zen-appcontent-navbar-container {
       pointer-events: none !important;
     }
     /* Offscreen descendants must not keep :hover alive outside the
        collapsed native hit strip. Leave native floating search alone. */
-    #zen-appcontent-navbar-wrapper:not([data-op-panel-open]) #zen-appcontent-navbar-container :not(#urlbar[zen-floating-urlbar="true"], #urlbar[zen-floating-urlbar="true"] *) {
+    &[zen-compact-mode="true"] #zen-appcontent-navbar-wrapper:not([data-op-panel-open]) #zen-appcontent-navbar-container :not(#urlbar[zen-floating-urlbar="true"], #urlbar[zen-floating-urlbar="true"] *) {
       pointer-events: none !important;
     }
     /* Frosted native toolbar; retain native reveal animation and popup states. */
@@ -47,7 +47,7 @@
       opacity: 1 !important;
       pointer-events: auto !important;
     }
-    #zen-appcontent-navbar-wrapper:not([data-op-panel-open]) #urlbar:not([zen-floating-urlbar="true"], [breakout-extend], :popover-open) {
+    &[zen-compact-mode="true"] #zen-appcontent-navbar-wrapper:not([data-op-panel-open]) #urlbar:not([zen-floating-urlbar="true"], [breakout-extend], :popover-open) {
       opacity:0 !important;
       pointer-events:none !important;
     }

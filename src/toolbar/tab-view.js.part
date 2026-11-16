@@ -25,7 +25,11 @@
     const title = html("span", "oneplane-tab-title");
     button.append(icon, title);
     button.addEventListener("click", () => {
-      if (!tab.closing) browser.selectedTab = tab;
+      if (!tab.closing && tab!==browser.selectedTab) {
+        guardRestoredAddress(tab);
+        guardPanelSwitch();
+        browser.selectedTab = tab;
+      }
     });
     item.addEventListener("auxclick", event => {
       if (event.button === 1 && !tab.closing) {

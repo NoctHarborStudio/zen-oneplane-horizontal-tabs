@@ -7,6 +7,11 @@
       panelCloseSince=null;
       return;
     }
+    if(!compactLayout()){
+      panelCloseSince=null;
+      toolbarWrapper.setAttribute("data-op-panel-open","true");
+      return;
+    }
     const open=toolbarWrapper.hasAttribute("data-op-panel-open");
     const direct=pointerInside||PANEL_HOLD_FLAGS.some(a=>toolbarWrapper.hasAttribute(a));
     const native=PANEL_NATIVE_FLAGS.some(a=>toolbarWrapper.hasAttribute(a));
@@ -57,11 +62,14 @@
     releaseAddressHold();
     clearAddressAnimation();
   }
+  function compactLayout(){
+    return root.getAttribute("zen-compact-mode")==="true";
+  }
   function hoverSupported() {
     return !dead && root.hasAttribute("oneplane-active") &&
-      root.getAttribute("zen-compact-mode") === "true" &&
-      !root.hasAttribute("customizing") && !root.hasAttribute("inDOMFullscreen") &&
-      !root.hasAttribute("inFullscreen") && window.innerWidth >= 900;
+      !root.hasAttribute("customizing") && root.getAttribute("inDOMFullscreen")!=="true" &&
+      root.getAttribute("inFullscreen")!=="true" && !root.hasAttribute("popup-window") &&
+      window.innerWidth >= 900;
   }
   function clearHover() {
     pointerInside = false;
@@ -99,6 +107,8 @@
     if (event.relatedTarget === null) {panelLastPointer=null;clearHover();}
   }
   function onCompactChanged() {
+    if(hoverSupported())ensureWindowCaptions();
+    else restoreWindowCaptions();
     if (!hoverSupported()) { clearHover(); clearTabHover(); releaseAddressHold(); clearAddressAnimation(); addressWasOpen = false; }
     else if (nativeInlineOpen(addressBar()) && !addressTransition && !addressSettling) addressWidths();
     reconcilePanel();

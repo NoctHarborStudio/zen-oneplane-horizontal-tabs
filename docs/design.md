@@ -146,3 +146,8 @@ One visual latch (data-op-panel-open) drives height, opacity, translation and hi
 ## 0.2 source migration (preview.1)
 
 See [architecture.md](architecture.md). This release splits source and introduces a deterministic build and pure-function tests. The shipped JS/CSS are byte-identical to preview.32. Stateful controller boundaries, persistent mode and Hub are subsequent milestones.
+
+
+## 0.2 preview.2
+
+OnePlane stays horizontal with Compact Mode disabled. The native mode is not forced at activation. Persistent toolbar occupies native flow and has no rear gradient spilling over page content. OP-001 records a suspected lazy-tab URI and geometry race; mitigation requires live validation.

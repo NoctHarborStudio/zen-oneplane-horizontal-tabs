@@ -71,6 +71,7 @@
     document.documentElement.removeEventListener("mouseleave", leaveWindow);
     window.removeEventListener("deactivate", onWindowDeactivate);
     window.removeEventListener("ZenCompactMode:Toggled", onCompactChanged);
+    window.removeEventListener("ZenCompactMode:LayoutUpdate", onCompactChanged);
     window.removeEventListener("resize", onCompactChanged);
     addressObserver?.disconnect();
     clearAddressAnimation();
@@ -78,10 +79,13 @@
     addressBar()?.removeEventListener("input", onAddressInput, true);
     addressBar()?.removeEventListener("toggle", onAddressMutation);
     if (addressFrame) window.cancelAnimationFrame(addressFrame);
+    if(restoringAddressTimer)window.clearTimeout(restoringAddressTimer);
+    restoringAddressTimer=0;restoringAddressTab=null;
     releaseShield();
     shield.remove();
     url.removeEventListener("focusout", onAddressMutation);
     restorePageActions();
+    restoreWindowCaptions();
     for (const event of events) browser.tabContainer.removeEventListener(event, schedule);
     browser.tabContainer.removeEventListener("TabSelect", onSelect);
     for(const event of ["TabOpen","TabClose"])browser.tabContainer.removeEventListener(event,onTabOpenOrClose,true);
@@ -182,6 +186,7 @@
     document.documentElement.addEventListener("mouseleave", leaveWindow);
     window.addEventListener("deactivate", onWindowDeactivate);
     window.addEventListener("ZenCompactMode:Toggled", onCompactChanged);
+    window.addEventListener("ZenCompactMode:LayoutUpdate", onCompactChanged);
     window.addEventListener("resize", onCompactChanged);
     row.setAttribute("data-ready", "true");
   } catch (error) {

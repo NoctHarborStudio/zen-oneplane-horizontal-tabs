@@ -126,6 +126,7 @@
     if(Math.abs(delta)>1)viewport.scrollLeft+=delta;
   }
   function onSelect() {
+    guardRestoredAddress(browser.selectedTab);
     guardPanelSwitch();
     updateEmptyAddress();
     schedule();

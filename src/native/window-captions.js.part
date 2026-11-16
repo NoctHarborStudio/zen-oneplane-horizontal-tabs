@@ -1,0 +1,22 @@
+  let captionHome=null, captionNode=null;
+  function ensureWindowCaptions(){
+    const toolbox=document.getElementById("navigator-toolbox");
+    let node;
+    try{node=window.gZenVerticalTabsManager?.actualWindowButtons;}catch{}
+    if(!navbar||!node||!toolbox?.contains(node))return;
+    captionHome?.remove();
+    captionHome=document.createComment("OnePlane native captions");
+    node.before(captionHome);
+    captionNode=node;
+    if(typeof navbar.moveBefore==="function")navbar.moveBefore(node,null);
+    else navbar.append(node);
+  }
+  function restoreWindowCaptions(){
+    if(captionHome?.parentNode && captionNode?.parentNode===navbar){
+      const parent=captionHome.parentNode;
+      if(typeof parent.moveBefore==="function")parent.moveBefore(captionNode,captionHome);
+      else parent.insertBefore(captionNode,captionHome);
+    }
+    captionHome?.remove();
+    captionHome=captionNode=null;
+  }

@@ -17,7 +17,6 @@ const root = document.documentElement;
 const prefs = Services.prefs;
 let disposed = false;
 let applied = false;
-let originalCompact = false;
 let closing = false;
 let startupObserver = null;
 let removeTabStrip = null;
@@ -56,12 +55,13 @@ function restorePrefs() {
   const raw = prefs.getStringPref(KEY, "");
   if (!raw) return;
   const saved = JSON.parse(raw);
-  for (const name of [...Object.keys(TARGET), STARTUP]) {
+  // Compact Mode is a user-owned setting.
+  for (const name of Object.keys(TARGET)) {
     const original = saved[name];
     if (!original || typeof original.value !== "boolean" || typeof original.user !== "boolean") continue;
     // Do not overwrite settings changed by the user while the mod was active.
-    const expected = name === STARTUP ? true : TARGET[name];
-    if (name !== STARTUP && prefs.getBoolPref(name) !== expected) continue;
+    const expected = TARGET[name];
+    if (prefs.getBoolPref(name) !== expected) continue;
     if (original.user) prefs.setBoolPref(name, original.value);
     else prefs.clearUserPref(name);
   }
@@ -374,6 +374,11 @@ function installTabStrip() {
       Math.abs(to.width-from.width)/Math.max(1,full.expanded-full.compact));
     return Math.max(80,duration*Math.min(1,fraction));
   }
+  function emptyAddressState(explicitEmpty,uri,pending,restoring){
+    if(explicitEmpty)return true;
+    if(pending||restoring)return false;
+    return /^(about:(blank|newtab|home|privatebrowsing))(?:[?#].*)?$/i.test(uri);
+  }
   function drawAddress(width, reveal) {
     const bar = addressBar();
     if (!bar) return;
@@ -528,12 +533,30 @@ function installTabStrip() {
       }
     });
   }
+  let restoringAddressTab=null, restoringAddressUntil=0, restoringAddressTimer=0;
+  function guardRestoredAddress(tab){
+    if(!tab || tab.hasAttribute("zen-empty-tab"))return;
+    const mirrored=entries.get(tab)?.item;
+    if(!tab.hasAttribute("pending")&&!tab.hasAttribute("discarded")&&
+       !mirrored?.hasAttribute("data-op-unloaded"))return;
+    restoringAddressTab=tab;
+    restoringAddressUntil=window.performance.now()+1500;
+    if(restoringAddressTimer)window.clearTimeout(restoringAddressTimer);
+    restoringAddressTimer=window.setTimeout(()=>{
+      restoringAddressTimer=0;
+      restoringAddressTab=null;
+      if(dead)return;
+      updateEmptyAddress();
+      scheduleGeometry();
+    },1501);
+  }
   function updateEmptyAddress() {
     const tab = browser.selectedTab;
     const spec = tab?.linkedBrowser?.currentURI?.spec || "";
-    const empty = Boolean(tab?.hasAttribute("zen-empty-tab")) ||
-      /^(about:(blank|newtab|home|privatebrowsing))(?:[?#].*)?$/i.test(spec);
-    url.toggleAttribute("data-op-empty", empty);
+    const pending=Boolean(tab?.hasAttribute("pending")||tab?.hasAttribute("discarded"));
+    const restoring=tab===restoringAddressTab && window.performance.now()<restoringAddressUntil;
+    const empty=emptyAddressState(Boolean(tab?.hasAttribute("zen-empty-tab")),spec,pending,restoring);
+    url.toggleAttribute("data-op-empty",empty);
   }
   const progressListener = {
     onLocationChange() { updateEmptyAddress(); alignAddressStart(); }
@@ -570,6 +593,28 @@ function installTabStrip() {
   // Unified Contour: composite the solid silhouette and vertical ramp
   // into ONE alpha mask. Applying opacity to their union prevents the
   // gradient from darkening the already translucent bookmark shelf.
+  let captionHome=null, captionNode=null;
+  function ensureWindowCaptions(){
+    const toolbox=document.getElementById("navigator-toolbox");
+    let node;
+    try{node=window.gZenVerticalTabsManager?.actualWindowButtons;}catch{}
+    if(!navbar||!node||!toolbox?.contains(node))return;
+    captionHome?.remove();
+    captionHome=document.createComment("OnePlane native captions");
+    node.before(captionHome);
+    captionNode=node;
+    if(typeof navbar.moveBefore==="function")navbar.moveBefore(node,null);
+    else navbar.append(node);
+  }
+  function restoreWindowCaptions(){
+    if(captionHome?.parentNode && captionNode?.parentNode===navbar){
+      const parent=captionHome.parentNode;
+      if(typeof parent.moveBefore==="function")parent.moveBefore(captionNode,captionHome);
+      else parent.insertBefore(captionNode,captionHome);
+    }
+    captionHome?.remove();
+    captionHome=captionNode=null;
+  }
   const contourDefaults={transparency:4,strength:100,length:69,hold:30,curve:65,radius:24,padding:0};
   const contourPrefPrefix="zen.oneplane.fade-";
   let contourFrame=0, contourUntil=0, contourKey="";
@@ -729,6 +774,8 @@ function installTabStrip() {
       geometryFrame = 0;
       if (dead || !root.hasAttribute("oneplane-active") || !toolbarWrapper) return;
       if (window.innerWidth < 900 || root.hasAttribute("customizing")) return;
+      if(toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
+         window.performance.now()<panelSwitchUntil)return;
       const targetRect = target.getBoundingClientRect();
       // Center the collapsed tabs against the WINDOW, not the remaining toolbar.
       // Native window buttons and all left/right controls consume edge space.
@@ -828,6 +875,11 @@ function installTabStrip() {
       panelCloseSince=null;
       return;
     }
+    if(!compactLayout()){
+      panelCloseSince=null;
+      toolbarWrapper.setAttribute("data-op-panel-open","true");
+      return;
+    }
     const open=toolbarWrapper.hasAttribute("data-op-panel-open");
     const direct=pointerInside||PANEL_HOLD_FLAGS.some(a=>toolbarWrapper.hasAttribute(a));
     const native=PANEL_NATIVE_FLAGS.some(a=>toolbarWrapper.hasAttribute(a));
@@ -878,11 +930,14 @@ function installTabStrip() {
     releaseAddressHold();
     clearAddressAnimation();
   }
+  function compactLayout(){
+    return root.getAttribute("zen-compact-mode")==="true";
+  }
   function hoverSupported() {
     return !dead && root.hasAttribute("oneplane-active") &&
-      root.getAttribute("zen-compact-mode") === "true" &&
-      !root.hasAttribute("customizing") && !root.hasAttribute("inDOMFullscreen") &&
-      !root.hasAttribute("inFullscreen") && window.innerWidth >= 900;
+      !root.hasAttribute("customizing") && root.getAttribute("inDOMFullscreen")!=="true" &&
+      root.getAttribute("inFullscreen")!=="true" && !root.hasAttribute("popup-window") &&
+      window.innerWidth >= 900;
   }
   function clearHover() {
     pointerInside = false;
@@ -920,6 +975,8 @@ function installTabStrip() {
     if (event.relatedTarget === null) {panelLastPointer=null;clearHover();}
   }
   function onCompactChanged() {
+    if(hoverSupported())ensureWindowCaptions();
+    else restoreWindowCaptions();
     if (!hoverSupported()) { clearHover(); clearTabHover(); releaseAddressHold(); clearAddressAnimation(); addressWasOpen = false; }
     else if (nativeInlineOpen(addressBar()) && !addressTransition && !addressSettling) addressWidths();
     reconcilePanel();
@@ -2146,7 +2203,11 @@ function installTabStrip() {
     const title = html("span", "oneplane-tab-title");
     button.append(icon, title);
     button.addEventListener("click", () => {
-      if (!tab.closing) browser.selectedTab = tab;
+      if (!tab.closing && tab!==browser.selectedTab) {
+        guardRestoredAddress(tab);
+        guardPanelSwitch();
+        browser.selectedTab = tab;
+      }
     });
     item.addEventListener("auxclick", event => {
       if (event.button === 1 && !tab.closing) {
@@ -2324,6 +2385,7 @@ function installTabStrip() {
     if(Math.abs(delta)>1)viewport.scrollLeft+=delta;
   }
   function onSelect() {
+    guardRestoredAddress(browser.selectedTab);
     guardPanelSwitch();
     updateEmptyAddress();
     schedule();
@@ -2419,6 +2481,7 @@ function installTabStrip() {
     document.documentElement.removeEventListener("mouseleave", leaveWindow);
     window.removeEventListener("deactivate", onWindowDeactivate);
     window.removeEventListener("ZenCompactMode:Toggled", onCompactChanged);
+    window.removeEventListener("ZenCompactMode:LayoutUpdate", onCompactChanged);
     window.removeEventListener("resize", onCompactChanged);
     addressObserver?.disconnect();
     clearAddressAnimation();
@@ -2426,10 +2489,13 @@ function installTabStrip() {
     addressBar()?.removeEventListener("input", onAddressInput, true);
     addressBar()?.removeEventListener("toggle", onAddressMutation);
     if (addressFrame) window.cancelAnimationFrame(addressFrame);
+    if(restoringAddressTimer)window.clearTimeout(restoringAddressTimer);
+    restoringAddressTimer=0;restoringAddressTab=null;
     releaseShield();
     shield.remove();
     url.removeEventListener("focusout", onAddressMutation);
     restorePageActions();
+    restoreWindowCaptions();
     for (const event of events) browser.tabContainer.removeEventListener(event, schedule);
     browser.tabContainer.removeEventListener("TabSelect", onSelect);
     for(const event of ["TabOpen","TabClose"])browser.tabContainer.removeEventListener(event,onTabOpenOrClose,true);
@@ -2530,6 +2596,7 @@ function installTabStrip() {
     document.documentElement.addEventListener("mouseleave", leaveWindow);
     window.addEventListener("deactivate", onWindowDeactivate);
     window.addEventListener("ZenCompactMode:Toggled", onCompactChanged);
+    window.addEventListener("ZenCompactMode:LayoutUpdate", onCompactChanged);
     window.addEventListener("resize", onCompactChanged);
     row.setAttribute("data-ready", "true");
   } catch (error) {
@@ -2556,10 +2623,6 @@ function cleanup() {
   if (window[CONTROLLER] === controller) delete window[CONTROLLER];
   if (!wasApplied) return;
   try {
-    const manager = window.gZenCompactModeManager;
-    if (!closing && manager?.preference === true && !originalCompact) {
-      manager.preference = false;
-    }
     if (!otherActiveWindow()) restorePrefs();
     if (!closing) window.dispatchEvent(new CustomEvent("ZenCompactMode:LayoutUpdate"));
   } catch (error) {
@@ -2578,15 +2641,13 @@ async function activate() {
     if (!manager || typeof manager.hideToolbar !== "function") {
       throw new Error("Unsupported Zen Compact Mode API.");
     }
-    const hadBackup = prefs.prefHasUserValue(KEY);
-    const saved = snapshot();
-    originalCompact = hadBackup ? saved[STARTUP].value : manager.preference;
+    snapshot();
     applied = true;
     for (const [name, value] of Object.entries(TARGET)) {
       if (prefs.getBoolPref(name) !== value) prefs.setBoolPref(name, value);
     }
+    // Configure the hide target without forcing Compact Mode on.
     manager.hideToolbar();
-    if (!manager.preference) manager.preference = true;
     removeTabStrip = installTabStrip();
     // Native state changes and animations remain owned by Zen.
     root.setAttribute("oneplane-active", "true");

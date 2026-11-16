@@ -15,10 +15,6 @@ function cleanup() {
   if (window[CONTROLLER] === controller) delete window[CONTROLLER];
   if (!wasApplied) return;
   try {
-    const manager = window.gZenCompactModeManager;
-    if (!closing && manager?.preference === true && !originalCompact) {
-      manager.preference = false;
-    }
     if (!otherActiveWindow()) restorePrefs();
     if (!closing) window.dispatchEvent(new CustomEvent("ZenCompactMode:LayoutUpdate"));
   } catch (error) {
@@ -37,15 +33,13 @@ async function activate() {
     if (!manager || typeof manager.hideToolbar !== "function") {
       throw new Error("Unsupported Zen Compact Mode API.");
     }
-    const hadBackup = prefs.prefHasUserValue(KEY);
-    const saved = snapshot();
-    originalCompact = hadBackup ? saved[STARTUP].value : manager.preference;
+    snapshot();
     applied = true;
     for (const [name, value] of Object.entries(TARGET)) {
       if (prefs.getBoolPref(name) !== value) prefs.setBoolPref(name, value);
     }
+    // Configure the hide target without forcing Compact Mode on.
     manager.hideToolbar();
-    if (!manager.preference) manager.preference = true;
     removeTabStrip = installTabStrip();
     // Native state changes and animations remain owned by Zen.
     root.setAttribute("oneplane-active", "true");

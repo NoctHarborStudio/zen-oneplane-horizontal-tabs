@@ -34,3 +34,8 @@ Free is a normal native workspace designated by stable UUID, default on ordinary
 5. Essentials, pinned and folders; then movement and native actions.
 
 Build locally with npm run build, verify with npm run verify, commit sources and generated artifacts atomically. CI checks parity, syntax, algorithms, stable manifest identity, monotonically increasing version/timestamp and served archive. Runtime smoke testing in Zen remains required.
+
+
+## Preview.2 — independent layout
+
+The common activation scope no longer depends on Compact Mode. The native mode is user-owned and changes only visibility/layout: overlay versus persistent in-flow. The persistent toolbar uses a solid background, no overlay gradient into page content. Native caption controls are rescued only if the manager puts them in the hidden toolbox, and restored on unload. Existing source sections remain transitional. See [OP-001](known-issues.md) for the reported unloaded-tab flicker mitigation.

@@ -152,12 +152,30 @@
       }
     });
   }
+  let restoringAddressTab=null, restoringAddressUntil=0, restoringAddressTimer=0;
+  function guardRestoredAddress(tab){
+    if(!tab || tab.hasAttribute("zen-empty-tab"))return;
+    const mirrored=entries.get(tab)?.item;
+    if(!tab.hasAttribute("pending")&&!tab.hasAttribute("discarded")&&
+       !mirrored?.hasAttribute("data-op-unloaded"))return;
+    restoringAddressTab=tab;
+    restoringAddressUntil=window.performance.now()+1500;
+    if(restoringAddressTimer)window.clearTimeout(restoringAddressTimer);
+    restoringAddressTimer=window.setTimeout(()=>{
+      restoringAddressTimer=0;
+      restoringAddressTab=null;
+      if(dead)return;
+      updateEmptyAddress();
+      scheduleGeometry();
+    },1501);
+  }
   function updateEmptyAddress() {
     const tab = browser.selectedTab;
     const spec = tab?.linkedBrowser?.currentURI?.spec || "";
-    const empty = Boolean(tab?.hasAttribute("zen-empty-tab")) ||
-      /^(about:(blank|newtab|home|privatebrowsing))(?:[?#].*)?$/i.test(spec);
-    url.toggleAttribute("data-op-empty", empty);
+    const pending=Boolean(tab?.hasAttribute("pending")||tab?.hasAttribute("discarded"));
+    const restoring=tab===restoringAddressTab && window.performance.now()<restoringAddressUntil;
+    const empty=emptyAddressState(Boolean(tab?.hasAttribute("zen-empty-tab")),spec,pending,restoring);
+    url.toggleAttribute("data-op-empty",empty);
   }
   const progressListener = {
     onLocationChange() { updateEmptyAddress(); alignAddressStart(); }

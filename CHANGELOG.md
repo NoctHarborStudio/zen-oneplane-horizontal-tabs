@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0-preview.2
+
+- Keep OnePlane mounted with native Compact Mode off; persistent horizontal toolbar uses normal layout flow. Compact Mode on retains the animated overlay. Stop forcing Compact Mode on startup or restoring its user-owned preference on unload.
+- Preserve native caption controls if Zen moves them into the hidden toolbox.
+- Record and mitigate OP-001: one-frame UI jump when activating an unloaded tab. Guard provisional blank URI and defer recentering through the existing tab-switch settling interval.
+- Add address classification regression tests. Hub and workspace presets remain planned; live testing is required.
+
 ## 0.2.0-preview.1
 
 - Introduce ordered source sections for core, native adapter, layout, toolbar, interactions and CSS; extract eight independently importable pure algorithm modules.

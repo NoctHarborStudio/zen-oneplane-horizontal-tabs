@@ -17,7 +17,6 @@ const root = document.documentElement;
 const prefs = Services.prefs;
 let disposed = false;
 let applied = false;
-let originalCompact = false;
 let closing = false;
 let startupObserver = null;
 let removeTabStrip = null;
@@ -56,12 +55,13 @@ function restorePrefs() {
   const raw = prefs.getStringPref(KEY, "");
   if (!raw) return;
   const saved = JSON.parse(raw);
-  for (const name of [...Object.keys(TARGET), STARTUP]) {
+  // Compact Mode is a user-owned setting.
+  for (const name of Object.keys(TARGET)) {
     const original = saved[name];
     if (!original || typeof original.value !== "boolean" || typeof original.user !== "boolean") continue;
     // Do not overwrite settings changed by the user while the mod was active.
-    const expected = name === STARTUP ? true : TARGET[name];
-    if (name !== STARTUP && prefs.getBoolPref(name) !== expected) continue;
+    const expected = TARGET[name];
+    if (prefs.getBoolPref(name) !== expected) continue;
     if (original.user) prefs.setBoolPref(name, original.value);
     else prefs.clearUserPref(name);
   }

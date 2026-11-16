@@ -47,3 +47,6 @@ This project is exclusively about horizontal tabs and the integrated top toolbar
 ## Development (0.2 source migration)
 
 Edit the source sections in `src/`, not the generated root script and stylesheet. Run `npm run build` and `npm run verify` with Node 20+. No npm dependencies are required. See [architecture and migration plan](docs/architecture.md) and [source layout](src/README.md). Preview 0.2.0-preview.1 preserves the exact runtime of 0.1.0-preview.32; persistent mode and Hub are not yet implemented.
+
+
+Preview 0.2.0-preview.2 keeps OnePlane active in both Compact Mode states. Toggle Compact Mode to switch between auto-hide overlay and persistent horizontal toolbar. See [known issues](docs/known-issues.md).

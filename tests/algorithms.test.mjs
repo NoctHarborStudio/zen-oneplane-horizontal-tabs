@@ -78,3 +78,13 @@ test("drag indicator falls to zero at detach threshold",()=>{
   assert.ok(pullIndicatorFactor(.62)<1e-10);
   assert.equal(pullIndicatorFactor(1),0);
 });
+
+import { emptyAddressState } from "../src/algorithms/address-empty.mjs";
+test("lazy restored address never collapses on provisional blank",()=>{
+  for(const [explicit,uri,pending,restoring,want] of [
+    [false,"about:blank",true,false,false],[false,"about:blank",false,true,false],
+    [false,"",false,true,false],[false,"https://example.com",false,true,false],
+    [true,"about:blank",true,true,true],[false,"about:blank",false,false,true],
+    [false,"about:newtab",false,false,true],[false,"https://example.com",false,false,false]
+  ])assert.equal(emptyAddressState(explicit,uri,pending,restoring),want);
+});

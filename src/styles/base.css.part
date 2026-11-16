@@ -1,7 +1,7 @@
 /* OnePlane — native toolbar tab view. No fixed-position overlay. */
 #oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss, #oneplane-center-start, #oneplane-center-end, #oneplane-toolbar-surface, #oneplane-split-drop { display: none !important; }
 @media (min-width: 900px) {
-  :root[oneplane-active="true"][zen-compact-mode="true"]:not([customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window]):has(#nav-bar-customization-target > #oneplane-tabs[data-ready="true"]) {
+  :root[oneplane-active="true"]:not([customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window]):has(#nav-bar-customization-target > #oneplane-tabs[data-ready="true"]) {
     --op-height: 34px;
     --op-tab: 36px;
     --op-tab-open: 180px;
