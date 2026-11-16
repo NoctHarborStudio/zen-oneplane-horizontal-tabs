@@ -96,3 +96,38 @@ test("trash flight stays in Hub and converges on target center",()=>{
  assert.equal(f.y+rect.height/2+f.dy,dest.top+dest.height/2);
  assert.equal(hubTrashFlightGeometry(rect,{x:500,y:110},dest,panel),null);
 });
+
+test("Hub Trash resets on a fresh opening and stale workspace deletion cannot expand it",async()=>{
+  const {readFile}=await import("node:fs/promises");
+  const source=await readFile(new URL("../src/hub/controller.js.part",import.meta.url),"utf8");
+  // Execute the actual controller entry point with only the popup/UI boundaries stubbed.
+  const toggle=source.slice(source.indexOf("    function toggle(event){"),source.indexOf("    function key(event){"));
+  const close=source.slice(source.indexOf("    function close(restoreFocus"),source.indexOf("    function updateGeometry(){"));
+  const deletion=source.slice(source.indexOf("    async function removeSpace(id){"),source.indexOf("    function trashTabs(){"));
+  let release;
+  const gate=new Promise(resolve=>{release=resolve;});
+  const native={activeWorkspace:"free",removeWorkspace:()=>gate,getWorkspaceFromId:()=>null};
+  const tab={};
+  const attrs=new Set();
+  const state=new Function("native","tab","attrs",`
+    let open=false,trashOpen=false,hubSession=0,destroyed=false,busy=false,contextId=null,confirmation=null,editId=null,purgePlan=null,drag=null,geometryFrame=0;
+    const panel={hidden:true,isConnected:true,querySelector:()=>null},mode={focus(){}},button={setAttribute(){},focus(){}},status={};
+    const trashPanel={hasAttribute:k=>attrs.has(k),setAttribute:k=>attrs.add(k),removeAttribute:k=>attrs.delete(k),getBoundingClientRect(){}};
+    const supported=()=>true,ensure=()=>{},setHold=()=>{},render=()=>{if(trashOpen)attrs.add("data-op-trash-open");else attrs.delete("data-op-trash-open");},
+      showPopup=()=>{panel.hidden=false;return true;},finishTrashDrag=()=>{},setTrashAgeOpen=()=>{},stopTrashUpdates=()=>{},
+      hideNow=()=>{panel.hidden=true;},fluid=()=>{},switchGuard=()=>{},singleWindow=()=>true,freeId=()=>"free",
+      ensureTrash=async()=>"trash",ownedTabs=()=>[],trashSessionStore=()=>({setCustomTabValue(){}}),moveNativeTab=()=>{},TRASH_TIME="stamp",
+      deletionDetails=id=>({id,native,description:"delete",plan:[tab]}),operation=async fn=>{await fn();if(open)render();};
+    ${toggle}
+    ${close}
+    ${deletion}
+    const event={preventDefault(){},stopPropagation(){}};
+    return {toggle:()=>toggle(event),expand:()=>{trashOpen=true;render();},close,expanded:()=>trashOpen,deleteSpace:()=>{confirmation=deletionDetails("work");return removeSpace("work");}};
+  `)(native,tab,attrs);
+  state.toggle();assert.equal(state.expanded(),false);
+  state.expand();assert.equal(state.expanded(),true);
+  state.close();state.toggle();assert.equal(state.expanded(),false);assert.equal(attrs.has("data-op-trash-open"),false);assert.equal(attrs.has("data-op-trash-reset"),false);
+  const pending=state.deleteSpace();state.close();state.toggle();release();await pending;
+  assert.equal(state.expanded(),false);
+  await state.deleteSpace();assert.equal(state.expanded(),true);
+});

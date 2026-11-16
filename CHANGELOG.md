@@ -1,3 +1,8 @@
+## 0.2.0-preview.37 — Reset Hub Trash on open
+
+- Start every new Hub opening with Trash collapsed, including an interrupted close animation. Keep the age filter, native Trash contents and in-session manual expansion unchanged.
+- Prevent an asynchronous workspace deletion from reopening Trash in a later Hub session; retain auto-expansion within the same session. Live Zen validation pending.
+
 ## 0.2.0-preview.36 — Home startup and search morph
 
 - Open Home once per normal supported window after session/workspace restoration and OnePlane readiness. Preserve native tabs and avoid reopening on live reload or workspace projection.

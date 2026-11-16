@@ -2070,7 +2070,7 @@ function installTabStrip() {
     content.append(titleRow,make("h3","op-hub-heading","Workspaces"),freeSetup,freeSlot,freeDivider,spaces,form,status,make("div","op-hub-divider"),make("h3","op-hub-heading","Settings"),mode,trashPanel);
     const returnButton=make("button","op-hub-return","Return to main window");returnButton.type="button";returnButton.hidden=true;content.prepend(returnButton);
     panel.append(content);
-    let destroyed=false,busy=false,open=false,contextId=null;
+    let destroyed=false,busy=false,open=false,contextId=null,hubSession=0;
     let trashOpen=false,purgePlan=null,trashDrag=null,editId=null;
     let trashData=[],trashAllowed=false,trashAgeTimer=0,trashFrame=0,trashRangeKey="",trashTarget=null;
     let trashAge="all";
@@ -2119,7 +2119,7 @@ function installTabStrip() {
       }catch{done();}
     }
     function close(restoreFocus=false,immediate=false){
-      const wasVisible=!panel.hidden;contextId=null;confirmation=null;editId=null;finishTrashDrag();setTrashAgeOpen(false);purgePlan=null;open=false;stopTrashUpdates();
+      const wasVisible=!panel.hidden;contextId=null;confirmation=null;editId=null;finishTrashDrag();setTrashAgeOpen(false);purgePlan=null;open=false;trashOpen=false;stopTrashUpdates();
       if(drag)cancelDrag();
       if(geometryFrame)window.cancelAnimationFrame(geometryFrame);geometryFrame=0;
       button.setAttribute("aria-expanded","false");
@@ -2347,6 +2347,7 @@ function installTabStrip() {
         confirmation=now;status.textContent="Workspace changed. Review again.";render();return;
       }
       confirmation=null;contextId=null;
+      const session=hubSession;
       await operation(async()=>{
         const native=now.native,destination=now.plan.length?await ensureTrash():null;
         if(native.activeWorkspace===id){switchGuard();await native.changeWorkspaceWithID(freeId());}
@@ -2361,7 +2362,8 @@ function installTabStrip() {
         if(!singleWindow()||ownedTabs(native,id)?.length!==0)throw Error("Not all tabs moved. Workspace kept.");
         switchGuard();await native.removeWorkspace(id);
         if(native.getWorkspaceFromId(id))throw Error("Workspace not removed.");
-        trashOpen=!!destination||trashOpen;
+        // Only auto-expand for a deletion from this same Hub opening.
+        if(destination&&open&&hubSession===session)trashOpen=true;
       });
     }
     function trashTabs(){const id=trashId();return id?(ownedTabs(manager(),id)||[]):[];}
@@ -2984,8 +2986,14 @@ function installTabStrip() {
       if(!supported()||destroyed)return;
       if(open){close();return;}
       ensure();if(!panel.isConnected)return;
-      status.textContent="";contextId=null;confirmation=null;open=true;
-      button.setAttribute("aria-expanded","true");setHold(true);render();
+      status.textContent="";contextId=null;confirmation=null;open=true;hubSession++;trashOpen=false;
+      // A fast reopen can interrupt the closing animation while the old drawer is visible.
+      const resetVisibleTrash=!panel.hidden&&trashPanel.hasAttribute("data-op-trash-open");
+      if(resetVisibleTrash)trashPanel.setAttribute("data-op-trash-reset","");
+      button.setAttribute("aria-expanded","true");setHold(true);
+      try{render();}finally{
+        if(resetVisibleTrash){trashPanel.getBoundingClientRect();trashPanel.removeAttribute("data-op-trash-reset");}
+      }
       try{
         if(!showPopup()){close();return;}
         (panel.querySelector('.op-hub-space[aria-current="true"]:not(:disabled)')||panel.querySelector(".op-hub-space:not(:disabled)")||mode).focus({preventScroll:true});

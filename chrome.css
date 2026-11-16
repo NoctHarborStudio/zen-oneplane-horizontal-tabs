@@ -1628,6 +1628,8 @@
 #oneplane-hub-panel .op-hub-mode-state {opacity:.7;}
 #oneplane-hub-panel .op-hub-trash-panel {border:1px solid color-mix(in srgb,currentColor 15%,transparent);border-radius:9px;background:color-mix(in srgb,currentColor 5%,transparent);transition:background 300ms,border-color 300ms;margin-top:3px;}
 #oneplane-hub-panel .op-hub-trash-panel[data-op-trash-open] {background:color-mix(in srgb,currentColor 7%,transparent);}
+/* Reset an interrupted Hub reopen without playing the previous Trash collapse. */
+#oneplane-hub-panel .op-hub-trash-panel[data-op-trash-reset],#oneplane-hub-panel [data-op-trash-reset] * {transition:none!important;}
 #oneplane-hub-panel .op-hub-trash-head {position:relative;height:40px;}
 #oneplane-hub-panel .op-hub-trash-toggle {position:absolute;inset:0;width:100%;border:0;border-radius:8px;background:transparent;color:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;font:inherit;}
 #oneplane-hub-panel .op-hub-trash-toggle:hover {background:color-mix(in srgb,currentColor 5%,transparent);}

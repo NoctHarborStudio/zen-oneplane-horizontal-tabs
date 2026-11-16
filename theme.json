@@ -4,7 +4,7 @@
   "description": "Horizontal top tabs and an expandable address bar in one auto-hide toolbar. Experimental.",
   "homepage": "https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/tree/preview",
   "author": "NoctHarborStudio",
-  "version": "0.2.0-preview.36",
+  "version": "0.2.0-preview.37",
   "style": {
     "chrome": "chrome.css"
   },
@@ -15,7 +15,7 @@
     "toolbar"
   ],
   "createdAt": "2026-11-15",
-  "updatedAt": "2026-11-16T18:58:35.954Z",
+  "updatedAt": "2026-11-16T18:59:59.000Z",
   "fork": [
     "zen"
   ],
