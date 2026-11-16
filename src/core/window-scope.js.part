@@ -16,6 +16,12 @@ function installTabStrip() {
   row.id = "oneplane-tabs";
   row.setAttribute("skipintoolbarset", "true");
   row.setAttribute("removable", "false");
+  const compactSearch=html("button","oneplane-compact-search");
+  compactSearch.id="oneplane-compact-search";compactSearch.type="button";compactSearch.title="Search or enter address";
+  compactSearch.setAttribute("aria-label","Search or enter address");
+  const searchGlyph=document.createElementNS("http://www.w3.org/2000/svg","svg");searchGlyph.setAttribute("viewBox","0 0 24 24");searchGlyph.setAttribute("aria-hidden","true");
+  const searchPath=document.createElementNS(searchGlyph.namespaceURI,"path");searchPath.setAttribute("d","M16 16l5 5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z");searchGlyph.append(searchPath);compactSearch.append(searchGlyph);
+  compactSearch.addEventListener("click",()=>{window.gURLBar?.focus();window.gURLBar?.select();});
   const list = html("div", "oneplane-tab-list");
   list.setAttribute("role", "tablist");
   list.setAttribute("aria-label", "Browser tabs");

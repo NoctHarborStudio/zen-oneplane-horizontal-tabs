@@ -2,6 +2,7 @@
     if (dead) return;
     dead = true;
     destroyHome();
+    overflowRevealAnimation?.cancel();overflowRevealAnimation=null;
     resetTabCascade();
     if (frame) window.cancelAnimationFrame(frame);
     if (dragCommitFrame) window.cancelAnimationFrame(dragCommitFrame);
@@ -56,6 +57,7 @@
     }
     islandTextAnimation?.cancel();
     prefs.removeObserver("zen.oneplane.hover-mode",hoverModePreferenceObserver);
+    for(const key of ["tab-width","expanded-tab-width","address-width"])prefs.removeObserver("zen.oneplane."+key,adaptiveGeometryPrefs);
     prefs.removeObserver("zen.oneplane.show-center-island",hoverModePreferenceObserver);
     prefs.removeObserver("zen.oneplane.tab-indicator", indicatorPreferenceObserver);
     window.removeEventListener("pointermove", trackTabPointer, true);
@@ -68,6 +70,7 @@
     try { browser.removeProgressListener(progressListener); } catch {}
     url.removeAttribute("data-op-empty");
     url.removeAttribute("data-op-url-ready");
+    url.removeAttribute("data-op-address-icon");compactSearch.remove();
     url.style.removeProperty("--op-url");
     for (const name of ["--op-url-expanded-width", "--op-url-compact-width", "--op-url-anchor-left", "--op-url-anchor-top", "--op-url-header-height"]) url.style.removeProperty(name);
     toolbarWrapper?.style.removeProperty("--op-measured-toolbar-height");
@@ -115,7 +118,7 @@
   }
 
   try {
-    url.after(row);
+    url.after(row);url.append(compactSearch);
     hub.ensure();
     releaseDragEngine=installDragEngine();
     try{releaseWorkspaceLinkScope=installWorkspaceLinkScope();}catch(error){console.warn("[OnePlane] Workspace link isolation:",error);}
@@ -155,6 +158,7 @@
       lane.addEventListener("wheel",onLaneWheel,{passive:false});
     }
     prefs.addObserver("zen.oneplane.hover-mode",hoverModePreferenceObserver);
+    for(const key of ["tab-width","expanded-tab-width","address-width"])prefs.addObserver("zen.oneplane."+key,adaptiveGeometryPrefs);
     prefs.addObserver("zen.oneplane.show-center-island",hoverModePreferenceObserver);
     prefs.addObserver("zen.oneplane.tab-indicator", indicatorPreferenceObserver);
     window.addEventListener("pointermove", trackTabPointer, true);

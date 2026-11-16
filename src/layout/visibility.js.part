@@ -130,6 +130,7 @@
     centerToolbar();
     onCompactChanged();
     schedule();
+    window.requestAnimationFrame(revealSelectedInStrip);
   }
   function onCompactChanged() {
     hub.onMode();

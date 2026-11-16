@@ -605,6 +605,12 @@ function installTabStrip() {
   row.id = "oneplane-tabs";
   row.setAttribute("skipintoolbarset", "true");
   row.setAttribute("removable", "false");
+  const compactSearch=html("button","oneplane-compact-search");
+  compactSearch.id="oneplane-compact-search";compactSearch.type="button";compactSearch.title="Search or enter address";
+  compactSearch.setAttribute("aria-label","Search or enter address");
+  const searchGlyph=document.createElementNS("http://www.w3.org/2000/svg","svg");searchGlyph.setAttribute("viewBox","0 0 24 24");searchGlyph.setAttribute("aria-hidden","true");
+  const searchPath=document.createElementNS(searchGlyph.namespaceURI,"path");searchPath.setAttribute("d","M16 16l5 5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z");searchGlyph.append(searchPath);compactSearch.append(searchGlyph);
+  compactSearch.addEventListener("click",()=>{window.gURLBar?.focus();window.gURLBar?.select();});
   const list = html("div", "oneplane-tab-list");
   list.setAttribute("role", "tablist");
   list.setAttribute("aria-label", "Browser tabs");
@@ -689,11 +695,11 @@ function installTabStrip() {
 
   // A fixed center has two independently budgeted sides. Compact mode
   // keeps at most one ordinary slot on either side; groups are atomic.
-  function planAdaptiveTabRows(widths,groups,boundary,available,title,tab,gap=3){
+  function planAdaptiveTabRows(widths,groups,boundary,available,title,tab,gap=3,returnReserve=0){
     const lane=(sideTitle)=>Math.max(0,(available-sideTitle-2*gap)/2-2*gap);
-    const wideCap=lane(title),rightCap=Math.max(0,wideCap-tab-gap);
+    const wideCap=Math.max(0,lane(title)-returnReserve/2),rightCap=Math.max(0,wideCap-tab-gap);
     const full=planTabOverflow(widths,boundary,wideCap,rightCap,gap);
-    if(!full.hasSecondRow&&available>=title+2*gap+2*(tab+gap)){
+    if(!full.hasSecondRow&&available>=title+2*gap+2*(tab+gap)+returnReserve){
       return {...full,mode:"wide",title,topPlus:true};
     }
     const minTitle=32;
@@ -734,7 +740,7 @@ function installTabStrip() {
     const r=Math.max(0,Math.min(1,(x-(right-edge))/edge));
     return Math.round((r*r-l*l)*18);
   }
-  let adaptiveHeightDirty=false;
+  let adaptiveHeightDirty=false,overflowRevealAnimation=null;
   function mountLaneNodes(lane,nodes){
     for(let i=0;i<nodes.length;i++){
       const node=nodes[i],before=lane.children[i]||null;
@@ -758,6 +764,10 @@ function installTabStrip() {
     row.toggleAttribute("data-op-bottom-plus",!plan.topPlus);
     bottomLane.hidden=!plan.hasSecondRow;
     if(changed){
+      overflowRevealAnimation?.cancel();overflowRevealAnimation=null;
+      if(plan.hasSecondRow&&row.hasAttribute("data-ready")&&cascadeState==="idle"&&!reducedMotion.matches&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0){
+        try{overflowRevealAnimation=bottomLane.animate([{opacity:0},{opacity:1}],{duration:160,easing:"ease-out"});}catch{}
+      }
       adaptiveHeightDirty=true;contourKey=null;
       // Real layout height changes once. Never repartition on hover.
       scheduleGeometry();scheduleContour();
@@ -3626,6 +3636,7 @@ function installTabStrip() {
   let geometryFrame = 0;
   let geometryObserver = null;
   let centering=false;
+  const adaptiveGeometryPrefs={observe(){schedule();scheduleGeometry();}};
   // The plus follows the occupied right lane, not the symmetric row's
   // far edge. Keep the existing expansion reserve in Expand mode.
   function rightPlusOffset(widths, expansion=0){
@@ -3669,6 +3680,7 @@ function installTabStrip() {
         const fullBudget=2*Math.min(window.innerWidth/2-left-preferred-8,window.innerWidth/2-right)-8-2*dragRoom;
         const compactAddress=window.innerWidth<900||(fullBudget<natural&&left+preferred+8>=right);
         const desired=adaptiveAddressWidth(preferred,window.innerWidth,left,16+dragRoom+4,8,compactAddress);
+        url.toggleAttribute("data-op-address-icon",desired<80);
         if(url.style.getPropertyValue("--op-url")!==desired+"px"){
           setLength(url,"--op-url",desired);
           addressCompactWidth=0;addressAnchor=null;alignAddressStart();
@@ -3688,7 +3700,7 @@ function installTabStrip() {
         const groups=stripOrderSnapshot.map(n=>n.classList.contains("oneplane-split-group"));
         const boundary=islandBoundary(widths,tabWidth+3);
         const title=iconHome?32:Math.max(100,Math.min(180,available-2*(tabWidth+9)));
-        const layout=planAdaptiveTabRows(widths,groups,boundary,available,title,tabWidth);
+        const layout=planAdaptiveTabRows(widths,groups,boundary,available,title,tabWidth,3,row.hasAttribute("data-op-adaptive-compact")?12:0);
         applyStripPartition(layout);
         row.toggleAttribute("data-op-island-compact",!iconHome&&layout.title===32);
         const widthOf=indices=>indices.reduce((n,i)=>n+widths[i]+3,6);
@@ -3900,6 +3912,7 @@ function installTabStrip() {
     centerToolbar();
     onCompactChanged();
     schedule();
+    window.requestAnimationFrame(revealSelectedInStrip);
   }
   function onCompactChanged() {
     hub.onMode();
@@ -4450,17 +4463,19 @@ function installTabStrip() {
     const clip=lane.getBoundingClientRect(),edge=Math.min(42,clip.width/3);
     const velocity=laneScrollVelocity(point.x,clip.left,clip.right,edge);
     const dt=laneDragLast?Math.min(32,now-laneDragLast):16;laneDragLast=now;
-    if(velocity){
-      const before=lane.scrollLeft;
-      lane.scrollLeft+=velocity*dt/16;
-      if(Math.abs(lane.scrollLeft-before)>.1)paintLaneDrop(laneDropTarget(lane,point.x,laneDragSource));
+    if(!velocity)return;
+    const before=lane.scrollLeft;
+    lane.scrollLeft+=velocity*dt/16;
+    if(Math.abs(lane.scrollLeft-before)>.1){
+      paintLaneDrop(laneDropTarget(lane,point.x,laneDragSource));
+      laneDragFrame=window.requestAnimationFrame(laneAutoStep);
     }
-    laneDragFrame=window.requestAnimationFrame(laneAutoStep);
   }
   function clearLaneDrag(){
     stopLaneAutoscroll();
     const active=row.hasAttribute("data-op-lane-drag");
     row.removeAttribute("data-op-lane-drag");
+    if(active&&!dead)scheduleGeometry();
     dragNode?.removeAttribute("data-op-lane-ghost");
     if(active&&dragImageMode==="inline")hideGhost();
   }
@@ -4483,7 +4498,8 @@ function installTabStrip() {
     if(local&&entry===dragNode&&dragImageMode==="inline")showLaneGhost(event);
     if(lane&&lane.scrollWidth>lane.clientWidth+1){
       laneDragViewport=lane;laneDragPoint={x:event.clientX,y:event.clientY};laneDragSource=source;
-      if(!laneDragFrame){laneDragLast=0;laneDragFrame=window.requestAnimationFrame(laneAutoStep);}
+      const b=lane.getBoundingClientRect();
+      if(!laneDragFrame&&laneScrollVelocity(event.clientX,b.left,b.right,Math.min(42,b.width/3))){laneDragLast=0;laneDragFrame=window.requestAnimationFrame(laneAutoStep);}
     }else stopLaneAutoscroll();
     return dest;
   }
@@ -5650,6 +5666,7 @@ function installTabStrip() {
     if (dead) return;
     dead = true;
     destroyHome();
+    overflowRevealAnimation?.cancel();overflowRevealAnimation=null;
     resetTabCascade();
     if (frame) window.cancelAnimationFrame(frame);
     if (dragCommitFrame) window.cancelAnimationFrame(dragCommitFrame);
@@ -5704,6 +5721,7 @@ function installTabStrip() {
     }
     islandTextAnimation?.cancel();
     prefs.removeObserver("zen.oneplane.hover-mode",hoverModePreferenceObserver);
+    for(const key of ["tab-width","expanded-tab-width","address-width"])prefs.removeObserver("zen.oneplane."+key,adaptiveGeometryPrefs);
     prefs.removeObserver("zen.oneplane.show-center-island",hoverModePreferenceObserver);
     prefs.removeObserver("zen.oneplane.tab-indicator", indicatorPreferenceObserver);
     window.removeEventListener("pointermove", trackTabPointer, true);
@@ -5716,6 +5734,7 @@ function installTabStrip() {
     try { browser.removeProgressListener(progressListener); } catch {}
     url.removeAttribute("data-op-empty");
     url.removeAttribute("data-op-url-ready");
+    url.removeAttribute("data-op-address-icon");compactSearch.remove();
     url.style.removeProperty("--op-url");
     for (const name of ["--op-url-expanded-width", "--op-url-compact-width", "--op-url-anchor-left", "--op-url-anchor-top", "--op-url-header-height"]) url.style.removeProperty(name);
     toolbarWrapper?.style.removeProperty("--op-measured-toolbar-height");
@@ -5763,7 +5782,7 @@ function installTabStrip() {
   }
 
   try {
-    url.after(row);
+    url.after(row);url.append(compactSearch);
     hub.ensure();
     releaseDragEngine=installDragEngine();
     try{releaseWorkspaceLinkScope=installWorkspaceLinkScope();}catch(error){console.warn("[OnePlane] Workspace link isolation:",error);}
@@ -5803,6 +5822,7 @@ function installTabStrip() {
       lane.addEventListener("wheel",onLaneWheel,{passive:false});
     }
     prefs.addObserver("zen.oneplane.hover-mode",hoverModePreferenceObserver);
+    for(const key of ["tab-width","expanded-tab-width","address-width"])prefs.addObserver("zen.oneplane."+key,adaptiveGeometryPrefs);
     prefs.addObserver("zen.oneplane.show-center-island",hoverModePreferenceObserver);
     prefs.addObserver("zen.oneplane.tab-indicator", indicatorPreferenceObserver);
     window.addEventListener("pointermove", trackTabPointer, true);

@@ -44,17 +44,19 @@
     const clip=lane.getBoundingClientRect(),edge=Math.min(42,clip.width/3);
     const velocity=laneScrollVelocity(point.x,clip.left,clip.right,edge);
     const dt=laneDragLast?Math.min(32,now-laneDragLast):16;laneDragLast=now;
-    if(velocity){
-      const before=lane.scrollLeft;
-      lane.scrollLeft+=velocity*dt/16;
-      if(Math.abs(lane.scrollLeft-before)>.1)paintLaneDrop(laneDropTarget(lane,point.x,laneDragSource));
+    if(!velocity)return;
+    const before=lane.scrollLeft;
+    lane.scrollLeft+=velocity*dt/16;
+    if(Math.abs(lane.scrollLeft-before)>.1){
+      paintLaneDrop(laneDropTarget(lane,point.x,laneDragSource));
+      laneDragFrame=window.requestAnimationFrame(laneAutoStep);
     }
-    laneDragFrame=window.requestAnimationFrame(laneAutoStep);
   }
   function clearLaneDrag(){
     stopLaneAutoscroll();
     const active=row.hasAttribute("data-op-lane-drag");
     row.removeAttribute("data-op-lane-drag");
+    if(active&&!dead)scheduleGeometry();
     dragNode?.removeAttribute("data-op-lane-ghost");
     if(active&&dragImageMode==="inline")hideGhost();
   }
@@ -77,7 +79,8 @@
     if(local&&entry===dragNode&&dragImageMode==="inline")showLaneGhost(event);
     if(lane&&lane.scrollWidth>lane.clientWidth+1){
       laneDragViewport=lane;laneDragPoint={x:event.clientX,y:event.clientY};laneDragSource=source;
-      if(!laneDragFrame){laneDragLast=0;laneDragFrame=window.requestAnimationFrame(laneAutoStep);}
+      const b=lane.getBoundingClientRect();
+      if(!laneDragFrame&&laneScrollVelocity(event.clientX,b.left,b.right,Math.min(42,b.width/3))){laneDragLast=0;laneDragFrame=window.requestAnimationFrame(laneAutoStep);}
     }else stopLaneAutoscroll();
     return dest;
   }

@@ -26,11 +26,11 @@
 
   // A fixed center has two independently budgeted sides. Compact mode
   // keeps at most one ordinary slot on either side; groups are atomic.
-  export function planAdaptiveTabRows(widths,groups,boundary,available,title,tab,gap=3){
+  export function planAdaptiveTabRows(widths,groups,boundary,available,title,tab,gap=3,returnReserve=0){
     const lane=(sideTitle)=>Math.max(0,(available-sideTitle-2*gap)/2-2*gap);
-    const wideCap=lane(title),rightCap=Math.max(0,wideCap-tab-gap);
+    const wideCap=Math.max(0,lane(title)-returnReserve/2),rightCap=Math.max(0,wideCap-tab-gap);
     const full=planTabOverflow(widths,boundary,wideCap,rightCap,gap);
-    if(!full.hasSecondRow&&available>=title+2*gap+2*(tab+gap)){
+    if(!full.hasSecondRow&&available>=title+2*gap+2*(tab+gap)+returnReserve){
       return {...full,mode:"wide",title,topPlus:true};
     }
     const minTitle=32;

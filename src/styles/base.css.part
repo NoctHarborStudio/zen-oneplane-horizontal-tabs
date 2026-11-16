@@ -12,7 +12,7 @@
   initial-value: 0;
 }
 /* OnePlane — native toolbar tab view. No fixed-position overlay. */
-#oneplane-hub-button, #oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss, #oneplane-center-start, #oneplane-center-end, #oneplane-toolbar-surface, #oneplane-split-drop { display: none !important; }
+ #oneplane-compact-search, #oneplane-hub-button, #oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss, #oneplane-center-start, #oneplane-center-end, #oneplane-toolbar-surface, #oneplane-split-drop { display: none !important; }
 @media (min-width: 0px) {
   :root[oneplane-active="true"]:not([customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window]):has(#nav-bar-customization-target > #oneplane-tabs[data-ready="true"]) {
     --op-height: 34px;
@@ -78,6 +78,7 @@
     #zen-sidebar-splitter { display: none !important; }
 
     #nav-bar {
+      overflow:visible!important;
       min-height:calc(var(--op-height) + 18px) !important;
     }
     #nav-bar-customization-target {

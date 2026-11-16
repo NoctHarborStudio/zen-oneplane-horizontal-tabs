@@ -122,7 +122,7 @@
     #oneplane-tabs[data-op-island-compact] .oneplane-title-island[data-op-home-enabled] > svg {display:block;}
     #oneplane-tabs[data-op-island-compact] .oneplane-title-island[data-op-home-enabled] .oneplane-island-title {display:none;}
     #oneplane-tabs[data-op-home-icon]:not([data-op-island-tight]) .oneplane-tab-list {translate:none;}
-    #oneplane-tabs[data-op-show-island]:not([data-op-island-tight]):is([data-op-dragging],[data-op-island-incoming]) .oneplane-island-lane {
+    #oneplane-tabs[data-op-show-island]:not([data-op-island-tight],[data-op-overflow-row],[data-op-lane-drag]):is([data-op-dragging],[data-op-island-incoming]) .oneplane-island-lane {
       overflow:visible !important;
     }
     #oneplane-tabs[data-op-show-island]:not([data-op-island-tight]):is([data-op-dragging],[data-op-island-incoming]) .oneplane-tab-list {

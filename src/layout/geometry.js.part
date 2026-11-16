@@ -4,6 +4,7 @@
   let geometryFrame = 0;
   let geometryObserver = null;
   let centering=false;
+  const adaptiveGeometryPrefs={observe(){schedule();scheduleGeometry();}};
   // The plus follows the occupied right lane, not the symmetric row's
   // far edge. Keep the existing expansion reserve in Expand mode.
   function rightPlusOffset(widths, expansion=0){
@@ -47,6 +48,7 @@
         const fullBudget=2*Math.min(window.innerWidth/2-left-preferred-8,window.innerWidth/2-right)-8-2*dragRoom;
         const compactAddress=window.innerWidth<900||(fullBudget<natural&&left+preferred+8>=right);
         const desired=adaptiveAddressWidth(preferred,window.innerWidth,left,16+dragRoom+4,8,compactAddress);
+        url.toggleAttribute("data-op-address-icon",desired<80);
         if(url.style.getPropertyValue("--op-url")!==desired+"px"){
           setLength(url,"--op-url",desired);
           addressCompactWidth=0;addressAnchor=null;alignAddressStart();
@@ -66,7 +68,7 @@
         const groups=stripOrderSnapshot.map(n=>n.classList.contains("oneplane-split-group"));
         const boundary=islandBoundary(widths,tabWidth+3);
         const title=iconHome?32:Math.max(100,Math.min(180,available-2*(tabWidth+9)));
-        const layout=planAdaptiveTabRows(widths,groups,boundary,available,title,tabWidth);
+        const layout=planAdaptiveTabRows(widths,groups,boundary,available,title,tabWidth,3,row.hasAttribute("data-op-adaptive-compact")?12:0);
         applyStripPartition(layout);
         row.toggleAttribute("data-op-island-compact",!iconHome&&layout.title===32);
         const widthOf=indices=>indices.reduce((n,i)=>n+widths[i]+3,6);
