@@ -1,3 +1,9 @@
+## 0.2.0-preview.44 — Scrollable Home pin picker
+
+- Replace recommendation pagination with a native vertical scrollbar and a fixed two-row viewport. Three columns on wide windows, two or one on narrow windows; Workspaces and Done stay outside the scroll region.
+- Keep scroll position after pin additions or returning from custom URL; reset on leaving Add Pin. Add short mode-enter, hover and press motion with reduced-motion support.
+- Preserve primary Home behavior and other preview.43 changes.
+
 ## 0.2.0-preview.42 — Compact Home Add Pin mode
 
 - Show only three recommended sites per page, with previous/next navigation. Add mode replaces the search and existing pinned grid, retaining Workspaces and a single Done control.

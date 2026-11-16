@@ -41,3 +41,7 @@ Add Pin is a dedicated substate of Customize. It replaces the search and existin
 ## 0.2.0-preview.43 — Home as primary destination
 
 Home trigger calls show(); legacy toggle is also idempotent. Plain Escape returns focus to search (picker/customization Escape retain their own behavior). Ordinary empty native tabs present Home instead of an empty background. Pending/discarded/busy tabs are not mistaken for placeholders. Real selected page navigation still exits; background TabOpen does not dismiss Home. Native projection startup, private windows, fullscreen/customization and last-lease teardown retain existing paths. No additional tabs or session mutation. Runtime validation pending.
+
+## 0.2.0-preview.44 — Scrollable Add Pin
+
+The compact picker now mounts the bounded recommendation list (up to 16), uses native vertical overflow with a fixed two-row viewport, and removes pagination controls. Three columns on wide windows, two on narrow windows and one at very narrow widths. Row height reduces on short windows. Only the recommendation grid scrolls; the picker controls, Workspaces and Done remain outside it. Store scroll offset before preference-driven rendering, clamp/restore after attaching the new grid, and reset when exiting the picker. Motion runs on mode transitions, not on every pin update; card hover/press transitions honor reduced motion. Test actual scrolling, focus, and compact geometry in Zen.

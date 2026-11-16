@@ -123,13 +123,21 @@ test("Home pin picker uses native sources and manual title is optional",()=>{
  assert.ok(core.includes('if(editing){'));
 });
 
-test("Add Pin recommendation pages contain at most three entries and clamp after pinning",()=>{
- const page=new Function(extract("  function pinPageSlice(","  function leavePinPicker(")+"return pinPageSlice")();
- assert.deepEqual(page([1,2,3,4,5,6,7],0),{index:0,pages:3,items:[1,2,3]});
- assert.deepEqual(page([1,2,3,4,5,6,7],1),{index:1,pages:3,items:[4,5,6]});
- assert.deepEqual(page([1,2,3,4,5,6],2),{index:1,pages:2,items:[4,5,6]});
- assert.deepEqual(page([],10),{index:0,pages:1,items:[]});
- assert.equal(page([1,2,3],-1).index,0);
+test("Add Pin uses two visible rows with native scrolling and no pagination",()=>{
+ assert.ok(core.includes('height:calc(2 * var(--zh-row) + var(--zh-row-gap) + 4px)'));
+ assert.ok(core.includes("overflow-y:auto"));
+ assert.ok(core.includes("scrollbar-gutter:stable"));
+ assert.ok(core.includes("for(const [index,item] of suggestions.entries())"));
+ assert.ok(!core.includes("pinPageSlice"));
+ assert.ok(!core.includes("zh-pagination"));
+});
+test("Add Pin scroll is clamped and restored after preference changes",()=>{
+ const restore=new Function(extract("  function restorePinScroll(","  function addForm(")+"return restorePinScroll")();
+ const grid={scrollHeight:400,clientHeight:140,scrollTop:0};
+ assert.equal(restore(grid,120),120);assert.equal(grid.scrollTop,120);
+ assert.equal(restore(grid,500),260);assert.equal(restore(grid,-10),0);
+ grid.scrollHeight=80;assert.equal(restore(grid,100),0);
+ assert.equal(restore(null,50),0);
 });
 test("Add Pin replaces search and pinned grid but retains shared workspaces and footer",()=>{
  const render=extract("  function render()","  function show(");
@@ -137,8 +145,15 @@ test("Add Pin replaces search and pinned grid but retains shared workspaces and 
  assert.ok(render.indexOf("}else{")<render.indexOf('button("zh-search"'));
  assert.ok(render.includes("if(adding){leavePinPicker();return;}"));
  assert.ok(render.indexOf("const manager=win.gZenWorkspaces")>render.indexOf("content.append(section);\n    }"));
- assert.ok(core.includes("for(const item of page.items)"));
- assert.ok(core.includes('grid-template-columns:repeat(3,minmax(0,1fr))'));
+ assert.ok(render.includes("if(adding&&oldGrid)pinScrollTop=oldGrid.scrollTop"));
+ assert.ok(render.includes("restorePinScroll(grid,pinScrollTop)"));
+ assert.ok(core.includes("grid-template-columns:repeat(3,minmax(0,1fr))"));
+});
+test("Home picker animation runs only on mode changes and honors reduced motion",()=>{
+ assert.ok(core.includes('const animateMode=nextMode!==pinViewMode'));
+ assert.ok(core.includes('animation:zh-picker-enter 200ms'));
+ assert.ok(core.includes('animation:none!important'));
+ assert.ok(core.includes('.zh-suggestion:active{scale:.97}'));
 });
 
 test("Home is primary: repeated clicks, Escape, background opens and real navigation",()=>{

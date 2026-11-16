@@ -70,17 +70,21 @@ function acquireZenHome(win, services) {
 #zen-shared-home[data-zh-adding] .zh-section:first-child{margin-block-start:0}
 #zen-shared-home[data-zh-adding] .zh-section{margin-block-start:24px}
 #zen-shared-home[data-zh-adding] .zh-footer{margin-top:22px}
-#zen-shared-home .zh-recommendations{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:2px;min-height:76px}
+#zen-shared-home .zh-recommendations{--zh-row:64px;--zh-row-gap:8px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:var(--zh-row);align-content:start;gap:var(--zh-row-gap);padding:2px;height:calc(2 * var(--zh-row) + var(--zh-row-gap) + 4px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-gutter:stable;scrollbar-color:color-mix(in srgb,currentColor 25%,transparent) transparent}
+#zen-shared-home .zh-recommendations:focus-visible{outline:1px solid AccentColor;outline-offset:2px}
+#zen-shared-home .zh-recommendations .zh-empty{align-self:center;padding:8px}
+#zen-shared-home [data-zh-enter]{animation:zh-picker-enter 200ms cubic-bezier(.2,.75,.25,1) both}
+@keyframes zh-picker-enter{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
 #zen-shared-home .zh-recommendations .zh-empty{grid-column:1/-1}
 #zen-shared-home .zh-picker-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;flex-wrap:wrap}
-#zen-shared-home .zh-pagination{display:flex;align-items:center;gap:6px;font-size:11px}
-#zen-shared-home .zh-pagination button{width:28px;height:28px;border-radius:7px;background:color-mix(in srgb,currentColor 7%,transparent)}
-#zen-shared-home .zh-pagination button:disabled{opacity:.3;cursor:default}
 #zen-shared-home .zh-picker-count{font-size:11px;opacity:.6}
 #zen-shared-home .zh-custom-actions{display:flex;justify-content:flex-end;gap:8px}
 #zen-shared-home .zh-custom-actions button{background:color-mix(in srgb,currentColor 7%,transparent)}
-#zen-shared-home .zh-suggestion{display:flex;align-items:center;gap:10px;min-width:0;min-height:72px;padding:10px;text-align:start;border-radius:10px;border:1px solid color-mix(in srgb,currentColor 9%,transparent);background:color-mix(in srgb,currentColor 4%,transparent);transition:background 160ms ease}
-#zen-shared-home .zh-suggestion:hover{background:color-mix(in srgb,currentColor 11%,transparent)}
+#zen-shared-home .zh-suggestion{display:flex;align-items:center;gap:10px;min-width:0;min-height:0;height:100%;padding:10px;text-align:start;border-radius:10px;border:1px solid color-mix(in srgb,currentColor 9%,transparent);background:color-mix(in srgb,currentColor 4%,transparent);transition:background 160ms ease,border-color 160ms ease,scale 140ms ease}
+#zen-shared-home .zh-suggestion:hover{background:color-mix(in srgb,currentColor 11%,transparent);border-color:color-mix(in srgb,currentColor 19%,transparent)}
+#zen-shared-home .zh-suggestion:active{scale:.97}
+#zen-shared-home .zh-suggestion-plus{transition:opacity 160ms ease,scale 160ms ease}
+#zen-shared-home .zh-suggestion:hover .zh-suggestion-plus{opacity:1;scale:1.12}
 #zen-shared-home .zh-suggestion img{width:23px;height:23px;object-fit:contain;flex:none}
 #zen-shared-home .zh-suggestion-copy{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}
 #zen-shared-home .zh-suggestion-copy span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:12px}
@@ -88,8 +92,9 @@ function acquireZenHome(win, services) {
 #zen-shared-home .zh-suggestion-plus{font-size:17px;opacity:.7;flex:none}
 #zen-shared-home .zh-picker-note{font-size:11px;opacity:.6;margin:0 0 12px}
 #zen-shared-home .zh-form{display:grid;gap:8px;margin:8px auto 0;max-width:420px}
-@media(max-width:520px){#zen-shared-home .zh-recommendations{grid-template-columns:1fr}#zen-shared-home .zh-suggestion{min-height:48px;padding:7px 10px}}
-@media(max-height:560px){#zen-shared-home[data-zh-adding]{padding-block:46px 12px}#zen-shared-home[data-zh-adding] .zh-section{margin-block-start:14px}#zen-shared-home[data-zh-adding] .zh-footer{margin-top:12px}#zen-shared-home .zh-picker{padding:10px}#zen-shared-home .zh-suggestion{min-height:48px}#zen-shared-home .zh-picker-note{margin-bottom:6px}}
+@media(max-width:520px){#zen-shared-home .zh-recommendations{grid-template-columns:repeat(2,minmax(0,1fr));--zh-row:52px}#zen-shared-home .zh-suggestion{padding:7px 8px;gap:6px}}
+@media(max-width:340px){#zen-shared-home .zh-recommendations{grid-template-columns:1fr}}
+@media(max-height:560px){#zen-shared-home[data-zh-adding]{padding-block:46px 12px}#zen-shared-home[data-zh-adding] .zh-section{margin-block-start:14px}#zen-shared-home[data-zh-adding] .zh-footer{margin-top:12px}#zen-shared-home .zh-picker{padding:10px}#zen-shared-home .zh-recommendations{--zh-row:48px}#zen-shared-home .zh-picker-note{margin-bottom:6px}}
 #zen-shared-home .zh-form input{width:100%;padding:9px 12px;border:1px solid color-mix(in srgb,currentColor 15%,transparent);border-radius:8px;background:color-mix(in srgb,currentColor 6%,transparent)}
 #zen-shared-home .zh-error{font-size:11px;color:light-dark(#a22,#ffb2b2)}
 #zen-shared-home .zh-pin[data-drop]{outline:1px solid AccentColor;border-radius:14px}
@@ -109,14 +114,14 @@ function acquireZenHome(win, services) {
   opacity:var(--zh-morph-alpha)!important;
 }
 @media(max-width:600px){#zen-shared-home{padding:62px 16px 20px}#zen-shared-home .zh-pin{flex-basis:calc((100% - 24px)/3)}#zen-shared-home .zh-tile{height:84px}#zen-shared-home .zh-space{flex-basis:120px}}
-@media(prefers-reduced-motion:reduce){#zen-shared-home *{transition:none!important}}
+@media(prefers-reduced-motion:reduce){#zen-shared-home *{transition:none!important;animation:none!important}#zen-shared-home .zh-suggestion:active,#zen-shared-home .zh-suggestion:hover .zh-suggestion-plus{scale:1}}
 `;
   const panel=html("div");panel.id="zen-shared-home";panel.hidden=true;
   panel.setAttribute("role","region");panel.setAttribute("aria-label","Home");
   const content=html("main","zh-content");panel.append(content);
   let open=false,editing=false,dead=false,switching=false,adding=false,dragId=null,focusHome=null,oldInert=false,covered=false,motion=null,searchToken=null,startupHome=false,homeOnPlaceholder=false;
   let searchFrame=0,searchMotion=null,searchTimer=0,searchBar=null;
-  let pinPage=0,pinCustom=false;
+  let pinScrollTop=0,pinCustom=false,pinViewMode="home";
   const leases=new Set(),cleanups=[];
   function listen(node,type,fn,options){node.addEventListener(type,fn,options);cleanups.push(()=>node.removeEventListener(type,fn,options));}
   const button=(cls,label,fn)=>{const n=html("button",cls,label);n.type="button";n.addEventListener("click",fn);return n;};
@@ -153,7 +158,7 @@ function acquireZenHome(win, services) {
   function restore(){if(!covered)return;covered=false;panels.removeAttribute("data-zr-home-covered");if(!oldInert)panels.removeAttribute("inert");host.removeAttribute("data-zr-home-host");}
   function stopMotion(){motion?.cancel();motion=null;}
   function close(restoreFocus=false){
-    if(!open)return;open=false;editing=false;adding=false;pinPage=0;pinCustom=false;panel.removeAttribute("data-zh-adding");dragId=null;startupHome=false;homeOnPlaceholder=false;finishSearchVisual();stopMotion();panel.hidden=true;restore();notify();
+    if(!open)return;open=false;editing=false;adding=false;pinScrollTop=0;pinCustom=false;pinViewMode="home";panel.removeAttribute("data-zh-adding");dragId=null;startupHome=false;homeOnPlaceholder=false;finishSearchVisual();stopMotion();panel.hidden=true;restore();notify();
     if(restoreFocus)try{if(focusHome?.isConnected)focusHome.focus({preventScroll:true});else browser.selectedBrowser?.focus();}catch{}
     focusHome=null;
   }
@@ -300,16 +305,17 @@ function acquireZenHome(win, services) {
     save([...items,{id,type:"shortcut",title,url}]);
     return "";
   }
-  // A dedicated add mode replaces the normal pinned grid rather than
-  // expanding it vertically. Only three recommendation cards are mounted.
-  function pinPageSlice(items,page){
-    const size=3,pages=Math.max(1,Math.ceil(items.length/size));
-    const index=Math.min(pages-1,Math.max(0,Math.trunc(Number(page)||0)));
-    return {index,pages,items:items.slice(index*size,index*size+size)};
-  }
+  // Keep a native two-row scroll viewport; preserve its position on
+  // preference-driven re-render and when visiting the custom form.
   function leavePinPicker(){
-    adding=false;pinPage=0;pinCustom=false;render();
+    adding=false;pinScrollTop=0;pinCustom=false;render();
     content.querySelector(".zh-add-pin")?.focus({preventScroll:true});
+  }
+  function restorePinScroll(grid,top){
+    if(!grid)return 0;
+    const max=Math.max(0,grid.scrollHeight-grid.clientHeight);
+    grid.scrollTop=Math.min(max,Math.max(0,Number(top)||0));
+    return grid.scrollTop;
   }
   function addForm(parent){
     const picker=html("div","zh-picker"),head=html("div","zh-picker-head"),error=html("div","zh-error");
@@ -333,16 +339,19 @@ function acquireZenHome(win, services) {
       });
       picker.append(form,error);parent.append(picker);return;
     }
-    const grid=html("div","zh-recommendations"),suggestions=collectRecommendations(load()),page=pinPageSlice(suggestions,pinPage);
-    pinPage=page.index;
+    const grid=html("div","zh-recommendations"),suggestions=collectRecommendations(load());
+    grid.setAttribute("role","region");grid.setAttribute("aria-label","Recommended sites");grid.tabIndex=0;
     picker.append(html("p","zh-picker-note","Choose a bookmark or open tab to pin it instantly."),grid,error);
-    if(!page.items.length)grid.append(html("div","zh-empty","No more recommended sites."));
-    for(const item of page.items){
+    if(!suggestions.length)grid.append(html("div","zh-empty","No more recommended sites."));
+    for(const [index,item] of suggestions.entries()){
       const row=button("zh-suggestion","",()=>{
         if(!open||!editing||!adding)return;
         const message=addPin(item.url,item.title);
         if(message){error.textContent=message;return;}
-        content.querySelector(".zh-suggestion, .zh-custom-link")?.focus({preventScroll:true});
+        // The preference observer replaces the old grid synchronously.
+        // Restore focus near the removed item, not at the beginning.
+        const rows=content.querySelectorAll(".zh-suggestion");
+        (rows[Math.min(index,rows.length-1)]||content.querySelector(".zh-custom-link"))?.focus({preventScroll:true});
       });
       row.title=item.url;row.setAttribute("aria-label","Pin "+item.title);
       const img=html("img");img.alt="";img.draggable=false;img.src="page-icon:"+item.url;
@@ -350,13 +359,8 @@ function acquireZenHome(win, services) {
       copy.append(html("span","",item.title),html("small","",domain+" · "+item.source));
       row.append(img,copy,html("span","zh-suggestion-plus","+"));grid.append(row);
     }
-    const actions=html("div","zh-picker-actions"),pagination=html("div","zh-pagination");
-    const changePage=delta=>{pinPage=pinPageSlice(suggestions,pinPage+delta).index;render();content.querySelector(".zh-suggestion")?.focus({preventScroll:true});};
-    const prev=button("zh-page-prev","‹",()=>changePage(-1)),next=button("zh-page-next","›",()=>changePage(1));
-    prev.setAttribute("aria-label","Previous recommendations");next.setAttribute("aria-label","Next recommendations");
-    prev.disabled=page.index===0;next.disabled=page.index===page.pages-1;
-    pagination.append(prev,html("span","",(page.index+1)+" / "+page.pages),next);
-    actions.append(button("zh-small zh-custom-link","Add a custom URL",()=>{pinCustom=true;render();content.querySelector(".zh-form input")?.focus({preventScroll:true});}),pagination);
+    const actions=html("div","zh-picker-actions");
+    actions.append(button("zh-small zh-custom-link","Add a custom URL",()=>{pinCustom=true;render();content.querySelector(".zh-form input")?.focus({preventScroll:true});}));
     picker.append(actions);parent.append(picker);
   }
   // Shared Home's workspace controls are keyed by native identity. A switch
@@ -378,16 +382,21 @@ function acquireZenHome(win, services) {
     return typeof transition?.run==="function"?transition.run(native):native();
   }
   function render(){
-    if(!open||dead)return;content.replaceChildren();
+    if(!open||dead)return;
+    const oldGrid=content.querySelector(".zh-recommendations");
+    if(adding&&oldGrid)pinScrollTop=oldGrid.scrollTop;
+    const nextMode=adding?(pinCustom?"custom-url":"add-pin"):(editing?"customize":"home");
+    const animateMode=nextMode!==pinViewMode;pinViewMode=nextMode;
+    content.replaceChildren();
     panel.toggleAttribute("data-zh-adding",adding);
     if(adding){
-      const section=html("section","zh-section");section.append(html("h3","","Add Pin"));addForm(section);content.append(section);
+      const section=html("section","zh-section");if(animateMode)section.setAttribute("data-zh-enter","");section.append(html("h3","","Add Pin"));addForm(section);content.append(section);
     }else{
     const searchButton=button("zh-search","",search),svg=doc.createElementNS("http://www.w3.org/2000/svg","svg");
     svg.setAttribute("viewBox","0 0 24 24");svg.setAttribute("fill","none");svg.setAttribute("stroke","currentColor");svg.setAttribute("stroke-width","1.6");
     for(const [tag,attrs] of [["circle",{cx:10.5,cy:10.5,r:6.5}],["path",{d:"m16 16 4 4"}]]){const node=doc.createElementNS("http://www.w3.org/2000/svg",tag);for(const [k,v] of Object.entries(attrs))node.setAttribute(k,v);svg.append(node);}
-    searchButton.append(svg,html("span","","Search or enter a URL"),html("span","","New tab"));content.append(searchButton);
-    const section=html("section","zh-section"),grid=html("div","zh-pins"),items=load();section.append(html("h3","","Pinned"),grid);
+    searchButton.append(svg,html("span","","Search or enter a URL"),html("span","","New tab"));if(animateMode)searchButton.setAttribute("data-zh-enter","");content.append(searchButton);
+    const section=html("section","zh-section"),grid=html("div","zh-pins"),items=load();section.append(html("h3","","Pinned"),grid);if(animateMode)section.setAttribute("data-zh-enter","");
     if(!items.length)grid.append(html("div","zh-empty",editing?"Add a pinned site to get started.":"Click Customize Home to add your first pinned site."));
     for(const [index,item] of items.entries()){
       const card=html("div","zh-pin"),tile=button("zh-tile","",()=>{if(!editing)navigate(item);});
@@ -409,7 +418,7 @@ function acquireZenHome(win, services) {
       grid.append(card);
     }
     if(editing){
-      const editbar=html("div","zh-editbar");editbar.append(button("zh-small zh-add-pin","+ Add Pin",()=>{adding=true;pinPage=0;pinCustom=false;render();content.querySelector(".zh-suggestion, .zh-custom-link")?.focus({preventScroll:true});}));section.append(editbar);
+      const editbar=html("div","zh-editbar");editbar.append(button("zh-small zh-add-pin","+ Add Pin",()=>{adding=true;pinScrollTop=0;pinCustom=false;render();content.querySelector(".zh-suggestion, .zh-custom-link")?.focus({preventScroll:true});}));section.append(editbar);
     }
     content.append(section);
     }
@@ -431,7 +440,8 @@ function acquireZenHome(win, services) {
       if(list.childElementCount)content.append(spaces);
     }
     const footer=html("div","zh-footer");footer.append(button("zh-small",editing?"Done":"Customize Home",()=>{if(adding){leavePinPicker();return;}editing=!editing;render();}));content.append(footer);
-
+    const grid=content.querySelector(".zh-recommendations");
+    if(grid)pinScrollTop=restorePinScroll(grid,pinScrollTop);
   }
   function show(startup=false){
     if(open||!allowed())return open;focusHome=doc.activeElement;startupHome=startup;homeOnPlaceholder=isHomePlaceholder(browser.selectedTab);
