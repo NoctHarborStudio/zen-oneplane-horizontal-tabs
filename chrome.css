@@ -1,3 +1,10 @@
+/* Registered once by the stylesheet. Native WAAPI can interpolate
+   selection opacity without a script callback on every display frame. */
+@property --op-url-selection-alpha {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 100%;
+}
 /* OnePlane — native toolbar tab view. No fixed-position overlay. */
 #oneplane-compact-toggle, #oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss, #oneplane-center-start, #oneplane-center-end, #oneplane-toolbar-surface, #oneplane-split-drop { display: none !important; }
 @media (min-width: 900px) {
@@ -157,7 +164,7 @@
       border-start-end-radius: var(--op-url-radius) !important;
       border-end-start-radius: var(--op-url-radius) !important;
       border-end-end-radius: var(--op-url-radius) !important;
-      clip-path: inset(0 round var(--op-url-radius)) !important;
+      clip-path: inset(0 round var(--op-url-radius));
       color-scheme: inherit !important;
       scale: 1 !important;
       transform: none !important;
@@ -324,11 +331,11 @@
       box-sizing: border-box !important;
       position-anchor: none !important;
       position-area: none !important;
-      clip-path: inset(0 0 max(0px, calc(100% - var(--op-url-header-height))) 0 round var(--op-url-radius)) !important;
+      clip-path: inset(0 0 max(0px, calc(100% - var(--op-url-header-height))) 0 round var(--op-url-radius));
     }
     #urlbar-container[data-op-url-ready] #urlbar[breakout-extend]:not([zen-floating-urlbar="true"]) {
       width: var(--op-url-live-width, var(--op-url-expanded-width)) !important;
-      clip-path: inset(0 round var(--op-url-radius)) !important;
+      clip-path: inset(0 round var(--op-url-radius));
     }
     /* Nebula keeps the web surface blurred as long as native [open] is
        present. During our deferred closing, release that effect immediately. */
@@ -343,9 +350,16 @@
     #urlbar-container #urlbar[data-op-url-animating]:not([zen-floating-urlbar="true"]),
     #urlbar-container[data-op-url-ready] #urlbar[data-op-url-animating]:not([zen-floating-urlbar="true"]) {
       width: var(--op-url-live-width, var(--op-url-compact-width)) !important;
-      clip-path: var(--op-url-live-clip, inset(0 round var(--op-url-radius))) !important;
+      clip-path: var(--op-url-live-clip, inset(0 round var(--op-url-radius)));
       transition: none !important;
       animation: none !important;
+    }
+    /* The native animation owns clip-path (do not mark it !important).
+       The fixed-width layout remains unchanged in both directions. */
+    #urlbar-container #urlbar[data-op-url-fluid]:not([zen-floating-urlbar="true"]) #identity-box {
+      background-color: var(--op-url-surface) !important;
+      position:relative;
+      z-index:2;
     }
     #urlbar-container #urlbar[data-op-url-selection-fade]:not([zen-floating-urlbar="true"]) #urlbar-input::selection {
       background-color: color-mix(in srgb, Highlight var(--op-url-selection-alpha, 100%), transparent) !important;

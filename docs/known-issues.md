@@ -15,7 +15,8 @@
 - Investigation candidates: width writes followed by synchronous layout reads in drawAddress(), per-frame clip-path regeneration, native result population and overlapping layout/geometry observers. These are hypotheses, not measured causes.
 - Acceptance: opening and closing should feel equally smooth; profile frame intervals on the actual monitor (including high-refresh displays), test cold/warm suggestions and interrupted/reversed animations. Preserve native search and keyboard input.
 - Preview.4 mitigation: lay out the opening popover at its final width once; animate the visible clip using rAF timestamps and cache height via ResizeObserver. Closing retains real shrinking width. Filter irrelevant suggestion-tree mutations. Actual high-refresh performance remains unmeasured.
-- Status: mitigation shipped; live confirmation pending.
+- Preview.5 follow-up: user reports both opening and closing still lack fluidity and appear near 60 FPS on preview.4. Replace normal per-frame script rendering with fixed-width WAAPI shape/polygon interpolation, smooth shared timing, and optional refresh-callback diagnostics. Complex clips may still paint on Gecko's main thread; actual presented FPS is unverified.
+- Status: open; preview.5 redesign requires live validation.
 
 ## OP-003 — Abrupt disappearance of selected URL text on close
 
@@ -24,7 +25,8 @@
 - Investigate native blur/selection timing relative to the closing wave. Do not replace the native text input or interfere with actual selection, clipboard or keyboard behavior.
 - Acceptance: selection visually settles without a sudden flash or jump; retain the existing good closing motion.
 - Preview.4 mitigation: fade the native selection highlight during the closing wave before blur, without changing selection range. Reopening restores highlight.
-- Status: mitigation shipped; live visual confirmation pending.
+- Preview.5 animates the registered selection-alpha CSS property and retains native selection range until dismissal.
+- Status: visual confirmation pending.
 
 ## OP-004 — Sine intermittently does not discover published updates
 
@@ -47,11 +49,11 @@
 - Report: after startup, the first toolbar/tab click moves the whole strip right then back. User suspects the initially hidden address bar; not reproduced in live Zen here.
 - Concrete code risk: the empty-address slot changes width immediately, but the 180ms selection guard freezes the old spacer bias. A floating search can also collapse the anchor on a real page. The prior observer watched spacer outputs, contributing to delayed feedback.
 - Preview.4 mitigation: synchronize center bias with the empty-state change; compensate independent edge resize before paint; keep only vertical geometry/contour guarded. Preserve the real-page address anchor during floating search. Regression test covers the centering invariant with changing left width.
-- Status: mitigation shipped; first-click behavior requires live validation. Keep OP-001 restored-tab regression coverage.
+- Status: **fixed in the user's live test on 0.2.0-preview.4**. Keep OP-001 and first-click centering regression coverage.
 
 ## OP-007 — Toggle Compact Mode vanishes after toggling
 
 - Report: the left native toggle exists after startup; switching off hides it, and turning Compact Mode on again does not bring it back until restart.
 - Source cause: ZenVerticalTabsManager reparents zen-sidebar-top-buttons between nav-bar and navigator-toolbox based on mode and native caption/sidebar conditions. OnePlane hides the toolbox, so the original widget may become inaccessible.
 - Preview.4 mitigation: stable OnePlane temporary toolbarbutton uses the existing cmd_toggleCompactModeIgnoreHover native command; do not move the registered native widget. Suppress the original only within the active OnePlane layout, restore by removing CSS/temporary proxy. Future Hub will replace this temporary button and expose the same native action.
-- Status: mitigation shipped; verify repeated toggles and native fallback in actual Zen.
+- Status: **fixed in the user's live test on 0.2.0-preview.4**. Keep repeated-toggle and native fallback regression coverage.

@@ -106,3 +106,31 @@ test("address appearing after startup is compensated without changing strip cent
     assert.equal(left-right+island.left-island.right,0);
   }
 });
+
+import { addressMotionSample, addressFluidClip, addressFluidFrames } from "../src/algorithms/address-wave.mjs";
+test("fluid native animation uses synchronized monotonic endpoints and invariant clip topology",()=>{
+  const closed={width:180,reveal:0,selection:0},open={width:900,reveal:1,selection:1};
+  for(const shape of [false,true]){
+    const frames=addressFluidFrames("opening",closed,open,900,30,8,shape);
+    const close=addressFluidFrames("closing-wave",open,closed,900,30,8,shape);
+    assert.equal(frames.length,17);
+    assert.equal(frames[0].offset,0);
+    assert.equal(frames.at(-1).offset,1);
+    assert.equal(frames[0].clipPath,close.at(-1).clipPath);
+    assert.equal(frames.at(-1).clipPath,close[0].clipPath);
+    assert.equal(frames[0].translate,"-720.000px 0px");
+    assert.equal(frames.at(-1).translate,"0.000px 0px");
+    assert.ok(frames.every(k=>!(/NaN|Infinity/.test(k.clipPath))&&k.clipPath.startsWith(shape?"shape(":"polygon(")));
+    assert.ok(frames.every(k=>k.clipPath.split(",").length===frames[0].clipPath.split(",").length));
+  }
+  let last=closed;
+  for(let i=0;i<=100;i++){
+    const v=addressMotionSample("opening",closed,open,i/100);
+    assert.ok(v.width>=last.width&&v.reveal>=last.reveal);
+    last=v;
+  }
+  assert.deepEqual(last,open);
+  const interrupted=addressMotionSample("opening",closed,open,.37);
+  assert.deepEqual(addressMotionSample("closing-wave",interrupted,closed,0),interrupted);
+  assert.equal(addressMotionSample("closing-wave",open,closed,1).selection,0);
+});

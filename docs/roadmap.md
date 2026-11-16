@@ -64,3 +64,8 @@ Maintain source modules and reproducible build; no large unrelated runtime chang
 - [ZenCustomizableUI](https://github.com/zen-browser/desktop/blob/1.24.2b/src/zen/common/sys/ZenCustomizableUI.sys.mjs) and [CustomizableUI patch](https://github.com/zen-browser/desktop/blob/1.24.2b/src/browser/components/customizableui/CustomizableUI-sys-mjs.patch).
 - [Mozilla extension toolbar help](https://support.mozilla.org/en-US/kb/extensions-button).
 - [Firefox lazy browser documentation](https://firefox-source-docs.mozilla.org/browser/components/tabbrowser/docs/lazy-browsers.html) (current upstream; verify exact Zen build contract).
+
+
+### Immediate stabilization checkpoint — preview.5
+
+User confirmed startup strip jump (OP-006) and Compact Mode button (OP-007) fixed. Address motion is the only current implementation priority: native Fluid Wave opening/closing and actual high-refresh validation (OP-002/003). Do not begin Hub until this is confirmed. All agreed Free, 10-minute unload, lower-left Extension Dock and portrait roadmap decisions are unchanged.

@@ -448,5 +448,11 @@
         "value": 20
       }
     ]
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.oneplane.address-diagnostics",
+    "label": "Address animation frame diagnostics (Browser Console)",
+    "defaultValue": false
   }
 ]

@@ -1,3 +1,10 @@
+/* Registered once by the stylesheet. Native WAAPI can interpolate
+   selection opacity without a script callback on every display frame. */
+@property --op-url-selection-alpha {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 100%;
+}
 /* OnePlane — native toolbar tab view. No fixed-position overlay. */
 #oneplane-compact-toggle, #oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss, #oneplane-center-start, #oneplane-center-end, #oneplane-toolbar-surface, #oneplane-split-drop { display: none !important; }
 @media (min-width: 900px) {

@@ -258,18 +258,31 @@ function installTabStrip() {
   const addressInput = () => window.gURLBar?.inputField || document.getElementById("urlbar-input");
   let addressFrame = 0;
   let addressObserver = null;
-  let addressAnimationFrame = 0;
+  let addressAnimation=null, addressIdentityAnimation=null, addressSelectionAnimation=null;
+  let addressDiagnosticsFrame=0;
   let addressTransition = null;
   let addressWasOpen = false;
-  let addressVisual = null;
   let addressCompactWidth = 0;
   let addressAnchor = null;
   const ADDRESS_WAVE_OPEN = 420, ADDRESS_WAVE_CLOSE = 380;
   const ADDRESS_WAVE_SPREAD = .24;
-  let addressBoxObserver=null, addressBoxHeight=0, addressBoxHeader=30, addressBoxRadius=8;
   let addressSettling = false;
   let addressSettleTimer = 0;
-  const addressEase = t => 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 3);
+  let addressFallbackFrame=0, addressClipHome=null;
+  function stopAddressAnimations(){
+    if(addressDiagnosticsFrame)window.cancelAnimationFrame(addressDiagnosticsFrame);
+    if(addressFallbackFrame)window.cancelAnimationFrame(addressFallbackFrame);
+    addressDiagnosticsFrame=addressFallbackFrame=0;
+    const animations=[addressAnimation,addressIdentityAnimation,addressSelectionAnimation];
+    addressAnimation=addressIdentityAnimation=addressSelectionAnimation=null;
+    for(const animation of animations)animation?.cancel();
+    if(addressClipHome){
+      const {bar,value,priority}=addressClipHome;
+      if(value)bar.style.setProperty("clip-path",value,priority);
+      else bar.style.removeProperty("clip-path");
+      addressClipHome=null;
+    }
+  }
 
   function addressBar() { return document.getElementById("urlbar"); }
   function nativeInlineOpen(bar) {
@@ -331,10 +344,8 @@ function installTabStrip() {
     }
   }
   function clearAddressAnimation() {
-    if (addressAnimationFrame) window.cancelAnimationFrame(addressAnimationFrame);
-    addressAnimationFrame = 0;
     addressTransition = null;
-    addressVisual = null;
+    stopAddressAnimations();
     addressSettling = false;
     if (addressSettleTimer) window.clearTimeout(addressSettleTimer);
     addressSettleTimer = 0;
@@ -347,7 +358,7 @@ function installTabStrip() {
     bar?.style.removeProperty("--op-url-live-width");
     bar?.style.removeProperty("--op-url-live-clip");
     bar?.style.removeProperty("--op-url-selection-alpha");
-    addressBoxHeight=0;
+    bar?.removeAttribute("data-op-url-fluid");
   }
   function addressWaveDepth(progress,x){
     const t=Math.max(0,Math.min(1,(progress-ADDRESS_WAVE_SPREAD*x)/(1-ADDRESS_WAVE_SPREAD)));
@@ -379,112 +390,199 @@ function installTabStrip() {
       Math.abs(to.width-from.width)/Math.max(1,full.expanded-full.compact));
     return Math.max(80,duration*Math.min(1,fraction));
   }
+  // Prepare all keyframes once. Both axes share the same smooth timeline.
+  // The lower edge is relative to the live border-box height: native
+  // suggestions can arrive after opening without restarting the animation.
+  function addressMotionSample(name,from,to,t){
+    t=Math.max(0,Math.min(1,t));
+    const s=t*t*(3-2*t);
+    const horizontal=name==="opening"?s+.35*s*(1-s):s-.35*s*(1-s);
+    const alpha=from.selection??1;
+    return {width:from.width+(to.width-from.width)*horizontal,
+      reveal:from.reveal+(to.reveal-from.reveal)*s,
+      selection:name==="opening"?alpha+(1-alpha)*s:alpha*(1-Math.min(1,s/.82))};
+  }
+  function addressFluidClip(width,header,progress,radius=8,shape=false){
+    const w=Math.max(1,width),r=Math.max(0,Math.min(radius,w/2,header/2));
+    const px=n=>Number(n.toFixed(3))+"px";
+    const y=(x,dy=0)=>{
+      const depth=addressWaveDepth(progress,Math.max(0,Math.min(1,x/w)));
+      return "calc("+px(header*(1-depth)+dy)+" + "+Number((100*depth).toFixed(4))+"%)";
+    };
+    if(shape){
+      // Identical command topology at every offset, including both endpoints.
+      const pt=(x,dy=0)=>px(x)+" "+y(x,dy);
+      const edge=(w-r);
+      const commands=["from "+px(r)+" 0px","hline to "+px(edge),
+        "curve to "+px(w)+" "+px(r)+" with "+px(w)+" 0px",
+        "vline to "+y(w,-r),
+        "curve to "+pt(edge)+" with "+px(w)+" "+y(w)];
+      for(let i=0;i<4;i++){
+        const x0=edge-(edge-r)*i/4,x1=edge-(edge-r)*(i+1)/4;
+        commands.push("curve to "+pt(x1)+" with "+pt(x0+(x1-x0)/3)+" / "+pt(x0+2*(x1-x0)/3));
+      }
+      commands.push("curve to 0px "+y(0,-r)+" with 0px "+y(0),
+        "vline to "+px(r),"curve to "+px(r)+" 0px with 0px 0px","close");
+      return "shape("+commands.join(", ")+")";
+    }
+    // Compatible polygon fallback. Fixed topology, rounded-corner samples
+    // and relative heights. No per-frame path serialization or layout reads.
+    const p=[],point=(x,v)=>p.push(px(x)+" "+v);
+    for(let i=0;i<=4;i++){
+      const t=i*Math.PI/8;point(r-r*Math.cos(t),px(r-r*Math.sin(t)));
+    }
+    for(let i=0;i<=4;i++){
+      const t=i*Math.PI/8;point(w-r+r*Math.sin(t),px(r-r*Math.cos(t)));
+    }
+    for(let i=0;i<=4;i++){
+      const t=i*Math.PI/8;point(w-r+r*Math.cos(t),y(w,-r+r*Math.sin(t)));
+    }
+    for(let i=0;i<=8;i++){
+      const x=(w-r)-(w-2*r)*i/8;point(x,y(x));
+    }
+    for(let i=0;i<=4;i++){
+      const t=i*Math.PI/8;point(r-r*Math.sin(t),y(0,-r+r*Math.cos(t)));
+    }
+    return "polygon("+p.join(", ")+")";
+  }
+  function addressFluidFrames(name,from,to,layoutWidth,header,radius=8,shape=false){
+    // These are interpolation knots, not frames or an FPS limit.
+    return Array.from({length:17},(_,i)=>{
+      const offset=i/16,v=addressMotionSample(name,from,to,offset);
+      return {offset,clipPath:addressFluidClip(v.width,header,v.reveal,radius,shape),
+        translate:""+(v.width-layoutWidth).toFixed(3)+"px 0px",
+        selection:(v.selection*100).toFixed(3)+"%"};
+    });
+  }
   function emptyAddressState(explicitEmpty,uri,pending,restoring){
     if(explicitEmpty)return true;
     if(pending||restoring)return false;
     return /^(about:(blank|newtab|home|privatebrowsing))(?:[?#].*)?$/i.test(uri);
   }
-  function measureAddressBox(bar){
-    const bounds=bar.getBoundingClientRect();
-    const input=bar.querySelector(".urlbar-input-container");
-    addressBoxHeader=Math.max(1,addressAnchor?.height || ((input?.getBoundingClientRect().bottom || bounds.top+30)-bounds.top));
-    addressBoxHeight=Math.max(addressBoxHeader,bounds.height);
-    addressBoxRadius=parseFloat(window.getComputedStyle(bar).getPropertyValue("--op-url-radius"))||8;
+  function currentAddressVisual(){
+    const a=addressTransition;
+    if(!a)return null;
+    const elapsed=addressAnimation?Number(addressAnimation.currentTime??0):window.performance.now()-a.start;
+    return addressMotionSample(a.name,a.from,a.to,elapsed/a.duration);
   }
-  function onAddressBoxResize(records){
-    if(!addressTransition)return;
-    for(const entry of records){
-      if(entry.target!==addressBar())continue;
-      const size=entry.borderBoxSize?.[0];
-      if(size && size.blockSize>0)addressBoxHeight=Math.max(addressBoxHeader,size.blockSize);
+  function startAddressDiagnostics(a){
+    if(!prefs.getBoolPref("zen.oneplane.address-diagnostics",false))return;
+    let last=null;
+    const intervals=[];
+    function sample(now){
+      if(dead||addressTransition!==a)return;
+      if(last!==null)intervals.push(now-last);
+      last=now;
+      addressDiagnosticsFrame=window.requestAnimationFrame(sample);
+    }
+    a.report=()=>{
+      if(addressDiagnosticsFrame)window.cancelAnimationFrame(addressDiagnosticsFrame);
+      addressDiagnosticsFrame=0;
+      const sorted=intervals.slice().sort((x,y)=>x-y);
+      const percentile=p=>sorted.length?Number(sorted[Math.min(sorted.length-1,Math.floor(p*(sorted.length-1)))].toFixed(2)):null;
+      window.console.info("[OnePlane address]",{phase:a.name,engine:a.engine,frames:intervals.length,
+        medianMs:percentile(.5),p95Ms:percentile(.95),maxMs:percentile(1),
+        approximateHz:sorted.length?Math.round(1000/(intervals.reduce((x,y)=>x+y,0)/intervals.length)):null,
+        frameRatePref:prefs.getIntPref("layout.frame_rate",-1)});
+    };
+    addressDiagnosticsFrame=window.requestAnimationFrame(sample);
+  }
+  function finishAddressPhase(a){
+    if(dead||addressTransition!==a)return;
+    a.report?.();
+    if(a.name!=="closing-wave"){
+      clearAddressAnimation();
+      return;
+    }
+    // Keep the last compact silhouette while native focus and popover
+    // dismissal settle. The layout changes once, at the end of motion.
+    addressTransition=null;
+    addressSettling=true;
+    url.setAttribute("data-op-url-phase","settling");
+    const bar=addressBar();
+    stopAddressAnimations();
+    if(bar){
+      bar.style.setProperty("--op-url-live-width",Math.max(1,a.to.width).toFixed(3)+"px");
+      bar.style.setProperty("--op-url-live-clip","inset(0 0 max(0px, calc(100% - var(--op-url-header-height))) 0 round var(--op-url-radius))");
+      bar.style.setProperty("--op-url-selection-alpha","0%");
+    }
+    finishDismissUrl();
+    if(!addressSettling)return;
+    if(!inlinePopoverPresent(addressBar())){
+      clearAddressAnimation();
+      addressWasOpen=false;
+    }else{
+      addressSettleTimer=window.setTimeout(()=>{
+        if(dead||!addressSettling)return;
+        clearAddressAnimation();
+        addressWasOpen=nativeInlineOpen(addressBar());
+      },600);
     }
   }
-  function drawAddress(width,reveal,selection=1){
-    const bar=addressBar(),a=addressTransition;
-    if(!bar||!a)return;
-    addressVisual={width,reveal,selection};
-    // Opening: lay out the native results at their final width ONCE,
-    // reveal their surface with a moving wave. Closing keeps its real
-    // shrinking width, but reads the size from ResizeObserver, never
-    // after the write. No forced layout in the animation tick.
-    const visible=Math.max(1,width);
-    const layoutWidth=a.name==="opening"?Math.max(1,a.to.width):visible;
-    const value=layoutWidth.toFixed(2)+"px";
-    if(bar.style.getPropertyValue("--op-url-live-width")!==value)
-      bar.style.setProperty("--op-url-live-width",value);
-    bar.style.setProperty("--op-url-live-clip",
-      addressWaveClip(visible,Math.max(addressBoxHeader,addressBoxHeight),addressBoxHeader,reveal,addressBoxRadius,layoutWidth));
-    if(a.name==="closing-wave" || (a.from.selection??1)<1){
-      const alpha=(100*Math.max(0,Math.min(1,selection))).toFixed(2)+"%";
-      if(bar.style.getPropertyValue("--op-url-selection-alpha")!==alpha)
-        bar.style.setProperty("--op-url-selection-alpha",alpha);
-    }
-  }
-  function beginAddressPhase(name, from, to, duration) {
-    addressTransition = { name, from, to, duration, start: window.performance.now() };
-    url.setAttribute("data-op-url-phase", name);
-    root.toggleAttribute("oneplane-address-unblur", name.startsWith("closing"));
+  function beginAddressPhase(name,from,to,duration,layoutWidth=Math.max(from.width,to.width)){
+    // Cancel only after sampling the previous visual position. Keep
+    // the native editor, selection, results and popup anchors intact.
+    stopAddressAnimations();
     const bar=addressBar();
     if(!bar){clearAddressAnimation();return;}
+    const full=Math.max(1,layoutWidth);
+    const header=Math.max(1,parseFloat(url.style.getPropertyValue("--op-url-header-height"))||addressAnchor?.height||30);
+    const radius=parseFloat(window.getComputedStyle(bar).getPropertyValue("--op-url-radius"))||8;
+    const shape=window.CSS?.supports("clip-path",addressFluidClip(Math.max(1,from.width),header,from.reveal,radius,true))??false;
+    const frames=addressFluidFrames(name,from,to,full,header,radius,shape);
+    const a={name,from,to,duration,start:window.performance.now(),engine:shape?"waapi-shape":"waapi-polygon"};
+    addressTransition=a;
+    url.setAttribute("data-op-url-phase",name);
+    root.toggleAttribute("oneplane-address-unblur",name.startsWith("closing"));
     bar.setAttribute("data-op-url-animating","true");
+    bar.setAttribute("data-op-url-fluid","true");
     bar.toggleAttribute("data-op-url-selection-fade",name==="closing-wave"||(from.selection??1)<1);
-    // One initial layout measurement, not one forced flush per frame.
-    bar.style.setProperty("--op-url-live-width",Math.max(1,name==="opening"?to.width:from.width).toFixed(2)+"px");
-    measureAddressBox(bar);
-    drawAddress(from.width,from.reveal,from.selection??1);
-    if (!addressAnimationFrame) addressAnimationFrame = window.requestAnimationFrame(stepAddress);
-  }
-  function stepAddress(now) {
-    addressAnimationFrame = 0;
-    const a = addressTransition;
-    if (!a || dead) return;
-    if (!nativeInlineOpen(addressBar()) || !addressMotionEnabled()) {
-      const closing = a.name.startsWith("closing");
-      clearAddressAnimation();
-      if (closing && nativeInlineOpen(addressBar())) finishDismissUrl();
-      return;
-    }
-    if (a.start === null) a.start = now;
-    const elapsed = now - a.start;
-    const t = Math.max(0,Math.min(1, elapsed / a.duration));
-    // Same timeline for both axes. Closing reverses the opening curve;
-    // the right side of the result surface retreats before the left.
-    const horizontal = a.name === "opening" ? addressEase(t) : 1-addressEase(1-t);
-    const vertical = t;
-    const selectionFrom=a.from.selection??1;
-    const selection=a.name==="opening"
-      ? selectionFrom+(1-selectionFrom)*addressEase(t)
-      : selectionFrom*Math.max(0,1-t/.65);
-    drawAddress(a.from.width + (a.to.width - a.from.width) * horizontal,
-      a.from.reveal + (a.to.reveal - a.from.reveal) * vertical,selection);
-    if (t < 1) {
-      addressAnimationFrame = window.requestAnimationFrame(stepAddress);
-      return;
-    }
-    if (a.name === "closing-wave") {
-      // Native focus and popover-close notifications can arrive separately.
-      // Hold the last compact frame until the real popover has closed;
-      // otherwise the expanded fallback width flashes for a frame.
-      addressTransition = null;
-      addressSettling = true;
-      url.setAttribute("data-op-url-phase", "settling");
-      finishDismissUrl();
-      if (!addressSettling) return;
-      if (!inlinePopoverPresent(addressBar())) {
-        clearAddressAnimation();
-        addressWasOpen = false;
-      } else {
-        addressSettleTimer = window.setTimeout(() => {
-          if (dead || !addressSettling) return;
-          // Fail open if native closure was blocked, rather than leaving the
-          // editor clipped indefinitely.
-          clearAddressAnimation();
-          addressWasOpen = nativeInlineOpen(addressBar());
-        }, 600);
+    bar.style.setProperty("--op-url-live-width",full.toFixed(3)+"px");
+    bar.style.setProperty("--op-url-live-clip",frames[0].clipPath);
+    bar.style.setProperty("--op-url-selection-alpha",frames[0].selection);
+    const timing={duration,easing:"linear",fill:"both"};
+    const identity=bar.querySelector("#identity-box");
+    try{
+      addressAnimation=bar.animate(frames.map(({offset,clipPath})=>({offset,clipPath})),timing);
+      // Verify the cascade, not just support for Element.animate().
+      // A user theme can still override clip-path with !important.
+      addressAnimation.pause();
+      addressAnimation.currentTime=duration/2;
+      const mid=window.getComputedStyle(bar).clipPath;
+      addressAnimation.currentTime=0;
+      const first=window.getComputedStyle(bar).clipPath;
+      if(mid===first)throw new Error("Native clip animation overridden");
+      addressAnimation.play();
+      const start=addressAnimation.startTime;
+      if(identity){
+        addressIdentityAnimation=identity.animate(frames.map(({offset,translate})=>({offset,translate})),timing);
+        if(start!==null)addressIdentityAnimation.startTime=start;
       }
-    } else {
-      clearAddressAnimation();
+      if(bar.hasAttribute("data-op-url-selection-fade")){
+        addressSelectionAnimation=bar.animate(frames.map(({offset,selection})=>({offset,"--op-url-selection-alpha":selection})),timing);
+        if(start!==null)addressSelectionAnimation.startTime=start;
+      }
+      addressAnimation.onfinish=()=>finishAddressPhase(a);
+    }catch(error){
+      // Compatibility fallback for a conflicting user theme or old Gecko.
+      // Normally unused. Preserve a functional native editor.
+      stopAddressAnimations();
+      a.engine="fallback";
+      window.console.warn("[OnePlane] Native address animation unavailable:",error);
+      addressClipHome={bar,value:bar.style.getPropertyValue("clip-path"),priority:bar.style.getPropertyPriority("clip-path")};
+      a.start=window.performance.now();
+      const draw=now=>{
+        if(dead||addressTransition!==a)return;
+        const t=Math.max(0,Math.min(1,(now-a.start)/duration));
+        const v=addressMotionSample(name,from,to,t);
+        bar.style.setProperty("clip-path",addressFluidClip(v.width,header,v.reveal,radius,shape),"important");
+        bar.style.setProperty("--op-url-selection-alpha",(v.selection*100).toFixed(3)+"%");
+        if(t<1)addressFallbackFrame=window.requestAnimationFrame(draw);
+        else finishAddressPhase(a);
+      };
+      draw(a.start);
     }
+    startAddressDiagnostics(a);
   }
   function updateAddressAnimation() {
     const bar = addressBar();
@@ -496,7 +594,6 @@ function installTabStrip() {
       }
       return;
     }
-    if (open && addressWasOpen && !addressTransition) addressWidths();
     if (!open || !addressMotionEnabled()) {
       if (addressTransition) {
         const closing = addressTransition.name.startsWith("closing");
@@ -523,32 +620,28 @@ function installTabStrip() {
     if (addressSettling || addressTransition?.name.startsWith("closing")) return true;
     holdToolbarAfterDismiss();
     const widths = addressWidths();
-    const from = addressVisual || { width: widths.expanded, reveal: 1 };
-    if (addressAnimationFrame) window.cancelAnimationFrame(addressAnimationFrame);
-    addressAnimationFrame = 0;
+    const from = currentAddressVisual() || { width: widths.expanded, reveal: 1, selection:1 };
     // Reverse an interrupted opening from its current visual position.
     // Shrink the width and the result wave together, in one phase.
     const to={width:widths.compact,reveal:0};
-    beginAddressPhase("closing-wave",from,to,addressWaveDuration(from,to,widths,ADDRESS_WAVE_CLOSE));
+    beginAddressPhase("closing-wave",from,to,addressWaveDuration(from,to,widths,ADDRESS_WAVE_CLOSE),widths.expanded);
     return true;
   }
   function onAddressMutation() {
     if (dead) return;
     updateAddressAnimation();
-    if(!addressTransition&&!addressSettling)alignAddressStart();
+    if(!addressTransition&&!addressSettling&&!nativeInlineOpen(addressBar()))alignAddressStart();
   }
   function onAddressInput() {
     // Typing or clicking the real input during closing reverses the close.
     if (!addressSettling && !addressTransition?.name.startsWith("closing")) {
-      rememberCompactAddress();
+      if(!addressTransition)rememberCompactAddress();
       return;
     }
-    const from = addressVisual || { width: addressWidths().compact, reveal: 0 };
+    const from = currentAddressVisual() || { width: addressWidths().compact, reveal: 0, selection:0 };
     addressSettling = false;
     if (addressSettleTimer) window.clearTimeout(addressSettleTimer);
     addressSettleTimer = 0;
-    if (addressAnimationFrame) window.cancelAnimationFrame(addressAnimationFrame);
-    addressAnimationFrame = 0;
     const widths=addressWidths(),to={width:widths.expanded,reveal:1};
     beginAddressPhase("opening",from,to,addressWaveDuration(from,to,widths,ADDRESS_WAVE_OPEN));
   }
@@ -2561,7 +2654,6 @@ function installTabStrip() {
     window.removeEventListener("ZenCompactMode:LayoutUpdate", onCompactChanged);
     window.removeEventListener("resize", onCompactChanged);
     addressObserver?.disconnect();
-    addressBoxObserver?.disconnect();
     clearAddressAnimation();
     addressBar()?.removeEventListener("pointerdown", onAddressInput, true);
     addressBar()?.removeEventListener("input", onAddressInput, true);
@@ -2607,8 +2699,6 @@ function installTabStrip() {
     const bar = document.getElementById("urlbar");
     if (bar) {
       addressObserver = new MutationObserver(onAddressMutation);
-      addressBoxObserver=new ResizeObserver(onAddressBoxResize);
-      addressBoxObserver.observe(bar,{box:"border-box"});
       bar.addEventListener("pointerdown", onAddressInput, true);
       bar.addEventListener("input", onAddressInput, true);
       bar.addEventListener("toggle", onAddressMutation);

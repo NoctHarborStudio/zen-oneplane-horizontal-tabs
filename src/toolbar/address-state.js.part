@@ -1,10 +1,10 @@
   const addressInput = () => window.gURLBar?.inputField || document.getElementById("urlbar-input");
   let addressFrame = 0;
   let addressObserver = null;
-  let addressAnimationFrame = 0;
+  let addressAnimation=null, addressIdentityAnimation=null, addressSelectionAnimation=null;
+  let addressDiagnosticsFrame=0;
   let addressTransition = null;
   let addressWasOpen = false;
-  let addressVisual = null;
   let addressCompactWidth = 0;
   let addressAnchor = null;
   const ADDRESS_WAVE_OPEN = 420, ADDRESS_WAVE_CLOSE = 380;

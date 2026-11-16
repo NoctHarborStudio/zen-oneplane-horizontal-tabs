@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0-preview.5
+
+- Rebuild both inline-address transitions around native Web Animations API interpolation. Keep one final-width layout throughout opening and closing, prepare a continuous rounded wave with height-relative coordinates once, and let Gecko sample the timeline. Use CSS shape() when available, polygon otherwise; retain a script-driven compatibility fallback if the native cascade prevents animation.
+- Synchronize horizontal and vertical progress with a smooth shared curve; move the native trailing identity control with the visible right edge. Preserve actual text selection and animate its highlight through a registered CSS property. No per-frame layout reads, width writes or JavaScript clip regeneration on the normal path.
+- Add optional address frame-interval diagnostics, including animation engine, median/p95/max rAF interval and layout.frame_rate. These are refresh callback intervals, not presented-frame/GPU measurements. Do not change global refresh-rate preferences.
+- Mark OP-006 and OP-007 confirmed fixed by user testing of preview.4. OP-002 remains open until high-refresh behavior is validated; OP-003 requires visual confirmation. Hub stays deferred.
+
 ## 0.2.0-preview.4
 
 - Prioritize UI stabilization before Hub. Opening Liquid Wave lays out native results at the final width once, then reveals the surface with the timestamp-driven clip; cache border-box geometry via ResizeObserver instead of forcing layout each animation frame.

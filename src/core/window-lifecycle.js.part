@@ -75,7 +75,6 @@
     window.removeEventListener("ZenCompactMode:LayoutUpdate", onCompactChanged);
     window.removeEventListener("resize", onCompactChanged);
     addressObserver?.disconnect();
-    addressBoxObserver?.disconnect();
     clearAddressAnimation();
     addressBar()?.removeEventListener("pointerdown", onAddressInput, true);
     addressBar()?.removeEventListener("input", onAddressInput, true);
@@ -121,8 +120,6 @@
     const bar = document.getElementById("urlbar");
     if (bar) {
       addressObserver = new MutationObserver(onAddressMutation);
-      addressBoxObserver=new ResizeObserver(onAddressBoxResize);
-      addressBoxObserver.observe(bar,{box:"border-box"});
       bar.addEventListener("pointerdown", onAddressInput, true);
       bar.addEventListener("input", onAddressInput, true);
       bar.addEventListener("toggle", onAddressMutation);

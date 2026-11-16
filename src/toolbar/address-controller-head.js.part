@@ -1,7 +1,20 @@
-  let addressBoxObserver=null, addressBoxHeight=0, addressBoxHeader=30, addressBoxRadius=8;
   let addressSettling = false;
   let addressSettleTimer = 0;
-  const addressEase = t => 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 3);
+  let addressFallbackFrame=0, addressClipHome=null;
+  function stopAddressAnimations(){
+    if(addressDiagnosticsFrame)window.cancelAnimationFrame(addressDiagnosticsFrame);
+    if(addressFallbackFrame)window.cancelAnimationFrame(addressFallbackFrame);
+    addressDiagnosticsFrame=addressFallbackFrame=0;
+    const animations=[addressAnimation,addressIdentityAnimation,addressSelectionAnimation];
+    addressAnimation=addressIdentityAnimation=addressSelectionAnimation=null;
+    for(const animation of animations)animation?.cancel();
+    if(addressClipHome){
+      const {bar,value,priority}=addressClipHome;
+      if(value)bar.style.setProperty("clip-path",value,priority);
+      else bar.style.removeProperty("clip-path");
+      addressClipHome=null;
+    }
+  }
 
   function addressBar() { return document.getElementById("urlbar"); }
   function nativeInlineOpen(bar) {
@@ -63,10 +76,8 @@
     }
   }
   function clearAddressAnimation() {
-    if (addressAnimationFrame) window.cancelAnimationFrame(addressAnimationFrame);
-    addressAnimationFrame = 0;
     addressTransition = null;
-    addressVisual = null;
+    stopAddressAnimations();
     addressSettling = false;
     if (addressSettleTimer) window.clearTimeout(addressSettleTimer);
     addressSettleTimer = 0;
@@ -79,5 +90,5 @@
     bar?.style.removeProperty("--op-url-live-width");
     bar?.style.removeProperty("--op-url-live-clip");
     bar?.style.removeProperty("--op-url-selection-alpha");
-    addressBoxHeight=0;
+    bar?.removeAttribute("data-op-url-fluid");
   }
