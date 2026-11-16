@@ -28,11 +28,12 @@
   inset:var(--op-hub-top,40px) auto auto var(--op-hub-left,4px) !important;
   margin:0 !important; padding:0 !important; border:0 !important;
   border-radius:8px !important;
+  clip-path:inset(0 0 0% 0 round 8px);
   width:var(--op-hub-width,250px) !important;
   max-width:calc(100vw - 8px) !important;
   max-height:calc(100vh - var(--op-hub-top,40px) - 8px) !important;
   box-sizing:border-box !important;
-  background:var(--op-hub-bg,light-dark(#e0e4ec,#30343e)) !important;
+  background:var(--op-hub-bg,light-dark(#f4f5f9,#15171e)) !important;
   color:var(--op-hub-fg,CanvasText) !important;
   box-shadow:0 0 0 1px color-mix(in srgb,currentColor 12%,transparent),0 6px 20px #0003;
   overflow:auto !important;
@@ -46,6 +47,15 @@
 #oneplane-hub-panel * {-moz-window-dragging:no-drag !important;}
 #oneplane-hub-panel .op-hub-name {outline:none;box-shadow:none;}
 #oneplane-hub-panel .op-hub-name:focus-visible {outline:2px solid AccentColor;outline-offset:-2px;}
-#oneplane-hub-panel .op-hub-context {padding:3px 5px 5px 32px;}
-#oneplane-hub-panel .op-hub-delete {display:block;width:100%;text-align:start;color:inherit;background:color-mix(in srgb,currentColor 8%,transparent);border:0;border-radius:6px;padding:7px;font:inherit;cursor:pointer;}
+#oneplane-hub-panel .op-hub-context {display:flex;flex-direction:column;gap:4px;box-sizing:border-box;width:100%;padding:5px 9px;margin:0 auto;}
+#oneplane-hub-panel .op-hub-delete {display:block;width:100%;text-align:center;color:inherit;background:color-mix(in srgb,currentColor 8%,transparent);border:0;border-radius:6px;padding:7px;font:inherit;cursor:pointer;}
 #oneplane-hub-panel .op-hub-delete:hover:not(:disabled) {background:color-mix(in srgb,currentColor 16%,transparent);}
+
+#oneplane-hub-panel .op-hub-action,#oneplane-hub-panel .op-hub-return {display:block;box-sizing:border-box;width:100%;text-align:center;color:inherit;background:color-mix(in srgb,currentColor 8%,transparent);border:0;border-radius:6px;padding:7px;font:inherit;cursor:pointer;}
+#oneplane-hub-panel .op-hub-action:hover:not(:disabled),#oneplane-hub-panel .op-hub-return:hover:not(:disabled) {background:color-mix(in srgb,currentColor 16%,transparent);}
+#oneplane-hub-panel .op-hub-return[hidden] {display:none!important;}
+#oneplane-hub-panel .op-hub-confirm-text {margin:4px 0;text-align:center;font-size:12px;line-height:1.4;overflow-wrap:anywhere;}
+#oneplane-hub-panel .op-hub-confirm-controls {display:flex;gap:6px;}
+#oneplane-hub-panel .op-hub-confirm-controls > button {flex:1;min-width:0;}
+#oneplane-hub-panel .op-hub-space[data-op-dragging] {opacity:.65;cursor:grabbing;}
+#oneplane-hub-panel[inert] {pointer-events:none!important;}

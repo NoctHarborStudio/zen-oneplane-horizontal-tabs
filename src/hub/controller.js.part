@@ -23,18 +23,44 @@
     add.type="submit";add.setAttribute("aria-label","Create workspace");form.append(name,add);
     const mode=make("button","op-hub-mode");mode.type="button";
     content.append(make("h2","op-hub-title","OnePlane"),make("h3","op-hub-heading","Workspaces"),spaces,form,status,make("h3","op-hub-heading","Settings"),mode);
+    const returnButton=make("button","op-hub-return","Return to main window");returnButton.type="button";returnButton.hidden=true;content.prepend(returnButton);
     panel.append(content);
     let destroyed=false,busy=false,open=false,contextId=null;
-    let geometryFrame=0;
+    let geometryFrame=0,motion=null,confirmation=null,drag=null,suppressClickUntil=0,projectionBusy=false;
+    const PROJECTION="__oneplaneWorkspaceProjection";
     const manager=()=>window.gZenWorkspaces;
     const command=()=>document.getElementById("cmd_toggleCompactModeIgnoreHover");
     function setHold(value){toolbarWrapper?.toggleAttribute("oneplane-hub-hold",value);hold();}
-    function close(restoreFocus=false){
-      const wasOpen=open;contextId=null;open=false;
-      if(geometryFrame)window.cancelAnimationFrame(geometryFrame);geometryFrame=0;
+    function stopMotion(){if(motion){motion.cancel();motion=null;}}
+    function hideNow(){
+      stopMotion();
       if(topLayer&&panel.matches(":popover-open"))panel.hidePopover();
-      panel.hidden=true;button.setAttribute("aria-expanded","false");if(wasOpen)setHold(false);
+      panel.hidden=true;panel.inert=false;setHold(false);
+    }
+    function fluid(show,done){
+      const reduced=window.matchMedia("(prefers-reduced-motion: reduce)").matches||prefs.getIntPref("zen.oneplane.animation-duration",160)===0;
+      if(reduced||typeof panel.animate!=="function"){stopMotion();done();return;}
+      const computed=window.getComputedStyle(panel);
+      const from=motion?{clipPath:computed.clipPath,opacity:computed.opacity,translate:computed.translate}:show?
+        {clipPath:"inset(0 0 100% 0 round 8px)",opacity:0,translate:"0 -6px"}:
+        {clipPath:"inset(0 0 0% 0 round 8px)",opacity:1,translate:"0 0px"};
+      stopMotion();
+      const to=show?{clipPath:"inset(0 0 0% 0 round 8px)",opacity:1,translate:"0 0px"}:
+        {clipPath:"inset(0 0 100% 0 round 8px)",opacity:0,translate:"0 -6px"};
+      try{
+        const animation=panel.animate([from,to],{duration:show?300:260,easing:"cubic-bezier(.22,.72,.2,1)",fill:"both"});
+        motion=animation;
+        animation.finished.then(()=>{if(motion!==animation)return;motion=null;animation.cancel();done();},()=>{});
+      }catch{done();}
+    }
+    function close(restoreFocus=false,immediate=false){
+      const wasVisible=!panel.hidden;contextId=null;confirmation=null;open=false;
+      if(drag)cancelDrag();
+      if(geometryFrame)window.cancelAnimationFrame(geometryFrame);geometryFrame=0;
+      button.setAttribute("aria-expanded","false");
       if(restoreFocus&&!destroyed&&supported())button.focus({preventScroll:true});
+      if(!wasVisible||immediate||destroyed||!supported()){hideNow();return;}
+      panel.inert=true;fluid(false,()=>{if(!open)hideNow();});
     }
     function updateGeometry(){
       if(!open||!supported())return;
@@ -46,9 +72,10 @@
       const right=a.width>1?a.right:a.left+compact;
       const width=hubPanelWidth(b.left,right,window.innerWidth);
       panel.style.setProperty("--op-hub-width",width+"px");
-      const bg=bar&&window.getComputedStyle(bar).backgroundColor;
-      if(bg&&bg!=="rgba(0, 0, 0, 0)"&&bg!=="transparent")panel.style.setProperty("--op-hub-bg",bg);
-      else panel.style.setProperty("--op-hub-bg",style.getPropertyValue("--op-url-surface").trim()||"light-dark(#e0e4ec,#30343e)");
+      // Share the actual toolbar contour color rather than the address capsule.
+      const bg=window.getComputedStyle(surface).backgroundColor;
+      panel.style.setProperty("--op-hub-bg",bg&&bg!=="rgba(0, 0, 0, 0)"&&bg!=="transparent"?bg:
+        window.getComputedStyle(toolbarWrapper).getPropertyValue("--op-surface-tint").trim()||"light-dark(#f4f5f9,#15171e)");
       const color=bar&&window.getComputedStyle(bar).color;
       if(color)panel.style.setProperty("--op-hub-fg",color);
       const x=Math.round(b.left),y=Math.round(b.bottom+4);
@@ -62,13 +89,14 @@
     }
     function showPopup(){
       if(!updateGeometry())return false;
-      panel.hidden=false;
-      if(topLayer)panel.showPopover();
-      return true;
+      panel.hidden=false;panel.inert=false;
+      if(topLayer&&!panel.matches(":popover-open"))panel.showPopover();
+      fluid(true,()=>{});return true;
     }
     function render(){
       if(destroyed)return;
       const snapshot=hubWorkspaceSnapshot(manager()),focusedId=document.activeElement?.dataset?.workspaceId;
+      returnButton.hidden=!window[PROJECTION];returnButton.disabled=projectionBusy;
       spaces.replaceChildren();
       if(!snapshot?.length)spaces.append(make("p","op-hub-empty",snapshot?"No native workspaces":"Native workspaces unavailable"));
       else for(const space of snapshot){
@@ -77,8 +105,13 @@
         const icon=make("span","op-hub-icon",space.icon||Array.from(space.name)[0]?.toUpperCase()||"·");icon.setAttribute("aria-hidden","true");
         entry.append(icon,make("span","op-hub-label",space.name));
         if(space.active)entry.append(make("span","op-hub-current","•"));
-        entry.addEventListener("click",()=>void select(space.id));
-        entry.addEventListener("contextmenu",event=>{event.preventDefault();event.stopPropagation();if(!busy){contextId=contextId===space.id?null:space.id;render();}});
+        entry.addEventListener("click",()=>{if(window.performance.now()>=suppressClickUntil)void select(space.id);});
+        entry.addEventListener("pointerdown",event=>beginDrag(event,space.id,entry));
+        entry.addEventListener("pointermove",moveDrag);
+        entry.addEventListener("pointerup",endDrag);
+        entry.addEventListener("pointercancel",cancelDrag);
+        entry.addEventListener("lostpointercapture",cancelDrag);
+        entry.addEventListener("contextmenu",event=>{event.preventDefault();event.stopPropagation();if(!busy){confirmation=null;contextId=contextId===space.id?null:space.id;render();}});
         spaces.append(entry);
         if(contextId===space.id)spaces.append(workspaceMenu(space,snapshot));
         if(focusedId===space.id&&open&&!busy)entry.focus({preventScroll:true});
@@ -93,9 +126,20 @@
       const menu=make("div","op-hub-context");menu.setAttribute("role","group");menu.setAttribute("aria-label","Workspace actions");
       const native=manager(),free=prefs.getStringPref("zen.oneplane.free-space-id","");
       const canDelete=snapshot.length>1&&space.id!==free&&typeof native?.removeWorkspace==="function";
-      const remove=make("button","op-hub-delete","Delete workspace…");remove.type="button";remove.disabled=busy||!canDelete;
-      remove.addEventListener("click",()=>void removeSpace(space.id));
-      menu.append(remove);return menu;
+      const detach=make("button","op-hub-action","Open in another window");detach.type="button";detach.disabled=busy||projectionBusy;
+      detach.addEventListener("click",()=>void project(space.id,null));menu.append(detach);
+      if(confirmation?.id===space.id){
+        const message=make("p","op-hub-confirm-text",confirmation.description);
+        const controls=make("div","op-hub-confirm-controls");
+        const cancel=make("button","op-hub-action","Cancel"),ok=make("button","op-hub-delete","Delete");cancel.type=ok.type="button";
+        cancel.addEventListener("click",()=>{confirmation=null;render();});
+        ok.addEventListener("click",()=>void removeSpace(space.id));
+        controls.append(cancel,ok);menu.append(message,controls);
+      }else{
+        const remove=make("button","op-hub-delete","Delete workspace");remove.type="button";remove.disabled=busy||!canDelete;
+        remove.addEventListener("click",()=>askDelete(space.id));menu.append(remove);
+      }
+      return menu;
     }
     function ownedTabs(native,id){
       if(!Array.isArray(native?.allStoredTabs))return null;
@@ -120,43 +164,141 @@
         return tabs;
       }catch{return null;}
     }
-    async function removeSpace(id){
-      if(busy||destroyed)return;
+    function deletionDetails(id){
       const native=manager(),snapshot=hubWorkspaceSnapshot(native),space=snapshot?.find(s=>s.id===id);
       const free=prefs.getStringPref("zen.oneplane.free-space-id","");
-      if(!space||snapshot.length<=1||id===free||typeof native.removeWorkspace!=="function")return;
+      if(!space||snapshot.length<=1||id===free||typeof native.removeWorkspace!=="function")return null;
       const destination=snapshot.find(s=>s.id===free&&s.id!==id)||snapshot.find(s=>s.id!==id&&s.active)||snapshot.find(s=>s.id!==id);
       const plan=preservationPlan(native,id,destination);
-      const title="Delete workspace: "+space.name;
-      // Native removeWorkspace closes owned tabs (also relevant to synced
-      // windows). Never call it implicitly for a preservation request.
       const description=plan===null?
-        "This workspace may contain tabs in other windows or groups. Deleting it through Zen closes its remaining tabs. Continue?":
-        plan.length?"Move its "+plan.length+" tab(s) to “"+destination.name+"”, then delete the workspace?":
-        "Delete this empty workspace?";
-      busy=true;contextId=null;status.textContent="";
+        "Delete “"+space.name+"” and close its remaining tabs, including in synced windows?":
+        plan.length?"Move "+plan.length+" tab(s) to “"+destination.name+"” and delete “"+space.name+"”?":
+        "Delete empty workspace “"+space.name+"”?";
+      return {id,native,destination,plan,description};
+    }
+    function askDelete(id){
+      if(busy||destroyed)return;
+      confirmation=deletionDetails(id);contextId=id;render();
+    }
+    async function removeSpace(id){
+      if(busy||destroyed||confirmation?.id!==id)return;
+      const approved=confirmation,now=deletionDetails(id);
+      if(!now||now.native!==approved.native||now.description!==approved.description||
+        (now.plan!==null&&approved.plan!==null&&(now.plan.length!==approved.plan.length||now.plan.some(t=>!approved.plan.includes(t))))){
+        confirmation=now;status.textContent="Workspace changed. Review again.";render();return;
+      }
+      const {native,destination,plan}=now;
+      busy=true;confirmation=null;contextId=null;status.textContent="";render();
       try{
-        if(!Services.prompt.confirm(window,title,description))return;
-        const current=hubWorkspaceSnapshot(native);
-        if(destroyed||!current?.some(s=>s.id===id)||current.length<=1||prefs.getStringPref("zen.oneplane.free-space-id","")===id)return;
         if(plan!==null){
-          const now=preservationPlan(native,id,destination);
-          if(!now||now.length!==plan.length||now.some(t=>!plan.includes(t)))throw Error("Workspace changed; try again");
-          if(now.length)native.moveTabsToWorkspace([...now],destination.id);
-          if(now.some(t=>t.getAttribute("zen-workspace-id")!==destination.id)||ownedTabs(native,id)?.length!==0)throw Error("Not all tabs were moved; deletion cancelled");
+          if(plan.length)native.moveTabsToWorkspace([...plan],destination.id);
+          if(plan.some(t=>t.getAttribute("zen-workspace-id")!==destination.id)||ownedTabs(native,id)?.length!==0)throw Error("Not all tabs moved");
         }
         switchGuard();await native.removeWorkspace(id);
-        if(native.getWorkspaceFromId(id))throw Error("Workspace was not removed");
+        if(native.getWorkspaceFromId(id))throw Error("Workspace not removed");
       }catch(error){if(!destroyed)status.textContent="Could not delete workspace safely.";console.warn("[OnePlane] Hub delete:",error);}
       finally{busy=false;if(!destroyed&&open)render();}
+    }
+    // A projection is a native synced window, not a copy or adoption of tabs.
+    function canProject(){
+      return !!manager()?.currentWindowIsSyncing&&!!window.gZenWindowSync&&
+        prefs.getBoolPref("zen.window-sync.enabled",true)&&!prefs.getBoolPref("zen.window-sync.sync-only-pinned-tabs",true);
+    }
+    function monitorAt(x,y){
+      try{
+        const screens=Cc["@mozilla.org/gfx/screenmanager;1"].getService(Ci.nsIScreenManager);
+        const rect=s=>{const l={},t={},w={},h={};s.GetAvailRectDisplayPix(l,t,w,h);return {x:l.value,y:t.value,width:w.value,height:h.value};};
+        const source=rect(screens.screenForRect(Math.round(window.screenX+window.outerWidth/2),Math.round(window.screenY+window.outerHeight/2),1,1));
+        const dest=rect(screens.screenForRect(Math.round(x),Math.round(y),1,1));
+        return hubOtherDisplay(source,dest,x,y)?dest:null;
+      }catch{return null;}
+    }
+    function beginDrag(event,id,entry){
+      if(event.button!==0||busy||projectionBusy)return;
+      drag={id,entry,pointer:event.pointerId,x:event.screenX,y:event.screenY,moved:false};
+      try{entry.setPointerCapture(event.pointerId);}catch{drag=null;}
+    }
+    function moveDrag(event){
+      if(!drag||event.pointerId!==drag.pointer)return;
+      if(!drag.moved&&Math.hypot(event.screenX-drag.x,event.screenY-drag.y)>=9){
+        drag.moved=true;drag.entry.setAttribute("data-op-dragging","true");
+        status.textContent="Drag to another monitor and release.";
+      }
+      if(drag.moved)event.preventDefault();
+    }
+    function cancelDrag(event){
+      if(!drag||(event&&event.pointerId!==drag.pointer))return;
+      const d=drag;drag=null;d.entry.removeAttribute("data-op-dragging");
+      if(d.moved){suppressClickUntil=window.performance.now()+400;status.textContent="";}
+      try{if(d.entry.hasPointerCapture(d.pointer))d.entry.releasePointerCapture(d.pointer);}catch{}
+    }
+    function endDrag(event){
+      if(!drag||event.pointerId!==drag.pointer)return;
+      const d=drag,point=monitorAt(event.screenX,event.screenY);cancelDrag(event);
+      if(!d.moved)return;
+      event.preventDefault();event.stopPropagation();
+      if(point)void project(d.id,point);
+      else status.textContent="Release on another monitor, or use Open in another window.";
+    }
+    async function project(id,display){
+      if(projectionBusy||busy||destroyed)return;
+      if(!canProject()){status.textContent="Enable native window sync for all tabs to use this feature.";return;}
+      const native=manager();
+      if(!native.getWorkspaceFromId(id))return;
+      projectionBusy=true;status.textContent="Opening workspace…";render();
+      let child=null;
+      try{
+        const {BrowserWindowTracker}=ChromeUtils.importESModule("resource:///modules/BrowserWindowTracker.sys.mjs");
+        const features=display?`left=${display.x+20},top=${display.y+20},width=${Math.max(320,display.width-40)},height=${Math.max(240,display.height-40)}`:undefined;
+        const options={openerWindow:window,private:false,zenSyncedWindow:!prefs.getBoolPref("zen.window-sync.prefer-unsynced-windows",false),features};
+        child=BrowserWindowTracker.openWindow(options);
+        if(!child)throw Error("Native window did not open");
+        child[PROJECTION]={source:window,id};
+        await new Promise((resolve,reject)=>{
+          if(child.gBrowserInit?.delayedStartupFinished){resolve();return;}
+          const observer=subject=>{if(subject===child){cleanup();resolve();}};
+          const closed=()=>{cleanup();reject(Error("Window closed"));};
+          const timer=window.setTimeout(()=>{cleanup();reject(Error("Window startup timeout"));},15000);
+          function cleanup(){window.clearTimeout(timer);Services.obs.removeObserver(observer,"browser-delayed-startup-finished");child.removeEventListener("unload",closed);}
+          Services.obs.addObserver(observer,"browser-delayed-startup-finished");child.addEventListener("unload",closed,{once:true});
+        });
+        await child.gZenWorkspaces?.promiseInitialized;
+        if(child.closed||destroyed||!child.gZenWorkspaces?.currentWindowIsSyncing||
+          child.gZenWindowSync!==window.gZenWindowSync||!child.gZenWorkspaces.getWorkspaceFromId(id))throw Error("Native sync unavailable");
+        await child.gZenWorkspaces.changeWorkspaceWithID(id);
+        if(child.gZenWorkspaces.activeWorkspace!==id)throw Error("Workspace not activated");
+        if(display){if(child.windowState===child.STATE_MAXIMIZED)child.restore();child.moveTo(display.x+20,display.y+20);}
+        child.focus();status.textContent="";
+      }catch(error){
+        if(child&&!child.closed)delete child[PROJECTION];
+        if(!destroyed)status.textContent="Could not open synced workspace. Check window sync settings.";
+        console.warn("[OnePlane] Workspace projection:",error);
+      }finally{projectionBusy=false;if(!destroyed&&open)render();}
+    }
+    async function returnProjection(){
+      const projection=window[PROJECTION],source=projection?.source;
+      if(projectionBusy||!source||source.closed||!canProject()||source.gZenWindowSync!==window.gZenWindowSync){
+        status.textContent="Main synced window unavailable.";return;
+      }
+      const own=manager()?.allStoredTabs,other=source.gZenWorkspaces?.allStoredTabs;
+      if(!Array.isArray(own)||!Array.isArray(other)||!own.filter(t=>!t.hasAttribute("zen-empty-tab")).every(t=>
+        t.id&&other.some(o=>o.id===t.id&&!o.closing&&o.getAttribute("zen-workspace-id")===t.getAttribute("zen-workspace-id")))){
+        status.textContent="Some tabs are not synced yet. Return cancelled to protect them.";return;
+      }
+      try{
+        if(typeof window.BrowserTryToCloseWindow==="function")window.BrowserTryToCloseWindow();
+        else if(typeof window.BrowserCommands?.tryToCloseWindow==="function")window.BrowserCommands.tryToCloseWindow();
+        else {status.textContent="Use the native close-window command.";return;}
+        if(window.closed)source.focus();
+      }catch(error){status.textContent="Could not return safely.";console.warn("[OnePlane] Return:",error);}
     }
     async function select(id){
       if(busy||destroyed)return;
       const native=manager(),space=hubWorkspaceSnapshot(native)?.find(s=>s.id===id);
-      if(!space){render();return;}if(space.active){close();return;}
+      if(!space){render();return;}if(space.active){contextId=null;confirmation=null;render();return;}
       busy=true;status.textContent="";render();
       try{switchGuard();await native.changeWorkspaceWithID(id);
-        if(!destroyed){if(native.activeWorkspace!==id)throw Error("Workspace did not activate");close();}
+        if(!destroyed){if(native.activeWorkspace!==id)throw Error("Workspace did not activate");contextId=null;confirmation=null;scheduleHubGeometry();}
       }catch(error){if(!destroyed)status.textContent="Could not switch workspace.";console.warn("[OnePlane] Hub switch:",error);}
       finally{busy=false;if(!destroyed&&open)render();}
     }
@@ -164,9 +306,9 @@
       event.preventDefault();const value=name.value.trim(),native=manager();
       if(!value||busy||destroyed||!hubWorkspaceSnapshot(native)||typeof native.createAndSaveWorkspace!=="function")return;
       busy=true;status.textContent="";render();
-      try{switchGuard();const result=await native.createAndSaveWorkspace(value);
-        if(!result?.uuid)throw Error("Native workspace creation unavailable");
-        if(!destroyed){name.value="";close();}
+      try{const result=await native.createAndSaveWorkspace(value,undefined,true);
+        if(!result?.uuid||!native.getWorkspaceFromId(result.uuid))throw Error("Native workspace creation unavailable");
+        if(!destroyed){name.value="";contextId=null;confirmation=null;scheduleHubGeometry();}
       }catch(error){if(!destroyed)status.textContent="Could not create workspace.";console.warn("[OnePlane] Hub create:",error);}
       finally{busy=false;if(!destroyed&&open)render();}
     }
@@ -180,7 +322,7 @@
       if(!supported()||destroyed)return;
       if(open){close();return;}
       ensure();if(!panel.isConnected)return;
-      status.textContent="";contextId=null;open=true;
+      status.textContent="";contextId=null;confirmation=null;open=true;
       button.setAttribute("aria-expanded","true");setHold(true);render();
       try{
         if(!showPopup()){close();return;}
@@ -190,11 +332,11 @@
     function key(event){
       if(!open||event.key!=="Escape")return;
       event.preventDefault();event.stopPropagation();
-      if(contextId){contextId=null;render();return;}close(true);
+      if(drag){cancelDrag();return;}if(confirmation){confirmation=null;render();return;}if(contextId){contextId=null;render();return;}close(true);
     }
-    function changed(){if(open){render();scheduleHubGeometry();}}
-    function onMode(){if(!supported())close();else if(open){setHold(true);changed();}}
-    function deactivate(){if(open&&!busy)close();}
+    function changed(){if(open){if(!drag)render();scheduleHubGeometry();}}
+    function onMode(){if(!supported())close(false,true);else if(open){setHold(true);changed();}}
+    function deactivate(){if(open&&!busy&&!drag&&!projectionBusy)close();}
     function toggleMode(){
       const cmd=command();if(typeof cmd?.doCommand!=="function"||!open)return;
       setHold(true);
@@ -205,11 +347,11 @@
     function stopDrag(event){event.stopPropagation();}
     function stopDouble(event){event.preventDefault();event.stopImmediatePropagation();}
     const listeners=[[button,"click",toggle],[button,"pointerdown",stopDrag],[button,"mousedown",stopDrag],[button,"dblclick",stopDouble],
-      [panel,"keydown",key],[form,"submit",create],[mode,"click",toggleMode],[window,"deactivate",deactivate],[name,"input",onInput],[window,"resize",scheduleHubGeometry]];
+      [panel,"keydown",key],[form,"submit",create],[mode,"click",toggleMode],[returnButton,"click",()=>void returnProjection()],[window,"deactivate",deactivate],[name,"input",onInput],[window,"resize",scheduleHubGeometry]];
     window.addEventListener("pointerdown",onOutside,true);
     for(const event of ["ZenWorkspaceDataChanged","ZenWorkspacesUIUpdate","ZenCompactMode:Toggled","ZenCompactMode:LayoutUpdate"])listeners.push([window,event,changed]);
     for(const [node,event,fn] of listeners)node.addEventListener(event,fn);
-    function destroy(){if(destroyed)return;destroyed=true;close();window.removeEventListener("pointerdown",onOutside,true);for(const [node,event,fn] of listeners)node.removeEventListener(event,fn);panel.remove();button.remove();}
+    function destroy(){if(destroyed)return;destroyed=true;close(false,true);window.removeEventListener("pointerdown",onOutside,true);for(const [node,event,fn] of listeners)node.removeEventListener(event,fn);panel.remove();button.remove();}
     return {ensure,close,onMode,destroy};
   }
   const hub=createHubController({target,root,toolbarWrapper,supported:hoverSupported,hold:reconcilePanel,switchGuard:guardPanelSwitch});

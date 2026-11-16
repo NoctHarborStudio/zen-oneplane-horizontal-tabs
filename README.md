@@ -70,3 +70,5 @@ The left Hub opens a native popup with real Zen workspaces, active state, named 
 Preview.12 aligns the Hub with the navigation/address row, keeps it open during Compact Mode changes and adds right-click workspace deletion. See [Hub notes](docs/hub.md) for data preservation and validation.
 
 Preview.13 changes Hub to an in-document panel and scopes native existing-tab reuse to the active workspace. Multi-monitor projection is not yet implemented.
+
+Preview.14 retains Hub on create/switch, adds inline deletion and Fluid animation, plus experimental synced workspace projection. See [Hub validation](docs/hub.md).

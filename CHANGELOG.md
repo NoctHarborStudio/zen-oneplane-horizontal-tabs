@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0-preview.14
+
+- Keep Hub open after create/select; native creation without activation, centered inline deletion confirmation and shared toolbar tint.
+- Interruptible native Fluid animation on Hub open/close; preserve trigger and existing animations.
+- Experimental synced workspace projection and Return, gated on all-tab sync; context action fallback. No tab adoption or independent session.
+- Native synced favicon fallback and event-driven refresh. Live validation pending.
+
 ## 0.2.0-preview.13
 
 - Replace native Hub popup with an in-document manual panel; fix single-click hit target, window dragging exclusion, hover background and icon sizing/brightness/alignment.

@@ -24,3 +24,6 @@
       return spaces;
     } catch { return null; }
   }
+  export function hubOtherDisplay(source,dest,x,y){
+    return !!source&&!!dest&&(source.x!==dest.x||source.y!==dest.y)&&x>=dest.x&&x<dest.x+dest.width&&y>=dest.y&&y<dest.y+dest.height;
+  }

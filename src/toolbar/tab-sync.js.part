@@ -138,6 +138,16 @@
     guardPanelSwitch();
     schedule();
   }
+  function onNativeIconChanged(event){
+    schedule();
+    if(!window.gZenWindowSync||!window.gZenWorkspaces?.currentWindowIsSyncing)return;
+    const wins=Services.wm.getEnumerator("navigator:browser");
+    while(wins.hasMoreElements()){
+      const win=wins.getNext();
+      if(win!==window&&!win.closed&&win.gZenWindowSync===window.gZenWindowSync&&win.gZenWorkspaces?.currentWindowIsSyncing)
+        win.dispatchEvent(new win.CustomEvent("OnePlane:SyncedIconChanged"));
+    }
+  }
   const events = ["TabOpen", "TabClose", "TabMove", "TabAttrModified", "TabPinned", "TabUnpinned", "TabShow", "TabHide", "TabBrowserInserted", "TabBrowserDiscarded", "ZenTabRemovedFromSplit"];
   const tabObserver = new MutationObserver(schedule);
   const workspaceObserver = new MutationObserver(schedule);

@@ -1,10 +1,26 @@
   function favicon(tab) {
-    const src = tab.querySelector(".tab-icon-image")?.getAttribute("src")
-      || tab.getAttribute("image") || "";
-    // Only local browser icon resources; never fetch a remote icon directly.
-    if (/^(data:image\/|chrome:|resource:|moz-anno:|page-icon:|blob:)/i.test(src)) return src;
-    const page = tab.linkedBrowser?.currentURI?.spec || "";
-    return /^https?:/i.test(page) ? "page-icon:" + page : "";
+    const local=t=>{
+      const sources=[t.getAttribute("image"),t.querySelector(".tab-icon-image")?.getAttribute("src")];
+      try{sources.push(t.ownerDocument.defaultView.gBrowser.getIcon(t));}catch{}
+      return sources.find(src=>/^(data:image\/|chrome:|resource:|moz-anno:|page-icon:|blob:)/i.test(src||""))||"";
+    };
+    const direct=local(tab);
+    if(direct)return direct;
+    // Resolve the native synchronized tab identity, not its URL/title.
+    if(tab.id&&window.gZenWindowSync&&window.gZenWorkspaces?.currentWindowIsSyncing){
+      const wins=Services.wm.getEnumerator("navigator:browser");
+      while(wins.hasMoreElements()){
+        const win=wins.getNext();
+        if(win===window||win.closed||win.gZenWindowSync!==window.gZenWindowSync||!win.gZenWorkspaces?.currentWindowIsSyncing)continue;
+        const peer=win.gZenWindowSync.getItemFromWindow(win,tab.id);
+        if(!peer||!win.gBrowser?.isTab(peer)||peer.closing||peer.getAttribute("zen-workspace-id")!==tab.getAttribute("zen-workspace-id"))continue;
+        const icon=local(peer);if(icon&&!icon.startsWith("blob:"))return icon;
+        const page=peer.linkedBrowser?.currentURI?.spec||"";
+        if(/^https?:/i.test(page))return "page-icon:"+page;
+      }
+    }
+    const page=tab.linkedBrowser?.currentURI?.spec||"";
+    return /^https?:/i.test(page)?"page-icon:"+page:"";
   }
 
   function createEntry(tab) {
@@ -18,6 +34,7 @@
     img.alt = "";
     img.draggable = false;
     img.addEventListener("error", () => { img.hidden = true; });
+    img.addEventListener("load", () => { img.hidden = false; });
     icon.append(img);
     const audio = html("span", "oneplane-tab-audio");
     audio.setAttribute("aria-hidden", "true");
