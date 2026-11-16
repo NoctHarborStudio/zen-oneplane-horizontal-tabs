@@ -3,14 +3,15 @@ import { ADDRESS_WAVE_SPREAD } from "./address-spread.mjs";
     const t=Math.max(0,Math.min(1,(progress-ADDRESS_WAVE_SPREAD*x)/(1-ADDRESS_WAVE_SPREAD)));
     return t*t*(3-2*t);
   }
-  export function addressWaveClip(width,height,header,progress,radius=8){
+  export function addressWaveClip(width,height,header,progress,radius=8,layoutWidth=width){
     width=Math.max(1,width);height=Math.max(1,height);
+    const rightInset=Math.max(0,layoutWidth-width);
     header=Math.min(height,Math.max(1,header));
     const r=Math.min(radius,width/2,header/2);
     const depth=x=>header+(height-header)*addressWaveDepth(progress,x);
     if(progress<=0 || progress>=1 || height-header<.5){
       const bottom=progress>=1?0:Math.max(0,height-header);
-      return "inset(0px 0px "+bottom.toFixed(2)+"px 0px round var(--op-url-radius))";
+      return "inset(0px "+rightInset.toFixed(2)+"px "+bottom.toFixed(2)+"px 0px round var(--op-url-radius))";
     }
     const f=n=>n.toFixed(2);
     const left=depth(0),right=depth(1);

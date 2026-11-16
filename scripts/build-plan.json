@@ -74,6 +74,10 @@
       "kind": "section"
     },
     {
+      "path": "src/algorithms/toolbar-center.mjs",
+      "kind": "esm-inline"
+    },
+    {
       "path": "src/layout/geometry.js.part",
       "kind": "section"
     },

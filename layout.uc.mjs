@@ -266,6 +266,7 @@ function installTabStrip() {
   let addressAnchor = null;
   const ADDRESS_WAVE_OPEN = 420, ADDRESS_WAVE_CLOSE = 380;
   const ADDRESS_WAVE_SPREAD = .24;
+  let addressBoxObserver=null, addressBoxHeight=0, addressBoxHeader=30, addressBoxRadius=8;
   let addressSettling = false;
   let addressSettleTimer = 0;
   const addressEase = t => 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 3);
@@ -342,21 +343,25 @@ function installTabStrip() {
     root.removeAttribute("oneplane-address-unblur");
     const bar = addressBar();
     bar?.removeAttribute("data-op-url-animating");
+    bar?.removeAttribute("data-op-url-selection-fade");
     bar?.style.removeProperty("--op-url-live-width");
     bar?.style.removeProperty("--op-url-live-clip");
+    bar?.style.removeProperty("--op-url-selection-alpha");
+    addressBoxHeight=0;
   }
   function addressWaveDepth(progress,x){
     const t=Math.max(0,Math.min(1,(progress-ADDRESS_WAVE_SPREAD*x)/(1-ADDRESS_WAVE_SPREAD)));
     return t*t*(3-2*t);
   }
-  function addressWaveClip(width,height,header,progress,radius=8){
+  function addressWaveClip(width,height,header,progress,radius=8,layoutWidth=width){
     width=Math.max(1,width);height=Math.max(1,height);
+    const rightInset=Math.max(0,layoutWidth-width);
     header=Math.min(height,Math.max(1,header));
     const r=Math.min(radius,width/2,header/2);
     const depth=x=>header+(height-header)*addressWaveDepth(progress,x);
     if(progress<=0 || progress>=1 || height-header<.5){
       const bottom=progress>=1?0:Math.max(0,height-header);
-      return "inset(0px 0px "+bottom.toFixed(2)+"px 0px round var(--op-url-radius))";
+      return "inset(0px "+rightInset.toFixed(2)+"px "+bottom.toFixed(2)+"px 0px round var(--op-url-radius))";
     }
     const f=n=>n.toFixed(2);
     const left=depth(0),right=depth(1);
@@ -379,31 +384,54 @@ function installTabStrip() {
     if(pending||restoring)return false;
     return /^(about:(blank|newtab|home|privatebrowsing))(?:[?#].*)?$/i.test(uri);
   }
-  function drawAddress(width, reveal) {
-    const bar = addressBar();
-    if (!bar) return;
-    addressVisual = { width, reveal };
-    // The native popover background includes both the header and results.
-    // Reveal the actual shared surface with a left-to-right liquid wave
-    // while its width grows, instead of waiting for width to finish.
-    bar.setAttribute("data-op-url-animating", "true");
-    bar.style.setProperty("--op-url-live-width", Math.max(1, width).toFixed(2) + "px");
-    const bounds = bar.getBoundingClientRect();
-    const input = bar.querySelector(".urlbar-input-container");
-    const inputBottom = input?.getBoundingClientRect().bottom || bounds.top + 30;
-    const header = Math.max(1, addressAnchor?.height || inputBottom - bounds.top);
-    // Clip coordinates belong to the real popover's border box.
-    // Never make the wave extend into page content outside that box.
-    const full = Math.max(header,bounds.height);
-    const radius=parseFloat(window.getComputedStyle(bar).getPropertyValue("--op-url-radius"))||8;
+  function measureAddressBox(bar){
+    const bounds=bar.getBoundingClientRect();
+    const input=bar.querySelector(".urlbar-input-container");
+    addressBoxHeader=Math.max(1,addressAnchor?.height || ((input?.getBoundingClientRect().bottom || bounds.top+30)-bounds.top));
+    addressBoxHeight=Math.max(addressBoxHeader,bounds.height);
+    addressBoxRadius=parseFloat(window.getComputedStyle(bar).getPropertyValue("--op-url-radius"))||8;
+  }
+  function onAddressBoxResize(records){
+    if(!addressTransition)return;
+    for(const entry of records){
+      if(entry.target!==addressBar())continue;
+      const size=entry.borderBoxSize?.[0];
+      if(size && size.blockSize>0)addressBoxHeight=Math.max(addressBoxHeader,size.blockSize);
+    }
+  }
+  function drawAddress(width,reveal,selection=1){
+    const bar=addressBar(),a=addressTransition;
+    if(!bar||!a)return;
+    addressVisual={width,reveal,selection};
+    // Opening: lay out the native results at their final width ONCE,
+    // reveal their surface with a moving wave. Closing keeps its real
+    // shrinking width, but reads the size from ResizeObserver, never
+    // after the write. No forced layout in the animation tick.
+    const visible=Math.max(1,width);
+    const layoutWidth=a.name==="opening"?Math.max(1,a.to.width):visible;
+    const value=layoutWidth.toFixed(2)+"px";
+    if(bar.style.getPropertyValue("--op-url-live-width")!==value)
+      bar.style.setProperty("--op-url-live-width",value);
     bar.style.setProperty("--op-url-live-clip",
-      addressWaveClip(bounds.width,full,header,reveal,radius));
+      addressWaveClip(visible,Math.max(addressBoxHeader,addressBoxHeight),addressBoxHeader,reveal,addressBoxRadius,layoutWidth));
+    if(a.name==="closing-wave" || (a.from.selection??1)<1){
+      const alpha=(100*Math.max(0,Math.min(1,selection))).toFixed(2)+"%";
+      if(bar.style.getPropertyValue("--op-url-selection-alpha")!==alpha)
+        bar.style.setProperty("--op-url-selection-alpha",alpha);
+    }
   }
   function beginAddressPhase(name, from, to, duration) {
-    addressTransition = { name, from, to, duration, start: null };
+    addressTransition = { name, from, to, duration, start: window.performance.now() };
     url.setAttribute("data-op-url-phase", name);
     root.toggleAttribute("oneplane-address-unblur", name.startsWith("closing"));
-    drawAddress(from.width, from.reveal);
+    const bar=addressBar();
+    if(!bar){clearAddressAnimation();return;}
+    bar.setAttribute("data-op-url-animating","true");
+    bar.toggleAttribute("data-op-url-selection-fade",name==="closing-wave"||(from.selection??1)<1);
+    // One initial layout measurement, not one forced flush per frame.
+    bar.style.setProperty("--op-url-live-width",Math.max(1,name==="opening"?to.width:from.width).toFixed(2)+"px");
+    measureAddressBox(bar);
+    drawAddress(from.width,from.reveal,from.selection??1);
     if (!addressAnimationFrame) addressAnimationFrame = window.requestAnimationFrame(stepAddress);
   }
   function stepAddress(now) {
@@ -418,13 +446,17 @@ function installTabStrip() {
     }
     if (a.start === null) a.start = now;
     const elapsed = now - a.start;
-    const t = Math.min(1, elapsed / a.duration);
+    const t = Math.max(0,Math.min(1, elapsed / a.duration));
     // Same timeline for both axes. Closing reverses the opening curve;
     // the right side of the result surface retreats before the left.
     const horizontal = a.name === "opening" ? addressEase(t) : 1-addressEase(1-t);
     const vertical = t;
+    const selectionFrom=a.from.selection??1;
+    const selection=a.name==="opening"
+      ? selectionFrom+(1-selectionFrom)*addressEase(t)
+      : selectionFrom*Math.max(0,1-t/.65);
     drawAddress(a.from.width + (a.to.width - a.from.width) * horizontal,
-      a.from.reveal + (a.to.reveal - a.from.reveal) * vertical);
+      a.from.reveal + (a.to.reveal - a.from.reveal) * vertical,selection);
     if (t < 1) {
       addressAnimationFrame = window.requestAnimationFrame(stepAddress);
       return;
@@ -464,7 +496,7 @@ function installTabStrip() {
       }
       return;
     }
-    if (open && !addressTransition) addressWidths();
+    if (open && addressWasOpen && !addressTransition) addressWidths();
     if (!open || !addressMotionEnabled()) {
       if (addressTransition) {
         const closing = addressTransition.name.startsWith("closing");
@@ -503,7 +535,7 @@ function installTabStrip() {
   function onAddressMutation() {
     if (dead) return;
     updateAddressAnimation();
-    alignAddressStart();
+    if(!addressTransition&&!addressSettling)alignAddressStart();
   }
   function onAddressInput() {
     // Typing or clicking the real input during closing reverses the close.
@@ -524,6 +556,7 @@ function installTabStrip() {
     if (addressFrame) return;
     addressFrame = window.requestAnimationFrame(() => {
       addressFrame = 0;
+      if(addressTransition||addressSettling)return;
       const bar = document.getElementById("urlbar");
       const input = addressInput();
       updateEmptyAddress();
@@ -556,13 +589,24 @@ function installTabStrip() {
     const pending=Boolean(tab?.hasAttribute("pending")||tab?.hasAttribute("discarded"));
     const restoring=tab===restoringAddressTab && window.performance.now()<restoringAddressUntil;
     const empty=emptyAddressState(Boolean(tab?.hasAttribute("zen-empty-tab")),spec,pending,restoring);
-    url.toggleAttribute("data-op-empty",empty);
+    if(url.hasAttribute("data-op-empty")!==empty){
+      url.toggleAttribute("data-op-empty",empty);
+      // CSS changes the anchor width synchronously; update its matching
+      // spacer bias in the same transaction, before the next paint.
+      centerToolbar();
+      scheduleGeometry();
+    }
   }
   const progressListener = {
     onLocationChange() { updateEmptyAddress(); alignAddressStart(); }
   };
-  const actionObserver = new MutationObserver(() => {
-    if (!dead) { movePageActions(); alignAddressStart(); }
+  const actionObserver = new MutationObserver(records => {
+    // Native suggestion rows mutate many times during opening. They
+    // cannot change the page-action placement; ignore those mutations.
+    const selector=actionIds.map(id=>"#"+id).join(",");
+    const relevant=records.some(record=>[...record.addedNodes,...record.removedNodes].some(node=>
+      node.nodeType===1&&(node.matches?.(selector)||node.querySelector?.(selector))));
+    if(!dead&&relevant){movePageActions();if(!addressTransition&&!addressSettling)alignAddressStart();}
   });
 
 
@@ -614,6 +658,20 @@ function installTabStrip() {
     }
     captionHome?.remove();
     captionHome=captionNode=null;
+  }
+  // Zen moves its real sidebar toolbar on every Compact Mode toggle.
+  // Keep a stable OnePlane command proxy, not a duplicate registered widget.
+  const compactToggle=document.createXULElement("toolbarbutton");
+  compactToggle.id="oneplane-compact-toggle";
+  compactToggle.className="toolbarbutton-1";
+  compactToggle.setAttribute("skipintoolbarset","true");
+  compactToggle.setAttribute("removable","false");
+  compactToggle.setAttribute("data-l10n-id","zen-toggle-compact-mode-button");
+  compactToggle.setAttribute("tooltiptext","Toggle Compact Mode");
+  compactToggle.setAttribute("aria-label","Toggle Compact Mode");
+  compactToggle.setAttribute("command","cmd_toggleCompactModeIgnoreHover");
+  function ensureCompactToggle(){
+    if(compactToggle.parentElement!==target)target.prepend(compactToggle);
   }
   const contourDefaults={transparency:4,strength:100,length:69,hold:30,curve:65,radius:24,padding:0};
   const contourPrefPrefix="zen.oneplane.fade-";
@@ -763,19 +821,20 @@ function installTabStrip() {
     contourUntil=window.performance.now()+360;
     scheduleContour();
   }
-  const leftIds = new Set(["sidebar-button", "sidebar-toggle-button", "back-button",
+  function toolbarCenterBias(left,right,trailingReserve,centered){
+    const bias=right-left+(centered?0:trailingReserve);
+    return {left:Math.max(0,Math.round(bias)),right:Math.max(0,Math.round(-bias))};
+  }
+  const leftIds = new Set(["oneplane-compact-toggle", "sidebar-button", "sidebar-toggle-button", "back-button",
     "forward-button", "stop-reload-button", "reload-button", "home-button", "urlbar-container"]);
   const centerIds = new Set(["oneplane-tabs", "oneplane-center-start", "oneplane-center-end"]);
   let geometryFrame = 0;
   let geometryObserver = null;
-  function scheduleGeometry() {
-    if (dead || geometryFrame) return;
-    geometryFrame = window.requestAnimationFrame(() => {
-      geometryFrame = 0;
-      if (dead || !root.hasAttribute("oneplane-active") || !toolbarWrapper) return;
-      if (window.innerWidth < 900 || root.hasAttribute("customizing")) return;
-      if(toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
-         window.performance.now()<panelSwitchUntil)return;
+  let centering=false;
+  function centerToolbar(){
+    if(centering||!hoverSupported()||!toolbarWrapper)return;
+    centering=true;
+    try {
       const targetRect = target.getBoundingClientRect();
       // Center the collapsed tabs against the WINDOW, not the remaining toolbar.
       // Native window buttons and all left/right controls consume edge space.
@@ -818,13 +877,27 @@ function installTabStrip() {
         setLength(row,"--op-island-width",titleWidth);
         setLength(row,"--op-island-row-width",Math.min(available,titleWidth+6+2*half));
       }
-      const bias = right - left + (centered ? 0 : trailingReserve);
-      setLength(leftSpacer, "--op-center-bias", bias);
-      setLength(rightSpacer, "--op-center-bias", -bias);
+      const bias=toolbarCenterBias(left,right,trailingReserve,centered);
+      setLength(leftSpacer,"--op-center-bias",bias.left);
+      setLength(rightSpacer,"--op-center-bias",bias.right);
       // Cap leftward expansion at actual free space next to navigation.
       setLength(row, "--op-left-room", leftSpacer.getBoundingClientRect().width - 4);
-      // Nebula can constrain the wrapper to a fixed height. Include the
-      // actual bookmarks row instead of letting it sit outside the hover area.
+    } finally {centering=false;}
+  }
+  function scheduleGeometry(){
+    if(dead||geometryFrame)return;
+    geometryFrame=window.requestAnimationFrame(()=>{
+      geometryFrame=0;
+      if(!hoverSupported()||!toolbarWrapper)return;
+      centerToolbar();
+      // Keep the earlier switch guard for vertical geometry and mask,
+      // not horizontal compensation. Old bias + new anchor = visible jump.
+      if(toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
+         window.performance.now()<panelSwitchUntil)return;
+      const setLength=(node,name,value)=>{
+        const next=Math.max(0,Math.round(value))+"px";
+        if(node.style.getPropertyValue(name)!==next)node.style.setProperty(name,next);
+      };
       const navHeight = Math.max(navbar?.getBoundingClientRect().height || 0,
         row.getBoundingClientRect().height || 0);
       const bookmarksHeight = bookmarks && !bookmarks.collapsed && !bookmarks.hidden
@@ -840,7 +913,7 @@ function installTabStrip() {
     // The wrapper's height is animated; observing it would trigger a
     // geometry/mask pass every frame of reveal. Observe real rows only.
     for (const element of [target, navbar, bookmarks, ...target.children]) {
-      if (element) geometryObserver.observe(element);
+      if(element&&!centerIds.has(element.id))geometryObserver.observe(element);
     }
     scheduleGeometry();
   }
@@ -2365,6 +2438,7 @@ function installTabStrip() {
       visualTabs[i].toggleAttribute("data-op-first", i === 0);
       visualTabs[i].toggleAttribute("data-op-last", i === visualTabs.length - 1);
     }
+    centerToolbar();
     refreshIndicator();
     refreshIslandTitle();
     scheduleGeometry();
@@ -2404,7 +2478,9 @@ function installTabStrip() {
     if (url.parentElement === target && row.parentElement !== target) url.after(row);
     if (leftSpacer.parentElement !== target) target.prepend(leftSpacer);
     if (rightSpacer.parentElement !== target) row.after(rightSpacer);
+    ensureCompactToggle();
     movePageActions();
+    centerToolbar();
     observeGeometry();
   });
 
@@ -2476,6 +2552,7 @@ function installTabStrip() {
     surface.remove();
     leftSpacer.remove();
     rightSpacer.remove();
+    compactToggle.remove();
     window.removeEventListener("pointermove", trackPointer, true);
     toolbarWrapper?.removeEventListener("pointerover", trackPointer);
     document.documentElement.removeEventListener("mouseleave", leaveWindow);
@@ -2484,6 +2561,7 @@ function installTabStrip() {
     window.removeEventListener("ZenCompactMode:LayoutUpdate", onCompactChanged);
     window.removeEventListener("resize", onCompactChanged);
     addressObserver?.disconnect();
+    addressBoxObserver?.disconnect();
     clearAddressAnimation();
     addressBar()?.removeEventListener("pointerdown", onAddressInput, true);
     addressBar()?.removeEventListener("input", onAddressInput, true);
@@ -2510,6 +2588,7 @@ function installTabStrip() {
 
   try {
     url.after(row);
+    ensureCompactToggle();
     target.prepend(leftSpacer);
     row.after(rightSpacer);
     tabbox.append(shield, splitZone);
@@ -2528,6 +2607,8 @@ function installTabStrip() {
     const bar = document.getElementById("urlbar");
     if (bar) {
       addressObserver = new MutationObserver(onAddressMutation);
+      addressBoxObserver=new ResizeObserver(onAddressBoxResize);
+      addressBoxObserver.observe(bar,{box:"border-box"});
       bar.addEventListener("pointerdown", onAddressInput, true);
       bar.addEventListener("input", onAddressInput, true);
       bar.addEventListener("toggle", onAddressMutation);
@@ -2566,7 +2647,12 @@ function installTabStrip() {
       workspaceObserver.observe(wrapper, { subtree: true, childList: true, attributes: true, attributeFilter: ["active", "hidden"] });
     }
     toolbarObserver.observe(target, { childList: true });
-    geometryObserver = new ResizeObserver(scheduleGeometry);
+    geometryObserver = new ResizeObserver(()=>{
+      // ResizeObserver delivery occurs before paint. Compensate edge
+      // width changes now rather than a frame later.
+      centerToolbar();
+      scheduleGeometry();
+    });
     observeGeometry();
     if(bookmarks){
       contourResize=new ResizeObserver(scheduleContour);

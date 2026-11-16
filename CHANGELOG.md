@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0-preview.4
+
+- Prioritize UI stabilization before Hub. Opening Liquid Wave lays out native results at the final width once, then reveals the surface with the timestamp-driven clip; cache border-box geometry via ResizeObserver instead of forcing layout each animation frame.
+- Preserve closing duration and reverse-wave shrinking width; fade selection highlight before native blur without changing actual text selection.
+- Fix stale center compensation when the startup address slot appears: recenter synchronously with its empty-state change, process independent edge ResizeObserver notifications before paint, and keep the tab-switch grace only for vertical geometry/contour. Floating search over a real page no longer collapses its reserved slot.
+- Keep a stable temporary Compact Mode command button in OnePlane, separate from the native sidebar toolbar Zen reparents on mode changes. Original widget remains available when OnePlane is disabled or outside its layout scope.
+- Add wave and center-bias regression tests, synchronize the approved Hub roadmap, and track OP-006/007. Live performance and visual confirmation are pending.
+
 ## 0.2.0-preview.3
 
 - Documentation and update-diagnostic release: record OP-002 (opening animation frame pacing), OP-003 (URL selection disappearance), and OP-004 (intermittent Sine update discovery).

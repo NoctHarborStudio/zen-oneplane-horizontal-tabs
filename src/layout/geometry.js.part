@@ -1,16 +1,13 @@
-  const leftIds = new Set(["sidebar-button", "sidebar-toggle-button", "back-button",
+  const leftIds = new Set(["oneplane-compact-toggle", "sidebar-button", "sidebar-toggle-button", "back-button",
     "forward-button", "stop-reload-button", "reload-button", "home-button", "urlbar-container"]);
   const centerIds = new Set(["oneplane-tabs", "oneplane-center-start", "oneplane-center-end"]);
   let geometryFrame = 0;
   let geometryObserver = null;
-  function scheduleGeometry() {
-    if (dead || geometryFrame) return;
-    geometryFrame = window.requestAnimationFrame(() => {
-      geometryFrame = 0;
-      if (dead || !root.hasAttribute("oneplane-active") || !toolbarWrapper) return;
-      if (window.innerWidth < 900 || root.hasAttribute("customizing")) return;
-      if(toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
-         window.performance.now()<panelSwitchUntil)return;
+  let centering=false;
+  function centerToolbar(){
+    if(centering||!hoverSupported()||!toolbarWrapper)return;
+    centering=true;
+    try {
       const targetRect = target.getBoundingClientRect();
       // Center the collapsed tabs against the WINDOW, not the remaining toolbar.
       // Native window buttons and all left/right controls consume edge space.
@@ -53,13 +50,27 @@
         setLength(row,"--op-island-width",titleWidth);
         setLength(row,"--op-island-row-width",Math.min(available,titleWidth+6+2*half));
       }
-      const bias = right - left + (centered ? 0 : trailingReserve);
-      setLength(leftSpacer, "--op-center-bias", bias);
-      setLength(rightSpacer, "--op-center-bias", -bias);
+      const bias=toolbarCenterBias(left,right,trailingReserve,centered);
+      setLength(leftSpacer,"--op-center-bias",bias.left);
+      setLength(rightSpacer,"--op-center-bias",bias.right);
       // Cap leftward expansion at actual free space next to navigation.
       setLength(row, "--op-left-room", leftSpacer.getBoundingClientRect().width - 4);
-      // Nebula can constrain the wrapper to a fixed height. Include the
-      // actual bookmarks row instead of letting it sit outside the hover area.
+    } finally {centering=false;}
+  }
+  function scheduleGeometry(){
+    if(dead||geometryFrame)return;
+    geometryFrame=window.requestAnimationFrame(()=>{
+      geometryFrame=0;
+      if(!hoverSupported()||!toolbarWrapper)return;
+      centerToolbar();
+      // Keep the earlier switch guard for vertical geometry and mask,
+      // not horizontal compensation. Old bias + new anchor = visible jump.
+      if(toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
+         window.performance.now()<panelSwitchUntil)return;
+      const setLength=(node,name,value)=>{
+        const next=Math.max(0,Math.round(value))+"px";
+        if(node.style.getPropertyValue(name)!==next)node.style.setProperty(name,next);
+      };
       const navHeight = Math.max(navbar?.getBoundingClientRect().height || 0,
         row.getBoundingClientRect().height || 0);
       const bookmarksHeight = bookmarks && !bookmarks.collapsed && !bookmarks.hidden
@@ -75,7 +86,7 @@
     // The wrapper's height is animated; observing it would trigger a
     // geometry/mask pass every frame of reveal. Observe real rows only.
     for (const element of [target, navbar, bookmarks, ...target.children]) {
-      if (element) geometryObserver.observe(element);
+      if(element&&!centerIds.has(element.id))geometryObserver.observe(element);
     }
     scheduleGeometry();
   }

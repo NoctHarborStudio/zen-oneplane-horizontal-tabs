@@ -66,6 +66,7 @@
     surface.remove();
     leftSpacer.remove();
     rightSpacer.remove();
+    compactToggle.remove();
     window.removeEventListener("pointermove", trackPointer, true);
     toolbarWrapper?.removeEventListener("pointerover", trackPointer);
     document.documentElement.removeEventListener("mouseleave", leaveWindow);
@@ -74,6 +75,7 @@
     window.removeEventListener("ZenCompactMode:LayoutUpdate", onCompactChanged);
     window.removeEventListener("resize", onCompactChanged);
     addressObserver?.disconnect();
+    addressBoxObserver?.disconnect();
     clearAddressAnimation();
     addressBar()?.removeEventListener("pointerdown", onAddressInput, true);
     addressBar()?.removeEventListener("input", onAddressInput, true);
@@ -100,6 +102,7 @@
 
   try {
     url.after(row);
+    ensureCompactToggle();
     target.prepend(leftSpacer);
     row.after(rightSpacer);
     tabbox.append(shield, splitZone);
@@ -118,6 +121,8 @@
     const bar = document.getElementById("urlbar");
     if (bar) {
       addressObserver = new MutationObserver(onAddressMutation);
+      addressBoxObserver=new ResizeObserver(onAddressBoxResize);
+      addressBoxObserver.observe(bar,{box:"border-box"});
       bar.addEventListener("pointerdown", onAddressInput, true);
       bar.addEventListener("input", onAddressInput, true);
       bar.addEventListener("toggle", onAddressMutation);
@@ -156,7 +161,12 @@
       workspaceObserver.observe(wrapper, { subtree: true, childList: true, attributes: true, attributeFilter: ["active", "hidden"] });
     }
     toolbarObserver.observe(target, { childList: true });
-    geometryObserver = new ResizeObserver(scheduleGeometry);
+    geometryObserver = new ResizeObserver(()=>{
+      // ResizeObserver delivery occurs before paint. Compensate edge
+      // width changes now rather than a frame later.
+      centerToolbar();
+      scheduleGeometry();
+    });
     observeGeometry();
     if(bookmarks){
       contourResize=new ResizeObserver(scheduleContour);

@@ -88,3 +88,21 @@ test("lazy restored address never collapses on provisional blank",()=>{
     [false,"about:newtab",false,false,true],[false,"https://example.com",false,false,false]
   ])assert.equal(emptyAddressState(explicit,uri,pending,restoring),want);
 });
+
+
+test("fixed-width opening wave clips the unused right side",()=>{
+  assert.equal(addressWaveClip(180,260,30,0,8,900),"inset(0px 720.00px 230.00px 0px round var(--op-url-radius))");
+  assert.equal(addressWaveClip(900,260,30,1,8,900),"inset(0px 0.00px 0.00px 0px round var(--op-url-radius))");
+  for(const p of [.01,.2,.5,.8,.99])assert.ok(addressWaveClip(180+720*p,260,30,p,8,900).startsWith('path("'));
+});
+
+import { toolbarCenterBias } from "../src/algorithms/toolbar-center.mjs";
+test("address appearing after startup is compensated without changing strip center",()=>{
+  const right=180, reserve=183;
+  for(const left of [90,270,450]){
+    const b=toolbarCenterBias(left,right,reserve,false);
+    assert.equal(left-right+b.left-b.right,reserve);
+    const island=toolbarCenterBias(left,right,reserve,true);
+    assert.equal(left-right+island.left-island.right,0);
+  }
+});

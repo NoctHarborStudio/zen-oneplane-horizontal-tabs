@@ -1,5 +1,5 @@
 /* OnePlane — native toolbar tab view. No fixed-position overlay. */
-#oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss, #oneplane-center-start, #oneplane-center-end, #oneplane-toolbar-surface, #oneplane-split-drop { display: none !important; }
+#oneplane-compact-toggle, #oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss, #oneplane-center-start, #oneplane-center-end, #oneplane-toolbar-surface, #oneplane-split-drop { display: none !important; }
 @media (min-width: 900px) {
   :root[oneplane-active="true"]:not([customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window]):has(#nav-bar-customization-target > #oneplane-tabs[data-ready="true"]) {
     --op-height: 34px;
@@ -73,6 +73,20 @@
     /* Three zones: left navigation, truly centered tabs, right page/window controls. */
     #nav-bar-customization-target > * { order: 100 !important; }
     #nav-bar-customization-target > toolbarspring { display: none !important; }
+    #zen-toggle-compact-mode { display:none !important; }
+    #nav-bar-customization-target > #oneplane-compact-toggle {
+      display:flex !important;
+      order: -1 !important;
+      flex:0 0 30px !important;
+      width:30px !important;
+      min-width:30px !important;
+      height:30px !important;
+      margin:0 !important;
+      padding:4px !important;
+      list-style-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='1.5' y='2.5' width='13' height='11' rx='2' fill='none' stroke='context-stroke' stroke-width='1.4'/%3E%3Cpath d='M2 6h12M5 6v7' fill='none' stroke='context-stroke' stroke-width='1.4'/%3E%3C/svg%3E") !important;
+      -moz-context-properties:stroke;
+      stroke:currentColor;
+    }
     #nav-bar-customization-target > :is(#sidebar-button, #sidebar-toggle-button) { order: 0 !important; }
     #nav-bar-customization-target > #oneplane-center-start { order: 35 !important; }
     #nav-bar-customization-target > #back-button { order: 20 !important; }
@@ -271,11 +285,9 @@
       opacity: 1 !important;
       transform: none !important;
     }
-    /* A floating search is a top-layer popover, not an inline address.
-       Zen can open it over an existing page (New Tab / Ctrl+T), before a
-       new tab exists. Collapse its anchor regardless of the current URI. */
-    #nav-bar-customization-target > #urlbar-container[data-op-empty]:not(:has(#urlbar:is([focused="true"], [open]):not([zen-floating-urlbar="true"]))),
-    #nav-bar-customization-target > #urlbar-container:has(#urlbar[zen-floating-urlbar="true"]) {
+    /* A true empty tab has no visible inline address slot. A floating
+       search on a real page must not change the toolbar's anchor width. */
+    #nav-bar-customization-target > #urlbar-container[data-op-empty] {
       flex: 0 0 0px !important;
       width: 0px !important;
       min-width: 0px !important;
@@ -288,8 +300,9 @@
       overflow: visible !important;
     }
     #nav-bar-customization-target > #urlbar-container:has(#urlbar[zen-floating-urlbar="true"]) {
-      /* The native floating search keeps its own width and position.
-         Do not animate the empty placeholder or reserve horizontal space. */
+      /* Keep the ordinary page's anchor reserved during floating search.
+         Only a real empty tab collapses it. Native floating popup geometry
+         is unchanged, and its open/close cannot shift the center strip. */
       transition: none !important;
     }
     #urlbar-container[data-op-empty] #urlbar:not([focused="true"], [open], [zen-floating-urlbar="true"]) {
@@ -333,6 +346,10 @@
       clip-path: var(--op-url-live-clip, inset(0 round var(--op-url-radius))) !important;
       transition: none !important;
       animation: none !important;
+    }
+    #urlbar-container #urlbar[data-op-url-selection-fade]:not([zen-floating-urlbar="true"]) #urlbar-input::selection {
+      background-color: color-mix(in srgb, Highlight var(--op-url-selection-alpha, 100%), transparent) !important;
+      color: color-mix(in srgb, HighlightText var(--op-url-selection-alpha, 100%), var(--toolbar-color, currentColor)) !important;
     }
     #urlbar-container:is([data-op-url-phase="opening"], [data-op-url-phase="closing-wave"], [data-op-url-phase="settling"]) #urlbar:not([zen-floating-urlbar="true"]) .urlbarView {
       pointer-events: none !important;

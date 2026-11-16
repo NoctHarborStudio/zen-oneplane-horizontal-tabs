@@ -151,3 +151,8 @@ See [architecture.md](architecture.md). This release splits source and introduce
 ## 0.2 preview.2
 
 OnePlane stays horizontal with Compact Mode disabled. The native mode is not forced at activation. Persistent toolbar occupies native flow and has no rear gradient spilling over page content. OP-001 records a suspected lazy-tab URI and geometry race; mitigation requires live validation.
+
+
+## 0.2 preview.4 — UI stabilization before Hub
+
+Opening uses a fixed final native popover layout width and animated clipped visible width, with one initial size measurement and ResizeObserver height updates. Closing retains shrinking real width, avoids synchronous layout reads within the tick and fades selection highlight before native blur. During opening, trailing native controls may be progressively revealed rather than moving with the edge; validate visual behavior. Horizontal center compensation runs immediately on address empty-state transitions and independent edge resizes, while vertical geometry/contour retain the switch grace. The temporary left Compact Mode button dispatches Zen's native command and remains in the OnePlane toolbar independently of native sidebar reparenting. These are code-level mitigations, not verified live-browser measurements. See OP-002/003/006/007 and [roadmap](roadmap.md).

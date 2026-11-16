@@ -50,3 +50,6 @@ Edit the source sections in `src/`, not the generated root script and stylesheet
 
 
 Preview 0.2.0-preview.2 keeps OnePlane active in both Compact Mode states. Toggle Compact Mode to switch between auto-hide overlay and persistent horizontal toolbar. See [known issues](docs/known-issues.md).
+
+
+Preview 0.2.0-preview.4 prioritizes address animation, startup centering and the persistent Compact Mode command before Hub. See [roadmap](docs/roadmap.md) and [known issues](docs/known-issues.md).

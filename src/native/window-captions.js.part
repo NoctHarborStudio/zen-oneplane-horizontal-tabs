@@ -20,3 +20,17 @@
     captionHome?.remove();
     captionHome=captionNode=null;
   }
+  // Zen moves its real sidebar toolbar on every Compact Mode toggle.
+  // Keep a stable OnePlane command proxy, not a duplicate registered widget.
+  const compactToggle=document.createXULElement("toolbarbutton");
+  compactToggle.id="oneplane-compact-toggle";
+  compactToggle.className="toolbarbutton-1";
+  compactToggle.setAttribute("skipintoolbarset","true");
+  compactToggle.setAttribute("removable","false");
+  compactToggle.setAttribute("data-l10n-id","zen-toggle-compact-mode-button");
+  compactToggle.setAttribute("tooltiptext","Toggle Compact Mode");
+  compactToggle.setAttribute("aria-label","Toggle Compact Mode");
+  compactToggle.setAttribute("command","cmd_toggleCompactModeIgnoreHover");
+  function ensureCompactToggle(){
+    if(compactToggle.parentElement!==target)target.prepend(compactToggle);
+  }

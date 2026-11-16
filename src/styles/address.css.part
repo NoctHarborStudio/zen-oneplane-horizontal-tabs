@@ -166,11 +166,9 @@
       opacity: 1 !important;
       transform: none !important;
     }
-    /* A floating search is a top-layer popover, not an inline address.
-       Zen can open it over an existing page (New Tab / Ctrl+T), before a
-       new tab exists. Collapse its anchor regardless of the current URI. */
-    #nav-bar-customization-target > #urlbar-container[data-op-empty]:not(:has(#urlbar:is([focused="true"], [open]):not([zen-floating-urlbar="true"]))),
-    #nav-bar-customization-target > #urlbar-container:has(#urlbar[zen-floating-urlbar="true"]) {
+    /* A true empty tab has no visible inline address slot. A floating
+       search on a real page must not change the toolbar's anchor width. */
+    #nav-bar-customization-target > #urlbar-container[data-op-empty] {
       flex: 0 0 0px !important;
       width: 0px !important;
       min-width: 0px !important;
@@ -183,8 +181,9 @@
       overflow: visible !important;
     }
     #nav-bar-customization-target > #urlbar-container:has(#urlbar[zen-floating-urlbar="true"]) {
-      /* The native floating search keeps its own width and position.
-         Do not animate the empty placeholder or reserve horizontal space. */
+      /* Keep the ordinary page's anchor reserved during floating search.
+         Only a real empty tab collapses it. Native floating popup geometry
+         is unchanged, and its open/close cannot shift the center strip. */
       transition: none !important;
     }
     #urlbar-container[data-op-empty] #urlbar:not([focused="true"], [open], [zen-floating-urlbar="true"]) {
@@ -228,6 +227,10 @@
       clip-path: var(--op-url-live-clip, inset(0 round var(--op-url-radius))) !important;
       transition: none !important;
       animation: none !important;
+    }
+    #urlbar-container #urlbar[data-op-url-selection-fade]:not([zen-floating-urlbar="true"]) #urlbar-input::selection {
+      background-color: color-mix(in srgb, Highlight var(--op-url-selection-alpha, 100%), transparent) !important;
+      color: color-mix(in srgb, HighlightText var(--op-url-selection-alpha, 100%), var(--toolbar-color, currentColor)) !important;
     }
     #urlbar-container:is([data-op-url-phase="opening"], [data-op-url-phase="closing-wave"], [data-op-url-phase="settling"]) #urlbar:not([zen-floating-urlbar="true"]) .urlbarView {
       pointer-events: none !important;
