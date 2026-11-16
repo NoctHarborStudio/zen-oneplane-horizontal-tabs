@@ -1,3 +1,9 @@
+## 0.2.0-preview.39 — Home recommended pin picker
+
+- Customize → Add Pin offers one-click recommendations from native toolbar bookmarks and recent visible tabs; already pinned URLs and unsafe schemes are excluded.
+- Keep the picker open for adding several sites. Manual URL entry is secondary and name is optional. No history or network requests.
+- Floating Smart Search appearance is unchanged in this release.
+
 ## 0.2.0-preview.37 — Reset Hub Trash on open
 
 - Start every new Hub opening with Trash collapsed, including an interrupted close animation. Keep the age filter, native Trash contents and in-session manual expansion unchanged.

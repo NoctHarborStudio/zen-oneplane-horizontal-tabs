@@ -103,3 +103,20 @@ test("OnePlane keeps contour and panel stable during shared motion",()=>{
  assert.ok(layout.includes('toggleAttribute("oneplane-workspace-hold",active)'));
  assert.ok(layout.includes('root.hasAttribute("data-zr-workspace-phase"))return;'));
 });
+
+test("Home recommendations prioritize bookmarks, then recent tabs and exclude existing/unsafe URLs",()=>{
+ const recommend=new Function("win","safeURL",extract("  function recommendedPins(","  function collectRecommendations(")+"return recommendedPins")({URL},safeURL);
+ const bookmarks=[{url:"https://github.com",title:"GitHub"},{url:"https://youtube.com/",title:"YouTube"},{url:"about:config",title:"Internal"},{url:"https://github.com/",title:"Duplicate"}];
+ const tabs=[{url:"https://old.example",title:"Old",last:1},{url:"https://new.example",title:"New",last:20},{url:"https://github.com",title:"Tab duplicate",last:99},{url:"https://youtube.com",title:"Pinned",last:100}];
+ const result=recommend(bookmarks,tabs,[{url:"https://youtube.com"}]);
+ assert.deepEqual(result.map(x=>[x.title,x.source]),[["GitHub","Bookmark"],["New","Open tab"],["Old","Open tab"]]);
+ assert.equal(recommend(bookmarks,tabs,[],1).length,1);
+});
+test("Home pin picker uses native sources and manual title is optional",()=>{
+ assert.ok(core.includes('getElementById("PlacesToolbarItems")'));
+ assert.ok(core.includes("browser.visibleTabs||browser.tabs"));
+ assert.ok(core.includes('const message=addPin(item.url,item.title)'));
+ assert.ok(core.includes('name.placeholder="Name (optional)"'));
+ assert.ok(core.includes('button("zh-small zh-add-pin","+ Add Pin"'));
+ assert.ok(core.includes('if(editing){'));
+});

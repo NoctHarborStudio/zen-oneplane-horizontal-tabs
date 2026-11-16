@@ -29,3 +29,7 @@ Home-origin search keeps the native floating bar and provider. Measure the sourc
 ## 0.2.0-preview.38 — shared workspace motion
 
 Home invokes the optional window-local `__zenRefinedWorkspaceTransition.run(nativeCallback)` when present. Without Refined, the native switch executes immediately. Keep the Home surface mounted throughout and update only the selected workspace's ARIA state; rebuild only if workspace identities/names changed. The host holds its Compact panel and freezes the contour mask during the transition. Search morph and startup claim are unchanged.
+
+## 0.2.0-preview.39 — recommended pins
+
+Add Pin is available only in Customize. The portable core reads native Places toolbar bookmark nodes in display order, then visible native tabs ordered by last activity. Exact normalized URLs are deduplicated and already pinned URLs omitted; HTTP(S) only, up to 16 suggestions. No history query, remote suggestions, or external icon fetch. Clicking a suggestion saves its title and URL immediately while retaining the picker. Manual URL entry is optional and falls back to the domain as title. Escape closes the picker before leaving customization. Search styling is deferred. Test actual Places toolbar node data, pending tabs, multiple pins, duplicate filtering, persistence, and narrow layouts in Zen.

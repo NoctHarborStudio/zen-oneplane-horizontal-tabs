@@ -64,7 +64,22 @@ function acquireZenHome(win, services) {
 #zen-shared-home .zh-small{padding:8px 12px;border-radius:8px;font-size:11px;opacity:.8}
 #zen-shared-home .zh-small:hover{background:color-mix(in srgb,currentColor 8%,transparent);opacity:1}
 #zen-shared-home .zh-empty{font-size:12px;opacity:.55;text-align:center;padding:26px}
-#zen-shared-home .zh-form{display:grid;gap:8px;margin:14px auto 0;max-width:340px}
+#zen-shared-home .zh-picker{margin:18px auto 0;padding:15px;border:1px solid color-mix(in srgb,currentColor 12%,transparent);border-radius:14px;background:color-mix(in srgb,currentColor 4%,transparent)}
+#zen-shared-home .zh-picker-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+#zen-shared-home .zh-picker-head h3{margin:0}
+#zen-shared-home .zh-recommendations{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:330px;overflow:auto;scrollbar-width:thin;padding:2px}
+#zen-shared-home .zh-suggestion{display:flex;align-items:center;gap:10px;min-width:0;min-height:58px;padding:10px 12px;text-align:start;border-radius:10px;border:1px solid color-mix(in srgb,currentColor 9%,transparent);background:color-mix(in srgb,currentColor 4%,transparent);transition:background 160ms ease}
+#zen-shared-home .zh-suggestion:hover{background:color-mix(in srgb,currentColor 11%,transparent)}
+#zen-shared-home .zh-suggestion img{width:23px;height:23px;object-fit:contain;flex:none}
+#zen-shared-home .zh-suggestion-copy{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}
+#zen-shared-home .zh-suggestion-copy span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:12px}
+#zen-shared-home .zh-suggestion-copy small{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;opacity:.58;font-size:10px}
+#zen-shared-home .zh-suggestion-plus{font-size:17px;opacity:.7;flex:none}
+#zen-shared-home .zh-picker-note{font-size:11px;opacity:.6;margin:0 0 12px}
+#zen-shared-home .zh-custom{margin-top:12px}
+#zen-shared-home .zh-custom summary{cursor:pointer;font-size:11px;opacity:.75;padding:8px 4px}
+#zen-shared-home .zh-form{display:grid;gap:8px;margin:8px auto 0;max-width:420px}
+@media(max-width:520px){#zen-shared-home .zh-recommendations{grid-template-columns:1fr}}
 #zen-shared-home .zh-form input{width:100%;padding:9px 12px;border:1px solid color-mix(in srgb,currentColor 15%,transparent);border-radius:8px;background:color-mix(in srgb,currentColor 6%,transparent)}
 #zen-shared-home .zh-error{font-size:11px;color:light-dark(#a22,#ffb2b2)}
 #zen-shared-home .zh-pin[data-drop]{outline:1px solid AccentColor;border-radius:14px}
@@ -200,21 +215,89 @@ function acquireZenHome(win, services) {
     const items=load(),from=items.findIndex(x=>x.id===id),to=items.findIndex(x=>x.id===targetId);
     if(from<0||to<0||from===to)return;const [item]=items.splice(from,1);items.splice(to,0,item);save(items);
   }
+  // Rank actual toolbar bookmarks first, then the most recently used
+  // visible native tabs. No history query, network requests or mod dependency.
+  function recommendedPins(bookmarks,tabs,items,limit=16){
+    const seen=new Set(items.map(item=>safeURL(item.url)).filter(Boolean)),result=[];
+    const add=(entry,source)=>{
+      if(result.length>=limit)return;
+      const url=safeURL(entry?.url);
+      if(!url||seen.has(url))return;
+      seen.add(url);
+      result.push({url,title:String(entry.title||new win.URL(url).hostname).trim().slice(0,80)||new win.URL(url).hostname,source});
+    };
+    for(const entry of bookmarks)add(entry,"Bookmark");
+    for(const entry of [...tabs].sort((a,b)=>(Number(b.last)||0)-(Number(a.last)||0)))add(entry,"Open tab");
+    return result;
+  }
+  function collectRecommendations(items){
+    const bookmarks=[],tabs=[];
+    // Native Places toolbarbuttons already contain the bookmark's title
+    // and URI, including items hidden by overflow. Skip folders/separators.
+    for(const node of doc.getElementById("PlacesToolbarItems")?.children||[]){
+      try{
+        if(!node.matches("toolbarbutton.bookmark-item")||node.hasAttribute("container"))continue;
+        const place=node._placesNode;
+        const url=place?.uri||node.getAttribute("targetURI");
+        if(url)bookmarks.push({url,title:place?.title||node.getAttribute("label")||node.label});
+      }catch{}
+    }
+    for(const tab of Array.from(browser.visibleTabs||browser.tabs||[])){
+      try{
+        if(tab.closing||tab.hidden||tab.hasAttribute("zen-empty-tab"))continue;
+        const url=tab.linkedBrowser?.currentURI?.spec;
+        const lazy=tab.hasAttribute("pending")||tab.hasAttribute("discarded");
+        const target=lazy?(win.SessionStore?.getLazyTabValue?.(tab,"url")||url):url;
+        tabs.push({url:target,title:tab.label||tab.getAttribute("label"),last:tab===browser.selectedTab?Number.MAX_SAFE_INTEGER:Number(tab.lastSeenActive||tab.lastAccessed)||0});
+      }catch{}
+    }
+    return recommendedPins(bookmarks,tabs,items);
+  }
+  function addPin(rawURL,rawTitle){
+    const url=safeURL(rawURL),items=load();
+    if(!url)return "Enter a valid HTTP or HTTPS URL.";
+    if(items.length>=100)return "Shortcut limit reached.";
+    if(items.some(i=>i.url===url))return "This site is already pinned.";
+    const title=String(rawTitle||"").trim().slice(0,80)||new win.URL(url).hostname;
+    let id;try{id=services.uuid.generateUUID().toString();}catch{id=String(Date.now())+"-"+Math.random().toString(36).slice(2);}
+    save([...items,{id,type:"shortcut",title,url}]);
+    return "";
+  }
   function addForm(parent){
-    const form=html("form","zh-form"),name=html("input"),url=html("input"),error=html("div","zh-error");
-    name.placeholder="Name";name.setAttribute("aria-label","Shortcut name");name.maxLength=80;name.required=true;
+    const picker=html("div","zh-picker"),head=html("div","zh-picker-head"),grid=html("div","zh-recommendations"),error=html("div","zh-error");
+    error.setAttribute("role","status");
+    const done=button("zh-small","Done",()=>{adding=false;render();content.querySelector(".zh-add-pin")?.focus({preventScroll:true});});
+    head.append(html("h3","","Recommended"),done);
+    picker.append(head,html("p","zh-picker-note","Choose a bookmark or open tab to pin it instantly."),grid,error);
+    const suggestions=collectRecommendations(load());
+    if(!suggestions.length)grid.append(html("div","zh-empty","No more recommended sites."));
+    for(const item of suggestions){
+      const row=button("zh-suggestion","",()=>{
+        if(!open||!editing||!adding)return;
+        const message=addPin(item.url,item.title);
+        if(message){error.textContent=message;return;}
+        // The preference observer refreshes the list. Keep the picker
+        // open for adding multiple sites and focus the next available row.
+        content.querySelector(".zh-suggestion")?.focus({preventScroll:true});
+      });
+      row.title=item.url;row.setAttribute("aria-label","Pin "+item.title);
+      const img=html("img");img.alt="";img.draggable=false;img.src="page-icon:"+item.url;
+      const copy=html("span","zh-suggestion-copy"),domain=new win.URL(item.url).hostname;
+      copy.append(html("span","",item.title),html("small","",domain+" · "+item.source));
+      row.append(img,copy,html("span","zh-suggestion-plus","+"));grid.append(row);
+    }
+    // Manual entry is secondary; URL alone is sufficient.
+    const custom=html("details","zh-custom"),summary=html("summary","","Add a custom URL");
+    const form=html("form","zh-form"),url=html("input"),name=html("input"),submit=html("button","zh-small","Add");
     url.placeholder="https://example.com";url.setAttribute("aria-label","Website URL");url.required=true;url.maxLength=2048;
-    const submit=html("button","zh-small","Add");submit.type="submit";
-    form.append(name,url,error,submit,button("zh-small","Cancel",()=>{adding=false;render();}));
+    name.placeholder="Name (optional)";name.setAttribute("aria-label","Optional shortcut name");name.maxLength=80;
+    submit.type="submit";form.append(url,name,submit);
     form.addEventListener("submit",e=>{
-      e.preventDefault();const value=safeURL(url.value),title=name.value.trim(),items=load();
-      if(!value||!title){error.textContent="Enter a name and a valid HTTP or HTTPS URL.";return;}
-      if(items.length>=100){error.textContent="Shortcut limit reached.";return;}
-      if(items.some(i=>i.url===value)){error.textContent="This site is already pinned.";return;}
-      let id;try{id=services.uuid.generateUUID().toString();}catch{id=String(Date.now())+"-"+Math.random().toString(36).slice(2);}
-      adding=false;save([...items,{id,type:"shortcut",title,url:value}]);render();
+      e.preventDefault();if(!open||!editing||!adding)return;
+      const message=addPin(url.value,name.value);
+      if(message)error.textContent=message;
     });
-    parent.append(form);
+    custom.append(summary,form);picker.append(custom);parent.append(picker);
   }
   // Shared Home's workspace controls are keyed by native identity. A switch
   // changes their selection, not the stable search and pinned shortcuts.
@@ -262,7 +345,7 @@ function acquireZenHome(win, services) {
       grid.append(card);
     }
     if(editing){
-      const editbar=html("div","zh-editbar");editbar.append(button("zh-small","+ Add pinned site",()=>{adding=true;render();}));section.append(editbar);if(adding)addForm(section);
+      const editbar=html("div","zh-editbar");editbar.append(button("zh-small zh-add-pin","+ Add Pin",()=>{adding=!adding;render();if(adding)content.querySelector(".zh-suggestion, .zh-custom summary")?.focus({preventScroll:true});}));section.append(editbar);if(adding)addForm(section);
     }
     content.append(section);
     const manager=win.gZenWorkspaces;
@@ -283,7 +366,7 @@ function acquireZenHome(win, services) {
       if(list.childElementCount)content.append(spaces);
     }
     const footer=html("div","zh-footer");footer.append(button("zh-small",editing?"Done":"Customize Home",()=>{editing=!editing;adding=false;render();}));content.append(footer);
-    if(adding)content.querySelector(".zh-form input")?.focus({preventScroll:true});
+
   }
   function show(startup=false){
     if(open||!allowed())return open;focusHome=doc.activeElement;startupHome=startup;
@@ -334,7 +417,7 @@ function acquireZenHome(win, services) {
       if(!open)return;
       if(e.target?.closest?.("#PlacesToolbarItems .bookmark-item:not([container]),#OtherBookmarks .bookmark-item:not([container]),#back-button,#forward-button,#reload-button,#stop-reload-button"))close();
     },true);
-    listen(win,"keydown",e=>{if(open&&e.key==="Escape"&&!searchActive()){e.preventDefault();e.stopPropagation();if(editing){editing=false;adding=false;render();}else close(true);}},true);
+    listen(win,"keydown",e=>{if(open&&e.key==="Escape"&&!searchActive()){e.preventDefault();e.stopPropagation();if(adding){adding=false;render();content.querySelector(".zh-add-pin")?.focus({preventScroll:true});}else if(editing){editing=false;render();}else close(true);}},true);
     const stateObserver=new win.MutationObserver(()=>{if(open&&!allowed())close();});
     stateObserver.observe(root,{attributes:true,attributeFilter:["customizing","inDOMFullscreen","inFullscreen","popup-window"]});cleanups.push(()=>stateObserver.disconnect());
     listen(win,"unload",destroy,{once:true});
