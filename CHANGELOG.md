@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0-preview.25
+
+- Test the real startup scheduling adapter for delayed startup, ready windows and cancellation; account for integer CSS feature rounding at 2x DPI. Runtime unchanged from preview.24.
+
 ## 0.2.0-preview.24
 
 - Create native windows with the selected final snap rectangle rather than the uniform center seed; maximize independently of workspace initialization.

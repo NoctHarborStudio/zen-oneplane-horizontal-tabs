@@ -72,8 +72,10 @@ test("each snap mode has its own startup rectangle, including maximize work area
   const modes=new Set();
   for(const x of [d.x,d.x+960,d.x+1919])for(const y of [d.y,d.y+540,d.y+1079]){
     const p=displaySnapTarget(d,d,x,y),f=displayStartupFeatures(p,1,2);
-    assert.deepEqual({x:f.left,y:f.top,width:f.outerWidth*2,height:f.outerHeight*2},
-      {x:p.x,y:p.y,width:p.width,height:p.height});
+    assert.equal(f.left,p.x);assert.equal(f.top,p.y);
+    // Integer CSS window features round odd desktop dimensions at 2x DPI.
+    assert.ok(Math.abs(f.outerWidth*2-p.width)<=1);
+    assert.ok(Math.abs(f.outerHeight*2-p.height)<=1);
     modes.add(JSON.stringify(f));
   }
   assert.equal(modes.size,9);
