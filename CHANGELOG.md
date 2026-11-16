@@ -1,3 +1,9 @@
+## 0.2.0-preview.57 — Progressive Home card return
+
+- Reveal individual pinned and workspace cards as their own row becomes uncovered, with smooth opacity, clipping and a subtle 6px rise. Headings and footer follow the same edge-driven motion. No abrupt final opacity reset.
+- Reuse unchanged native result snapshots, track scroll/mutation invalidation, and start the closing layer from the last actual native geometry. Avoid redundant position writes and report maximum frame gap in close diagnostics.
+- Live Zen visual validation pending.
+
 ## 0.2.0-preview.56 — Continuous search collapse
 
 - Freeze the latest native Smart Search result view into a detached, inert visual copy before cancellation; preserve visible rows during the reverse animation even if Zen tears down the popover on blur.

@@ -47,7 +47,8 @@ test("Home native search preserves surface on cancel and ignores stale close",()
  let open=true,searchToken=null,searchBar=null,searchFrame=0,searchMotion=null,searchTimer=0,closed=0;
  let searchGeometry=null,searchLastHeight=0,searchCurrentHeight=0,searchClosing=false,searchReturn=null,searchReturnFrame=0;
  let searchInput=null,searchOriginalPlaceholder=null,searchSessionLabel=null;
- let searchSnapshot=null,searchSnapshotTimer=0,searchSnapshotObserver=null;const doc={getElementById:()=>null};
+ let searchSnapshot=null,searchSnapshotTimer=0,searchSnapshotObserver=null,searchSnapshotDirty=true,searchSnapshotView=null;
+ let searchReturnParts=[],searchLastRect=null;const doc={getElementById:()=>null};
  function close(){open=false;closed++;finishSearchVisual()}
  function leaveHome(){close()}
  function ensurePrimaryHome(){}
@@ -298,24 +299,40 @@ test("Home search handoff shares header tokens, exact anchor and no New tab labe
  assert.ok(core.includes("eased=t*t*(3-2*t)"));
 });
 
-test("Home return alpha follows the moving bottom edge, not the native close event",()=>{
- const alpha=new Function(extract("  function returnSectionAlpha(","  function freezeSearchResults(")+"return returnSectionAlpha")();
- assert.equal(alpha(300,450,0),0);
- assert.equal(alpha(300,350,.8),0);
- assert.equal(alpha(300,276,.5),.45);
- assert.equal(alpha(300,200,1),1);
- assert.equal(alpha(650,500,0),0);
- assert.ok(alpha(650,500,.2)>0&&alpha(650,500,.2)<1);
- assert.equal(alpha(300,264,.95,264),1);
+test("Home cards reveal continuously as the search edge clears each row",()=>{
+ const state=new Function(extract("  function returnCardState(","  function prepareReturnParts(")+"return returnCardState")();
+ assert.deepEqual(state(300,100,450,0,250),{alpha:0,clip:100,shift:6});
+ const partial=state(300,100,370,.35,250);
+ assert.ok(partial.alpha>0&&partial.alpha<1);
+ assert.ok(partial.clip>0&&partial.clip<100);
+ assert.ok(partial.shift>0&&partial.shift<6);
+ // The second Pinned row and workspaces appear before the first row.
+ assert.ok(state(420,100,450,.35,250).alpha>state(300,100,450,.35,250).alpha);
+ assert.ok(state(550,48,450,.2,250).alpha>0);
+ assert.deepEqual(state(300,100,250,1,250),{alpha:1,clip:0,shift:0});
+ // The endpoint remains continuous even if the source is unusually low.
+ const near=state(260,100,265,.99,264);
+ assert.ok(near.alpha>.99&&near.clip<=1);
+ assert.deepEqual(state(260,100,264,1,264),{alpha:1,clip:0,shift:0});
 });
 test("Home closes with a frozen native results layer and no early full Home opacity",()=>{
  assert.ok(core.includes("function freezeSearchResults(view,barRect)"));
  assert.ok(core.includes('const target=html(src?"img":"div")'));
  assert.ok(core.includes('if(frozen)shell.append(frozen.node)'));
  assert.ok(core.includes('captureSearchSnapshot();\n    animateSearchReturn(reason,true);'));
- assert.ok(core.includes('opacity:var(--zh-return-alpha,0)'));
- assert.ok(core.includes('returnSectionAlpha(part.top,top+h,p,dest.top+dest.height)'));
+ assert.ok(core.includes('opacity:calc(var(--zh-return-alpha,0) * var(--zh-return-base,1))'));
+ assert.ok(core.includes('paintReturnParts(parts,top+h,p,finalBottom)'));
  assert.ok(core.includes('searchLog("close-start",{reason,rows:'));
  assert.ok(!core.includes('.zh-footer{opacity:1}'));
  assert.ok(core.includes("stopSearchSnapshot();"));
+});
+
+test("Home close reuses an unchanged snapshot and avoids unnecessary geometry writes",()=>{
+ assert.ok(core.includes("if(searchSnapshot&&!searchSnapshotDirty)return;"));
+ assert.ok(core.includes('searchSnapshotDirty=true;'));
+ assert.ok(core.includes('searchSnapshotView?.removeEventListener("scroll",scheduleSearchSnapshot,true)'));
+ assert.ok(core.includes("const measured=live?bar?.getBoundingClientRect():searchLastRect;"));
+ assert.ok(core.includes('if(moveTop)shell.style.top=top+"px";'));
+ assert.ok(core.includes("maxFrameGap:Math.round(maxFrameGap)"));
+ assert.ok(core.includes('if(part.last===key)continue'));
 });

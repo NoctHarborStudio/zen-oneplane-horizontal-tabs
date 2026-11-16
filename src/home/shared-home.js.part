@@ -242,7 +242,13 @@ function acquireZenHome(win, services) {
 }
 #zen-home-search-return .zh-return-header{box-sizing:border-box}
 #zen-shared-home[data-zh-return] .zh-search{visibility:hidden}
-#zen-shared-home[data-zh-return] .zh-section,#zen-shared-home[data-zh-return] .zh-footer{opacity:var(--zh-return-alpha,0);transition:none!important;pointer-events:none}
+#zen-shared-home[data-zh-return] .zh-section{opacity:1;transition:none!important;animation:none!important;pointer-events:none}
+#zen-shared-home[data-zh-return] :is(.zh-section h3,.zh-pin,.zh-pins .zh-empty,.zh-editbar,.zh-space,.zh-footer){
+  opacity:calc(var(--zh-return-alpha,0) * var(--zh-return-base,1));
+  clip-path:inset(var(--zh-return-clip,0px) 0 0 0);
+  translate:0 var(--zh-return-shift,0px);
+  transition:none!important;animation:none!important;pointer-events:none
+}
 #zen-home-search-return .zh-return-results{position:absolute;pointer-events:none;overflow:hidden}
 #zen-home-search-return,#zen-home-search-return *{-moz-window-dragging:no-drag!important;pointer-events:none!important}
 @media(max-width:600px){#zen-shared-home{padding:62px 16px 20px}#zen-shared-home .zh-pin{flex-basis:calc((100% - 24px)/3)}#zen-shared-home .zh-tile{height:84px}#zen-shared-home .zh-space{flex-basis:120px}}
@@ -255,7 +261,8 @@ function acquireZenHome(win, services) {
   let searchFrame=0,searchMotion=null,searchTimer=0,searchBar=null;
   let searchGeometry=null,searchLastHeight=0,searchCurrentHeight=0,searchClosing=false,searchReturn=null,searchReturnFrame=0;
   let searchInput=null,searchOriginalPlaceholder=null,searchSessionLabel=null;
-  let searchSnapshot=null,searchSnapshotTimer=0,searchSnapshotObserver=null;
+  let searchSnapshot=null,searchSnapshotTimer=0,searchSnapshotObserver=null,searchSnapshotDirty=true,searchSnapshotView=null;
+  let searchReturnParts=[],searchLastRect=null;
   let pinScrollTop=0,pinCustom=false,pinViewMode="home";
   const leases=new Set(),cleanups=[];
   function listen(node,type,fn,options){node.addEventListener(type,fn,options);cleanups.push(()=>node.removeEventListener(type,fn,options));}
@@ -323,7 +330,8 @@ function acquireZenHome(win, services) {
     if(searchReturnFrame)win.cancelAnimationFrame(searchReturnFrame);searchReturnFrame=0;
     searchReturn?.remove();searchReturn=null;
     stopSearchSnapshot();
-    for(const part of content.querySelectorAll?.(".zh-section,.zh-footer")||[])part.style?.removeProperty("--zh-return-alpha");
+    for(const part of searchReturnParts)for(const key of ["alpha","base","clip","shift"])part.node.style.removeProperty("--zh-return-"+key);
+    searchReturnParts=[];searchLastRect=null;
     if(searchBar){
       searchBar.removeAttribute("data-zr-home-search");searchBar.removeAttribute("data-zh-closing");
       for(const key of ["left","top","width","header","room"])searchBar.style?.removeProperty("--zh-search-"+key);
@@ -460,11 +468,39 @@ function acquireZenHome(win, services) {
   function searchLog(event,fields={}){
     win.console.info?.("[Zen Home] search "+event,fields);
   }
-  function returnSectionAlpha(top,bottom,progress,finalBottom=top-48){
-    const p=Math.max(0,Math.min(1,progress));
-    const distance=Math.max(1,Math.min(48,top-finalBottom));
-    const clearance=Math.max(0,Math.min(1,(top-bottom)/distance));
-    return p===1?1:Math.min(1,p*1.8)*clearance;
+  // A card starts appearing when any of its height is uncovered, rather
+  // than waiting for the top of the entire Pinned section to clear.
+  function returnCardState(top,height,bottom,progress,finalBottom){
+    const clamp=v=>Math.max(0,Math.min(1,v)),smooth=v=>{const t=clamp(v);return t*t*(3-2*t);};
+    const h=Math.max(1,height),p=clamp(progress);
+    const overlap=Math.max(0,bottom-top+3)-Math.max(0,finalBottom-top+3);
+    const clip=Math.min(h,Math.max(0,overlap));
+    const exposed=h-clip;
+    const alpha=smooth(exposed/Math.min(h,38))*smooth(p/.48);
+    return {alpha,clip,shift:6*(1-alpha)};
+  }
+  function prepareReturnParts(){
+    // Measure all visible cards and headings once. Rows at equal y share
+    // the same reveal timing automatically, including wrapped workspaces.
+    const bounds=panel.getBoundingClientRect();
+    const parts=[];
+    for(const node of content.querySelectorAll(".zh-section h3,.zh-pin,.zh-pins .zh-empty,.zh-editbar,.zh-space,.zh-footer")){
+      const rect=node.getBoundingClientRect();
+      if(rect.height<=0||rect.bottom<=bounds.top||rect.top>=bounds.bottom)continue;
+      const base=Number.parseFloat(win.getComputedStyle(node).opacity);
+      parts.push({node,top:rect.top,height:rect.height,base:Number.isFinite(base)?base:1,last:null});
+    }
+    return parts;
+  }
+  function paintReturnParts(parts,bottom,progress,finalBottom){
+    for(const part of parts){
+      const state=returnCardState(part.top,part.height,bottom,progress,finalBottom);
+      const alpha=state.alpha.toFixed(3),clip=state.clip.toFixed(2)+"px",shift=state.shift.toFixed(2)+"px";
+      const key=alpha+"/"+clip+"/"+shift;if(part.last===key)continue;part.last=key;
+      part.node.style.setProperty("--zh-return-alpha",alpha);
+      part.node.style.setProperty("--zh-return-clip",clip);
+      part.node.style.setProperty("--zh-return-shift",shift);
+    }
   }
   function freezeSearchResults(view,barRect){
     const rect=view.getBoundingClientRect();
@@ -516,27 +552,33 @@ function acquireZenHome(win, services) {
   function captureSearchSnapshot(){
     if(!searchToken||!searchBar||searchClosing||searchReturn||!searchGeometry||
        searchBar.getAttribute("zen-floating-urlbar")!=="true"||!nativeSearchOpen(searchBar))return;
+    if(searchSnapshot&&!searchSnapshotDirty)return;
     try{
       const view=searchBar.querySelector?.(".urlbarView");
       if(!view?.querySelector(".urlbarView-row:not([hidden])"))return;
       const frozen=freezeSearchResults(view,searchBar.getBoundingClientRect());
-      if(frozen?.rows)searchSnapshot=frozen;
+      if(frozen?.rows){searchSnapshot=frozen;searchSnapshotDirty=false;}
     }catch(error){searchLog("snapshot unavailable",{reason:error?.name||"Error"});}
   }
   function scheduleSearchSnapshot(){
-    if(!searchToken||searchClosing||searchReturn||searchSnapshotTimer)return;
+    if(!searchToken||searchClosing||searchReturn)return;
+    searchSnapshotDirty=true;
+    if(searchSnapshotTimer)return;
     searchSnapshotTimer=win.setTimeout(()=>{searchSnapshotTimer=0;captureSearchSnapshot();},80);
   }
   function startSearchSnapshot(){
     if(win.matchMedia("(prefers-reduced-motion: reduce)").matches||!searchBar||!win.MutationObserver)return;
     const view=searchBar.querySelector?.(".urlbarView");if(!view)return;
+    searchSnapshotView=view;view.addEventListener("scroll",scheduleSearchSnapshot,true);
     searchSnapshotObserver=new win.MutationObserver(scheduleSearchSnapshot);
     searchSnapshotObserver.observe(view,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:["hidden","src","selected","style","data-zr-group","data-zr-cell","data-zr-smart-grid","data-zr-first","data-zr-rail","data-zr-narrow"]});
     scheduleSearchSnapshot();
   }
   function stopSearchSnapshot(){
     if(searchSnapshotTimer)win.clearTimeout(searchSnapshotTimer);searchSnapshotTimer=0;
-    searchSnapshotObserver?.disconnect();searchSnapshotObserver=null;searchSnapshot=null;
+    searchSnapshotObserver?.disconnect();searchSnapshotObserver=null;
+    searchSnapshotView?.removeEventListener("scroll",scheduleSearchSnapshot,true);searchSnapshotView=null;
+    searchSnapshot=null;searchSnapshotDirty=true;
   }
   function finishNativeCancel(){
     const bar=searchBar;
@@ -562,8 +604,9 @@ function acquireZenHome(win, services) {
     if(!searchToken||searchReturn)return;
     if(!searchGeometry||win.matchMedia("(prefers-reduced-motion: reduce)").matches){finishSearchVisual();return;}
     const g=searchGeometry,bar=searchBar;
-    const measured=live?bar?.getBoundingClientRect().height:0;
-    const height=Math.max(g.header,Math.min(g.room,measured||searchLastHeight||g.header));
+    const measured=live?bar?.getBoundingClientRect():searchLastRect;
+    const height=Math.max(g.header,Math.min(g.room,measured?.height||searchLastHeight||g.header));
+    const startBox={left:measured?.left??g.left,top:measured?.top??g.top,width:measured?.width||g.width};
     searchClosing=true;
     finishSearchMotion();
     if(searchTimer)win.clearTimeout(searchTimer);searchTimer=0;
@@ -574,29 +617,37 @@ function acquireZenHome(win, services) {
     if(icon)header.append(icon);
     header.append(html("span","",source?.querySelector("span")?.textContent||"Search or enter address"));shell.append(header);
     const dest=source?.getBoundingClientRect()||{left:g.left,top:g.top,width:g.width,height:g.header};
-    Object.assign(shell.style,{left:g.left+"px",top:g.top+"px",width:g.width+"px",height:height+"px"});
+    Object.assign(shell.style,{left:startBox.left+"px",top:startBox.top+"px",width:startBox.width+"px",height:height+"px"});
     header.style.height=Math.max(0,g.header-2)+"px";
     const frozen=searchSnapshot;
     if(frozen)shell.append(frozen.node);
     root.append(shell);searchReturn=shell;
     if(frozen)for(const s of frozen.scroll){s.node.scrollTop=s.top;s.node.scrollLeft=s.left;}
-    const parts=Array.from(content.querySelectorAll(".zh-section,.zh-footer"),node=>({node,top:node.getBoundingClientRect().top}));
-    for(const part of parts)part.node.style.setProperty("--zh-return-alpha","0");
+    searchReturnParts=prepareReturnParts();
+    const parts=searchReturnParts,finalBottom=dest.top+dest.height;
+    for(const part of parts)part.node.style.setProperty("--zh-return-base",String(part.base));
+    // Remove completed entry animations so they cannot replay at handoff.
+    for(const node of content.querySelectorAll("[data-zh-enter]"))node.removeAttribute("data-zh-enter");
+    paintReturnParts(parts,startBox.top+height,0,finalBottom);
     panel.setAttribute("data-zh-search-ready","");panel.setAttribute("data-zh-return","");
     const duration=height>dest.height+8?460:180;
-    searchLog("close-start",{reason,rows:frozen?.rows||0,height:Math.round(height),header:Math.round(dest.height),duration});
-    const token=searchToken;let start=null;
+    searchLog("close-start",{reason,rows:frozen?.rows||0,height:Math.round(height),header:Math.round(dest.height),duration,parts:parts.length,snapshotDirty:searchSnapshotDirty});
+    const token=searchToken;let start=null,previous=null,maxFrameGap=0;
+    const moveTop=Math.abs(startBox.top-dest.top)>.1,moveLeft=Math.abs(startBox.left-dest.left)>.1,moveWidth=Math.abs(startBox.width-dest.width)>.1;
     const tick=now=>{
       searchReturnFrame=0;if(!open||searchToken!==token||searchReturn!==shell)return;
       if(start===null)start=now;
-      const p=Math.min(1,(now-start)/duration),h=revealValue(height,dest.height,p),top=revealValue(g.top,dest.top,p);
-      shell.style.height=h+"px";shell.style.top=top+"px";
-      shell.style.left=revealValue(g.left,dest.left,p)+"px";shell.style.width=revealValue(g.width,dest.width,p)+"px";
+      if(previous!==null)maxFrameGap=Math.max(maxFrameGap,now-previous);previous=now;
+      const p=Math.min(1,(now-start)/duration),h=revealValue(height,dest.height,p),top=revealValue(startBox.top,dest.top,p);
+      shell.style.height=h+"px";
+      if(moveTop)shell.style.top=top+"px";
+      if(moveLeft)shell.style.left=revealValue(startBox.left,dest.left,p)+"px";
+      if(moveWidth)shell.style.width=revealValue(startBox.width,dest.width,p)+"px";
       if(frozen)frozen.node.style.opacity=String(Math.min(1,Math.max(0,(h-dest.height)/80)));
-      for(const part of parts)part.node.style.setProperty("--zh-return-alpha",String(returnSectionAlpha(part.top,top+h,p,dest.top+dest.height)));
+      paintReturnParts(parts,top+h,p,finalBottom);
       if(p<1)searchReturnFrame=win.requestAnimationFrame(tick);
       else{
-        searchLog("close-finish",{reason,rows:frozen?.rows||0});
+        searchLog("close-finish",{reason,rows:frozen?.rows||0,elapsed:Math.round(now-start),maxFrameGap:Math.round(maxFrameGap)});
         finishSearchVisual();content.querySelector(".zh-search")?.focus({preventScroll:true});
       }
     };
@@ -856,15 +907,15 @@ function acquireZenHome(win, services) {
       panel.setAttribute("data-zh-search-ready","");finishSearchMotion();
       const from=content.querySelector(".zh-search")?.getBoundingClientRect();
       searchGeometry=homeSearchGeometry(from,win.innerWidth,win.innerHeight);
-      applySearchGeometry(searchBar,searchGeometry);
+      applySearchGeometry(searchBar,searchGeometry);scheduleSearchSnapshot();
     });
     if(win.gURLBar){
       // Remember the latest painted height for native blur/popover teardown.
       if(typeof win.ResizeObserver==="function"){
         const sizes=new win.ResizeObserver(()=>{
           if(searchToken&&!searchClosing&&!searchReturn&&searchBar?.getAttribute("zen-floating-urlbar")==="true"&&nativeSearchOpen(searchBar)){
-            const h=searchBar.getBoundingClientRect().height;
-            if(h>0)searchLastHeight=h;
+            const rect=searchBar.getBoundingClientRect();
+            if(rect.height>0){searchLastHeight=rect.height;searchLastRect=rect;}
           }
         });sizes.observe(win.gURLBar);cleanups.push(()=>sizes.disconnect());
       }
