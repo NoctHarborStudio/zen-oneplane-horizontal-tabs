@@ -1,7 +1,94 @@
+  // Use painted lane rectangles, not offscreen native-order slots.
+  function useLaneDrop(){
+    return row.hasAttribute("data-op-overflow-row")||row.hasAttribute("data-op-lane-drag")||
+      (hasCenteredIsland()?[leftLane,rightLane]:[list]).some(l=>l.clientWidth>0&&l.scrollWidth>l.clientWidth+1);
+  }
+  function laneAtPoint(point){
+    const lanes=hasCenteredIsland()?[leftLane,rightLane,...(bottomLane.hidden?[]:[bottomLane])]:[list];
+    return lanes.find(lane=>{
+      const b=lane.getBoundingClientRect();
+      return b.width>0&&b.height>0&&point.y>=b.top&&point.y<b.bottom&&point.x>=b.left-5&&point.x<=b.right+5;
+    })||null;
+  }
+  function laneDropTarget(lane,x,source=null){
+    if(!lane)return null;
+    const clip=lane.getBoundingClientRect(),nodes=laneNodes(lane).filter(n=>n!==source);
+    const slots=nodes.map(node=>({node,rect:node.getBoundingClientRect()}));
+    const picked=visibleLaneDropIndex(slots.map(s=>({left:s.rect.left,right:s.rect.right})),clip.left,clip.right,x);
+    if(picked)return {...nativeSlot(slots[picked.index].node),before:picked.before};
+    if(!nodes.length){
+      const all=stripNodes().filter(n=>n!==source);
+      if(!all.length)return null;
+      const tabWidth=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab"))||36;
+      const boundary=islandBoundary(all.map(n=>compactSlotWidth(n,tabWidth)),tabWidth+3);
+      if(lane===leftLane&&all[boundary])return {...nativeSlot(all[boundary]),before:true};
+      if(lane===rightLane&&all[boundary-1])return {...nativeSlot(all[boundary-1]),before:false};
+      return {...nativeSlot(all.at(-1)),before:false};
+    }
+    return null;
+  }
+  let laneDragFrame=0,laneDragPoint=null,laneDragSource=null,laneDragViewport=null,laneDragLast=0;
+  function stopLaneAutoscroll(){
+    if(laneDragFrame)window.cancelAnimationFrame(laneDragFrame);
+    laneDragFrame=0;laneDragPoint=null;laneDragSource=null;laneDragViewport=null;laneDragLast=0;
+  }
+  function paintLaneDrop(dest){
+    clearDropMarker();
+    if(dest?.native){dropMarker=dest.element;dropMarker.setAttribute(dest.before?"data-op-drop-before":"data-op-drop-after","true");}
+    liveDragTarget=dest;
+  }
+  function laneAutoStep(now){
+    laneDragFrame=0;
+    const lane=laneDragViewport,point=laneDragPoint;
+    if(dead||!lane||!point||!row.hasAttribute("data-op-lane-drag"))return;
+    const clip=lane.getBoundingClientRect(),edge=Math.min(42,clip.width/3);
+    const velocity=laneScrollVelocity(point.x,clip.left,clip.right,edge);
+    const dt=laneDragLast?Math.min(32,now-laneDragLast):16;laneDragLast=now;
+    if(!velocity)return;
+    const before=lane.scrollLeft;
+    lane.scrollLeft+=velocity*dt/16;
+    if(Math.abs(lane.scrollLeft-before)>.1){
+      paintLaneDrop(laneDropTarget(lane,point.x,laneDragSource));
+      laneDragFrame=window.requestAnimationFrame(laneAutoStep);
+    }
+  }
+  function clearLaneDrag(){
+    stopLaneAutoscroll();
+    const active=row.hasAttribute("data-op-lane-drag");
+    row.removeAttribute("data-op-lane-drag");
+    if(active&&!dead)scheduleGeometry();
+    dragNode?.removeAttribute("data-op-lane-ghost");
+    if(active&&dragImageMode==="inline")hideGhost();
+  }
+  function showLaneGhost(event,pull=0){
+    if(!dragNode)return;
+    makeDragGhost();
+    if(!dragGhost||!dragGhostBody)return;
+    dragNode.setAttribute("data-op-lane-ghost","true");
+    dragGhost.hidden=false;
+    positionGhost(event.clientX,event.clientY);
+    dragGhostBody.style.transform=pull?"scale("+Math.max(.12,1-.8*pull)+")":"";
+  }
+  function previewLaneDrag(event,tab,entry){
+    if(dragShifted.size||row.hasAttribute("data-op-live-drag"))clearLiveDrag();
+    row.setAttribute("data-op-lane-drag","true");
+    const local=tabOwner(tab)===window,source=local&&isStripNode(entry)?entry:null;
+    const lane=laneAtPoint({x:event.clientX,y:event.clientY});
+    const dest=laneDropTarget(lane,event.clientX,source);
+    paintLaneDrop(dest);
+    if(local&&entry===dragNode&&dragImageMode==="inline")showLaneGhost(event);
+    if(lane&&lane.scrollWidth>lane.clientWidth+1){
+      laneDragViewport=lane;laneDragPoint={x:event.clientX,y:event.clientY};laneDragSource=source;
+      const b=lane.getBoundingClientRect();
+      if(!laneDragFrame&&laneScrollVelocity(event.clientX,b.left,b.right,Math.min(42,b.width/3))){laneDragLast=0;laneDragFrame=window.requestAnimationFrame(laneAutoStep);}
+    }else stopLaneAutoscroll();
+    return dest;
+  }
   function previewStripDrag(event, tab) {
     const owner = tabOwner(tab);
     const group = owner?.[DRAG_CONTROLLER]?.group();
     const entry = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
+    if(useLaneDrop())return previewLaneDrag(event,tab,entry);
     if(owner!==window && row.hasAttribute("data-op-show-island") &&
         !row.hasAttribute("data-op-island-incoming")){
       row.setAttribute("data-op-island-incoming","true");
@@ -100,6 +187,7 @@
   function onStripDragLeave(event) {
     if (event.relatedTarget instanceof Node && row.contains(event.relatedTarget)) return;
     if (toolbarContainsPoint(event.clientX,event.clientY)) return;
+    stopLaneAutoscroll();
     // The window capture listener owns pull and image transitions.
     // Do not erase a group's visual position mid-extraction.
     if (!(groupPullLayout && dragImageMode === "inline")) clearLiveDrag();
@@ -130,7 +218,8 @@
     const navHeight=navbar?.getBoundingClientRect().height||0;
     // Reserve the actual expanded toolbar even while its compact height
     // is still animating. Do not include the decorative fade.
-    return tabReturnZone(event.clientX,event.clientY,rect,Math.max(rect.height,measured,navHeight,36)+4);
+    const stripBottom=row.getBoundingClientRect().bottom;
+    return tabReturnZone(event.clientX,event.clientY,rect,Math.max(rect.height,measured,navHeight,stripBottom-rect.top,36)+4);
   }
   function holdToolbarForReturn(){
     toolbarWrapper.setAttribute("oneplane-drag-hold","true");
@@ -158,8 +247,8 @@
     if (local && dragNode) {
       dragLastPoint = {x:event.clientX,y:event.clientY};
       if (within && dragImageMode !== "content" && dragImageMode !== "outside")
-        dragEdge = toolbarWrapper.getBoundingClientRect().bottom;
-      const p = Math.max(0,Math.min(1,(event.clientY-(dragEdge-15))/PULL_DISTANCE));
+        dragEdge = Math.max(toolbarWrapper.getBoundingClientRect().bottom,row.getBoundingClientRect().bottom,navbar?.getBoundingClientRect().bottom||0);
+      const p = within?0:Math.max(0,Math.min(1,(event.clientY-dragEdge)/PULL_DISTANCE));
       const lateralExit = event.clientX < toolbarWrapper.getBoundingClientRect().left ||
                           event.clientX > toolbarWrapper.getBoundingClientRect().right;
       const threshold = dragImageMode === "content" || dragImageMode === "outside" ? .72 : .96;
@@ -177,6 +266,10 @@
       }
       if (p === 0) dragReentry = false;
       if (p > 0 && !dragReentry) {
+        if(useLaneDrop()){
+          clearLiveDrag();clearDropMarker();setPull(p);row.setAttribute("data-op-lane-drag","true");showLaneGhost(event,p);
+          return;
+        }
         if (draggedGroup) captureGroupPull(event);
         if (groupPullLayout) row.setAttribute("data-op-group-pull","true");
         else clearLiveDrag();

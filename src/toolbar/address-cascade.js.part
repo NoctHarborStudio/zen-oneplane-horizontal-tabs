@@ -48,7 +48,7 @@
     row.inert=false;
     cancelCascadeAnimations();
     setBookmarkWave(null);
-    if(!dead){refreshIndicator();scheduleContour();}
+    if(!dead){refreshIndicator();scheduleGeometry();scheduleContour();}
   }
   function settleHidden(generation){
     if(dead||generation!==cascadeGeneration)return;

@@ -846,6 +846,12 @@ function installTabStrip() {
   row.id = "oneplane-tabs";
   row.setAttribute("skipintoolbarset", "true");
   row.setAttribute("removable", "false");
+  const compactSearch=html("button","oneplane-compact-search");
+  compactSearch.id="oneplane-compact-search";compactSearch.type="button";compactSearch.title="Search or enter address";
+  compactSearch.setAttribute("aria-label","Search or enter address");
+  const searchGlyph=document.createElementNS("http://www.w3.org/2000/svg","svg");searchGlyph.setAttribute("viewBox","0 0 24 24");searchGlyph.setAttribute("aria-hidden","true");
+  const searchPath=document.createElementNS(searchGlyph.namespaceURI,"path");searchPath.setAttribute("d","M16 16l5 5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z");searchGlyph.append(searchPath);compactSearch.append(searchGlyph);
+  compactSearch.addEventListener("click",()=>{window.gURLBar?.focus();window.gURLBar?.select();});
   const list = html("div", "oneplane-tab-list");
   list.setAttribute("role", "tablist");
   list.setAttribute("aria-label", "Browser tabs");
@@ -864,6 +870,9 @@ function installTabStrip() {
   indicator.setAttribute("aria-hidden", "true");
   const leftLane = html("div","oneplane-island-lane oneplane-island-left");
   const rightLane = html("div","oneplane-island-lane oneplane-island-right");
+  const bottomLane = html("div","oneplane-island-lane oneplane-overflow-lane");
+  bottomLane.hidden=true;
+  bottomLane.setAttribute("role","group");bottomLane.setAttribute("aria-label","Overflow tabs");
   const island = html("button","oneplane-title-island");
   island.type="button";island.disabled=true;island.setAttribute("aria-label","Toggle Home");island.setAttribute("aria-expanded","false");
   const homeGlyph=document.createElementNS("http://www.w3.org/2000/svg","svg");
@@ -872,17 +881,21 @@ function installTabStrip() {
   const islandTitle = html("span","oneplane-island-title");
   island.append(islandTitle);
   row.append(list, plus, indicator, island);
+  let stripOrderSnapshot=[];
   function stripNodes() {
-    return leftLane.parentElement === list ?
-      [...leftLane.children,...rightLane.children] : Array.from(list.children);
+    // The painted row order is not the native order once overflow is active.
+    return stripOrderSnapshot.filter(node=>list.contains(node));
   }
   function isStripNode(node) {
     return Boolean(node && (node.parentElement === list ||
-      node.parentElement === leftLane || node.parentElement === rightLane));
+      node.parentElement === leftLane || node.parentElement === rightLane || node.parentElement===bottomLane));
   }
   function compactSlotWidth(node, tabWidth) {
     return node.classList.contains("oneplane-split-group") ?
       22 + node.querySelectorAll(".oneplane-tab").length*(tabWidth+3) : tabWidth;
+  }
+  function laneNodes(lane){
+    return Array.from(lane.children).filter(isStripNode);
   }
   function islandBoundary(widths, plusWidth, gap=3) {
     if (widths.length < 2) return widths.length;
@@ -895,26 +908,135 @@ function installTabStrip() {
     }
     return best;
   }
-  function placeStripOrder(order) {
-    const useLanes=row.hasAttribute("data-op-show-island");
-    // Preserve the native drag source DOM parent. Both lanes stay in
-    // place during a drag; only visual slot transforms change.
-    if(row.hasAttribute("data-op-dragging")) return;
-    if(useLanes){
-      if(leftLane.parentElement!==list) list.append(leftLane,rightLane);
-      const tabWidth=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab"))||36;
-      const boundary=islandBoundary(order.map(n=>compactSlotWidth(n,tabWidth)),tabWidth+3);
-      for(const [lane,nodes] of [[leftLane,order.slice(0,boundary)],[rightLane,order.slice(boundary)]]){
-        for(let i=0;i<nodes.length;i++)
-          if(lane.children[i]!==nodes[i]) lane.insertBefore(nodes[i],lane.children[i]||null);
-      }
-    }else{
-      for(let i=0;i<order.length;i++)
-        if(list.children[i]!==order[i]) list.insertBefore(order[i],list.children[i]||null);
-      leftLane.remove();rightLane.remove();
+  // Pure collapsed-slot allocation for the second-row controller.
+  // Each slot represents one tab or one entire Split View group.
+  function planTabOverflow(widths,boundary,leftCapacity,rightCapacity,gap=3){
+    if(!Array.isArray(widths)||widths.some(w=>!Number.isFinite(w)||w<=0)||
+       !Number.isInteger(boundary)||boundary<0||boundary>widths.length||
+       ![leftCapacity,rightCapacity,gap].every(v=>Number.isFinite(v)&&v>=0))
+      throw new TypeError("Invalid collapsed slot geometry");
+    let leftStart=boundary,leftUsed=0;
+    while(leftStart>0){
+      const next=widths[leftStart-1]+(leftStart===boundary?0:gap);
+      if(leftUsed+next>leftCapacity)break;
+      leftStart--;leftUsed+=next;
     }
+    let rightEnd=boundary,rightUsed=0;
+    while(rightEnd<widths.length){
+      const next=widths[rightEnd]+(rightEnd===boundary?0:gap);
+      if(rightUsed+next>rightCapacity)break;
+      rightUsed+=next;rightEnd++;
+    }
+    const indices=(a,b)=>Array.from({length:b-a},(_,i)=>a+i);
+    const lowerLeft=indices(0,leftStart),lowerRight=indices(rightEnd,widths.length);
+    return {topLeft:indices(leftStart,boundary),topRight:indices(boundary,rightEnd),
+      lowerLeft,lowerRight,lower:[...lowerLeft,...lowerRight],
+      hasSecondRow:lowerLeft.length+lowerRight.length>0,leftUsed,rightUsed};
   }
 
+  // A fixed center has two independently budgeted sides. Compact mode
+  // keeps at most one ordinary slot on either side; groups are atomic.
+  function planAdaptiveTabRows(widths,groups,boundary,available,title,tab,gap=3,returnReserve=0){
+    const lane=(sideTitle)=>Math.max(0,(available-sideTitle-2*gap)/2-2*gap);
+    const wideCap=Math.max(0,lane(title)-returnReserve/2),rightCap=Math.max(0,wideCap-tab-gap);
+    const full=planTabOverflow(widths,boundary,wideCap,rightCap,gap);
+    if(!full.hasSecondRow&&available>=title+2*gap+2*(tab+gap)+returnReserve){
+      return {...full,mode:"wide",title,topPlus:true};
+    }
+    const minTitle=32;
+    const compactTitle=available>=title+2*gap?title:minTitle;
+    const cap=lane(compactTitle);
+    // Prefer a title until it would prevent even one ordinary slot.
+    const chosenTitle=cap<tab&&compactTitle>minTitle?minTitle:compactTitle;
+    const compactCap=lane(chosenTitle);
+    const left=[],right=[];
+    if(compactCap>=tab){
+      for(let i=boundary-1;i>=0;i--)if(!groups[i]&&widths[i]<=compactCap){left.push(i);break;}
+      for(let i=boundary;i<widths.length;i++)if(!groups[i]&&widths[i]<=compactCap){right.push(i);break;}
+    }
+    const kept=new Set([...left,...right]);
+    const lower=widths.map((_,i)=>i).filter(i=>!kept.has(i));
+    // The plus has a guaranteed slot on the bottom whenever top space
+    // cannot contain it. Even an empty strip can use this minimal shelf.
+    const topPlus=lower.length===0&&available>=chosenTitle+2*gap+2*(tab+gap+2*gap);
+    return {mode:chosenTitle===minTitle&&compactCap<tab?"ultra":"compact",title:chosenTitle,
+      topLeft:left,topRight:right,lower,hasSecondRow:lower.length>0||!topPlus,topPlus};
+  }
+  function adaptiveAddressWidth(preferred,windowWidth,leftWithoutAddress,centerReserve,margin=8,forceCompact=false){
+    const budget=Math.max(0,Math.floor(windowWidth/2-leftWithoutAddress-centerReserve-margin));
+    const desired=forceCompact||budget<preferred?Math.round(preferred*.7):preferred;
+    return Math.max(36,Math.min(desired,budget));
+  }
+
+  function visibleLaneDropIndex(slots,left,right,x){
+    const visible=slots.map((s,index)=>({index,left:Math.max(left,s.left),right:Math.min(right,s.right)}))
+      .filter(s=>s.right>s.left);
+    if(!visible.length)return null;
+    for(const s of visible)if(x<(s.left+s.right)/2)return {index:s.index,before:true};
+    return {index:visible.at(-1).index,before:false};
+  }
+  function laneScrollVelocity(x,left,right,edge=32){
+    if(!(edge>0))return 0;
+    const l=Math.max(0,Math.min(1,(left+edge-x)/edge));
+    const r=Math.max(0,Math.min(1,(x-(right-edge))/edge));
+    return Math.round((r*r-l*l)*18);
+  }
+  let adaptiveHeightDirty=false,overflowRevealAnimation=null;
+  function mountLaneNodes(lane,nodes){
+    for(let i=0;i<nodes.length;i++){
+      const node=nodes[i],before=lane.children[i]||null;
+      if(before===node)continue;
+      if(node.isConnected&&typeof lane.moveBefore==="function"){
+        try{lane.moveBefore(node,before);continue;}catch{}
+      }
+      lane.insertBefore(node,before);
+    }
+  }
+  function applyStripPartition(plan){
+    if(leftLane.parentElement!==list)list.append(leftLane,rightLane,bottomLane);
+    const active=document.activeElement;
+    const selected=entries.get(browser.selectedTab)?.item,previousLane=selected?.closest(".oneplane-island-lane");
+    mountLaneNodes(leftLane,plan.topLeft.map(i=>stripOrderSnapshot[i]));
+    mountLaneNodes(rightLane,plan.topRight.map(i=>stripOrderSnapshot[i]));
+    mountLaneNodes(bottomLane,plan.lower.map(i=>stripOrderSnapshot[i]));
+    const changed=row.hasAttribute("data-op-overflow-row")!==plan.hasSecondRow;
+    row.toggleAttribute("data-op-overflow-row",plan.hasSecondRow);
+    row.toggleAttribute("data-op-adaptive-compact",plan.mode!=="wide");
+    row.toggleAttribute("data-op-bottom-plus",!plan.topPlus);
+    bottomLane.hidden=!plan.hasSecondRow;
+    if(changed){
+      overflowRevealAnimation?.cancel();overflowRevealAnimation=null;
+      if(plan.hasSecondRow&&row.hasAttribute("data-ready")&&cascadeState==="idle"&&!reducedMotion.matches&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0){
+        try{overflowRevealAnimation=bottomLane.animate([{opacity:0},{opacity:1}],{duration:160,easing:"ease-out"});}catch{}
+      }
+      adaptiveHeightDirty=true;contourKey=null;
+      // Real layout height changes once. Never repartition on hover.
+      scheduleGeometry();scheduleContour();
+    }
+    if(active&&list.contains(active)&&document.activeElement!==active)active.focus?.({preventScroll:true});
+    if(selected&&previousLane!==selected.closest(".oneplane-island-lane")&&!row.hasAttribute("data-op-home-open"))window.requestAnimationFrame(revealSelectedInStrip);
+  }
+  function placeStripOrder(order) {
+    if(row.hasAttribute("data-op-dragging"))return;
+    stripOrderSnapshot=order.slice();
+    const useLanes=row.hasAttribute("data-op-show-island");
+    if(useLanes){
+      if(leftLane.parentElement!==list)list.append(leftLane,rightLane,bottomLane);
+      if(row.hasAttribute("data-ready")&&hoverSupported()){
+        centerToolbar();
+      }else{
+        const tabWidth=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab"))||36;
+        const boundary=islandBoundary(order.map(n=>compactSlotWidth(n,tabWidth)),tabWidth+3);
+        applyStripPartition({topLeft:order.slice(0,boundary).map((_,i)=>i),
+          topRight:order.slice(boundary).map((_,i)=>i+boundary),lower:[],hasSecondRow:false,mode:"wide",topPlus:true});
+      }
+    }else{
+      mountLaneNodes(list,order);
+      leftLane.remove();rightLane.remove();bottomLane.remove();bottomLane.hidden=true;
+      if(row.hasAttribute("data-op-overflow-row")){adaptiveHeightDirty=true;contourKey=null;scheduleGeometry();}
+      for(const attr of ["data-op-overflow-row","data-op-adaptive-compact","data-op-bottom-plus"])row.removeAttribute(attr);
+    }
+  }
 
   // Keep native page actions and popup anchors, moving only their actual nodes.
   const actions = document.createXULElement("hbox");
@@ -926,6 +1048,7 @@ function installTabStrip() {
   const actionHomes = new Map();
   function movePageActions() {
     if (root.hasAttribute("customizing")) return;
+    if(window.innerWidth<=700){if(actions.isConnected||actionHomes.size)restorePageActions();return;}
     if (actions.parentElement !== target || actions !== target.lastElementChild) {
       target.append(actions);
     }
@@ -1060,9 +1183,9 @@ function installTabStrip() {
   }
   function addressWidths() {
     const base = parseFloat(window.getComputedStyle(url).getPropertyValue("--op-url")) || 180;
-    const compact = (url.hasAttribute("data-op-empty") || url.hasAttribute("data-op-home")) ? 0 : (addressCompactWidth || base);
     const bar = addressBar();
     const anchor = url.getBoundingClientRect();
+    const compact = (url.hasAttribute("data-op-empty") || url.hasAttribute("data-op-home")) ? 0 : (anchor.width || addressCompactWidth || base);
     const left = anchor.left + (addressAnchor?.dx || 0);
     const top = anchor.top + (addressAnchor?.dy || 0);
     url.style.setProperty("--op-url-anchor-left", left.toFixed(2) + "px");
@@ -1084,7 +1207,7 @@ function installTabStrip() {
         right = Math.min(right, box.left);
       }
     }
-    const expanded = Math.max(compact, right - Math.max(0, left) - 6);
+    const expanded = Math.max(1, Math.min(window.innerWidth-12, right - Math.max(0, left) - 6));
     url.style.setProperty("--op-url-expanded-width", expanded.toFixed(2) + "px");
     url.style.setProperty("--op-url-compact-width", Math.max(1, compact).toFixed(2) + "px");
     return { compact, expanded };
@@ -1323,7 +1446,7 @@ function installTabStrip() {
     row.inert=false;
     cancelCascadeAnimations();
     setBookmarkWave(null);
-    if(!dead){refreshIndicator();scheduleContour();}
+    if(!dead){refreshIndicator();scheduleGeometry();scheduleContour();}
   }
   function settleHidden(generation){
     if(dead||generation!==cascadeGeneration)return;
@@ -3754,6 +3877,7 @@ function installTabStrip() {
   let geometryFrame = 0;
   let geometryObserver = null;
   let centering=false;
+  const adaptiveGeometryPrefs={observe(){schedule();scheduleGeometry();}};
   // The plus follows the occupied right lane, not the symmetric row's
   // far edge. Keep the existing expansion reserve in Expand mode.
   function rightPlusOffset(widths, expansion=0){
@@ -3768,12 +3892,14 @@ function installTabStrip() {
       // Native window buttons and all left/right controls consume edge space.
       let left = Math.max(0, targetRect.left);
       let right = Math.max(0, window.innerWidth - targetRect.right);
+      let addressExtent=0;
       for (const child of target.children) {
         if (centerIds.has(child.id) || child.localName === "toolbarspring") continue;
         const box = child.getBoundingClientRect();
         if (!box.width) continue;
         const style = window.getComputedStyle(child);
         const extent = box.width + (parseFloat(style.marginLeft) || 0) + (parseFloat(style.marginRight) || 0);
+        if(child===url){addressExtent=extent;continue;}
         if (leftIds.has(child.id)) left += extent;
         else right += extent;
       }
@@ -3782,35 +3908,55 @@ function installTabStrip() {
         if (node.style.getPropertyValue(name) !== next) node.style.setProperty(name, next);
       };
       const rowWidth = row.getBoundingClientRect().width;
-      const tabWidth = parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab")) || 36;
-      const count = Number(row.style.getPropertyValue("--op-tab-count")) || 0;
-      const groupOverhead = Number(row.style.getPropertyValue("--op-split-count")) * 25 || 0;
-      const naturalTabsWidth = count ? count * (tabWidth + 3) - 3 + groupOverhead : 0;
-      // Do not count the new-tab button or the expansion reserve in the center.
-      // When space runs out, center only the visible tab viewport as far as possible.
-      const collapsedTabsWidth = Math.min(naturalTabsWidth, Math.max(0, rowWidth - tabWidth - 3));
-      const trailingReserve = Math.max(0, rowWidth - collapsedTabsWidth);
-      // In Island Mode the row has symmetric halves around the fixed
-      // center. Neither the hovered title nor the scroll positions affect it.
-      const wantsIsland = row.hasAttribute("data-op-show-island");
-      const dragRoom=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-window-drag-room"))||16;
-      const available = Math.max(0,2*Math.min(window.innerWidth/2-left,window.innerWidth/2-right)-8-2*dragRoom);
+      const style=window.getComputedStyle(row);
+      const tabWidth=parseFloat(style.getPropertyValue("--op-tab"))||36;
+      const openWidth=parseFloat(style.getPropertyValue("--op-tab-open"))||180;
+      const dragRoom=parseFloat(style.getPropertyValue("--op-window-drag-room"))||4;
+      const wantsIsland=row.hasAttribute("data-op-show-island");
       const iconHome=row.hasAttribute("data-op-home-icon");
-      const minIslandRoom = 32+2*(tabWidth+9);
-      const compactTitle=wantsIsland&&!iconHome&&available<100+2*(tabWidth+9);
-      row.toggleAttribute("data-op-island-compact",compactTitle);
-      const tight = wantsIsland && available < minIslandRoom;
-      row.toggleAttribute("data-op-island-tight",tight);
-      const centered = wantsIsland && !tight;
-      if (centered) {
-        const titleWidth=iconHome||compactTitle?32:Math.max(100,Math.min(180,available-2*(tabWidth+9)));
-        const laneWidth=lane=>Array.from(lane.children).reduce((sum,n)=>sum+compactSlotWidth(n,tabWidth)+3,6);
-        const expandReserve=iconHome&&row.getAttribute("data-op-hover-mode")==="expand"?Math.max(0,(parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab-open"))||180)-tabWidth):0;
-        const half=Math.max(laneWidth(leftLane),laneWidth(rightLane)+tabWidth+3,tabWidth+9)+expandReserve;
-        setLength(row,"--op-right-plus-offset",rightPlusOffset(Array.from(rightLane.children,n=>compactSlotWidth(n,tabWidth)),expandReserve));
-        setLength(row,"--op-island-width",titleWidth);
-        setLength(row,"--op-island-row-width",Math.min(available,titleWidth+6+2*half));
-      }else row.style.removeProperty("--op-right-plus-offset");
+      const frozen=row.hasAttribute("data-op-dragging")||row.hasAttribute("data-op-island-incoming")||row.hasAttribute("data-op-lane-drag")||cascadeState==="hiding"||cascadeState==="showing";
+      if(!frozen){
+        const preferred=prefs.getIntPref("zen.oneplane.address-width",180);
+        const natural=stripOrderSnapshot.reduce((n,node)=>n+compactSlotWidth(node,tabWidth)+3,0)+(iconHome?32:180)+tabWidth+18;
+        const fullBudget=2*Math.min(window.innerWidth/2-left-preferred-8,window.innerWidth/2-right)-8-2*dragRoom;
+        const compactAddress=window.innerWidth<900||(fullBudget<natural&&left+preferred+8>=right);
+        const desired=adaptiveAddressWidth(preferred,window.innerWidth,left,16+dragRoom+4,8,compactAddress);
+        url.toggleAttribute("data-op-address-icon",desired<80);
+        if(url.style.getPropertyValue("--op-url")!==desired+"px"){
+          setLength(url,"--op-url",desired);
+          addressCompactWidth=0;addressAnchor=null;alignAddressStart();
+        }
+        addressExtent=url.hasAttribute("data-op-empty")||url.hasAttribute("data-op-home")?0:
+          url.getBoundingClientRect().width+(parseFloat(window.getComputedStyle(url).marginLeft)||0)+(parseFloat(window.getComputedStyle(url).marginRight)||0);
+      }
+      left+=addressExtent;
+      const naturalTabsWidth=stripOrderSnapshot.reduce((n,node)=>n+compactSlotWidth(node,tabWidth)+3,0);
+      const collapsedTabsWidth=Math.min(naturalTabsWidth,Math.max(0,rowWidth-tabWidth-3));
+      const trailingReserve=Math.max(0,rowWidth-collapsedTabsWidth);
+      const available=Math.max(0,2*Math.min(window.innerWidth/2-left,window.innerWidth/2-right)-8-2*dragRoom);
+      const centered=wantsIsland;
+      if(centered&&!frozen){
+        row.removeAttribute("data-op-island-tight");
+        const widths=stripOrderSnapshot.map(n=>compactSlotWidth(n,tabWidth));
+        const groups=stripOrderSnapshot.map(n=>n.classList.contains("oneplane-split-group"));
+        const boundary=islandBoundary(widths,tabWidth+3);
+        const title=iconHome?32:Math.max(100,Math.min(180,available-2*(tabWidth+9)));
+        const layout=planAdaptiveTabRows(widths,groups,boundary,available,title,tabWidth,3,row.hasAttribute("data-op-adaptive-compact")?12:0);
+        applyStripPartition(layout);
+        row.toggleAttribute("data-op-island-compact",!iconHome&&layout.title===32);
+        const widthOf=indices=>indices.reduce((n,i)=>n+widths[i]+3,6);
+        const expandReserve=iconHome&&layout.mode==="wide"?Math.max(0,openWidth-tabWidth):0;
+        const half=Math.max(widthOf(layout.topLeft),widthOf(layout.topRight)+(layout.topPlus?tabWidth+3:0),tabWidth+9)+expandReserve;
+        const topWidth=layout.mode==="wide"?Math.min(available,layout.title+6+2*half):Math.max(layout.title+6,available);
+        const bottomBudget=Math.max(tabWidth+6,window.innerWidth-24);
+        const lowerNatural=widthOf(layout.lower)+2*(tabWidth+3)+(iconHome?Math.max(0,openWidth-tabWidth):0);
+        const bottomWidth=Math.min(bottomBudget,Math.max(3*tabWidth+12,lowerNatural));
+        setLength(row,"--op-island-width",layout.title);
+        setLength(row,"--op-island-row-width",Math.max(layout.title+6,topWidth));
+        setLength(row,"--op-right-plus-offset",rightPlusOffset(layout.topRight.map(i=>widths[i]),expandReserve));
+        setLength(row,"--op-overflow-width",bottomWidth);
+        setLength(row,"--op-bottom-open",Math.max(tabWidth,Math.min(openWidth,bottomWidth-2*(tabWidth+3)-6)));
+      }else if(!centered)row.style.removeProperty("--op-right-plus-offset");
       const bias=toolbarCenterBias(left,right,trailingReserve,centered);
       setLength(leftSpacer,"--op-center-bias",bias.left);
       setLength(rightSpacer,"--op-center-bias",bias.right);
@@ -3827,8 +3973,9 @@ function installTabStrip() {
       centerToolbar();
       // Keep the earlier switch guard for vertical geometry and mask,
       // not horizontal compensation. Old bias + new anchor = visible jump.
-      if(toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
+      if(!adaptiveHeightDirty&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
          window.performance.now()<panelSwitchUntil)return;
+      adaptiveHeightDirty=false;
       const setLength=(node,name,value)=>{
         const next=Math.max(0,Math.round(value))+"px";
         if(node.style.getPropertyValue(name)!==next)node.style.setProperty(name,next);
@@ -3951,8 +4098,7 @@ function installTabStrip() {
   function hoverSupported() {
     return !dead && root.hasAttribute("oneplane-active") &&
       !root.hasAttribute("customizing") && root.getAttribute("inDOMFullscreen")!=="true" &&
-      root.getAttribute("inFullscreen")!=="true" && !root.hasAttribute("popup-window") &&
-      window.innerWidth >= 900;
+      root.getAttribute("inFullscreen")!=="true" && !root.hasAttribute("popup-window");
   }
   function clearHover() {
     pointerInside = false;
@@ -3995,9 +4141,19 @@ function installTabStrip() {
   function onWindowGeometryChanged(){
     if(dead)return;
     if(!row.hasAttribute("data-op-dragging")&&hoverTab)clearTabHover();
-    if(!nativeInlineOpen(addressBar())&&!addressTransition&&!addressSettling&&cascadeState!=="idle")resetTabCascade();
+    if(addressTransition){
+      const closing=addressTransition.name==="closing-wave";clearAddressAnimation();
+      if(closing)finishDismissUrl();
+    }
+    if(cascadeState==="hiding"||cascadeState==="showing"||!nativeInlineOpen(addressBar())&&cascadeState!=="idle"){
+      resetTabCascade();
+      if(nativeInlineOpen(addressBar())){row.inert=true;settleHidden(++cascadeGeneration);}
+    }
+    movePageActions();
+    centerToolbar();
     onCompactChanged();
     schedule();
+    window.requestAnimationFrame(revealSelectedInStrip);
   }
   function onCompactChanged() {
     hub.onMode();
@@ -4128,6 +4284,11 @@ function installTabStrip() {
     return Array.from(group?.tabs || []).filter(validNativeTab);
   }
   function dropTarget(event) {
+    if(useLaneDrop()){
+      const tab=readDraggedTab(event),owner=tabOwner(tab),group=owner?.[DRAG_CONTROLLER]?.group();
+      const source=owner===window?(group?splitEntries.get(group)?.box:entries.get(tab)?.item):null;
+      return laneDropTarget(laneAtPoint({x:event.clientX,y:event.clientY}),event.clientX,isStripNode(source)?source:null);
+    }
     const children = stripNodes();
     if (!children.length) return null;
     let element = event.target?.closest?.(".oneplane-split-group, .oneplane-tab");
@@ -4176,6 +4337,7 @@ function installTabStrip() {
     return { element: node, native: group || tab, group, tab };
   }
   function clearLiveDrag() {
+    clearLaneDrag();
     liveDragTarget = null;
     for (const node of dragShifted) {
       node.style.removeProperty("--op-drag-x");
@@ -4496,10 +4658,97 @@ function installTabStrip() {
     if (atEdge || event.target === window || event.target === document || event.target === root)
       setDragImageMode("outside",event);
   }
+  // Use painted lane rectangles, not offscreen native-order slots.
+  function useLaneDrop(){
+    return row.hasAttribute("data-op-overflow-row")||row.hasAttribute("data-op-lane-drag")||
+      (hasCenteredIsland()?[leftLane,rightLane]:[list]).some(l=>l.clientWidth>0&&l.scrollWidth>l.clientWidth+1);
+  }
+  function laneAtPoint(point){
+    const lanes=hasCenteredIsland()?[leftLane,rightLane,...(bottomLane.hidden?[]:[bottomLane])]:[list];
+    return lanes.find(lane=>{
+      const b=lane.getBoundingClientRect();
+      return b.width>0&&b.height>0&&point.y>=b.top&&point.y<b.bottom&&point.x>=b.left-5&&point.x<=b.right+5;
+    })||null;
+  }
+  function laneDropTarget(lane,x,source=null){
+    if(!lane)return null;
+    const clip=lane.getBoundingClientRect(),nodes=laneNodes(lane).filter(n=>n!==source);
+    const slots=nodes.map(node=>({node,rect:node.getBoundingClientRect()}));
+    const picked=visibleLaneDropIndex(slots.map(s=>({left:s.rect.left,right:s.rect.right})),clip.left,clip.right,x);
+    if(picked)return {...nativeSlot(slots[picked.index].node),before:picked.before};
+    if(!nodes.length){
+      const all=stripNodes().filter(n=>n!==source);
+      if(!all.length)return null;
+      const tabWidth=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab"))||36;
+      const boundary=islandBoundary(all.map(n=>compactSlotWidth(n,tabWidth)),tabWidth+3);
+      if(lane===leftLane&&all[boundary])return {...nativeSlot(all[boundary]),before:true};
+      if(lane===rightLane&&all[boundary-1])return {...nativeSlot(all[boundary-1]),before:false};
+      return {...nativeSlot(all.at(-1)),before:false};
+    }
+    return null;
+  }
+  let laneDragFrame=0,laneDragPoint=null,laneDragSource=null,laneDragViewport=null,laneDragLast=0;
+  function stopLaneAutoscroll(){
+    if(laneDragFrame)window.cancelAnimationFrame(laneDragFrame);
+    laneDragFrame=0;laneDragPoint=null;laneDragSource=null;laneDragViewport=null;laneDragLast=0;
+  }
+  function paintLaneDrop(dest){
+    clearDropMarker();
+    if(dest?.native){dropMarker=dest.element;dropMarker.setAttribute(dest.before?"data-op-drop-before":"data-op-drop-after","true");}
+    liveDragTarget=dest;
+  }
+  function laneAutoStep(now){
+    laneDragFrame=0;
+    const lane=laneDragViewport,point=laneDragPoint;
+    if(dead||!lane||!point||!row.hasAttribute("data-op-lane-drag"))return;
+    const clip=lane.getBoundingClientRect(),edge=Math.min(42,clip.width/3);
+    const velocity=laneScrollVelocity(point.x,clip.left,clip.right,edge);
+    const dt=laneDragLast?Math.min(32,now-laneDragLast):16;laneDragLast=now;
+    if(!velocity)return;
+    const before=lane.scrollLeft;
+    lane.scrollLeft+=velocity*dt/16;
+    if(Math.abs(lane.scrollLeft-before)>.1){
+      paintLaneDrop(laneDropTarget(lane,point.x,laneDragSource));
+      laneDragFrame=window.requestAnimationFrame(laneAutoStep);
+    }
+  }
+  function clearLaneDrag(){
+    stopLaneAutoscroll();
+    const active=row.hasAttribute("data-op-lane-drag");
+    row.removeAttribute("data-op-lane-drag");
+    if(active&&!dead)scheduleGeometry();
+    dragNode?.removeAttribute("data-op-lane-ghost");
+    if(active&&dragImageMode==="inline")hideGhost();
+  }
+  function showLaneGhost(event,pull=0){
+    if(!dragNode)return;
+    makeDragGhost();
+    if(!dragGhost||!dragGhostBody)return;
+    dragNode.setAttribute("data-op-lane-ghost","true");
+    dragGhost.hidden=false;
+    positionGhost(event.clientX,event.clientY);
+    dragGhostBody.style.transform=pull?"scale("+Math.max(.12,1-.8*pull)+")":"";
+  }
+  function previewLaneDrag(event,tab,entry){
+    if(dragShifted.size||row.hasAttribute("data-op-live-drag"))clearLiveDrag();
+    row.setAttribute("data-op-lane-drag","true");
+    const local=tabOwner(tab)===window,source=local&&isStripNode(entry)?entry:null;
+    const lane=laneAtPoint({x:event.clientX,y:event.clientY});
+    const dest=laneDropTarget(lane,event.clientX,source);
+    paintLaneDrop(dest);
+    if(local&&entry===dragNode&&dragImageMode==="inline")showLaneGhost(event);
+    if(lane&&lane.scrollWidth>lane.clientWidth+1){
+      laneDragViewport=lane;laneDragPoint={x:event.clientX,y:event.clientY};laneDragSource=source;
+      const b=lane.getBoundingClientRect();
+      if(!laneDragFrame&&laneScrollVelocity(event.clientX,b.left,b.right,Math.min(42,b.width/3))){laneDragLast=0;laneDragFrame=window.requestAnimationFrame(laneAutoStep);}
+    }else stopLaneAutoscroll();
+    return dest;
+  }
   function previewStripDrag(event, tab) {
     const owner = tabOwner(tab);
     const group = owner?.[DRAG_CONTROLLER]?.group();
     const entry = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
+    if(useLaneDrop())return previewLaneDrag(event,tab,entry);
     if(owner!==window && row.hasAttribute("data-op-show-island") &&
         !row.hasAttribute("data-op-island-incoming")){
       row.setAttribute("data-op-island-incoming","true");
@@ -4598,6 +4847,7 @@ function installTabStrip() {
   function onStripDragLeave(event) {
     if (event.relatedTarget instanceof Node && row.contains(event.relatedTarget)) return;
     if (toolbarContainsPoint(event.clientX,event.clientY)) return;
+    stopLaneAutoscroll();
     // The window capture listener owns pull and image transitions.
     // Do not erase a group's visual position mid-extraction.
     if (!(groupPullLayout && dragImageMode === "inline")) clearLiveDrag();
@@ -4628,7 +4878,8 @@ function installTabStrip() {
     const navHeight=navbar?.getBoundingClientRect().height||0;
     // Reserve the actual expanded toolbar even while its compact height
     // is still animating. Do not include the decorative fade.
-    return tabReturnZone(event.clientX,event.clientY,rect,Math.max(rect.height,measured,navHeight,36)+4);
+    const stripBottom=row.getBoundingClientRect().bottom;
+    return tabReturnZone(event.clientX,event.clientY,rect,Math.max(rect.height,measured,navHeight,stripBottom-rect.top,36)+4);
   }
   function holdToolbarForReturn(){
     toolbarWrapper.setAttribute("oneplane-drag-hold","true");
@@ -4656,8 +4907,8 @@ function installTabStrip() {
     if (local && dragNode) {
       dragLastPoint = {x:event.clientX,y:event.clientY};
       if (within && dragImageMode !== "content" && dragImageMode !== "outside")
-        dragEdge = toolbarWrapper.getBoundingClientRect().bottom;
-      const p = Math.max(0,Math.min(1,(event.clientY-(dragEdge-15))/PULL_DISTANCE));
+        dragEdge = Math.max(toolbarWrapper.getBoundingClientRect().bottom,row.getBoundingClientRect().bottom,navbar?.getBoundingClientRect().bottom||0);
+      const p = within?0:Math.max(0,Math.min(1,(event.clientY-dragEdge)/PULL_DISTANCE));
       const lateralExit = event.clientX < toolbarWrapper.getBoundingClientRect().left ||
                           event.clientX > toolbarWrapper.getBoundingClientRect().right;
       const threshold = dragImageMode === "content" || dragImageMode === "outside" ? .72 : .96;
@@ -4675,6 +4926,10 @@ function installTabStrip() {
       }
       if (p === 0) dragReentry = false;
       if (p > 0 && !dragReentry) {
+        if(useLaneDrop()){
+          clearLiveDrag();clearDropMarker();setPull(p);row.setAttribute("data-op-lane-drag","true");showLaneGhost(event,p);
+          return;
+        }
         if (draggedGroup) captureGroupPull(event);
         if (groupPullLayout) row.setAttribute("data-op-group-pull","true");
         else clearLiveDrag();
@@ -4755,6 +5010,7 @@ function installTabStrip() {
     const search = dragSearch;
     dragSearch = null; pointerSearch = null;
     clearGroupPull();
+    dragNode?.removeAttribute("data-op-lane-ghost");
     dragNode?.removeAttribute("data-op-detached");
     dragNode?.removeAttribute("data-op-drag-follow");
     dragNode?.removeAttribute("data-op-pulling");
@@ -4865,6 +5121,10 @@ function installTabStrip() {
     const group = source?.group();
     if (owner === window && dragNode) { setDragImageMode("inline",event); setPull(0); }
     const dest = previewStripDrag(event, tab) || dropTarget(event);
+    if(!dest?.native){
+      if(owner===window)source?.markHandled();
+      clearLiveDrag();clearDropMarker();return;
+    }
     row.setAttribute("data-op-drag-commit", "true");
     try {
       if (group) {
@@ -5044,7 +5304,7 @@ function installTabStrip() {
   }
   function indicatorTarget() {
     const s=row.getBoundingClientRect();
-    if(s.width<=0||s.height<=0)return null;
+    if(s.width<=0||s.height<=0||row.hasAttribute("data-op-lane-drag"))return null;
     const dragging=Boolean(dragNode && row.hasAttribute("data-op-dragging"));
     const homeOpen=row.hasAttribute("data-op-home-open");
     const item=dragging?dragNode:indicatorHover && list.contains(indicatorHover)?
@@ -5280,10 +5540,10 @@ function installTabStrip() {
     }, hoverDelay());
   }
   function pointOverTabStrip(event) {
-    const a = list.getBoundingClientRect();
-    return a.width > 0 && a.height > 0 &&
-      event.clientX >= a.left - 3 && event.clientX <= a.right + 3 &&
-      event.clientY >= a.top - 2 && event.clientY <= a.bottom + 2;
+    return [list,...(bottomLane.hidden?[]:[bottomLane])].some(l=>{
+      const a=l.getBoundingClientRect();
+      return a.width>0&&a.height>0&&event.clientX>=a.left-3&&event.clientX<=a.right+3&&event.clientY>=a.top-2&&event.clientY<=a.bottom+2;
+    });
   }
   function releaseIndicatorHover() {
     if(!indicatorHover||indicatorReturnTimer)return;
@@ -5461,7 +5721,8 @@ function installTabStrip() {
     handle.addEventListener("keydown", event => {
       if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
       const before = event.key === "ArrowLeft";
-      const other = before ? box.previousElementSibling : box.nextElementSibling;
+      const slots=stripNodes(),index=slots.indexOf(box);
+      const other=slots[index+(before?-1:1)];
       if (!other) return;
       const native = [...splitEntries].find(([, entry]) => entry.box === other)?.[0] || tabFromItem(other);
       if (!native) return;
@@ -5541,6 +5802,7 @@ function installTabStrip() {
       entry.item.toggleAttribute("data-muted", muted);
       entry.audio.title = muted ? "Tab muted" : audible ? "Playing audio" : "";
       entry.button.setAttribute("aria-selected", String(selected));
+      entry.button.title=label;
       entry.button.setAttribute("aria-label", label + (split ? ", Split View" : "") + (muted ? ", muted" : audible ? ", playing audio" : ""));
       if (entry.title.textContent !== label) entry.title.textContent = label;
       const src = favicon(tab);
@@ -5577,7 +5839,7 @@ function installTabStrip() {
     // Count each actual visible tab, including split members, but never
     // the group wrapper, handle or plus. Use rendered order, not native
     // indexes, because a split can collect non-adjacent native tabs.
-    const visualTabs = Array.from(list.querySelectorAll(".oneplane-tab"));
+    const visualTabs=stripNodes().flatMap(n=>n.classList.contains("oneplane-tab")?[n]:Array.from(n.querySelectorAll(".oneplane-tab")));
     row.toggleAttribute("data-op-small-strip", visualTabs.length <= 3);
     for (let i = 0; i < visualTabs.length; i++) {
       visualTabs[i].toggleAttribute("data-op-first", i === 0);
@@ -5645,6 +5907,7 @@ function installTabStrip() {
     if (dead) return;
     dead = true;
     destroyHome();
+    overflowRevealAnimation?.cancel();overflowRevealAnimation=null;
     resetTabCascade();
     if (frame) window.cancelAnimationFrame(frame);
     if (dragCommitFrame) window.cancelAnimationFrame(dragCommitFrame);
@@ -5693,12 +5956,13 @@ function installTabStrip() {
     splitZone.removeEventListener("dragover", onSplitDragOver);
     splitZone.removeEventListener("drop", onSplitDrop);
     splitZone.remove();
-    for(const lane of [list,leftLane,rightLane]){
+    for(const lane of [list,leftLane,rightLane,bottomLane]){
       lane.removeEventListener("scroll",refreshIndicator);
       lane.removeEventListener("wheel",onLaneWheel);
     }
     islandTextAnimation?.cancel();
     prefs.removeObserver("zen.oneplane.hover-mode",hoverModePreferenceObserver);
+    for(const key of ["tab-width","expanded-tab-width","address-width"])prefs.removeObserver("zen.oneplane."+key,adaptiveGeometryPrefs);
     prefs.removeObserver("zen.oneplane.show-center-island",hoverModePreferenceObserver);
     prefs.removeObserver("zen.oneplane.tab-indicator", indicatorPreferenceObserver);
     window.removeEventListener("pointermove", trackTabPointer, true);
@@ -5711,6 +5975,8 @@ function installTabStrip() {
     try { browser.removeProgressListener(progressListener); } catch {}
     url.removeAttribute("data-op-empty");
     url.removeAttribute("data-op-url-ready");
+    url.removeAttribute("data-op-address-icon");compactSearch.remove();
+    url.style.removeProperty("--op-url");
     for (const name of ["--op-url-expanded-width", "--op-url-compact-width", "--op-url-anchor-left", "--op-url-anchor-top", "--op-url-header-height"]) url.style.removeProperty(name);
     toolbarWrapper?.style.removeProperty("--op-measured-toolbar-height");
     surface.remove();
@@ -5757,7 +6023,7 @@ function installTabStrip() {
   }
 
   try {
-    url.after(row);
+    url.after(row);url.append(compactSearch);
     hub.ensure();
     releaseDragEngine=installDragEngine();
     try{releaseWorkspaceLinkScope=installWorkspaceLinkScope();}catch(error){console.warn("[OnePlane] Workspace link isolation:",error);}
@@ -5792,11 +6058,12 @@ function installTabStrip() {
     applyHoverMode();
     sync();
     try { browser.addProgressListener(progressListener); } catch {}
-    for(const lane of [list,leftLane,rightLane]){
+    for(const lane of [list,leftLane,rightLane,bottomLane]){
       lane.addEventListener("scroll",refreshIndicator,{passive:true});
       lane.addEventListener("wheel",onLaneWheel,{passive:false});
     }
     prefs.addObserver("zen.oneplane.hover-mode",hoverModePreferenceObserver);
+    for(const key of ["tab-width","expanded-tab-width","address-width"])prefs.addObserver("zen.oneplane."+key,adaptiveGeometryPrefs);
     prefs.addObserver("zen.oneplane.show-center-island",hoverModePreferenceObserver);
     prefs.addObserver("zen.oneplane.tab-indicator", indicatorPreferenceObserver);
     window.addEventListener("pointermove", trackTabPointer, true);

@@ -1,7 +1,7 @@
     #nav-bar-customization-target > #urlbar-container {
       flex: 0 0 var(--op-url) !important;
       width: var(--op-url) !important;
-      min-width: 100px !important;
+      min-width: min(100px,var(--op-url)) !important;
       max-width: none !important;
       margin-inline: 4px !important;
       padding-block: 0 !important;
@@ -253,3 +253,22 @@
       min-width: 0px !important;
     }
 
+    @media(max-width:520px){
+      #urlbar-container #urlbar:not([breakout-extend],[zen-floating-urlbar="true"],:popover-open) #zen-copy-url-button {display:none!important;}
+      #urlbar-container #urlbar:not([breakout-extend],[zen-floating-urlbar="true"],:popover-open) .urlbar-input-container {padding-inline:2px!important;}
+    }
+
+    #nav-bar-customization-target > #urlbar-container[data-op-address-icon] {position:relative!important;}
+    #oneplane-compact-search {
+      display:none!important;position:absolute;inset:2px 0;z-index:2;
+      align-items:center;justify-content:center;appearance:none;
+      border:0;border-radius:var(--op-url-radius);background:var(--op-url-surface);
+      color:inherit;cursor:pointer;-moz-window-dragging:no-drag;
+    }
+    #urlbar-container[data-op-address-icon]:not([data-op-empty],[data-op-home]):not(:has(#urlbar:is([focused],[open],[breakout-extend],[zen-floating-urlbar],:popover-open))) > #oneplane-compact-search {
+      display:flex!important;
+    }
+    #urlbar-container[data-op-address-icon]:not([data-op-empty],[data-op-home]):not(:has(#urlbar:is([focused],[open],[breakout-extend],[zen-floating-urlbar],:popover-open))) > #urlbar {
+      opacity:0!important;pointer-events:none!important;
+    }
+    #oneplane-compact-search > svg {width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;}

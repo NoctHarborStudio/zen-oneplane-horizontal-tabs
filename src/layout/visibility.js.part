@@ -75,8 +75,7 @@
   function hoverSupported() {
     return !dead && root.hasAttribute("oneplane-active") &&
       !root.hasAttribute("customizing") && root.getAttribute("inDOMFullscreen")!=="true" &&
-      root.getAttribute("inFullscreen")!=="true" && !root.hasAttribute("popup-window") &&
-      window.innerWidth >= 900;
+      root.getAttribute("inFullscreen")!=="true" && !root.hasAttribute("popup-window");
   }
   function clearHover() {
     pointerInside = false;
@@ -119,9 +118,19 @@
   function onWindowGeometryChanged(){
     if(dead)return;
     if(!row.hasAttribute("data-op-dragging")&&hoverTab)clearTabHover();
-    if(!nativeInlineOpen(addressBar())&&!addressTransition&&!addressSettling&&cascadeState!=="idle")resetTabCascade();
+    if(addressTransition){
+      const closing=addressTransition.name==="closing-wave";clearAddressAnimation();
+      if(closing)finishDismissUrl();
+    }
+    if(cascadeState==="hiding"||cascadeState==="showing"||!nativeInlineOpen(addressBar())&&cascadeState!=="idle"){
+      resetTabCascade();
+      if(nativeInlineOpen(addressBar())){row.inert=true;settleHidden(++cascadeGeneration);}
+    }
+    movePageActions();
+    centerToolbar();
     onCompactChanged();
     schedule();
+    window.requestAnimationFrame(revealSelectedInStrip);
   }
   function onCompactChanged() {
     hub.onMode();

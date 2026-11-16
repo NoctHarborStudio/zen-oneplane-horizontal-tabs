@@ -1,3 +1,11 @@
+## 0.2.0-preview.48 — Adaptive centered overflow
+
+- Keep the wide OnePlane layout and fixed central Home. On overflow keep at most one ordinary tab per upper lane; all other tabs and intact Split View groups occupy a centered, independently scrollable lower lane. In the smallest mode keep only Home above. Reserve the lower plus slot and return to one row with a 12px hysteresis margin.
+- Size the native address from measured edge controls, reduce by 30% when constrained, and expose compact search below an 80px anchor. Remove the 900px activation gate. Narrow auxiliary controls collapse; native menu and keyboard commands remain available.
+- Crowded-strip drag uses clipped, row-aware hit testing and edge autoscroll; one ghost follows the pointer. Invalid toolbar-gap drops cancel instead of unsplitting. Bunny extraction begins below the measured toolbar.
+- Include the lower lane in toolbar height, bookmarks and Unified Contour. Sync shared Magnetic Bookmarks with Zen Refined preview.26; preserve the latest Home changes.
+- Pure allocation, address sizing and clipped drop-target regressions passed in a JS harness. Native Gecko/Windows, mixed DPI and Sine validation remain pending.
+
 ## 0.2.0-preview.47 — Home search open/close motion and Gmail icon
 
 - Keep the original-size search header visible while waiting for actual native results; reveal with a bounded 340ms height animation and result fade. Handle late result-height changes.

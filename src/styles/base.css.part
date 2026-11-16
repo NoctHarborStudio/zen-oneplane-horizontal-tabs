@@ -12,11 +12,14 @@
   initial-value: 0;
 }
 /* OnePlane — native toolbar tab view. No fixed-position overlay. */
-#oneplane-hub-button, #oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss, #oneplane-center-start, #oneplane-center-end, #oneplane-toolbar-surface, #oneplane-split-drop { display: none !important; }
-@media (min-width: 900px) {
+ #oneplane-compact-search, #oneplane-hub-button, #oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss, #oneplane-center-start, #oneplane-center-end, #oneplane-toolbar-surface, #oneplane-split-drop { display: none !important; }
+@media (min-width: 0px) {
   :root[oneplane-active="true"]:not([customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window]):has(#nav-bar-customization-target > #oneplane-tabs[data-ready="true"]) {
     --op-height: 34px;
     --op-window-drag-room: 16px;
+    @media(max-width:760px){--op-window-drag-room:8px;}
+    @media(max-width:480px){--op-window-drag-room:4px;}
+    --op-top-row-height:calc(var(--op-height) + 18px);
     --op-tab: 36px;
     --op-tab-open: 180px;
     --op-url: 180px;
@@ -75,6 +78,7 @@
     #zen-sidebar-splitter { display: none !important; }
 
     #nav-bar {
+      overflow:visible!important;
       min-height:calc(var(--op-height) + 18px) !important;
     }
     #nav-bar-customization-target {
@@ -151,4 +155,28 @@
     #PersonalToolbar #PlacesToolbarItems {
       justify-content: center !important;
       flex: 1 1 auto !important;
+    }
+    /* Keep native captions and the essential navigation controls reachable.
+       Additional toolbar widgets remain in their native toolbar and are
+       available through the browser menu/extension panel in narrow mode. */
+    @media(max-width:700px){
+      #nav-bar-customization-target > :is(#sidebar-button,#sidebar-toggle-button,#forward-button,#home-button) {display:none!important;}
+      #nav-bar-customization-target > toolbarbutton:not(#back-button,#stop-reload-button,#reload-button,#unified-extensions-button,#PanelUI-menu-button,#nav-bar-overflow-button) {display:none!important;}
+    }
+    @media(max-width:520px){
+      #nav-bar-customization-target > :is(#stop-reload-button,#reload-button,#unified-extensions-button,#nav-bar-overflow-button) {display:none!important;}
+      #nav-bar .titlebar-buttonbox > toolbarbutton {min-width:28px!important;width:28px!important;padding-inline:0!important;}
+    }
+    @media(max-width:400px){
+      #nav-bar-customization-target > #back-button {display:none!important;}
+    }
+    #nav-bar:has(#oneplane-tabs[data-op-overflow-row]){
+      --op-overflow-extra:var(--op-top-row-height);
+      min-height:calc(2 * var(--op-top-row-height))!important;
+    }
+    #nav-bar:has(#oneplane-tabs[data-op-overflow-row]) #nav-bar-customization-target > :not(#oneplane-tabs){
+      margin-block-end:var(--op-overflow-extra)!important;
+    }
+    #nav-bar:has(#oneplane-tabs[data-op-overflow-row]) > :not(#nav-bar-customization-target):not(:has(#nav-bar-customization-target)){
+      margin-block-end:var(--op-overflow-extra)!important;
     }

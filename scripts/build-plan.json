@@ -22,6 +22,10 @@
       "kind": "esm-inline"
     },
     {
+      "path": "src/algorithms/tab-overflow.mjs",
+      "kind": "esm-inline"
+    },
+    {
       "path": "src/toolbar/strip-order.js.part",
       "kind": "section"
     },

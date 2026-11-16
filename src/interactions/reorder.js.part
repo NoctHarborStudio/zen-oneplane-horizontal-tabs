@@ -32,6 +32,7 @@
     return { element: node, native: group || tab, group, tab };
   }
   function clearLiveDrag() {
+    clearLaneDrag();
     liveDragTarget = null;
     for (const node of dragShifted) {
       node.style.removeProperty("--op-drag-x");

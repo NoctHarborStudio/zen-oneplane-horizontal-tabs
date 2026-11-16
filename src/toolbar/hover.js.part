@@ -72,10 +72,10 @@
     }, hoverDelay());
   }
   function pointOverTabStrip(event) {
-    const a = list.getBoundingClientRect();
-    return a.width > 0 && a.height > 0 &&
-      event.clientX >= a.left - 3 && event.clientX <= a.right + 3 &&
-      event.clientY >= a.top - 2 && event.clientY <= a.bottom + 2;
+    return [list,...(bottomLane.hidden?[]:[bottomLane])].some(l=>{
+      const a=l.getBoundingClientRect();
+      return a.width>0&&a.height>0&&event.clientX>=a.left-3&&event.clientX<=a.right+3&&event.clientY>=a.top-2&&event.clientY<=a.bottom+2;
+    });
   }
   function releaseIndicatorHover() {
     if(!indicatorHover||indicatorReturnTimer)return;

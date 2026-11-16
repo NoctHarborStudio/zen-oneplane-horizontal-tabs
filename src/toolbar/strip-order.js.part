@@ -1,21 +1,57 @@
-  function placeStripOrder(order) {
-    const useLanes=row.hasAttribute("data-op-show-island");
-    // Preserve the native drag source DOM parent. Both lanes stay in
-    // place during a drag; only visual slot transforms change.
-    if(row.hasAttribute("data-op-dragging")) return;
-    if(useLanes){
-      if(leftLane.parentElement!==list) list.append(leftLane,rightLane);
-      const tabWidth=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab"))||36;
-      const boundary=islandBoundary(order.map(n=>compactSlotWidth(n,tabWidth)),tabWidth+3);
-      for(const [lane,nodes] of [[leftLane,order.slice(0,boundary)],[rightLane,order.slice(boundary)]]){
-        for(let i=0;i<nodes.length;i++)
-          if(lane.children[i]!==nodes[i]) lane.insertBefore(nodes[i],lane.children[i]||null);
+  let adaptiveHeightDirty=false,overflowRevealAnimation=null;
+  function mountLaneNodes(lane,nodes){
+    for(let i=0;i<nodes.length;i++){
+      const node=nodes[i],before=lane.children[i]||null;
+      if(before===node)continue;
+      if(node.isConnected&&typeof lane.moveBefore==="function"){
+        try{lane.moveBefore(node,before);continue;}catch{}
       }
-    }else{
-      for(let i=0;i<order.length;i++)
-        if(list.children[i]!==order[i]) list.insertBefore(order[i],list.children[i]||null);
-      leftLane.remove();rightLane.remove();
+      lane.insertBefore(node,before);
     }
   }
-
+  function applyStripPartition(plan){
+    if(leftLane.parentElement!==list)list.append(leftLane,rightLane,bottomLane);
+    const active=document.activeElement;
+    const selected=entries.get(browser.selectedTab)?.item,previousLane=selected?.closest(".oneplane-island-lane");
+    mountLaneNodes(leftLane,plan.topLeft.map(i=>stripOrderSnapshot[i]));
+    mountLaneNodes(rightLane,plan.topRight.map(i=>stripOrderSnapshot[i]));
+    mountLaneNodes(bottomLane,plan.lower.map(i=>stripOrderSnapshot[i]));
+    const changed=row.hasAttribute("data-op-overflow-row")!==plan.hasSecondRow;
+    row.toggleAttribute("data-op-overflow-row",plan.hasSecondRow);
+    row.toggleAttribute("data-op-adaptive-compact",plan.mode!=="wide");
+    row.toggleAttribute("data-op-bottom-plus",!plan.topPlus);
+    bottomLane.hidden=!plan.hasSecondRow;
+    if(changed){
+      overflowRevealAnimation?.cancel();overflowRevealAnimation=null;
+      if(plan.hasSecondRow&&row.hasAttribute("data-ready")&&cascadeState==="idle"&&!reducedMotion.matches&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0){
+        try{overflowRevealAnimation=bottomLane.animate([{opacity:0},{opacity:1}],{duration:160,easing:"ease-out"});}catch{}
+      }
+      adaptiveHeightDirty=true;contourKey=null;
+      // Real layout height changes once. Never repartition on hover.
+      scheduleGeometry();scheduleContour();
+    }
+    if(active&&list.contains(active)&&document.activeElement!==active)active.focus?.({preventScroll:true});
+    if(selected&&previousLane!==selected.closest(".oneplane-island-lane")&&!row.hasAttribute("data-op-home-open"))window.requestAnimationFrame(revealSelectedInStrip);
+  }
+  function placeStripOrder(order) {
+    if(row.hasAttribute("data-op-dragging"))return;
+    stripOrderSnapshot=order.slice();
+    const useLanes=row.hasAttribute("data-op-show-island");
+    if(useLanes){
+      if(leftLane.parentElement!==list)list.append(leftLane,rightLane,bottomLane);
+      if(row.hasAttribute("data-ready")&&hoverSupported()){
+        centerToolbar();
+      }else{
+        const tabWidth=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab"))||36;
+        const boundary=islandBoundary(order.map(n=>compactSlotWidth(n,tabWidth)),tabWidth+3);
+        applyStripPartition({topLeft:order.slice(0,boundary).map((_,i)=>i),
+          topRight:order.slice(boundary).map((_,i)=>i+boundary),lower:[],hasSecondRow:false,mode:"wide",topPlus:true});
+      }
+    }else{
+      mountLaneNodes(list,order);
+      leftLane.remove();rightLane.remove();bottomLane.remove();bottomLane.hidden=true;
+      if(row.hasAttribute("data-op-overflow-row")){adaptiveHeightDirty=true;contourKey=null;scheduleGeometry();}
+      for(const attr of ["data-op-overflow-row","data-op-adaptive-compact","data-op-bottom-plus"])row.removeAttribute(attr);
+    }
+  }
 

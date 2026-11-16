@@ -1,12 +1,16 @@
+  let stripOrderSnapshot=[];
   function stripNodes() {
-    return leftLane.parentElement === list ?
-      [...leftLane.children,...rightLane.children] : Array.from(list.children);
+    // The painted row order is not the native order once overflow is active.
+    return stripOrderSnapshot.filter(node=>list.contains(node));
   }
   function isStripNode(node) {
     return Boolean(node && (node.parentElement === list ||
-      node.parentElement === leftLane || node.parentElement === rightLane));
+      node.parentElement === leftLane || node.parentElement === rightLane || node.parentElement===bottomLane));
   }
   function compactSlotWidth(node, tabWidth) {
     return node.classList.contains("oneplane-split-group") ?
       22 + node.querySelectorAll(".oneplane-tab").length*(tabWidth+3) : tabWidth;
+  }
+  function laneNodes(lane){
+    return Array.from(lane.children).filter(isStripNode);
   }
