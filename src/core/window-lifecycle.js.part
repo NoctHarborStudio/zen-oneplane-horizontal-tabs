@@ -1,6 +1,7 @@
   function destroy() {
     if (dead) return;
     dead = true;
+    resetTabCascade();
     if (frame) window.cancelAnimationFrame(frame);
     if (dragCommitFrame) window.cancelAnimationFrame(dragCommitFrame);
     dragCommitFrame = 0;

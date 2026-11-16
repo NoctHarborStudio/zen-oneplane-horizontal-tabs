@@ -359,6 +359,7 @@ function installTabStrip() {
     bar?.style.removeProperty("--op-url-live-clip");
     bar?.style.removeProperty("--op-url-selection-alpha");
     bar?.removeAttribute("data-op-url-fluid");
+    reconcileTabCascade();
   }
   function addressWaveDepth(progress,x){
     const t=Math.max(0,Math.min(1,(progress-ADDRESS_WAVE_SPREAD*x)/(1-ADDRESS_WAVE_SPREAD)));
@@ -459,6 +460,148 @@ function installTabStrip() {
     if(pending||restoring)return false;
     return /^(about:(blank|newtab|home|privatebrowsing))(?:[?#].*)?$/i.test(uri);
   }
+  function cascadeTiming(name,from,to,duration,anchor,left){
+    const opening=name==="opening";
+    const crossed=t=>opening?anchor+addressMotionSample(name,from,to,t).width>=left:
+      anchor+addressMotionSample(name,from,to,t).width<=left;
+    let lo=0,hi=1;
+    if(crossed(0))hi=0;
+    else if(!crossed(1))lo=1;
+    else for(let i=0;i<24;i++){
+      const m=(lo+hi)/2;
+      if(crossed(m))hi=m;else lo=m;
+    }
+    const crossing=(lo+hi)/2*duration;
+    if(opening){
+      const end=Math.min(duration,Math.max(Math.min(90,duration),crossing));
+      const start=Math.max(0,end-135);
+      return {delay:start,duration:Math.max(1,end-start)};
+    }
+    return {delay:crossing,duration:160};
+  }
+  function cascadeKeyframes(opening,x,y,opacity){
+    const scale=(a,b)=>a.toFixed(4)+" "+b.toFixed(4);
+    if(!opening&&opacity>=.999&&Math.abs(x-1)<.001&&Math.abs(y-1)<.001)
+      return [{scale:"1 1",opacity:1},{scale:"1 1",opacity:1}];
+    return opening?[
+      {offset:0,scale:scale(x,y),opacity,easing:"cubic-bezier(.2,.5,.4,1)"},
+      {offset:.22,scale:scale(x*1.07,y*1.07),opacity,easing:"cubic-bezier(.45,0,.65,1)"},
+      {offset:1,scale:"0 0",opacity:0}
+    ]:[
+      {offset:0,scale:scale(x,y),opacity,easing:"cubic-bezier(.15,.7,.3,1)"},
+      {offset:.64,scale:"1.12 1.12",opacity:1,easing:"cubic-bezier(.3,0,.5,1)"},
+      {offset:1,scale:"1 1",opacity:1}
+    ];
+  }
+  // Visual-only companion to the native address wave. Keep layout slots,
+  // native tab state and the two hover modes independent of visibility.
+  let cascadeState="idle",cascadeGeneration=0;
+  const cascadeAnimations=new Map();
+  function cancelCascadeAnimations(){
+    for(const [node,anim] of cascadeAnimations){
+      anim.cancel();
+      node.removeAttribute("data-op-cascade-member");
+      node.removeAttribute("data-op-cascade-frame");
+    }
+    cascadeAnimations.clear();
+  }
+  function resetTabCascade(){
+    cascadeGeneration++;
+    row.removeAttribute("data-op-cascade");
+    cascadeState="idle";
+    row.inert=false;
+    cancelCascadeAnimations();
+    if(!dead)refreshIndicator();
+  }
+  function settleTabCascade(opening,generation){
+    if(dead||generation!==cascadeGeneration)return;
+    if(!opening){resetTabCascade();return;}
+    cascadeState="hidden";
+    row.setAttribute("data-op-cascade","hidden");
+    cancelCascadeAnimations();
+    // Only collapse an expanded hover card after it is invisible.
+    clearTabHover();
+    hideIndicator();
+  }
+  function animateTabCascade(opening,phase=null){
+    if(dead||!hoverSupported()){resetTabCascade();return;}
+    const previous=cascadeState;
+    if(opening&&previous==="hidden"||!opening&&previous==="idle")return;
+    if(row.hasAttribute("data-op-dragging"))return;
+    cancelHoverTimer();
+    if(!opening&&previous==="hidden")refreshIndicator(true);
+    if(indicatorFrame)window.cancelAnimationFrame(indicatorFrame);
+    indicatorFrame=0;last=0;iv=0;
+    const nodes=Array.from(row.querySelectorAll(".oneplane-tab,.oneplane-split-handle,.oneplane-split-group,.oneplane-title-island,.oneplane-new-tab"));
+    if(indicatorShown)nodes.push(indicator);
+    // Read the actual visual state before cancelling any old animation.
+    const measured=nodes.filter(n=>n.isConnected&&n.offsetWidth>0&&n.offsetHeight>0).map(node=>{
+      const rect=node.getBoundingClientRect(),css=window.getComputedStyle(node);
+      const frame=node.classList.contains("oneplane-split-group");
+      const hidden=previous!=="idle"&&!cascadeAnimations.has(node);
+      let values=css.scale==="none"?[1,1]:css.scale.split(/\s+/).map(Number);
+      // The underline already has a translated transform. Individual
+      // scale would scale its translation too, moving it to the origin.
+      if(node===indicator&&css.transform!=="none"){
+        try{const m=new window.DOMMatrixReadOnly(css.transform);values=[m.a,m.d];}catch{}
+      }
+      const x=hidden?0:(Number.isFinite(values[0])?values[0]:1);
+      const y=hidden?0:(Number.isFinite(values[1])?values[1]:x);
+      const opacity=hidden?0:(parseFloat(css.opacity)||0);
+      const frameAlpha=hidden?0:previous==="idle"?1:(parseFloat(css.getPropertyValue("--op-cascade-frame-alpha"))||0);
+      const center=(rect.left+rect.right)/2;
+      return {node,frame,x,y,opacity,frameAlpha,left:center-node.offsetWidth/2,right:center+node.offsetWidth/2};
+    });
+    const generation=++cascadeGeneration;
+    cancelCascadeAnimations();
+    cascadeState=opening?"hiding":"showing";
+    row.setAttribute("data-op-cascade",cascadeState);
+    row.inert=true;
+    if(!addressMotionEnabled()||!measured.length){settleTabCascade(opening,generation);return;}
+    const ordered=measured.sort((a,b)=>opening?a.left-b.left:b.left-a.left);
+    const anchor=parseFloat(url.style.getPropertyValue("--op-url-anchor-left"))||url.getBoundingClientRect().left;
+    const jobs=[];
+    for(const [index,v] of ordered.entries()){
+      const {node,frame}=v;
+      const edge=frame&&!opening?v.right:v.left;
+      const timing=phase?cascadeTiming(phase.name,phase.from,phase.to,phase.duration,anchor,edge):
+        {delay:Math.min(240,index*28),duration:opening?135:160};
+      try{
+        let frames;
+        if(frame){
+          // The group frame fades separately; its member cards each
+          // shrink into their own center rather than scaling twice.
+          node.setAttribute("data-op-cascade-frame","true");
+          frames=[{"--op-cascade-frame-alpha":v.frameAlpha},{"--op-cascade-frame-alpha":opening?0:1}];
+        }else{
+          node.setAttribute("data-op-cascade-member","true");
+          frames=cascadeKeyframes(opening,v.x,v.y,v.opacity);
+          if(node===indicator){
+            const position=indicator.style.transform||"translate3d(0px,0px,0px)";
+            frames=frames.map(({scale,...key})=>({...key,transform:position+" scale("+scale.replace(" ",",")+")"}));
+          }
+        }
+        const anim=node.animate(frames,{...timing,fill:"both",easing:"linear"});
+        cascadeAnimations.set(node,anim);
+        const start=phase&&addressAnimation?.startTime;
+        if(start!==null&&start!==undefined&&Number.isFinite(start))anim.startTime=start;
+        jobs.push(anim.finished);
+      }catch(error){
+        node.removeAttribute("data-op-cascade-member");
+        node.removeAttribute("data-op-cascade-frame");
+        window.console.warn("[OnePlane] Tab cascade fallback:",error);
+      }
+    }
+    Promise.allSettled(jobs).then(()=>settleTabCascade(opening,generation));
+  }
+  function reconcileTabCascade(){
+    if(dead||!hoverSupported()){if(cascadeState!=="idle")resetTabCascade();return;}
+    if(addressTransition||addressSettling)return;
+    const open=nativeInlineOpen(addressBar());
+    if(open&&(cascadeState==="idle"||cascadeState==="showing"))animateTabCascade(true);
+    else if(!open&&(cascadeState==="hidden"||cascadeState==="hiding"))animateTabCascade(false);
+  }
+
   function currentAddressVisual(){
     const a=addressTransition;
     if(!a)return null;
@@ -583,6 +726,7 @@ function installTabStrip() {
       draw(a.start);
     }
     startAddressDiagnostics(a);
+    animateTabCascade(name==="opening",a);
   }
   function updateAddressAnimation() {
     const bar = addressBar();
@@ -630,6 +774,7 @@ function installTabStrip() {
   function onAddressMutation() {
     if (dead) return;
     updateAddressAnimation();
+    reconcileTabCascade();
     if(!addressTransition&&!addressSettling&&!nativeInlineOpen(addressBar()))alignAddressStart();
   }
   function onAddressInput() {
@@ -1875,6 +2020,7 @@ function installTabStrip() {
     refreshIndicator();
     refreshIslandTitle();
     restoreStartupSearch(search);
+    reconcileTabCascade();
   }
   function sourceHandled(tab) {
     const source = tabOwner(tab)?.[DRAG_CONTROLLER];
@@ -1935,6 +2081,7 @@ function installTabStrip() {
     }
   }
   function onStripDragOver(event) {
+    if(cascadeState!=="idle")return;
     const tab = readDraggedTab(event);
     if (!tab) return;
     event.preventDefault();
@@ -1951,6 +2098,7 @@ function installTabStrip() {
     return true;
   }
   function onStripDrop(event) {
+    if(cascadeState!=="idle")return;
     const tab = readDraggedTab(event);
     if (!tab) return;
     event.preventDefault();
@@ -2211,7 +2359,8 @@ function installTabStrip() {
     if (indicatorFrame) window.cancelAnimationFrame(indicatorFrame);
     indicatorFrame = 0; iv = 0; last = 0;
   }
-  function refreshIndicator() {
+  function refreshIndicator(force=false) {
+    if(cascadeState!=="idle"&&force!==true)return;
     if (dead || !prefs.getBoolPref("zen.oneplane.tab-indicator", true)) {
       hideIndicator(); return;
     }
@@ -2259,7 +2408,7 @@ function installTabStrip() {
   }
   const hoverModePreferenceObserver={observe(){applyHoverMode();}};
   function selectHover(item, x = null) {
-    if (!item || !list.contains(item)) return;
+    if (cascadeState!=="idle" || !item || !list.contains(item)) return;
     cancelHoverTimer();
     hoverX = x;
     if (hoverTab !== item) {
@@ -2282,7 +2431,7 @@ function installTabStrip() {
     refreshIslandTitle();
   }
   function queueTabCollapse() {
-    if (!hoverTab || hoverTimer) return;
+    if (cascadeState!=="idle" || !hoverTab || hoverTimer) return;
     hoverTimer = window.setTimeout(() => {
       hoverTimer = 0;
       // Keep the plus stationary until the pointer actually leaves it.
@@ -2304,7 +2453,7 @@ function installTabStrip() {
     refreshIslandTitle();
   }
   function trackTabPointer(event) {
-    if (!hoverSupported() || event.pointerType === "touch" || draggedTab || root.hasAttribute("data-zr-startup-phase")) return;
+    if (cascadeState!=="idle" || !hoverSupported() || event.pointerType === "touch" || draggedTab || root.hasAttribute("data-zr-startup-phase")) return;
     const hit = event.target?.closest?.(".oneplane-tab");
     if (hit && list.contains(hit)) {
       const point = {x:event.clientX,y:event.clientY};
@@ -2327,7 +2476,7 @@ function installTabStrip() {
     queueTabCollapse();
   }
   function focusTab(event) {
-    if(root.hasAttribute("data-zr-startup-phase"))return;
+    if(cascadeState!=="idle"||root.hasAttribute("data-zr-startup-phase"))return;
     const item = event.target?.closest?.(".oneplane-tab");
     if (item && event.target.matches(":focus-visible")) selectHover(item);
   }
@@ -2337,7 +2486,7 @@ function installTabStrip() {
   function leaveTabPointer(event) {
     // The translated strip can extend beyond the row's original box.
     // A pointerleave from the plus or row is not necessarily a departure.
-    if (event && pointOverTabStrip(event)) return;
+    if (cascadeState!=="idle" || (event && pointOverTabStrip(event))) return;
     releaseIndicatorHover();
     queueTabCollapse();
   }
@@ -2581,6 +2730,7 @@ function installTabStrip() {
   function destroy() {
     if (dead) return;
     dead = true;
+    resetTabCascade();
     if (frame) window.cancelAnimationFrame(frame);
     if (dragCommitFrame) window.cancelAnimationFrame(dragCommitFrame);
     dragCommitFrame = 0;

@@ -1,3 +1,8 @@
+@property --op-cascade-frame-alpha {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
 /* Registered once by the stylesheet. Native WAAPI can interpolate
    selection opacity without a script callback on every display frame. */
 @property --op-url-selection-alpha {

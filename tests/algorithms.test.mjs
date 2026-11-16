@@ -134,3 +134,30 @@ test("fluid native animation uses synchronized monotonic endpoints and invariant
   assert.deepEqual(addressMotionSample("closing-wave",interrupted,closed,0),interrupted);
   assert.equal(addressMotionSample("closing-wave",open,closed,1).selection,0);
 });
+
+import { cascadeTiming, cascadeKeyframes } from "../src/algorithms/address-cascade.mjs";
+test("Bunny Cascade follows the address edge in both directions",()=>{
+  const closed={width:180,reveal:0},open={width:900,reveal:1},anchor=100;
+  let previousEnd=0,previousDelay=Infinity;
+  for(const left of [280,300,400,500,650,800,1000,1100]){
+    const hide=cascadeTiming("opening",closed,open,420,anchor,left);
+    const show=cascadeTiming("closing-wave",open,closed,380,anchor,left);
+    const end=hide.delay+hide.duration;
+    assert.ok(end>=previousEnd&&end<=420&&hide.duration>0);
+    assert.ok(show.delay<=previousDelay&&show.delay>=0&&show.delay<=380);
+    assert.equal(show.duration,160);
+    previousEnd=end;previousDelay=show.delay;
+  }
+  for(const opening of [true,false]){
+    const frames=cascadeKeyframes(opening,.43,.52,.61);
+    assert.equal(frames[0].scale,"0.4300 0.5200");
+    assert.equal(frames[0].opacity,.61);
+    assert.equal(frames.at(-1).scale,opening?"0 0":"1 1");
+    assert.equal(frames.at(-1).opacity,opening?0:1);
+  }
+  assert.equal(cascadeKeyframes(false,0,0,0)[1].scale,"1.12 1.12");
+  for(const duration of [80,100,420]){
+    const result=cascadeTiming("opening",closed,open,duration,anchor,600);
+    assert.ok(result.delay+result.duration<=duration);
+  }
+});

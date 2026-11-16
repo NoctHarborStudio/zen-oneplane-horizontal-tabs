@@ -50,6 +50,14 @@
       "kind": "esm-inline"
     },
     {
+      "path": "src/algorithms/address-cascade.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/toolbar/address-cascade.js.part",
+      "kind": "section"
+    },
+    {
       "path": "src/toolbar/address-controller.js.part",
       "kind": "section"
     },
@@ -209,6 +217,10 @@
     },
     {
       "path": "src/styles/drag.css.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/styles/address-cascade.css.part",
       "kind": "section"
     },
     {

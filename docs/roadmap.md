@@ -69,3 +69,8 @@ Maintain source modules and reproducible build; no large unrelated runtime chang
 ### Immediate stabilization checkpoint — preview.5
 
 User confirmed startup strip jump (OP-006) and Compact Mode button (OP-007) fixed. Address motion is the only current implementation priority: native Fluid Wave opening/closing and actual high-refresh validation (OP-002/003). Do not begin Hub until this is confirmed. All agreed Free, 10-minute unload, lower-left Extension Dock and portrait roadmap decisions are unchanged.
+
+
+### Stabilization checkpoint — preview.7
+
+User approved the native address wave and requested the Bunny Cascade visual companion in both hover modes before Hub. Preserve the accepted address trajectory. Validate the new cascade (Expand/Island, native dismissal, rapid reversal, Split View and optional Zen Refined startup) before beginning Hub. No workspace or Extension Dock changes.

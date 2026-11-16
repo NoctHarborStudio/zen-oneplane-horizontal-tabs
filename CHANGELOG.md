@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0-preview.7
+
+- Add Bunny Cascade for inline address search: each tab shrinks into its own center as the address edge advances, then springs back (112% overshoot, 160ms) as the edge retreats. Use native WAAPI scale/opacity, no per-frame layout loop.
+- Support Expand Mode and Island Mode, including the title island, plus button, active underline, each Split View member and handle; fade the shared split outline separately.
+- Preserve tab layout slots while hidden, block hidden tab interactions, reconcile native dismissal and interrupted animation, and cancel animations on unload. Respect reduced motion and disabled animation preference. Keep native floating search, bookmarks, navigation, captions and the accepted address wave unchanged.
+- Retain preview.6's optional Zen Refined startup integration. Add timing and reversal tests. Actual visual validation remains pending.
+
 ## 0.2.0-preview.5
 
 - Rebuild both inline-address transitions around native Web Animations API interpolation. Keep one final-width layout throughout opening and closing, prepare a continuous rounded wave with height-relative coordinates once, and let Gecko sample the timeline. Use CSS shape() when available, polygon otherwise; retain a script-driven compatibility fallback if the native cascade prevents animation.

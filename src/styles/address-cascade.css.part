@@ -1,0 +1,40 @@
+    /* No flex/grid or slot dimension changes during Bunny Cascade. */
+    #oneplane-tabs[data-op-cascade] { pointer-events: none !important; }
+    #oneplane-tabs[data-op-cascade] :is(.oneplane-tab,.oneplane-split-handle,.oneplane-title-island,.oneplane-new-tab,#oneplane-tab-indicator) {
+      transform-origin: center;
+      transition: none !important;
+      pointer-events: none !important;
+    }
+    #oneplane-tabs[data-op-cascade] :is(.oneplane-tab,.oneplane-split-handle,.oneplane-title-island,.oneplane-new-tab,#oneplane-tab-indicator):not([data-op-cascade-member]) {
+      opacity: 0 !important;
+    }
+    /* Separate the split frame from its independent member animations. */
+    #oneplane-tabs[data-op-cascade] .oneplane-split-group {
+      background: transparent !important;
+      box-shadow: none !important;
+      transition: none !important;
+      --op-cascade-frame-alpha: 0;
+    }
+    #oneplane-tabs[data-op-cascade] .oneplane-split-group[data-op-cascade-frame] {
+      --op-cascade-frame-alpha: 1;
+    }
+    #oneplane-tabs[data-op-cascade] .oneplane-split-group::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: color-mix(in srgb, var(--op-split-color) 13%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--op-split-color) 75%, transparent);
+      opacity: var(--op-cascade-frame-alpha);
+      pointer-events: none;
+      z-index: 0;
+    }
+    #oneplane-tabs[data-op-cascade] .oneplane-split-group[data-op-split-active]::before {
+      background: color-mix(in srgb, var(--op-split-color) 24%, transparent);
+      box-shadow: inset 0 0 0 1px var(--op-split-color);
+    }
+    #oneplane-tabs[data-op-cascade] .oneplane-split-group > :is(.oneplane-tab,.oneplane-split-handle) {
+      position: relative;
+      z-index: 1;
+    }
+

@@ -122,6 +122,7 @@
       draw(a.start);
     }
     startAddressDiagnostics(a);
+    animateTabCascade(name==="opening",a);
   }
   function updateAddressAnimation() {
     const bar = addressBar();
@@ -169,6 +170,7 @@
   function onAddressMutation() {
     if (dead) return;
     updateAddressAnimation();
+    reconcileTabCascade();
     if(!addressTransition&&!addressSettling&&!nativeInlineOpen(addressBar()))alignAddressStart();
   }
   function onAddressInput() {

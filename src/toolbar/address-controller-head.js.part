@@ -91,4 +91,5 @@
     bar?.style.removeProperty("--op-url-live-clip");
     bar?.style.removeProperty("--op-url-selection-alpha");
     bar?.removeAttribute("data-op-url-fluid");
+    reconcileTabCascade();
   }

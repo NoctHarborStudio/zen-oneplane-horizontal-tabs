@@ -24,6 +24,7 @@
     refreshIndicator();
     refreshIslandTitle();
     restoreStartupSearch(search);
+    reconcileTabCascade();
   }
   function sourceHandled(tab) {
     const source = tabOwner(tab)?.[DRAG_CONTROLLER];
@@ -84,6 +85,7 @@
     }
   }
   function onStripDragOver(event) {
+    if(cascadeState!=="idle")return;
     const tab = readDraggedTab(event);
     if (!tab) return;
     event.preventDefault();
@@ -100,6 +102,7 @@
     return true;
   }
   function onStripDrop(event) {
+    if(cascadeState!=="idle")return;
     const tab = readDraggedTab(event);
     if (!tab) return;
     event.preventDefault();
