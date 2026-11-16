@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0-preview.13
+
+- Replace native Hub popup with an in-document manual panel; fix single-click hit target, window dragging exclusion, hover background and icon sizing/brightness/alignment.
+- Preserve Hub through Compact toggles without native popup reopen timers.
+- Scope existing-tab URI reuse to current workspace/current window, preserving visible Essentials and native opening; add URL-bar result handling and cleanup.
+- Multi-monitor projection remains a planned milestone. Live validation pending.
+
 ## 0.2.0-preview.12
 
 - Visible SVG Hub trigger; match address surface and left/navigation width; no native arrow padding.

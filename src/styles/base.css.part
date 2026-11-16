@@ -82,22 +82,30 @@
     #nav-bar-customization-target > toolbarspring { display: none !important; }
     #zen-toggle-compact-mode { display:none !important; }
     #nav-bar-customization-target > #oneplane-hub-button {
-      display:grid !important; place-items:center;
+      display:flex !important; align-items:center !important; justify-content:center !important;
       order:-1 !important; flex:0 0 30px !important;
       width:30px !important; min-width:30px !important; height:30px !important;
-      margin:0 !important; padding:0 !important; border:0 !important;
-      border-radius:var(--op-url-radius) !important;
-      color:inherit !important; background:transparent !important;
+      box-sizing:border-box !important; margin:0 0 0 4px !important;
+      padding:0 !important; border:0 !important;
+      border-radius:var(--toolbarbutton-border-radius,var(--op-url-radius)) !important;
+      color:var(--toolbarbutton-icon-fill,currentColor) !important;
+      background-color:transparent !important;
       appearance:none !important; cursor:pointer;
+      -moz-window-dragging:no-drag !important;
+      pointer-events:auto !important;
     }
-    #oneplane-hub-button > svg {
-      display:block !important; width:18px !important; height:18px !important;
+    #nav-bar-customization-target > #oneplane-hub-button > svg {
+      display:block !important; flex:none !important;
+      width:var(--zen-toolbar-button-size,16px) !important; height:var(--zen-toolbar-button-size,16px) !important;
       fill:none !important; stroke:currentColor !important; stroke-width:1.5;
-      stroke-linecap:round; stroke-linejoin:round; pointer-events:none;
-      opacity:.88;
+      stroke-linecap:round; stroke-linejoin:round; pointer-events:none !important;
+      opacity:.66 !important;
     }
-    #oneplane-hub-button:is(:hover,[aria-expanded="true"]) {
-      background:color-mix(in srgb,currentColor 12%,transparent) !important;
+    #nav-bar-customization-target > #oneplane-hub-button:is(:hover,[aria-expanded="true"]) {
+      background-color:var(--toolbarbutton-hover-background,color-mix(in srgb,currentColor 12%,transparent)) !important;
+    }
+    #nav-bar-customization-target > #oneplane-hub-button:active {
+      background-color:var(--toolbarbutton-active-background,color-mix(in srgb,currentColor 20%,transparent)) !important;
     }
     #oneplane-hub-button:focus-visible {outline:2px solid AccentColor;outline-offset:-2px;}
     #nav-bar-customization-target > :is(#sidebar-button, #sidebar-toggle-button) { order: 0 !important; }

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {hubWorkspaceSnapshot,hubPanelWidth} from "../src/algorithms/hub-workspaces.mjs";
+import {hubWorkspaceSnapshot,hubPanelWidth,hubWorkspaceBrowserEligible} from "../src/algorithms/hub-workspaces.mjs";
 test("native identities and current state; no mutation",()=>{
   const native=[{uuid:"a",name:"Study",icon:"📚"},{uuid:"b",name:"Free",icon:"chrome://x.svg"},{uuid:"a",name:"duplicate"}];
   const manager={activeWorkspace:"b",getWorkspaces:()=>native,changeWorkspaceWithID(){}};
@@ -16,4 +16,13 @@ test("hub follows navigation right edge and clamps to viewport",()=>{
   assert.equal(hubPanelWidth(5,255,1920),250);
   assert.equal(hubPanelWidth(5,100,1920),180);
   assert.equal(hubPanelWidth(850,1100,900),42);
+});
+
+test("workspace reuse is local; global visible Essentials remain available",()=>{
+  const tab=(attrs,extra={})=>({getAttribute:k=>attrs[k]??null,hasAttribute:k=>k in attrs,...extra});
+  assert.equal(hubWorkspaceBrowserEligible(tab({"zen-workspace-id":"work"}),"work"),true);
+  assert.equal(hubWorkspaceBrowserEligible(tab({"zen-workspace-id":"free"}),"work"),false);
+  assert.equal(hubWorkspaceBrowserEligible(tab({"zen-essential":"true"}),"work"),true);
+  assert.equal(hubWorkspaceBrowserEligible(tab({"zen-essential":"true"},{hidden:true}),"work"),false);
+  assert.equal(hubWorkspaceBrowserEligible(tab({"zen-workspace-id":"work","zen-empty-tab":"true"}),"work"),false);
 });

@@ -67,6 +67,7 @@
     surface.remove();
     leftSpacer.remove();
     rightSpacer.remove();
+    releaseWorkspaceLinkScope();
     hub.destroy();
     closeNativeTabMenu();
     window.removeEventListener("pointermove", trackPointer, true);
@@ -104,6 +105,7 @@
   try {
     url.after(row);
     hub.ensure();
+    try{releaseWorkspaceLinkScope=installWorkspaceLinkScope();}catch(error){console.warn("[OnePlane] Workspace link isolation:",error);}
     target.prepend(leftSpacer);
     row.after(rightSpacer);
     tabbox.append(shield, splitZone);

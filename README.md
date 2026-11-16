@@ -68,3 +68,5 @@ OnePlane includes the same Magnetic Bookmarks controller and CSS as [Zen Refined
 The left Hub opens a native popup with real Zen workspaces, active state, named creation and Compact Mode. Right-click a mirrored tab to open its native menu. Free designation, timed discard, Library and Extension Dock are separate stages. See [Hub validation](docs/hub.md).
 
 Preview.12 aligns the Hub with the navigation/address row, keeps it open during Compact Mode changes and adds right-click workspace deletion. See [Hub notes](docs/hub.md) for data preservation and validation.
+
+Preview.13 changes Hub to an in-document panel and scopes native existing-tab reuse to the active workspace. Multi-monitor projection is not yet implemented.

@@ -1,5 +1,5 @@
 
-/* Native root popup: outside the compact overlay and contour. */
+/* In-document Hub: manual top layer, no native popup window or screen coordinates. */
 #oneplane-hub-panel .op-hub-content {display:flex;flex-direction:column;gap:8px;box-sizing:border-box;width:var(--op-hub-width,250px);max-width:calc(100vw - 8px);max-height:min(560px,calc(100vh - 80px));overflow:auto;padding:10px;color:var(--op-hub-fg,inherit);font:menu;}
 #oneplane-hub-panel .op-hub-title {font-size:16px;font-weight:650;margin:0 0 6px;}
 #oneplane-hub-panel .op-hub-heading {font-size:11px;font-weight:600;opacity:.7;margin:8px 0 0;}
@@ -24,15 +24,26 @@
 #oneplane-hub-panel button:disabled {opacity:.5;cursor:default;}
 
 #oneplane-hub-panel {
-  --panel-padding:0px !important; --panel-border-radius:8px !important;
-  --panel-background:var(--op-hub-bg,light-dark(#e0e4ec,#30343e)) !important;
-  --panel-color:var(--op-hub-fg,inherit) !important;
-  --panel-border-color:color-mix(in srgb,var(--op-hub-fg,currentColor) 12%,transparent) !important;
-  margin:0 !important; padding:0 !important;
-  color:var(--op-hub-fg,inherit) !important;
+  position:fixed !important;
+  inset:var(--op-hub-top,40px) auto auto var(--op-hub-left,4px) !important;
+  margin:0 !important; padding:0 !important; border:0 !important;
+  border-radius:8px !important;
+  width:var(--op-hub-width,250px) !important;
+  max-width:calc(100vw - 8px) !important;
+  max-height:calc(100vh - var(--op-hub-top,40px) - 8px) !important;
+  box-sizing:border-box !important;
+  background:var(--op-hub-bg,light-dark(#e0e4ec,#30343e)) !important;
+  color:var(--op-hub-fg,CanvasText) !important;
+  box-shadow:0 0 0 1px color-mix(in srgb,currentColor 12%,transparent),0 6px 20px #0003;
+  overflow:auto !important;
+  pointer-events:auto !important;
+  -moz-window-dragging:no-drag !important;
+  z-index:2147483647 !important;
 }
-#oneplane-hub-panel::part(content) {padding:0 !important;margin:0 !important;background:var(--panel-background) !important;border-radius:8px !important;}
-#oneplane-hub-panel .op-hub-content {background:var(--panel-background);border-radius:8px;}
+#oneplane-hub-panel[hidden] {display:none !important;}
+#oneplane-hub-panel::backdrop {background:transparent;pointer-events:none;}
+#oneplane-hub-panel .op-hub-content {width:100%;background:transparent;border-radius:8px;max-height:none;overflow:visible;}
+#oneplane-hub-panel * {-moz-window-dragging:no-drag !important;}
 #oneplane-hub-panel .op-hub-name {outline:none;box-shadow:none;}
 #oneplane-hub-panel .op-hub-name:focus-visible {outline:2px solid AccentColor;outline-offset:-2px;}
 #oneplane-hub-panel .op-hub-context {padding:3px 5px 5px 32px;}

@@ -1041,6 +1041,11 @@ function installTabStrip() {
     const room=Math.max(1,viewport-left-8);
     return Math.max(1,Math.min(Math.round(room),Math.max(180,Math.round(right-left))));
   }
+  function hubWorkspaceBrowserEligible(tab,active){
+    if(!tab||!active||tab.closing||tab.hasAttribute("zen-empty-tab"))return false;
+    if(tab.hasAttribute("zen-essential"))return !tab.hidden&&!tab.collapsed;
+    return tab.getAttribute("zen-workspace-id")===active;
+  }
   function hubWorkspaceSnapshot(manager) {
     try {
       if (!manager || manager.workspaceEnabled === false ||
@@ -1068,9 +1073,12 @@ function installTabStrip() {
     shape.setAttribute("d","M4 3.5h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2ZM2 8h16M7 8v8.5M10 11h5M10 14h5");
     glyph.append(shape);button.append(glyph);button.title="OnePlane Hub";
     for(const [key,value] of Object.entries({skipintoolbarset:"true",removable:"false",tooltiptext:"OnePlane Hub","aria-label":"OnePlane Hub","aria-haspopup":"dialog","aria-expanded":"false"}))button.setAttribute(key,value);
-    const panel=document.createXULElement("panel");
+    const panel=html("div","op-hub-panel");
+    panel.hidden=true;
+    const topLayer=typeof panel.showPopover==="function"&&typeof panel.hidePopover==="function";
+    if(topLayer)panel.setAttribute("popover","manual");
     panel.id="oneplane-hub-panel";
-    for(const [key,value] of Object.entries({orient:"vertical",role:"dialog","aria-label":"OnePlane Hub"}))panel.setAttribute(key,value);
+    for(const [key,value] of Object.entries({role:"dialog","aria-label":"OnePlane Hub"}))panel.setAttribute(key,value);
     const make=(tag,cls,text)=>{const n=html(tag,cls);if(text!==undefined)n.textContent=text;return n;};
     const content=make("div","op-hub-content");
     const spaces=make("div","op-hub-spaces"),status=make("div","op-hub-status");
@@ -1081,21 +1089,17 @@ function installTabStrip() {
     const mode=make("button","op-hub-mode");mode.type="button";
     content.append(make("h2","op-hub-title","OnePlane"),make("h3","op-hub-heading","Workspaces"),spaces,form,status,make("h3","op-hub-heading","Settings"),mode);
     panel.append(content);
-    let destroyed=false,busy=false,open=false,escapeFocus=false,contextId=null,modeTransition=false,modeTimer=0,modeFrame=0,modeReopened=false;
+    let destroyed=false,busy=false,open=false,contextId=null;
     let geometryFrame=0;
     const manager=()=>window.gZenWorkspaces;
     const command=()=>document.getElementById("cmd_toggleCompactModeIgnoreHover");
     function setHold(value){toolbarWrapper?.toggleAttribute("oneplane-hub-hold",value);hold();}
-    function clearModeTransition(){
-      modeTransition=false;modeReopened=false;
-      if(modeTimer)window.clearTimeout(modeTimer);modeTimer=0;
-      if(modeFrame)window.cancelAnimationFrame(modeFrame);modeFrame=0;
-    }
-    function close(){
-      clearModeTransition();contextId=null;open=false;
+    function close(restoreFocus=false){
+      const wasOpen=open;contextId=null;open=false;
       if(geometryFrame)window.cancelAnimationFrame(geometryFrame);geometryFrame=0;
-      if(panel.state==="open"||panel.state==="showing")panel.hidePopup();
-      button.setAttribute("aria-expanded","false");setHold(false);
+      if(topLayer&&panel.matches(":popover-open"))panel.hidePopover();
+      panel.hidden=true;button.setAttribute("aria-expanded","false");if(wasOpen)setHold(false);
+      if(restoreFocus&&!destroyed&&supported())button.focus({preventScroll:true});
     }
     function updateGeometry(){
       if(!open||!supported())return;
@@ -1107,23 +1111,24 @@ function installTabStrip() {
       const right=a.width>1?a.right:a.left+compact;
       const width=hubPanelWidth(b.left,right,window.innerWidth);
       panel.style.setProperty("--op-hub-width",width+"px");
-      const bg=bar&&window.getComputedStyle(bar).getPropertyValue("--op-url-surface").trim();
-      if(bg)panel.style.setProperty("--op-hub-bg",bg);
+      const bg=bar&&window.getComputedStyle(bar).backgroundColor;
+      if(bg&&bg!=="rgba(0, 0, 0, 0)"&&bg!=="transparent")panel.style.setProperty("--op-hub-bg",bg);
       else panel.style.setProperty("--op-hub-bg",style.getPropertyValue("--op-url-surface").trim()||"light-dark(#e0e4ec,#30343e)");
       const color=bar&&window.getComputedStyle(bar).color;
       if(color)panel.style.setProperty("--op-hub-fg",color);
-      const x=window.mozInnerScreenX+b.left,y=window.mozInnerScreenY+b.bottom+4;
-      if(panel.state==="open"&&typeof panel.moveTo==="function")panel.moveTo(Math.round(x),Math.round(y));
-      return {x:Math.round(x),y:Math.round(y)};
+      const x=Math.round(b.left),y=Math.round(b.bottom+4);
+      panel.style.setProperty("--op-hub-left",x+"px");
+      panel.style.setProperty("--op-hub-top",y+"px");
+      return true;
     }
     function scheduleHubGeometry(){
       if(!open||geometryFrame)return;
       geometryFrame=window.requestAnimationFrame(()=>{geometryFrame=0;updateGeometry();});
     }
     function showPopup(){
-      const p=updateGeometry();if(!p)return false;
-      if(typeof panel.openPopupAtScreen==="function")panel.openPopupAtScreen(p.x,p.y,false);
-      else panel.openPopup(button,"after_start",0,4,false,false);
+      if(!updateGeometry())return false;
+      panel.hidden=false;
+      if(topLayer)panel.showPopover();
       return true;
     }
     function render(){
@@ -1233,50 +1238,156 @@ function installTabStrip() {
     function ensure(){
       if(destroyed)return;
       if(button.parentElement!==target)target.prepend(button);
-      const popupset=document.getElementById("mainPopupSet");
-      if(popupset&&panel.parentElement!==popupset)popupset.append(panel);
+      if(panel.parentElement!==root)root.append(panel);
     }
-    function toggle(){
+    function toggle(event){
+      event.preventDefault();event.stopPropagation();
       if(!supported()||destroyed)return;
-      if(open||panel.state==="open"||panel.state==="showing"){close();return;}
-      ensure();if(!panel.isConnected||typeof panel.openPopup!=="function")return;
-      status.textContent="";escapeFocus=false;contextId=null;open=true;
+      if(open){close();return;}
+      ensure();if(!panel.isConnected)return;
+      status.textContent="";contextId=null;open=true;
       button.setAttribute("aria-expanded","true");setHold(true);render();
-      try{if(!showPopup())close();}
-      catch(error){close();console.warn("[OnePlane] Hub popup:",error);}
+      try{
+        if(!showPopup()){close();return;}
+        (spaces.querySelector('[aria-current="true"]:not(:disabled)')||spaces.querySelector("button:not(:disabled)")||mode).focus({preventScroll:true});
+      }catch(error){close();console.warn("[OnePlane] Hub open:",error);}
     }
-    function shown(event){
-      if(event.target===panel&&!modeTransition)(spaces.querySelector('[aria-current="true"]:not(:disabled)')||spaces.querySelector("button:not(:disabled)")||mode).focus({preventScroll:true});
+    function key(event){
+      if(!open||event.key!=="Escape")return;
+      event.preventDefault();event.stopPropagation();
+      if(contextId){contextId=null;render();return;}close(true);
     }
-    function hidden(event){
-      if(event.target!==panel)return;
-      if(open&&modeTransition&&!modeReopened&&!destroyed&&supported()){
-        modeReopened=true;modeFrame=window.requestAnimationFrame(()=>{modeFrame=0;if(open&&modeTransition&&supported())try{showPopup();}catch{close();}});return;
-      }
-      clearModeTransition();contextId=null;open=false;button.setAttribute("aria-expanded","false");setHold(false);
-      if(escapeFocus&&!destroyed&&supported())button.focus();escapeFocus=false;
-    }
-    function key(event){if(event.key==="Escape"){event.preventDefault();event.stopPropagation();if(contextId){contextId=null;render();return;}escapeFocus=true;close();}}
     function changed(){if(open){render();scheduleHubGeometry();}}
-    function onMode(){if(!supported())close();else changed();}
-    function deactivate(){if(open&&!modeTransition&&!busy)close();}
+    function onMode(){if(!supported())close();else if(open){setHold(true);changed();}}
+    function deactivate(){if(open&&!busy)close();}
     function toggleMode(){
       const cmd=command();if(typeof cmd?.doCommand!=="function"||!open)return;
-      clearModeTransition();modeTransition=true;setHold(true);
-      // Zen can roll up the native popup while reparenting toolbar nodes.
-      // Preserve intent for one bounded reopen, not a permanent popup lock.
-      modeTimer=window.setTimeout(()=>{clearModeTransition();if(open&&panel.state==="closed")close();},650);
-      try{cmd.doCommand();changed();}catch(error){clearModeTransition();console.warn("[OnePlane] Compact Mode:",error);}
+      setHold(true);
+      try{cmd.doCommand();changed();}catch(error){console.warn("[OnePlane] Compact Mode:",error);}
     }
     function onInput(){add.disabled=busy||!name.value.trim();}
-    function onOutside(event){if(open&&modeTransition&&!panel.contains(event.target)&&!button.contains(event.target))close();}
-    const listeners=[[button,"click",toggle],[panel,"popupshown",shown],[panel,"popuphidden",hidden],[panel,"keydown",key],[form,"submit",create],[mode,"click",toggleMode],[window,"deactivate",deactivate],[name,"input",onInput],[window,"resize",scheduleHubGeometry],[window,"pointerdown",onOutside]];
+    function onOutside(event){if(open&&!event.composedPath().includes(panel)&&!event.composedPath().includes(button))close();}
+    function stopDrag(event){event.stopPropagation();}
+    function stopDouble(event){event.preventDefault();event.stopImmediatePropagation();}
+    const listeners=[[button,"click",toggle],[button,"pointerdown",stopDrag],[button,"mousedown",stopDrag],[button,"dblclick",stopDouble],
+      [panel,"keydown",key],[form,"submit",create],[mode,"click",toggleMode],[window,"deactivate",deactivate],[name,"input",onInput],[window,"resize",scheduleHubGeometry]];
+    window.addEventListener("pointerdown",onOutside,true);
     for(const event of ["ZenWorkspaceDataChanged","ZenWorkspacesUIUpdate","ZenCompactMode:Toggled","ZenCompactMode:LayoutUpdate"])listeners.push([window,event,changed]);
     for(const [node,event,fn] of listeners)node.addEventListener(event,fn);
-    function destroy(){if(destroyed)return;destroyed=true;close();for(const [node,event,fn] of listeners)node.removeEventListener(event,fn);panel.remove();button.remove();}
+    function destroy(){if(destroyed)return;destroyed=true;close();window.removeEventListener("pointerdown",onOutside,true);for(const [node,event,fn] of listeners)node.removeEventListener(event,fn);panel.remove();button.remove();}
     return {ensure,close,onMode,destroy};
   }
   const hub=createHubController({target,root,toolbarWrapper,supported:hoverSupported,hold:reconcilePanel,switchGuard:guardPanelSwitch});
+
+  // Zen 1.24.2b URILoadingHelper enumerates allUsedBrowsers across windows.
+  // Filter only for the duration of a synchronous reuse lookup. Never
+  // change workspace ownership, provider databases, or the native getter
+  // outside this call. Explicit tab selection continues to use Zen's API.
+  function installWorkspaceLinkScope(){
+    const nativeSwitch=window.switchToTabHavingURI;
+    if(typeof nativeSwitch!=="function")return ()=>{};
+    const active=()=>root.hasAttribute("oneplane-active")&&
+      window.gZenWorkspaces?.workspaceEnabled&&!!window.gZenWorkspaces.activeWorkspace;
+    function withScope(run){
+      if(!active())return run();
+      const restores=[];
+      try{
+        const enumerator=Services.wm.getEnumerator("navigator:browser"),windows=new Set([window]);
+        while(enumerator.hasMoreElements())windows.add(enumerator.getNext());
+        for(const win of windows){
+          if(win.closed||!win.gBrowser)continue;
+          const manager=win.gZenWorkspaces;
+          if(!manager)throw Error("Native workspace lookup unavailable");
+          const descriptor=Object.getOwnPropertyDescriptor(manager,"allUsedBrowsers");
+          if(descriptor&&!descriptor.configurable)throw Error("Native workspace lookup cannot be scoped");
+          const original=manager.allUsedBrowsers;
+          if(!Array.isArray(original))throw Error("Native browser list unavailable");
+          const list=win===window?original.filter(b=>{
+            const t=win.gBrowser.getTabForBrowser(b);
+            return hubWorkspaceBrowserEligible(t,manager.activeWorkspace);
+          }):[];
+          Object.defineProperty(manager,"allUsedBrowsers",{configurable:true,get:()=>list});
+          restores.push(()=>descriptor?Object.defineProperty(manager,"allUsedBrowsers",descriptor):delete manager.allUsedBrowsers);
+        }
+      }catch(error){
+        for(const restore of restores.reverse())restore();
+        console.warn("[OnePlane] Could not scope workspace URI lookup:",error);
+        // Do not accidentally switch spaces if the native contract changes.
+        return undefined;
+      }
+      try{return run();}finally{for(const restore of restores.reverse())restore();}
+    }
+    const helper=ChromeUtils.importESModule("resource:///modules/URILoadingHelper.sys.mjs").URILoadingHelper;
+    function fallback(uri,openNew,params={},context=null){
+      if(!openNew)return false;
+      const spec=typeof uri==="string"?uri:uri.spec;
+      const options={...params};
+      for(const key of ["ignoreFragment","ignoreQueryString","replaceQueryString","adoptIntoActiveWindow"])delete options[key];
+      if(context!==null&&context!==undefined)options.userContextId=context;
+      helper.openTrustedLinkIn(window,spec,"tab",options);return false;
+    }
+    function scopedSwitch(uri,openNew,params={},context=null,split=null){
+      if(!active())return nativeSwitch.apply(this,arguments);
+      const result=withScope(()=>nativeSwitch.call(this,uri,openNew,{...params},context,split));
+      return result===undefined?fallback(uri,openNew,params,context):result;
+    }
+    window.switchToTabHavingURI=scopedSwitch;
+    // The native address-bar result path calls the shared URI helper
+    // directly. Avoid its stale-result unregister path when an existing
+    // matching tab merely belongs to a different workspace.
+    let unregister=()=>{};
+    try{
+      const {UrlbarParentController}=ChromeUtils.importESModule("moz-src:///browser/components/urlbar/UrlbarParentController.sys.mjs");
+      const proto=UrlbarParentController.prototype,key=Symbol.for("oneplane.workspace-urlbar-scope");
+      let registry=proto[key];
+      if(!registry){
+        const original=proto.switchToTab;
+        if(typeof original!=="function")throw Error("URL bar switch API unavailable");
+        const clients=new Map();
+        const wrapper=function(data){
+          const client=clients.get(this.browserWindow);
+          return client?client(this,data,original):original.call(this,data);
+        };
+        registry={clients,original,wrapper};
+        Object.defineProperty(proto,key,{configurable:true,value:registry});
+        proto.switchToTab=wrapper;
+      }
+      const client=(controller,data,original)=>{
+        if(!active()||!data?.url)return original.call(controller,data);
+        const context=data.userContextId??0;
+        // Native private context sentinel is not a public container ID.
+        const userContext=context===-1?null:context;
+        const matches=b=>{
+          try{return b.currentURI.spec===data.url&&(userContext===null||String(b.getAttribute("usercontextid")||0)===String(userContext));}catch{return false;}
+        };
+        const manager=window.gZenWorkspaces;
+        const local=manager.allUsedBrowsers.some(b=>matches(b)&&hubWorkspaceBrowserEligible(browser.getTabForBrowser(b),manager.activeWorkspace));
+        if(local){
+          const result=withScope(()=>{original.call(controller,data);return true;});
+          if(result)return;
+        }
+        // No reusable tab in this workspace: load locally rather than
+        // unregistering a real tab belonging to another workspace.
+        const params=userContext===null?{}:{userContextId:userContext};
+        helper.openTrustedLinkIn(window,data.url,"tab",params);
+        if(!data.heuristic)controller.addToInputHistory?.(data.url,data.searchString);
+      };
+      registry.clients.set(window,client);
+      unregister=()=>{
+        if(registry.clients.get(window)===client)registry.clients.delete(window);
+        if(!registry.clients.size&&proto[key]===registry){
+          if(proto.switchToTab===registry.wrapper)proto.switchToTab=registry.original;
+          delete proto[key];
+        }
+      };
+    }catch(error){console.warn("[OnePlane] URL bar workspace isolation unavailable:",error);}
+    return ()=>{
+      unregister();
+      if(window.switchToTabHavingURI===scopedSwitch)window.switchToTabHavingURI=nativeSwitch;
+    };
+  }
+  let releaseWorkspaceLinkScope=()=>{};
+
 
   // Target Zen 1.24.2b TabContextMenu resolves triggerNode.tab.
   // Fail closed rather than accidentally acting on the selected tab.
@@ -3199,6 +3310,7 @@ function installTabStrip() {
     surface.remove();
     leftSpacer.remove();
     rightSpacer.remove();
+    releaseWorkspaceLinkScope();
     hub.destroy();
     closeNativeTabMenu();
     window.removeEventListener("pointermove", trackPointer, true);
@@ -3236,6 +3348,7 @@ function installTabStrip() {
   try {
     url.after(row);
     hub.ensure();
+    try{releaseWorkspaceLinkScope=installWorkspaceLinkScope();}catch(error){console.warn("[OnePlane] Workspace link isolation:",error);}
     target.prepend(leftSpacer);
     row.after(rightSpacer);
     tabbox.append(shield, splitZone);

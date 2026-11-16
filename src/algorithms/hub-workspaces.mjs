@@ -2,6 +2,11 @@
     const room=Math.max(1,viewport-left-8);
     return Math.max(1,Math.min(Math.round(room),Math.max(180,Math.round(right-left))));
   }
+  export function hubWorkspaceBrowserEligible(tab,active){
+    if(!tab||!active||tab.closing||tab.hasAttribute("zen-empty-tab"))return false;
+    if(tab.hasAttribute("zen-essential"))return !tab.hidden&&!tab.collapsed;
+    return tab.getAttribute("zen-workspace-id")===active;
+  }
   export function hubWorkspaceSnapshot(manager) {
     try {
       if (!manager || manager.workspaceEnabled === false ||

@@ -97,3 +97,8 @@
 
 - User confirmed creating/switching native workspaces works in preview.11. Hub icon not painted; popup closes on Compact toggle; width and left edge do not align with navigation and color differs.
 - Preview.12 explicit SVG trigger, measured compact address edge, shared address surface token, non-arrow popup, retained Compact toggle intent; pending visual verification. Right-click deletion added with explicit confirmation and safe preservation when supported.
+
+## OP-015 — Hub hit target and workspace reuse
+
+- Preview.12 user reports first click intermittent, double click maximizes/restores window, missing hover and icon misalignment/brightness. Preview.13 uses explicit no-drag, centered native-sized SVG, hover surface and in-document manual panel. Cause hypothesis: titlebar dragging/native popup rollup; no runtime trace. Live verification pending.
+- Zen natively searches all spaces for existing settings/URL tabs. Preview.13 scopes reuse to active workspace/current window (visible Essentials preserved); native explicit workspace selection unaffected. Test about:preferences and URL bar, private/container context, cross-window and cleanup.
