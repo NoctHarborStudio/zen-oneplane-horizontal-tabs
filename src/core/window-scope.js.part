@@ -34,6 +34,9 @@ function installTabStrip() {
   indicator.setAttribute("aria-hidden", "true");
   const leftLane = html("div","oneplane-island-lane oneplane-island-left");
   const rightLane = html("div","oneplane-island-lane oneplane-island-right");
+  const bottomLane = html("div","oneplane-island-lane oneplane-overflow-lane");
+  bottomLane.hidden=true;
+  bottomLane.setAttribute("role","group");bottomLane.setAttribute("aria-label","Overflow tabs");
   const island = html("button","oneplane-title-island");
   island.type="button";island.disabled=true;island.setAttribute("aria-label","Toggle Home");island.setAttribute("aria-expanded","false");
   const homeGlyph=document.createElementNS("http://www.w3.org/2000/svg","svg");

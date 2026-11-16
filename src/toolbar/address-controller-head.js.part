@@ -33,9 +33,9 @@
   }
   function addressWidths() {
     const base = parseFloat(window.getComputedStyle(url).getPropertyValue("--op-url")) || 180;
-    const compact = (url.hasAttribute("data-op-empty") || url.hasAttribute("data-op-home")) ? 0 : (addressCompactWidth || base);
     const bar = addressBar();
     const anchor = url.getBoundingClientRect();
+    const compact = (url.hasAttribute("data-op-empty") || url.hasAttribute("data-op-home")) ? 0 : (anchor.width || addressCompactWidth || base);
     const left = anchor.left + (addressAnchor?.dx || 0);
     const top = anchor.top + (addressAnchor?.dy || 0);
     url.style.setProperty("--op-url-anchor-left", left.toFixed(2) + "px");
@@ -57,7 +57,7 @@
         right = Math.min(right, box.left);
       }
     }
-    const expanded = Math.max(compact, right - Math.max(0, left) - 6);
+    const expanded = Math.max(1, Math.min(window.innerWidth-12, right - Math.max(0, left) - 6));
     url.style.setProperty("--op-url-expanded-width", expanded.toFixed(2) + "px");
     url.style.setProperty("--op-url-compact-width", Math.max(1, compact).toFixed(2) + "px");
     return { compact, expanded };

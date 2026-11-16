@@ -1,7 +1,7 @@
     #nav-bar-customization-target > #urlbar-container {
       flex: 0 0 var(--op-url) !important;
       width: var(--op-url) !important;
-      min-width: 100px !important;
+      min-width: min(100px,var(--op-url)) !important;
       max-width: none !important;
       margin-inline: 4px !important;
       padding-block: 0 !important;
@@ -253,3 +253,7 @@
       min-width: 0px !important;
     }
 
+    @media(max-width:520px){
+      #urlbar-container #urlbar:not([breakout-extend],[zen-floating-urlbar="true"],:popover-open) #zen-copy-url-button {display:none!important;}
+      #urlbar-container #urlbar:not([breakout-extend],[zen-floating-urlbar="true"],:popover-open) .urlbar-input-container {padding-inline:2px!important;}
+    }

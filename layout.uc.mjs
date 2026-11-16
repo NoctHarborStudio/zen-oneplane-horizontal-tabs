@@ -623,6 +623,9 @@ function installTabStrip() {
   indicator.setAttribute("aria-hidden", "true");
   const leftLane = html("div","oneplane-island-lane oneplane-island-left");
   const rightLane = html("div","oneplane-island-lane oneplane-island-right");
+  const bottomLane = html("div","oneplane-island-lane oneplane-overflow-lane");
+  bottomLane.hidden=true;
+  bottomLane.setAttribute("role","group");bottomLane.setAttribute("aria-label","Overflow tabs");
   const island = html("button","oneplane-title-island");
   island.type="button";island.disabled=true;island.setAttribute("aria-label","Toggle Home");island.setAttribute("aria-expanded","false");
   const homeGlyph=document.createElementNS("http://www.w3.org/2000/svg","svg");
@@ -631,17 +634,21 @@ function installTabStrip() {
   const islandTitle = html("span","oneplane-island-title");
   island.append(islandTitle);
   row.append(list, plus, indicator, island);
+  let stripOrderSnapshot=[];
   function stripNodes() {
-    return leftLane.parentElement === list ?
-      [...leftLane.children,...rightLane.children] : Array.from(list.children);
+    // The painted row order is not the native order once overflow is active.
+    return stripOrderSnapshot.filter(node=>list.contains(node));
   }
   function isStripNode(node) {
     return Boolean(node && (node.parentElement === list ||
-      node.parentElement === leftLane || node.parentElement === rightLane));
+      node.parentElement === leftLane || node.parentElement === rightLane || node.parentElement===bottomLane));
   }
   function compactSlotWidth(node, tabWidth) {
     return node.classList.contains("oneplane-split-group") ?
       22 + node.querySelectorAll(".oneplane-tab").length*(tabWidth+3) : tabWidth;
+  }
+  function laneNodes(lane){
+    return Array.from(lane.children).filter(isStripNode);
   }
   function islandBoundary(widths, plusWidth, gap=3) {
     if (widths.length < 2) return widths.length;
@@ -654,26 +661,115 @@ function installTabStrip() {
     }
     return best;
   }
-  function placeStripOrder(order) {
-    const useLanes=row.hasAttribute("data-op-show-island");
-    // Preserve the native drag source DOM parent. Both lanes stay in
-    // place during a drag; only visual slot transforms change.
-    if(row.hasAttribute("data-op-dragging")) return;
-    if(useLanes){
-      if(leftLane.parentElement!==list) list.append(leftLane,rightLane);
-      const tabWidth=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab"))||36;
-      const boundary=islandBoundary(order.map(n=>compactSlotWidth(n,tabWidth)),tabWidth+3);
-      for(const [lane,nodes] of [[leftLane,order.slice(0,boundary)],[rightLane,order.slice(boundary)]]){
-        for(let i=0;i<nodes.length;i++)
-          if(lane.children[i]!==nodes[i]) lane.insertBefore(nodes[i],lane.children[i]||null);
-      }
-    }else{
-      for(let i=0;i<order.length;i++)
-        if(list.children[i]!==order[i]) list.insertBefore(order[i],list.children[i]||null);
-      leftLane.remove();rightLane.remove();
+  // Pure collapsed-slot allocation for the second-row controller.
+  // Each slot represents one tab or one entire Split View group.
+  function planTabOverflow(widths,boundary,leftCapacity,rightCapacity,gap=3){
+    if(!Array.isArray(widths)||widths.some(w=>!Number.isFinite(w)||w<=0)||
+       !Number.isInteger(boundary)||boundary<0||boundary>widths.length||
+       ![leftCapacity,rightCapacity,gap].every(v=>Number.isFinite(v)&&v>=0))
+      throw new TypeError("Invalid collapsed slot geometry");
+    let leftStart=boundary,leftUsed=0;
+    while(leftStart>0){
+      const next=widths[leftStart-1]+(leftStart===boundary?0:gap);
+      if(leftUsed+next>leftCapacity)break;
+      leftStart--;leftUsed+=next;
     }
+    let rightEnd=boundary,rightUsed=0;
+    while(rightEnd<widths.length){
+      const next=widths[rightEnd]+(rightEnd===boundary?0:gap);
+      if(rightUsed+next>rightCapacity)break;
+      rightUsed+=next;rightEnd++;
+    }
+    const indices=(a,b)=>Array.from({length:b-a},(_,i)=>a+i);
+    const lowerLeft=indices(0,leftStart),lowerRight=indices(rightEnd,widths.length);
+    return {topLeft:indices(leftStart,boundary),topRight:indices(boundary,rightEnd),
+      lowerLeft,lowerRight,lower:[...lowerLeft,...lowerRight],
+      hasSecondRow:lowerLeft.length+lowerRight.length>0,leftUsed,rightUsed};
   }
 
+  // A fixed center has two independently budgeted sides. Compact mode
+  // keeps at most one ordinary slot on either side; groups are atomic.
+  function planAdaptiveTabRows(widths,groups,boundary,available,title,tab,gap=3){
+    const lane=(sideTitle)=>Math.max(0,(available-sideTitle-2*gap)/2-2*gap);
+    const wideCap=lane(title),rightCap=Math.max(0,wideCap-tab-gap);
+    const full=planTabOverflow(widths,boundary,wideCap,rightCap,gap);
+    if(!full.hasSecondRow&&available>=title+2*gap+2*(tab+gap)){
+      return {...full,mode:"wide",title,topPlus:true};
+    }
+    const minTitle=32;
+    const compactTitle=available>=title+2*gap?title:minTitle;
+    const cap=lane(compactTitle);
+    // Prefer a title until it would prevent even one ordinary slot.
+    const chosenTitle=cap<tab&&compactTitle>minTitle?minTitle:compactTitle;
+    const compactCap=lane(chosenTitle);
+    const left=[],right=[];
+    if(compactCap>=tab){
+      for(let i=boundary-1;i>=0;i--)if(!groups[i]&&widths[i]<=compactCap){left.push(i);break;}
+      for(let i=boundary;i<widths.length;i++)if(!groups[i]&&widths[i]<=compactCap){right.push(i);break;}
+    }
+    const kept=new Set([...left,...right]);
+    const lower=widths.map((_,i)=>i).filter(i=>!kept.has(i));
+    // The plus has a guaranteed slot on the bottom whenever top space
+    // cannot contain it. Even an empty strip can use this minimal shelf.
+    const topPlus=lower.length===0&&available>=chosenTitle+2*gap+2*(tab+gap+2*gap);
+    return {mode:chosenTitle===minTitle&&compactCap<tab?"ultra":"compact",title:chosenTitle,
+      topLeft:left,topRight:right,lower,hasSecondRow:lower.length>0||!topPlus,topPlus};
+  }
+  function adaptiveAddressWidth(preferred,windowWidth,leftWithoutAddress,centerReserve,margin=8){
+    const budget=Math.max(0,Math.floor(windowWidth/2-leftWithoutAddress-centerReserve-margin));
+    const desired=budget<preferred?Math.round(preferred*.7):preferred;
+    return Math.max(36,Math.min(desired,budget));
+  }
+  let adaptiveHeightDirty=false;
+  function mountLaneNodes(lane,nodes){
+    for(let i=0;i<nodes.length;i++){
+      const node=nodes[i],before=lane.children[i]||null;
+      if(before===node)continue;
+      if(node.isConnected&&typeof lane.moveBefore==="function"){
+        try{lane.moveBefore(node,before);continue;}catch{}
+      }
+      lane.insertBefore(node,before);
+    }
+  }
+  function applyStripPartition(plan){
+    if(leftLane.parentElement!==list)list.append(leftLane,rightLane,bottomLane);
+    const active=document.activeElement;
+    mountLaneNodes(leftLane,plan.topLeft.map(i=>stripOrderSnapshot[i]));
+    mountLaneNodes(rightLane,plan.topRight.map(i=>stripOrderSnapshot[i]));
+    mountLaneNodes(bottomLane,plan.lower.map(i=>stripOrderSnapshot[i]));
+    const changed=row.hasAttribute("data-op-overflow-row")!==plan.hasSecondRow;
+    row.toggleAttribute("data-op-overflow-row",plan.hasSecondRow);
+    row.toggleAttribute("data-op-adaptive-compact",plan.mode!=="wide");
+    row.toggleAttribute("data-op-bottom-plus",!plan.topPlus);
+    bottomLane.hidden=!plan.hasSecondRow;
+    if(changed){
+      adaptiveHeightDirty=true;contourKey=null;
+      // Real layout height changes once. Never repartition on hover.
+      scheduleGeometry();scheduleContour();
+    }
+    if(active&&list.contains(active)&&document.activeElement!==active)active.focus?.({preventScroll:true});
+  }
+  function placeStripOrder(order) {
+    if(row.hasAttribute("data-op-dragging"))return;
+    stripOrderSnapshot=order.slice();
+    const useLanes=row.hasAttribute("data-op-show-island");
+    if(useLanes){
+      if(leftLane.parentElement!==list)list.append(leftLane,rightLane,bottomLane);
+      if(row.hasAttribute("data-ready")&&hoverSupported()){
+        centerToolbar();
+      }else{
+        const tabWidth=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab"))||36;
+        const boundary=islandBoundary(order.map(n=>compactSlotWidth(n,tabWidth)),tabWidth+3);
+        applyStripPartition({topLeft:order.slice(0,boundary).map((_,i)=>i),
+          topRight:order.slice(boundary).map((_,i)=>i+boundary),lower:[],hasSecondRow:false,mode:"wide",topPlus:true});
+      }
+    }else{
+      mountLaneNodes(list,order);
+      leftLane.remove();rightLane.remove();bottomLane.remove();bottomLane.hidden=true;
+      if(row.hasAttribute("data-op-overflow-row")){adaptiveHeightDirty=true;contourKey=null;scheduleGeometry();}
+      for(const attr of ["data-op-overflow-row","data-op-adaptive-compact","data-op-bottom-plus"])row.removeAttribute(attr);
+    }
+  }
 
   // Keep native page actions and popup anchors, moving only their actual nodes.
   const actions = document.createXULElement("hbox");
@@ -685,6 +781,7 @@ function installTabStrip() {
   const actionHomes = new Map();
   function movePageActions() {
     if (root.hasAttribute("customizing")) return;
+    if(window.innerWidth<=700){if(actions.isConnected||actionHomes.size)restorePageActions();return;}
     if (actions.parentElement !== target || actions !== target.lastElementChild) {
       target.append(actions);
     }
@@ -819,9 +916,9 @@ function installTabStrip() {
   }
   function addressWidths() {
     const base = parseFloat(window.getComputedStyle(url).getPropertyValue("--op-url")) || 180;
-    const compact = (url.hasAttribute("data-op-empty") || url.hasAttribute("data-op-home")) ? 0 : (addressCompactWidth || base);
     const bar = addressBar();
     const anchor = url.getBoundingClientRect();
+    const compact = (url.hasAttribute("data-op-empty") || url.hasAttribute("data-op-home")) ? 0 : (anchor.width || addressCompactWidth || base);
     const left = anchor.left + (addressAnchor?.dx || 0);
     const top = anchor.top + (addressAnchor?.dy || 0);
     url.style.setProperty("--op-url-anchor-left", left.toFixed(2) + "px");
@@ -843,7 +940,7 @@ function installTabStrip() {
         right = Math.min(right, box.left);
       }
     }
-    const expanded = Math.max(compact, right - Math.max(0, left) - 6);
+    const expanded = Math.max(1, Math.min(window.innerWidth-12, right - Math.max(0, left) - 6));
     url.style.setProperty("--op-url-expanded-width", expanded.toFixed(2) + "px");
     url.style.setProperty("--op-url-compact-width", Math.max(1, compact).toFixed(2) + "px");
     return { compact, expanded };
@@ -3527,12 +3624,14 @@ function installTabStrip() {
       // Native window buttons and all left/right controls consume edge space.
       let left = Math.max(0, targetRect.left);
       let right = Math.max(0, window.innerWidth - targetRect.right);
+      let addressExtent=0;
       for (const child of target.children) {
         if (centerIds.has(child.id) || child.localName === "toolbarspring") continue;
         const box = child.getBoundingClientRect();
         if (!box.width) continue;
         const style = window.getComputedStyle(child);
         const extent = box.width + (parseFloat(style.marginLeft) || 0) + (parseFloat(style.marginRight) || 0);
+        if(child===url){addressExtent=extent;continue;}
         if (leftIds.has(child.id)) left += extent;
         else right += extent;
       }
@@ -3541,35 +3640,51 @@ function installTabStrip() {
         if (node.style.getPropertyValue(name) !== next) node.style.setProperty(name, next);
       };
       const rowWidth = row.getBoundingClientRect().width;
-      const tabWidth = parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab")) || 36;
-      const count = Number(row.style.getPropertyValue("--op-tab-count")) || 0;
-      const groupOverhead = Number(row.style.getPropertyValue("--op-split-count")) * 25 || 0;
-      const naturalTabsWidth = count ? count * (tabWidth + 3) - 3 + groupOverhead : 0;
-      // Do not count the new-tab button or the expansion reserve in the center.
-      // When space runs out, center only the visible tab viewport as far as possible.
-      const collapsedTabsWidth = Math.min(naturalTabsWidth, Math.max(0, rowWidth - tabWidth - 3));
-      const trailingReserve = Math.max(0, rowWidth - collapsedTabsWidth);
-      // In Island Mode the row has symmetric halves around the fixed
-      // center. Neither the hovered title nor the scroll positions affect it.
-      const wantsIsland = row.hasAttribute("data-op-show-island");
-      const dragRoom=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-window-drag-room"))||16;
-      const available = Math.max(0,2*Math.min(window.innerWidth/2-left,window.innerWidth/2-right)-8-2*dragRoom);
+      const style=window.getComputedStyle(row);
+      const tabWidth=parseFloat(style.getPropertyValue("--op-tab"))||36;
+      const openWidth=parseFloat(style.getPropertyValue("--op-tab-open"))||180;
+      const dragRoom=parseFloat(style.getPropertyValue("--op-window-drag-room"))||4;
+      const wantsIsland=row.hasAttribute("data-op-show-island");
       const iconHome=row.hasAttribute("data-op-home-icon");
-      const minIslandRoom = 32+2*(tabWidth+9);
-      const compactTitle=wantsIsland&&!iconHome&&available<100+2*(tabWidth+9);
-      row.toggleAttribute("data-op-island-compact",compactTitle);
-      const tight = wantsIsland && available < minIslandRoom;
-      row.toggleAttribute("data-op-island-tight",tight);
-      const centered = wantsIsland && !tight;
-      if (centered) {
-        const titleWidth=iconHome||compactTitle?32:Math.max(100,Math.min(180,available-2*(tabWidth+9)));
-        const laneWidth=lane=>Array.from(lane.children).reduce((sum,n)=>sum+compactSlotWidth(n,tabWidth)+3,6);
-        const expandReserve=iconHome&&row.getAttribute("data-op-hover-mode")==="expand"?Math.max(0,(parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab-open"))||180)-tabWidth):0;
-        const half=Math.max(laneWidth(leftLane),laneWidth(rightLane)+tabWidth+3,tabWidth+9)+expandReserve;
-        setLength(row,"--op-right-plus-offset",rightPlusOffset(Array.from(rightLane.children,n=>compactSlotWidth(n,tabWidth)),expandReserve));
-        setLength(row,"--op-island-width",titleWidth);
-        setLength(row,"--op-island-row-width",Math.min(available,titleWidth+6+2*half));
-      }else row.style.removeProperty("--op-right-plus-offset");
+      const frozen=row.hasAttribute("data-op-dragging")||row.hasAttribute("data-op-island-incoming")||cascadeState!=="idle";
+      if(!frozen){
+        const preferred=prefs.getIntPref("zen.oneplane.address-width",180);
+        const desired=adaptiveAddressWidth(preferred,window.innerWidth,left,16+dragRoom+4);
+        if(url.style.getPropertyValue("--op-url")!==desired+"px"){
+          setLength(url,"--op-url",desired);
+          addressCompactWidth=0;addressAnchor=null;alignAddressStart();
+        }
+        addressExtent=url.hasAttribute("data-op-empty")||url.hasAttribute("data-op-home")?0:
+          url.getBoundingClientRect().width+(parseFloat(window.getComputedStyle(url).marginLeft)||0)+(parseFloat(window.getComputedStyle(url).marginRight)||0);
+      }
+      left+=addressExtent;
+      const naturalTabsWidth=stripOrderSnapshot.reduce((n,node)=>n+compactSlotWidth(node,tabWidth)+3,0);
+      const collapsedTabsWidth=Math.min(naturalTabsWidth,Math.max(0,rowWidth-tabWidth-3));
+      const trailingReserve=Math.max(0,rowWidth-collapsedTabsWidth);
+      const available=Math.max(0,2*Math.min(window.innerWidth/2-left,window.innerWidth/2-right)-8-2*dragRoom);
+      const centered=wantsIsland;
+      if(centered&&!frozen){
+        row.removeAttribute("data-op-island-tight");
+        const widths=stripOrderSnapshot.map(n=>compactSlotWidth(n,tabWidth));
+        const groups=stripOrderSnapshot.map(n=>n.classList.contains("oneplane-split-group"));
+        const boundary=islandBoundary(widths,tabWidth+3);
+        const title=iconHome?32:Math.max(100,Math.min(180,available-2*(tabWidth+9)));
+        const layout=planAdaptiveTabRows(widths,groups,boundary,available,title,tabWidth);
+        applyStripPartition(layout);
+        row.toggleAttribute("data-op-island-compact",!iconHome&&layout.title===32);
+        const widthOf=indices=>indices.reduce((n,i)=>n+widths[i]+3,6);
+        const expandReserve=iconHome&&layout.mode==="wide"?Math.max(0,openWidth-tabWidth):0;
+        const half=Math.max(widthOf(layout.topLeft),widthOf(layout.topRight)+(layout.topPlus?tabWidth+3:0),tabWidth+9)+expandReserve;
+        const topWidth=layout.mode==="wide"?Math.min(available,layout.title+6+2*half):Math.max(layout.title+6,available);
+        const bottomBudget=Math.max(tabWidth+6,window.innerWidth-24);
+        const lowerNatural=widthOf(layout.lower)+2*(tabWidth+3)+(iconHome?Math.max(0,openWidth-tabWidth):0);
+        const bottomWidth=Math.min(bottomBudget,Math.max(3*tabWidth+12,lowerNatural));
+        setLength(row,"--op-island-width",layout.title);
+        setLength(row,"--op-island-row-width",Math.max(layout.title+6,topWidth));
+        setLength(row,"--op-right-plus-offset",rightPlusOffset(layout.topRight.map(i=>widths[i]),expandReserve));
+        setLength(row,"--op-overflow-width",bottomWidth);
+        setLength(row,"--op-bottom-open",Math.max(tabWidth,Math.min(openWidth,bottomWidth-2*(tabWidth+3)-6)));
+      }else if(!centered)row.style.removeProperty("--op-right-plus-offset");
       const bias=toolbarCenterBias(left,right,trailingReserve,centered);
       setLength(leftSpacer,"--op-center-bias",bias.left);
       setLength(rightSpacer,"--op-center-bias",bias.right);
@@ -3586,8 +3701,9 @@ function installTabStrip() {
       centerToolbar();
       // Keep the earlier switch guard for vertical geometry and mask,
       // not horizontal compensation. Old bias + new anchor = visible jump.
-      if(toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
+      if(!adaptiveHeightDirty&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
          window.performance.now()<panelSwitchUntil)return;
+      adaptiveHeightDirty=false;
       const setLength=(node,name,value)=>{
         const next=Math.max(0,Math.round(value))+"px";
         if(node.style.getPropertyValue(name)!==next)node.style.setProperty(name,next);
@@ -3710,8 +3826,7 @@ function installTabStrip() {
   function hoverSupported() {
     return !dead && root.hasAttribute("oneplane-active") &&
       !root.hasAttribute("customizing") && root.getAttribute("inDOMFullscreen")!=="true" &&
-      root.getAttribute("inFullscreen")!=="true" && !root.hasAttribute("popup-window") &&
-      window.innerWidth >= 900;
+      root.getAttribute("inFullscreen")!=="true" && !root.hasAttribute("popup-window");
   }
   function clearHover() {
     pointerInside = false;
@@ -3755,6 +3870,7 @@ function installTabStrip() {
     if(dead)return;
     if(!row.hasAttribute("data-op-dragging")&&hoverTab)clearTabHover();
     if(!nativeInlineOpen(addressBar())&&!addressTransition&&!addressSettling&&cascadeState!=="idle")resetTabCascade();
+    movePageActions();
     onCompactChanged();
     schedule();
   }

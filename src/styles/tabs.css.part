@@ -306,3 +306,50 @@
       content: ""; position: absolute; width: 10px; height: 1px;
       background: currentColor; transform: rotate(-40deg);
     }
+    /* The second lane is a real part of the tab strip. Its viewport may
+       extend beneath the side controls, but it never extends past the window. */
+    #oneplane-tabs[data-op-show-island] {--op-top-row-height:calc(var(--op-height) + var(--op-hover-reserve));}
+    #oneplane-tabs[data-op-show-island] .oneplane-tab-list {position:relative;translate:none;}
+    #oneplane-tabs .oneplane-overflow-lane[hidden] {display:none!important;}
+    #oneplane-tabs[data-op-overflow-row] {
+      height:calc(2 * var(--op-top-row-height))!important;
+      min-height:calc(2 * var(--op-top-row-height))!important;
+    }
+    #oneplane-tabs[data-op-overflow-row] .oneplane-tab-list {
+      grid-template-rows:var(--op-top-row-height)!important;
+      height:100%!important;
+      overflow:visible!important;
+      clip-path:none!important;
+    }
+    #oneplane-tabs[data-op-overflow-row] .oneplane-overflow-lane:not([hidden]){
+      display:flex!important;position:absolute;left:50%;top:var(--op-top-row-height);
+      translate:-50% 0;justify-content:safe center;
+      width:max(0px,calc(var(--op-overflow-width,100%) - 2 * (var(--op-tab) + 3px)));
+      height:var(--op-top-row-height);--op-tab-open:var(--op-bottom-open,180px);
+      overflow-x:auto!important;overflow-y:hidden!important;
+    }
+    #oneplane-tabs[data-op-overflow-row] .oneplane-title-island,
+    #oneplane-tabs[data-op-overflow-row] .oneplane-new-tab{
+      top:calc((var(--op-top-row-height) - var(--op-hover-bottom-pad))/2)!important;
+    }
+    #oneplane-tabs[data-op-bottom-plus] .oneplane-island-right {margin-inline-end:0!important;}
+    #oneplane-tabs[data-op-bottom-plus] .oneplane-new-tab {
+      left:calc(50% + var(--op-overflow-width,100%)/2 - var(--op-tab))!important;
+      top:calc(var(--op-top-row-height) + (var(--op-top-row-height) - var(--op-hover-bottom-pad))/2)!important;
+    }
+    #oneplane-tabs[data-op-adaptive-compact] :is(.oneplane-island-left,.oneplane-island-right) {
+      --op-tab-open:var(--op-tab);
+    }
+    #oneplane-tabs[data-op-adaptive-compact] :is(.oneplane-island-left,.oneplane-island-right) .oneplane-tab-select {
+      gap:0!important;padding-inline:0!important;
+    }
+    #oneplane-tabs[data-op-adaptive-compact] :is(.oneplane-island-left,.oneplane-island-right) .oneplane-tab-title {
+      max-width:0!important;opacity:0!important;
+    }
+    #oneplane-tabs[data-op-adaptive-compact] :is(.oneplane-island-left,.oneplane-island-right) .oneplane-tab {
+      --op-hover-zoom-delta:.05!important;--op-hover-descent:3px!important;
+    }
+    #oneplane-tabs[data-op-overflow-row] .oneplane-island-lane {
+      overflow-x:auto!important;overflow-y:hidden!important;
+    }
+    #oneplane-tabs[data-op-overflow-row] .oneplane-tab-list {padding-inline-end:0!important;}

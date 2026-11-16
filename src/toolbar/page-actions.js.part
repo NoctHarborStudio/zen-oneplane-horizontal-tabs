@@ -8,6 +8,7 @@
   const actionHomes = new Map();
   function movePageActions() {
     if (root.hasAttribute("customizing")) return;
+    if(window.innerWidth<=700){if(actions.isConnected||actionHomes.size)restorePageActions();return;}
     if (actions.parentElement !== target || actions !== target.lastElementChild) {
       target.append(actions);
     }

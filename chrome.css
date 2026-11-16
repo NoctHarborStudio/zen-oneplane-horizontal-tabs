@@ -13,10 +13,13 @@
 }
 /* OnePlane — native toolbar tab view. No fixed-position overlay. */
 #oneplane-hub-button, #oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss, #oneplane-center-start, #oneplane-center-end, #oneplane-toolbar-surface, #oneplane-split-drop { display: none !important; }
-@media (min-width: 900px) {
+@media (min-width: 0px) {
   :root[oneplane-active="true"]:not([customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window]):has(#nav-bar-customization-target > #oneplane-tabs[data-ready="true"]) {
     --op-height: 34px;
     --op-window-drag-room: 16px;
+    @media(max-width:760px){--op-window-drag-room:8px;}
+    @media(max-width:480px){--op-window-drag-room:4px;}
+    --op-top-row-height:calc(var(--op-height) + 18px);
     --op-tab: 36px;
     --op-tab-open: 180px;
     --op-url: 180px;
@@ -152,10 +155,34 @@
       justify-content: center !important;
       flex: 1 1 auto !important;
     }
+    /* Keep native captions and the essential navigation controls reachable.
+       Additional toolbar widgets remain in their native toolbar and are
+       available through the browser menu/extension panel in narrow mode. */
+    @media(max-width:700px){
+      #nav-bar-customization-target > :is(#sidebar-button,#sidebar-toggle-button,#forward-button,#home-button) {display:none!important;}
+      #nav-bar-customization-target > toolbarbutton:not(#back-button,#stop-reload-button,#reload-button,#unified-extensions-button,#PanelUI-menu-button,#nav-bar-overflow-button) {display:none!important;}
+    }
+    @media(max-width:520px){
+      #nav-bar-customization-target > :is(#stop-reload-button,#reload-button,#unified-extensions-button,#nav-bar-overflow-button) {display:none!important;}
+      #nav-bar .titlebar-buttonbox > toolbarbutton {min-width:28px!important;width:28px!important;padding-inline:0!important;}
+    }
+    @media(max-width:400px){
+      #nav-bar-customization-target > #back-button {display:none!important;}
+    }
+    #nav-bar:has(#oneplane-tabs[data-op-overflow-row]){
+      --op-overflow-extra:var(--op-top-row-height);
+      min-height:calc(2 * var(--op-top-row-height))!important;
+    }
+    #nav-bar:has(#oneplane-tabs[data-op-overflow-row]) #nav-bar-customization-target > :not(#oneplane-tabs){
+      margin-block-end:var(--op-overflow-extra)!important;
+    }
+    #nav-bar:has(#oneplane-tabs[data-op-overflow-row]) > :not(#nav-bar-customization-target):not(:has(#nav-bar-customization-target)){
+      margin-block-end:var(--op-overflow-extra)!important;
+    }
     #nav-bar-customization-target > #urlbar-container {
       flex: 0 0 var(--op-url) !important;
       width: var(--op-url) !important;
-      min-width: 100px !important;
+      min-width: min(100px,var(--op-url)) !important;
       max-width: none !important;
       margin-inline: 4px !important;
       padding-block: 0 !important;
@@ -407,6 +434,10 @@
       min-width: 0px !important;
     }
 
+    @media(max-width:520px){
+      #urlbar-container #urlbar:not([breakout-extend],[zen-floating-urlbar="true"],:popover-open) #zen-copy-url-button {display:none!important;}
+      #urlbar-container #urlbar:not([breakout-extend],[zen-floating-urlbar="true"],:popover-open) .urlbar-input-container {padding-inline:2px!important;}
+    }
     /* As a real toolbar child, the strip inherits native Compact Mode reveal. */
     #oneplane-tabs {
       display: flex !important;
@@ -715,6 +746,53 @@
       content: ""; position: absolute; width: 10px; height: 1px;
       background: currentColor; transform: rotate(-40deg);
     }
+    /* The second lane is a real part of the tab strip. Its viewport may
+       extend beneath the side controls, but it never extends past the window. */
+    #oneplane-tabs[data-op-show-island] {--op-top-row-height:calc(var(--op-height) + var(--op-hover-reserve));}
+    #oneplane-tabs[data-op-show-island] .oneplane-tab-list {position:relative;translate:none;}
+    #oneplane-tabs .oneplane-overflow-lane[hidden] {display:none!important;}
+    #oneplane-tabs[data-op-overflow-row] {
+      height:calc(2 * var(--op-top-row-height))!important;
+      min-height:calc(2 * var(--op-top-row-height))!important;
+    }
+    #oneplane-tabs[data-op-overflow-row] .oneplane-tab-list {
+      grid-template-rows:var(--op-top-row-height)!important;
+      height:100%!important;
+      overflow:visible!important;
+      clip-path:none!important;
+    }
+    #oneplane-tabs[data-op-overflow-row] .oneplane-overflow-lane:not([hidden]){
+      display:flex!important;position:absolute;left:50%;top:var(--op-top-row-height);
+      translate:-50% 0;justify-content:safe center;
+      width:max(0px,calc(var(--op-overflow-width,100%) - 2 * (var(--op-tab) + 3px)));
+      height:var(--op-top-row-height);--op-tab-open:var(--op-bottom-open,180px);
+      overflow-x:auto!important;overflow-y:hidden!important;
+    }
+    #oneplane-tabs[data-op-overflow-row] .oneplane-title-island,
+    #oneplane-tabs[data-op-overflow-row] .oneplane-new-tab{
+      top:calc((var(--op-top-row-height) - var(--op-hover-bottom-pad))/2)!important;
+    }
+    #oneplane-tabs[data-op-bottom-plus] .oneplane-island-right {margin-inline-end:0!important;}
+    #oneplane-tabs[data-op-bottom-plus] .oneplane-new-tab {
+      left:calc(50% + var(--op-overflow-width,100%)/2 - var(--op-tab))!important;
+      top:calc(var(--op-top-row-height) + (var(--op-top-row-height) - var(--op-hover-bottom-pad))/2)!important;
+    }
+    #oneplane-tabs[data-op-adaptive-compact] :is(.oneplane-island-left,.oneplane-island-right) {
+      --op-tab-open:var(--op-tab);
+    }
+    #oneplane-tabs[data-op-adaptive-compact] :is(.oneplane-island-left,.oneplane-island-right) .oneplane-tab-select {
+      gap:0!important;padding-inline:0!important;
+    }
+    #oneplane-tabs[data-op-adaptive-compact] :is(.oneplane-island-left,.oneplane-island-right) .oneplane-tab-title {
+      max-width:0!important;opacity:0!important;
+    }
+    #oneplane-tabs[data-op-adaptive-compact] :is(.oneplane-island-left,.oneplane-island-right) .oneplane-tab {
+      --op-hover-zoom-delta:.05!important;--op-hover-descent:3px!important;
+    }
+    #oneplane-tabs[data-op-overflow-row] .oneplane-island-lane {
+      overflow-x:auto!important;overflow-y:hidden!important;
+    }
+    #oneplane-tabs[data-op-overflow-row] .oneplane-tab-list {padding-inline-end:0!important;}
     /* A real flex wrapper, with one shared surface and a dedicated handle.
        Its 25px overhead is included in collapsed-strip centering. */
     #oneplane-tabs .oneplane-split-group {
@@ -1050,7 +1128,7 @@
 
 
 /* Slot positions are already calculated by the pointer controller. */
-@media (min-width:900px) {
+@media (min-width:0px) {
   #oneplane-tabs[data-op-live-drag] :is(.oneplane-tab-list,.oneplane-island-lane) > :is(.oneplane-tab,.oneplane-split-group),
   #oneplane-tabs[data-op-live-drag] .oneplane-new-tab {transition:none !important;}
   #oneplane-tabs[data-op-dragging] [data-op-detached] {opacity:0 !important;visibility:hidden !important;transition:none !important;}
@@ -1572,7 +1650,7 @@
 /* Integration with OnePlane: use a stable mask calculated from the
  * resting row. Match its complete activation selector and override only
  * the surface mask/height, not its tint, blur, panel motion or controls. */
-@media (min-width: 900px) {
+@media (min-width: 0px) {
   :root[oneplane-active="true"][zen-compact-mode="true"]:not([customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window]):has(#nav-bar-customization-target > #oneplane-tabs[data-ready="true"])
     #zen-appcontent-navbar-wrapper > #oneplane-toolbar-surface[data-zr-bm-stable-contour] {
     mask-image: var(--zr-bm-contour-mask) !important;
@@ -1581,7 +1659,7 @@
   }
 }
 
-@media (min-width: 900px) and (prefers-reduced-transparency: reduce) {
+@media (min-width: 0px) and (prefers-reduced-transparency: reduce) {
   :root[oneplane-active="true"][zen-compact-mode="true"]:not([customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window]):has(#nav-bar-customization-target > #oneplane-tabs[data-ready="true"])
     #zen-appcontent-navbar-wrapper > #oneplane-toolbar-surface[data-zr-bm-stable-contour] {
     mask-image: none !important;

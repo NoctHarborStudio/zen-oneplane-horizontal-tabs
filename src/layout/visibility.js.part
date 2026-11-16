@@ -75,8 +75,7 @@
   function hoverSupported() {
     return !dead && root.hasAttribute("oneplane-active") &&
       !root.hasAttribute("customizing") && root.getAttribute("inDOMFullscreen")!=="true" &&
-      root.getAttribute("inFullscreen")!=="true" && !root.hasAttribute("popup-window") &&
-      window.innerWidth >= 900;
+      root.getAttribute("inFullscreen")!=="true" && !root.hasAttribute("popup-window");
   }
   function clearHover() {
     pointerInside = false;
@@ -120,6 +119,7 @@
     if(dead)return;
     if(!row.hasAttribute("data-op-dragging")&&hoverTab)clearTabHover();
     if(!nativeInlineOpen(addressBar())&&!addressTransition&&!addressSettling&&cascadeState!=="idle")resetTabCascade();
+    movePageActions();
     onCompactChanged();
     schedule();
   }
