@@ -29,7 +29,7 @@
   }
   export function dragInterruptionKey(event){
     return event.key==="Escape"||event.key==="PrintScreen"||
-      ((event.metaKey||event.osKey)&&event.shiftKey&&String(event.key).toLowerCase()==="s");
+      Boolean((event.metaKey||event.osKey)&&event.shiftKey&&String(event.key).toLowerCase()==="s");
   }
   export function dragEndMatches(identity,event,tab){
     return !!identity&&identity.target===event?.target&&identity.tab===tab;

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0-preview.19
+
+- Normalize screenshot-shortcut detection to a strict boolean; fix regression test without weakening assertions. Includes preview.17–18 Drag Engine changes.
+
 ## 0.2.0-preview.18
 
 - Harden native dragend ownership against a different/stale source node or tab, preserving the Drag Engine stabilization scope. No Snap or Split View visual changes.
