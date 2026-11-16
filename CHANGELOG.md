@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0-preview.3
+
+- Documentation and update-diagnostic release: record OP-002 (opening animation frame pacing), OP-003 (URL selection disappearance), and OP-004 (intermittent Sine update discovery).
+- No runtime JS, CSS or preference changes relative to preview.2. This release also provides a fresh manifest for update-path diagnosis.
+
 ## 0.2.0-preview.2
 
 - Keep OnePlane mounted with native Compact Mode off; persistent horizontal toolbar uses normal layout flow. Compact Mode on retains the animated overlay. Stop forcing Compact Mode on startup or restoring its user-owned preference on unload.
