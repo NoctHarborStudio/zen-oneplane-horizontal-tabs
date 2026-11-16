@@ -1087,6 +1087,11 @@
     &[zen-compact-mode="true"] #zen-appcontent-navbar-wrapper:not([data-op-panel-open]) #zen-appcontent-navbar-container :not(#urlbar[zen-floating-urlbar="true"], #urlbar[zen-floating-urlbar="true"] *) {
       pointer-events: none !important;
     }
+    /* Startup reveal is owned by Zen Refined. Hold final panel geometry
+       while it assembles the children; release restores native motion. */
+    #zen-appcontent-navbar-wrapper[oneplane-startup-hold] {
+      transition: none !important;
+    }
     /* Frosted native toolbar; retain native reveal animation and popup states. */
     #zen-appcontent-navbar-wrapper[data-op-panel-open] {
       --op-panel-motion: var(--op-panel-open-speed);
@@ -1142,6 +1147,9 @@
         translate var(--op-panel-motion) var(--op-panel-ease) !important;
       position: relative !important;
       z-index: 1 !important;
+    }
+    #zen-appcontent-navbar-wrapper[oneplane-startup-hold] > :is(#zen-appcontent-navbar-container, #oneplane-toolbar-surface) {
+      transition: none !important;
     }
     #zen-appcontent-navbar-wrapper[data-op-panel-open] > #zen-appcontent-navbar-container {
       opacity:1 !important;

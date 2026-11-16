@@ -77,7 +77,7 @@
     refreshIslandTitle();
   }
   function trackTabPointer(event) {
-    if (!hoverSupported() || event.pointerType === "touch" || draggedTab) return;
+    if (!hoverSupported() || event.pointerType === "touch" || draggedTab || root.hasAttribute("data-zr-startup-phase")) return;
     const hit = event.target?.closest?.(".oneplane-tab");
     if (hit && list.contains(hit)) {
       const point = {x:event.clientX,y:event.clientY};
@@ -100,6 +100,7 @@
     queueTabCollapse();
   }
   function focusTab(event) {
+    if(root.hasAttribute("data-zr-startup-phase"))return;
     const item = event.target?.closest?.(".oneplane-tab");
     if (item && event.target.matches(":focus-visible")) selectHover(item);
   }

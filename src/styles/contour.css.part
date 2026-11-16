@@ -35,6 +35,9 @@
       position: relative !important;
       z-index: 1 !important;
     }
+    #zen-appcontent-navbar-wrapper[oneplane-startup-hold] > :is(#zen-appcontent-navbar-container, #oneplane-toolbar-surface) {
+      transition: none !important;
+    }
     #zen-appcontent-navbar-wrapper[data-op-panel-open] > #zen-appcontent-navbar-container {
       opacity:1 !important;
       translate: 0 0;

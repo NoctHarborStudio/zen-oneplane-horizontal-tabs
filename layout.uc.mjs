@@ -1017,7 +1017,7 @@ function installTabStrip() {
   let panelTimer=0, panelSwitchTimer=0, panelSwitchUntil=0, panelCloseSince=null;
   let panelLastPointer=null;
   const PANEL_NATIVE_FLAGS=["zen-has-hover","has-popup-menu","zen-compact-mode-active"];
-  const PANEL_HOLD_FLAGS=["oneplane-url-hold","oneplane-drag-hold"];
+  const PANEL_HOLD_FLAGS=["oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold"];
   const PANEL_SWITCH_GRACE=180, PANEL_CLOSE_GRACE=100;
   // One visual state for the wrapper, tint and controls. Native flags
   // can disappear/reappear during a native tab selection transaction.
@@ -2304,7 +2304,7 @@ function installTabStrip() {
     refreshIslandTitle();
   }
   function trackTabPointer(event) {
-    if (!hoverSupported() || event.pointerType === "touch" || draggedTab) return;
+    if (!hoverSupported() || event.pointerType === "touch" || draggedTab || root.hasAttribute("data-zr-startup-phase")) return;
     const hit = event.target?.closest?.(".oneplane-tab");
     if (hit && list.contains(hit)) {
       const point = {x:event.clientX,y:event.clientY};
@@ -2327,6 +2327,7 @@ function installTabStrip() {
     queueTabCollapse();
   }
   function focusTab(event) {
+    if(root.hasAttribute("data-zr-startup-phase"))return;
     const item = event.target?.closest?.(".oneplane-tab");
     if (item && event.target.matches(":focus-visible")) selectHover(item);
   }
@@ -2786,6 +2787,8 @@ function cleanup() {
   if (disposed) return;
   disposed = true;
   root.removeAttribute("oneplane-active");
+  root.removeAttribute("data-op-startup-ready");
+  window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
   removeTabStrip?.();
   removeTabStrip = null;
   if (startupObserver) {
@@ -2827,6 +2830,14 @@ async function activate() {
     removeTabStrip = installTabStrip();
     // Native state changes and animations remain owned by Zen.
     root.setAttribute("oneplane-active", "true");
+    // Publish readiness after activation has allowed geometry and the
+    // native toolbar to settle. No dependency on Zen Refined.
+    window.dispatchEvent(new window.CustomEvent("ZenCompactMode:LayoutUpdate"));
+    window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>{
+      if(disposed||window.closed)return;
+      root.setAttribute("data-op-startup-ready","true");
+      window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
+    }));
   } catch (error) {
     console.error("[OnePlane] Layout activation failed:", error);
     cleanup();
@@ -2836,6 +2847,8 @@ async function activate() {
 if (!root.hasAttribute("popup-window") && typeof window.addUnloadListener === "function") {
   window[CONTROLLER]?.cleanup();
   window[CONTROLLER] = controller;
+  root.setAttribute("data-op-startup-ready","pending");
+  window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
   window.addEventListener("beforeunload", markClosing, true);
   window.addEventListener("unload", cleanup, { once: true });
   window.addUnloadListener(cleanup);

@@ -53,3 +53,7 @@ Preview 0.2.0-preview.2 keeps OnePlane active in both Compact Mode states. Toggl
 
 
 Preview 0.2.0-preview.4 prioritizes address animation, startup centering and the persistent Compact Mode command before Hub. See [roadmap](docs/roadmap.md) and [known issues](docs/known-issues.md).
+
+## Optional Zen Refined startup integration
+
+OnePlane exposes `data-op-startup-ready` (`pending` → `true`) and observes the optional `oneplane-startup-hold` wrapper flag. Zen Refined owns the startup animation and releases the flag on completion/cancel. OnePlane never requires Zen Refined; normal startup, Compact Mode and persistent mode work independently. The hold does not change browser preferences.
