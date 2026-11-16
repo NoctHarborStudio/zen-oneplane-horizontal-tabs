@@ -1,7 +1,7 @@
 
 /* Native root popup: outside the compact overlay and contour. */
-#oneplane-hub-panel .op-hub-content {display:flex;flex-direction:column;gap:8px;box-sizing:border-box;width:300px;max-width:calc(100vw - 32px);max-height:min(560px,calc(100vh - 80px));overflow:auto;padding:14px;color:inherit;font:menu;}
-#oneplane-hub-panel .op-hub-title {font-size:18px;font-weight:650;margin:0 0 6px;}
+#oneplane-hub-panel .op-hub-content {display:flex;flex-direction:column;gap:8px;box-sizing:border-box;width:var(--op-hub-width,250px);max-width:calc(100vw - 8px);max-height:min(560px,calc(100vh - 80px));overflow:auto;padding:10px;color:var(--op-hub-fg,inherit);font:menu;}
+#oneplane-hub-panel .op-hub-title {font-size:16px;font-weight:650;margin:0 0 6px;}
 #oneplane-hub-panel .op-hub-heading {font-size:11px;font-weight:600;opacity:.7;margin:8px 0 0;}
 #oneplane-hub-panel .op-hub-spaces {display:flex;flex-direction:column;gap:3px;}
 #oneplane-hub-panel :is(.op-hub-space,.op-hub-mode,.op-hub-add,.op-hub-name) {font:inherit;color:inherit;border:0;border-radius:8px;background:transparent;box-sizing:border-box;min-height:34px;}
@@ -22,3 +22,19 @@
 #oneplane-hub-panel .op-hub-status {font-size:12px;}
 #oneplane-hub-panel .op-hub-mode {width:100%;}
 #oneplane-hub-panel button:disabled {opacity:.5;cursor:default;}
+
+#oneplane-hub-panel {
+  --panel-padding:0px !important; --panel-border-radius:8px !important;
+  --panel-background:var(--op-hub-bg,light-dark(#e0e4ec,#30343e)) !important;
+  --panel-color:var(--op-hub-fg,inherit) !important;
+  --panel-border-color:color-mix(in srgb,var(--op-hub-fg,currentColor) 12%,transparent) !important;
+  margin:0 !important; padding:0 !important;
+  color:var(--op-hub-fg,inherit) !important;
+}
+#oneplane-hub-panel::part(content) {padding:0 !important;margin:0 !important;background:var(--panel-background) !important;border-radius:8px !important;}
+#oneplane-hub-panel .op-hub-content {background:var(--panel-background);border-radius:8px;}
+#oneplane-hub-panel .op-hub-name {outline:none;box-shadow:none;}
+#oneplane-hub-panel .op-hub-name:focus-visible {outline:2px solid AccentColor;outline-offset:-2px;}
+#oneplane-hub-panel .op-hub-context {padding:3px 5px 5px 32px;}
+#oneplane-hub-panel .op-hub-delete {display:block;width:100%;text-align:start;color:inherit;background:color-mix(in srgb,currentColor 8%,transparent);border:0;border-radius:6px;padding:7px;font:inherit;cursor:pointer;}
+#oneplane-hub-panel .op-hub-delete:hover:not(:disabled) {background:color-mix(in srgb,currentColor 16%,transparent);}

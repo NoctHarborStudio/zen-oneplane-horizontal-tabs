@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0-preview.12
+
+- Visible SVG Hub trigger; match address surface and left/navigation width; no native arrow padding.
+- Keep Hub open while toggling Compact Mode, bounded recovery if Zen rolls up the popup.
+- Workspace right-click Delete with confirmation, last/Free protection and default safe tab preservation for ordinary single-window cases.
+- Record multi-monitor workspace projection and Return design; not implemented yet. User verified preview.11 creation and switching; new polish needs live testing.
+
 ## 0.2.0-preview.11
 
 - Hub Foundation: stable left button, native popup, real workspaces, explicit named creation, Compact Mode and lifecycle-owned visibility hold.

@@ -82,18 +82,24 @@
     #nav-bar-customization-target > toolbarspring { display: none !important; }
     #zen-toggle-compact-mode { display:none !important; }
     #nav-bar-customization-target > #oneplane-hub-button {
-      display:flex !important;
-      order: -1 !important;
-      flex:0 0 30px !important;
-      width:30px !important;
-      min-width:30px !important;
-      height:30px !important;
-      margin:0 !important;
-      padding:4px !important;
-      list-style-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='1.5' y='2.5' width='13' height='11' rx='2' fill='none' stroke='context-stroke' stroke-width='1.4'/%3E%3Cpath d='M2 6h12M5 6v7M8 9h4M8 11h4' fill='none' stroke='context-stroke' stroke-width='1.4'/%3E%3C/svg%3E") !important;
-      -moz-context-properties:stroke;
-      stroke:currentColor;
+      display:grid !important; place-items:center;
+      order:-1 !important; flex:0 0 30px !important;
+      width:30px !important; min-width:30px !important; height:30px !important;
+      margin:0 !important; padding:0 !important; border:0 !important;
+      border-radius:var(--op-url-radius) !important;
+      color:inherit !important; background:transparent !important;
+      appearance:none !important; cursor:pointer;
     }
+    #oneplane-hub-button > svg {
+      display:block !important; width:18px !important; height:18px !important;
+      fill:none !important; stroke:currentColor !important; stroke-width:1.5;
+      stroke-linecap:round; stroke-linejoin:round; pointer-events:none;
+      opacity:.88;
+    }
+    #oneplane-hub-button:is(:hover,[aria-expanded="true"]) {
+      background:color-mix(in srgb,currentColor 12%,transparent) !important;
+    }
+    #oneplane-hub-button:focus-visible {outline:2px solid AccentColor;outline-offset:-2px;}
     #nav-bar-customization-target > :is(#sidebar-button, #sidebar-toggle-button) { order: 0 !important; }
     #nav-bar-customization-target > #oneplane-center-start { order: 35 !important; }
     #nav-bar-customization-target > #back-button { order: 20 !important; }

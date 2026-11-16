@@ -8,3 +8,7 @@ Existing native spaces are shown as-is. Free designation/migration and full edit
 - Verify actual names, current space, selection, named creation, no duplicate tabs, disabled workspaces, private/synced windows, rapid clicks and unload during async work.
 - Right-click non-selected, pinned and split tabs; the native menu must act on the exact tab without selecting it first. Cancel if trigger identity is unavailable. Check keyboard menu, submenus and cleanup.
 - Verify no regression in Center Assembly, Fluid Wave, Bunny, shared Magnetic Bookmarks and contour. Native appearance is provisional; custom Hub animation and full Library remain future work.
+
+## Preview.12 — live feedback and polish
+
+User confirmed native workspace creation and switching, including newly created empty Work. Hub icon was invisible, Compact toggle closed the panel, and fixed width/left alignment/theme did not match the toolbar. Preview.12 uses an explicit SVG button, address-width-derived panel geometry and address surface color. Compact transition keeps intent with at most one bounded reopen. Right-click workspace opens actions. Delete uses native Zen removal after explicit confirmation: ordinary ungrouped tabs in a single participating window move to another existing space (Free if designated); grouped/Glance/multiwindow cases require separate explicit consent to close remaining tabs, not a silent lossy move. Last space and designated Free protected. Live tests pending. Test populated/empty, active/inactive, grouped, multiwindow, cancellation and last-space protection.

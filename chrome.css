@@ -82,18 +82,24 @@
     #nav-bar-customization-target > toolbarspring { display: none !important; }
     #zen-toggle-compact-mode { display:none !important; }
     #nav-bar-customization-target > #oneplane-hub-button {
-      display:flex !important;
-      order: -1 !important;
-      flex:0 0 30px !important;
-      width:30px !important;
-      min-width:30px !important;
-      height:30px !important;
-      margin:0 !important;
-      padding:4px !important;
-      list-style-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='1.5' y='2.5' width='13' height='11' rx='2' fill='none' stroke='context-stroke' stroke-width='1.4'/%3E%3Cpath d='M2 6h12M5 6v7M8 9h4M8 11h4' fill='none' stroke='context-stroke' stroke-width='1.4'/%3E%3C/svg%3E") !important;
-      -moz-context-properties:stroke;
-      stroke:currentColor;
+      display:grid !important; place-items:center;
+      order:-1 !important; flex:0 0 30px !important;
+      width:30px !important; min-width:30px !important; height:30px !important;
+      margin:0 !important; padding:0 !important; border:0 !important;
+      border-radius:var(--op-url-radius) !important;
+      color:inherit !important; background:transparent !important;
+      appearance:none !important; cursor:pointer;
     }
+    #oneplane-hub-button > svg {
+      display:block !important; width:18px !important; height:18px !important;
+      fill:none !important; stroke:currentColor !important; stroke-width:1.5;
+      stroke-linecap:round; stroke-linejoin:round; pointer-events:none;
+      opacity:.88;
+    }
+    #oneplane-hub-button:is(:hover,[aria-expanded="true"]) {
+      background:color-mix(in srgb,currentColor 12%,transparent) !important;
+    }
+    #oneplane-hub-button:focus-visible {outline:2px solid AccentColor;outline-offset:-2px;}
     #nav-bar-customization-target > :is(#sidebar-button, #sidebar-toggle-button) { order: 0 !important; }
     #nav-bar-customization-target > #oneplane-center-start { order: 35 !important; }
     #nav-bar-customization-target > #back-button { order: 20 !important; }
@@ -1504,8 +1510,8 @@
 
 
 /* Native root popup: outside the compact overlay and contour. */
-#oneplane-hub-panel .op-hub-content {display:flex;flex-direction:column;gap:8px;box-sizing:border-box;width:300px;max-width:calc(100vw - 32px);max-height:min(560px,calc(100vh - 80px));overflow:auto;padding:14px;color:inherit;font:menu;}
-#oneplane-hub-panel .op-hub-title {font-size:18px;font-weight:650;margin:0 0 6px;}
+#oneplane-hub-panel .op-hub-content {display:flex;flex-direction:column;gap:8px;box-sizing:border-box;width:var(--op-hub-width,250px);max-width:calc(100vw - 8px);max-height:min(560px,calc(100vh - 80px));overflow:auto;padding:10px;color:var(--op-hub-fg,inherit);font:menu;}
+#oneplane-hub-panel .op-hub-title {font-size:16px;font-weight:650;margin:0 0 6px;}
 #oneplane-hub-panel .op-hub-heading {font-size:11px;font-weight:600;opacity:.7;margin:8px 0 0;}
 #oneplane-hub-panel .op-hub-spaces {display:flex;flex-direction:column;gap:3px;}
 #oneplane-hub-panel :is(.op-hub-space,.op-hub-mode,.op-hub-add,.op-hub-name) {font:inherit;color:inherit;border:0;border-radius:8px;background:transparent;box-sizing:border-box;min-height:34px;}
@@ -1526,3 +1532,19 @@
 #oneplane-hub-panel .op-hub-status {font-size:12px;}
 #oneplane-hub-panel .op-hub-mode {width:100%;}
 #oneplane-hub-panel button:disabled {opacity:.5;cursor:default;}
+
+#oneplane-hub-panel {
+  --panel-padding:0px !important; --panel-border-radius:8px !important;
+  --panel-background:var(--op-hub-bg,light-dark(#e0e4ec,#30343e)) !important;
+  --panel-color:var(--op-hub-fg,inherit) !important;
+  --panel-border-color:color-mix(in srgb,var(--op-hub-fg,currentColor) 12%,transparent) !important;
+  margin:0 !important; padding:0 !important;
+  color:var(--op-hub-fg,inherit) !important;
+}
+#oneplane-hub-panel::part(content) {padding:0 !important;margin:0 !important;background:var(--panel-background) !important;border-radius:8px !important;}
+#oneplane-hub-panel .op-hub-content {background:var(--panel-background);border-radius:8px;}
+#oneplane-hub-panel .op-hub-name {outline:none;box-shadow:none;}
+#oneplane-hub-panel .op-hub-name:focus-visible {outline:2px solid AccentColor;outline-offset:-2px;}
+#oneplane-hub-panel .op-hub-context {padding:3px 5px 5px 32px;}
+#oneplane-hub-panel .op-hub-delete {display:block;width:100%;text-align:start;color:inherit;background:color-mix(in srgb,currentColor 8%,transparent);border:0;border-radius:6px;padding:7px;font:inherit;cursor:pointer;}
+#oneplane-hub-panel .op-hub-delete:hover:not(:disabled) {background:color-mix(in srgb,currentColor 16%,transparent);}

@@ -1037,6 +1037,10 @@ function installTabStrip() {
     captionHome?.remove();
     captionHome=captionNode=null;
   }
+  function hubPanelWidth(left,right,viewport){
+    const room=Math.max(1,viewport-left-8);
+    return Math.max(1,Math.min(Math.round(room),Math.max(180,Math.round(right-left))));
+  }
   function hubWorkspaceSnapshot(manager) {
     try {
       if (!manager || manager.workspaceEnabled === false ||
@@ -1056,29 +1060,71 @@ function installTabStrip() {
   }
   // Native Hub, window-scoped. Zen owns all workspace/session state.
   function createHubController({target,root,toolbarWrapper,supported,hold,switchGuard}) {
-    const button=document.createXULElement("toolbarbutton");
-    button.id="oneplane-hub-button"; button.className="toolbarbutton-1";
+    const button=html("button","op-hub-trigger");
+    button.id="oneplane-hub-button";button.type="button";
+    const glyph=document.createElementNS("http://www.w3.org/2000/svg","svg");
+    glyph.setAttribute("viewBox","0 0 20 20");glyph.setAttribute("aria-hidden","true");
+    const shape=document.createElementNS(glyph.namespaceURI,"path");
+    shape.setAttribute("d","M4 3.5h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2ZM2 8h16M7 8v8.5M10 11h5M10 14h5");
+    glyph.append(shape);button.append(glyph);button.title="OnePlane Hub";
     for(const [key,value] of Object.entries({skipintoolbarset:"true",removable:"false",tooltiptext:"OnePlane Hub","aria-label":"OnePlane Hub","aria-haspopup":"dialog","aria-expanded":"false"}))button.setAttribute(key,value);
     const panel=document.createXULElement("panel");
     panel.id="oneplane-hub-panel";
-    for(const [key,value] of Object.entries({type:"arrow",orient:"vertical",role:"dialog","aria-label":"OnePlane Hub"}))panel.setAttribute(key,value);
+    for(const [key,value] of Object.entries({orient:"vertical",role:"dialog","aria-label":"OnePlane Hub"}))panel.setAttribute(key,value);
     const make=(tag,cls,text)=>{const n=html(tag,cls);if(text!==undefined)n.textContent=text;return n;};
     const content=make("div","op-hub-content");
     const spaces=make("div","op-hub-spaces"),status=make("div","op-hub-status");
     status.setAttribute("role","status");status.setAttribute("aria-live","polite");
     const form=make("form","op-hub-create"),name=make("input","op-hub-name"),add=make("button","op-hub-add","+");
-    name.type="text";name.maxLength=80;name.placeholder="New workspace";name.required=true;name.setAttribute("aria-label","New workspace name");
+    name.type="text";name.maxLength=80;name.placeholder="New workspace";name.setAttribute("aria-label","New workspace name");
     add.type="submit";add.setAttribute("aria-label","Create workspace");form.append(name,add);
     const mode=make("button","op-hub-mode");mode.type="button";
     content.append(make("h2","op-hub-title","OnePlane"),make("h3","op-hub-heading","Workspaces"),spaces,form,status,make("h3","op-hub-heading","Settings"),mode);
     panel.append(content);
-    let destroyed=false,busy=false,open=false,escapeFocus=false;
+    let destroyed=false,busy=false,open=false,escapeFocus=false,contextId=null,modeTransition=false,modeTimer=0,modeFrame=0,modeReopened=false;
+    let geometryFrame=0;
     const manager=()=>window.gZenWorkspaces;
     const command=()=>document.getElementById("cmd_toggleCompactModeIgnoreHover");
     function setHold(value){toolbarWrapper?.toggleAttribute("oneplane-hub-hold",value);hold();}
+    function clearModeTransition(){
+      modeTransition=false;modeReopened=false;
+      if(modeTimer)window.clearTimeout(modeTimer);modeTimer=0;
+      if(modeFrame)window.cancelAnimationFrame(modeFrame);modeFrame=0;
+    }
     function close(){
+      clearModeTransition();contextId=null;open=false;
+      if(geometryFrame)window.cancelAnimationFrame(geometryFrame);geometryFrame=0;
       if(panel.state==="open"||panel.state==="showing")panel.hidePopup();
-      open=false;button.setAttribute("aria-expanded","false");setHold(false);
+      button.setAttribute("aria-expanded","false");setHold(false);
+    }
+    function updateGeometry(){
+      if(!open||!supported())return;
+      const b=button.getBoundingClientRect(),a=url.getBoundingClientRect();
+      const bar=document.getElementById("urlbar"),style=window.getComputedStyle(root);
+      const compact=parseFloat(style.getPropertyValue("--op-url"))||180;
+      // A blank tab collapses the address anchor. Reserve its usual width,
+      // rather than collapsing the Hub or following a live search wave.
+      const right=a.width>1?a.right:a.left+compact;
+      const width=hubPanelWidth(b.left,right,window.innerWidth);
+      panel.style.setProperty("--op-hub-width",width+"px");
+      const bg=bar&&window.getComputedStyle(bar).getPropertyValue("--op-url-surface").trim();
+      if(bg)panel.style.setProperty("--op-hub-bg",bg);
+      else panel.style.setProperty("--op-hub-bg",style.getPropertyValue("--op-url-surface").trim()||"light-dark(#e0e4ec,#30343e)");
+      const color=bar&&window.getComputedStyle(bar).color;
+      if(color)panel.style.setProperty("--op-hub-fg",color);
+      const x=window.mozInnerScreenX+b.left,y=window.mozInnerScreenY+b.bottom+4;
+      if(panel.state==="open"&&typeof panel.moveTo==="function")panel.moveTo(Math.round(x),Math.round(y));
+      return {x:Math.round(x),y:Math.round(y)};
+    }
+    function scheduleHubGeometry(){
+      if(!open||geometryFrame)return;
+      geometryFrame=window.requestAnimationFrame(()=>{geometryFrame=0;updateGeometry();});
+    }
+    function showPopup(){
+      const p=updateGeometry();if(!p)return false;
+      if(typeof panel.openPopupAtScreen==="function")panel.openPopupAtScreen(p.x,p.y,false);
+      else panel.openPopup(button,"after_start",0,4,false,false);
+      return true;
     }
     function render(){
       if(destroyed)return;
@@ -1091,14 +1137,78 @@ function installTabStrip() {
         const icon=make("span","op-hub-icon",space.icon||Array.from(space.name)[0]?.toUpperCase()||"·");icon.setAttribute("aria-hidden","true");
         entry.append(icon,make("span","op-hub-label",space.name));
         if(space.active)entry.append(make("span","op-hub-current","•"));
-        entry.addEventListener("click",()=>void select(space.id));spaces.append(entry);
+        entry.addEventListener("click",()=>void select(space.id));
+        entry.addEventListener("contextmenu",event=>{event.preventDefault();event.stopPropagation();if(!busy){contextId=contextId===space.id?null:space.id;render();}});
+        spaces.append(entry);
+        if(contextId===space.id)spaces.append(workspaceMenu(space,snapshot));
         if(focusedId===space.id&&open&&!busy)entry.focus({preventScroll:true});
       }
       form.hidden=!snapshot||typeof manager()?.createAndSaveWorkspace!=="function";
-      name.disabled=add.disabled=busy;
+      name.disabled=busy;add.disabled=busy||!name.value.trim();
       const compact=root.getAttribute("zen-compact-mode")==="true";
-      mode.textContent=compact?"Compact Mode · On":"Compact Mode · Off";
+      mode.textContent=compact?"Compact Mode     On":"Compact Mode     Off";
       mode.setAttribute("aria-pressed",String(compact));mode.disabled=typeof command()?.doCommand!=="function";
+    }
+    function workspaceMenu(space,snapshot){
+      const menu=make("div","op-hub-context");menu.setAttribute("role","group");menu.setAttribute("aria-label","Workspace actions");
+      const native=manager(),free=prefs.getStringPref("zen.oneplane.free-space-id","");
+      const canDelete=snapshot.length>1&&space.id!==free&&typeof native?.removeWorkspace==="function";
+      const remove=make("button","op-hub-delete","Delete workspace…");remove.type="button";remove.disabled=busy||!canDelete;
+      remove.addEventListener("click",()=>void removeSpace(space.id));
+      menu.append(remove);return menu;
+    }
+    function ownedTabs(native,id){
+      if(!Array.isArray(native?.allStoredTabs))return null;
+      return native.allStoredTabs.filter(tab=>tab.getAttribute("zen-workspace-id")===id&&
+        !tab.hasAttribute("zen-essential")&&!(tab.hasAttribute("zen-empty-tab")&&!tab.group));
+    }
+    // Keep existing data by default. Moving ordinary tabs is safe only with
+    // one participating window and no native grouping/Glance relationships.
+    function preservationPlan(native,id,destination){
+      try{
+        const tabs=ownedTabs(native,id);
+        if(!tabs||!destination||typeof native.moveTabsToWorkspace!=="function")return null;
+        const windows=Services.wm.getEnumerator("navigator:browser");
+        while(windows.hasMoreElements()){
+          const other=windows.getNext();
+          if(other!==window&&!other.closed&&other.gZenWorkspaces?.getWorkspaceFromId?.(id))return null;
+        }
+        if(tabs.some(t=>t.closing||t.group||t.hasAttribute("glance-id")||t.hasAttribute("zen-glance-tab")||
+          t.hasAttribute("split-view")||t.querySelector?.(".tabbrowser-tab[glance-id]")))return null;
+        const targetSpace=native.getWorkspaceFromId(destination.id),element=native.workspaceElement(destination.id);
+        if(!targetSpace||!element||tabs.some(t=>!((t.pinned?element.pinnedTabsContainer:element.tabsContainer))))return null;
+        return tabs;
+      }catch{return null;}
+    }
+    async function removeSpace(id){
+      if(busy||destroyed)return;
+      const native=manager(),snapshot=hubWorkspaceSnapshot(native),space=snapshot?.find(s=>s.id===id);
+      const free=prefs.getStringPref("zen.oneplane.free-space-id","");
+      if(!space||snapshot.length<=1||id===free||typeof native.removeWorkspace!=="function")return;
+      const destination=snapshot.find(s=>s.id===free&&s.id!==id)||snapshot.find(s=>s.id!==id&&s.active)||snapshot.find(s=>s.id!==id);
+      const plan=preservationPlan(native,id,destination);
+      const title="Delete workspace: "+space.name;
+      // Native removeWorkspace closes owned tabs (also relevant to synced
+      // windows). Never call it implicitly for a preservation request.
+      const description=plan===null?
+        "This workspace may contain tabs in other windows or groups. Deleting it through Zen closes its remaining tabs. Continue?":
+        plan.length?"Move its "+plan.length+" tab(s) to “"+destination.name+"”, then delete the workspace?":
+        "Delete this empty workspace?";
+      busy=true;contextId=null;status.textContent="";
+      try{
+        if(!Services.prompt.confirm(window,title,description))return;
+        const current=hubWorkspaceSnapshot(native);
+        if(destroyed||!current?.some(s=>s.id===id)||current.length<=1||prefs.getStringPref("zen.oneplane.free-space-id","")===id)return;
+        if(plan!==null){
+          const now=preservationPlan(native,id,destination);
+          if(!now||now.length!==plan.length||now.some(t=>!plan.includes(t)))throw Error("Workspace changed; try again");
+          if(now.length)native.moveTabsToWorkspace([...now],destination.id);
+          if(now.some(t=>t.getAttribute("zen-workspace-id")!==destination.id)||ownedTabs(native,id)?.length!==0)throw Error("Not all tabs were moved; deletion cancelled");
+        }
+        switchGuard();await native.removeWorkspace(id);
+        if(native.getWorkspaceFromId(id))throw Error("Workspace was not removed");
+      }catch(error){if(!destroyed)status.textContent="Could not delete workspace safely.";console.warn("[OnePlane] Hub delete:",error);}
+      finally{busy=false;if(!destroyed&&open)render();}
     }
     async function select(id){
       if(busy||destroyed)return;
@@ -1130,25 +1240,37 @@ function installTabStrip() {
       if(!supported()||destroyed)return;
       if(open||panel.state==="open"||panel.state==="showing"){close();return;}
       ensure();if(!panel.isConnected||typeof panel.openPopup!=="function")return;
-      status.textContent="";escapeFocus=false;open=true;
+      status.textContent="";escapeFocus=false;contextId=null;open=true;
       button.setAttribute("aria-expanded","true");setHold(true);render();
-      try{panel.openPopup(button,"after_start",0,4,false,false);}
+      try{if(!showPopup())close();}
       catch(error){close();console.warn("[OnePlane] Hub popup:",error);}
     }
     function shown(event){
-      if(event.target===panel)(spaces.querySelector('[aria-current="true"]:not(:disabled)')||spaces.querySelector("button:not(:disabled)")||mode).focus({preventScroll:true});
+      if(event.target===panel&&!modeTransition)(spaces.querySelector('[aria-current="true"]:not(:disabled)')||spaces.querySelector("button:not(:disabled)")||mode).focus({preventScroll:true});
     }
     function hidden(event){
       if(event.target!==panel)return;
-      open=false;button.setAttribute("aria-expanded","false");setHold(false);
+      if(open&&modeTransition&&!modeReopened&&!destroyed&&supported()){
+        modeReopened=true;modeFrame=window.requestAnimationFrame(()=>{modeFrame=0;if(open&&modeTransition&&supported())try{showPopup();}catch{close();}});return;
+      }
+      clearModeTransition();contextId=null;open=false;button.setAttribute("aria-expanded","false");setHold(false);
       if(escapeFocus&&!destroyed&&supported())button.focus();escapeFocus=false;
     }
-    function key(event){if(event.key==="Escape"){escapeFocus=true;event.preventDefault();event.stopPropagation();close();}}
-    function changed(){if(open)render();}
+    function key(event){if(event.key==="Escape"){event.preventDefault();event.stopPropagation();if(contextId){contextId=null;render();return;}escapeFocus=true;close();}}
+    function changed(){if(open){render();scheduleHubGeometry();}}
     function onMode(){if(!supported())close();else changed();}
-    function deactivate(){if(open)close();}
-    function toggleMode(){const cmd=command();if(typeof cmd?.doCommand==="function"){close();cmd.doCommand();}}
-    const listeners=[[button,"command",toggle],[panel,"popupshown",shown],[panel,"popuphidden",hidden],[panel,"keydown",key],[form,"submit",create],[mode,"click",toggleMode],[window,"deactivate",deactivate]];
+    function deactivate(){if(open&&!modeTransition&&!busy)close();}
+    function toggleMode(){
+      const cmd=command();if(typeof cmd?.doCommand!=="function"||!open)return;
+      clearModeTransition();modeTransition=true;setHold(true);
+      // Zen can roll up the native popup while reparenting toolbar nodes.
+      // Preserve intent for one bounded reopen, not a permanent popup lock.
+      modeTimer=window.setTimeout(()=>{clearModeTransition();if(open&&panel.state==="closed")close();},650);
+      try{cmd.doCommand();changed();}catch(error){clearModeTransition();console.warn("[OnePlane] Compact Mode:",error);}
+    }
+    function onInput(){add.disabled=busy||!name.value.trim();}
+    function onOutside(event){if(open&&modeTransition&&!panel.contains(event.target)&&!button.contains(event.target))close();}
+    const listeners=[[button,"click",toggle],[panel,"popupshown",shown],[panel,"popuphidden",hidden],[panel,"keydown",key],[form,"submit",create],[mode,"click",toggleMode],[window,"deactivate",deactivate],[name,"input",onInput],[window,"resize",scheduleHubGeometry],[window,"pointerdown",onOutside]];
     for(const event of ["ZenWorkspaceDataChanged","ZenWorkspacesUIUpdate","ZenCompactMode:Toggled","ZenCompactMode:LayoutUpdate"])listeners.push([window,event,changed]);
     for(const [node,event,fn] of listeners)node.addEventListener(event,fn);
     function destroy(){if(destroyed)return;destroyed=true;close();for(const [node,event,fn] of listeners)node.removeEventListener(event,fn);panel.remove();button.remove();}

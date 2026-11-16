@@ -92,3 +92,8 @@
 - Preview.10 limits both scale axes to 100%, removes overshoot, and fades items progressively during opening. Bookmarks share the address trajectory with depth-aware timing; native text is opacity-only.
 - Shared Magnetic Bookmarks controller replaces duplicate ownership; both updated mods needed for reliable two-way unload handoff. Contour recalculation suspended during wave.
 - Status: mitigation prepared; live visual/FPS and integration validation pending.
+
+## OP-014 — Hub foundation visual and Compact Mode issues
+
+- User confirmed creating/switching native workspaces works in preview.11. Hub icon not painted; popup closes on Compact toggle; width and left edge do not align with navigation and color differs.
+- Preview.12 explicit SVG trigger, measured compact address edge, shared address surface token, non-arrow popup, retained Compact toggle intent; pending visual verification. Right-click deletion added with explicit confirmation and safe preservation when supported.

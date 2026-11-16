@@ -1,3 +1,7 @@
+  export function hubPanelWidth(left,right,viewport){
+    const room=Math.max(1,viewport-left-8);
+    return Math.max(1,Math.min(Math.round(room),Math.max(180,Math.round(right-left))));
+  }
   export function hubWorkspaceSnapshot(manager) {
     try {
       if (!manager || manager.workspaceEnabled === false ||
