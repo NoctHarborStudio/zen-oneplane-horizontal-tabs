@@ -154,3 +154,11 @@ Preview.26 user reports maximize and startup still fail; indicator cooldown conf
 ### OP-019 / projection startup update (preview.28)
 
 User-provided console identifies premature startup cancellation: Error: Window closed before Zen restore begins. Both tasks had unconditional document unload handlers. Replace with native domwindowclosed notifications, closed-state checks and bounded readiness; preserve startup guard through document replacement. Correct destination and geometry confirmed by log; indicator confirmed by user. Runtime retest pending.
+
+### OP-019 update (preview.29)
+
+User reports .28 generally works. Search appears when projecting inactive Work, but already-active Space can show only transparent placeholder. Latest pasted console lacks OnePlane projection stages; exact cause unconfirmed. .29 verifies actual native search view rather than zen-newtab flag alone, resumes stale native session after placement and skips redundant native workspace switch. Runtime retest pending; keep geometry and accepted indicator unchanged.
+
+## OP-022 — floating search surface color/translucency
+
+User reports near-black native floating search mismatches muted blue-gray OnePlane toolbar. Approved shared visual pipeline in OnePlane and Zen Refined, including standalone compatibility; not implemented yet. See roadmap.

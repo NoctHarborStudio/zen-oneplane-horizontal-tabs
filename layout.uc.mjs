@@ -2021,13 +2021,42 @@ function installTabStrip() {
       projectionLog(child,"start-prepared",{candidates:startupTabs.size,removed,identifiable});
       return b.selectedTab===empty;
     }
-    function openProjectionSearch(child,id){
-      if(child.closed||destroyed||child.gZenWorkspaces?.activeWorkspace!==id||
-        !child.gBrowser?.selectedTab?.hasAttribute("zen-empty-tab"))return;
-      const bar=child.gURLBar;
-      if(!bar||bar.hasAttribute("zen-newtab"))return;
-      const opened=child.gZenUIManager?.handleNewTab(false,false,"tab",true);
-      projectionLog(child,"search",{opened:!!opened});
+    // A synced child can inherit an empty-page search session whose
+    // zen-newtab attribute remains set even after native focus/rollup hides
+    // its result view. Check the actual floating view, not just its flag.
+    async function openProjectionSearch(child,id,interacted){
+      const eligible=()=>!child.closed&&!window.closed&&!destroyed&&!interacted()&&
+        child.gZenWorkspaces?.activeWorkspace===id&&
+        child.gBrowser?.selectedTab?.hasAttribute("zen-empty-tab");
+      const isVisible=bar=>!!bar?.hasAttribute("zen-newtab")&&
+        !!(bar.view?.isOpen||bar.hasAttribute("open"));
+      const wait=()=>new Promise(resolve=>window.setTimeout(resolve,100));
+      if(!eligible())return false;
+      child.focus();
+      // Let the real window activation/size-mode change and native URL-bar
+      // rollup settle. Never steal focus again or toggle an existing search.
+      for(let attempt=0;attempt<4;attempt++){
+        await wait();
+        if(!eligible()){projectionLog(child,"search-cancelled",{attempt});return false;}
+        const bar=child.gURLBar;
+        const focused=child.document?.hasFocus?.()??true;
+        if(isVisible(bar)&&focused){projectionLog(child,"search-visible",{attempt});return true;}
+        if(!bar||!focused)continue;
+        const session=bar.hasAttribute("zen-newtab");
+        try{
+          if(session){
+            // Resume the already-owned native new-tab session, rather than
+            // calling handleNewTab again or creating an ordinary tab.
+            bar.search("");
+            child.document.getElementById("Browser:OpenLocation")?.doCommand();
+          }else child.gZenUIManager?.handleNewTab(false,false,"tab",true);
+          projectionLog(child,"search-attempt",{attempt,resumed:session,viewOpen:isVisible(bar),focused});
+        }catch(error){projectionLog(child,"search-error",{attempt,error:String(error)});}
+      }
+      await wait();
+      const visible=eligible()&&isVisible(child.gURLBar)&&(child.document?.hasFocus?.()??true);
+      projectionLog(child,"search-result",{visible:!!visible});
+      return !!visible;
     }
     // A newly opened chrome WindowProxy survives its initial document
     // replacement. Never use DOM unload as a window-close notification.
@@ -2115,17 +2144,21 @@ function installTabStrip() {
         projectionLog(child,"spaces-ready",{candidates:startupTabs.size});
         if(child.closed||destroyed||!child.gZenWorkspaces?.currentWindowIsSyncing||
           child.gZenWindowSync!==window.gZenWindowSync||!child.gZenWorkspaces.getWorkspaceFromId(id))throw Error("Native sync unavailable");
-        await child.gZenWorkspaces.changeWorkspaceWithID(id);
+        const alreadyActive=child.gZenWorkspaces.activeWorkspace===id;
+        // The cloned window may already be on the requested workspace.
+        // A redundant native switch is a no-op and can disturb focus.
+        if(!alreadyActive)await child.gZenWorkspaces.changeWorkspaceWithID(id);
         if(child.gZenWorkspaces.activeWorkspace!==id)throw Error("Workspace not activated");
+        projectionLog(child,"workspace-active",{alreadyActive,sourceActive:native.activeWorkspace===id});
         // Select Zen's transparent placeholder first, including when the
         // synthetic startup tab was the selected tab in this window.
         const showStart=prepareProjectionStart(child,id,startupTabs,preexistingIds,identifiable,interacted);
-        // Startup search must not be blocked by native maximize/placement.
-        if(!child.closed&&!interacted&&showStart){
-          child.focus();openProjectionSearch(child,id);
-        }
+        // Keep empty-tab selection independent of placement. Open the
+        // floating search AFTER window placement settles, because native
+        // activation/maximize may otherwise dismiss it on the same space.
         const placed=await placementTask;
-        if(!child.closed&&!interacted&&showStart)openProjectionSearch(child,id);
+        const searchVisible=showStart&&await openProjectionSearch(child,id,()=>interacted);
+        projectionLog(child,"projection-complete",{placed,searchVisible:!!searchVisible,alreadyActive});
         status.textContent=placed?"":"Window opened; placement could not be verified.";
       }catch(error){
         if(child&&!child.closed)delete child[PROJECTION];

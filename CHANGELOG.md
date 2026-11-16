@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0-preview.29
+
+- Open projected workspace search after placement settles; verify actual visible native view, resume inherited closed new-tab session, skip redundant same-space switch and add bounded diagnostics. No tab creation or geometry/indicator changes.
+- Record shared theme-aware floating search color/translucency design in roadmap. Runtime verification pending.
+
 ## 0.2.0-preview.28
 
 - Fix premature workspace/placement startup cancellation on document unload; observe actual native window closure and verified closed state instead.

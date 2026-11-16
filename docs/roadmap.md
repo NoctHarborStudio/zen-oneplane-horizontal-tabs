@@ -117,3 +117,11 @@ Cross-monitor placement now has a Snap-style OnePlane preview, fixed center targ
 ## Preview.21 — Display & Snap Engine first implementation
 
 Separate display geometry and runtime adapter. Windows chrome native monitor validation, work-area snap, small source-window map and guarded native placement. True desktop-wide visual overlay and native shell Snap semantics deferred pending physical-monitor verification. Drag Engine live test remains open; do not advance to Workspace Engine until this gate is reviewed.
+
+## Preview.29 — projection verification checkpoint
+
+User reports .28 now generally works, including transparent placeholder and search when projecting an inactive workspace, but search is missing for the already-active workspace. Keep Display & Snap Engine on runtime verification until consistent search is confirmed. .29 distinguishes inherited search state from actual open view; open after window placement, bounded recovery only, no ordinary tab creation. Continue using Browser Console stage diagnostics for subsequent regressions.
+
+## Shared floating search surface — approved 2026-11-16
+
+User screenshot: the native central floating search panel is near-black, while the OnePlane toolbar uses a muted blue-gray surface; user requests matching color and translucency in both OnePlane and standalone Zen Refined. This is an agreed visual pipeline task, not yet implemented. Zen Refined should own the reusable native floating URL-bar surface styling; OnePlane should provide/consume compatible toolbar surface tokens and a standalone fallback when Refined is absent. One effective style owner when both are enabled; no duplicated opacity/blur or competing overrides. Use theme-derived color, controlled translucency and a readable fallback when OS material/backdrop is unavailable. Preserve native search layout, keyboard/focus/security cues, suggestions and Smart Search behavior. Test ordinary startup, Ctrl+T, projected workspace, dark/light themes, Nebula on/off, each mod separately and combined, multi-monitor and disable/unload. Do not change accepted Fluid animations.
