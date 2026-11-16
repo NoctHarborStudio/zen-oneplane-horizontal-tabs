@@ -46,7 +46,8 @@ test("Home native search preserves surface on cancel and ignores stale close",()
  const run=new Function("win","panel","content",code+`
  let open=true,searchToken=null,searchBar=null,searchFrame=0,searchMotion=null,searchTimer=0,closed=0;
  let searchGeometry=null,searchLastHeight=0,searchCurrentHeight=0,searchClosing=false,searchReturn=null,searchReturnFrame=0;
- let searchInput=null,searchOriginalPlaceholder=null,searchSessionLabel=null;const doc={getElementById:()=>null};
+ let searchInput=null,searchOriginalPlaceholder=null,searchSessionLabel=null;
+ let searchSnapshot=null,searchSnapshotTimer=0,searchSnapshotObserver=null;const doc={getElementById:()=>null};
  function close(){open=false;closed++;finishSearchVisual()}
  function leaveHome(){close()}
  function ensurePrimaryHome(){}
@@ -243,6 +244,7 @@ test("Home search waits for a real result height and animates both directions",(
  const panel={hasAttribute:k=>attrsMock.has(k),setAttribute:(k,v)=>attrsMock.set(k,v)};const attrsMock=new Map();
  function nativeSearchOpen(){return true}
  function finishSearchMotion(){bar.removeAttribute("data-zr-home-search-motion")}
+ function scheduleSearchSnapshot(){}
  return {start:()=>startSearchMorph(searchToken,searchGeometry),close:()=>{searchClosing=true;animateSearchHeight(searchToken,400,56,460,true,()=>{})},get current(){return searchCurrentHeight}};
  `);
  const a=run(win,bar);
@@ -256,8 +258,8 @@ test("Home search waits for a real result height and animates both directions",(
 });
 test("Home search closing preserves native ownership and has blur fallback",()=>{
  assert.ok(core.includes("bar._zenHandleUrlbarClose(false,false)"));
- assert.ok(core.includes("animateSearchHeight(token,from,g.header,460,true"));
- assert.ok(core.includes("function animateSearchReturn()"));
+ assert.ok(core.includes("animateSearchReturn(reason,true)"));
+ assert.ok(core.includes("function animateSearchReturn(reason="));
  assert.ok(core.includes('panel.removeAttribute("data-zh-return")'));
  assert.ok(core.includes("if(detail.onElementPicked||detail.onSwitch)leaveHome();"));
  assert.ok(core.includes('searchReturn?.remove()'));
@@ -294,4 +296,26 @@ test("Home search handoff shares header tokens, exact anchor and no New tab labe
  assert.ok(!core.includes("shell.style.opacity="));
  assert.ok(core.includes("round?280:560"));
  assert.ok(core.includes("eased=t*t*(3-2*t)"));
+});
+
+test("Home return alpha follows the moving bottom edge, not the native close event",()=>{
+ const alpha=new Function(extract("  function returnSectionAlpha(","  function freezeSearchResults(")+"return returnSectionAlpha")();
+ assert.equal(alpha(300,450,0),0);
+ assert.equal(alpha(300,350,.8),0);
+ assert.equal(alpha(300,276,.5),.45);
+ assert.equal(alpha(300,200,1),1);
+ assert.equal(alpha(650,500,0),0);
+ assert.ok(alpha(650,500,.2)>0&&alpha(650,500,.2)<1);
+ assert.equal(alpha(300,264,.95,264),1);
+});
+test("Home closes with a frozen native results layer and no early full Home opacity",()=>{
+ assert.ok(core.includes("function freezeSearchResults(view,barRect)"));
+ assert.ok(core.includes('const target=html(src?"img":"div")'));
+ assert.ok(core.includes('if(frozen)shell.append(frozen.node)'));
+ assert.ok(core.includes('captureSearchSnapshot();\n    animateSearchReturn(reason,true);'));
+ assert.ok(core.includes('opacity:var(--zh-return-alpha,0)'));
+ assert.ok(core.includes('returnSectionAlpha(part.top,top+h,p,dest.top+dest.height)'));
+ assert.ok(core.includes('searchLog("close-start",{reason,rows:'));
+ assert.ok(!core.includes('.zh-footer{opacity:1}'));
+ assert.ok(core.includes("stopSearchSnapshot();"));
 });

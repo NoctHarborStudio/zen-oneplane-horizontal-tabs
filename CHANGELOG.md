@@ -1,3 +1,9 @@
+## 0.2.0-preview.56 — Continuous search collapse
+
+- Freeze the latest native Smart Search result view into a detached, inert visual copy before cancellation; preserve visible rows during the reverse animation even if Zen tears down the popover on blur.
+- Reveal Pinned, Workspaces and Customize progressively using the moving bottom edge and elapsed progress. No overlapping full-opacity Home content when a result snapshot is available.
+- Add close-start/close-finish diagnostics (reason, row count, geometry and duration; no URLs or query text). Preserve preview.55 overflow and Compact changes. Native browser visual verification pending.
+
 ## 0.2.0-preview.55 — Visible overflow scrubber and opaque shelf
 
 - Separate native range for the lower lane; proportional thumb and position, pointer, keyboard and wheel, hidden when all tabs fit. Keep existing row height and plus placement.
