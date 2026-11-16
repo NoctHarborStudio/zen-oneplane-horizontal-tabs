@@ -53,33 +53,63 @@
         margin-inline-end var(--op-tab-speed) var(--op-tab-ease),
         scale var(--op-tab-speed) var(--op-tab-ease), translate var(--op-tab-speed) var(--op-tab-ease);
     }
-    /* The card visibly grows into the spare vertical space of the row.
-       Keep horizontal overhang below half the 3px slot gap at every
-       supported width, and keep the independent drag transform untouched. */
+    /* Expand mode: one eased progress value controls the complete slot.
+       The actual box is slot / zoom; symmetric margins reserve the exact
+       painted width. Adjacent cards can retarget without overlapping. */
     #oneplane-tabs .oneplane-tab { scale: 1; translate: 0 0; transform-origin: center; }
     #oneplane-tabs .oneplane-tab-icon img {
       scale: 1;
       transition: scale var(--op-tab-speed) var(--op-tab-ease);
     }
     #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) {
-      scale: 1.02 1.20;
-      translate: 0 7px;
       z-index: 2;
     }
-    #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) .oneplane-tab-icon img {
-      scale: 1.28;
+    #oneplane-tabs:not([data-op-dragging],[data-op-hover-mode="island"]) .oneplane-tab:not([data-op-reinsert]) {
+      --op-hover-zoom-delta:.2;
+      --op-hover-descent:7px;
+      --op-hover-zoom:calc(1 + var(--op-hover-progress) * var(--op-hover-zoom-delta));
+      --op-hover-slot:calc(var(--op-tab) + (var(--op-tab-open) - var(--op-tab)) * var(--op-hover-progress));
+      --op-hover-base:calc(var(--op-hover-slot) / var(--op-hover-zoom));
+      box-sizing:border-box;min-width:0;
+      width:var(--op-hover-base);flex-basis:var(--op-hover-base);
+      margin-inline:calc((var(--op-hover-slot) - var(--op-hover-base)) / 2);
+      scale:var(--op-hover-zoom);translate:0 calc(var(--op-hover-descent) * var(--op-hover-progress));
+      transition:--op-hover-progress var(--op-tab-speed) var(--op-tab-ease),
+        background-color var(--op-tab-speed) ease, transform 170ms cubic-bezier(.22,.72,.2,1), opacity 120ms ease;
     }
-    /* Split members stay within their shared frame. A small in-frame
-       lift and a larger favicon are preferable to stretching the group. */
-    #oneplane-tabs:not([data-op-dragging]) .oneplane-split-group .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) {
-      scale:1 1.05;
+    #oneplane-tabs:not([data-op-dragging],[data-op-hover-mode="island"]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) {
+      --op-hover-progress:1;
+    }
+    /* Split members retain their small in-frame lift; Island retains its
+       stationary slot widths. Both use uniform rather than axis-wise scale. */
+    #oneplane-tabs:not([data-op-dragging],[data-op-hover-mode="island"]) .oneplane-split-group .oneplane-tab:not([data-op-reinsert]) {
+      --op-hover-zoom-delta:.05;
+      --op-hover-descent:1px;
+    }
+    #oneplane-tabs[data-op-hover-mode="island"]:not([data-op-dragging]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) {
+      scale:1.05;
+      translate:0 3px;
+    }
+    #oneplane-tabs[data-op-hover-mode="island"]:not([data-op-dragging]) .oneplane-split-group .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) {
       translate:0 1px;
     }
+    /* Keep the combined card + icon zoom near the original 128%, not 154%. */
+    #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) .oneplane-tab-icon img {
+      scale:1.22;
+    }
+    #oneplane-tabs:not([data-op-dragging],[data-op-hover-mode="island"]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) .oneplane-tab-icon img {
+      scale:1.067;
+    }
+    #oneplane-tabs:not([data-op-dragging],[data-op-hover-mode="island"]) .oneplane-split-group .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) .oneplane-tab-icon img {
+      scale:1.22;
+    }
     @media (prefers-reduced-motion: reduce) {
+      #oneplane-tabs .oneplane-tab { --op-hover-zoom-delta:0!important; --op-hover-descent:0px!important; }
       #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered],
       #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered] .oneplane-tab-icon img { scale: 1 !important; translate: none !important; }
     }
     @media (-moz-pref("zen.oneplane.animation-duration", 0)) {
+      #oneplane-tabs .oneplane-tab { --op-hover-zoom-delta:0!important; --op-hover-descent:0px!important; }
       #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered],
       #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered] .oneplane-tab-icon img { scale: 1 !important; translate: none !important; }
     }

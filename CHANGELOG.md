@@ -1,3 +1,9 @@
+## 0.2.0-preview.40 — Proportional tab hover
+
+- Expand ordinary tabs with uniform 120% scale and the existing 7px descent. A single interpolated progress drives layout width, scale and exact symmetric slot compensation; the configured expanded width remains the final painted width, with no additional horizontal overhang.
+- Split and Island hover use a restrained uniform 105% scale; keep Split within its frame and Island slots stationary. Compensate the favicon zoom to remain around 128%; preserve drag, address-wave and reduced-motion paths.
+- Chromium fixture verified geometry at 140/180/240px during hover retargeting; real Zen verification pending.
+
 ## 0.2.0-preview.39 — Home recommended pin picker
 
 - Customize → Add Pin offers one-click recommendations from native toolbar bookmarks and recent visible tabs; already pinned URLs and unsafe schemes are excluded.

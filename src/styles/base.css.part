@@ -5,6 +5,12 @@
   inherits: true;
   initial-value: 100%;
 }
+/* One interpolated hover value drives both painted scale and reserved slot. */
+@property --op-hover-progress {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
 /* OnePlane — native toolbar tab view. No fixed-position overlay. */
 #oneplane-hub-button, #oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss, #oneplane-center-start, #oneplane-center-end, #oneplane-toolbar-surface, #oneplane-split-drop { display: none !important; }
 @media (min-width: 900px) {
