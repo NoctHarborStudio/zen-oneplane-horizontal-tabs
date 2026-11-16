@@ -1,3 +1,10 @@
+## 0.2.0-preview.59 — Four upper tabs and smoother overflow
+
+- Keep up to two ordinary tabs on each side of the fixed Home center when the measured budget allows; never move part of a Split View group upstairs. Keep the full title when possible and preserve the wide strip. Reserve enough address space for the extra pair.
+- Make resting strip/lane background a native window drag region instead of a blanket no-drag hitbox. Only actual cards, groups, controls and active drag/cascade states exclude the native region; preserve DOM hit testing for wheel and tab DnD.
+- Reduce overflow range hit height to 6px, track to 2px, and thumb to 4px (6px on hover). Wheel and track-click movement use a bounded 145ms ease-out, with accumulated wheel targets; thumb dragging and horizontal trackpad input stay direct. Respect reduced motion and cancel on tab drag, selection reveal and teardown.
+- Regression fixtures cover allocation and scrolling. Native Zen/Windows runtime validation pending.
+
 ## 0.2.0-preview.58 — Home footer return
 
 - Use the footer's resting opacity when animating Customize back into view, not its search-hidden opacity.

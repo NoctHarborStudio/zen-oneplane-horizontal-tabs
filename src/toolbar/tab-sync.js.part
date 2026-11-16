@@ -127,7 +127,10 @@
     if(viewport.scrollWidth<=viewport.clientWidth+1)return;
     const a=item.getBoundingClientRect(),b=viewport.getBoundingClientRect();
     const delta=a.left<b.left?a.left-b.left:a.right>b.right?a.right-b.right:0;
-    if(Math.abs(delta)>1)viewport.scrollLeft+=delta;
+    if(Math.abs(delta)>1){
+      if(viewport===bottomLane)cancelOverflowMotion();
+      viewport.scrollLeft+=delta;
+    }
   }
   function onSelect() {
     markHomeTitleActivity();

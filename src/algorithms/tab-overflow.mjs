@@ -100,3 +100,9 @@
     return {visible,max,position,value:Math.round(position*1000),
       thumb:visible?Math.min(viewport,Math.max(20,viewport*viewport/content)):0};
   }
+
+  // Direct dragging bypasses this short, interruptible ease-out.
+  export function overflowScrollEase(start,target,elapsed,duration=145){
+    const t=duration>0?Math.max(0,Math.min(1,elapsed/duration)):1;
+    return t===1?target:start+(target-start)*(1-(1-t)**3);
+  }

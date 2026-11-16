@@ -1220,6 +1220,12 @@ function installTabStrip() {
     return {visible,max,position,value:Math.round(position*1000),
       thumb:visible?Math.min(viewport,Math.max(20,viewport*viewport/content)):0};
   }
+
+  // Direct dragging bypasses this short, interruptible ease-out.
+  function overflowScrollEase(start,target,elapsed,duration=145){
+    const t=duration>0?Math.max(0,Math.min(1,elapsed/duration)):1;
+    return t===1?target:start+(target-start)*(1-(1-t)**3);
+  }
   let adaptiveHeightDirty=false,overflowRevealAnimation=null;
   function mountLaneNodes(lane,nodes){
     for(let i=0;i<nodes.length;i++){
@@ -5298,6 +5304,7 @@ function installTabStrip() {
     const image = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
     if (!image) { event.preventDefault(); return; }
     cancelInsertion();
+    cancelOverflowMotion();
     if(dragLifecycle.current())cancelActiveDrag("superseded");
     const grabbed = image.getBoundingClientRect();
     dragGrabRatio = Math.max(0,Math.min(1,(event.clientX-grabbed.left)/Math.max(1,grabbed.width)));
@@ -5876,7 +5883,8 @@ function installTabStrip() {
     if(!raw||!Number.isFinite(raw))return;
     const unit=event.deltaMode===1?32:event.deltaMode===2?lane.clientWidth:1;
     event.preventDefault();event.stopPropagation();
-    lane.scrollLeft+=raw*unit;
+    if(lane.id==="oneplane-overflow-tabs")scrollOverflowBy(raw*unit,event.deltaMode===0&&Math.abs(event.deltaX)>Math.abs(event.deltaY));
+    else lane.scrollLeft+=raw*unit;
     refreshIndicator();
   }
   let leftScrollMax=null;
@@ -5894,11 +5902,62 @@ function installTabStrip() {
 
 
   let overflowSliderFrame=0,overflowSliderUntil=0;
+  let overflowMotionFrame=0,overflowMotion=null,overflowPointer=null;
+  function cancelOverflowMotion(){
+    if(overflowMotionFrame)window.cancelAnimationFrame(overflowMotionFrame);
+    overflowMotionFrame=0;overflowMotion=null;
+  }
+  function overflowMotionAllowed(){
+    return !dead&&!bottomLane.hidden&&cascadeState==="idle"&&!row.hasAttribute("data-op-dragging")&&!row.hasAttribute("data-op-island-incoming");
+  }
+  function tickOverflowMotion(now){
+    overflowMotionFrame=0;
+    if(!overflowMotion||!overflowMotionAllowed()){cancelOverflowMotion();return;}
+    const m=overflowMotion,max=Math.max(0,bottomLane.scrollWidth-bottomLane.clientWidth);
+    const target=Math.max(0,Math.min(max,m.target)),elapsed=Math.max(0,now-m.startTime);
+    bottomLane.scrollLeft=overflowScrollEase(m.start,target,elapsed,m.duration);
+    refreshOverflowSlider();
+    if(!overflowMotion)return;
+    if(elapsed<m.duration&&Math.abs(bottomLane.scrollLeft-target)>.5)
+      overflowMotionFrame=window.requestAnimationFrame(tickOverflowMotion);
+    else{bottomLane.scrollLeft=target;cancelOverflowMotion();refreshOverflowSlider();}
+  }
+  function scrollOverflowTo(target,direct=false){
+    if(!overflowMotionAllowed())return;
+    const max=Math.max(0,bottomLane.scrollWidth-bottomLane.clientWidth);
+    target=Math.max(0,Math.min(max,target));
+    cancelOverflowMotion();
+    if(direct||reducedMotion.matches||prefs.getIntPref("zen.oneplane.animation-duration",160)===0||Math.abs(target-bottomLane.scrollLeft)<1){
+      bottomLane.scrollLeft=target;refreshOverflowSlider();return;
+    }
+    overflowMotion={start:bottomLane.scrollLeft,target,startTime:window.performance.now(),duration:145};
+    overflowMotionFrame=window.requestAnimationFrame(tickOverflowMotion);
+  }
+  function scrollOverflowBy(delta,direct=false){
+    const from=direct?bottomLane.scrollLeft:overflowMotion?.target??bottomLane.scrollLeft;
+    scrollOverflowTo(from+delta,direct);
+  }
+  function onOverflowPointerDown(event){
+    if(event.button!==0)return;
+    cancelOverflowMotion();
+    const r=overflowSlider.getBoundingClientRect(),m=overflowScrollMetrics(bottomLane.clientWidth,bottomLane.scrollWidth,bottomLane.scrollLeft);
+    const center=r.left+m.thumb/2+m.position*Math.max(0,r.width-m.thumb);
+    overflowPointer={id:event.pointerId,x:event.clientX,direct:Math.abs(event.clientX-center)<=m.thumb/2+2};
+  }
+  function onOverflowPointerMove(event){
+    if(!overflowPointer||overflowPointer.id!==event.pointerId||overflowPointer.direct)return;
+    if(Math.abs(event.clientX-overflowPointer.x)>3){
+      overflowPointer.direct=true;cancelOverflowMotion();
+    }
+  }
+  function onOverflowPointerEnd(event){
+    if(overflowPointer?.id===event.pointerId)overflowPointer=null;
+  }
   function refreshOverflowSlider(){
     if(dead)return;
     const m=overflowScrollMetrics(bottomLane.clientWidth,bottomLane.scrollWidth,bottomLane.scrollLeft);
     overflowSlider.hidden=bottomLane.hidden||!row.hasAttribute("data-op-overflow-row")||!m.visible;
-    if(overflowSlider.hidden)return;
+    if(overflowSlider.hidden){cancelOverflowMotion();return;}
     const width=m.thumb.toFixed(2)+"px";
     if(overflowSlider.style.getPropertyValue("--op-scroll-thumb")!==width)overflowSlider.style.setProperty("--op-scroll-thumb",width);
     if(Number(overflowSlider.value)!==m.value)overflowSlider.value=String(m.value);
@@ -5908,8 +5967,7 @@ function installTabStrip() {
   function onOverflowSliderInput(){
     if(dead||bottomLane.hidden||cascadeState!=="idle"||row.hasAttribute("data-op-dragging"))return;
     const m=overflowScrollMetrics(bottomLane.clientWidth,bottomLane.scrollWidth,bottomLane.scrollLeft);
-    bottomLane.scrollLeft=m.max*Number(overflowSlider.value)/1000;
-    refreshOverflowSlider();
+    scrollOverflowTo(m.max*Number(overflowSlider.value)/1000,overflowPointer?.direct===true);
   }
   function onOverflowSliderWheel(event){
     if(event.ctrlKey||event.metaKey||cascadeState!=="idle"||row.hasAttribute("data-op-dragging"))return;
@@ -5918,8 +5976,8 @@ function installTabStrip() {
     const raw=Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.deltaY;
     if(!raw)return;
     event.preventDefault();event.stopPropagation();
-    bottomLane.scrollLeft+=raw*(event.deltaMode===1?32:event.deltaMode===2?bottomLane.clientWidth:1);
-    refreshOverflowSlider();
+    scrollOverflowBy(raw*(event.deltaMode===1?32:event.deltaMode===2?bottomLane.clientWidth:1),
+      event.deltaMode===0&&Math.abs(event.deltaX)>Math.abs(event.deltaY));
   }
   function onOverflowSliderEnter(){if(hoverTab||indicatorHover)clearTabHover();}
   function onOverflowSliderDragStart(event){event.preventDefault();event.stopPropagation();}
@@ -5937,16 +5995,28 @@ function installTabStrip() {
   }
   function mountOverflowSlider(){
     overflowSlider.addEventListener("input",onOverflowSliderInput);
+    overflowSlider.addEventListener("pointerdown",onOverflowPointerDown);
+    window.addEventListener("pointermove",onOverflowPointerMove,true);
+    window.addEventListener("pointerup",onOverflowPointerEnd,true);
+    window.addEventListener("pointercancel",onOverflowPointerEnd,true);
+    window.addEventListener("blur",cancelOverflowPointer);
     overflowSlider.addEventListener("wheel",onOverflowSliderWheel,{passive:false});
     overflowSlider.addEventListener("pointerenter",onOverflowSliderEnter);
     overflowSlider.addEventListener("dragstart",onOverflowSliderDragStart);
     bottomLane.addEventListener("scroll",refreshOverflowSlider,{passive:true});
     for(const type of ["transitionrun","transitionend","transitioncancel"])bottomLane.addEventListener(type,onOverflowWidthTransition);
   }
+  function cancelOverflowPointer(){overflowPointer=null;cancelOverflowMotion();}
   function destroyOverflowSlider(){
+    cancelOverflowPointer();
     if(overflowSliderFrame)window.cancelAnimationFrame(overflowSliderFrame);
     overflowSliderFrame=0;
     overflowSlider.removeEventListener("input",onOverflowSliderInput);
+    overflowSlider.removeEventListener("pointerdown",onOverflowPointerDown);
+    window.removeEventListener("pointermove",onOverflowPointerMove,true);
+    window.removeEventListener("pointerup",onOverflowPointerEnd,true);
+    window.removeEventListener("pointercancel",onOverflowPointerEnd,true);
+    window.removeEventListener("blur",cancelOverflowPointer);
     overflowSlider.removeEventListener("wheel",onOverflowSliderWheel);
     overflowSlider.removeEventListener("pointerenter",onOverflowSliderEnter);
     overflowSlider.removeEventListener("dragstart",onOverflowSliderDragStart);
@@ -6184,7 +6254,10 @@ function installTabStrip() {
     if(viewport.scrollWidth<=viewport.clientWidth+1)return;
     const a=item.getBoundingClientRect(),b=viewport.getBoundingClientRect();
     const delta=a.left<b.left?a.left-b.left:a.right>b.right?a.right-b.right:0;
-    if(Math.abs(delta)>1)viewport.scrollLeft+=delta;
+    if(Math.abs(delta)>1){
+      if(viewport===bottomLane)cancelOverflowMotion();
+      viewport.scrollLeft+=delta;
+    }
   }
   function onSelect() {
     markHomeTitleActivity();

@@ -41,6 +41,7 @@
     const image = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
     if (!image) { event.preventDefault(); return; }
     cancelInsertion();
+    cancelOverflowMotion();
     if(dragLifecycle.current())cancelActiveDrag("superseded");
     const grabbed = image.getBoundingClientRect();
     dragGrabRatio = Math.max(0,Math.min(1,(event.clientX-grabbed.left)/Math.max(1,grabbed.width)));
