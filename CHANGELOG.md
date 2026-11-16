@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0-preview.23
+
+- Seed native workspace/tab window creation on verified target monitor using converted opener position and destination size features; retain post-startup snap verification and bounded native move fallback.
+- Do not silently open an unknown target on source during experimental monitor drag; add local placement diagnostics. Preserve existing preview, zones and animations.
+
 ## 0.2.0-preview.22
 
 - Broaden monitor snap zones (22% horizontal, 18% vertical), move small placement preview to target display with CSS coordinate conversion and validation.

@@ -52,3 +52,17 @@
     return !!rect&&[x,y,rect.left,rect.right,rect.top,height].every(Number.isFinite)&&
       x>=rect.left&&x<rect.right&&y>=Math.max(0,rect.top)&&y<Math.max(0,rect.top)+Math.max(0,height);
   }
+  // nsWindowWatcher converts position using opener CSS->desktop scale,
+  // and outer size using the destination widget CSS scale (plus opener zoom).
+  // Use a centered normal seed even for maximize/quarters, avoiding startup
+  // minimum-size/restore clamping across the display boundary.
+  export function displayStartupFeatures(target,openerScale,destinationScale,openerZoom=1){
+    const w=target?.work;
+    if(!w||!displayContains(w,w.x,w.y)||
+       ![openerScale,destinationScale,openerZoom].every(n=>Number.isFinite(n)&&n>0))return null;
+    const width=Math.round(w.width*.60),height=Math.round(w.height*.65);
+    const x=w.x+Math.floor((w.width-width)/2),y=w.y+Math.floor((w.height-height)/2);
+    return {left:Math.round(x/openerScale),top:Math.round(y/openerScale),
+      outerWidth:Math.max(1,Math.round(width/(destinationScale*openerZoom))),
+      outerHeight:Math.max(1,Math.round(height/(destinationScale*openerZoom)))};
+  }

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {displayContains,displayCssPoint,displayRectEqual,displaySnapTarget,displayNativeRect,displayPreviewFraction,displayReleaseMatches,tabReturnZone} from "../src/algorithms/display-placement.mjs";
+import {displayContains,displayCssPoint,displayRectEqual,displaySnapTarget,displayNativeRect,displayPreviewFraction,displayReleaseMatches,tabReturnZone,displayStartupFeatures} from "../src/algorithms/display-placement.mjs";
 const left={x:-2560,y:-200,width:2560,height:1440},work={x:-2560,y:-200,width:2560,height:1392};
 test("CSS points use event window scale, not target monitor scale",()=>{
   assert.deepEqual(displayCssPoint(-1600,400,1.5,1),{x:-2400,y:600});
@@ -59,4 +59,22 @@ test("return zone reserves expanded toolbar while compact strip animates",()=>{
   assert.equal(tabReturnZone(800,24,r,70),true);
   assert.equal(tabReturnZone(800,71,r,70),false);
   assert.equal(tabReturnZone(-1,24,r,70),false);
+});
+
+test("native startup seed uses opener position scale and destination size scale",()=>{
+  const target=displaySnapTarget(left,work,-1,400);
+  const f=displayStartupFeatures(target,1.5,1.25);
+  assert.deepEqual(f,{left:-1365,top:29,outerWidth:1229,outerHeight:724});
+  const x=Math.round(f.left*1.5),y=Math.round(f.top*1.5);
+  assert.ok(displayContains(work,x,y));
+  assert.ok(displayContains(work,x+Math.round(f.outerWidth*1.25)-1,y+Math.round(f.outerHeight*1.25)-1));
+  assert.equal(displayStartupFeatures(target,0,1),null);
+});
+test("startup seed is stable across snap modes and handles positive and vertical monitors",()=>{
+  const d={x:1920,y:-1080,width:1920,height:1080};
+  const a=displaySnapTarget(d,d,2500,-1079),b=displaySnapTarget(d,d,3839,-500);
+  assert.deepEqual(displayStartupFeatures(a,1,2),displayStartupFeatures(b,1,2));
+  const f=displayStartupFeatures(a,1,2);
+  assert.ok(f.left>=d.x&&f.top>=d.y);
+  assert.ok(f.left+f.outerWidth*2<=d.x+d.width&&f.top+f.outerHeight*2<=d.y+d.height);
 });

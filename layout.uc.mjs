@@ -1295,6 +1295,20 @@ function installTabStrip() {
     return !!rect&&[x,y,rect.left,rect.right,rect.top,height].every(Number.isFinite)&&
       x>=rect.left&&x<rect.right&&y>=Math.max(0,rect.top)&&y<Math.max(0,rect.top)+Math.max(0,height);
   }
+  // nsWindowWatcher converts position using opener CSS->desktop scale,
+  // and outer size using the destination widget CSS scale (plus opener zoom).
+  // Use a centered normal seed even for maximize/quarters, avoiding startup
+  // minimum-size/restore clamping across the display boundary.
+  function displayStartupFeatures(target,openerScale,destinationScale,openerZoom=1){
+    const w=target?.work;
+    if(!w||!displayContains(w,w.x,w.y)||
+       ![openerScale,destinationScale,openerZoom].every(n=>Number.isFinite(n)&&n>0))return null;
+    const width=Math.round(w.width*.60),height=Math.round(w.height*.65);
+    const x=w.x+Math.floor((w.width-width)/2),y=w.y+Math.floor((w.height-height)/2);
+    return {left:Math.round(x/openerScale),top:Math.round(y/openerScale),
+      outerWidth:Math.max(1,Math.round(width/(destinationScale*openerZoom))),
+      outerHeight:Math.max(1,Math.round(height/(destinationScale*openerZoom)))};
+  }
   // Display Engine: Windows first. Gecko's chrome MouseEvent.screen and
   // nsIBaseWindow expose the native monitor and desktop/device pixel scales.
   // A compact native panel is allowed on the target display; never a desktop-sized overlay.
@@ -1428,21 +1442,39 @@ function installTabStrip() {
       }else placementPreview.openPopupAtScreen(x,y,false);
     }catch(error){console.warn("[OnePlane] Display preview:",error);try{placementPreview?.hidePopup();}catch{}}
   }
+  function targetScreen(target){
+    if(!target)return null;
+    const f=target.full;
+    const screen=screenManager().screenForRect(f.x+Math.floor(f.width/2),f.y+Math.floor(f.height/2),1,1);
+    return displayRectEqual(f,screenRect(screen))&&displayRectEqual(target.work,screenRect(screen,true))?screen:null;
+  }
+  function nativeStartupFeatures(target){
+    if(!displaySnapEnabled()||!target)return null;
+    try{
+      const screen=targetScreen(target);
+      if(!screen)return null;
+      const openerScale=window.devicePixelRatio/nativeBase(window).devicePixelsPerDesktopPixel;
+      const destinationScale=screen.defaultCSSScaleFactor/screen.contentsScaleFactor;
+      const zoom=window.browsingContext?.fullZoom||1;
+      return displayStartupFeatures(target,openerScale,destinationScale,zoom);
+    }catch(error){console.warn("[OnePlane] Startup display features:",error);return null;}
+  }
+  function logPlacement(stage,target,actual=null,extra=null){
+    console.info("[OnePlane] Display placement "+stage,JSON.stringify({target:target?.full,mode:target?.mode,actual,extra}));
+  }
   async function placeNativeWindow(win,target){
     if(!displaySnapEnabled()||!win||win.closed||!target)return false;
     let interrupted=false;
-    const stop=()=>{interrupted=true;};
-    const wait=()=>new Promise(resolve=>window.setTimeout(resolve,100));
+    const stop=event=>{if(event.isTrusted)interrupted=true;};
+    const wait=()=>new Promise(resolve=>window.setTimeout(resolve,120));
     const alive=()=>!dead&&!win.closed&&!interrupted;
     try{
       win.addEventListener("pointerdown",stop,true);win.addEventListener("keydown",stop,true);
       const full=target.full,work=target.work;
-      const validTarget=()=>{
-        const screen=screenManager().screenForRect(full.x+Math.floor(full.width/2),full.y+Math.floor(full.height/2),1,1);
-        return displayRectEqual(full,screenRect(screen))&&displayRectEqual(work,screenRect(screen,true));
-      };
+      const validTarget=()=>!!targetScreen(target);
       const onTarget=rect=>rect&&displayContains(full,rect.x+Math.floor(rect.width/2),rect.y+Math.floor(rect.height/2));
-      if(!validTarget())return false;
+      if(!validTarget()){logPlacement("target-disconnected",target);return false;}
+      logPlacement("before",target,nativeWindowRect(win));
       const base=nativeBase(win);
       if(typeof base.setPositionDesktopPix!=="function"||typeof base.setSize!=="function")return false;
       if(win.windowState===win.STATE_MAXIMIZED||win.windowState===win.STATE_MINIMIZED){win.restore();await wait();}
@@ -1456,17 +1488,31 @@ function installTabStrip() {
         if(!native)throw Error("Invalid native display scale");
         base.setSize(native.width,native.height,true);
       };
-      size(seed);
-      for(let attempt=0;attempt<3;attempt++){
-        if(!alive()||!validTarget())return false;
-        base.setPositionDesktopPix(seed.x,seed.y);await wait();
-        if(onTarget(nativeWindowRect(win)))break;
-        if(attempt===2)return false;
+      if(!onTarget(nativeWindowRect(win))){
+        size(seed);
+        for(let attempt=0;attempt<4;attempt++){
+          if(!alive()||!validTarget())return false;
+          // Native API first; if the backend ignores the move, use the
+          // chrome window's CSS move API with the CHILD's current scale.
+          if(attempt<2)base.setPositionDesktopPix(seed.x,seed.y);
+          else{
+            const scale=win.devicePixelRatio/base.devicePixelsPerDesktopPixel;
+            if(!Number.isFinite(scale)||scale<=0)return false;
+            win.moveTo(Math.round(seed.x/scale),Math.round(seed.y/scale));
+          }
+          await wait();
+          const actual=nativeWindowRect(win);
+          logPlacement("move-"+(attempt+1),target,actual);
+          if(onTarget(actual))break;
+          if(attempt===3)return false;
+        }
       }
       if(!alive()||!validTarget())return false;
       if(target.mode==="maximize"){
         win.maximize();await wait();
-        return alive()&&onTarget(nativeWindowRect(win))&&win.windowState===win.STATE_MAXIMIZED;
+        const actual=nativeWindowRect(win);
+        logPlacement("maximize",target,actual,win.windowState);
+        return alive()&&onTarget(actual)&&win.windowState===win.STATE_MAXIMIZED;
       }
       // Re-read the widget's scale after moving; use desktop position
       // separately from size, and verify after the OS applies constraints.
@@ -1477,8 +1523,9 @@ function installTabStrip() {
       const x=Math.max(work.x,Math.min(work.x+work.width-actual.width,target.x));
       const y=Math.max(work.y,Math.min(work.y+work.height-actual.height,target.y));
       if(Math.abs(actual.x-x)>2||Math.abs(actual.y-y)>2){base.setPositionDesktopPix(x,y);await wait();}
-      return alive()&&onTarget(nativeWindowRect(win));
-    }catch(error){console.warn("[OnePlane] Native display placement:",error);return false;}
+      const final=nativeWindowRect(win);logPlacement("final",target,final);
+      return alive()&&onTarget(final)&&displayContains(work,final.x,final.y)&&displayContains(work,final.x+final.width-1,final.y+final.height-1);
+    }catch(error){logPlacement("exception",target,nativeWindowRect(win),String(error));console.warn("[OnePlane] Native display placement:",error);return false;}
     finally{try{win.removeEventListener("pointerdown",stop,true);win.removeEventListener("keydown",stop,true);}catch{}}
   }
   function placeAfterStartup(win,target){
@@ -1760,15 +1807,18 @@ function installTabStrip() {
       if(!event.isTrusted||event.button!==0||!d.entry.isConnected){cancelDrag();return;}
       const outside=Number.isFinite(event.screenX)&&Number.isFinite(event.screenY)&&
         !(event.screenX===0&&event.screenY===0)&&!pointInSourceWindow(event);
-      const point=outside?placementAt(event,true):null;
+      const point=placementAt(event,true);
+      const external=outside||!!point;
       if(!dragLifecycle.finish(d.token))return;
       cleanupDrag();
       if(!d.moved)return;
       event.preventDefault();event.stopPropagation();
       // A genuine external release opens a native synced window. If the
       // screen coordinate contract cannot be verified, retain native placement.
-      if(outside)void project(d.id,point);
-      else status.textContent="Release outside the browser, or use Open in another window.";
+      if(external){
+        if(displaySnapEnabled()&&!point){status.textContent="Target monitor not verified. Try the drop again.";logPlacement("workspace-release-unverified",null);return;}
+        void project(d.id,point);
+      }else status.textContent="Release outside the browser, or use Open in another window.";
     }
     async function project(id,display){
       if(projectionBusy||busy||destroyed)return;
@@ -1785,9 +1835,14 @@ function installTabStrip() {
       let child=null;
       try{
         const {BrowserWindowTracker}=ChromeUtils.importESModule("resource:///modules/BrowserWindowTracker.sys.mjs");
-        // Never pass desktop pixels to CSS-based startup window features.
+        // Supply a converted target-monitor seed at native window creation,
+        // before Zen can restore the opener monitor geometry.
+        const seed=display?nativeStartupFeatures(display):null;
+        if(display&&!seed){status.textContent="Target monitor changed. Try the drop again.";return;}
+        const features=seed?Object.entries(seed).map(([k,v])=>k+"="+v).join(","):undefined;
+        if(seed)logPlacement("workspace-open",display,null,seed);
         const args=Cc["@mozilla.org/supports-string;1"].createInstance(Ci.nsISupportsString);args.data="about:blank";
-        const options={openerWindow:window,private:false,zenSyncedWindow:!prefs.getBoolPref("zen.window-sync.prefer-unsynced-windows",false),args};
+        const options={openerWindow:window,private:false,zenSyncedWindow:!prefs.getBoolPref("zen.window-sync.prefer-unsynced-windows",false),args,features};
         child=BrowserWindowTracker.openWindow(options);
         if(!child)throw Error("Native window did not open");
         child[PROJECTION]={source:window,id};
@@ -1816,8 +1871,8 @@ function installTabStrip() {
           const peer=window.gZenWindowSync.getItemFromWindow(window,startupTab.id);
           if(!peer||(peer.isEmpty&&!peer.pinned&&!peer.group&&peer.linkedBrowser?.currentURI?.spec==="about:blank"&&peer.linkedBrowser?.canGoBack===false&&peer.linkedBrowser?.canGoForward===false))child.gBrowser.removeTab(startupTab,{animate:false});
         }
-        child.focus();
         const placed=!display||await placeNativeWindow(child,display);
+        if(placed&&!child.closed)child.focus();
         status.textContent=placed?"":"Window opened; placement could not be verified.";
       }catch(error){
         if(child&&!child.closed)delete child[PROJECTION];
@@ -3386,7 +3441,7 @@ function installTabStrip() {
     const dt = event.dataTransfer;
     // Ignore late or duplicate dragend after cancel/handled drop.
     const placement=placementAt(event,true);
-    const returned=dragDetachedOnce&&toolbarDragReturnZone(event);
+    const returned=!placement&&pointInSourceWindow(event)&&dragDetachedOnce&&toolbarDragReturnZone(event);
     if(!finishNativeDragLifecycle(event,tab))return;
     const handled = dragHandled;
     const wasGroup = Boolean(draggedGroup);
@@ -3400,7 +3455,7 @@ function installTabStrip() {
     const x = event.screenX, y = event.screenY;
     if (!Number.isFinite(x) || !Number.isFinite(y) || (x === 0 && y === 0) ||
         Math.hypot(x-start.x,y-start.y) < 12) return;
-    const inside=pointInSourceWindow(event);
+    const inside=!placement&&pointInSourceWindow(event);
     if (inside) {
       if(!toolbarContainsPoint(event.clientX,event.clientY)&&emptySplitTarget(browser.selectedTab))browser.selectedTab=tab;
       return;
@@ -3408,9 +3463,12 @@ function installTabStrip() {
     try {
       // Native session adoption preserves the live browser, history, audio
       // and private-window state. Zen chooses its native window-sync mode.
-      if (isSplit(tab) && !unsplitTab(tab)) return;
       const p=placement;
-      const win=browser.replaceTabWithWindow(tab,{replaceLastTab:true});
+      const seed=p?nativeStartupFeatures(p):null;
+      if(displaySnapEnabled()&&!seed){logPlacement("tab-release-unverified",p);return;}
+      if (isSplit(tab) && !unsplitTab(tab)) return;
+      if(seed)logPlacement("tab-open",p,null,seed);
+      const win=browser.replaceTabWithWindow(tab,{replaceLastTab:true,...(seed||{})});
       if(win&&p)placeAfterStartup(win,p);
     } catch (error) { console.error("[OnePlane] Detach tab:", error); }
   }

@@ -254,15 +254,18 @@
       if(!event.isTrusted||event.button!==0||!d.entry.isConnected){cancelDrag();return;}
       const outside=Number.isFinite(event.screenX)&&Number.isFinite(event.screenY)&&
         !(event.screenX===0&&event.screenY===0)&&!pointInSourceWindow(event);
-      const point=outside?placementAt(event,true):null;
+      const point=placementAt(event,true);
+      const external=outside||!!point;
       if(!dragLifecycle.finish(d.token))return;
       cleanupDrag();
       if(!d.moved)return;
       event.preventDefault();event.stopPropagation();
       // A genuine external release opens a native synced window. If the
       // screen coordinate contract cannot be verified, retain native placement.
-      if(outside)void project(d.id,point);
-      else status.textContent="Release outside the browser, or use Open in another window.";
+      if(external){
+        if(displaySnapEnabled()&&!point){status.textContent="Target monitor not verified. Try the drop again.";logPlacement("workspace-release-unverified",null);return;}
+        void project(d.id,point);
+      }else status.textContent="Release outside the browser, or use Open in another window.";
     }
     async function project(id,display){
       if(projectionBusy||busy||destroyed)return;
@@ -279,9 +282,14 @@
       let child=null;
       try{
         const {BrowserWindowTracker}=ChromeUtils.importESModule("resource:///modules/BrowserWindowTracker.sys.mjs");
-        // Never pass desktop pixels to CSS-based startup window features.
+        // Supply a converted target-monitor seed at native window creation,
+        // before Zen can restore the opener monitor geometry.
+        const seed=display?nativeStartupFeatures(display):null;
+        if(display&&!seed){status.textContent="Target monitor changed. Try the drop again.";return;}
+        const features=seed?Object.entries(seed).map(([k,v])=>k+"="+v).join(","):undefined;
+        if(seed)logPlacement("workspace-open",display,null,seed);
         const args=Cc["@mozilla.org/supports-string;1"].createInstance(Ci.nsISupportsString);args.data="about:blank";
-        const options={openerWindow:window,private:false,zenSyncedWindow:!prefs.getBoolPref("zen.window-sync.prefer-unsynced-windows",false),args};
+        const options={openerWindow:window,private:false,zenSyncedWindow:!prefs.getBoolPref("zen.window-sync.prefer-unsynced-windows",false),args,features};
         child=BrowserWindowTracker.openWindow(options);
         if(!child)throw Error("Native window did not open");
         child[PROJECTION]={source:window,id};
@@ -310,8 +318,8 @@
           const peer=window.gZenWindowSync.getItemFromWindow(window,startupTab.id);
           if(!peer||(peer.isEmpty&&!peer.pinned&&!peer.group&&peer.linkedBrowser?.currentURI?.spec==="about:blank"&&peer.linkedBrowser?.canGoBack===false&&peer.linkedBrowser?.canGoForward===false))child.gBrowser.removeTab(startupTab,{animate:false});
         }
-        child.focus();
         const placed=!display||await placeNativeWindow(child,display);
+        if(placed&&!child.closed)child.focus();
         status.textContent=placed?"":"Window opened; placement could not be verified.";
       }catch(error){
         if(child&&!child.closed)delete child[PROJECTION];

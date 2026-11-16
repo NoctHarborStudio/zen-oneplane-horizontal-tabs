@@ -134,3 +134,7 @@ User confirmed screen classification improved in .21, but destination placement 
 ## OP-021 — returning a detached tab to toolbar accidentally splits
 
 Preview.21 report: top Split View claims tab strip on return. Preview.22 reserves expanded toolbar geometry during drag and explicitly cancels detached same-window return without changing tab order; direct reorder and content split retained. Live verification pending.
+
+### OP-019 update (preview.23)
+
+Persistent primary-monitor placement reported in .22. Pass converted target geometry directly to native window creation, then verify final placement, bounded chrome move fallback, refuse unknown external targets instead of silently opening on source; log local placement diagnostics. Real monitor test pending.
