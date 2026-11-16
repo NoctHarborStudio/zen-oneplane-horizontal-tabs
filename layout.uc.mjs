@@ -1037,19 +1037,149 @@ function installTabStrip() {
     captionHome?.remove();
     captionHome=captionNode=null;
   }
-  // Zen moves its real sidebar toolbar on every Compact Mode toggle.
-  // Keep a stable OnePlane command proxy, not a duplicate registered widget.
-  const compactToggle=document.createXULElement("toolbarbutton");
-  compactToggle.id="oneplane-compact-toggle";
-  compactToggle.className="toolbarbutton-1";
-  compactToggle.setAttribute("skipintoolbarset","true");
-  compactToggle.setAttribute("removable","false");
-  compactToggle.setAttribute("data-l10n-id","zen-toggle-compact-mode-button");
-  compactToggle.setAttribute("tooltiptext","Toggle Compact Mode");
-  compactToggle.setAttribute("aria-label","Toggle Compact Mode");
-  compactToggle.setAttribute("command","cmd_toggleCompactModeIgnoreHover");
-  function ensureCompactToggle(){
-    if(compactToggle.parentElement!==target)target.prepend(compactToggle);
+  function hubWorkspaceSnapshot(manager) {
+    try {
+      if (!manager || manager.workspaceEnabled === false ||
+          typeof manager.getWorkspaces !== "function" || typeof manager.changeWorkspaceWithID !== "function") return null;
+      const native = manager.getWorkspaces();
+      if (!Array.isArray(native)) return null;
+      const seen = new Set(), spaces = [];
+      for (const space of native) {
+        if (typeof space?.uuid !== "string" || !space.uuid || seen.has(space.uuid)) continue;
+        seen.add(space.uuid);
+        spaces.push({id:space.uuid,name:typeof space.name==="string" && space.name.trim()?space.name:"Unnamed space",
+          icon:typeof space.icon==="string" && space.icon.length<=24 && !space.icon.includes(".svg")?space.icon:"",
+          active:space.uuid===manager.activeWorkspace});
+      }
+      return spaces;
+    } catch { return null; }
+  }
+  // Native Hub, window-scoped. Zen owns all workspace/session state.
+  function createHubController({target,root,toolbarWrapper,supported,hold,switchGuard}) {
+    const button=document.createXULElement("toolbarbutton");
+    button.id="oneplane-hub-button"; button.className="toolbarbutton-1";
+    for(const [key,value] of Object.entries({skipintoolbarset:"true",removable:"false",tooltiptext:"OnePlane Hub","aria-label":"OnePlane Hub","aria-haspopup":"dialog","aria-expanded":"false"}))button.setAttribute(key,value);
+    const panel=document.createXULElement("panel");
+    panel.id="oneplane-hub-panel";
+    for(const [key,value] of Object.entries({type:"arrow",orient:"vertical",role:"dialog","aria-label":"OnePlane Hub"}))panel.setAttribute(key,value);
+    const make=(tag,cls,text)=>{const n=html(tag,cls);if(text!==undefined)n.textContent=text;return n;};
+    const content=make("div","op-hub-content");
+    const spaces=make("div","op-hub-spaces"),status=make("div","op-hub-status");
+    status.setAttribute("role","status");status.setAttribute("aria-live","polite");
+    const form=make("form","op-hub-create"),name=make("input","op-hub-name"),add=make("button","op-hub-add","+");
+    name.type="text";name.maxLength=80;name.placeholder="New workspace";name.required=true;name.setAttribute("aria-label","New workspace name");
+    add.type="submit";add.setAttribute("aria-label","Create workspace");form.append(name,add);
+    const mode=make("button","op-hub-mode");mode.type="button";
+    content.append(make("h2","op-hub-title","OnePlane"),make("h3","op-hub-heading","Workspaces"),spaces,form,status,make("h3","op-hub-heading","Settings"),mode);
+    panel.append(content);
+    let destroyed=false,busy=false,open=false,escapeFocus=false;
+    const manager=()=>window.gZenWorkspaces;
+    const command=()=>document.getElementById("cmd_toggleCompactModeIgnoreHover");
+    function setHold(value){toolbarWrapper?.toggleAttribute("oneplane-hub-hold",value);hold();}
+    function close(){
+      if(panel.state==="open"||panel.state==="showing")panel.hidePopup();
+      open=false;button.setAttribute("aria-expanded","false");setHold(false);
+    }
+    function render(){
+      if(destroyed)return;
+      const snapshot=hubWorkspaceSnapshot(manager()),focusedId=document.activeElement?.dataset?.workspaceId;
+      spaces.replaceChildren();
+      if(!snapshot?.length)spaces.append(make("p","op-hub-empty",snapshot?"No native workspaces":"Native workspaces unavailable"));
+      else for(const space of snapshot){
+        const entry=make("button","op-hub-space");entry.type="button";entry.dataset.workspaceId=space.id;entry.disabled=busy;
+        entry.setAttribute("aria-current",space.active?"true":"false");
+        const icon=make("span","op-hub-icon",space.icon||Array.from(space.name)[0]?.toUpperCase()||"·");icon.setAttribute("aria-hidden","true");
+        entry.append(icon,make("span","op-hub-label",space.name));
+        if(space.active)entry.append(make("span","op-hub-current","•"));
+        entry.addEventListener("click",()=>void select(space.id));spaces.append(entry);
+        if(focusedId===space.id&&open&&!busy)entry.focus({preventScroll:true});
+      }
+      form.hidden=!snapshot||typeof manager()?.createAndSaveWorkspace!=="function";
+      name.disabled=add.disabled=busy;
+      const compact=root.getAttribute("zen-compact-mode")==="true";
+      mode.textContent=compact?"Compact Mode · On":"Compact Mode · Off";
+      mode.setAttribute("aria-pressed",String(compact));mode.disabled=typeof command()?.doCommand!=="function";
+    }
+    async function select(id){
+      if(busy||destroyed)return;
+      const native=manager(),space=hubWorkspaceSnapshot(native)?.find(s=>s.id===id);
+      if(!space){render();return;}if(space.active){close();return;}
+      busy=true;status.textContent="";render();
+      try{switchGuard();await native.changeWorkspaceWithID(id);
+        if(!destroyed){if(native.activeWorkspace!==id)throw Error("Workspace did not activate");close();}
+      }catch(error){if(!destroyed)status.textContent="Could not switch workspace.";console.warn("[OnePlane] Hub switch:",error);}
+      finally{busy=false;if(!destroyed&&open)render();}
+    }
+    async function create(event){
+      event.preventDefault();const value=name.value.trim(),native=manager();
+      if(!value||busy||destroyed||!hubWorkspaceSnapshot(native)||typeof native.createAndSaveWorkspace!=="function")return;
+      busy=true;status.textContent="";render();
+      try{switchGuard();const result=await native.createAndSaveWorkspace(value);
+        if(!result?.uuid)throw Error("Native workspace creation unavailable");
+        if(!destroyed){name.value="";close();}
+      }catch(error){if(!destroyed)status.textContent="Could not create workspace.";console.warn("[OnePlane] Hub create:",error);}
+      finally{busy=false;if(!destroyed&&open)render();}
+    }
+    function ensure(){
+      if(destroyed)return;
+      if(button.parentElement!==target)target.prepend(button);
+      const popupset=document.getElementById("mainPopupSet");
+      if(popupset&&panel.parentElement!==popupset)popupset.append(panel);
+    }
+    function toggle(){
+      if(!supported()||destroyed)return;
+      if(open||panel.state==="open"||panel.state==="showing"){close();return;}
+      ensure();if(!panel.isConnected||typeof panel.openPopup!=="function")return;
+      status.textContent="";escapeFocus=false;open=true;
+      button.setAttribute("aria-expanded","true");setHold(true);render();
+      try{panel.openPopup(button,"after_start",0,4,false,false);}
+      catch(error){close();console.warn("[OnePlane] Hub popup:",error);}
+    }
+    function shown(event){
+      if(event.target===panel)(spaces.querySelector('[aria-current="true"]:not(:disabled)')||spaces.querySelector("button:not(:disabled)")||mode).focus({preventScroll:true});
+    }
+    function hidden(event){
+      if(event.target!==panel)return;
+      open=false;button.setAttribute("aria-expanded","false");setHold(false);
+      if(escapeFocus&&!destroyed&&supported())button.focus();escapeFocus=false;
+    }
+    function key(event){if(event.key==="Escape"){escapeFocus=true;event.preventDefault();event.stopPropagation();close();}}
+    function changed(){if(open)render();}
+    function onMode(){if(!supported())close();else changed();}
+    function deactivate(){if(open)close();}
+    function toggleMode(){const cmd=command();if(typeof cmd?.doCommand==="function"){close();cmd.doCommand();}}
+    const listeners=[[button,"command",toggle],[panel,"popupshown",shown],[panel,"popuphidden",hidden],[panel,"keydown",key],[form,"submit",create],[mode,"click",toggleMode],[window,"deactivate",deactivate]];
+    for(const event of ["ZenWorkspaceDataChanged","ZenWorkspacesUIUpdate","ZenCompactMode:Toggled","ZenCompactMode:LayoutUpdate"])listeners.push([window,event,changed]);
+    for(const [node,event,fn] of listeners)node.addEventListener(event,fn);
+    function destroy(){if(destroyed)return;destroyed=true;close();for(const [node,event,fn] of listeners)node.removeEventListener(event,fn);panel.remove();button.remove();}
+    return {ensure,close,onMode,destroy};
+  }
+  const hub=createHubController({target,root,toolbarWrapper,supported:hoverSupported,hold:reconcilePanel,switchGuard:guardPanelSwitch});
+
+  // Target Zen 1.24.2b TabContextMenu resolves triggerNode.tab.
+  // Fail closed rather than accidentally acting on the selected tab.
+  let nativeTabMenu=null,nativeTabMenuCleanup=null;
+  function closeNativeTabMenu(){if(nativeTabMenu)nativeTabMenu.hidePopup();nativeTabMenuCleanup?.();}
+  function openNativeTabMenu(event,tab,button){
+    if(!hoverSupported()||!validNativeTab(tab))return;
+    const popup=document.getElementById("tabContextMenu");
+    if(!popup||typeof popup.openPopupAtScreen!=="function")return;
+    event.preventDefault();event.stopPropagation();hub.close();closeNativeTabMenu();
+    const trigger=event.target;if(!trigger||!button.parentElement?.contains(trigger))return;
+    trigger.tab=tab;
+    const guard=e=>{if(e.target===popup&&popup.triggerNode?.tab!==tab){e.preventDefault();e.stopImmediatePropagation();cleanup();}};
+    const hidden=e=>{if(e.target===popup)cleanup();};
+    const cleanup=()=>{
+      popup.removeEventListener("popupshowing",guard,true);popup.removeEventListener("popuphidden",hidden);
+      if(trigger.tab===tab)delete trigger.tab;
+      if(nativeTabMenu===popup){nativeTabMenu=null;nativeTabMenuCleanup=null;toolbarWrapper?.removeAttribute("oneplane-tab-menu-hold");reconcilePanel();}
+    };
+    nativeTabMenu=popup;nativeTabMenuCleanup=cleanup;
+    popup.addEventListener("popupshowing",guard,true);popup.addEventListener("popuphidden",hidden);
+    toolbarWrapper?.setAttribute("oneplane-tab-menu-hold","true");reconcilePanel();
+    const rect=button.getBoundingClientRect(),x=event.screenX||window.mozInnerScreenX+rect.left,y=event.screenY||window.mozInnerScreenY+rect.bottom;
+    try{popup.openPopupAtScreen(x,y,true,event);}
+    catch(error){cleanup();console.warn("[OnePlane] Native tab menu:",error);}
   }
   const contourDefaults={transparency:4,strength:100,length:69,hold:30,curve:65,radius:24,padding:0};
   const contourPrefPrefix="zen.oneplane.fade-";
@@ -1203,7 +1333,7 @@ function installTabStrip() {
     const bias=right-left+(centered?0:trailingReserve);
     return {left:Math.max(0,Math.round(bias)),right:Math.max(0,Math.round(-bias))};
   }
-  const leftIds = new Set(["oneplane-compact-toggle", "sidebar-button", "sidebar-toggle-button", "back-button",
+  const leftIds = new Set(["oneplane-hub-button", "sidebar-button", "sidebar-toggle-button", "back-button",
     "forward-button", "stop-reload-button", "reload-button", "home-button", "urlbar-container"]);
   const centerIds = new Set(["oneplane-tabs", "oneplane-center-start", "oneplane-center-end"]);
   let geometryFrame = 0;
@@ -1302,7 +1432,7 @@ function installTabStrip() {
   let panelTimer=0, panelSwitchTimer=0, panelSwitchUntil=0, panelCloseSince=null;
   let panelLastPointer=null;
   const PANEL_NATIVE_FLAGS=["zen-has-hover","has-popup-menu","zen-compact-mode-active"];
-  const PANEL_HOLD_FLAGS=["oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold"];
+  const PANEL_HOLD_FLAGS=["oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold"];
   const PANEL_SWITCH_GRACE=180, PANEL_CLOSE_GRACE=100;
   // One visual state for the wrapper, tint and controls. Native flags
   // can disappear/reappear during a native tab selection transaction.
@@ -1377,6 +1507,7 @@ function installTabStrip() {
     }, ADDRESS_DISMISS_HOLD_MS);
   }
   function onWindowDeactivate() {
+    closeNativeTabMenu();
     clearHover();
     releaseAddressHold();
     clearAddressAnimation();
@@ -1426,6 +1557,8 @@ function installTabStrip() {
     if (event.relatedTarget === null) {panelLastPointer=null;clearHover();}
   }
   function onCompactChanged() {
+    hub.onMode();
+    if(!hoverSupported())closeNativeTabMenu();
     if(hoverSupported())ensureWindowCaptions();
     else restoreWindowCaptions();
     if (!hoverSupported()) { clearHover(); clearTabHover(); releaseAddressHold(); clearAddressAnimation(); addressWasOpen = false; }
@@ -2665,6 +2798,7 @@ function installTabStrip() {
     for (let i = 0; i < 3; i++) audio.append(html("i"));
     const title = html("span", "oneplane-tab-title");
     button.append(icon, title);
+    item.addEventListener("contextmenu", event => openNativeTabMenu(event, tab, button));
     button.addEventListener("click", () => {
       if (!tab.closing && tab!==browser.selectedTab) {
         guardRestoredAddress(tab);
@@ -2868,7 +3002,7 @@ function installTabStrip() {
     if (url.parentElement === target && row.parentElement !== target) url.after(row);
     if (leftSpacer.parentElement !== target) target.prepend(leftSpacer);
     if (rightSpacer.parentElement !== target) row.after(rightSpacer);
-    ensureCompactToggle();
+    hub.ensure();
     movePageActions();
     centerToolbar();
     observeGeometry();
@@ -2943,7 +3077,8 @@ function installTabStrip() {
     surface.remove();
     leftSpacer.remove();
     rightSpacer.remove();
-    compactToggle.remove();
+    hub.destroy();
+    closeNativeTabMenu();
     window.removeEventListener("pointermove", trackPointer, true);
     toolbarWrapper?.removeEventListener("pointerover", trackPointer);
     document.documentElement.removeEventListener("mouseleave", leaveWindow);
@@ -2978,7 +3113,7 @@ function installTabStrip() {
 
   try {
     url.after(row);
-    ensureCompactToggle();
+    hub.ensure();
     target.prepend(leftSpacer);
     row.after(rightSpacer);
     tabbox.append(shield, splitZone);

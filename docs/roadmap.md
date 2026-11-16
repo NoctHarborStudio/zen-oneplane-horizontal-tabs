@@ -89,3 +89,7 @@ User requests plain tab hiding during address opening, Bunny only on close, and 
 ### Stabilization checkpoint — preview.10
 
 Bounded Bunny and progressive Wave Fade for tabs/bookmarks; shared Magnetic Bookmarks with Zen Refined, one controller per window. Validate both installation combinations, disable order, and hover/animation performance before Hub. Existing workspace, 10-minute unload, Extension Dock and portrait priorities remain unchanged.
+
+## Preview.11
+
+Hub Foundation first pass: native popup, actual workspace list, selection, named creation, Compact Mode and native tab context menu. Free designation/migration, full management, memory policy, Library and Extension Dock remain future stages. See [hub.md](hub.md).

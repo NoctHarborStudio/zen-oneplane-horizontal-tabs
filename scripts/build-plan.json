@@ -70,6 +70,14 @@
       "kind": "section"
     },
     {
+      "path": "src/algorithms/hub-workspaces.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/hub/controller.js.part",
+      "kind": "section"
+    },
+    {
       "path": "src/layout/contour-settings.js.part",
       "kind": "section"
     },
@@ -257,6 +265,10 @@
     },
     {
       "path": "src/styles/magnetic-bookmarks.css.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/styles/hub.css.part",
       "kind": "section"
     }
   ]

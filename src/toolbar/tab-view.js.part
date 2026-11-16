@@ -24,6 +24,7 @@
     for (let i = 0; i < 3; i++) audio.append(html("i"));
     const title = html("span", "oneplane-tab-title");
     button.append(icon, title);
+    item.addEventListener("contextmenu", event => openNativeTabMenu(event, tab, button));
     button.addEventListener("click", () => {
       if (!tab.closing && tab!==browser.selectedTab) {
         guardRestoredAddress(tab);

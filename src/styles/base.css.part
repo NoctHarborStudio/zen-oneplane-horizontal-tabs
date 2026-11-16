@@ -6,7 +6,7 @@
   initial-value: 100%;
 }
 /* OnePlane — native toolbar tab view. No fixed-position overlay. */
-#oneplane-compact-toggle, #oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss, #oneplane-center-start, #oneplane-center-end, #oneplane-toolbar-surface, #oneplane-split-drop { display: none !important; }
+#oneplane-hub-button, #oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss, #oneplane-center-start, #oneplane-center-end, #oneplane-toolbar-surface, #oneplane-split-drop { display: none !important; }
 @media (min-width: 900px) {
   :root[oneplane-active="true"]:not([customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window]):has(#nav-bar-customization-target > #oneplane-tabs[data-ready="true"]) {
     --op-height: 34px;
@@ -81,7 +81,7 @@
     #nav-bar-customization-target > * { order: 100 !important; }
     #nav-bar-customization-target > toolbarspring { display: none !important; }
     #zen-toggle-compact-mode { display:none !important; }
-    #nav-bar-customization-target > #oneplane-compact-toggle {
+    #nav-bar-customization-target > #oneplane-hub-button {
       display:flex !important;
       order: -1 !important;
       flex:0 0 30px !important;
@@ -90,7 +90,7 @@
       height:30px !important;
       margin:0 !important;
       padding:4px !important;
-      list-style-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='1.5' y='2.5' width='13' height='11' rx='2' fill='none' stroke='context-stroke' stroke-width='1.4'/%3E%3Cpath d='M2 6h12M5 6v7' fill='none' stroke='context-stroke' stroke-width='1.4'/%3E%3C/svg%3E") !important;
+      list-style-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='1.5' y='2.5' width='13' height='11' rx='2' fill='none' stroke='context-stroke' stroke-width='1.4'/%3E%3Cpath d='M2 6h12M5 6v7M8 9h4M8 11h4' fill='none' stroke='context-stroke' stroke-width='1.4'/%3E%3C/svg%3E") !important;
       -moz-context-properties:stroke;
       stroke:currentColor;
     }

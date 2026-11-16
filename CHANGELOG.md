@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0-preview.11
+
+- Hub Foundation: stable left button, native popup, real workspaces, explicit named creation, Compact Mode and lifecycle-owned visibility hold.
+- Native mirrored-tab context menu; cancel if target identity cannot be resolved.
+- No Free migration, discard, Library or Extension Dock yet. Fluid Wave, Bunny and Magnetic Bookmarks unchanged. Live validation pending.
+
 ## 0.2.0-preview.10
 
 - Replace external Bunny overshoot with a bounded 0–100–93–100% return, four keyframes per tab. Restore progressive Wave Fade on address opening: two opacity keyframes per visible item, no scale on normal opening.

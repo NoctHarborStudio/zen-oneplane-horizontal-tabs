@@ -4,4 +4,4 @@
   let panelTimer=0, panelSwitchTimer=0, panelSwitchUntil=0, panelCloseSince=null;
   let panelLastPointer=null;
   const PANEL_NATIVE_FLAGS=["zen-has-hover","has-popup-menu","zen-compact-mode-active"];
-  const PANEL_HOLD_FLAGS=["oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold"];
+  const PANEL_HOLD_FLAGS=["oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold"];

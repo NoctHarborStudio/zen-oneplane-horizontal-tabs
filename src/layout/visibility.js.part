@@ -58,6 +58,7 @@
     }, ADDRESS_DISMISS_HOLD_MS);
   }
   function onWindowDeactivate() {
+    closeNativeTabMenu();
     clearHover();
     releaseAddressHold();
     clearAddressAnimation();
@@ -107,6 +108,8 @@
     if (event.relatedTarget === null) {panelLastPointer=null;clearHover();}
   }
   function onCompactChanged() {
+    hub.onMode();
+    if(!hoverSupported())closeNativeTabMenu();
     if(hoverSupported())ensureWindowCaptions();
     else restoreWindowCaptions();
     if (!hoverSupported()) { clearHover(); clearTabHover(); releaseAddressHold(); clearAddressAnimation(); addressWasOpen = false; }

@@ -67,7 +67,8 @@
     surface.remove();
     leftSpacer.remove();
     rightSpacer.remove();
-    compactToggle.remove();
+    hub.destroy();
+    closeNativeTabMenu();
     window.removeEventListener("pointermove", trackPointer, true);
     toolbarWrapper?.removeEventListener("pointerover", trackPointer);
     document.documentElement.removeEventListener("mouseleave", leaveWindow);
@@ -102,7 +103,7 @@
 
   try {
     url.after(row);
-    ensureCompactToggle();
+    hub.ensure();
     target.prepend(leftSpacer);
     row.after(rightSpacer);
     tabbox.append(shield, splitZone);

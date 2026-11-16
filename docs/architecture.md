@@ -50,3 +50,7 @@ The common activation scope no longer depends on Compact Mode. The native mode i
 ## Toolbar composition contract
 
 The upper row owns Hub, navigation, address, centered tabs and system buttons. The separate lower-left strip owns the native extension manager and pinned extension widgets, starting under Hub and extending below the full navigation/address group. Center bookmarks remain distinct. The layout controller measures both zones; Compact Mode reveals/hides the composite toolbar and persistent mode reserves its measured height. Do not clone extension actions or create independent blur layers. Portrait wrapping is an additional responsive policy, not a replacement for the dock. The exact row geometry and overflow thresholds require a prototype and live tests.
+
+## Preview.11 — Hub Foundation
+
+`src/hub/controller.js.part` owns the window popup, button, listeners and cleanup; `src/algorithms/hub-workspaces.mjs` reads native metadata. Dedicated holds keep Compact Mode open for Hub and native tab menus. No new preferences or session database.

@@ -62,3 +62,7 @@ OnePlane exposes `data-op-startup-ready` (`pending` → `true`) and observes the
 ## Shared Magnetic Bookmarks and Wave Fade (preview.10)
 
 OnePlane includes the same Magnetic Bookmarks controller and CSS as [Zen Refined 0.6.0-preview.3](https://github.com/NoctHarborStudio/zen-refined-ui-improvements/tree/c36668d9819a345ca24473cb399d01dfe89d7119). It works without Refined. When both updated mods are installed, independent leases share a single controller per window; settings remain under `zen.refined.bookmarks.*` and may appear in both Sine settings panels. OnePlane alone owns address-wave timing. The canonical copies are pinned in `scripts/shared-bookmarks.lock.json` and verified by the existing CI. No external runtime fetch. Update both mods for mixed-use compatibility; old legacy versions may require restart after the last shared copy is removed.
+
+## Hub Foundation (preview.11)
+
+The left Hub opens a native popup with real Zen workspaces, active state, named creation and Compact Mode. Right-click a mirrored tab to open its native menu. Free designation, timed discard, Library and Extension Dock are separate stages. See [Hub validation](docs/hub.md).
