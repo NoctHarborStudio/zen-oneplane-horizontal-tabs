@@ -135,13 +135,14 @@ function acquireZenHome(win, services) {
 #zen-tabbox-wrapper[data-zr-home-host]{position:relative!important}
 #tabbrowser-tabpanels[data-zr-home-covered],#tabbrowser-tabpanels[data-zr-home-covered] browser{visibility:hidden!important;pointer-events:none!important}
 #zen-shared-home[hidden]{display:none!important}
-#zen-shared-home{position:absolute;inset:0;z-index:4;display:flex;align-items:safe center;justify-content:center;overflow:auto;box-sizing:border-box;padding:72px 24px 32px;background:transparent;color:var(--toolbox-textcolor,currentColor);font:menu;-moz-window-dragging:drag;scrollbar-width:thin}
+#zen-shared-home{position:absolute;inset:0;z-index:4;display:flex;align-items:safe center;justify-content:center;overflow:auto;box-sizing:border-box;padding:72px 24px 32px;background:transparent;color:var(--toolbox-textcolor,currentColor);font:menu;scrollbar-width:thin}
 #zen-shared-home *{box-sizing:border-box}
 #zen-shared-home button,#zen-shared-home input{font:inherit;color:inherit}
 #zen-shared-home button{appearance:none;cursor:pointer;border:0;background:none;padding:0}
 #zen-shared-home button:focus-visible,#zen-shared-home input:focus-visible{outline:2px solid AccentColor;outline-offset:3px}
-/* Native non-client dragging only on the blank Home background. */
-#zen-shared-home :is(.zh-content,button,input,summary,a,[draggable=true]){-moz-window-dragging:no-drag!important}
+/* Home is a client-area surface, including its blank background.
+   Only the native toolbar's dedicated gaps own window dragging. */
+#zen-shared-home,#zen-shared-home *{-moz-window-dragging:no-drag!important}
 #zen-shared-home .zh-content{width:min(100%,720px);margin:auto;transition:opacity 180ms ease,translate 220ms cubic-bezier(.2,.75,.25,1)}
 #zen-shared-home .zh-search{display:flex;align-items:center;gap:12px;width:100%;height:56px;padding:0 19px;border:1px solid color-mix(in srgb,currentColor 12%,transparent);background:color-mix(in srgb,currentColor 5%,transparent);border-radius:14px;text-align:start}
 #zen-shared-home .zh-search:hover{background:color-mix(in srgb,currentColor 9%,transparent)}

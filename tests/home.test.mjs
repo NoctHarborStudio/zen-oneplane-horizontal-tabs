@@ -270,3 +270,12 @@ test("Home icon error fallback retains original cache URI before generic",()=>{
  listeners.get("error")();assert.ok(img.src.startsWith("data:image/svg+xml,"));
  listeners.get("error")();assert.equal(listeners.has("error"),false);
 });
+
+
+test("Home is entirely client area; native toolbar gaps retain window drag",()=>{
+ const toolbar=readFileSync(new URL("../src/styles/base.css.part",import.meta.url),"utf8");
+ assert.ok(core.includes("#zen-shared-home,#zen-shared-home *{-moz-window-dragging:no-drag!important}"));
+ assert.doesNotMatch(core,/-moz-window-dragging:\s*drag\b/);
+ assert.match(toolbar,/#oneplane-center-start, #oneplane-center-end\s*\{[^}]*-moz-window-dragging:\s*drag\s*!important/);
+ assert.ok(layout.includes(core),"generated bundle must contain the updated Home source");
+});

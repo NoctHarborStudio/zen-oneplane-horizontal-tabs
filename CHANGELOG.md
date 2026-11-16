@@ -1,3 +1,9 @@
+## 0.2.0-preview.49 — Toolbar-only window dragging
+
+- Restore the entire Home surface to client-area hit testing, including blank space, so clicking or dragging there cannot move the browser window. Keep native window dragging on the dedicated upper toolbar gaps and preserve tab drag and Home search cancellation.
+- Add a source/bundle drag-ownership regression. Native Windows verification pending.
+- Separate known issue: cold startup can blur the native address bar before SearchService initialization; the supplied stack identifies Home startup as the trigger. Not changed in this scoped fix.
+
 ## 0.2.0-preview.48 — Adaptive centered overflow
 
 - Keep the wide OnePlane layout and fixed central Home. On overflow keep at most one ordinary tab per upper lane; all other tabs and intact Split View groups occupy a centered, independently scrollable lower lane. In the smallest mode keep only Home above. Reserve the lower plus slot and return to one row with a 12px hysteresis margin.
