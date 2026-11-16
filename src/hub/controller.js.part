@@ -37,24 +37,32 @@
     const freeSetup=make("div","op-hub-free-setup"),trashPanel=make("section","op-hub-trash-panel");
     trashPanel.setAttribute("aria-label","Trash");
     const trashList=make("div","op-hub-trash-list"),trashTools=make("div","op-hub-trash-tools");
-    const ageSelect=make("select","op-hub-age"),clearTrash=make("button","op-hub-action","Clear");
-    clearTrash.type="button";ageSelect.setAttribute("aria-label","Clear tabs older than");
-    for(const [value,label] of [["all","All tabs"],["5m","Older than 5 minutes"],["1h","Older than 1 hour"],["1d","Older than 1 day"],["7d","Older than 7 days"],["30d","Older than 30 days"],["1y","Older than 1 year"]]){
-      const option=make("option","",label);option.value=value;ageSelect.append(option);
+    const ageSelect=make("button","op-hub-age"),clearTrash=make("button","op-hub-action","Clear");
+    clearTrash.type=ageSelect.type="button";
+    ageSelect.setAttribute("aria-label","Clear tabs older than");ageSelect.setAttribute("aria-expanded","false");
+    ageSelect.setAttribute("aria-controls","oneplane-trash-age-menu");
+    const ageLabel=make("span","op-hub-age-label","All tabs"),ageChevron=make("span","op-hub-age-chevron","⌄");
+    ageChevron.setAttribute("aria-hidden","true");ageSelect.append(ageLabel,ageChevron);
+    const ageMenu=make("div","op-hub-age-menu");ageMenu.id="oneplane-trash-age-menu";ageMenu.hidden=true;
+    ageMenu.setAttribute("role","group");ageMenu.setAttribute("aria-label","Clear tabs older than");
+    const ageChoices=new Map();
+    for(const [value,short,label] of hubTrashAgeOptions()){
+      const option=make("button","op-hub-age-option",label);option.type="button";option.setAttribute("aria-pressed",String(value==="all"));
+      option.addEventListener("click",()=>selectTrashAge(value));ageChoices.set(value,{short,option});ageMenu.append(option);
     }
     trashTools.append(clearTrash,ageSelect);
     const trashConfirmation=make("div","op-hub-trash-confirm");
     const trashHead=make("div","op-hub-trash-head"),trashDrawer=make("div","op-hub-trash-drawer"),trashInner=make("div","op-hub-trash-inner");
     const trashNotice=make("div","op-hub-trash-notice"),trashRows=make("div","op-hub-trash-rows");
     trashList.append(trashRows);trashHead.append(trashToggle,trashTools);
-    trashInner.append(trashConfirmation,trashNotice,trashList);trashDrawer.append(trashInner);trashDrawer.inert=true;
+    trashInner.append(ageMenu,trashConfirmation,trashNotice,trashList);trashDrawer.append(trashInner);trashDrawer.inert=true;
     trashPanel.append(trashHead,trashDrawer);
     trashToggle.addEventListener("click",()=>{
       if(trashDrag)return;
-      trashOpen=!trashOpen;purgePlan=null;renderTrash();
+      trashOpen=!trashOpen;purgePlan=null;setTrashAgeOpen(false);renderTrash();
     });
     trashList.addEventListener("scroll",scheduleTrashRows,{passive:true});
-    ageSelect.addEventListener("change",()=>{purgePlan=null;renderTrash();});
+    ageSelect.addEventListener("click",()=>{if(open&&trashOpen&&!ageSelect.disabled)setTrashAgeOpen(ageMenu.hidden,true);});
     clearTrash.addEventListener("click",()=>askPurge());
     const freeSlot=make("div","op-hub-free-slot"),freeDivider=make("div","op-hub-divider");
     freeDivider.hidden=true;
@@ -63,7 +71,8 @@
     panel.append(content);
     let destroyed=false,busy=false,open=false,contextId=null;
     let trashOpen=false,purgePlan=null,trashDrag=null,editId=null;
-    let trashData=[],trashAllowed=false,trashAgeTimer=0,trashFrame=0,trashRangeKey="",trashTarget=null,trashGhost=null;
+    let trashData=[],trashAllowed=false,trashAgeTimer=0,trashFrame=0,trashRangeKey="",trashTarget=null,trashGhost=null,trashFlight=null;
+    let trashAge="all";
     const TRASH_ROW_HEIGHT=54;
     const FREE_PREF="zen.oneplane.free-space-id",TRASH_PREF="zen.oneplane.trash-space-id",COLOR_PREF="zen.oneplane.workspace-colors",TRASH_TIME="oneplane-trashed-at";
     let geometryFrame=0,motion=null,confirmation=null,drag=null,suppressClickUntil=0,projectionBusy=false;
@@ -109,7 +118,7 @@
       }catch{done();}
     }
     function close(restoreFocus=false,immediate=false){
-      const wasVisible=!panel.hidden;contextId=null;confirmation=null;editId=null;finishTrashDrag();purgePlan=null;open=false;stopTrashUpdates();
+      const wasVisible=!panel.hidden;contextId=null;confirmation=null;editId=null;finishTrashDrag();stopTrashFlight();setTrashAgeOpen(false);purgePlan=null;open=false;stopTrashUpdates();
       if(drag)cancelDrag();
       if(geometryFrame)window.cancelAnimationFrame(geometryFrame);geometryFrame=0;
       button.setAttribute("aria-expanded","false");
@@ -372,7 +381,7 @@
       trashTarget?.removeAttribute("data-op-trash-target");trashTarget=null;
     }
     function finishTrashDrag(){
-      trashDrag?.row?.removeAttribute("data-op-trash-dragging");trashDrag=null;
+      trashDrag?.lift?.cancel();trashDrag?.row?.removeAttribute("data-op-trash-dragging");trashDrag=null;
       clearTrashTarget();
       trashGhost?.remove();trashGhost=null;
     }
@@ -385,18 +394,75 @@
     async function trashRestoreDrop(event,id){
       if(!trashDrag||!event.isTrusted||event.dataTransfer?.getData(TRASH_DRAG_TYPE)!==trashDrag.token)return;
       event.preventDefault();event.stopPropagation();
-      const tab=trashDrag.tab;finishTrashDrag();await restoreTrashTab(tab,id);
-      if(!open||trashTabs().includes(tab)||window.matchMedia("(prefers-reduced-motion: reduce)").matches)return;
+      const d=trashDrag,tab=d.tab,card=d.row.cloneNode(true),rect=d.rect;
+      const release={x:event.clientX,y:event.clientY};
+      finishTrashDrag();await restoreTrashTab(tab,id);
+      if(!open||trashTabs().includes(tab)||!trashMotionEnabled())return;
       const target=Array.from(panel.querySelectorAll(".op-hub-space")).find(n=>n.dataset.workspaceId===id);
-      try{target?.animate([{transform:"scale(1)"},{transform:"scale(1.035)"},{transform:"scale(1)"}],{duration:420,easing:"cubic-bezier(.22,.75,.2,1)"});}catch{}
+      if(target)animateTrashFlight(card,rect,release,target,true);
+    }
+    function trashMotionEnabled(){
+      return !window.matchMedia("(prefers-reduced-motion: reduce)").matches&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0;
+    }
+    function stopTrashFlight(){
+      const f=trashFlight;trashFlight=null;
+      if(f){f.animation?.cancel();f.node.remove();}
+    }
+    function animateTrashFlight(card,rect,release,target,absorbed){
+      if(!open||!trashMotionEnabled()||!target?.isConnected)return;
+      stopTrashFlight();
+      // Single short-lived post-drag clone inside Hub, never an additional
+      // cursor follower during native drag.
+      const panelRect=panel.getBoundingClientRect(),dest=target.getBoundingClientRect();
+      const geometry=hubTrashFlightGeometry(rect,release,dest,panelRect);
+      if(!geometry)return;
+      const {x,y,dx,dy}=geometry;
+      card.removeAttribute("data-op-trash-dragging");card.classList.remove("op-hub-trash-ghost");
+      card.classList.add("op-hub-trash-flight");card.draggable=false;card.setAttribute("aria-hidden","true");card.inert=true;
+      card.style.width=rect.width+"px";card.style.height=rect.height+"px";
+      card.style.left=(x-panelRect.left+panel.scrollLeft)+"px";card.style.top=(y-panelRect.top+panel.scrollTop)+"px";
+      panel.append(card);
+      const f={node:card,animation:null};trashFlight=f;
+      const tx=(a,b,sx,sy)=>"translate("+a+"px,"+b+"px) scale("+sx+","+sy+")";
+      try{
+        const frames=absorbed?[
+          {transform:tx(0,0,1.04,1.04),opacity:1,offset:0},
+          {transform:tx(dx*.32,dy*.32,1.14,.84),opacity:1,offset:.26},
+          {transform:tx(dx*.88,dy*.88,.48,.68),opacity:.9,offset:.68},
+          {transform:tx(dx,dy,.07,.12),opacity:0,offset:1}
+        ]:[
+          {transform:tx(0,0,1.04,1.04),opacity:1,offset:0},
+          {transform:tx(dx*.86,dy*.86,.85,1.12),opacity:1,offset:.6},
+          {transform:tx(dx,dy,1.04,.97),opacity:.95,offset:.85},
+          {transform:tx(dx,dy,1,1),opacity:0,offset:1}
+        ];
+        f.animation=card.animate(frames,{duration:absorbed?420:360,easing:"cubic-bezier(.22,.75,.2,1)",fill:"both"});
+        f.animation.finished.then(()=>{
+          if(trashFlight!==f)return;stopTrashFlight();
+          if(absorbed&&open&&target.isConnected)try{target.animate([
+            {transform:"scale(1.035,.94)"},{transform:"scale(.99,1.045)"},{transform:"scale(1)"}],
+            {duration:260,easing:"ease-out"});}catch{}
+        },()=>{if(trashFlight===f)stopTrashFlight();});
+      }catch{stopTrashFlight();}
     }
     function purgeEligible(tab){
       return hubTrashTabEligible(tab)&&!tab.pinned&&tab!==browser.selectedTab&&
         !["busy","soundplaying","soundplaying-scheduledremoval","sharing","pictureinpicture"].some(k=>tab.hasAttribute(k));
     }
+    function setTrashAgeOpen(value,focus=false){
+      ageMenu.hidden=!value;ageSelect.setAttribute("aria-expanded",String(value));
+      if(value&&focus)ageChoices.get(trashAge)?.option.focus({preventScroll:true});
+    }
+    function selectTrashAge(value){
+      if(!open||!trashOpen||ageSelect.disabled||!ageChoices.has(value))return;
+      trashAge=value;ageLabel.textContent=ageChoices.get(value).short;
+      for(const [key,{option}] of ageChoices)option.setAttribute("aria-pressed",String(key===value));
+      purgePlan=null;setTrashAgeOpen(false);renderTrash();ageSelect.focus({preventScroll:true});
+    }
     function askPurge(){
       if(busy||!canManage()||!singleWindow())return;
-      const age=ageSelect.value,now=Date.now();
+      setTrashAgeOpen(false);
+      const age=trashAge,now=Date.now();
       purgePlan={age,tabs:trashTabs().filter(t=>purgeEligible(t)&&hubTrashAgeMatches(trashStamp(t),age,now))};renderTrash();
     }
     async function executePurge(){
@@ -435,20 +501,36 @@
       row.draggable=trashAllowed&&hubTrashTabEligible(tab)&&tab!==browser.selectedTab;
       row.addEventListener("dragstart",event=>{
         if(!event.isTrusted||!row.draggable||!event.dataTransfer||!singleWindow()){event.preventDefault();return;}
-        const token=Services.uuid.generateUUID().toString();trashDrag={tab,token,row};
+        stopTrashFlight();setTrashAgeOpen(false);
+        const token=Services.uuid.generateUUID().toString(),rect=row.getBoundingClientRect();trashDrag={tab,token,row,rect,lift:null};
         event.dataTransfer.setData(TRASH_DRAG_TYPE,token);event.dataTransfer.effectAllowed="move";
         // One native drag image, not an extra cursor-following overlay.
         // Clone the card within the visible top-layer panel for Gecko.
         try{
-          const rect=row.getBoundingClientRect();trashGhost=row.cloneNode(true);
+          trashGhost=row.cloneNode(true);
           trashGhost.classList.add("op-hub-trash-ghost");trashGhost.draggable=false;
           trashGhost.style.width=rect.width+"px";trashGhost.style.left=rect.left+"px";trashGhost.style.top=rect.top+"px";
           panel.append(trashGhost);event.dataTransfer.setDragImage(trashGhost,Math.min(20,rect.width/2),rect.height/2);
-          window.requestAnimationFrame(()=>{trashGhost?.remove();trashGhost=null;});
+          const ghost=trashGhost;window.requestAnimationFrame(()=>{ghost.remove();if(trashGhost===ghost)trashGhost=null;});
         }catch{trashGhost?.remove();trashGhost=null;}
         row.setAttribute("data-op-trash-dragging","true");
+        if(trashMotionEnabled())try{trashDrag.lift=row.animate([
+          {transform:"scale(1)",opacity:1,offset:0},
+          {transform:"scale(1.10,.88)",opacity:.85,offset:.28},
+          {transform:"scale(.91,1.07)",opacity:.48,offset:.58},
+          {transform:"scale(.97)",opacity:.28,offset:1}
+        ],{duration:340,easing:"ease-out"});}catch{}
       });
-      row.addEventListener("dragend",()=>{finishTrashDrag();if(open)renderTrash();});
+      row.addEventListener("dragend",event=>{
+        const d=trashDrag;if(d?.row!==row)return;
+        const card=row.cloneNode(true),rect=d.rect,release={x:event.clientX,y:event.clientY};
+        finishTrashDrag();
+        if(!open)return;
+        if(row.isConnected&&trashTabs().includes(tab)){
+          if(trashMotionEnabled())animateTrashFlight(card,rect,release,row,false);
+          updateTrashAges();scheduleTrashRows();
+        }else renderTrash();
+      });
       return row;
     }
     function stopTrashUpdates(){
@@ -482,6 +564,7 @@
       trashToggle.setAttribute("aria-expanded",String(trashOpen));
       trashToggle.setAttribute("aria-label",(trashOpen?"Collapse":"Expand")+" Trash ("+tabs.length+" tabs)");
       trashPanel.toggleAttribute("data-op-trash-open",trashOpen);trashDrawer.inert=!trashOpen;trashTools.inert=!trashOpen;
+      if(!trashOpen){setTrashAgeOpen(false);stopTrashFlight();}
       if(!open||!trashOpen){stopTrashUpdates();return;}
       trashAllowed=!busy&&canManage()&&singleWindow();
       trashData=tabs.map(tab=>({tab,stamp:trashStamp(tab)})).sort((a,b)=>b.stamp-a.stamp);
@@ -492,6 +575,7 @@
       renderTrashRows();scheduleTrashRows();
       if(!trashAgeTimer)trashAgeTimer=window.setInterval(updateTrashAges,60000);
       clearTrash.disabled=!trashAllowed||!tabs.some(purgeEligible);ageSelect.disabled=!trashAllowed;
+      if(ageSelect.disabled)setTrashAgeOpen(false);
       if(purgePlan){
         const n=purgePlan.tabs.length;
         trashConfirmation.append(make("p","op-hub-confirm-text",n?"Close "+n+" matching tab(s)? Native recently closed history may retain them.":"No eligible tabs match this age."));
@@ -879,6 +963,7 @@
     function key(event){
       if(!open||event.key!=="Escape")return;
       event.preventDefault();event.stopPropagation();
+      if(!ageMenu.hidden){setTrashAgeOpen(false);ageSelect.focus({preventScroll:true});return;}
       if(trashDrag){finishTrashDrag();renderTrash();return;}if(drag){cancelDrag();return;}if(confirmation){confirmation=null;render();return;}if(contextId){contextId=null;render();return;}close(true);
     }
     function changed(){if(open){if(drag&&!manager()?.getWorkspaceFromId(drag.id))cancelDrag();if(!drag&&!trashDrag&&!editId)render();scheduleHubGeometry();}}
@@ -890,7 +975,11 @@
       try{cmd.doCommand();changed();}catch(error){console.warn("[OnePlane] Compact Mode:",error);}
     }
     function onInput(){add.disabled=busy||!name.value.trim();}
-    function onOutside(event){if(open&&!event.composedPath().includes(panel)&&!event.composedPath().includes(button))close();}
+    function onOutside(event){
+      if(!open)return;const path=event.composedPath();
+      if(!path.includes(panel)&&!path.includes(button)){close();return;}
+      if(!ageMenu.hidden&&!path.includes(ageMenu)&&!path.includes(ageSelect))setTrashAgeOpen(false);
+    }
     function stopDrag(event){event.stopPropagation();}
     function stopDouble(event){event.preventDefault();event.stopImmediatePropagation();}
     const listeners=[[button,"click",toggle],[button,"pointerdown",stopDrag],[button,"mousedown",stopDrag],[button,"dblclick",stopDouble],

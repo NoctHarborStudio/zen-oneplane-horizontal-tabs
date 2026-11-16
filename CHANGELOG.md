@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0-preview.32
+
+- Center Trash header controls; replace native age select with inline choices that retain filter state.
+- Add Fluid lift, post-drop suction and in-Hub cancellation return while preserving native drag transfer and virtual list.
+
 ## 0.2.0-preview.31
 
 - Redesign One Plane Hub: separated Free, settings above expandable bottom Trash button, count/header controls and compact drag-only site cards.

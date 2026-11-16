@@ -1661,3 +1661,26 @@
 @media (prefers-reduced-motion:reduce) {
   #oneplane-hub-panel :is(.op-hub-trash-panel,.op-hub-trash-title,.op-hub-trash-symbol,.op-hub-trash-tools,.op-hub-trash-drawer,.op-hub-trash-item,.op-hub-space) {transition:none!important;}
 }
+
+/* .32: common vertical center, in-document age menu. */
+#oneplane-hub-panel .op-hub-trash-toggle {padding:0;margin:0;height:40px;min-height:0;box-sizing:border-box;}
+#oneplane-hub-panel .op-hub-trash-title {top:50%;line-height:16px;transform:translate(-4px,-50%);}
+#oneplane-hub-panel [data-op-trash-open] .op-hub-trash-title {transform:translate(0,-50%);}
+#oneplane-hub-panel .op-hub-trash-symbol {top:50%;transform:translate(-50%,-50%);}
+#oneplane-hub-panel [data-op-trash-open] .op-hub-trash-symbol {transform:translate(-100%,-50%);}
+#oneplane-hub-panel .op-hub-trash-tools {top:20px;transform:translate(-50%,-50%) translateY(-3px);align-items:center;}
+#oneplane-hub-panel [data-op-trash-open] .op-hub-trash-tools {transform:translate(-50%,-50%);}
+#oneplane-hub-panel .op-hub-trash-tools :is(.op-hub-action,.op-hub-age) {appearance:none;display:flex;align-items:center;justify-content:center;height:26px;min-height:0;margin:0;padding:0 5px;line-height:1;border:1px solid color-mix(in srgb,currentColor 15%,transparent);border-radius:5px;background:color-mix(in srgb,currentColor 8%,transparent);}
+#oneplane-hub-panel .op-hub-age {width:72px;gap:3px;cursor:pointer;}
+#oneplane-hub-panel .op-hub-age-label {min-width:0;overflow:hidden;text-overflow:ellipsis;}
+#oneplane-hub-panel .op-hub-age-chevron {font-size:11px;line-height:1;opacity:.7;}
+#oneplane-hub-panel .op-hub-age-menu {display:flex;flex-direction:column;gap:2px;margin:0 5px 5px;padding:3px;border-radius:6px;background:color-mix(in srgb,currentColor 6%,transparent);}
+#oneplane-hub-panel .op-hub-age-menu[hidden] {display:none!important;}
+#oneplane-hub-panel .op-hub-age-option {display:flex;align-items:center;justify-content:space-between;min-height:28px;width:100%;margin:0;border:0;border-radius:5px;padding:4px 7px;background:transparent;color:inherit;font:inherit;font-size:11px;text-align:start;cursor:pointer;}
+#oneplane-hub-panel .op-hub-age-option:is(:hover,[aria-pressed="true"]) {background:color-mix(in srgb,currentColor 13%,transparent);}
+#oneplane-hub-panel .op-hub-age-option[aria-pressed="true"]::after {content:"✓";color:AccentColor;}
+#oneplane-hub-panel .op-hub-trash-flight {position:absolute;z-index:3;pointer-events:none!important;transform-origin:center;margin:0;opacity:1;background:var(--op-hub-bg,Canvas);border-color:AccentColor;box-shadow:0 4px 12px #0004;transition:none;}
+@container (max-width: 235px) {
+  #oneplane-hub-panel [data-op-trash-open] .op-hub-trash-head {height:70px;}
+  #oneplane-hub-panel [data-op-trash-open] .op-hub-trash-tools {top:54px;}
+}

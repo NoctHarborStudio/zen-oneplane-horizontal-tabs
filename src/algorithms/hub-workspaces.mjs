@@ -64,3 +64,13 @@
     const m=Math.max(0,Math.floor((now-stamp)/60000));
     return m<1?"Just now":m<60?m+" min":m<1440?Math.floor(m/60)+" h":m<525600?Math.floor(m/1440)+" d":Math.floor(m/525600)+" y";
   }
+  export function hubTrashAgeOptions(){
+    return [["all","All tabs","All tabs"],["5m","5 min+","Older than 5 minutes"],["1h","1 hour+","Older than 1 hour"],["1d","1 day+","Older than 1 day"],["7d","7 days+","Older than 7 days"],["30d","30 days+","Older than 30 days"],["1y","1 year+","Older than 1 year"]];
+  }
+  export function hubTrashFlightGeometry(rect,release,dest,panel){
+    if(!rect||!release||!dest||!panel||![rect.width,rect.height,release.x,release.y,dest.left,dest.top,dest.width,dest.height,panel.left,panel.top,panel.right,panel.bottom].every(Number.isFinite)||rect.width<=0||rect.height<=0)return null;
+    if(release.x<panel.left||release.x>panel.right||release.y<panel.top||release.y>panel.bottom)return null;
+    const x=Math.max(panel.left,Math.min(panel.right-rect.width,release.x-Math.min(20,rect.width/2)));
+    const y=Math.max(panel.top,Math.min(panel.bottom-rect.height,release.y-rect.height/2));
+    return {x,y,dx:dest.left+dest.width/2-x-rect.width/2,dy:dest.top+dest.height/2-y-rect.height/2};
+  }

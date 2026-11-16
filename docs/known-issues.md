@@ -174,3 +174,7 @@ First native Trash/Free candidate, not live-validated. Native Trash visible in Z
 ### Preview.31 Hub visual candidate
 
 Approved prototype implemented; runtime verification pending. Trash restore via drag only as requested; keyboard-only restore deferred. Native favicon may be unavailable or nonlocal, in which case use fallback glyph. Free startup intentionally skips ambiguous same-name spaces, projected/private/unsynced windows and live reload; confirm cold start and session restoration on Windows. Native drag image is OS-controlled after lift, not a custom cross-monitor ghost.
+
+### Preview.32 Trash polish
+
+User confirms .31 drawer/clear/drag restoration; reports uneven header and native age selection dismisses Hub. Inline picker and aligned controls address suspected native popup deactivation; exact event sequence unlogged. Fluid lift/suction visuals require live verification; native transfer unchanged. No cross-window transfer change.

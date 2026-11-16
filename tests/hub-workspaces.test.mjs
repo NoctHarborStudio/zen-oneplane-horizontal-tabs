@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {hubWorkspaceSnapshot,hubPanelWidth,hubWorkspaceBrowserEligible,hubOtherDisplay,hubSnapRect,hubTrashAgeMatches,hubWorkspaceOrder,hubTrashTabEligible,hubTrashRange,hubTrashRelativeAge} from "../src/algorithms/hub-workspaces.mjs";
+import {hubWorkspaceSnapshot,hubPanelWidth,hubWorkspaceBrowserEligible,hubOtherDisplay,hubSnapRect,hubTrashAgeMatches,hubWorkspaceOrder,hubTrashTabEligible,hubTrashRange,hubTrashRelativeAge,hubTrashAgeOptions,hubTrashFlightGeometry} from "../src/algorithms/hub-workspaces.mjs";
 test("native identities and current state; no mutation",()=>{
   const native=[{uuid:"a",name:"Study",icon:"📚"},{uuid:"b",name:"Free",icon:"chrome://x.svg"},{uuid:"a",name:"duplicate"}];
   const manager={activeWorkspace:"b",getWorkspaces:()=>native,changeWorkspaceWithID(){}};
@@ -80,4 +80,19 @@ test("relative time is derived from fixed timestamps",()=>{
   assert.equal(hubTrashRelativeAge(n-86400000,n),"1 d");
   assert.equal(hubTrashRelativeAge(n-31536000000,n),"1 y");
   assert.equal(hubTrashRelativeAge(0,n),"Unknown");
+});
+
+test("inline age choices use valid clear filter keys",()=>{
+ const options=hubTrashAgeOptions();
+ assert.deepEqual(options.map(o=>o[0]),["all","5m","1h","1d","7d","30d","1y"]);
+ const now=2000000000000;
+ for(const [key] of options)assert.equal(hubTrashAgeMatches(now-31536000000,key,now),true);
+});
+test("trash flight stays in Hub and converges on target center",()=>{
+ const rect={width:180,height:50},panel={left:10,top:20,right:250,bottom:600},dest={left:20,top:90,width:210,height:34};
+ const f=hubTrashFlightGeometry(rect,{x:130,y:110},dest,panel);
+ assert.deepEqual(f,{x:70,y:85,dx:-35,dy:-3});
+ assert.equal(f.x+rect.width/2+f.dx,dest.left+dest.width/2);
+ assert.equal(f.y+rect.height/2+f.dy,dest.top+dest.height/2);
+ assert.equal(hubTrashFlightGeometry(rect,{x:500,y:110},dest,panel),null);
 });

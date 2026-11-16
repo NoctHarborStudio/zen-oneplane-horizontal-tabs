@@ -143,3 +143,7 @@ User approves expanded Hub with Free, workspace editing, Trash icon and downward
 ## Preview.31 — approved One Plane Hub visual iteration
 
 User approved interactive prototype: Free separated, full-width bottom Trash button expands within itself, icon/count move right and Clear/age appear in header, no Restore to selectors, compact site cards with favicon/title/address/relative age, drag lift/target feedback. Virtualized fixed-row viewport and single minute timer while open, no per-tab timers. First normal synced startup selects UUID-designated Free or creates one without renaming other spaces; same-named ambiguous user space retains explicit designation. Projection and live reload excluded. Native Trash safety constraints unchanged; keyboard-only restoration, group/multiwindow safety and native color theme remain follow-up. Physical Zen test pending.
+
+## Preview.32 — Trash polish
+
+User confirms bottom drawer, Clear and native drag restore to Free/Space work. Fix misaligned header and age picker closing Hub; use in-Hub button choices, keep selected value for Clear. Add bounded Fluid card lift and post-drop suction/return animation without changing native tab transfer. Runtime visual verification pending.
