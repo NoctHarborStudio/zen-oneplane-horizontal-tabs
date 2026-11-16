@@ -57,3 +57,8 @@ Preview 0.2.0-preview.4 prioritizes address animation, startup centering and the
 ## Optional Zen Refined startup integration
 
 OnePlane exposes `data-op-startup-ready` (`pending` → `true`) and observes the optional `oneplane-startup-hold` wrapper flag. Zen Refined owns the startup animation and releases the flag on completion/cancel. OnePlane never requires Zen Refined; normal startup, Compact Mode and persistent mode work independently. The hold does not change browser preferences.
+
+
+## Shared Magnetic Bookmarks and Wave Fade (preview.10)
+
+OnePlane includes the same Magnetic Bookmarks controller and CSS as [Zen Refined 0.6.0-preview.3](https://github.com/NoctHarborStudio/zen-refined-ui-improvements/tree/c36668d9819a345ca24473cb399d01dfe89d7119). It works without Refined. When both updated mods are installed, independent leases share a single controller per window; settings remain under `zen.refined.bookmarks.*` and may appear in both Sine settings panels. OnePlane alone owns address-wave timing. The canonical copies are pinned in `scripts/shared-bookmarks.lock.json` and verified by the existing CI. No external runtime fetch. Update both mods for mixed-use compatibility; old legacy versions may require restart after the last shared copy is removed.

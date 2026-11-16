@@ -85,3 +85,10 @@
 - User reports the slider below the selected Steam tab is delayed until all cards reappear. Preview.8 deliberately hid indicator until final handoff.
 - Preview.9 schedules indicator opacity with the selected card's own delay (+28ms, 105ms fade), stops native spring during the cascade, and resumes normal indicator at handoff.
 - Status: mitigation published; live validation pending.
+
+## OP-013 — Remaining visual overlap and abrupt hiding in Preview 9
+
+- User reports Bunny still overlaps despite horizontal gap limit. The vertical overshoot and cross-region bounds are possible contributors, but no captured live trace.
+- Preview.10 limits both scale axes to 100%, removes overshoot, and fades items progressively during opening. Bookmarks share the address trajectory with depth-aware timing; native text is opacity-only.
+- Shared Magnetic Bookmarks controller replaces duplicate ownership; both updated mods needed for reliable two-way unload handoff. Contour recalculation suspended during wave.
+- Status: mitigation prepared; live visual/FPS and integration validation pending.

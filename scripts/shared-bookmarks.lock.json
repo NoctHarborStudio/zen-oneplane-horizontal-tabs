@@ -1,0 +1,16 @@
+{
+  "repository": "NoctHarborStudio/zen-refined-ui-improvements",
+  "commit": "c36668d9819a345ca24473cb399d01dfe89d7119",
+  "files": [
+    {
+      "path": "bookmarks.uc.mjs",
+      "upstream": "bookmarks.uc.mjs",
+      "gitBlob": "21413a77bf1f62ef0bba014a8704a7ef56cd96a1"
+    },
+    {
+      "path": "src/styles/magnetic-bookmarks.css.part",
+      "upstream": "magnetic-bookmarks.css",
+      "gitBlob": "09e0d525c22bd8d7416fd742ce2c1952f45c59fa"
+    }
+  ]
+}

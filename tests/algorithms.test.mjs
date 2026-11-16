@@ -135,29 +135,39 @@ test("fluid native animation uses synchronized monotonic endpoints and invariant
   assert.equal(addressMotionSample("closing-wave",open,closed,1).selection,0);
 });
 
-import { cascadeRevealSchedule, cascadeRevealFrames } from "../src/algorithms/address-cascade.mjs";
-test("Bunny reveal uses linear keyframe count and bounded horizontal growth",()=>{
+import { cascadeWaveSchedule, cascadeRevealFrames, cascadeFadeFrames } from "../src/algorithms/address-cascade.mjs";
+test("bounded Bunny never exceeds its resting slot in either axis",()=>{
   for(const count of [1,8,32,80,200]){
-    const slots=Array.from({length:count},(_,i)=>({width:i%5===0?180:36,left:5000-i*190,leftGap:3,rightGap:3}));
-    const timing=cascadeRevealSchedule(slots,{name:"closing-wave",from:{width:900,reveal:1},to:{width:180,reveal:0},duration:380},100);
-    assert.equal(timing.length,count);
-    for(let i=1;i<count;i++)assert.ok(timing[i].delay>timing[i-1].delay);
-    assert.ok(timing.at(-1).delay<=620.01);
-    const frames=slots.map(cascadeRevealFrames);
-    assert.equal(frames.flat().length,3*count);
-    for(let i=0;i<count;i++){
-      const peak=Number(frames[i][1].scale.split(" ")[0]);
-      assert.ok((peak-1)*slots[i].width<=2.201);
-      assert.equal(frames[i][0].opacity,0);
-      assert.equal(frames[i].at(-1).scale,"1 1");
-      assert.equal(frames[i].at(-1).opacity,1);
+    const slots=Array.from({length:count},(_,i)=>({left:300+i*39,top:0}));
+    const geometry={left:100,top:0,header:30,height:240};
+    for(const opening of [true,false]){
+      const phase={name:opening?"opening":"closing-wave",from:{width:opening?180:900,reveal:opening?0:1},to:{width:opening?900:180,reveal:opening?1:0},duration:opening?420:380};
+      const timing=cascadeWaveSchedule(opening?slots:slots.slice().reverse(),phase,geometry,opening);
+      for(let i=1;i<timing.length;i++)assert.ok(timing[i].delay>=timing[i-1].delay);
+      if(opening)assert.ok(timing.every(t=>t.delay+t.duration<=420.001));
+      else assert.ok(timing.at(-1).delay<=620.001);
+    }
+    const frames=slots.map(()=>cascadeRevealFrames());
+    assert.equal(frames.flat().length,4*count);
+    for(const fs of frames){
+      assert.ok(fs.every(f=>f.scale.split(" ").every(v=>Number(v)>=0&&Number(v)<=1)));
+      assert.equal(fs[2].scale,"0.93 0.93");
+      assert.equal(fs.at(-1).scale,"1 1");
     }
   }
+  assert.equal(cascadeRevealFrames({x:.4,y:.7,opacity:.5})[0].scale,"0.4 0.7");
+  assert.equal(cascadeFadeFrames(.4,true)[0].opacity,.4);
+  assert.equal(cascadeFadeFrames(.4,true)[1].opacity,0);
 });
-test("Bunny reveal respects narrow neighboring gaps and split boundaries",()=>{
-  for(const width of [16,32,36,44,180,240])for(const gap of [0,.5,1,2,3,8]){
-    const peak=Number(cascadeRevealFrames({width,leftGap:gap,rightGap:gap})[1].scale.split(" ")[0]);
-    assert.ok((peak-1)*width<=Math.max(0,gap-.8)+.001);
-  }
-  assert.equal(cascadeRevealFrames({width:180,leftGap:0,rightGap:3})[1].scale,"1.000000 1.140000");
+test("Wave Fade uses address depth for bookmark row and clears both rows by the end",()=>{
+  const g={left:100,top:0,header:30,height:240};
+  const phase={name:"opening",from:{width:180,reveal:0},to:{width:900,reveal:1},duration:420};
+  const top={left:420,top:0},bm={left:420,top:70,bookmark:true};
+  const a=cascadeWaveSchedule([top],phase,g,true)[0];
+  const b=cascadeWaveSchedule([bm],phase,g,true)[0];
+  assert.ok(b.delay>=a.delay);
+  const far=cascadeWaveSchedule([{left:2000,top:400,bookmark:true}],phase,g,true)[0];
+  assert.ok(far.delay+far.duration<=420);
+  const reverse={name:"closing-wave",from:phase.to,to:phase.from,duration:380};
+  assert.ok(cascadeWaveSchedule([bm],reverse,g,false)[0].delay<=cascadeWaveSchedule([top],reverse,g,false)[0].delay);
 });

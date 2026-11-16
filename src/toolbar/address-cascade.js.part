@@ -1,16 +1,40 @@
-  // Bunny Cascade v3. Opening is a single visibility state; closing
-  // has three local keyframes per visible card. No animated custom
-  // properties, no slot locks, no repeated layout in the animation.
+  // Shared address-wave choreography. Each visible item gets a fixed
+  // small set of keyframes; all measurement is batched before writes.
+  const TAB_WAVE_SELECTOR=".oneplane-tab,.oneplane-split-handle,.oneplane-title-island,.oneplane-new-tab";
+  const BOOKMARK_WAVE_SELECTOR="#PlacesToolbarItems > :is(toolbarbutton,toolbaritem,toolbarseparator),#PlacesChevron,#OtherBookmarks";
   let cascadeState="idle",cascadeGeneration=0,cascadeHandoffFrame=0;
-  const cascadeAnimations=new Map();
-  let cascadePointer=null;
+  const cascadeAnimations=new Map(),cascadeDecorations=new Set();
+  let cascadePointer=null,bookmarkInertHome=null;
+  function setBookmarkWave(state){
+    if(!bookmarks)return;
+    if(state){
+      if(bookmarkInertHome===null)bookmarkInertHome={present:bookmarks.hasAttribute("inert"),value:bookmarks.getAttribute("inert")};
+      bookmarks.setAttribute("inert","");
+      root.setAttribute("data-op-bookmark-wave",state);
+      bookmarks.setAttribute("data-op-bookmark-wave",state);
+    }else{
+      bookmarks.removeAttribute("data-op-bookmark-wave");
+      root.removeAttribute("data-op-bookmark-wave");
+      if(bookmarkInertHome!==null){
+        if(bookmarkInertHome.present)bookmarks.setAttribute("inert",bookmarkInertHome.value);
+        else bookmarks.removeAttribute("inert");
+      }
+      bookmarkInertHome=null;
+    }
+    window.__zenMagneticBookmarksShared?.syncAddressState?.();
+  }
   function cancelCascadeAnimations(){
     for(const [node,anim] of cascadeAnimations){
       anim.cancel();
       node.removeAttribute("data-op-cascade-member");
       node.removeAttribute("data-op-cascade-frame");
+      node.removeAttribute("data-op-bookmark-wave-member");
     }
     cascadeAnimations.clear();
+    for(const {node,anim} of cascadeDecorations){
+      anim.cancel();node.removeAttribute("data-op-bookmark-wave-card");
+    }
+    cascadeDecorations.clear();
   }
   function cancelCascadeHandoff(){
     if(cascadeHandoffFrame)window.cancelAnimationFrame(cascadeHandoffFrame);
@@ -23,113 +47,180 @@
     cascadeState="idle";
     row.inert=false;
     cancelCascadeAnimations();
-    if(!dead)refreshIndicator();
+    setBookmarkWave(null);
+    if(!dead){refreshIndicator();scheduleContour();}
   }
-  function hideTabCascade(){
-    if(cascadeState==="hidden")return;
-    cascadeGeneration++;
-    cancelCascadeHandoff();
-    if(panelLastPointer)cascadePointer={...panelLastPointer};
-    // Hide the entire row before cancelling fills or collapsing hover.
+  function settleHidden(generation){
+    if(dead||generation!==cascadeGeneration)return;
     cascadeState="hidden";
     row.setAttribute("data-op-cascade","hidden");
-    row.inert=true;
+    setBookmarkWave("hidden");
     cancelCascadeAnimations();
-    hideIndicator();
-    clearTabHover();
-    islandTextAnimation?.cancel();
+    clearTabHover();hideIndicator();islandTextAnimation?.cancel();
   }
   function finishCascadeHandoff(generation){
     if(dead||generation!==cascadeGeneration)return;
-    // Final fill is identical to normal style. Keep it for one paint;
-    // then restore hover without retargeting a stationary pointer.
     cascadeHandoffFrame=window.requestAnimationFrame(()=>{
       cascadeHandoffFrame=0;
       if(dead||generation!==cascadeGeneration)return;
       resetTabCascade();
+      clearTabHover();
     });
+  }
+  function collectCascadeSlots(previous){
+    const viewport=row.getBoundingClientRect(),cache=new Map();
+    const bounds=node=>{
+      if(!cache.has(node))cache.set(node,node.getBoundingClientRect());
+      return cache.get(node);
+    };
+    const tabNodes=Array.from(row.querySelectorAll(TAB_WAVE_SELECTOR));
+    const bmNodes=bookmarks&&!bookmarks.hidden&&!bookmarks.collapsed?
+      Array.from(bookmarks.querySelectorAll(BOOKMARK_WAVE_SELECTOR)).filter(n=>!n.parentElement?.closest(BOOKMARK_WAVE_SELECTOR)):[];
+    const result=[];
+    for(const [nodes,bookmark] of [[tabNodes,false],[bmNodes,true]]){
+      for(const node of nodes){
+        if(!node.isConnected||node.hidden||node.collapsed)continue;
+        const rect=node.getBoundingClientRect();
+        // XUL bookmarks need not expose HTMLElement.offsetWidth.
+        // Their native text is never scaled by our wave.
+        const width=bookmark?rect.width:node.offsetWidth,height=bookmark?rect.height:node.offsetHeight;
+        if(!(width>0&&height>0))continue;
+        const css=window.getComputedStyle(node);
+        if(css.display==="none"||bookmark&&css.visibility!=="visible")continue;
+        const scale=!css.scale||css.scale==="none"?[1,1]:css.scale.split(/\s+/).map(Number);
+        const tracked=cascadeAnimations.has(node);
+        const hidden=previous!=="idle"&&!tracked;
+        const fullyHidden=hidden||previous==="hidden";
+        const center=(rect.left+rect.right)/2,cy=(rect.top+rect.bottom)/2;
+        const left=center-width/2,right=center+width/2,top=cy-height/2;
+        const lane=bookmark?null:node.closest(".oneplane-island-lane");
+        const region=bookmark?bookmarks:(lane&&lane.offsetWidth>0?lane:node.closest(".oneplane-tab-list")||row);
+        const clip=region===row?viewport:bounds(region);
+        const group=bookmark?null:node.closest(".oneplane-split-group");
+        if(right<=clip.left||left>=clip.right)continue;
+        result.push({node,bookmark,group,left,right,top,
+          x:fullyHidden?0:(Number.isFinite(scale[0])?scale[0]:1),
+          y:fullyHidden?0:(Number.isFinite(scale[1])?scale[1]:Number.isFinite(scale[0])?scale[0]:1),
+          opacity:fullyHidden?0:Math.max(0,Math.min(1,parseFloat(css.opacity)||0))});
+      }
+    }
+    return result;
   }
   function animateTabCascade(opening,phase=null){
     if(dead||!hoverSupported()){resetTabCascade();return;}
-    if(opening){hideTabCascade();return;}
-    if(cascadeState!=="hidden"||row.hasAttribute("data-op-dragging"))return;
-    if(!addressMotionEnabled()){resetTabCascade();return;}
+    const previous=cascadeState;
+    if(opening&&(previous==="hidden"||previous==="hiding")||!opening&&(previous==="idle"||previous==="showing"))return;
+    if(row.hasAttribute("data-op-dragging"))return;
     cancelCascadeHandoff();
     if(panelLastPointer)cascadePointer={...panelLastPointer};
+    cancelHoverTimer();
     const generation=++cascadeGeneration;
-    // The hidden row retains its layout. All hover widths have already
-    // settled; read each visible slot once, before starting animations.
-    const viewport=row.getBoundingClientRect();
-    const laneBounds=new Map();
-    const bounds=node=>{
-      if(!laneBounds.has(node))laneBounds.set(node,node.getBoundingClientRect());
-      return laneBounds.get(node);
-    };
-    const slots=Array.from(row.querySelectorAll(".oneplane-tab,.oneplane-split-handle,.oneplane-title-island,.oneplane-new-tab"))
-      .filter(n=>n.isConnected&&n.offsetWidth>0&&n.offsetHeight>0).map(node=>{
-        const rect=node.getBoundingClientRect(),width=node.offsetWidth;
-        const lane=node.closest(".oneplane-island-lane");
-        const region=lane&&lane.offsetWidth>0?lane:node.closest(".oneplane-tab-list")||row;
-        const clip=region===row?viewport:bounds(region);
-        const group=node.closest(".oneplane-split-group");
-        const g=group?bounds(group):null;
-        return {node,width,left:rect.left,right:rect.right,region,group,
-          min:Math.max(clip.left,g?g.left: -Infinity),max:Math.min(clip.right,g?g.right:Infinity)};
-      }).filter(v=>v.right>v.min&&v.left<v.max).sort((a,b)=>a.left-b.left);
-    for(let i=0;i<slots.length;i++){
-      const v=slots[i],a=slots[i-1],b=slots[i+1];
-      v.leftGap=Math.min(2*(v.left-v.min),a&&a.region===v.region?v.left-a.right:2.8);
-      v.rightGap=Math.min(2*(v.max-v.right),b&&b.region===v.region?b.left-v.right:2.8);
+    if(!addressMotionEnabled()){
+      if(opening){row.inert=true;settleHidden(generation);}else resetTabCascade();
+      return;
     }
-    if(!slots.length){resetTabCascade();return;}
-    const ordered=slots.slice().reverse();
-    const anchor=parseFloat(url.style.getPropertyValue("--op-url-anchor-left"))||url.getBoundingClientRect().left;
-    const timings=cascadeRevealSchedule(ordered,phase,anchor);
-    const jobs=[],groupTiming=new Map();
-    cascadeState="showing";
-    row.setAttribute("data-op-cascade","showing");
+    // Suspend Magnetic Hover synchronously, before reading resting slots.
+    // Preserve the tab hover geometry until the opening fade is invisible.
+    if(bookmarks){
+      root.setAttribute("data-op-bookmark-wave",opening?"hiding":"showing");
+      window.__zenMagneticBookmarksShared?.syncAddressState?.();
+    }
+    const slots=collectCascadeSlots(previous);
+    const groupAlpha=new Map();
+    for(const v of slots)if(v.group&&!groupAlpha.has(v.group)){
+      groupAlpha.set(v.group,previous==="idle"?1:cascadeAnimations.has(v.group)?
+        parseFloat(window.getComputedStyle(v.group).opacity)||0:0);
+    }
+    const bar=addressBar(),rect=bar?.getBoundingClientRect();
+    const geometry={left:parseFloat(url.style.getPropertyValue("--op-url-anchor-left"))||url.getBoundingClientRect().left,
+      top:parseFloat(url.style.getPropertyValue("--op-url-anchor-top"))||rect?.top||0,
+      header:parseFloat(url.style.getPropertyValue("--op-url-header-height"))||30,
+      height:rect?.height||30};
+    const hadIndicator=indicatorShown,indicatorOpacity=previous==="idle"?1:
+      cascadeAnimations.has(indicator)?parseFloat(window.getComputedStyle(indicator).opacity)||0:0;
+    cancelCascadeAnimations();
+    cascadeState=opening?"hiding":"showing";
+    row.setAttribute("data-op-cascade",cascadeState);
     row.inert=true;
-    // No spring solver during the cascade. The underline uses its
-    // selected card's delay, independent of when the last card settles.
-    refreshIndicator(true);
+    setBookmarkWave(cascadeState);
+    if(!opening){
+      indicatorHover=null;hoverX=null;
+      hideIndicator();refreshIndicator(true);
+    }
     if(indicatorFrame)window.cancelAnimationFrame(indicatorFrame);
     indicatorFrame=0;iv=0;last=0;
+    islandTextAnimation?.cancel();
     const start=phase&&addressAnimation?.startTime;
+    const jobs=[],groupTiming=new Map();
     const play=(node,frames,timing,attr)=>{
       try{
         node.setAttribute(attr,"true");
         const anim=node.animate(frames,{...timing,fill:"both",easing:"linear"});
         cascadeAnimations.set(node,anim);
         if(start!==null&&start!==undefined&&Number.isFinite(start))anim.startTime=start;
-        jobs.push(anim.finished);
-        return true;
+        jobs.push(anim.finished);return true;
       }catch(error){
         node.removeAttribute(attr);
-        window.console.warn("[OnePlane] Tab reveal fallback:",error);
+        window.console.warn("[OnePlane] Wave animation fallback:",error);
         return false;
       }
     };
     const selected=entries.get(browser.selectedTab)?.item;
-    for(let i=0;i<ordered.length;i++){
-      const v=ordered[i],timing=timings[i];
-      play(v.node,cascadeRevealFrames(v),timing,"data-op-cascade-member");
-      if(v.group&&!groupTiming.has(v.group))groupTiming.set(v.group,timing);
-      if(v.node===selected&&indicatorShown){
-        play(indicator,[{opacity:0},{opacity:1}],{delay:timing.delay+28,duration:105},"data-op-cascade-member");
+    const indicatorItem=opening&&indicatorHover&&list.contains(indicatorHover)?indicatorHover:selected;
+    let indicatorPlayed=false;
+    // Two rows share the same address trajectory but independent stagger.
+    // No quadratic global timeline and no repeated geometry sampling.
+    for(const bookmark of [false,true]){
+      const ordered=slots.filter(v=>v.bookmark===bookmark).sort((a,b)=>opening?a.left-b.left:b.left-a.left);
+      const timings=cascadeWaveSchedule(ordered,phase,geometry,opening);
+      for(let i=0;i<ordered.length;i++){
+        const v=ordered[i],timing=timings[i];
+        let frames=opening||bookmark?cascadeFadeFrames(v.opacity,opening):cascadeRevealFrames(v);
+        // On reopening during a return, hold the card's current scale
+        // during its fade rather than snapping back to full size.
+        if(opening&&!bookmark&&previous==="showing")
+          frames=frames.map(k=>({...k,scale:v.x+" "+v.y}));
+        play(v.node,frames,timing,bookmark?"data-op-bookmark-wave-member":"data-op-cascade-member");
+        if(v.group){
+          const old=groupTiming.get(v.group);
+          if(!old||opening&&old.delay<timing.delay)groupTiming.set(v.group,timing);
+        }
+        if(!opening&&bookmark&&v.node.matches("toolbarbutton.bookmark-item")){
+          // Native XUL labels/icons only fade. The decorative card alone
+          // has a bounded spring; it never alters the native text metrics.
+          try{
+            v.node.setAttribute("data-op-bookmark-wave-card","true");
+            const effect=new window.KeyframeEffect(v.node,[
+              {offset:0,transform:"scale(0)",opacity:0},
+              {offset:.55,transform:"scale(1)",opacity:.18},
+              {offset:.78,transform:"scale(.93)",opacity:.12},
+              {offset:1,transform:"scale(1)",opacity:0}
+            ],{...timing,fill:"both",easing:"ease-out",pseudoElement:"::before"});
+            if(effect.pseudoElement!=="::before")throw Error("pseudo unsupported");
+            const anim=new window.Animation(effect,document.timeline);
+            cascadeDecorations.add({node:v.node,anim});anim.play();
+            if(start!==null&&start!==undefined&&Number.isFinite(start))anim.startTime=start;
+            jobs.push(anim.finished);
+          }catch{v.node.removeAttribute("data-op-bookmark-wave-card");}
+        }
+        if(v.node===indicatorItem&&(opening?hadIndicator:indicatorShown)){
+          indicatorPlayed=play(indicator,cascadeFadeFrames(indicatorOpacity,opening),
+            opening?timing:{delay:timing.delay+28,duration:105},"data-op-cascade-member");
+        }
       }
     }
-    // Fade the actual group, not its inherited background alpha.
-    // Children retain their individual bounce and the radius stays 8px.
+    if(!indicatorPlayed&&opening)hideIndicator();
     for(const [group,timing] of groupTiming)
-      play(group,[{opacity:0},{opacity:1}],{delay:timing.delay,duration:85},"data-op-cascade-frame");
-    Promise.allSettled(jobs).then(()=>finishCascadeHandoff(generation));
+      play(group,cascadeFadeFrames(groupAlpha.get(group)??0,opening),
+        {delay:timing.delay,duration:opening?timing.duration:85},"data-op-cascade-frame");
+    Promise.allSettled(jobs).then(()=>opening?settleHidden(generation):finishCascadeHandoff(generation));
   }
   function reconcileTabCascade(){
     if(dead||!hoverSupported()){if(cascadeState!=="idle")resetTabCascade();return;}
     if(addressTransition||addressSettling)return;
     const open=nativeInlineOpen(addressBar());
-    if(open&&cascadeState!=="hidden")hideTabCascade();
-    else if(!open&&cascadeState==="hidden"){
+    if(open&&(cascadeState==="idle"||cascadeState==="showing"))animateTabCascade(true);
+    else if(!open&&(cascadeState==="hidden"||cascadeState==="hiding")){
       holdToolbarAfterDismiss();
       animateTabCascade(false);
     }

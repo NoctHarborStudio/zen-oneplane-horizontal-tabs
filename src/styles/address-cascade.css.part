@@ -1,5 +1,5 @@
-    /* Opening hides one whole strip, without per-card animation or
-       changing layout. Bookmarks and other toolbar zones are untouched. */
+    /* Keep layout slots. On opening only opacity animates; the return
+       is bounded scale/opacity. The whole strip stays noninteractive. */
     #oneplane-tabs[data-op-cascade] { pointer-events:none !important; }
     #oneplane-tabs[data-op-cascade="hidden"] {
       visibility:hidden !important;
@@ -9,8 +9,31 @@
       transition:none !important;
       pointer-events:none !important;
     }
-    #oneplane-tabs[data-op-cascade="showing"] :is(.oneplane-tab,.oneplane-split-handle,.oneplane-title-island,.oneplane-new-tab,#oneplane-tab-indicator):not([data-op-cascade-member]),
-    #oneplane-tabs[data-op-cascade="showing"] .oneplane-split-group:not([data-op-cascade-frame]) {
+    #oneplane-tabs[data-op-cascade] :is(.oneplane-tab,.oneplane-split-handle,.oneplane-title-island,.oneplane-new-tab,#oneplane-tab-indicator):not([data-op-cascade-member]),
+    #oneplane-tabs[data-op-cascade] .oneplane-split-group:not([data-op-cascade-frame]) {
       opacity:0 !important;
+    }
+    #PersonalToolbar[data-op-bookmark-wave] :is(#PlacesToolbarItems > :is(toolbarbutton,toolbaritem,toolbarseparator),#PlacesChevron,#OtherBookmarks) {
+      pointer-events:none !important;
+      transition:none !important;
+    }
+    #PersonalToolbar[data-op-bookmark-wave] :is(#PlacesToolbarItems > :is(toolbarbutton,toolbaritem,toolbarseparator),#PlacesChevron,#OtherBookmarks):not([data-op-bookmark-wave-member]),
+    #PersonalToolbar[data-op-bookmark-wave] #zr-bookmark-indicator {
+      opacity:0 !important;
+    }
+    #PersonalToolbar[data-op-bookmark-wave] [data-op-bookmark-wave-card] {
+      position:relative !important;
+      isolation:isolate;
+    }
+    #PersonalToolbar[data-op-bookmark-wave] [data-op-bookmark-wave-card]::before {
+      content:"";
+      position:absolute;
+      inset:0;
+      border-radius:7px;
+      background:currentColor;
+      opacity:0;
+      pointer-events:none;
+      z-index:-1;
+      transform-origin:center;
     }
 

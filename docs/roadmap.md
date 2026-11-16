@@ -84,3 +84,8 @@ Bunny Cascade v2 addresses reported card overlaps, merged impulses, reveal flick
 ### Stabilization checkpoint — preview.9
 
 User requests plain tab hiding during address opening, Bunny only on close, and early active-tab underline. Replace expensive shared timeline with linear-size local effects; validate real FPS before moving to Hub. Approved native address wave and other roadmap decisions remain unchanged.
+
+
+### Stabilization checkpoint — preview.10
+
+Bounded Bunny and progressive Wave Fade for tabs/bookmarks; shared Magnetic Bookmarks with Zen Refined, one controller per window. Validate both installation combinations, disable order, and hover/animation performance before Hub. Existing workspace, 10-minute unload, Extension Dock and portrait priorities remain unchanged.

@@ -1,6 +1,6 @@
 {
   "name": "oneplane-horizontal-tabs",
-  "version": "0.2.0-preview.9",
+  "version": "0.2.0-preview.10",
   "private": true,
   "type": "module",
   "engines": {
@@ -10,6 +10,6 @@
     "build": "node scripts/build.mjs",
     "check:build": "node scripts/build.mjs --check",
     "test": "node --test tests/*.test.mjs",
-    "verify": "npm run check:build && node --check layout.uc.mjs && npm test"
+    "verify": "npm run check:build && node --check layout.uc.mjs && node --check bookmarks.uc.mjs && npm test"
   }
 }

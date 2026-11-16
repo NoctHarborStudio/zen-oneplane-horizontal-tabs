@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0-preview.10
+
+- Replace external Bunny overshoot with a bounded 0–100–93–100% return, four keyframes per tab. Restore progressive Wave Fade on address opening: two opacity keyframes per visible item, no scale on normal opening.
+- Include native bookmarks, folders and overflow in the same address-wave choreography. Use the existing horizontal trajectory and vertical depth for the lower row; preserve native text metrics, add an optional decorative-only bounded bounce on return.
+- Bundle canonical Magnetic Bookmarks from Zen Refined 0.6.0-preview.3, byte-identical script and stylesheet, with one window-scoped controller and independent leases. Existing shared settings are retained; no runtime dependency on Refined.
+- Suspend magnetic hover and freeze both contour calculations during the address wave. Keep original Split View contour and selected-tab indicator timing. Keep the accepted Fluid Wave source unchanged.
+- Add source-lock and lease tests; actual Zen high-refresh and two-mod lifecycle tests pending.
+
 ## 0.2.0-preview.9
 
 - Remove opening Bunny animation entirely: hide the complete tab strip (including title island, plus, indicator and split groups) with one visibility/opacity state, without layout removal or per-card animation.

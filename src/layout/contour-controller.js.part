@@ -22,7 +22,7 @@
     }
   }
   function paintContour(){
-    if(dead||!toolbarWrapper||!hoverSupported())return;
+    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-op-bookmark-wave"))return;
     // A switch can briefly hide or resize native bookmark controls.
     // Retain the last valid mask until the native layout settles.
     if(contourKey && window.performance.now()<panelSwitchUntil)return;
@@ -83,13 +83,13 @@
     contourFrame=0;
     if(dead)return;
     paintContour();
-    if(now<contourUntil && hoverSupported())contourFrame=window.requestAnimationFrame(stepContour);
+    if(now<contourUntil && hoverSupported()&&!root.hasAttribute("data-op-bookmark-wave"))contourFrame=window.requestAnimationFrame(stepContour);
   }
   function scheduleContour(){
     if(!dead&&!contourFrame)contourFrame=window.requestAnimationFrame(stepContour);
   }
   function onContourTransition(event){
-    if(!contourObserved.has(event.target))return;
+    if(root.hasAttribute("data-op-bookmark-wave")||!contourObserved.has(event.target))return;
     if(!/^(margin|width|height|scale|translate|transform|padding)/.test(event.propertyName||""))return;
     // Magnetic Bookmarks can move through CSS transforms without a
     // resize notification. Follow only while its short transition runs.
