@@ -1584,13 +1584,14 @@ function installTabStrip() {
       const cleanup=()=>{
         if(done)return false;done=true;
         try{Services.obs.removeObserver(observer,"browser-delayed-startup-finished");}catch{}
-        win.removeEventListener("unload",cancel);window.removeEventListener("unload",cancel);
+        try{Services.obs.removeObserver(closedObserver,"domwindowclosed");}catch{}
         win.removeEventListener("pointerdown",input,true);win.removeEventListener("keydown",input,true);
         if(timer)window.clearTimeout(timer);if(poll)window.clearTimeout(poll);if(settle)window.clearTimeout(settle);
         return true;
       };
-      const cancel=()=>{if(cleanup()){logPlacement("startup-cancelled",target);resolve(false);}};
-      const input=event=>{if(event.isTrusted)cancel();};
+      const cancel=(reason)=>{if(cleanup()){logPlacement("startup-cancelled",target,null,{reason});resolve(false);}};
+      const input=event=>{if(event.isTrusted)cancel("child-input");};
+      const closedObserver=subject=>{if(subject===win||subject===window)cancel("domwindowclosed");};
       let applying=false;
       const apply=async()=>{
         if(done||applying)return;applying=true;
@@ -1601,21 +1602,24 @@ function installTabStrip() {
           await Promise.race([Promise.resolve(win.gZenStartup.promiseInitialized).catch(()=>{}),new Promise(r=>{settle=window.setTimeout(r,600);})]);
         }
         if(!cleanup())return;
-        if(dead||win.closed){resolve(false);return;}
+        if(dead||window.closed||win.closed){resolve(false);return;}
         const ok=await placeNativeWindow(win,target);
         if(!ok)console.warn("[OnePlane] Placement not verified; native window kept.");
         resolve(ok);
       };
       const observer=subject=>{if(subject===win)void apply();};
       Services.obs.addObserver(observer,"browser-delayed-startup-finished");
-      win.addEventListener("unload",cancel,{once:true});window.addEventListener("unload",cancel,{once:true});
+      // Initial about:blank document unload is normal when a new chrome
+      // window navigates to browser.xhtml. Only actual window destruction
+      // (WindowWatcher notification) or verified closed state cancels.
+      Services.obs.addObserver(closedObserver,"domwindowclosed");
       win.addEventListener("pointerdown",input,true);win.addEventListener("keydown",input,true);
-      timer=window.setTimeout(()=>{logPlacement("startup-timeout",target);cancel();},15000);
+      timer=window.setTimeout(()=>{logPlacement("startup-timeout",target);cancel("timeout");},15000);
       // Poll only during this startup, so a missed observer or wrapper
       // mismatch cannot leave a correctly sized but non-maximized window.
       const check=()=>{
         if(done||applying)return;
-        if(win.closed||dead){cancel();return;}
+        if(win.closed||window.closed||dead){cancel("closed-state");return;}
         if(win.gBrowserInit?.delayedStartupFinished||win.gZenStartup?.isReady){void apply();return;}
         poll=window.setTimeout(check,100);
       };
@@ -1955,7 +1959,7 @@ function installTabStrip() {
         child.removeEventListener("DOMContentLoaded",install,true);
         child.removeEventListener("load",install,true);
         child.removeEventListener("AfterWorkspacesSessionRestore",stop,true);
-        child.removeEventListener("unload",stop);
+        // Document unload does not mean the native window has closed.
         if(owner?.selectEmptyTab===wrapped){
           if(own)owner.selectEmptyTab=original;else delete owner.selectEmptyTab;
         }
@@ -1963,8 +1967,9 @@ function installTabStrip() {
       child.addEventListener("DOMContentLoaded",install,true);
       child.addEventListener("load",install,true);
       child.addEventListener("AfterWorkspacesSessionRestore",stop,true);
-      child.addEventListener("unload",stop,{once:true});
+      // The caller owns lifetime via domwindowclosed and bounded readiness.
       install();
+      stop.probe=install;
       return stop;
     }
     function untouchedProjectionTab(tab,win){
@@ -2024,6 +2029,48 @@ function installTabStrip() {
       const opened=child.gZenUIManager?.handleNewTab(false,false,"tab",true);
       projectionLog(child,"search",{opened:!!opened});
     }
+    // A newly opened chrome WindowProxy survives its initial document
+    // replacement. Never use DOM unload as a window-close notification.
+    // Keep probes alive until Zen's workspace promise resolves, even when
+    // the Gecko startup notification arrives before our listener.
+    function waitForProjectionReady(child,onProbe){
+      return new Promise((resolve,reject)=>{
+        let finished=false,waiting=false,nativeReady=false,poll=0,timer=0;
+        const cleanup=()=>{
+          if(finished)return false;finished=true;
+          if(poll)window.clearTimeout(poll);if(timer)window.clearTimeout(timer);
+          try{Services.obs.removeObserver(startup,"browser-delayed-startup-finished");}catch{}
+          try{Services.obs.removeObserver(closed,"domwindowclosed");}catch{}
+          return true;
+        };
+        const fail=error=>{if(cleanup())reject(error);};
+        const closed=subject=>{if(subject===child||subject===window)fail(Error("Native window closed"));};
+        const startup=subject=>{if(subject===child){nativeReady=true;check();}};
+        const check=()=>{
+          if(finished)return;
+          if(poll)window.clearTimeout(poll);poll=0;
+          if(child.closed||window.closed||destroyed){fail(Error("Native window closed or OnePlane disabled"));return;}
+          try{
+            onProbe?.();
+            nativeReady||=!!child.gBrowserInit?.delayedStartupFinished||!!child.gZenStartup?.isReady;
+            const spaces=child.gZenWorkspaces;
+            if(nativeReady&&spaces?.promiseInitialized&&!waiting){
+              waiting=true;
+              Promise.resolve(spaces.promiseInitialized).then(()=>{
+                if(finished)return;
+                if(child.closed||window.closed||destroyed){fail(Error("Native window closed"));return;}
+                if(cleanup())resolve();
+              },fail);
+            }
+          }catch(error){fail(error);return;}
+          if(!finished)poll=window.setTimeout(check,100);
+        };
+        Services.obs.addObserver(startup,"browser-delayed-startup-finished");
+        Services.obs.addObserver(closed,"domwindowclosed");
+        timer=window.setTimeout(()=>fail(Error("Workspace startup timeout")),20000);
+        check();
+      });
+    }
     async function project(id,display){
       if(projectionBusy||busy||destroyed)return;
       if(!canProject()){status.textContent="Enable native window sync for all tabs to use this feature.";return;}
@@ -2060,16 +2107,10 @@ function installTabStrip() {
         captureStartup();child.addEventListener("DOMContentLoaded",captureStartup,true);child.addEventListener("load",captureStartup,true);
         stopEmptyGuard=installProjectionEmptyGuard(child,record,()=>interacted);
         projectionLog(child,"opened");
-        await new Promise((resolve,reject)=>{
-          if(child.gBrowserInit?.delayedStartupFinished){resolve();return;}
-          const observer=subject=>{if(subject===child){cleanup();resolve();}};
-          const closed=()=>{cleanup();reject(Error("Window closed"));};
-          const timer=window.setTimeout(()=>{cleanup();reject(Error("Window startup timeout"));},15000);
-          function cleanup(){window.clearTimeout(timer);Services.obs.removeObserver(observer,"browser-delayed-startup-finished");child.removeEventListener("unload",closed);}
-          Services.obs.addObserver(observer,"browser-delayed-startup-finished");child.addEventListener("unload",closed,{once:true});
+        await waitForProjectionReady(child,()=>{
+          captureStartup();stopEmptyGuard.probe?.();
         });
         captureStartup();child.removeEventListener("DOMContentLoaded",captureStartup,true);child.removeEventListener("load",captureStartup,true);
-        await child.gZenWorkspaces?.promiseInitialized;
         stopEmptyGuard();
         projectionLog(child,"spaces-ready",{candidates:startupTabs.size});
         if(child.closed||destroyed||!child.gZenWorkspaces?.currentWindowIsSyncing||

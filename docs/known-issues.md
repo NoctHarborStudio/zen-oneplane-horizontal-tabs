@@ -150,3 +150,7 @@ User confirms correct monitor and non-maximize placements in .25. Maximize still
 ### OP-019 / projection startup update (preview.27)
 
 Preview.26 user reports maximize and startup still fail; indicator cooldown confirmed working. Native selectEmptyTab fallback addressed with temporary projection-only guard, canonical SessionStore import, independent search and bounded maximize readiness. Exact remaining runtime cause not yet established; diagnostic stage logs added. Do not mark fixed until physical test.
+
+### OP-019 / projection startup update (preview.28)
+
+User-provided console identifies premature startup cancellation: Error: Window closed before Zen restore begins. Both tasks had unconditional document unload handlers. Replace with native domwindowclosed notifications, closed-state checks and bounded readiness; preserve startup guard through document replacement. Correct destination and geometry confirmed by log; indicator confirmed by user. Runtime retest pending.

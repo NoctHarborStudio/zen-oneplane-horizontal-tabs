@@ -26,3 +26,9 @@ test("missing placeholder records only native-created fallback; explicit URL unt
   assert.deepEqual(h.recorded,[fallback]);h.spaces.selectEmptyTab("https://example.com");
   assert.equal(h.recorded.length,1);h.stop();assert.equal(h.spaces.selectEmptyTab,h.original);
 });
+
+test("initial document unload does not remove the startup guard",()=>{
+  const h=harness();h.child.dispatchEvent(new Event("unload"));
+  assert.equal(h.spaces.selectEmptyTab(),h.empty);
+  h.stop();assert.equal(h.spaces.selectEmptyTab,h.original);
+});

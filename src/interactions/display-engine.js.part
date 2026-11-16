@@ -268,13 +268,14 @@
       const cleanup=()=>{
         if(done)return false;done=true;
         try{Services.obs.removeObserver(observer,"browser-delayed-startup-finished");}catch{}
-        win.removeEventListener("unload",cancel);window.removeEventListener("unload",cancel);
+        try{Services.obs.removeObserver(closedObserver,"domwindowclosed");}catch{}
         win.removeEventListener("pointerdown",input,true);win.removeEventListener("keydown",input,true);
         if(timer)window.clearTimeout(timer);if(poll)window.clearTimeout(poll);if(settle)window.clearTimeout(settle);
         return true;
       };
-      const cancel=()=>{if(cleanup()){logPlacement("startup-cancelled",target);resolve(false);}};
-      const input=event=>{if(event.isTrusted)cancel();};
+      const cancel=(reason)=>{if(cleanup()){logPlacement("startup-cancelled",target,null,{reason});resolve(false);}};
+      const input=event=>{if(event.isTrusted)cancel("child-input");};
+      const closedObserver=subject=>{if(subject===win||subject===window)cancel("domwindowclosed");};
       let applying=false;
       const apply=async()=>{
         if(done||applying)return;applying=true;
@@ -285,21 +286,24 @@
           await Promise.race([Promise.resolve(win.gZenStartup.promiseInitialized).catch(()=>{}),new Promise(r=>{settle=window.setTimeout(r,600);})]);
         }
         if(!cleanup())return;
-        if(dead||win.closed){resolve(false);return;}
+        if(dead||window.closed||win.closed){resolve(false);return;}
         const ok=await placeNativeWindow(win,target);
         if(!ok)console.warn("[OnePlane] Placement not verified; native window kept.");
         resolve(ok);
       };
       const observer=subject=>{if(subject===win)void apply();};
       Services.obs.addObserver(observer,"browser-delayed-startup-finished");
-      win.addEventListener("unload",cancel,{once:true});window.addEventListener("unload",cancel,{once:true});
+      // Initial about:blank document unload is normal when a new chrome
+      // window navigates to browser.xhtml. Only actual window destruction
+      // (WindowWatcher notification) or verified closed state cancels.
+      Services.obs.addObserver(closedObserver,"domwindowclosed");
       win.addEventListener("pointerdown",input,true);win.addEventListener("keydown",input,true);
-      timer=window.setTimeout(()=>{logPlacement("startup-timeout",target);cancel();},15000);
+      timer=window.setTimeout(()=>{logPlacement("startup-timeout",target);cancel("timeout");},15000);
       // Poll only during this startup, so a missed observer or wrapper
       // mismatch cannot leave a correctly sized but non-maximized window.
       const check=()=>{
         if(done||applying)return;
-        if(win.closed||dead){cancel();return;}
+        if(win.closed||window.closed||dead){cancel("closed-state");return;}
         if(win.gBrowserInit?.delayedStartupFinished||win.gZenStartup?.isReady){void apply();return;}
         poll=window.setTimeout(check,100);
       };

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0-preview.28
+
+- Fix premature workspace/placement startup cancellation on document unload; observe actual native window closure and verified closed state instead.
+- Keep projection startup guard alive across initial document replacement; bounded readiness probes and explicit cancellation diagnostics. Add regression tests for early unload and actual closure. Preserve working geometry and indicator.
+
 ## 0.2.0-preview.27
 
 - Guard native projection startup empty-tab selection against ordinary homepage fallback; restore native method, safely identify startup tabs and open search independently of placement.
