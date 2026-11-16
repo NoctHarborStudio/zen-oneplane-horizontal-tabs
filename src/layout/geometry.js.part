@@ -47,9 +47,11 @@
         const natural=stripOrderSnapshot.reduce((n,node)=>n+compactSlotWidth(node,tabWidth)+3,0)+(iconHome?32:180)+tabWidth+18;
         const fullBudget=2*Math.min(window.innerWidth/2-left-preferred-8,window.innerWidth/2-right)-8-2*dragRoom;
         const compactAddress=window.innerWidth<900||(fullBudget<natural&&left+preferred+8>=right);
-        const pairReserve=16+3+tabWidth+2+dragRoom+4;
-        const canFitPair=window.innerWidth/2-right>=pairReserve;
-        const reserve=compactAddress&&canFitPair?pairReserve:16+dragRoom+4;
+        // Budget for up to two collapsed cards on each side of Home.
+        const pairReserve=16+3+2*tabWidth+3+2+dragRoom+4;
+        const singleReserve=16+3+tabWidth+2+dragRoom+4;
+        const canFit=reserve=>window.innerWidth/2-right>=reserve&&window.innerWidth/2-left-36-8>=reserve;
+        const reserve=compactAddress?(canFit(pairReserve)?pairReserve:canFit(singleReserve)?singleReserve:16+dragRoom+4):16+dragRoom+4;
         const desired=adaptiveAddressWidth(preferred,window.innerWidth,left,reserve,8,compactAddress);
         url.toggleAttribute("data-op-address-icon",desired<80);
         if(url.style.getPropertyValue("--op-url")!==desired+"px"){

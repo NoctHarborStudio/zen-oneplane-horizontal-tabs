@@ -5,9 +5,9 @@ test("wide layout keeps all slots in their original halves",()=>{
   const p=planAdaptiveTabRows([36,100,36,36], [false,true,false,false],2,700,180,36);
   assert.equal(p.mode,"wide");assert.deepEqual(p.topLeft,[0,1]);assert.deepEqual(p.topRight,[2,3]);assert.equal(p.hasSecondRow,false);
 });
-test("compact layout keeps no more than one ordinary tab per side",()=>{
+test("compact layout keeps up to two ordinary tabs per side",()=>{
   const p=planAdaptiveTabRows([36,100,100,36,100,36], [false,true,true,false,true,false],3,260,100,36);
-  assert.equal(p.mode,"compact");assert.deepEqual(p.topLeft,[0]);assert.deepEqual(p.topRight,[3]);assert.deepEqual(p.lower,[1,2,4,5]);assert.equal(p.topPlus,false);
+  assert.equal(p.mode,"compact");assert.deepEqual(p.topLeft,[0]);assert.deepEqual(p.topRight,[3,5]);assert.deepEqual(p.lower,[1,2,4]);assert.equal(p.topPlus,false);
 });
 test("group-only overflow keeps Home above and every group below",()=>{
   const p=planAdaptiveTabRows([100,139,100],[true,true,true],1,180,100,36);
@@ -22,7 +22,7 @@ test("adaptive allocation does not duplicate or lose slots at any width",()=>{
   for(const tab of [32,36,44])for(let w=0;w<=1600;w+=5)for(let b=0;b<=widths.length;b++){
     const p=planAdaptiveTabRows(widths,groups,b,w,180,tab);
     assert.deepEqual([...p.topLeft,...p.topRight,...p.lower].sort((a,b)=>a-b),widths.map((_,i)=>i));
-    if(p.mode!=="wide"){assert.ok(p.topLeft.length<=1&&p.topRight.length<=1);assert.ok([...p.topLeft,...p.topRight].every(i=>!groups[i]));}
+    if(p.mode!=="wide"){assert.ok(p.topLeft.length<=2&&p.topRight.length<=2);assert.ok([...p.topLeft,...p.topRight].every(i=>!groups[i]));}
     if(!p.hasSecondRow)assert.equal(p.lower.length,0);
   }
 });
@@ -53,4 +53,25 @@ test("measured center correction preserves the window midpoint when possible",()
   assert.equal(centeredRowCorrection(540,100,180,277,110),-7);
   assert.equal(centeredRowCorrection(540,100,180,270,110),0);
   assert.equal(centeredRowCorrection(540,100,235,270,100),-15);
+});
+
+test("two plus two fits in 340px with a 180px title and keeps groups intact",()=>{
+ const widths=[36,36,100,36,36,100,36,36],groups=widths.map(w=>w>36);
+ const p=planAdaptiveTabRows(widths,groups,4,340,180,36);
+ assert.equal(p.mode,"compact");assert.equal(p.title,180);
+ assert.deepEqual(p.topLeft,[1,3]);assert.deepEqual(p.topRight,[4,6]);assert.deepEqual(p.lower,[0,2,5,7]);
+});
+test("compact title may become an icon to reveal additional ordinary tabs",()=>{
+ const widths=[36,36,100,36,36,100],groups=widths.map(w=>w>36);
+ const p=planAdaptiveTabRows(widths,groups,3,195,180,36);
+ assert.equal(p.title,32);assert.deepEqual(p.topLeft,[0,1]);assert.deepEqual(p.topRight,[3,4]);assert.deepEqual(p.lower,[2,5]);
+});
+test("compact allocation stays inside each measured lane at all widths",()=>{
+ for(const tab of [32,36,44])for(let w=0;w<550;w++){
+   const widths=[tab,tab,100,tab,tab,100,tab,tab],groups=widths.map((_,i)=>i===2||i===5);
+   const p=planAdaptiveTabRows(widths,groups,4,w,180,tab);
+   if(p.mode==="wide")continue;
+   const cap=Math.max(0,(w-p.title-6)/2-2);
+   for(const ids of [p.topLeft,p.topRight])assert.ok(ids.reduce((s,i)=>s+widths[i],0)+Math.max(0,ids.length-1)*3<=cap);
+ }
 });

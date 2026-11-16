@@ -25,7 +25,7 @@
   }
 
   // A fixed center has two independently budgeted sides. Compact mode
-  // keeps at most one ordinary slot on either side; groups are atomic.
+  // keeps at most two ordinary slots on either side; groups are atomic.
   export function planAdaptiveTabRows(widths,groups,boundary,available,title,tab,gap=3,returnReserve=0){
     const lane=(sideTitle)=>Math.max(0,(available-sideTitle-2*gap)/2-2*gap);
     const wideCap=Math.max(0,lane(title)-returnReserve/2),rightCap=Math.max(0,wideCap-tab-gap);
@@ -36,20 +36,33 @@
     const minTitle=32;
     const compactTitle=available>=title+2*gap?title:minTitle;
     const compactLane=sideTitle=>Math.max(0,(available-sideTitle-2*gap)/2-2);
-    const cap=compactLane(compactTitle);
-    // Prefer a title until it would prevent even one ordinary slot.
-    const chosenTitle=cap<tab&&compactTitle>minTitle?minTitle:compactTitle;
+    const pick=(cap,start,end,step)=>{
+      const picked=[];let used=0;
+      for(let i=start;i!==end&&picked.length<2;i+=step){
+        if(groups[i])continue;
+        const extent=widths[i]+(picked.length?gap:0);
+        if(used+extent>cap)continue;
+        picked.push(i);used+=extent;
+      }
+      if(step<0)picked.reverse();
+      return {picked,used};
+    };
+    const slots=sideTitle=>{
+      const cap=compactLane(sideTitle);
+      return {left:pick(cap,boundary-1,-1,-1),right:pick(cap,boundary,widths.length,1)};
+    };
+    const titled=slots(compactTitle),icon=slots(minTitle);
+    // Keep the full title unless the icon can reveal another actual tab.
+    const count=s=>s.left.picked.length+s.right.picked.length;
+    const chosenTitle=count(icon)>count(titled)||available<compactTitle+2*gap?minTitle:compactTitle;
     const compactCap=compactLane(chosenTitle);
-    const left=[],right=[];
-    if(compactCap>=tab){
-      for(let i=boundary-1;i>=0;i--)if(!groups[i]&&widths[i]<=compactCap){left.push(i);break;}
-      for(let i=boundary;i<widths.length;i++)if(!groups[i]&&widths[i]<=compactCap){right.push(i);break;}
-    }
+    const chosen=chosenTitle===minTitle?icon:titled;
+    const left=chosen.left.picked,right=chosen.right.picked;
     const kept=new Set([...left,...right]);
     const lower=widths.map((_,i)=>i).filter(i=>!kept.has(i));
-    // The plus has a guaranteed slot on the bottom whenever top space
-    // cannot contain it. Even an empty strip can use this minimal shelf.
-    const topPlus=lower.length===0&&available>=chosenTitle+2*gap+2*(tab+gap+2*gap);
+    const singleCap=lane(chosenTitle);
+    const topPlus=lower.length===0&&chosen.left.used<=singleCap&&
+      chosen.right.used+tab+gap<=singleCap&&available>=chosenTitle+2*gap+2*(tab+gap+2*gap);
     return {mode:chosenTitle===minTitle&&compactCap<tab?"ultra":"compact",title:chosenTitle,
       topLeft:left,topRight:right,lower,hasSecondRow:lower.length>0||!topPlus,topPlus};
   }

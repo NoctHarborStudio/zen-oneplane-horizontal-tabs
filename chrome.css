@@ -144,7 +144,7 @@
       -moz-window-dragging: drag !important;
     }
     /* Keep controls and native popups out of the non-client hit region. */
-    #nav-bar-customization-target > :not(#oneplane-center-start,#oneplane-center-end),
+    #nav-bar-customization-target > :not(#oneplane-center-start,#oneplane-center-end):not(#oneplane-tabs),
     #nav-bar :is(toolbarbutton,button,input,menupopup,panel,.titlebar-buttonbox) {
       -moz-window-dragging: no-drag !important;
     }
@@ -475,7 +475,7 @@
       gap: 3px;
       margin-inline: 2px;
       color: var(--toolbar-color, currentColor);
-      -moz-window-dragging: no-drag;
+      -moz-window-dragging: default;
     }
     /* Same centered expansion for every tab when the strip is crowded.
        Only strips of one to three visible tabs get directional edges.
@@ -872,6 +872,20 @@
     }
     #oneplane-tabs .oneplane-overflow-slider:focus-visible {outline:1px solid AccentColor;outline-offset:1px;border-radius:5px;}
     #oneplane-tabs:is([data-op-cascade],[data-op-dragging],[data-op-island-incoming]) .oneplane-overflow-slider {visibility:hidden;pointer-events:none!important;}
+
+    /* Resting empty strip geometry is native titlebar, not a giant
+       no-drag hitbox. Preserve the DOM hit testing for wheel and DnD. */
+    #oneplane-tabs:not([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-cascade]),
+    #oneplane-tabs:not([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-cascade]) :is(.oneplane-tab-list,.oneplane-island-lane) {
+      -moz-window-dragging:drag!important;
+    }
+    #oneplane-tabs:is([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-cascade]),
+    #oneplane-tabs:is([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-cascade]) :is(.oneplane-tab-list,.oneplane-island-lane) {
+      -moz-window-dragging:no-drag!important;
+    }
+    #oneplane-tabs :is(.oneplane-tab,.oneplane-split-group,.oneplane-title-island,.oneplane-new-tab,.oneplane-overflow-slider,button,input) {
+      -moz-window-dragging:no-drag!important;
+    }
     /* A real flex wrapper, with one shared surface and a dedicated handle.
        Its 25px overhead is included in collapsed-strip centering. */
     #oneplane-tabs .oneplane-split-group {
