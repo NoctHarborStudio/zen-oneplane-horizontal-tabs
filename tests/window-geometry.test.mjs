@@ -23,7 +23,7 @@ test("toolbar drag spaces have nonzero dimensions, controls stay non-draggable",
  assert.ok(base.includes("height: var(--op-height);"));
  assert.ok(base.includes("-moz-window-dragging: drag !important"));
  assert.ok(base.includes(":not(#oneplane-center-start,#oneplane-center-end)"));
- assert.ok(source.includes("-8-2*dragRoom"));
+ assert.ok(source.includes("-4-2*dragRoom"));
 });
 test("window resize and native size mode reflow are lifecycle-owned",()=>{
  for(const event of ["resize","sizemodechange"]){
@@ -34,4 +34,10 @@ test("window resize and native size mode reflow are lifecycle-owned",()=>{
  const calls=[];
  const run=new Function("calls",code+'let dead=false,hoverTab={},addressTransition=null,addressSettling=false,cascadeState="hidden";const row={hasAttribute:()=>false};function clearTabHover(){calls.push("hover")}function nativeInlineOpen(){return false}function addressBar(){}function resetTabCascade(){calls.push("cascade")}function movePageActions(){calls.push("actions")}function centerToolbar(){calls.push("center")}function onCompactChanged(){calls.push("layout")}function schedule(){calls.push("sync")}function revealSelectedInStrip(){calls.push("reveal")}const window={requestAnimationFrame(fn){fn()}};onWindowGeometryChanged();')(calls);
  assert.deepEqual(calls,["hover","cascade","actions","center","layout","sync","reveal"]);
+});
+
+test("compact lane padding and hidden tracks override the wide lane cascade",()=>{
+ assert.ok(tabs.includes("padding-block-end:0!important;"));
+ assert.ok(tabs.includes("padding-inline:1px!important;"));
+ assert.ok(tabs.includes(".oneplane-island-lane {scrollbar-width:none!important;}"));
 });

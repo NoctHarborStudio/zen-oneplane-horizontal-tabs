@@ -816,10 +816,10 @@
     /* Compact rows share the same top-row center as native navigation.
        Keep all three viewports scrollable without an extra visible track. */
     #oneplane-tabs[data-op-overflow-row] :is(.oneplane-island-left,.oneplane-island-right) {
-      padding-block-end:0;
-      padding-inline:1px;
+      padding-block-end:0!important;
+      padding-inline:1px!important;
     }
-    #oneplane-tabs[data-op-overflow-row] .oneplane-island-lane {scrollbar-width:none;}
+    #oneplane-tabs[data-op-overflow-row] .oneplane-island-lane {scrollbar-width:none!important;}
     #oneplane-tabs[data-op-overflow-row] .oneplane-title-island,
     #oneplane-tabs[data-op-overflow-row]:not([data-op-bottom-plus]) .oneplane-new-tab {
       top:calc(var(--op-top-row-height)/2)!important;

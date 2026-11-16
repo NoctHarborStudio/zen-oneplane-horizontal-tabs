@@ -1,3 +1,7 @@
+## 0.2.0-preview.53 — Compact cascade and startup tests
+
+- Ensure compact lane padding and scrollbar visibility override the more-specific wide lane CSS. Update the existing geometry regression and add startup SearchService readiness/selection-race tests.
+
 ## 0.2.0-preview.52 — Compact toolbar polish
 
 - Prevent underlying web controls showing through the two-row tab shelf, retain the rear fade, and remove the scrollbar track and floating selection underline in compact mode while keeping scrolling and selected-card feedback.
