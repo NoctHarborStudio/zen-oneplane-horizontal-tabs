@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0-preview.27
+
+- Guard native projection startup empty-tab selection against ordinary homepage fallback; restore native method, safely identify startup tabs and open search independently of placement.
+- Bound maximize readiness wait and add missed-startup fallback, verified screen check and diagnostic stages. Preserve confirmed indicator cooldown and snap geometry.
+
 ## 0.2.0-preview.26
 
 - Wait for native Zen startup before maximize; bounded maximize retry and cancellation guards.

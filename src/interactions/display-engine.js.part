@@ -151,6 +151,22 @@
   function logPlacement(stage,target,actual=null,extra=null){
     console.info("[OnePlane] Display placement "+stage,JSON.stringify({target:target?.full,rect:target?{x:target.x,y:target.y,width:target.width,height:target.height}:null,mode:target?.mode,actual,extra}));
   }
+  // The startup window already has the selected target rectangle. If
+  // nsIBaseWindow geometry is unavailable, check the child's native Screen
+  // rectangle using the target's CSS scale, never guess the display.
+  function childOnTargetScreen(win,target){
+    try{
+      const screen=targetScreen(target);
+      if(!screen)return false;
+      const scale=screen.defaultCSSScaleFactor/screen.contentsScaleFactor;
+      if(!Number.isFinite(scale)||scale<=0)return false;
+      const actual=win.screen,full=target.full;
+      return ["x","y","width","height"].every((k,i)=>{
+        const v=actual[["left","top","width","height"][i]];
+        return Number.isFinite(v)&&Math.abs(v*scale-full[k])<=3;
+      });
+    }catch{return false;}
+  }
   async function placeNativeWindow(win,target){
     if(!displaySnapEnabled()||!win||win.closed||!target)return false;
     let interrupted=false;
@@ -158,7 +174,8 @@
     const wait=()=>new Promise(resolve=>window.setTimeout(resolve,120));
     const alive=()=>!dead&&!win.closed&&!interrupted;
     const stateMax=()=>win.windowState===win.STATE_MAXIMIZED;
-    const matches=()=>displayPlacementMatches(target,nativeWindowRect(win),stateMax());
+    const matches=()=>displayPlacementMatches(target,nativeWindowRect(win),stateMax())||
+      (target.mode==="maximize"&&stateMax()&&childOnTargetScreen(win,target));
     const validTarget=()=>!!targetScreen(target);
     try{
       win.addEventListener("pointerdown",stop,true);win.addEventListener("keydown",stop,true);
@@ -169,10 +186,10 @@
       if(matches()){logPlacement("already-matched",target,nativeWindowRect(win));return true;}
       // Maximize a correctly positioned window directly; do not make this
       // depend on a subsequent resize, tab loading or a workspace switch.
-      if(target.mode==="maximize"&&onTarget(nativeWindowRect(win))&&win.windowState!==win.STATE_MINIMIZED){
+      if(target.mode==="maximize"&&(onTarget(nativeWindowRect(win))||childOnTargetScreen(win,target))&&win.windowState!==win.STATE_MINIMIZED){
         for(let attempt=0;attempt<3;attempt++){
           if(!alive()||!validTarget())return false;
-          if(!stateMax())win.maximize();
+          if(!stateMax()){logPlacement("maximize-request",target,nativeWindowRect(win),win.windowState);win.maximize();}
           await wait();
           if(!alive())return false;
           if(matches()){logPlacement("maximize",target,nativeWindowRect(win),win.windowState);return true;}
@@ -247,25 +264,25 @@
   function placeAfterStartup(win,target){
     if(!displaySnapEnabled()||!win||!target)return Promise.resolve(false);
     return new Promise(resolve=>{
-      let timer=0,done=false;
+      let timer=0,poll=0,settle=0,done=false;
       const cleanup=()=>{
         if(done)return false;done=true;
         try{Services.obs.removeObserver(observer,"browser-delayed-startup-finished");}catch{}
         win.removeEventListener("unload",cancel);window.removeEventListener("unload",cancel);
         win.removeEventListener("pointerdown",input,true);win.removeEventListener("keydown",input,true);
-        if(timer)window.clearTimeout(timer);
+        if(timer)window.clearTimeout(timer);if(poll)window.clearTimeout(poll);if(settle)window.clearTimeout(settle);
         return true;
       };
-      const cancel=()=>{if(cleanup())resolve(false);};
+      const cancel=()=>{if(cleanup()){logPlacement("startup-cancelled",target);resolve(false);}};
       const input=event=>{if(event.isTrusted)cancel();};
       let applying=false;
       const apply=async()=>{
         if(done||applying)return;applying=true;
-        // Zen restores layout/session after Gecko delayed startup. For
-        // maximize, let that settle before issuing the real native action.
-        // Keep the original input/close/timeout guards live during the wait.
-        if(target.mode==="maximize"&&win.gZenStartup?.promiseInitialized){
-          try{await win.gZenStartup.promiseInitialized;}catch{cancel();return;}
+        logPlacement("startup-observed",target,null,{zenReady:!!win.gZenStartup?.isReady});
+        // Do not wait indefinitely on Zen session initialization. Either
+        // readiness or a bounded settle interval permits native maximize.
+        if(target.mode==="maximize"&&!win.gZenStartup?.isReady&&win.gZenStartup?.promiseInitialized){
+          await Promise.race([Promise.resolve(win.gZenStartup.promiseInitialized).catch(()=>{}),new Promise(r=>{settle=window.setTimeout(r,600);})]);
         }
         if(!cleanup())return;
         if(dead||win.closed){resolve(false);return;}
@@ -278,8 +295,15 @@
       win.addEventListener("unload",cancel,{once:true});window.addEventListener("unload",cancel,{once:true});
       win.addEventListener("pointerdown",input,true);win.addEventListener("keydown",input,true);
       timer=window.setTimeout(()=>{logPlacement("startup-timeout",target);cancel();},15000);
-      // Check again after installing the observer, avoiding a missed signal.
-      if(win.gBrowserInit?.delayedStartupFinished)void apply();
+      // Poll only during this startup, so a missed observer or wrapper
+      // mismatch cannot leave a correctly sized but non-maximized window.
+      const check=()=>{
+        if(done||applying)return;
+        if(win.closed||dead){cancel();return;}
+        if(win.gBrowserInit?.delayedStartupFinished||win.gZenStartup?.isReady){void apply();return;}
+        poll=window.setTimeout(check,100);
+      };
+      check();
     });
   }
   function onSourceDrag(event){

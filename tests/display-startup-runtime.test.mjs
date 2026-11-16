@@ -53,3 +53,9 @@ test("closing during Zen initialization prevents late maximize",async()=>{
   h.child.dispatchEvent(new Event("unload"));ready();
   assert.equal(await pending,false);await Promise.resolve();assert.equal(h.calls.length,0);
 });
+
+test("maximize does not remain blocked by unresolved Zen initialization",async()=>{
+  const h=harness(true);h.child.gZenStartup={promiseInitialized:new Promise(()=>{})};
+  assert.equal(await h.place(h.child,{mode:"maximize"}),true);
+  assert.equal(h.calls.length,1);
+});
