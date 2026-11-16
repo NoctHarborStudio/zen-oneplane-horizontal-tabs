@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0-preview.18
+
+- Harden native dragend ownership against a different/stale source node or tab, preserving the Drag Engine stabilization scope. No Snap or Split View visual changes.
+
 ## 0.2.0-preview.17
 
 - Extract shared tokenized Drag Engine and cancel/finish ownership for workspace and native tab gestures; clear stale visuals and ignore late input.

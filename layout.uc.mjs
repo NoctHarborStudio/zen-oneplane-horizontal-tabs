@@ -1088,7 +1088,7 @@ function installTabStrip() {
       begin(kind,handlers={}){
         if(active) return null;
         const token=++sequence;
-        active={kind,token,...handlers};return token;
+        active={...handlers,kind,token};return token;
       },
       owns(token,kind){return !!active&&active.token===token&&(!kind||active.kind===kind);},
       finish(token){
@@ -1112,10 +1112,13 @@ function installTabStrip() {
     return event.key==="Escape"||event.key==="PrintScreen"||
       ((event.metaKey||event.osKey)&&event.shiftKey&&String(event.key).toLowerCase()==="s");
   }
+  function dragEndMatches(identity,event,tab){
+    return !!identity&&identity.target===event?.target&&identity.tab===tab;
+  }
   // Drag Engine: lifecycle only. Geometry/rendering and native tab
   // operations remain separate. No polling while idle.
   const dragLifecycle=createDragLifecycle();
-  let nativeDragToken=null,dragWatchTimer=0,dragMissingSessions=0,dragFallbackTimer=0;
+  let nativeDragToken=null,nativeDragIdentity=null,dragWatchTimer=0,dragMissingSessions=0,dragFallbackTimer=0;
   const dragService=()=>Cc["@mozilla.org/widget/dragservice;1"].getService(Ci.nsIDragService);
   function stopNativeDragWatch(){
     if(dragWatchTimer)window.clearTimeout(dragWatchTimer);
@@ -1141,7 +1144,7 @@ function installTabStrip() {
     dragWatchTimer=window.setTimeout(check,250);
   }
   function cancelNativeDrag(reason){
-    nativeDragToken=null;stopNativeDragWatch();
+    nativeDragToken=null;nativeDragIdentity=null;stopNativeDragWatch();
     dragHandled=true;dragStartPoint=null;draggedTab=null;draggedGroup=null;
     // Do not reopen the start-page search after an interrupted OS gesture.
     dragSearch=null;pointerSearch=null;
@@ -1157,14 +1160,15 @@ function installTabStrip() {
       }catch{}
     }
   }
-  function startNativeDragLifecycle(){
+  function startNativeDragLifecycle(event,tab){
     if(dragLifecycle.current())dragLifecycle.cancel("superseded");
     nativeDragToken=dragLifecycle.begin("tab",{onCancel:cancelNativeDrag});
-    if(nativeDragToken!==null)watchNativeDrag(nativeDragToken);
+    if(nativeDragToken!==null){nativeDragIdentity={target:event.target,tab};watchNativeDrag(nativeDragToken);}
     return nativeDragToken!==null;
   }
-  function finishNativeDragLifecycle(){
-    const token=nativeDragToken;nativeDragToken=null;stopNativeDragWatch();
+  function finishNativeDragLifecycle(event=null,tab=null){
+    if(event&&!dragEndMatches(nativeDragIdentity,event,tab))return false;
+    const token=nativeDragToken;nativeDragToken=null;nativeDragIdentity=null;stopNativeDragWatch();
     return token!==null&&dragLifecycle.finish(token);
   }
   function cancelActiveDrag(reason){return dragLifecycle.cancel(reason);}
@@ -1215,6 +1219,7 @@ function installTabStrip() {
     function nativeEnd(event){
       const current=dragLifecycle.current();
       if(current?.kind!=="tab"||!event.isTrusted)return;
+      if(event.type==="dragend"&&event.target!==nativeDragIdentity?.target)return;
       // The source node's own dragend/drop listeners must run first.
       // A fallback timeout is token-scoped if they never run.
       if(dragFallbackTimer)window.clearTimeout(dragFallbackTimer);
@@ -2996,7 +3001,7 @@ function installTabStrip() {
       event.preventDefault();
       return;
     }
-    if(!startNativeDragLifecycle()){event.preventDefault();return;}
+    if(!startNativeDragLifecycle(event,tab)){event.preventDefault();return;}
     dragSearch = pointerSearch?.tab === browser.selectedTab ? pointerSearch : readStartupSearch();
     pointerSearch = null;
     groupPullLayout = null;
@@ -3157,7 +3162,7 @@ function installTabStrip() {
   function onDragEnd(event, tab) {
     const dt = event.dataTransfer;
     // Ignore late or duplicate dragend after cancel/handled drop.
-    if(!finishNativeDragLifecycle())return;
+    if(!finishNativeDragLifecycle(event,tab))return;
     const handled = dragHandled;
     const wasGroup = Boolean(draggedGroup);
     const start = dragStartPoint;

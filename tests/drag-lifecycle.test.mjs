@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {createDragLifecycle,dragPointerSignal,dragInterruptionKey} from "../src/algorithms/drag-lifecycle.mjs";
+import {createDragLifecycle,dragPointerSignal,dragInterruptionKey,dragEndMatches} from "../src/algorithms/drag-lifecycle.mjs";
 test("cancel invalidates before cleanup; late release cannot commit",()=>{
   const life=createDragLifecycle();let calls=0;
   const token=life.begin("workspace",{onCancel:()=>{calls++;assert.equal(life.current(),null);assert.equal(life.finish(token),false);}});
@@ -30,4 +30,12 @@ test("escape and screenshot shortcuts are interruption signals",()=>{
   assert.equal(dragInterruptionKey({key:"PrintScreen"}),true);
   assert.equal(dragInterruptionKey({key:"S",metaKey:true,shiftKey:true}),true);
   assert.equal(dragInterruptionKey({key:"s",shiftKey:true}),false);
+});
+
+test("late native dragend from another origin cannot finish active drag",()=>{
+  const node={},tab={},identity={target:node,tab};
+  assert.equal(dragEndMatches(identity,{target:node},tab),true);
+  assert.equal(dragEndMatches(identity,{target:{}},tab),false);
+  assert.equal(dragEndMatches(identity,{target:node},{}),false);
+  assert.equal(dragEndMatches(null,{target:node},tab),false);
 });

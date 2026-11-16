@@ -53,7 +53,7 @@
       event.preventDefault();
       return;
     }
-    if(!startNativeDragLifecycle()){event.preventDefault();return;}
+    if(!startNativeDragLifecycle(event,tab)){event.preventDefault();return;}
     dragSearch = pointerSearch?.tab === browser.selectedTab ? pointerSearch : readStartupSearch();
     pointerSearch = null;
     groupPullLayout = null;

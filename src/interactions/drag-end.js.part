@@ -1,7 +1,7 @@
   function onDragEnd(event, tab) {
     const dt = event.dataTransfer;
     // Ignore late or duplicate dragend after cancel/handled drop.
-    if(!finishNativeDragLifecycle())return;
+    if(!finishNativeDragLifecycle(event,tab))return;
     const handled = dragHandled;
     const wasGroup = Boolean(draggedGroup);
     const start = dragStartPoint;
