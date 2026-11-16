@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0-preview.26
+
+- Wait for native Zen startup before maximize; bounded maximize retry and cancellation guards.
+- Select native transparent empty tab and open floating startup search in projected workspace; remove only verified new untouched startup tab, never existing tabs.
+- Hold hover underline for 2000ms after pointer departure, cancel on new hover or explicit selection; preserve tab expansion timing and existing drag/snap geometry.
+
 ## 0.2.0-preview.25
 
 - Test the real startup scheduling adapter for delayed startup, ready windows and cancellation; account for integer CSS feature rounding at 2x DPI. Runtime unchanged from preview.24.

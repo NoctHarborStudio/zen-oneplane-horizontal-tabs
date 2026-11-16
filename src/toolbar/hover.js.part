@@ -34,6 +34,7 @@
   function selectHover(item, x = null) {
     if (cascadeState!=="idle" || !item || !list.contains(item)) return;
     cancelHoverTimer();
+    cancelIndicatorReturn();
     hoverX = x;
     if (hoverTab !== item) {
       hoverTab?.removeAttribute("data-op-expanded");
@@ -46,11 +47,13 @@
     refreshIndicator();
     refreshIslandTitle();
   }
-  function clearTabHover() {
+  function clearTabHover(keepIndicator=false) {
     cancelHoverTimer();
     hoverTab?.removeAttribute("data-op-expanded");
     hoverTab?.removeAttribute("data-op-hovered");
-    hoverTab = null; hoverX = null; lastHoverPointer = null; indicatorHover = null;
+    hoverTab = null; hoverX = null; lastHoverPointer = null;
+    if(keepIndicator===true)releaseIndicatorHover();
+    else {cancelIndicatorReturn();indicatorHover=null;}
     refreshIndicator();
     refreshIslandTitle();
   }
@@ -60,7 +63,7 @@
       hoverTimer = 0;
       // Keep the plus stationary until the pointer actually leaves it.
       if (plus.matches(":hover") || plus.matches(":active")) return;
-      clearTabHover();
+      clearTabHover(true);
     }, hoverDelay());
   }
   function pointOverTabStrip(event) {
@@ -70,11 +73,17 @@
       event.clientY >= a.top - 2 && event.clientY <= a.bottom + 2;
   }
   function releaseIndicatorHover() {
-    if (!indicatorHover) return;
-    indicatorHover = null;
-    hoverX = null;
-    refreshIndicator();
-    refreshIslandTitle();
+    if(!indicatorHover||indicatorReturnTimer)return;
+    indicatorReturnTimer=window.setTimeout(()=>{
+      indicatorReturnTimer=0;indicatorHover=null;hoverX=null;
+      if(!dead){refreshIndicator();refreshIslandTitle();}
+    },INDICATOR_RETURN_DELAY);
+  }
+  function indicatorSelectionChanged(){
+    // An explicit selection during the cooldown should retarget from the
+    // held position to the newly selected tab, not wait for the old timer.
+    if(!indicatorReturnTimer)return;
+    cancelIndicatorReturn();indicatorHover=null;hoverX=null;refreshIndicator();refreshIslandTitle();
   }
   function trackTabPointer(event) {
     if(event.pointerType==="touch")return;

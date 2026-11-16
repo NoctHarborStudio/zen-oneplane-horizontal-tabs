@@ -14,7 +14,7 @@
     const keep = new Set(tabs);
     for (const [tab, entry] of entries) {
       if (!keep.has(tab)) {
-        if (hoverTab === entry.item) clearTabHover();
+        if (hoverTab === entry.item || indicatorHover === entry.item) clearTabHover();
         splitMeasureObserver.unobserve(entry.item);
         entry.item.remove(); entries.delete(tab);
       }
@@ -127,6 +127,7 @@
     if(Math.abs(delta)>1)viewport.scrollLeft+=delta;
   }
   function onSelect() {
+    indicatorSelectionChanged();
     guardRestoredAddress(browser.selectedTab);
     guardPanelSwitch();
     updateEmptyAddress();

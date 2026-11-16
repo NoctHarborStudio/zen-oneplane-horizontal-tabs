@@ -170,9 +170,13 @@
       // Maximize a correctly positioned window directly; do not make this
       // depend on a subsequent resize, tab loading or a workspace switch.
       if(target.mode==="maximize"&&onTarget(nativeWindowRect(win))&&win.windowState!==win.STATE_MINIMIZED){
-        win.maximize();await wait();
-        if(!alive())return false;
-        if(matches()){logPlacement("maximize",target,nativeWindowRect(win),win.windowState);return true;}
+        for(let attempt=0;attempt<3;attempt++){
+          if(!alive()||!validTarget())return false;
+          if(!stateMax())win.maximize();
+          await wait();
+          if(!alive())return false;
+          if(matches()){logPlacement("maximize",target,nativeWindowRect(win),win.windowState);return true;}
+        }
       }
       const base=nativeBase(win);
       if(stateMax()||win.windowState===win.STATE_MINIMIZED){win.restore();await wait();}
@@ -254,7 +258,15 @@
       };
       const cancel=()=>{if(cleanup())resolve(false);};
       const input=event=>{if(event.isTrusted)cancel();};
+      let applying=false;
       const apply=async()=>{
+        if(done||applying)return;applying=true;
+        // Zen restores layout/session after Gecko delayed startup. For
+        // maximize, let that settle before issuing the real native action.
+        // Keep the original input/close/timeout guards live during the wait.
+        if(target.mode==="maximize"&&win.gZenStartup?.promiseInitialized){
+          try{await win.gZenStartup.promiseInitialized;}catch{cancel();return;}
+        }
         if(!cleanup())return;
         if(dead||win.closed){resolve(false);return;}
         const ok=await placeNativeWindow(win,target);
@@ -262,7 +274,6 @@
         resolve(ok);
       };
       const observer=subject=>{if(subject===win)void apply();};
-      if(win.gBrowserInit?.delayedStartupFinished){void apply();return;}
       Services.obs.addObserver(observer,"browser-delayed-startup-finished");
       win.addEventListener("unload",cancel,{once:true});window.addEventListener("unload",cancel,{once:true});
       win.addEventListener("pointerdown",input,true);win.addEventListener("keydown",input,true);

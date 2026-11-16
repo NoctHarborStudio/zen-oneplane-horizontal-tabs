@@ -142,3 +142,7 @@ Persistent primary-monitor placement reported in .22. Pass converted target geom
 ### OP-019 update (preview.24)
 
 User confirms correct monitor in .23, but all snap modes retain the centered startup seed. .24 uses the selected target rectangle at window creation and independent native maximization/verification. Exact failure of the old post-startup path not confirmed without console logs. Runtime confirmation pending.
+
+### OP-019 update (preview.26)
+
+User confirms correct monitor and non-maximize placements in .25. Maximize still normal window. Wait for Zen startup and retry native maximize; live verification pending. Projection adds blank New Tab: use native transparent placeholder and floating search, exact safe startup cleanup only. Underline return delay requested: separate 2000ms timer, no change to expansion speed.

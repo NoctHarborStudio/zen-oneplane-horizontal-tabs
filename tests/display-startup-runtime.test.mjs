@@ -38,3 +38,18 @@ test("closing the child before startup cancels placement and removes observer",a
   assert.equal(await pending,false);assert.equal(h.calls.length,0);
   assert.equal(h.observers.size,0);
 });
+
+test("maximize waits for Zen startup and ignores duplicate notifications",async()=>{
+  const h=harness(true);let ready;
+  h.child.gZenStartup={promiseInitialized:new Promise(resolve=>{ready=resolve;})};
+  const pending=h.place(h.child,{mode:"maximize"});
+  h.notify(h.child);assert.equal(h.calls.length,0);
+  ready();assert.equal(await pending,true);assert.equal(h.calls.length,1);
+});
+test("closing during Zen initialization prevents late maximize",async()=>{
+  const h=harness(true);let ready;
+  h.child.gZenStartup={promiseInitialized:new Promise(resolve=>{ready=resolve;})};
+  const pending=h.place(h.child,{mode:"maximize"});
+  h.child.dispatchEvent(new Event("unload"));ready();
+  assert.equal(await pending,false);await Promise.resolve();assert.equal(h.calls.length,0);
+});

@@ -20,7 +20,7 @@
     if(open!==state.open){
       toolbarWrapper.toggleAttribute("data-op-panel-open",state.open);
       if(state.open)scheduleContour();
-      else clearTabHover();
+      else clearTabHover(true);
     }
     if(state.wait>0)panelTimer=window.setTimeout(reconcilePanel,Math.ceil(state.wait)+1);
   }

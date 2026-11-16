@@ -1486,9 +1486,13 @@ function installTabStrip() {
       // Maximize a correctly positioned window directly; do not make this
       // depend on a subsequent resize, tab loading or a workspace switch.
       if(target.mode==="maximize"&&onTarget(nativeWindowRect(win))&&win.windowState!==win.STATE_MINIMIZED){
-        win.maximize();await wait();
-        if(!alive())return false;
-        if(matches()){logPlacement("maximize",target,nativeWindowRect(win),win.windowState);return true;}
+        for(let attempt=0;attempt<3;attempt++){
+          if(!alive()||!validTarget())return false;
+          if(!stateMax())win.maximize();
+          await wait();
+          if(!alive())return false;
+          if(matches()){logPlacement("maximize",target,nativeWindowRect(win),win.windowState);return true;}
+        }
       }
       const base=nativeBase(win);
       if(stateMax()||win.windowState===win.STATE_MINIMIZED){win.restore();await wait();}
@@ -1570,7 +1574,15 @@ function installTabStrip() {
       };
       const cancel=()=>{if(cleanup())resolve(false);};
       const input=event=>{if(event.isTrusted)cancel();};
+      let applying=false;
       const apply=async()=>{
+        if(done||applying)return;applying=true;
+        // Zen restores layout/session after Gecko delayed startup. For
+        // maximize, let that settle before issuing the real native action.
+        // Keep the original input/close/timeout guards live during the wait.
+        if(target.mode==="maximize"&&win.gZenStartup?.promiseInitialized){
+          try{await win.gZenStartup.promiseInitialized;}catch{cancel();return;}
+        }
         if(!cleanup())return;
         if(dead||win.closed){resolve(false);return;}
         const ok=await placeNativeWindow(win,target);
@@ -1578,7 +1590,6 @@ function installTabStrip() {
         resolve(ok);
       };
       const observer=subject=>{if(subject===win)void apply();};
-      if(win.gBrowserInit?.delayedStartupFinished){void apply();return;}
       Services.obs.addObserver(observer,"browser-delayed-startup-finished");
       win.addEventListener("unload",cancel,{once:true});window.addEventListener("unload",cancel,{once:true});
       win.addEventListener("pointerdown",input,true);win.addEventListener("keydown",input,true);
@@ -1864,6 +1875,72 @@ function installTabStrip() {
         void project(d.id,point);
       }else status.textContent="Release outside the browser, or use Open in another window.";
     }
+    // A projection uses the native Zen empty tab, never a new visible
+    // about:blank tab. Capture only the initial native startup identity.
+    function projectionStartupCandidate(child){
+      const spaces=child.gZenWorkspaces,b=child.gBrowser;
+      const initial=spaces?._tabToRemoveForEmpty||spaces?._initialTab;
+      if(initial&&b?.isTab(initial)&&!initial.hasAttribute("zen-empty-tab"))return initial;
+      if(!child.gBrowserInit?.delayedStartupFinished&&b?.tabs?.length===1){
+        const tab=b.tabs[0];
+        if(tab&&!tab.hasAttribute("zen-empty-tab"))return tab;
+      }
+      return null;
+    }
+    function untouchedProjectionTab(tab,win){
+      if(!tab||tab.closing||tab.pinned||tab.group||tab.hasAttribute("zen-essential")||
+        tab.hasAttribute("zen-empty-tab")||tab.hasAttribute("split-view")||tab.hasAttribute("split-view-group")||
+        tab.hasAttribute("busy")||tab.hasAttribute("soundplaying")||tab.hasAttribute("muted")||
+        tab.linkedBrowser?.userTypedValue)return false;
+      // A synced/lazy tab can expose about:blank while holding a real page
+      // in SessionStore. Inspect the stored history as well, fail closed.
+      try{
+        const {SessionStore}=ChromeUtils.importESModule("resource:///modules/sessionstore/SessionStore.sys.mjs");
+        const stored=JSON.parse(SessionStore.getTabState(tab));
+        const empty=url=>url==="about:blank"||url==="about:newtab";
+        const entries=stored.entries;
+        if(!Array.isArray(entries)||entries.length>1||entries.some(entry=>!empty(entry.url))||
+          stored.userTypedValue||stored.userTypedClear||stored.formdata)return false;
+        const browser=tab.linkedBrowser;
+        return !!browser&&empty(browser.currentURI?.spec)&&!browser.canGoBack&&!browser.canGoForward&&
+          (!tab._originalUrl||empty(tab._originalUrl));
+      }catch{return false;}
+    }
+    function prepareProjectionStart(child,id,startupTab,preexistingIds,identifiable,interacted){
+      if(interacted||child.closed||destroyed)return false;
+      const manager=child.gZenWorkspaces,b=child.gBrowser,empty=manager?._emptyTab;
+      // Do not use selectEmptyTab's fallback, which can create a real tab
+      // when the native floating-new-tab mode is unavailable.
+      if(manager?.activeWorkspace!==id||!empty?.isConnected||empty.closing||
+        !empty.hasAttribute("zen-empty-tab")||!b?.isTab(empty))return false;
+      b.selectedTab=empty;
+      if(b.selectedTab!==empty)return false;
+      if(identifiable&&startupTab?.id&&!preexistingIds.has(startupTab.id)&&
+        startupTab.isConnected&&startupTab!==empty&&b.isTab(startupTab)&&untouchedProjectionTab(startupTab,child)){
+        // Verify all extant synced peers, not merely the opener. Never
+        // delete a tab whose authoritative copy has been navigated.
+        let safe=true;
+        try{
+          const wins=Services.wm.getEnumerator("navigator:browser");
+          while(wins.hasMoreElements()){
+            const win=wins.getNext();
+            if(win===child||win.closed||win.gZenWindowSync!==child.gZenWindowSync||
+              !win.gZenWorkspaces?.currentWindowIsSyncing)continue;
+            const peer=win.gZenWindowSync.getItemFromWindow(win,startupTab.id);
+            if(peer&&(!win.gBrowser?.isTab(peer)||!untouchedProjectionTab(peer,win))){safe=false;break;}
+          }
+        }catch{safe=false;}
+        if(safe)b.removeTab(startupTab,{animate:false,skipSessionStore:true,closeWindowWithLastTab:false});
+      }
+      return b.selectedTab===empty;
+    }
+    function openProjectionSearch(child,id){
+      if(child.closed||destroyed||child.gZenWorkspaces?.activeWorkspace!==id||
+        !child.gBrowser?.selectedTab?.hasAttribute("zen-empty-tab"))return;
+      const bar=child.gURLBar;
+      if(!bar||bar.hasAttribute("zen-newtab")||bar.hasAttribute("open")||bar.view?.isOpen)return;
+      child.gZenUIManager?.handleNewTab(false,false,"tab",true);
+    }
     async function project(id,display){
       if(projectionBusy||busy||destroyed)return;
       if(!canProject()){status.textContent="Enable native window sync for all tabs to use this feature.";return;}
@@ -1876,7 +1953,8 @@ function installTabStrip() {
         for(const tab of tabs){if(tab.hasAttribute("zen-empty-tab"))continue;if(!tab.id)identifiable=false;else preexistingIds.add(tab.id);}
       }}catch{identifiable=false;}
       projectionBusy=true;status.textContent="Opening workspace…";render();
-      let child=null;
+      let child=null,interacted=false;
+      const onInput=event=>{if(event.isTrusted)interacted=true;};
       try{
         const {BrowserWindowTracker}=ChromeUtils.importESModule("resource:///modules/BrowserWindowTracker.sys.mjs");
         // Supply the final snap rectangle at native window creation,
@@ -1885,15 +1963,17 @@ function installTabStrip() {
         if(display&&!seed){status.textContent="Target monitor changed. Try the drop again.";return;}
         const features=seed?Object.entries(seed).map(([k,v])=>k+"="+v).join(","):undefined;
         if(seed)logPlacement("workspace-open",display,null,seed);
+        // Use the recognized native initial page, not a user navigation.
         const args=Cc["@mozilla.org/supports-string;1"].createInstance(Ci.nsISupportsString);args.data="about:blank";
         const options={openerWindow:window,private:false,zenSyncedWindow:!prefs.getBoolPref("zen.window-sync.prefer-unsynced-windows",false),args,features};
         child=BrowserWindowTracker.openWindow(options);
         if(!child)throw Error("Native window did not open");
         child[PROJECTION]={source:window,id};
         const placementTask=display?placeAfterStartup(child,display):Promise.resolve(true);
+        child.addEventListener("pointerdown",onInput,true);child.addEventListener("keydown",onInput,true);
         let startupTab=null;
-        const captureStartup=()=>{if(!startupTab)startupTab=child.gBrowser?.selectedTab||null;};
-        captureStartup();child.addEventListener("DOMContentLoaded",captureStartup,{once:true});
+        const captureStartup=()=>{if(!startupTab)startupTab=projectionStartupCandidate(child);};
+        captureStartup();child.addEventListener("DOMContentLoaded",captureStartup,true);child.addEventListener("load",captureStartup,true);
         await new Promise((resolve,reject)=>{
           if(child.gBrowserInit?.delayedStartupFinished){resolve();return;}
           const observer=subject=>{if(subject===child){cleanup();resolve();}};
@@ -1902,28 +1982,27 @@ function installTabStrip() {
           function cleanup(){window.clearTimeout(timer);Services.obs.removeObserver(observer,"browser-delayed-startup-finished");child.removeEventListener("unload",closed);}
           Services.obs.addObserver(observer,"browser-delayed-startup-finished");child.addEventListener("unload",closed,{once:true});
         });
-        child.removeEventListener("DOMContentLoaded",captureStartup);
+        captureStartup();child.removeEventListener("DOMContentLoaded",captureStartup,true);child.removeEventListener("load",captureStartup,true);
         await child.gZenWorkspaces?.promiseInitialized;
+        await child.gZenStartup?.promiseInitialized;
         if(child.closed||destroyed||!child.gZenWorkspaces?.currentWindowIsSyncing||
           child.gZenWindowSync!==window.gZenWindowSync||!child.gZenWorkspaces.getWorkspaceFromId(id))throw Error("Native sync unavailable");
         await child.gZenWorkspaces.changeWorkspaceWithID(id);
         if(child.gZenWorkspaces.activeWorkspace!==id)throw Error("Workspace not activated");
-        // Only the exact untouched projection startup tab, never arbitrary New Tab.
-        if(identifiable&&startupTab?.id&&!preexistingIds.has(startupTab.id)&&startupTab!==child.gBrowser.selectedTab&&!startupTab.closing&&!startupTab.pinned&&!startupTab.group&&
-          !startupTab.hasAttribute("zen-essential")&&!startupTab.hasAttribute("zen-empty-tab")&&startupTab.isEmpty&&
-          startupTab.linkedBrowser?.currentURI?.spec==="about:blank"&&startupTab.linkedBrowser?.canGoBack===false&&startupTab.linkedBrowser?.canGoForward===false){
-          // The source peer must also be untouched; otherwise keep the tab.
-          const peer=window.gZenWindowSync.getItemFromWindow(window,startupTab.id);
-          if(!peer||(peer.isEmpty&&!peer.pinned&&!peer.group&&peer.linkedBrowser?.currentURI?.spec==="about:blank"&&peer.linkedBrowser?.canGoBack===false&&peer.linkedBrowser?.canGoForward===false))child.gBrowser.removeTab(startupTab,{animate:false});
-        }
+        // Select Zen's transparent placeholder first, including when the
+        // synthetic startup tab was the selected tab in this window.
+        const showStart=prepareProjectionStart(child,id,startupTab,preexistingIds,identifiable,interacted);
         const placed=await placementTask;
-        if(placed&&!child.closed)child.focus();
+        if(!child.closed&&!interacted){
+          child.focus();
+          if(showStart)openProjectionSearch(child,id);
+        }
         status.textContent=placed?"":"Window opened; placement could not be verified.";
       }catch(error){
         if(child&&!child.closed)delete child[PROJECTION];
         if(!destroyed)status.textContent="Could not open synced workspace. Check window sync settings.";
         console.warn("[OnePlane] Workspace projection:",error);
-      }finally{projectionBusy=false;if(!destroyed&&open)render();}
+      }finally{if(child&&!child.closed){child.removeEventListener("pointerdown",onInput,true);child.removeEventListener("keydown",onInput,true);}projectionBusy=false;if(!destroyed&&open)render();}
     }
     async function returnProjection(){
       const projection=window[PROJECTION],source=projection?.source;
@@ -2429,7 +2508,7 @@ function installTabStrip() {
     if(open!==state.open){
       toolbarWrapper.toggleAttribute("data-op-panel-open",state.open);
       if(state.open)scheduleContour();
-      else clearTabHover();
+      else clearTabHover(true);
     }
     if(state.wait>0)panelTimer=window.setTimeout(reconcilePanel,Math.ceil(state.wait)+1);
   }
@@ -3541,7 +3620,12 @@ function installTabStrip() {
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const clamp = (x, min, max) => Math.max(min, Math.min(max, x));
   let hoverTab = null, hoverX = null, hoverTimer = 0, indicatorFrame = 0;
-  let lastHoverPointer = null, indicatorHover = null;
+  let lastHoverPointer = null, indicatorHover = null, indicatorReturnTimer = 0;
+  const INDICATOR_RETURN_DELAY = 2000;
+  function cancelIndicatorReturn(){
+    if(indicatorReturnTimer)window.clearTimeout(indicatorReturnTimer);
+    indicatorReturnTimer=0;
+  }
   let indicatorShown = false, ix = 0, iy = 0, iw = 14, ih = 3, iv = 0, last = 0, until = 0;
   const hoverDelay = () => reducedMotion.matches ? 0 :
     clamp(prefs.getIntPref("zen.oneplane.hover-close-delay", 260), 0, 600);
@@ -3701,6 +3785,7 @@ function installTabStrip() {
   function selectHover(item, x = null) {
     if (cascadeState!=="idle" || !item || !list.contains(item)) return;
     cancelHoverTimer();
+    cancelIndicatorReturn();
     hoverX = x;
     if (hoverTab !== item) {
       hoverTab?.removeAttribute("data-op-expanded");
@@ -3713,11 +3798,13 @@ function installTabStrip() {
     refreshIndicator();
     refreshIslandTitle();
   }
-  function clearTabHover() {
+  function clearTabHover(keepIndicator=false) {
     cancelHoverTimer();
     hoverTab?.removeAttribute("data-op-expanded");
     hoverTab?.removeAttribute("data-op-hovered");
-    hoverTab = null; hoverX = null; lastHoverPointer = null; indicatorHover = null;
+    hoverTab = null; hoverX = null; lastHoverPointer = null;
+    if(keepIndicator===true)releaseIndicatorHover();
+    else {cancelIndicatorReturn();indicatorHover=null;}
     refreshIndicator();
     refreshIslandTitle();
   }
@@ -3727,7 +3814,7 @@ function installTabStrip() {
       hoverTimer = 0;
       // Keep the plus stationary until the pointer actually leaves it.
       if (plus.matches(":hover") || plus.matches(":active")) return;
-      clearTabHover();
+      clearTabHover(true);
     }, hoverDelay());
   }
   function pointOverTabStrip(event) {
@@ -3737,11 +3824,17 @@ function installTabStrip() {
       event.clientY >= a.top - 2 && event.clientY <= a.bottom + 2;
   }
   function releaseIndicatorHover() {
-    if (!indicatorHover) return;
-    indicatorHover = null;
-    hoverX = null;
-    refreshIndicator();
-    refreshIslandTitle();
+    if(!indicatorHover||indicatorReturnTimer)return;
+    indicatorReturnTimer=window.setTimeout(()=>{
+      indicatorReturnTimer=0;indicatorHover=null;hoverX=null;
+      if(!dead){refreshIndicator();refreshIslandTitle();}
+    },INDICATOR_RETURN_DELAY);
+  }
+  function indicatorSelectionChanged(){
+    // An explicit selection during the cooldown should retarget from the
+    // held position to the newly selected tab, not wait for the old timer.
+    if(!indicatorReturnTimer)return;
+    cancelIndicatorReturn();indicatorHover=null;hoverX=null;refreshIndicator();refreshIslandTitle();
   }
   function trackTabPointer(event) {
     if(event.pointerType==="touch")return;
@@ -3905,7 +3998,7 @@ function installTabStrip() {
     const keep = new Set(tabs);
     for (const [tab, entry] of entries) {
       if (!keep.has(tab)) {
-        if (hoverTab === entry.item) clearTabHover();
+        if (hoverTab === entry.item || indicatorHover === entry.item) clearTabHover();
         splitMeasureObserver.unobserve(entry.item);
         entry.item.remove(); entries.delete(tab);
       }
@@ -4018,6 +4111,7 @@ function installTabStrip() {
     if(Math.abs(delta)>1)viewport.scrollLeft+=delta;
   }
   function onSelect() {
+    indicatorSelectionChanged();
     guardRestoredAddress(browser.selectedTab);
     guardPanelSwitch();
     updateEmptyAddress();
