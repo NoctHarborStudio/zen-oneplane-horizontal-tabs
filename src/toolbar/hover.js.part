@@ -3,9 +3,12 @@
     if(dead || !row.hasAttribute("data-op-show-island")) return;
     const item=dragNode && row.hasAttribute("data-op-dragging")?dragNode:
       indicatorHover && list.contains(indicatorHover)?indicatorHover:entries.get(browser.selectedTab)?.item;
-    const title=item?.classList.contains("oneplane-split-group")?
+    const nativeTitle=item?.classList.contains("oneplane-split-group")?
       Array.from(item.querySelectorAll(".oneplane-tab-title")).map(n=>n.textContent).filter(Boolean).join(" · "):
       item?.querySelector(".oneplane-tab-title")?.textContent || "";
+    const key=item||null;
+    if(homeLease && (homeTitleKey!==key || homeNativeTitle!==nativeTitle)){homeTitleKey=key;homeNativeTitle=nativeTitle;markHomeTitleActivity();}
+    const title=homeLease&&(homeLease.open||homeIdle||!nativeTitle)?"Home":nativeTitle;
     if(islandTitle.textContent===title) return;
     islandTextAnimation?.cancel();
     const hadTitle=Boolean(islandTitle.textContent);
@@ -19,8 +22,10 @@
   function applyHoverMode(){
     if(dead || row.hasAttribute("data-op-dragging")) return;
     const mode=prefs.getIntPref("zen.oneplane.hover-mode",0)===1?"island":"expand";
-    const show=mode==="island" && prefs.getBoolPref("zen.oneplane.show-center-island",true);
-    if(row.getAttribute("data-op-hover-mode")===mode && row.hasAttribute("data-op-show-island")===show) return;
+    const titleMode=mode==="island" && prefs.getBoolPref("zen.oneplane.show-center-island",true);
+    const show=titleMode||!!homeLease;
+    row.toggleAttribute("data-op-home-icon",show&&!titleMode);
+    if(row.getAttribute("data-op-hover-mode")===mode && row.hasAttribute("data-op-show-island")===show){scheduleGeometry();return;}
     clearTabHover();
     row.setAttribute("data-op-hover-mode",mode);
     row.toggleAttribute("data-op-show-island",show);

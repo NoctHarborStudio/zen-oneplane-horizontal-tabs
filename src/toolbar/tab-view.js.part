@@ -43,6 +43,7 @@
     button.append(icon, title);
     item.addEventListener("contextmenu", event => openNativeTabMenu(event, tab, button));
     button.addEventListener("click", () => {
+      if(!tab.closing)homeLease?.close();
       if (!tab.closing && tab!==browser.selectedTab) {
         guardRestoredAddress(tab);
         guardPanelSwitch();
@@ -79,6 +80,7 @@
     handle.addEventListener("click", event => {
       event.stopPropagation();
       const member = groupMembers(group)[0];
+      if(member)homeLease?.close();
       if (member && splitGroup(browser.selectedTab) !== group) browser.selectedTab = member;
     });
     // Keyboard alternative to drag. Move the whole group one top-level slot.

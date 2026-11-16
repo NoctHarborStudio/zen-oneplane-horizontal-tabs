@@ -1,0 +1,208 @@
+// Shared Zen Home v1: portable core, independent of both mod hosts.
+function acquireZenHome(win, services) {
+  const KEY="__zenSharedHomeV1", PREF="zen.home.shortcuts.v1";
+  const existing=win[KEY];
+  if(existing)return existing.apiVersion===1?existing.acquire():null;
+  const doc=win.document, root=doc.documentElement, prefs=services.prefs;
+  const host=doc.getElementById("zen-tabbox-wrapper"), panels=doc.getElementById("tabbrowser-tabpanels"), browser=win.gBrowser;
+  if(!host||!panels||!host.contains(panels)||!browser?.tabContainer)return null;
+  try{
+    const {PrivateBrowsingUtils}=ChromeUtils.importESModule("resource://gre/modules/PrivateBrowsingUtils.sys.mjs");
+    if(PrivateBrowsingUtils.isWindowPrivate(win))return null;
+  }catch{return null;}
+  const html=(tag,cls,text)=>{
+    const n=doc.createElementNS("http://www.w3.org/1999/xhtml",tag);
+    if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;
+  };
+  function safeURL(value){
+    if(typeof value!=="string"||!value.trim())return null;
+    try{
+      const input=value.trim(), url=new win.URL(/^[a-z][a-z\d+.-]*:/i.test(input)?input:"https://"+input);
+      return /^(https?):$/.test(url.protocol)&&url.hostname&&!url.username&&!url.password?url.href:null;
+    }catch{return null;}
+  }
+  function normalize(raw){
+    if(!raw||raw.version!==1||!Array.isArray(raw.items))return [];
+    const seen=new Set(),result=[];
+    for(const item of raw.items.slice(0,100)){
+      const url=safeURL(item?.url),id=item?.id;
+      if(item?.type!=="shortcut"||typeof id!=="string"||!id||seen.has(id)||!url)continue;
+      seen.add(id);result.push({id,type:"shortcut",title:String(item.title||new win.URL(url).hostname).slice(0,80),url});
+    }
+    return result;
+  }
+  const style=html("style");style.id="zen-shared-home-style";
+  style.textContent=`
+#zen-tabbox-wrapper[data-zr-home-host]{position:relative!important}
+#tabbrowser-tabpanels[data-zr-home-covered],#tabbrowser-tabpanels[data-zr-home-covered] browser{visibility:hidden!important;pointer-events:none!important}
+#zen-shared-home[hidden]{display:none!important}
+#zen-shared-home{position:absolute;inset:0;z-index:4;display:flex;align-items:safe center;justify-content:center;overflow:auto;box-sizing:border-box;padding:72px 24px 32px;background:transparent;color:var(--toolbox-textcolor,currentColor);font:menu;-moz-window-dragging:no-drag;scrollbar-width:thin}
+#zen-shared-home *{box-sizing:border-box}
+#zen-shared-home button,#zen-shared-home input{font:inherit;color:inherit}
+#zen-shared-home button{appearance:none;cursor:pointer;border:0;background:none;padding:0}
+#zen-shared-home button:focus-visible,#zen-shared-home input:focus-visible{outline:2px solid AccentColor;outline-offset:3px}
+#zen-shared-home .zh-content{width:min(100%,600px);margin:auto}
+#zen-shared-home .zh-search{display:flex;align-items:center;gap:12px;width:100%;height:48px;padding:0 16px;border:1px solid color-mix(in srgb,currentColor 12%,transparent);background:color-mix(in srgb,currentColor 5%,transparent);border-radius:14px;text-align:start}
+#zen-shared-home .zh-search:hover{background:color-mix(in srgb,currentColor 9%,transparent)}
+#zen-shared-home .zh-search svg{width:17px;height:17px;opacity:.7}
+#zen-shared-home .zh-search span:last-child{margin-inline-start:auto;opacity:.55;font-size:10px}
+#zen-shared-home .zh-section{margin-block-start:30px}
+#zen-shared-home h3{font-size:12px;font-weight:500;opacity:.68;margin:0 0 12px}
+#zen-shared-home .zh-pins{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
+#zen-shared-home .zh-pin{position:relative;flex:0 0 min(132px,calc((100% - 30px)/4));min-width:0}
+#zen-shared-home .zh-tile{width:100%;height:88px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;border-radius:14px;background:color-mix(in srgb,currentColor 5%,transparent);border:1px solid color-mix(in srgb,currentColor 8%,transparent);transition:background 160ms,translate 180ms}
+#zen-shared-home .zh-tile:not(:disabled):hover{background:color-mix(in srgb,currentColor 10%,transparent);translate:0 -2px}
+#zen-shared-home .zh-tile img{width:26px;height:26px;object-fit:contain}
+#zen-shared-home .zh-tile span{max-width:90%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}
+#zen-shared-home .zh-remove{position:absolute;right:5px;top:5px;border-radius:50%;width:21px;height:21px;background:color-mix(in srgb,currentColor 16%,transparent)}
+#zen-shared-home .zh-order{display:flex;justify-content:center;gap:7px;margin-top:5px}
+#zen-shared-home .zh-spaces{display:flex;flex-wrap:wrap;justify-content:center;gap:9px}
+#zen-shared-home .zh-space{flex:1 1 140px;max-width:185px;min-width:0;display:flex;align-items:center;gap:9px;text-align:start;padding:11px;border:1px solid color-mix(in srgb,currentColor 8%,transparent);background:color-mix(in srgb,currentColor 5%,transparent);border-radius:11px}
+#zen-shared-home .zh-space span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#zen-shared-home .zh-space[aria-current=true]{border-color:color-mix(in srgb,currentColor 25%,transparent)}
+#zen-shared-home .zh-footer,#zen-shared-home .zh-editbar{display:flex;justify-content:center;gap:8px;margin-top:28px}
+#zen-shared-home .zh-small{padding:8px 12px;border-radius:8px;font-size:11px;opacity:.8}
+#zen-shared-home .zh-small:hover{background:color-mix(in srgb,currentColor 8%,transparent);opacity:1}
+#zen-shared-home .zh-empty{font-size:12px;opacity:.55;text-align:center;padding:20px}
+#zen-shared-home .zh-form{display:grid;gap:8px;margin:14px auto 0;max-width:340px}
+#zen-shared-home .zh-form input{width:100%;padding:9px 12px;border:1px solid color-mix(in srgb,currentColor 15%,transparent);border-radius:8px;background:color-mix(in srgb,currentColor 6%,transparent)}
+#zen-shared-home .zh-error{font-size:11px;color:light-dark(#a22,#ffb2b2)}
+#zen-shared-home .zh-pin[data-drop]{outline:1px solid AccentColor;border-radius:14px}
+@media(max-width:600px){#zen-shared-home{padding:62px 16px 20px}#zen-shared-home .zh-pin{flex-basis:calc((100% - 20px)/3)}#zen-shared-home .zh-space{flex-basis:120px}}
+@media(prefers-reduced-motion:reduce){#zen-shared-home *{transition:none!important}}
+`;
+  const panel=html("div");panel.id="zen-shared-home";panel.hidden=true;
+  panel.setAttribute("role","region");panel.setAttribute("aria-label","Home");
+  const content=html("main","zh-content");panel.append(content);
+  let open=false,editing=false,dead=false,switching=false,adding=false,dragId=null,focusHome=null,oldInert=false,covered=false,motion=null;
+  const leases=new Set(),cleanups=[];
+  function listen(node,type,fn,options){node.addEventListener(type,fn,options);cleanups.push(()=>node.removeEventListener(type,fn,options));}
+  const button=(cls,label,fn)=>{const n=html("button",cls,label);n.type="button";n.addEventListener("click",fn);return n;};
+  function load(){try{return normalize(JSON.parse(prefs.getStringPref(PREF,'{"version":1,"items":[]}')));}catch{return [];}}
+  function save(items){prefs.setStringPref(PREF,JSON.stringify({version:1,items:normalize({version:1,items})}));}
+  function notify(){for(const l of [...leases])for(const fn of [...l.listeners])try{fn(open);}catch(error){win.console.warn("[Zen Home] subscriber",error);}}
+  function allowed(){return !dead&&host.isConnected&&panels.isConnected&&!root.hasAttribute("customizing")&&root.getAttribute("inDOMFullscreen")!=="true"&&root.getAttribute("inFullscreen")!=="true"&&!root.hasAttribute("popup-window");}
+  function restore(){if(!covered)return;covered=false;panels.removeAttribute("data-zr-home-covered");if(!oldInert)panels.removeAttribute("inert");host.removeAttribute("data-zr-home-host");}
+  function stopMotion(){motion?.cancel();motion=null;}
+  function close(restoreFocus=false){
+    if(!open)return;open=false;editing=false;adding=false;dragId=null;stopMotion();panel.hidden=true;restore();notify();
+    if(restoreFocus)try{if(focusHome?.isConnected)focusHome.focus({preventScroll:true});else browser.selectedBrowser?.focus();}catch{}
+    focusHome=null;
+  }
+  function navigate(item){
+    close();try{win.openTrustedLinkIn(item.url,"tab");}catch(error){win.console.warn("[Zen Home] shortcut navigation",error);}
+  }
+  function search(){
+    close();try{const cmd=doc.getElementById("cmd_newNavigatorTab");if(typeof cmd?.doCommand==="function")cmd.doCommand();else win.BrowserCommands?.openTab();}catch(error){win.console.warn("[Zen Home] native search",error);}
+  }
+  function move(id,targetId){
+    const items=load(),from=items.findIndex(x=>x.id===id),to=items.findIndex(x=>x.id===targetId);
+    if(from<0||to<0||from===to)return;const [item]=items.splice(from,1);items.splice(to,0,item);save(items);
+  }
+  function addForm(parent){
+    const form=html("form","zh-form"),name=html("input"),url=html("input"),error=html("div","zh-error");
+    name.placeholder="Name";name.setAttribute("aria-label","Shortcut name");name.maxLength=80;name.required=true;
+    url.placeholder="https://example.com";url.setAttribute("aria-label","Website URL");url.required=true;url.maxLength=2048;
+    const submit=html("button","zh-small","Add");submit.type="submit";
+    form.append(name,url,error,submit,button("zh-small","Cancel",()=>{adding=false;render();}));
+    form.addEventListener("submit",e=>{
+      e.preventDefault();const value=safeURL(url.value),title=name.value.trim(),items=load();
+      if(!value||!title){error.textContent="Enter a name and a valid HTTP or HTTPS URL.";return;}
+      if(items.length>=100){error.textContent="Shortcut limit reached.";return;}
+      if(items.some(i=>i.url===value)){error.textContent="This site is already pinned.";return;}
+      let id;try{id=services.uuid.generateUUID().toString();}catch{id=String(Date.now())+"-"+Math.random().toString(36).slice(2);}
+      adding=false;save([...items,{id,type:"shortcut",title,url:value}]);render();
+    });
+    parent.append(form);
+  }
+  function render(){
+    if(!open||dead)return;content.replaceChildren();
+    const searchButton=button("zh-search","",search),svg=doc.createElementNS("http://www.w3.org/2000/svg","svg");
+    svg.setAttribute("viewBox","0 0 24 24");svg.setAttribute("fill","none");svg.setAttribute("stroke","currentColor");svg.setAttribute("stroke-width","1.6");
+    for(const [tag,attrs] of [["circle",{cx:10.5,cy:10.5,r:6.5}],["path",{d:"m16 16 4 4"}]]){const node=doc.createElementNS("http://www.w3.org/2000/svg",tag);for(const [k,v] of Object.entries(attrs))node.setAttribute(k,v);svg.append(node);}
+    searchButton.append(svg,html("span","","Search or enter a URL"),html("span","","New tab"));content.append(searchButton);
+    const section=html("section","zh-section"),grid=html("div","zh-pins"),items=load();section.append(html("h3","","Pinned"),grid);
+    if(!items.length)grid.append(html("div","zh-empty","No pinned sites yet"));
+    for(const [index,item] of items.entries()){
+      const card=html("div","zh-pin"),tile=button("zh-tile","",()=>{if(!editing)navigate(item);});
+      tile.title=item.title;const img=html("img");img.alt="";img.draggable=false;img.src="page-icon:"+item.url;
+      img.addEventListener("error",()=>{img.hidden=true;});tile.append(img,html("span","",item.title));card.append(tile);
+      if(editing){
+        tile.disabled=true;
+        const remove=button("zh-remove","×",()=>save(load().filter(x=>x.id!==item.id)));remove.setAttribute("aria-label","Remove "+item.title);card.append(remove);
+        const order=html("div","zh-order");
+        if(index>0){const prev=button("zh-small","←",()=>move(item.id,items[index-1].id));prev.setAttribute("aria-label","Move "+item.title+" left");order.append(prev);}
+        if(index<items.length-1){const next=button("zh-small","→",()=>move(item.id,items[index+1].id));next.setAttribute("aria-label","Move "+item.title+" right");order.append(next);}
+        card.append(order);card.draggable=true;
+        card.addEventListener("dragstart",e=>{dragId=item.id;e.dataTransfer.setData("application/x-zen-home-shortcut",item.id);e.dataTransfer.effectAllowed="move";e.stopPropagation();});
+        card.addEventListener("dragover",e=>{if(!dragId)return;e.preventDefault();e.stopPropagation();card.setAttribute("data-drop","");});
+        card.addEventListener("dragleave",()=>card.removeAttribute("data-drop"));
+        card.addEventListener("dragend",e=>{dragId=null;card.removeAttribute("data-drop");e.stopPropagation();});
+        card.addEventListener("drop",e=>{if(!dragId)return;e.preventDefault();e.stopPropagation();const id=dragId;dragId=null;move(id,item.id);});
+      }
+      grid.append(card);
+    }
+    if(editing){
+      const editbar=html("div","zh-editbar");editbar.append(button("zh-small","+ Add pinned site",()=>{adding=true;render();}));section.append(editbar);if(adding)addForm(section);
+    }
+    content.append(section);
+    const manager=win.gZenWorkspaces;
+    if(manager?.workspaceEnabled&&typeof manager.getWorkspaces==="function"){
+      const spaces=html("section","zh-section"),list=html("div","zh-spaces");spaces.append(html("h3","","Workspaces"),list);
+      let workspaces=[];try{workspaces=manager.getWorkspaces()||[];}catch{}
+      for(const ws of workspaces){
+        if(!ws?.uuid)continue;
+        const b=button("zh-space","",async()=>{
+          if(switching||manager.activeWorkspace===ws.uuid)return;switching=true;
+          try{await manager.changeWorkspaceWithID(ws.uuid);}catch(error){win.console.warn("[Zen Home] workspace",error);}
+          finally{switching=false;if(open)render();}
+        });
+        b.append(html("span","","◦"),html("span","",String(ws.name||"Workspace")));
+        if(manager.activeWorkspace===ws.uuid)b.setAttribute("aria-current","true");list.append(b);
+      }
+      if(list.childElementCount)content.append(spaces);
+    }
+    const footer=html("div","zh-footer");footer.append(button("zh-small",editing?"Done":"Customize Home",()=>{editing=!editing;adding=false;render();}));content.append(footer);
+    if(adding)content.querySelector(".zh-form input")?.focus({preventScroll:true});
+  }
+  function show(){
+    if(open||!allowed())return open;focusHome=doc.activeElement;
+    try{
+      win.gURLBar?.view?.close();win.gURLBar?.blur();
+      oldInert=panels.hasAttribute("inert");covered=true;host.setAttribute("data-zr-home-host","");panels.setAttribute("data-zr-home-covered","");panels.setAttribute("inert","");
+      panel.hidden=false;open=true;render();notify();
+      if(!win.matchMedia("(prefers-reduced-motion: reduce)").matches&&typeof content.animate==="function"){
+        motion=content.animate([{opacity:0,transform:"translateY(9px)"},{opacity:1,transform:"translateY(0)"}],{duration:300,easing:"cubic-bezier(.2,.75,.25,1)"});
+        const a=motion;a.finished.then(()=>{if(motion===a)motion=null;},()=>{});
+      }
+      content.querySelector(".zh-search")?.focus({preventScroll:true});return true;
+    }catch(error){close();restore();win.console.warn("[Zen Home] open",error);return false;}
+  }
+  function destroy(){
+    if(dead)return;close();dead=true;for(const fn of cleanups.splice(0))try{fn();}catch{}
+    panel.remove();style.remove();if(win[KEY]===registry)delete win[KEY];
+  }
+  const registry={apiVersion:1,acquire(){
+    if(dead)return null;const lease={listeners:new Set()};leases.add(lease);let released=false;
+    return {get open(){return !released&&open;},show:()=>!released&&show(),close:(focus=false)=>{if(!released)close(focus);},
+      toggle:()=>{if(released)return false;if(open){close(true);return false;}return show();},
+      subscribe(fn){if(released)return()=>{};lease.listeners.add(fn);fn(open);return()=>lease.listeners.delete(fn);},
+      release(){if(released)return;released=true;lease.listeners.clear();leases.delete(lease);if(!leases.size)destroy();}};
+  }};
+  try{
+    root.append(style);host.append(panel);
+    const observer={observe(){if(open)render();}};prefs.addObserver(PREF,observer);cleanups.push(()=>prefs.removeObserver(PREF,observer));
+    listen(browser.tabContainer,"TabSelect",()=>{if(!switching)close();});
+    listen(browser.tabContainer,"TabOpen",()=>{if(!switching)close();});
+    listen(win,"ZenWorkspaceDataChanged",()=>{if(open&&!switching)render();});
+    listen(win,"ZenWorkspacesUIUpdate",()=>{if(open&&!switching)render();});
+    listen(win,"keydown",e=>{if(open&&e.key==="Escape"&&!win.gURLBar?.view?.isOpen){e.preventDefault();e.stopPropagation();if(editing){editing=false;adding=false;render();}else close(true);}},true);
+    const stateObserver=new win.MutationObserver(()=>{if(open&&!allowed())close();});
+    stateObserver.observe(root,{attributes:true,attributeFilter:["customizing","inDOMFullscreen","inFullscreen","popup-window"]});cleanups.push(()=>stateObserver.disconnect());
+    listen(win,"unload",destroy,{once:true});
+    const progress={onLocationChange(b,wp){if(open&&!switching&&b===browser.selectedBrowser&&wp?.isTopLevel)close();}};
+    if(typeof browser.addTabsProgressListener==="function"){browser.addTabsProgressListener(progress);cleanups.push(()=>browser.removeTabsProgressListener(progress));}
+    win[KEY]=registry;return registry.acquire();
+  }catch(error){destroy();win.console.warn("[Zen Home] init",error);return null;}
+}
+

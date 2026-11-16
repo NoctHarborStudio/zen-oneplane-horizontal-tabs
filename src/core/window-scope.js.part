@@ -34,8 +34,11 @@ function installTabStrip() {
   indicator.setAttribute("aria-hidden", "true");
   const leftLane = html("div","oneplane-island-lane oneplane-island-left");
   const rightLane = html("div","oneplane-island-lane oneplane-island-right");
-  const island = html("div","oneplane-title-island");
-  island.setAttribute("aria-hidden","true");
+  const island = html("button","oneplane-title-island");
+  island.type="button";island.disabled=true;island.setAttribute("aria-label","Toggle Home");island.setAttribute("aria-expanded","false");
+  const homeGlyph=document.createElementNS("http://www.w3.org/2000/svg","svg");
+  homeGlyph.setAttribute("viewBox","0 0 24 24");homeGlyph.setAttribute("aria-hidden","true");
+  const homePath=document.createElementNS("http://www.w3.org/2000/svg","path");homePath.setAttribute("d","m3 10 9-7 9 7v10h-6v-7H9v7H3z");homeGlyph.append(homePath);island.append(homeGlyph);
   const islandTitle = html("span","oneplane-island-title");
   island.append(islandTitle);
   row.append(list, plus, indicator, island);

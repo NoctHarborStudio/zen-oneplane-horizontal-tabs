@@ -1,0 +1,32 @@
+  // OnePlane-only trigger and Compact Mode adapter; core is host-neutral.
+  let homeLease=null, homeUnsubscribe=null, homeIdleTimer=0, homeIdle=false, homeTitleKey=null, homeNativeTitle="";
+  function clearHomeIdle(){if(homeIdleTimer)window.clearTimeout(homeIdleTimer);homeIdleTimer=0;}
+  function markHomeTitleActivity(){
+    clearHomeIdle();homeIdle=false;if(!homeLease||homeLease.open)return;
+    homeIdleTimer=window.setTimeout(()=>{homeIdleTimer=0;homeIdle=true;refreshIslandTitle();},5000);
+  }
+  function mountHome(){
+    try{homeLease=acquireZenHome(window,Services);}catch(error){console.warn("[OnePlane] Home unavailable",error);}
+    island.toggleAttribute("data-op-home-enabled",!!homeLease);island.disabled=!homeLease;
+    if(!homeLease)return;
+    homeUnsubscribe=homeLease.subscribe(open=>{
+      row.toggleAttribute("data-op-home-open",open);island.setAttribute("aria-expanded",String(open));
+      toolbarWrapper?.toggleAttribute("oneplane-home-hold",open);
+      if(open){clearHomeIdle();homeIdle=true;}else markHomeTitleActivity();
+      refreshIslandTitle();reconcilePanel();
+    });
+    island.addEventListener("click",onHomeTrigger);island.addEventListener("dblclick",stopHomeDoubleClick);island.addEventListener("pointerdown",stopHomePointer);
+  }
+  function stopHomeDoubleClick(e){e.preventDefault();e.stopPropagation();}
+  function stopHomePointer(e){e.stopPropagation();}
+  function onHomeTrigger(e){
+    e.stopPropagation();
+    if(!hoverSupported()||cascadeState!=="idle"||row.hasAttribute("data-op-dragging"))return;
+    homeLease?.toggle();
+  }
+  function destroyHome(){
+    clearHomeIdle();homeUnsubscribe?.();homeUnsubscribe=null;
+    island.removeEventListener("click",onHomeTrigger);island.removeEventListener("dblclick",stopHomeDoubleClick);island.removeEventListener("pointerdown",stopHomePointer);
+    toolbarWrapper?.removeAttribute("oneplane-home-hold");homeLease?.release();homeLease=null;
+  }
+

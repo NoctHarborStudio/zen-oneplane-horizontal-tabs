@@ -1,6 +1,7 @@
   function destroy() {
     if (dead) return;
     dead = true;
+    destroyHome();
     resetTabCascade();
     if (frame) window.cancelAnimationFrame(frame);
     if (dragCommitFrame) window.cancelAnimationFrame(dragCommitFrame);
@@ -138,6 +139,7 @@
     url.addEventListener("focusout", onAddressMutation);
     actionObserver.observe(url, { subtree: true, childList: true });
     alignAddressStart();
+    mountHome();
     applyHoverMode();
     sync();
     try { browser.addProgressListener(progressListener); } catch {}

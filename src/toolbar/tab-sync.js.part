@@ -127,6 +127,7 @@
     if(Math.abs(delta)>1)viewport.scrollLeft+=delta;
   }
   function onSelect() {
+    markHomeTitleActivity();
     indicatorSelectionChanged();
     guardRestoredAddress(browser.selectedTab);
     guardPanelSwitch();

@@ -72,3 +72,7 @@ Preview.12 aligns the Hub with the navigation/address row, keeps it open during 
 Preview.13 changes Hub to an in-document panel and scopes native existing-tab reuse to the active workspace. Multi-monitor projection is not yet implemented.
 
 Preview.14 retains Hub on create/switch, adds inline deletion and Fluid animation, plus experimental synced workspace projection. See [Hub validation](docs/hub.md).
+
+## Home (preview.33)
+
+Click the center title or central home icon to open transparent Home. Customize adds, removes and reorders shortcuts; ordinary mode stays symmetric. Native search and workspaces are reused. Portable controller uses per-window leases for future Zen Refined integration. [Architecture and validation](docs/home.md). Live Zen validation pending.

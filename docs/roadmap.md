@@ -147,3 +147,9 @@ User approved interactive prototype: Free separated, full-width bottom Trash but
 ## Preview.32 — Trash polish
 
 User confirms bottom drawer, Clear and native drag restore to Free/Space work. Fix misaligned header and age picker closing Hub; use in-Hub button choices, keep selected value for Clear. Add bounded Fluid card lift and post-drop suction/return animation without changing native tab transfer. Runtime visual verification pending.
+
+## Shared Home and Extension Dock follow-up
+
+- Preview.33: portable Home core and OnePlane host; validate in Zen before porting identical source to Refined. Both hosts use one window lease registry and shared shortcut preference.
+- After Home stabilizes, add independent Zen Refined trigger. Test both install/unload orders.
+- Extension Dock: investigate right-to-left relocation of native pinned extensions and manager, overflow and portrait. No change in this rollout.

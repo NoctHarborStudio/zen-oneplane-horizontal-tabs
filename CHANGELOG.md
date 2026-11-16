@@ -1,3 +1,9 @@
+## 0.2.0-preview.33 — Home foundation
+
+- Shared per-window Home controller and OnePlane trigger, native background, shortcuts and customization, workspace/search bridge.
+- Fixed-width idle Home title and alternate centered icon where room permits. Extension relocation deferred. Private windows retain native behavior.
+- Live Zen validation pending; Zen Refined host not shipped yet.
+
 # Changelog
 
 ## 0.2.0-preview.32

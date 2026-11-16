@@ -6,6 +6,10 @@
       "kind": "section"
     },
     {
+      "path": "src/home/shared-home.js.part",
+      "kind": "section"
+    },
+    {
       "path": "src/core/window-scope.js.part",
       "kind": "section"
     },
@@ -195,6 +199,10 @@
     },
     {
       "path": "src/toolbar/indicator.js.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/home/oneplane-trigger.js.part",
       "kind": "section"
     },
     {

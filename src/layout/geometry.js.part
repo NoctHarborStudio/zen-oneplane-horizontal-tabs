@@ -39,14 +39,16 @@
       // center. Neither the hovered title nor the scroll positions affect it.
       const wantsIsland = row.hasAttribute("data-op-show-island");
       const available = Math.max(0,2*Math.min(window.innerWidth/2-left,window.innerWidth/2-right)-8);
-      const minIslandRoom = 100+2*(tabWidth+9);
+      const iconHome=row.hasAttribute("data-op-home-icon");
+      const minIslandRoom = (iconHome?32:100)+2*(tabWidth+9);
       const tight = wantsIsland && available < minIslandRoom;
       row.toggleAttribute("data-op-island-tight",tight);
       const centered = wantsIsland && !tight;
       if (centered) {
-        const titleWidth=Math.max(100,Math.min(180,available-2*(tabWidth+9)));
+        const titleWidth=iconHome?32:Math.max(100,Math.min(180,available-2*(tabWidth+9)));
         const laneWidth=lane=>Array.from(lane.children).reduce((sum,n)=>sum+compactSlotWidth(n,tabWidth)+3,6);
-        const half=Math.max(laneWidth(leftLane),laneWidth(rightLane)+tabWidth+3,tabWidth+9);
+        const expandReserve=iconHome&&row.getAttribute("data-op-hover-mode")==="expand"?Math.max(0,(parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab-open"))||180)-tabWidth):0;
+        const half=Math.max(laneWidth(leftLane),laneWidth(rightLane)+tabWidth+3,tabWidth+9)+expandReserve;
         setLength(row,"--op-island-width",titleWidth);
         setLength(row,"--op-island-row-width",Math.min(available,titleWidth+6+2*half));
       }
