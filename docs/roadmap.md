@@ -157,3 +157,7 @@ User confirms bottom drawer, Clear and native drag restore to Free/Space work. F
 ## Preview.35 — real Trash card and Free startup
 
 User rejects native ghost/doubled drag image. Move the original Trash row with shared pointer lifecycle, empty spacer and bounded lift/absorption/return; no clone or native drag image. Preserve native restore, filter and virtualization. Windows console confirms hiddenDOMWindow fails during Free startup; use process-local default-branch claim instead. Runtime verification pending.
+
+## 0.2.0-preview.38 — workspace transition integration
+
+Center Workspace Transition integration with Zen Refined preview.24: Home and Hub use an explicit optional shared controller. Preserve toolbar surface and Home contents while old tabs/bookmarks collapse and new ones emerge. Freeze contour geometry during the transition; resume after cleanup. Actual Zen startup, theme/background flicker and repeated switching require runtime verification. Native switches outside Home/Hub are not intercepted.

@@ -76,3 +76,30 @@ test("Home visual selection does not mutate native selected tab",()=>{
  assert.ok(layout.includes('url.toggleAttribute("data-op-home",open)'));
  assert.ok(core.includes("Click Customize Home to add your first pinned site."));
 });
+
+test("Home workspace switch uses optional Refined controller once and native fallback",async()=>{
+ const code=extract("  function switchHomeWorkspace(","  function render(");
+ let calls=0,wrapped=0;
+ const win={},manager={changeWorkspaceWithID(id){calls++;return id;}};
+ const change=new Function("win",code+"return switchHomeWorkspace;")(win);
+ assert.equal(await change(manager,"a"),"a");assert.equal(calls,1);
+ win.__zenRefinedWorkspaceTransition={run(fn){wrapped++;return fn();}};
+ assert.equal(await change(manager,"b"),"b");assert.equal(wrapped,1);assert.equal(calls,2);
+});
+test("Home workspace state updates without replacing search and shortcuts",()=>{
+ const code=extract("  function refreshWorkspaceSelection(","  function switchHomeWorkspace(");
+ function button(id,name){const a=new Map([["data-zh-workspace-id",id],["data-zh-workspace-name",name]]);return {getAttribute:k=>a.get(k),setAttribute:(k,v)=>a.set(k,v),removeAttribute:k=>a.delete(k)}}
+ const a=button("a","A"),b=button("b","B");
+ a.setAttribute("aria-current","true");
+ const manager={activeWorkspace:"b",getWorkspaces:()=>[{uuid:"a",name:"A"},{uuid:"b",name:"B"}]};
+ let renders=0;
+ const refresh=new Function("win","content","render",code+"let open=true,dead=false;return refreshWorkspaceSelection;")({gZenWorkspaces:manager},{querySelectorAll:()=>[a,b]},()=>renders++);
+ refresh();assert.equal(a.getAttribute("aria-current"),undefined);assert.equal(b.getAttribute("aria-current"),"true");assert.equal(renders,0);
+ manager.getWorkspaces=()=>[{uuid:"b",name:"Renamed"}];refresh();assert.equal(renders,1);
+});
+test("OnePlane keeps contour and panel stable during shared motion",()=>{
+ assert.ok(layout.includes('window.addEventListener("ZenRefined:WorkspaceTransition",onWorkspaceMotion)'));
+ assert.ok(layout.includes('window.removeEventListener("ZenRefined:WorkspaceTransition",onWorkspaceMotion)'));
+ assert.ok(layout.includes('toggleAttribute("oneplane-workspace-hold",active)'));
+ assert.ok(layout.includes('root.hasAttribute("data-zr-workspace-phase"))return;'));
+});

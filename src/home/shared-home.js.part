@@ -216,6 +216,24 @@ function acquireZenHome(win, services) {
     });
     parent.append(form);
   }
+  // Shared Home's workspace controls are keyed by native identity. A switch
+  // changes their selection, not the stable search and pinned shortcuts.
+  function refreshWorkspaceSelection(){
+    if(!open||dead)return;
+    const manager=win.gZenWorkspaces;
+    const buttons=Array.from(content.querySelectorAll(".zh-space[data-zh-workspace-id]"));
+    let spaces=[];try{spaces=(manager?.getWorkspaces?.()||[]).filter(ws=>ws?.uuid);}catch{return;}
+    if(buttons.length!==spaces.length||buttons.some((b,i)=>b.getAttribute("data-zh-workspace-id")!==spaces[i].uuid||b.getAttribute("data-zh-workspace-name")!==String(spaces[i].name||"Workspace"))){render();return;}
+    for(const b of buttons){
+      if(b.getAttribute("data-zh-workspace-id")===manager.activeWorkspace)b.setAttribute("aria-current","true");
+      else b.removeAttribute("aria-current");
+    }
+  }
+  function switchHomeWorkspace(manager,id){
+    const transition=win.__zenRefinedWorkspaceTransition;
+    const native=()=>manager.changeWorkspaceWithID(id);
+    return typeof transition?.run==="function"?transition.run(native):native();
+  }
   function render(){
     if(!open||dead)return;content.replaceChildren();
     const searchButton=button("zh-search","",search),svg=doc.createElementNS("http://www.w3.org/2000/svg","svg");
@@ -255,9 +273,10 @@ function acquireZenHome(win, services) {
         if(!ws?.uuid)continue;
         const b=button("zh-space","",async()=>{
           if(switching||manager.activeWorkspace===ws.uuid)return;switching=true;
-          try{await manager.changeWorkspaceWithID(ws.uuid);}catch(error){win.console.warn("[Zen Home] workspace",error);}
-          finally{switching=false;if(open)render();}
+          try{await switchHomeWorkspace(manager,ws.uuid);}catch(error){win.console.warn("[Zen Home] workspace",error);}
+          finally{switching=false;if(open)refreshWorkspaceSelection();}
         });
+        b.setAttribute("data-zh-workspace-id",ws.uuid);b.setAttribute("data-zh-workspace-name",String(ws.name||"Workspace"));
         b.append(html("span","","◦"),html("span","",String(ws.name||"Workspace")));
         if(manager.activeWorkspace===ws.uuid)b.setAttribute("aria-current","true");list.append(b);
       }
@@ -303,7 +322,7 @@ function acquireZenHome(win, services) {
     listen(browser.tabContainer,"TabSelect",()=>{if(!switching)close();});
     listen(browser.tabContainer,"TabOpen",()=>{if(!switching)close();});
     listen(win,"ZenWorkspaceDataChanged",()=>{if(open&&!switching)render();});
-    listen(win,"ZenWorkspacesUIUpdate",()=>{if(open&&!switching)render();});
+    listen(win,"ZenWorkspacesUIUpdate",()=>{if(open&&!switching)refreshWorkspaceSelection();});
     listen(win,"ZenURLBarClosed",onSearchClosed);
     if(win.gURLBar){
       const searchObserver=new win.MutationObserver(observeSearch);

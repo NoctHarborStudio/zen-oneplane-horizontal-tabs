@@ -22,7 +22,7 @@
     }
   }
   function paintContour(){
-    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-op-bookmark-wave"))return;
+    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-op-bookmark-wave")||root.hasAttribute("data-zr-workspace-phase"))return;
     // A switch can briefly hide or resize native bookmark controls.
     // Retain the last valid mask until the native layout settles.
     if(contourKey && window.performance.now()<panelSwitchUntil)return;
@@ -83,7 +83,7 @@
     contourFrame=0;
     if(dead)return;
     paintContour();
-    if(now<contourUntil && hoverSupported()&&!root.hasAttribute("data-op-bookmark-wave"))contourFrame=window.requestAnimationFrame(stepContour);
+    if(now<contourUntil && hoverSupported()&&!root.hasAttribute("data-op-bookmark-wave")&&!root.hasAttribute("data-zr-workspace-phase"))contourFrame=window.requestAnimationFrame(stepContour);
   }
   function scheduleContour(){
     if(!dead&&!contourFrame)contourFrame=window.requestAnimationFrame(stepContour);

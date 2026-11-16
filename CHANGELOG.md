@@ -24,6 +24,11 @@
 
 # Changelog
 
+## 0.2.0-preview.38
+
+- Integrate the optional Zen Refined Center Workspace Transition in Home and Hub without changing native workspace ownership. Hold the Compact toolbar and retain the Unified Contour mask during the transition. Home updates workspace selection by native identity instead of rebuilding its search and pinned shortcuts.
+- Preserve existing Home startup and search morph, address wave, and native fallback when Zen Refined is absent. Runtime integration validation pending.
+
 ## 0.2.0-preview.35
 
 - Move the original Trash card via shared pointer drag lifecycle and empty spacer; remove native drag image and post-drop clones. Animate lift, absorption and return.

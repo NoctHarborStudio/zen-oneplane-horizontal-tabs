@@ -97,6 +97,8 @@
     browser.tabContainer.removeEventListener("TabSelect", onSelect);
     for(const event of ["TabOpen","TabClose"])browser.tabContainer.removeEventListener(event,onTabOpenOrClose,true);
     window.removeEventListener("ZenWorkspaceDataChanged", schedule);
+    window.removeEventListener("ZenRefined:WorkspaceTransition",onWorkspaceMotion);
+    toolbarWrapper?.removeAttribute("oneplane-workspace-hold");
     window.removeEventListener("ZenTabIconChanged",onNativeIconChanged,true);
     window.removeEventListener("OnePlane:SyncedIconChanged",schedule);
     window.removeEventListener("ZenViewSplitter:SplitViewActivated", schedule);
@@ -158,6 +160,8 @@
     browser.tabContainer.addEventListener("TabSelect", onSelect);
     for(const event of ["TabOpen","TabClose"])browser.tabContainer.addEventListener(event,onTabOpenOrClose,true);
     window.addEventListener("ZenWorkspaceDataChanged", schedule);
+    window.addEventListener("ZenRefined:WorkspaceTransition",onWorkspaceMotion);
+    onWorkspaceMotion();
     window.addEventListener("ZenTabIconChanged",onNativeIconChanged,true);
     window.addEventListener("OnePlane:SyncedIconChanged",schedule);
     window.addEventListener("ZenViewSplitter:SplitViewActivated", schedule);

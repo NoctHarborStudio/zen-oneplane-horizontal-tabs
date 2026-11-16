@@ -291,6 +291,24 @@ function acquireZenHome(win, services) {
     });
     parent.append(form);
   }
+  // Shared Home's workspace controls are keyed by native identity. A switch
+  // changes their selection, not the stable search and pinned shortcuts.
+  function refreshWorkspaceSelection(){
+    if(!open||dead)return;
+    const manager=win.gZenWorkspaces;
+    const buttons=Array.from(content.querySelectorAll(".zh-space[data-zh-workspace-id]"));
+    let spaces=[];try{spaces=(manager?.getWorkspaces?.()||[]).filter(ws=>ws?.uuid);}catch{return;}
+    if(buttons.length!==spaces.length||buttons.some((b,i)=>b.getAttribute("data-zh-workspace-id")!==spaces[i].uuid||b.getAttribute("data-zh-workspace-name")!==String(spaces[i].name||"Workspace"))){render();return;}
+    for(const b of buttons){
+      if(b.getAttribute("data-zh-workspace-id")===manager.activeWorkspace)b.setAttribute("aria-current","true");
+      else b.removeAttribute("aria-current");
+    }
+  }
+  function switchHomeWorkspace(manager,id){
+    const transition=win.__zenRefinedWorkspaceTransition;
+    const native=()=>manager.changeWorkspaceWithID(id);
+    return typeof transition?.run==="function"?transition.run(native):native();
+  }
   function render(){
     if(!open||dead)return;content.replaceChildren();
     const searchButton=button("zh-search","",search),svg=doc.createElementNS("http://www.w3.org/2000/svg","svg");
@@ -330,9 +348,10 @@ function acquireZenHome(win, services) {
         if(!ws?.uuid)continue;
         const b=button("zh-space","",async()=>{
           if(switching||manager.activeWorkspace===ws.uuid)return;switching=true;
-          try{await manager.changeWorkspaceWithID(ws.uuid);}catch(error){win.console.warn("[Zen Home] workspace",error);}
-          finally{switching=false;if(open)render();}
+          try{await switchHomeWorkspace(manager,ws.uuid);}catch(error){win.console.warn("[Zen Home] workspace",error);}
+          finally{switching=false;if(open)refreshWorkspaceSelection();}
         });
+        b.setAttribute("data-zh-workspace-id",ws.uuid);b.setAttribute("data-zh-workspace-name",String(ws.name||"Workspace"));
         b.append(html("span","","◦"),html("span","",String(ws.name||"Workspace")));
         if(manager.activeWorkspace===ws.uuid)b.setAttribute("aria-current","true");list.append(b);
       }
@@ -378,7 +397,7 @@ function acquireZenHome(win, services) {
     listen(browser.tabContainer,"TabSelect",()=>{if(!switching)close();});
     listen(browser.tabContainer,"TabOpen",()=>{if(!switching)close();});
     listen(win,"ZenWorkspaceDataChanged",()=>{if(open&&!switching)render();});
-    listen(win,"ZenWorkspacesUIUpdate",()=>{if(open&&!switching)render();});
+    listen(win,"ZenWorkspacesUIUpdate",()=>{if(open&&!switching)refreshWorkspaceSelection();});
     listen(win,"ZenURLBarClosed",onSearchClosed);
     if(win.gURLBar){
       const searchObserver=new win.MutationObserver(observeSearch);
@@ -2961,7 +2980,9 @@ function installTabStrip() {
       const native=manager(),space=hubWorkspaceSnapshot(native)?.find(s=>s.id===id);
       if(!space){render();return;}if(space.active){contextId=null;confirmation=null;render();return;}
       busy=true;status.textContent="";render();
-      try{switchGuard();await native.changeWorkspaceWithID(id);
+      try{switchGuard();const transition=window.__zenRefinedWorkspaceTransition;
+        const change=()=>native.changeWorkspaceWithID(id);
+        await (typeof transition?.run==="function"?transition.run(change):change());
         if(!destroyed){if(native.activeWorkspace!==id)throw Error("Workspace did not activate");contextId=null;confirmation=null;scheduleHubGeometry();}
       }catch(error){if(!destroyed)status.textContent="Could not switch workspace.";console.warn("[OnePlane] Hub switch:",error);}
       finally{busy=false;if(!destroyed&&open)render();}
@@ -3240,7 +3261,7 @@ function installTabStrip() {
     }
   }
   function paintContour(){
-    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-op-bookmark-wave"))return;
+    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-op-bookmark-wave")||root.hasAttribute("data-zr-workspace-phase"))return;
     // A switch can briefly hide or resize native bookmark controls.
     // Retain the last valid mask until the native layout settles.
     if(contourKey && window.performance.now()<panelSwitchUntil)return;
@@ -3301,7 +3322,7 @@ function installTabStrip() {
     contourFrame=0;
     if(dead)return;
     paintContour();
-    if(now<contourUntil && hoverSupported()&&!root.hasAttribute("data-op-bookmark-wave"))contourFrame=window.requestAnimationFrame(stepContour);
+    if(now<contourUntil && hoverSupported()&&!root.hasAttribute("data-op-bookmark-wave")&&!root.hasAttribute("data-zr-workspace-phase"))contourFrame=window.requestAnimationFrame(stepContour);
   }
   function scheduleContour(){
     if(!dead&&!contourFrame)contourFrame=window.requestAnimationFrame(stepContour);
@@ -3419,7 +3440,7 @@ function installTabStrip() {
   let panelTimer=0, panelSwitchTimer=0, panelSwitchUntil=0, panelCloseSince=null;
   let panelLastPointer=null;
   const PANEL_NATIVE_FLAGS=["zen-has-hover","has-popup-menu","zen-compact-mode-active"];
-  const PANEL_HOLD_FLAGS=["oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold","oneplane-home-hold"];
+  const PANEL_HOLD_FLAGS=["oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold","oneplane-home-hold","oneplane-workspace-hold"];
   const PANEL_SWITCH_GRACE=180, PANEL_CLOSE_GRACE=100;
   // One visual state for the wrapper, tint and controls. Native flags
   // can disappear/reappear during a native tab selection transaction.
@@ -3459,6 +3480,12 @@ function installTabStrip() {
       else clearTabHover(true);
     }
     if(state.wait>0)panelTimer=window.setTimeout(reconcilePanel,Math.ceil(state.wait)+1);
+  }
+  function onWorkspaceMotion(){
+    const active=root.hasAttribute("data-zr-workspace-phase");
+    toolbarWrapper?.toggleAttribute("oneplane-workspace-hold",active);
+    reconcilePanel();
+    if(!active){scheduleGeometry();scheduleContour();}
   }
   function guardPanelSwitch(){
     if(!hoverSupported())return;
@@ -5251,6 +5278,8 @@ function installTabStrip() {
     browser.tabContainer.removeEventListener("TabSelect", onSelect);
     for(const event of ["TabOpen","TabClose"])browser.tabContainer.removeEventListener(event,onTabOpenOrClose,true);
     window.removeEventListener("ZenWorkspaceDataChanged", schedule);
+    window.removeEventListener("ZenRefined:WorkspaceTransition",onWorkspaceMotion);
+    toolbarWrapper?.removeAttribute("oneplane-workspace-hold");
     window.removeEventListener("ZenTabIconChanged",onNativeIconChanged,true);
     window.removeEventListener("OnePlane:SyncedIconChanged",schedule);
     window.removeEventListener("ZenViewSplitter:SplitViewActivated", schedule);
@@ -5312,6 +5341,8 @@ function installTabStrip() {
     browser.tabContainer.addEventListener("TabSelect", onSelect);
     for(const event of ["TabOpen","TabClose"])browser.tabContainer.addEventListener(event,onTabOpenOrClose,true);
     window.addEventListener("ZenWorkspaceDataChanged", schedule);
+    window.addEventListener("ZenRefined:WorkspaceTransition",onWorkspaceMotion);
+    onWorkspaceMotion();
     window.addEventListener("ZenTabIconChanged",onNativeIconChanged,true);
     window.addEventListener("OnePlane:SyncedIconChanged",schedule);
     window.addEventListener("ZenViewSplitter:SplitViewActivated", schedule);

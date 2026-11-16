@@ -960,7 +960,9 @@
       const native=manager(),space=hubWorkspaceSnapshot(native)?.find(s=>s.id===id);
       if(!space){render();return;}if(space.active){contextId=null;confirmation=null;render();return;}
       busy=true;status.textContent="";render();
-      try{switchGuard();await native.changeWorkspaceWithID(id);
+      try{switchGuard();const transition=window.__zenRefinedWorkspaceTransition;
+        const change=()=>native.changeWorkspaceWithID(id);
+        await (typeof transition?.run==="function"?transition.run(change):change());
         if(!destroyed){if(native.activeWorkspace!==id)throw Error("Workspace did not activate");contextId=null;confirmation=null;scheduleHubGeometry();}
       }catch(error){if(!destroyed)status.textContent="Could not switch workspace.";console.warn("[OnePlane] Hub switch:",error);}
       finally{busy=false;if(!destroyed&&open)render();}

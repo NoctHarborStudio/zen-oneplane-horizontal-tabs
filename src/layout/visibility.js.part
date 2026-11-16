@@ -24,6 +24,12 @@
     }
     if(state.wait>0)panelTimer=window.setTimeout(reconcilePanel,Math.ceil(state.wait)+1);
   }
+  function onWorkspaceMotion(){
+    const active=root.hasAttribute("data-zr-workspace-phase");
+    toolbarWrapper?.toggleAttribute("oneplane-workspace-hold",active);
+    reconcilePanel();
+    if(!active){scheduleGeometry();scheduleContour();}
+  }
   function guardPanelSwitch(){
     if(!hoverSupported())return;
     panelSwitchUntil=window.performance.now()+PANEL_SWITCH_GRACE;
