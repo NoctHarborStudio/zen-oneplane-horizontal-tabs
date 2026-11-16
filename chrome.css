@@ -982,6 +982,13 @@
       #oneplane-tabs .oneplane-tab-audio i { animation: none !important; }
     }
 
+
+/* Slot positions are already calculated by the pointer controller. */
+@media (min-width:900px) {
+  #oneplane-tabs[data-op-live-drag] :is(.oneplane-tab-list,.oneplane-island-lane) > :is(.oneplane-tab,.oneplane-split-group),
+  #oneplane-tabs[data-op-live-drag] .oneplane-new-tab {transition:none !important;}
+  #oneplane-tabs[data-op-dragging] [data-op-detached] {opacity:0 !important;visibility:hidden !important;transition:none !important;}
+}
     /* Keep layout slots. On opening only opacity animates; the return
        is bounded scale/opacity. The whole strip stays noninteractive. */
     #oneplane-tabs[data-op-cascade] { pointer-events:none !important; }
@@ -1577,3 +1584,9 @@
 #oneplane-hub-panel .op-hub-confirm-controls > button {flex:1;min-width:0;}
 #oneplane-hub-panel .op-hub-space[data-op-dragging] {opacity:.65;cursor:grabbing;}
 #oneplane-hub-panel[inert] {pointer-events:none!important;}
+
+/* Experimental cross-screen preview. */
+#oneplane-placement-preview { --panel-padding:0px; --panel-background:transparent; --panel-border-color:transparent; pointer-events:none !important; margin:0 !important; padding:0 !important; background:transparent !important; border:0 !important; }
+#oneplane-placement-preview::part(content) {padding:0 !important;background:transparent !important;border:0 !important;}
+#oneplane-placement-preview .op-placement-label {display:grid;place-items:center;box-sizing:border-box;pointer-events:none!important;border:2px solid #91adf2;border-radius:12px;background:#769ef233;color:white;font:600 15px system-ui;text-shadow:0 1px 4px #000;}
+#oneplane-hub-panel .op-hub-space[data-op-dragging] {background:color-mix(in srgb,currentColor 18%,transparent);outline:1px solid color-mix(in srgb,currentColor 35%,transparent);}

@@ -1066,6 +1066,86 @@ function installTabStrip() {
   function hubOtherDisplay(source,dest,x,y){
     return !!source&&!!dest&&(source.x!==dest.x||source.y!==dest.y)&&x>=dest.x&&x<dest.x+dest.width&&y>=dest.y&&y<dest.y+dest.height;
   }
+  function hubSnapRect(display,x,y){
+    if(!display||![display.x,display.y,display.width,display.height,x,y].every(Number.isFinite)||display.width<=0||display.height<=0)return null;
+    const {x:left,y:top,width,height}=display;
+    const edge=Math.max(24,Math.min(100,Math.round(Math.min(width,height)*.085)));
+    const right=left+width,bottom=top+height,hw=Math.floor(width/2),hh=Math.floor(height/2);
+    const h=x-left<=edge?"left":right-x<=edge?"right":"",v=y-top<=edge?"top":bottom-y<=edge?"bottom":"";
+    if(h&&v)return {x:h==="left"?left:left+hw,y:v==="top"?top:top+hh,width:h==="left"?hw:width-hw,height:v==="top"?hh:height-hh,mode:h+"-"+v};
+    if(v==="top")return {x:left,y:top,width,height,mode:"maximize"};
+    if(h)return {x:h==="left"?left:left+hw,y:top,width:h==="left"?hw:width-hw,height,mode:h};
+    if(v==="bottom")return {x:left,y:top+hh,width,height:height-hh,mode:"bottom"};
+    const w=Math.round(width*.72),ht=Math.round(height*.74);
+    return {x:Math.max(left,Math.min(right-w,Math.round(x-w/2))),y:Math.max(top,Math.min(bottom-ht,Math.round(y-ht/2))),width:w,height:ht,mode:"center"};
+  }
+  // Shared monitor work-area geometry and experimental chrome preview.
+  let placementPreview=null,placementLabel=null,placementKey="";
+  function desktopDisplayAt(x,y){
+    if(!Number.isFinite(x)||!Number.isFinite(y))return null;
+    try{
+      const sm=Cc["@mozilla.org/gfx/screenmanager;1"].getService(Ci.nsIScreenManager);
+      const s=sm.screenForRect(Math.round(x),Math.round(y),1,1),l={},t={},w={},h={};
+      s.GetAvailRectDisplayPix(l,t,w,h);
+      const d={x:l.value,y:t.value,width:w.value,height:h.value};
+      return x>=d.x&&x<d.x+d.width&&y>=d.y&&y<d.y+d.height?d:null;
+    }catch{return null;}
+  }
+  function placementAt(x,y){const d=desktopDisplayAt(x,y);return d?hubSnapRect(d,x,y):null;}
+  function pointInSourceWindow(x,y){
+    return x>=window.screenX&&x<window.screenX+window.outerWidth&&y>=window.screenY&&y<window.screenY+window.outerHeight;
+  }
+  function clearPlacementPreview(remove=false){
+    placementKey="";
+    if(placementPreview&&(placementPreview.state==="open"||placementPreview.state==="showing"))try{placementPreview.hidePopup();}catch{}
+    if(remove){placementPreview?.remove();placementPreview=placementLabel=null;}
+  }
+  function showPlacementPreview(x,y,label){
+    if(pointInSourceWindow(x,y)){clearPlacementPreview();return;}
+    const p=placementAt(x,y);if(!p){clearPlacementPreview();return;}
+    const key=[p.x,p.y,p.width,p.height,p.mode,label].join(":");
+    if(key===placementKey)return;
+    placementKey=key;
+    try{
+      if(!placementPreview){
+        const set=document.getElementById("mainPopupSet");if(!set)return;
+        placementPreview=document.createXULElement("panel");placementPreview.id="oneplane-placement-preview";
+        for(const [k,v] of Object.entries({noautohide:"true",noautofocus:"true",mousethrough:"always",level:"top","aria-hidden":"true"}))placementPreview.setAttribute(k,v);
+        placementLabel=html("div","op-placement-label");placementPreview.append(placementLabel);set.append(placementPreview);
+      }
+      placementLabel.textContent=label+" · "+(p.mode==="maximize"?"Full screen":p.mode==="center"?"Window":p.mode);
+      const inset=8,w=Math.max(1,p.width-2*inset),h=Math.max(1,p.height-2*inset);
+      placementPreview.style.width=w+"px";placementPreview.style.height=h+"px";
+      placementLabel.style.width=w+"px";placementLabel.style.height=h+"px";
+      if(placementPreview.state==="open"){placementPreview.sizeTo(w,h);placementPreview.moveTo(p.x+inset,p.y+inset);}
+      else if(placementPreview.state!=="showing")placementPreview.openPopupAtScreen(p.x+inset,p.y+inset,false);
+    }catch(error){clearPlacementPreview(true);console.warn("[OnePlane] Snap preview unavailable:",error);}
+  }
+  function placeNativeWindow(win,p){
+    if(!win||win.closed||!p)return;
+    try{
+      if(win.windowState===win.STATE_MAXIMIZED||win.windowState===win.STATE_MINIMIZED)win.restore();
+      win.moveTo(p.x,p.y);win.resizeTo(p.width,p.height);
+      if(p.mode==="maximize")win.maximize();
+    }catch(error){console.warn("[OnePlane] Window placement:",error);}
+  }
+  function placeAfterStartup(win,p){
+    if(!win||!p)return;
+    if(win.gBrowserInit?.delayedStartupFinished){placeNativeWindow(win,p);return;}
+    let timer=0;
+    const cleanup=()=>{Services.obs.removeObserver(observer,"browser-delayed-startup-finished");win.removeEventListener("unload",cleanup);if(timer)window.clearTimeout(timer);};
+    const observer=subject=>{if(subject===win){cleanup();placeNativeWindow(win,p);}};
+    Services.obs.addObserver(observer,"browser-delayed-startup-finished");win.addEventListener("unload",cleanup,{once:true});
+    timer=window.setTimeout(cleanup,15000);
+  }
+  function onSourceDrag(event){
+    if(!draggedTab||draggedGroup||(!event.screenX&&!event.screenY))return;
+    if(!pointInSourceWindow(event.screenX,event.screenY)){
+      if(dragImageMode!=="outside")setDragImageMode("outside",event);
+      showPlacementPreview(event.screenX,event.screenY,"Tab");
+    }else clearPlacementPreview();
+  }
+
   // Native Hub, window-scoped. Zen owns all workspace/session state.
   function createHubController({target,root,toolbarWrapper,supported,hold,switchGuard}) {
     const button=html("button","op-hub-trigger");
@@ -1116,7 +1196,7 @@ function installTabStrip() {
       const to=show?{clipPath:"inset(0 0 0% 0 round 8px)",opacity:1,translate:"0 0px"}:
         {clipPath:"inset(0 0 100% 0 round 8px)",opacity:0,translate:"0 -6px"};
       try{
-        const animation=panel.animate([from,to],{duration:show?300:260,easing:"cubic-bezier(.22,.72,.2,1)",fill:"both"});
+        const animation=panel.animate([from,to],{duration:show?460:390,easing:"cubic-bezier(.22,.72,.2,1)",fill:"both"});
         motion=animation;
         animation.finished.then(()=>{if(motion!==animation)return;motion=null;animation.cancel();done();},()=>{});
       }catch{done();}
@@ -1273,13 +1353,8 @@ function installTabStrip() {
         prefs.getBoolPref("zen.window-sync.enabled",true)&&!prefs.getBoolPref("zen.window-sync.sync-only-pinned-tabs",true);
     }
     function monitorAt(x,y){
-      try{
-        const screens=Cc["@mozilla.org/gfx/screenmanager;1"].getService(Ci.nsIScreenManager);
-        const rect=s=>{const l={},t={},w={},h={};s.GetAvailRectDisplayPix(l,t,w,h);return {x:l.value,y:t.value,width:w.value,height:h.value};};
-        const source=rect(screens.screenForRect(Math.round(window.screenX+window.outerWidth/2),Math.round(window.screenY+window.outerHeight/2),1,1));
-        const dest=rect(screens.screenForRect(Math.round(x),Math.round(y),1,1));
-        return hubOtherDisplay(source,dest,x,y)?dest:null;
-      }catch{return null;}
+      const source=desktopDisplayAt(window.screenX+window.outerWidth/2,window.screenY+window.outerHeight/2),dest=desktopDisplayAt(x,y);
+      return hubOtherDisplay(source,dest,x,y)?hubSnapRect(dest,x,y):null;
     }
     function beginDrag(event,id,entry){
       if(event.button!==0||busy||projectionBusy)return;
@@ -1292,11 +1367,11 @@ function installTabStrip() {
         drag.moved=true;drag.entry.setAttribute("data-op-dragging","true");
         status.textContent="Drag to another monitor and release.";
       }
-      if(drag.moved)event.preventDefault();
+      if(drag.moved){event.preventDefault();showPlacementPreview(event.screenX,event.screenY,manager()?.getWorkspaceFromId(drag.id)?.name||"Workspace");}
     }
     function cancelDrag(event){
       if(!drag||(event&&event.pointerId!==drag.pointer))return;
-      const d=drag;drag=null;d.entry.removeAttribute("data-op-dragging");
+      const d=drag;drag=null;clearPlacementPreview();d.entry.removeAttribute("data-op-dragging");
       if(d.moved){suppressClickUntil=window.performance.now()+400;status.textContent="";}
       try{if(d.entry.hasPointerCapture(d.pointer))d.entry.releasePointerCapture(d.pointer);}catch{}
     }
@@ -1317,11 +1392,15 @@ function installTabStrip() {
       let child=null;
       try{
         const {BrowserWindowTracker}=ChromeUtils.importESModule("resource:///modules/BrowserWindowTracker.sys.mjs");
-        const features=display?`left=${display.x+20},top=${display.y+20},width=${Math.max(320,display.width-40)},height=${Math.max(240,display.height-40)}`:undefined;
-        const options={openerWindow:window,private:false,zenSyncedWindow:!prefs.getBoolPref("zen.window-sync.prefer-unsynced-windows",false),features};
+        const features=display?`left=${display.x},top=${display.y},width=${display.width},height=${display.height}`:undefined;
+        const args=Cc["@mozilla.org/supports-string;1"].createInstance(Ci.nsISupportsString);args.data="about:blank";
+        const options={openerWindow:window,private:false,zenSyncedWindow:!prefs.getBoolPref("zen.window-sync.prefer-unsynced-windows",false),features,args};
         child=BrowserWindowTracker.openWindow(options);
         if(!child)throw Error("Native window did not open");
         child[PROJECTION]={source:window,id};
+        let startupTab=null;
+        const captureStartup=()=>{if(!startupTab)startupTab=child.gBrowser?.selectedTab||null;};
+        captureStartup();child.addEventListener("DOMContentLoaded",captureStartup,{once:true});
         await new Promise((resolve,reject)=>{
           if(child.gBrowserInit?.delayedStartupFinished){resolve();return;}
           const observer=subject=>{if(subject===child){cleanup();resolve();}};
@@ -1330,12 +1409,19 @@ function installTabStrip() {
           function cleanup(){window.clearTimeout(timer);Services.obs.removeObserver(observer,"browser-delayed-startup-finished");child.removeEventListener("unload",closed);}
           Services.obs.addObserver(observer,"browser-delayed-startup-finished");child.addEventListener("unload",closed,{once:true});
         });
+        child.removeEventListener("DOMContentLoaded",captureStartup);
         await child.gZenWorkspaces?.promiseInitialized;
         if(child.closed||destroyed||!child.gZenWorkspaces?.currentWindowIsSyncing||
           child.gZenWindowSync!==window.gZenWindowSync||!child.gZenWorkspaces.getWorkspaceFromId(id))throw Error("Native sync unavailable");
         await child.gZenWorkspaces.changeWorkspaceWithID(id);
         if(child.gZenWorkspaces.activeWorkspace!==id)throw Error("Workspace not activated");
-        if(display){if(child.windowState===child.STATE_MAXIMIZED)child.restore();child.moveTo(display.x+20,display.y+20);}
+        // Only the exact untouched projection startup tab, never arbitrary New Tab.
+        if(startupTab&&startupTab!==child.gBrowser.selectedTab&&!startupTab.closing&&!startupTab.pinned&&!startupTab.group&&
+          !startupTab.hasAttribute("zen-essential")&&!startupTab.hasAttribute("zen-empty-tab")&&startupTab.isEmpty&&
+          startupTab.linkedBrowser?.currentURI?.spec==="about:blank"&&startupTab.linkedBrowser?.canGoBack===false&&startupTab.linkedBrowser?.canGoForward===false){
+          child.gBrowser.removeTab(startupTab,{animate:false});
+        }
+        if(display)placeNativeWindow(child,display);
         child.focus();status.textContent="";
       }catch(error){
         if(child&&!child.closed)delete child[PROJECTION];
@@ -1419,7 +1505,7 @@ function installTabStrip() {
     window.addEventListener("pointerdown",onOutside,true);
     for(const event of ["ZenWorkspaceDataChanged","ZenWorkspacesUIUpdate","ZenCompactMode:Toggled","ZenCompactMode:LayoutUpdate"])listeners.push([window,event,changed]);
     for(const [node,event,fn] of listeners)node.addEventListener(event,fn);
-    function destroy(){if(destroyed)return;destroyed=true;close(false,true);window.removeEventListener("pointerdown",onOutside,true);for(const [node,event,fn] of listeners)node.removeEventListener(event,fn);panel.remove();button.remove();}
+    function destroy(){if(destroyed)return;destroyed=true;close(false,true);clearPlacementPreview(true);window.removeEventListener("pointerdown",onOutside,true);for(const [node,event,fn] of listeners)node.removeEventListener(event,fn);panel.remove();button.remove();}
     return {ensure,close,onMode,destroy};
   }
   const hub=createHubController({target,root,toolbarWrapper,supported:hoverSupported,hold:reconcilePanel,switchGuard:guardPanelSwitch});
@@ -2357,10 +2443,10 @@ function installTabStrip() {
     // Animate the real card (not just its icon), using individual transforms
     // so horizontal tracking and native drop/slot positioning stay independent.
     const animation = node.animate([
-      {translate:"0 "+dy+"px",scale:".78 1.06",offset:0},
-      {translate:"0 -4px",scale:"1.16 .72",offset:.30},
-      {translate:"0 2px",scale:".94 1.14",offset:.56},
-      {translate:"0 -1px",scale:"1.04 .97",offset:.78},
+      {translate:"0 "+dy+"px",scale:".78 .92",offset:0},
+      {translate:"0 -4px",scale:"1 .78",offset:.30},
+      {translate:"0 2px",scale:".94 1",offset:.56},
+      {translate:"0 -1px",scale:"1 .97",offset:.78},
       {translate:"0 0",scale:"1 1",offset:1}
     ],{duration:240,easing:"linear"});
     dragInsertAnimation=animation;
@@ -2372,6 +2458,8 @@ function installTabStrip() {
   }
   function setDragImageMode(mode, event) {
     if (!dragNode || mode === dragImageMode) return;
+    // Once OS owns the drag image, never draw a local duplicate on re-entry.
+    if(dragImageMode==="outside")return;
     const previous = dragImageMode;
     if (mode === "outside") {
       // Only the OS drag image is painted beyond this browser window.
@@ -2557,6 +2645,8 @@ function installTabStrip() {
     const tab = readDraggedTab(event);
     if (!hoverSupported() || !tab || !toolbarWrapper) return;
     const within = toolbarContainsPoint(event.clientX,event.clientY);
+    if(tabOwner(tab)===window)clearPlacementPreview();
+    else tabOwner(tab)?.[DRAG_CONTROLLER]?.preview?.(event);
     const local = tabOwner(tab) === window;
     if (local && dragNode) {
       dragLastPoint = {x:event.clientX,y:event.clientY};
@@ -2573,7 +2663,11 @@ function installTabStrip() {
         clearLiveDrag(); releaseDragReveal();
         return;
       }
-      if (dragImageMode === "outside") return;
+      if (dragImageMode === "outside") {
+        if(within){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";previewStripDrag(event,tab);}
+        else{clearLiveDrag();releaseDragReveal();}
+        return;
+      }
       if (p === 0) dragReentry = false;
       if (p > 0 && !dragReentry) {
         if (draggedGroup) captureGroupPull(event);
@@ -2646,6 +2740,8 @@ function installTabStrip() {
     },80);
   }
   function endDragVisual() {
+    clearPlacementPreview();
+    cancelInsertion();
     const search = dragSearch;
     dragSearch = null; pointerSearch = null;
     clearGroupPull();
@@ -2716,7 +2812,7 @@ function installTabStrip() {
       image.setAttribute("data-op-drag-follow","true");
       makeDragGhost(); hideGhost();
       if (group) image.setAttribute("data-op-group-dragging", "true");
-      if (!group && (browser.selectedTab !== tab || isSplit(tab)) && window.gZenViewSplitter?.splitTabs) {
+      if (!group && (browser.selectedTab !== tab || isSplit(tab))) {
         splitZone.setAttribute("data-op-dragging", "true");
       }
       previewStripDrag(event,tab);
@@ -2819,7 +2915,7 @@ function installTabStrip() {
     splitZone.setAttribute("data-op-side", side);
     event.preventDefault();
     event.stopPropagation();
-    event.dataTransfer.dropEffect = side ? "move" : "none";
+    event.dataTransfer.dropEffect = "move";
   }
   function onSplitDrop(event) {
     const tab = readDraggedTab(event);
@@ -2831,9 +2927,8 @@ function installTabStrip() {
     const side = splitSide(event);
     try {
       if (emptySplitTarget(current)) {
-        // Reject an unsupported split without changing the selected tab.
-        sourceHandled(tab);
-        return;
+        // Empty start page is not a valid split partner: select the real tab.
+        browser.selectedTab=tab;sourceHandled(tab);schedule();return;
       }
       if (isSplit(tab)) {
         unsplitTab(tab);
@@ -2848,6 +2943,8 @@ function installTabStrip() {
         const result = window.gZenViewSplitter?.splitTabs(first ? [tab,current] : [current,tab], grid, first ? 0 : 1);
         if (!result && validNativeTab(current)) browser.selectedTab = current;
         schedule();
+      } else if (!side && validNativeTab(tab)) {
+        browser.selectedTab=tab;schedule();
       }
       sourceHandled(tab);
     } catch (error) {
@@ -2872,22 +2969,28 @@ function installTabStrip() {
     const left = window.screenX, top = window.screenY;
     const inside = x >= left && x < left + window.outerWidth &&
       y >= top && y < top + window.outerHeight;
-    if (inside) return;
+    if (inside) {
+      if(!toolbarContainsPoint(event.clientX,event.clientY)&&emptySplitTarget(browser.selectedTab))browser.selectedTab=tab;
+      return;
+    }
     try {
       // Native session adoption preserves the live browser, history, audio
       // and private-window state. Zen chooses its native window-sync mode.
       if (isSplit(tab) && !unsplitTab(tab)) return;
-      browser.replaceTabWithWindow(tab, {
-        replaceLastTab: true, screenX: x - 40, screenY: y - 20,
-        outerWidth: Math.min(window.outerWidth, 1200),
-        outerHeight: Math.min(window.outerHeight, 850)
+      const p=placementAt(x,y);
+      const win=browser.replaceTabWithWindow(tab, {
+        replaceLastTab: true, screenX:p?.x??x-40,screenY:p?.y??y-20,
+        outerWidth:p?.width??Math.min(window.outerWidth,1200),
+        outerHeight:p?.height??Math.min(window.outerHeight,850)
       });
+      if(win&&p)placeAfterStartup(win,p);
     } catch (error) { console.error("[OnePlane] Detach tab:", error); }
   }
   const dragController = {
     source: () => draggedTab,
     group: () => draggedGroup,
     outside: event => setDragImageMode("outside",event),
+    preview: event => {if(draggedTab&&!draggedGroup)showPlacementPreview(event.screenX,event.screenY,"Tab");},
     markHandled: () => {
       dragHandled = true;
       endDragVisual();
@@ -3450,6 +3553,7 @@ function installTabStrip() {
     draggedGroup = null;
     if (window[DRAG_CONTROLLER] === dragController) delete window[DRAG_CONTROLLER];
     window.removeEventListener("dragover", revealForDrag, true);
+    window.removeEventListener("drag",onSourceDrag,true);clearPlacementPreview(true);
     window.removeEventListener("drop", onToolbarDrop, true);
     window.removeEventListener("dragleave", onWindowDragLeave, true);
     window.removeEventListener("dragexit", onWindowDragLeave, true);
@@ -3527,6 +3631,7 @@ function installTabStrip() {
     row.after(rightSpacer);
     tabbox.append(shield, splitZone);
     window.addEventListener("dragover", revealForDrag, true);
+    window.addEventListener("drag",onSourceDrag,true);
     window.addEventListener("drop", onToolbarDrop, true);
     window.addEventListener("dragleave", onWindowDragLeave, true);
     window.addEventListener("dragexit", onWindowDragLeave, true);

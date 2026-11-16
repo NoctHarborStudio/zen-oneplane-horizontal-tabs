@@ -19,7 +19,7 @@
     splitZone.setAttribute("data-op-side", side);
     event.preventDefault();
     event.stopPropagation();
-    event.dataTransfer.dropEffect = side ? "move" : "none";
+    event.dataTransfer.dropEffect = "move";
   }
   function onSplitDrop(event) {
     const tab = readDraggedTab(event);
@@ -31,9 +31,8 @@
     const side = splitSide(event);
     try {
       if (emptySplitTarget(current)) {
-        // Reject an unsupported split without changing the selected tab.
-        sourceHandled(tab);
-        return;
+        // Empty start page is not a valid split partner: select the real tab.
+        browser.selectedTab=tab;sourceHandled(tab);schedule();return;
       }
       if (isSplit(tab)) {
         unsplitTab(tab);
@@ -48,6 +47,8 @@
         const result = window.gZenViewSplitter?.splitTabs(first ? [tab,current] : [current,tab], grid, first ? 0 : 1);
         if (!result && validNativeTab(current)) browser.selectedTab = current;
         schedule();
+      } else if (!side && validNativeTab(tab)) {
+        browser.selectedTab=tab;schedule();
       }
       sourceHandled(tab);
     } catch (error) {

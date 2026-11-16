@@ -27,10 +27,10 @@
     // Animate the real card (not just its icon), using individual transforms
     // so horizontal tracking and native drop/slot positioning stay independent.
     const animation = node.animate([
-      {translate:"0 "+dy+"px",scale:".78 1.06",offset:0},
-      {translate:"0 -4px",scale:"1.16 .72",offset:.30},
-      {translate:"0 2px",scale:".94 1.14",offset:.56},
-      {translate:"0 -1px",scale:"1.04 .97",offset:.78},
+      {translate:"0 "+dy+"px",scale:".78 .92",offset:0},
+      {translate:"0 -4px",scale:"1 .78",offset:.30},
+      {translate:"0 2px",scale:".94 1",offset:.56},
+      {translate:"0 -1px",scale:"1 .97",offset:.78},
       {translate:"0 0",scale:"1 1",offset:1}
     ],{duration:240,easing:"linear"});
     dragInsertAnimation=animation;
@@ -42,6 +42,8 @@
   }
   function setDragImageMode(mode, event) {
     if (!dragNode || mode === dragImageMode) return;
+    // Once OS owns the drag image, never draw a local duplicate on re-entry.
+    if(dragImageMode==="outside")return;
     const previous = dragImageMode;
     if (mode === "outside") {
       // Only the OS drag image is painted beyond this browser window.

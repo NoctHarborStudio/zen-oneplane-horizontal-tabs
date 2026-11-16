@@ -196,3 +196,10 @@
       #oneplane-tabs .oneplane-tab-audio i { animation: none !important; }
     }
 
+
+/* Slot positions are already calculated by the pointer controller. */
+@media (min-width:900px) {
+  #oneplane-tabs[data-op-live-drag] :is(.oneplane-tab-list,.oneplane-island-lane) > :is(.oneplane-tab,.oneplane-split-group),
+  #oneplane-tabs[data-op-live-drag] .oneplane-new-tab {transition:none !important;}
+  #oneplane-tabs[data-op-dragging] [data-op-detached] {opacity:0 !important;visibility:hidden !important;transition:none !important;}
+}

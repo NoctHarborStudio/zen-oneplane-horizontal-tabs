@@ -35,6 +35,7 @@
     draggedGroup = null;
     if (window[DRAG_CONTROLLER] === dragController) delete window[DRAG_CONTROLLER];
     window.removeEventListener("dragover", revealForDrag, true);
+    window.removeEventListener("drag",onSourceDrag,true);clearPlacementPreview(true);
     window.removeEventListener("drop", onToolbarDrop, true);
     window.removeEventListener("dragleave", onWindowDragLeave, true);
     window.removeEventListener("dragexit", onWindowDragLeave, true);
@@ -112,6 +113,7 @@
     row.after(rightSpacer);
     tabbox.append(shield, splitZone);
     window.addEventListener("dragover", revealForDrag, true);
+    window.addEventListener("drag",onSourceDrag,true);
     window.addEventListener("drop", onToolbarDrop, true);
     window.addEventListener("dragleave", onWindowDragLeave, true);
     window.addEventListener("dragexit", onWindowDragLeave, true);

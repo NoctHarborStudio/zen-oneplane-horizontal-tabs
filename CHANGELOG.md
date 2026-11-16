@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0-preview.15
+
+- Latch native drag image after external transition, clamp reinsertion scale, remove delayed live slot transforms; drop onto empty workspace selects dragged tab.
+- Shared experimental snap-style work-area preview and placement for tabs/workspaces, top maximize, sides/quarters/center. Not Windows shell Snap UI.
+- Explicit blank projection startup and guarded exact untouched startup tab cleanup; Hub Fluid 460/390ms.
+- Document simultaneous live-page mirror as separate architecture; not implemented. Live verification pending.
+
 ## 0.2.0-preview.14
 
 - Keep Hub open after create/select; native creation without activation, centered inline deletion confirmation and shared toolbar tint.

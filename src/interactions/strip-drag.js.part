@@ -127,6 +127,8 @@
     const tab = readDraggedTab(event);
     if (!hoverSupported() || !tab || !toolbarWrapper) return;
     const within = toolbarContainsPoint(event.clientX,event.clientY);
+    if(tabOwner(tab)===window)clearPlacementPreview();
+    else tabOwner(tab)?.[DRAG_CONTROLLER]?.preview?.(event);
     const local = tabOwner(tab) === window;
     if (local && dragNode) {
       dragLastPoint = {x:event.clientX,y:event.clientY};
@@ -143,7 +145,11 @@
         clearLiveDrag(); releaseDragReveal();
         return;
       }
-      if (dragImageMode === "outside") return;
+      if (dragImageMode === "outside") {
+        if(within){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";previewStripDrag(event,tab);}
+        else{clearLiveDrag();releaseDragReveal();}
+        return;
+      }
       if (p === 0) dragReentry = false;
       if (p > 0 && !dragReentry) {
         if (draggedGroup) captureGroupPull(event);

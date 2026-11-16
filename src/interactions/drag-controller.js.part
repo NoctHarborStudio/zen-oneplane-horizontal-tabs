@@ -1,4 +1,6 @@
   function endDragVisual() {
+    clearPlacementPreview();
+    cancelInsertion();
     const search = dragSearch;
     dragSearch = null; pointerSearch = null;
     clearGroupPull();
@@ -69,7 +71,7 @@
       image.setAttribute("data-op-drag-follow","true");
       makeDragGhost(); hideGhost();
       if (group) image.setAttribute("data-op-group-dragging", "true");
-      if (!group && (browser.selectedTab !== tab || isSplit(tab)) && window.gZenViewSplitter?.splitTabs) {
+      if (!group && (browser.selectedTab !== tab || isSplit(tab))) {
         splitZone.setAttribute("data-op-dragging", "true");
       }
       previewStripDrag(event,tab);

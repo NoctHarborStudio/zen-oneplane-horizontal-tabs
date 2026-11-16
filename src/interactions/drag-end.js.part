@@ -15,22 +15,28 @@
     const left = window.screenX, top = window.screenY;
     const inside = x >= left && x < left + window.outerWidth &&
       y >= top && y < top + window.outerHeight;
-    if (inside) return;
+    if (inside) {
+      if(!toolbarContainsPoint(event.clientX,event.clientY)&&emptySplitTarget(browser.selectedTab))browser.selectedTab=tab;
+      return;
+    }
     try {
       // Native session adoption preserves the live browser, history, audio
       // and private-window state. Zen chooses its native window-sync mode.
       if (isSplit(tab) && !unsplitTab(tab)) return;
-      browser.replaceTabWithWindow(tab, {
-        replaceLastTab: true, screenX: x - 40, screenY: y - 20,
-        outerWidth: Math.min(window.outerWidth, 1200),
-        outerHeight: Math.min(window.outerHeight, 850)
+      const p=placementAt(x,y);
+      const win=browser.replaceTabWithWindow(tab, {
+        replaceLastTab: true, screenX:p?.x??x-40,screenY:p?.y??y-20,
+        outerWidth:p?.width??Math.min(window.outerWidth,1200),
+        outerHeight:p?.height??Math.min(window.outerHeight,850)
       });
+      if(win&&p)placeAfterStartup(win,p);
     } catch (error) { console.error("[OnePlane] Detach tab:", error); }
   }
   const dragController = {
     source: () => draggedTab,
     group: () => draggedGroup,
     outside: event => setDragImageMode("outside",event),
+    preview: event => {if(draggedTab&&!draggedGroup)showPlacementPreview(event.screenX,event.screenY,"Tab");},
     markHandled: () => {
       dragHandled = true;
       endDragVisual();

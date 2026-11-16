@@ -1,3 +1,70 @@
+  // Shared monitor work-area geometry and experimental chrome preview.
+  let placementPreview=null,placementLabel=null,placementKey="";
+  function desktopDisplayAt(x,y){
+    if(!Number.isFinite(x)||!Number.isFinite(y))return null;
+    try{
+      const sm=Cc["@mozilla.org/gfx/screenmanager;1"].getService(Ci.nsIScreenManager);
+      const s=sm.screenForRect(Math.round(x),Math.round(y),1,1),l={},t={},w={},h={};
+      s.GetAvailRectDisplayPix(l,t,w,h);
+      const d={x:l.value,y:t.value,width:w.value,height:h.value};
+      return x>=d.x&&x<d.x+d.width&&y>=d.y&&y<d.y+d.height?d:null;
+    }catch{return null;}
+  }
+  function placementAt(x,y){const d=desktopDisplayAt(x,y);return d?hubSnapRect(d,x,y):null;}
+  function pointInSourceWindow(x,y){
+    return x>=window.screenX&&x<window.screenX+window.outerWidth&&y>=window.screenY&&y<window.screenY+window.outerHeight;
+  }
+  function clearPlacementPreview(remove=false){
+    placementKey="";
+    if(placementPreview&&(placementPreview.state==="open"||placementPreview.state==="showing"))try{placementPreview.hidePopup();}catch{}
+    if(remove){placementPreview?.remove();placementPreview=placementLabel=null;}
+  }
+  function showPlacementPreview(x,y,label){
+    if(pointInSourceWindow(x,y)){clearPlacementPreview();return;}
+    const p=placementAt(x,y);if(!p){clearPlacementPreview();return;}
+    const key=[p.x,p.y,p.width,p.height,p.mode,label].join(":");
+    if(key===placementKey)return;
+    placementKey=key;
+    try{
+      if(!placementPreview){
+        const set=document.getElementById("mainPopupSet");if(!set)return;
+        placementPreview=document.createXULElement("panel");placementPreview.id="oneplane-placement-preview";
+        for(const [k,v] of Object.entries({noautohide:"true",noautofocus:"true",mousethrough:"always",level:"top","aria-hidden":"true"}))placementPreview.setAttribute(k,v);
+        placementLabel=html("div","op-placement-label");placementPreview.append(placementLabel);set.append(placementPreview);
+      }
+      placementLabel.textContent=label+" · "+(p.mode==="maximize"?"Full screen":p.mode==="center"?"Window":p.mode);
+      const inset=8,w=Math.max(1,p.width-2*inset),h=Math.max(1,p.height-2*inset);
+      placementPreview.style.width=w+"px";placementPreview.style.height=h+"px";
+      placementLabel.style.width=w+"px";placementLabel.style.height=h+"px";
+      if(placementPreview.state==="open"){placementPreview.sizeTo(w,h);placementPreview.moveTo(p.x+inset,p.y+inset);}
+      else if(placementPreview.state!=="showing")placementPreview.openPopupAtScreen(p.x+inset,p.y+inset,false);
+    }catch(error){clearPlacementPreview(true);console.warn("[OnePlane] Snap preview unavailable:",error);}
+  }
+  function placeNativeWindow(win,p){
+    if(!win||win.closed||!p)return;
+    try{
+      if(win.windowState===win.STATE_MAXIMIZED||win.windowState===win.STATE_MINIMIZED)win.restore();
+      win.moveTo(p.x,p.y);win.resizeTo(p.width,p.height);
+      if(p.mode==="maximize")win.maximize();
+    }catch(error){console.warn("[OnePlane] Window placement:",error);}
+  }
+  function placeAfterStartup(win,p){
+    if(!win||!p)return;
+    if(win.gBrowserInit?.delayedStartupFinished){placeNativeWindow(win,p);return;}
+    let timer=0;
+    const cleanup=()=>{Services.obs.removeObserver(observer,"browser-delayed-startup-finished");win.removeEventListener("unload",cleanup);if(timer)window.clearTimeout(timer);};
+    const observer=subject=>{if(subject===win){cleanup();placeNativeWindow(win,p);}};
+    Services.obs.addObserver(observer,"browser-delayed-startup-finished");win.addEventListener("unload",cleanup,{once:true});
+    timer=window.setTimeout(cleanup,15000);
+  }
+  function onSourceDrag(event){
+    if(!draggedTab||draggedGroup||(!event.screenX&&!event.screenY))return;
+    if(!pointInSourceWindow(event.screenX,event.screenY)){
+      if(dragImageMode!=="outside")setDragImageMode("outside",event);
+      showPlacementPreview(event.screenX,event.screenY,"Tab");
+    }else clearPlacementPreview();
+  }
+
   // Native Hub, window-scoped. Zen owns all workspace/session state.
   function createHubController({target,root,toolbarWrapper,supported,hold,switchGuard}) {
     const button=html("button","op-hub-trigger");
@@ -48,7 +115,7 @@
       const to=show?{clipPath:"inset(0 0 0% 0 round 8px)",opacity:1,translate:"0 0px"}:
         {clipPath:"inset(0 0 100% 0 round 8px)",opacity:0,translate:"0 -6px"};
       try{
-        const animation=panel.animate([from,to],{duration:show?300:260,easing:"cubic-bezier(.22,.72,.2,1)",fill:"both"});
+        const animation=panel.animate([from,to],{duration:show?460:390,easing:"cubic-bezier(.22,.72,.2,1)",fill:"both"});
         motion=animation;
         animation.finished.then(()=>{if(motion!==animation)return;motion=null;animation.cancel();done();},()=>{});
       }catch{done();}
@@ -205,13 +272,8 @@
         prefs.getBoolPref("zen.window-sync.enabled",true)&&!prefs.getBoolPref("zen.window-sync.sync-only-pinned-tabs",true);
     }
     function monitorAt(x,y){
-      try{
-        const screens=Cc["@mozilla.org/gfx/screenmanager;1"].getService(Ci.nsIScreenManager);
-        const rect=s=>{const l={},t={},w={},h={};s.GetAvailRectDisplayPix(l,t,w,h);return {x:l.value,y:t.value,width:w.value,height:h.value};};
-        const source=rect(screens.screenForRect(Math.round(window.screenX+window.outerWidth/2),Math.round(window.screenY+window.outerHeight/2),1,1));
-        const dest=rect(screens.screenForRect(Math.round(x),Math.round(y),1,1));
-        return hubOtherDisplay(source,dest,x,y)?dest:null;
-      }catch{return null;}
+      const source=desktopDisplayAt(window.screenX+window.outerWidth/2,window.screenY+window.outerHeight/2),dest=desktopDisplayAt(x,y);
+      return hubOtherDisplay(source,dest,x,y)?hubSnapRect(dest,x,y):null;
     }
     function beginDrag(event,id,entry){
       if(event.button!==0||busy||projectionBusy)return;
@@ -224,11 +286,11 @@
         drag.moved=true;drag.entry.setAttribute("data-op-dragging","true");
         status.textContent="Drag to another monitor and release.";
       }
-      if(drag.moved)event.preventDefault();
+      if(drag.moved){event.preventDefault();showPlacementPreview(event.screenX,event.screenY,manager()?.getWorkspaceFromId(drag.id)?.name||"Workspace");}
     }
     function cancelDrag(event){
       if(!drag||(event&&event.pointerId!==drag.pointer))return;
-      const d=drag;drag=null;d.entry.removeAttribute("data-op-dragging");
+      const d=drag;drag=null;clearPlacementPreview();d.entry.removeAttribute("data-op-dragging");
       if(d.moved){suppressClickUntil=window.performance.now()+400;status.textContent="";}
       try{if(d.entry.hasPointerCapture(d.pointer))d.entry.releasePointerCapture(d.pointer);}catch{}
     }
@@ -249,11 +311,15 @@
       let child=null;
       try{
         const {BrowserWindowTracker}=ChromeUtils.importESModule("resource:///modules/BrowserWindowTracker.sys.mjs");
-        const features=display?`left=${display.x+20},top=${display.y+20},width=${Math.max(320,display.width-40)},height=${Math.max(240,display.height-40)}`:undefined;
-        const options={openerWindow:window,private:false,zenSyncedWindow:!prefs.getBoolPref("zen.window-sync.prefer-unsynced-windows",false),features};
+        const features=display?`left=${display.x},top=${display.y},width=${display.width},height=${display.height}`:undefined;
+        const args=Cc["@mozilla.org/supports-string;1"].createInstance(Ci.nsISupportsString);args.data="about:blank";
+        const options={openerWindow:window,private:false,zenSyncedWindow:!prefs.getBoolPref("zen.window-sync.prefer-unsynced-windows",false),features,args};
         child=BrowserWindowTracker.openWindow(options);
         if(!child)throw Error("Native window did not open");
         child[PROJECTION]={source:window,id};
+        let startupTab=null;
+        const captureStartup=()=>{if(!startupTab)startupTab=child.gBrowser?.selectedTab||null;};
+        captureStartup();child.addEventListener("DOMContentLoaded",captureStartup,{once:true});
         await new Promise((resolve,reject)=>{
           if(child.gBrowserInit?.delayedStartupFinished){resolve();return;}
           const observer=subject=>{if(subject===child){cleanup();resolve();}};
@@ -262,12 +328,19 @@
           function cleanup(){window.clearTimeout(timer);Services.obs.removeObserver(observer,"browser-delayed-startup-finished");child.removeEventListener("unload",closed);}
           Services.obs.addObserver(observer,"browser-delayed-startup-finished");child.addEventListener("unload",closed,{once:true});
         });
+        child.removeEventListener("DOMContentLoaded",captureStartup);
         await child.gZenWorkspaces?.promiseInitialized;
         if(child.closed||destroyed||!child.gZenWorkspaces?.currentWindowIsSyncing||
           child.gZenWindowSync!==window.gZenWindowSync||!child.gZenWorkspaces.getWorkspaceFromId(id))throw Error("Native sync unavailable");
         await child.gZenWorkspaces.changeWorkspaceWithID(id);
         if(child.gZenWorkspaces.activeWorkspace!==id)throw Error("Workspace not activated");
-        if(display){if(child.windowState===child.STATE_MAXIMIZED)child.restore();child.moveTo(display.x+20,display.y+20);}
+        // Only the exact untouched projection startup tab, never arbitrary New Tab.
+        if(startupTab&&startupTab!==child.gBrowser.selectedTab&&!startupTab.closing&&!startupTab.pinned&&!startupTab.group&&
+          !startupTab.hasAttribute("zen-essential")&&!startupTab.hasAttribute("zen-empty-tab")&&startupTab.isEmpty&&
+          startupTab.linkedBrowser?.currentURI?.spec==="about:blank"&&startupTab.linkedBrowser?.canGoBack===false&&startupTab.linkedBrowser?.canGoForward===false){
+          child.gBrowser.removeTab(startupTab,{animate:false});
+        }
+        if(display)placeNativeWindow(child,display);
         child.focus();status.textContent="";
       }catch(error){
         if(child&&!child.closed)delete child[PROJECTION];
@@ -351,7 +424,7 @@
     window.addEventListener("pointerdown",onOutside,true);
     for(const event of ["ZenWorkspaceDataChanged","ZenWorkspacesUIUpdate","ZenCompactMode:Toggled","ZenCompactMode:LayoutUpdate"])listeners.push([window,event,changed]);
     for(const [node,event,fn] of listeners)node.addEventListener(event,fn);
-    function destroy(){if(destroyed)return;destroyed=true;close(false,true);window.removeEventListener("pointerdown",onOutside,true);for(const [node,event,fn] of listeners)node.removeEventListener(event,fn);panel.remove();button.remove();}
+    function destroy(){if(destroyed)return;destroyed=true;close(false,true);clearPlacementPreview(true);window.removeEventListener("pointerdown",onOutside,true);for(const [node,event,fn] of listeners)node.removeEventListener(event,fn);panel.remove();button.remove();}
     return {ensure,close,onMode,destroy};
   }
   const hub=createHubController({target,root,toolbarWrapper,supported:hoverSupported,hold:reconcilePanel,switchGuard:guardPanelSwitch});
