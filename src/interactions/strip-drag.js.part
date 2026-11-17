@@ -60,6 +60,16 @@
     dragNode?.removeAttribute("data-op-lane-ghost");
     if(active&&dragImageMode==="inline")hideGhost();
   }
+  function prepareLanePull(){
+    // Do not clear an already-owned lane ghost on every dragover. That
+    // hides the card, resets its transform and schedules another layout.
+    if(!row.hasAttribute("data-op-lane-drag")||dragShifted.size||row.hasAttribute("data-op-live-drag"))
+      clearLiveDrag();
+    stopLaneAutoscroll();
+    liveDragTarget=null;
+    clearDropMarker();
+    row.setAttribute("data-op-lane-drag","true");
+  }
   function showLaneGhost(event,pull=0){
     if(!dragNode)return;
     makeDragGhost();
@@ -191,7 +201,7 @@
     stopLaneAutoscroll();
     // The window capture listener owns pull and image transitions.
     // Do not erase a group's visual position mid-extraction.
-    if (!(groupPullLayout && dragImageMode === "inline")) clearLiveDrag();
+    if (!(dragImageMode === "inline" && (groupPullLayout || dragPull > 0))) clearLiveDrag();
     clearDropMarker();
   }
   function clearDropMarker() {
@@ -241,9 +251,10 @@
     // remains owned by onToolbarDrop; do not reorder after detachment.
     if (local && dragNode) {
       dragLastPoint = {x:event.clientX,y:event.clientY};
-      if (within && dragImageMode !== "content" && dragImageMode !== "outside")
-        dragEdge = Math.max(toolbarWrapper.getBoundingClientRect().bottom,row.getBoundingClientRect().bottom,navbar?.getBoundingClientRect().bottom||0);
-      const p = within?0:Math.max(0,Math.min(1,(event.clientY-dragEdge)/PULL_DISTANCE));
+      // The broad native return/drop zone is deliberately independent of
+      // Bunny's narrow source-card zone. Never zero pull just for entering
+      // the toolbar, and never chase a changing wrapper/row rectangle.
+      const p = bunnyPullProgress(event.clientY,dragEdge);
       const lateralExit = event.clientX < toolbarWrapper.getBoundingClientRect().left ||
                           event.clientX > toolbarWrapper.getBoundingClientRect().right;
       const threshold = dragImageMode === "content" || dragImageMode === "outside" ? .72 : .96;
@@ -254,7 +265,12 @@
       if(previous==="content"&&dragImageMode==="inline")dragReturnFloor=p;
       if (dragImageMode === "content") {
         positionGhost(event.clientX,event.clientY);
-        clearLiveDrag(); releaseDragReveal();
+        clearLiveDrag(); clearDropMarker();
+        if(within){
+          // Keep the panel open but don't let the strip's bubble handler
+          // replace the content ghost while crossing the other lane.
+          event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";
+        }else releaseDragReveal();
         return;
       }
       if (dragImageMode === "outside") {
@@ -279,7 +295,9 @@
       }
       if (p > 0) {
         if(useLaneDrop()){
-          clearLiveDrag();clearDropMarker();setPull(p);row.setAttribute("data-op-lane-drag","true");showLaneGhost(event,p);
+          prepareLanePull();setPull(p);showLaneGhost(event,p);
+          if(!within)holdToolbarForReturn();
+          if(within){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";}
           return;
         }
         if (draggedGroup) captureGroupPull(event);
@@ -298,7 +316,7 @@
       if(dragDetachedOnce&&within){
         // Visually return to the original native slot; no reorder.
         event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";
-        clearDropMarker();return;
+        clearLaneDrag();clearDropMarker();return;
       }
     } else if (!local) tabOwner(tab)?.[DRAG_CONTROLLER]?.outside(event);
     if (!within && !(local && dragReentry && dragImageMode === "inline")) {

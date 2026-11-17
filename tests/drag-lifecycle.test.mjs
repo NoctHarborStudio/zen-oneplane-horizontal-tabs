@@ -77,3 +77,38 @@ test("Bunny return owns a single visible card and preserves native cancellation"
   assert.ok(s.includes('node.removeAttribute("data-op-reinsert");hideGhost();animation.cancel();'));
   assert.ok(strip.includes('if(tabOwner(tab)===window&&dragDetachedOnce)'));
 });
+
+test("Bunny uses a frozen card-local edge, independent of the native toolbar zone",async()=>{
+  const {readFile}=await import("node:fs/promises");
+  const read=p=>readFile(new URL("../src/interactions/"+p,import.meta.url),"utf8");
+  const [state,start,strip]=await Promise.all([read("drag-state.js.part"),read("drag-controller.js.part"),read("strip-drag.js.part")]);
+  const a=state.indexOf("function bunnyPullProgress("),b=state.indexOf("  let dragGhost",a);
+  const progress=new Function("PULL_DISTANCE",state.slice(a,b)+"return bunnyPullProgress")(30);
+  const upper=36+3,lower=88+3;
+  for(const edge of [upper,lower]){
+    assert.equal(progress(edge-1,edge),0);
+    assert.equal(progress(edge,edge),0);
+    assert.equal(progress(edge+15,edge),.5);
+    assert.equal(progress(edge+30,edge),1);
+    assert.ok(progress(edge+29,edge)>=.96);
+    assert.ok(progress(edge+21,edge)<.72);
+  }
+  assert.equal(progress(upper+15,lower),0);
+  assert.ok(start.includes("dragEdge = grabbed.bottom + BUNNY_EDGE_PAD"));
+  assert.ok(strip.includes("const p = bunnyPullProgress(event.clientY,dragEdge)"));
+  assert.ok(!strip.includes("dragEdge = Math.max"));
+  assert.ok(!strip.includes("const p = within?0"));
+});
+test("lane pull keeps the same visible ghost across repeated pointer events",async()=>{
+  const {readFile}=await import("node:fs/promises");
+  const s=await readFile(new URL("../src/interactions/strip-drag.js.part",import.meta.url),"utf8");
+  const a=s.indexOf("function prepareLanePull("),b=s.indexOf("function showLaneGhost(",a);
+  const attrs=new Set(),row={hasAttribute:k=>attrs.has(k),setAttribute:k=>attrs.add(k)};
+  let clears=0,stops=0,markers=0;
+  const step=new Function("row","dragShifted","clearLiveDrag","stopLaneAutoscroll","clearDropMarker","let liveDragTarget={};"+s.slice(a,b)+"return prepareLanePull")(row,new Set(),()=>{clears++;attrs.clear();},()=>stops++,()=>markers++);
+  step();step();step();
+  assert.equal(clears,1);assert.equal(stops,3);assert.equal(markers,3);
+  assert.ok(attrs.has("data-op-lane-drag"));
+  assert.ok(s.includes("prepareLanePull();setPull(p);showLaneGhost(event,p)"));
+  assert.ok(s.includes("clearLaneDrag();clearDropMarker();return;"));
+});

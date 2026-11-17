@@ -1,7 +1,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.19",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.20",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -5151,7 +5151,11 @@ function installTabStrip() {
   let draggedTab = null;
   let draggedGroup = null;
   let dragNode = null, dragImageMode = null, dragGrabRatio = .5, dragGrabY = .5;
-  const PULL_DISTANCE = 37, REORDER_BUFFER = 8;
+  const PULL_DISTANCE = 30, BUNNY_EDGE_PAD = 3, REORDER_BUFFER = 8;
+  // Visual extraction belongs to the original card, not the native drop panel.
+  function bunnyPullProgress(y,edge,distance=PULL_DISTANCE){
+    return Math.max(0,Math.min(1,(y-edge)/distance));
+  }
   let dragGhost = null, dragGhostBody = null, dragPull = 0, dragEdge = 0, dragWidth = 0;
   let dragGhostAnimation = null;
   let dragLastPoint = null;
@@ -5703,6 +5707,16 @@ function installTabStrip() {
     dragNode?.removeAttribute("data-op-lane-ghost");
     if(active&&dragImageMode==="inline")hideGhost();
   }
+  function prepareLanePull(){
+    // Do not clear an already-owned lane ghost on every dragover. That
+    // hides the card, resets its transform and schedules another layout.
+    if(!row.hasAttribute("data-op-lane-drag")||dragShifted.size||row.hasAttribute("data-op-live-drag"))
+      clearLiveDrag();
+    stopLaneAutoscroll();
+    liveDragTarget=null;
+    clearDropMarker();
+    row.setAttribute("data-op-lane-drag","true");
+  }
   function showLaneGhost(event,pull=0){
     if(!dragNode)return;
     makeDragGhost();
@@ -5834,7 +5848,7 @@ function installTabStrip() {
     stopLaneAutoscroll();
     // The window capture listener owns pull and image transitions.
     // Do not erase a group's visual position mid-extraction.
-    if (!(groupPullLayout && dragImageMode === "inline")) clearLiveDrag();
+    if (!(dragImageMode === "inline" && (groupPullLayout || dragPull > 0))) clearLiveDrag();
     clearDropMarker();
   }
   function clearDropMarker() {
@@ -5884,9 +5898,10 @@ function installTabStrip() {
     // remains owned by onToolbarDrop; do not reorder after detachment.
     if (local && dragNode) {
       dragLastPoint = {x:event.clientX,y:event.clientY};
-      if (within && dragImageMode !== "content" && dragImageMode !== "outside")
-        dragEdge = Math.max(toolbarWrapper.getBoundingClientRect().bottom,row.getBoundingClientRect().bottom,navbar?.getBoundingClientRect().bottom||0);
-      const p = within?0:Math.max(0,Math.min(1,(event.clientY-dragEdge)/PULL_DISTANCE));
+      // The broad native return/drop zone is deliberately independent of
+      // Bunny's narrow source-card zone. Never zero pull just for entering
+      // the toolbar, and never chase a changing wrapper/row rectangle.
+      const p = bunnyPullProgress(event.clientY,dragEdge);
       const lateralExit = event.clientX < toolbarWrapper.getBoundingClientRect().left ||
                           event.clientX > toolbarWrapper.getBoundingClientRect().right;
       const threshold = dragImageMode === "content" || dragImageMode === "outside" ? .72 : .96;
@@ -5897,7 +5912,12 @@ function installTabStrip() {
       if(previous==="content"&&dragImageMode==="inline")dragReturnFloor=p;
       if (dragImageMode === "content") {
         positionGhost(event.clientX,event.clientY);
-        clearLiveDrag(); releaseDragReveal();
+        clearLiveDrag(); clearDropMarker();
+        if(within){
+          // Keep the panel open but don't let the strip's bubble handler
+          // replace the content ghost while crossing the other lane.
+          event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";
+        }else releaseDragReveal();
         return;
       }
       if (dragImageMode === "outside") {
@@ -5922,7 +5942,9 @@ function installTabStrip() {
       }
       if (p > 0) {
         if(useLaneDrop()){
-          clearLiveDrag();clearDropMarker();setPull(p);row.setAttribute("data-op-lane-drag","true");showLaneGhost(event,p);
+          prepareLanePull();setPull(p);showLaneGhost(event,p);
+          if(!within)holdToolbarForReturn();
+          if(within){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";}
           return;
         }
         if (draggedGroup) captureGroupPull(event);
@@ -5941,7 +5963,7 @@ function installTabStrip() {
       if(dragDetachedOnce&&within){
         // Visually return to the original native slot; no reorder.
         event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";
-        clearDropMarker();return;
+        clearLaneDrag();clearDropMarker();return;
       }
     } else if (!local) tabOwner(tab)?.[DRAG_CONTROLLER]?.outside(event);
     if (!within && !(local && dragReentry && dragImageMode === "inline")) {
@@ -6055,8 +6077,10 @@ function installTabStrip() {
     dragGrabY = Math.max(0,Math.min(1,(event.clientY-grabbed.top)/Math.max(1,grabbed.height)));
     const compactWidth = parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab")) || 36;
     dragWidth = group ? (22 + image.querySelectorAll(".oneplane-tab").length*(compactWidth+3)) : compactWidth;
-    dragEdge = toolbarWrapper?.getBoundingClientRect().bottom || grabbed.bottom;
-    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.start.geometry",()=>({group:!!group,edge:dragEdge,width:dragWidth,grabX:dragGrabRatio,grabY:dragGrabY,pullDistance:PULL_DISTANCE,overflow:row.hasAttribute('data-op-overflow-row'),panelHeight:toolbarWrapper?.getBoundingClientRect().height}),{sample:1800});
+    // Freeze the unpulled card's lower edge for this gesture. The panel,
+    // bookmarks and lower lane may change independently during native DnD.
+    dragEdge = grabbed.bottom + BUNNY_EDGE_PAD;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.start.geometry",()=>({group:!!group,edge:dragEdge,cardBottom:grabbed.bottom,edgePad:BUNNY_EDGE_PAD,width:dragWidth,grabX:dragGrabRatio,grabY:dragGrabY,pullDistance:PULL_DISTANCE,overflow:row.hasAttribute('data-op-overflow-row'),panelHeight:toolbarWrapper?.getBoundingClientRect().height}),{sample:1800});
     dragLastPoint = {x:event.clientX,y:event.clientY};
     clearTabHover();
     if (group && (splitGroup(tab) !== group || groupMembers(group).length < 2)) {

@@ -1,3 +1,10 @@
+## 0.3.0-preview.20 — Row-local Bunny
+
+- Freeze the actual dragged card's lower edge plus 3 CSS pixels at gesture start. Use a 30px pull distance with the existing detach/return hysteresis; upper and lower rows no longer share the panel's bottom edge.
+- Keep native return/drop and panel reveal separate from visual pull. Prevent the strip bubble handler from repainting a content/pull ghost within the toolbar.
+- Retain the lane ghost across consecutive pull events instead of clearing its visual state, and release it when the source has returned. Preserve the continuous 320ms insertion, Magnetic Fold and native cancellation policy.
+- Record source card bottom and edge padding in drag-start diagnostics; add regression tests for row-local progress and lane ghost ownership.
+
 ## 0.3.0-preview.19 — Continuous Bunny drag handoff
 
 - Re-arm pointer-driven pull on outward reversal after re-entry, rather than waiting for the pointer to reach the toolbar. Run the return state machine before applying native return cancellation.

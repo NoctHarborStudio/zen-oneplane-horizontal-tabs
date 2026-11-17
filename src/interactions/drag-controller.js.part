@@ -49,8 +49,10 @@
     dragGrabY = Math.max(0,Math.min(1,(event.clientY-grabbed.top)/Math.max(1,grabbed.height)));
     const compactWidth = parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab")) || 36;
     dragWidth = group ? (22 + image.querySelectorAll(".oneplane-tab").length*(compactWidth+3)) : compactWidth;
-    dragEdge = toolbarWrapper?.getBoundingClientRect().bottom || grabbed.bottom;
-    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.start.geometry",()=>({group:!!group,edge:dragEdge,width:dragWidth,grabX:dragGrabRatio,grabY:dragGrabY,pullDistance:PULL_DISTANCE,overflow:row.hasAttribute('data-op-overflow-row'),panelHeight:toolbarWrapper?.getBoundingClientRect().height}),{sample:1800});
+    // Freeze the unpulled card's lower edge for this gesture. The panel,
+    // bookmarks and lower lane may change independently during native DnD.
+    dragEdge = grabbed.bottom + BUNNY_EDGE_PAD;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.start.geometry",()=>({group:!!group,edge:dragEdge,cardBottom:grabbed.bottom,edgePad:BUNNY_EDGE_PAD,width:dragWidth,grabX:dragGrabRatio,grabY:dragGrabY,pullDistance:PULL_DISTANCE,overflow:row.hasAttribute('data-op-overflow-row'),panelHeight:toolbarWrapper?.getBoundingClientRect().height}),{sample:1800});
     dragLastPoint = {x:event.clientX,y:event.clientY};
     clearTabHover();
     if (group && (splitGroup(tab) !== group || groupMembers(group).length < 2)) {
