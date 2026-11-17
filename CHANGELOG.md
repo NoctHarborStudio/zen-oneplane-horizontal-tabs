@@ -1,3 +1,9 @@
+## 0.3.0-preview.35 — Library L2 native data services
+
+- Introduce a single per-window Downloads subscription, independent of the Dock preference, with native replay, immutable records, opaque IDs and validated actions. Dock consumes the same service; no second native list observer.
+- Add lazy read-only PlacesQuery and source-window SessionStore adapters, with bounded query size, stale request rejection and cleanup. Private History/Closed unavailable; private downloads use their own native list.
+- Keep existing download UI, progress, drag and session-list-only clear behavior. Places historical download merge, Library UI, restore/open and shortcut interception remain later stages. Native validation pending.
+
 ## 0.3.0-preview.34 — Boot verification follow-up
 
 - Update test fixtures for the early boot prelude and existing Overlay ownership. Same startup behavior as preview.33.

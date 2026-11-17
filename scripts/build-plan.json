@@ -325,5 +325,23 @@
       "path": "src/core/overlay-runtime.js.part",
       "kind": "section"
     }
+  ],
+  "libraryServices": [
+    {
+      "path": "src/services/downloads-service.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/services/history-service.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/services/closed-tabs-service.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/services/library-services-runtime.js.part",
+      "kind": "section"
+    }
   ]
 }

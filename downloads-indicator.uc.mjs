@@ -18,7 +18,7 @@ try{if(typeof window!=="undefined"){
   const enabled=()=>prefs.getBoolPref(PREF,true);
   if(root.hasAttribute("popup-window")||typeof window.addUnloadListener!=="function")return;
   window[KEY]?.dispose?.();
-  let dead=false,epoch=0,view=null,list=null,node=null,fill=null,speed=null,icon=null,host=null;
+  let dead=false,epoch=0,unsubscribeDownloads=null,list=null,node=null,fill=null,speed=null,icon=null,host=null;
   let flight=null,flightAnimation=null,panelAnimation=null,panelToken=0,entering=false,manualHold=false,sidebarOrigin=false,overlayLayer=null;
   let layoutFrame=0,resizeObserver=null,observedSidebar=null,anchor=null,lastClick=null,cardOpen=false,flightToken=0,flightTimer=0,latest=null;
   let updateTimer=0,hideTimer=0,readyObserver=null,layoutObserver=null,initialized=false,hydrating=false;
@@ -479,7 +479,7 @@ try{if(typeof window!=="undefined"){
       for(const d of targets){
         if(dead||token!==epoch||list!==source)break;
         if(!CLEARABLE(d)||!history.has(d))continue;
-        try{await source.remove(d);}catch{failures++;}
+        try{if(!await source.remove(d))failures++;}catch{failures++;}
       }
     }finally{
       if(!dead&&token===epoch&&list===source){
@@ -640,16 +640,16 @@ try{if(typeof window!=="undefined"){
     const open=action("Open","zr-dock-open-file",async()=>{
       // Explicit user click only; Gecko handles the target and OS policy.
       try{
-        if(!download.succeeded||download.target?.exists===false||typeof download.launch!=="function")return;
-        await download.launch();
+        if(!list)return;
+        await list.actionNative(download,"open");
       }catch{showActionError("Could not open the downloaded file.");}
     });
     const folder=action("Show in folder","zr-dock-folder",async()=>{
       // Gecko owns path resolution and platform file-manager integration.
       // No shell command, arbitrary path, or executable launch.
       try{
-        if(!download.succeeded||typeof download.showContainingDirectory!=="function")return;
-        await download.showContainingDirectory();
+        if(!list)return;
+        await list.actionNative(download,"reveal");
       }catch{showActionError("Could not open the containing folder.");}
     });
     open.setAttribute("title","Open downloaded file");folder.setAttribute("title","Show in folder");
@@ -904,8 +904,7 @@ try{if(typeof window!=="undefined"){
     if(updateTimer)window.clearTimeout(updateTimer);updateTimer=0;cancelHide();cancelFlight();cancelPanel();cardOpen=dockOpen=false;manualHold=false;sidebarOrigin=false;dock?.removeAttribute("data-closing");syncDownloadHolds();stopFollow();overlayUntil=0;
     if(layoutFrame)window.cancelAnimationFrame(layoutFrame);layoutFrame=0;
     resizeObserver?.disconnect();resizeObserver=null;observedSidebar=anchor=null;
-    if(list&&view)try{Promise.resolve(list.removeView(view)).catch(()=>{});}catch{}
-    list=view=null;hydrating=false;
+    unsubscribeDownloads?.();unsubscribeDownloads=null;list=null;hydrating=false;
     layoutObserver?.disconnect();layoutObserver=null;
     window.removeEventListener("resize",scheduleMount);window.removeEventListener("OnePlane:DownloadHostChanged",scheduleMount);
     window.removeEventListener("ZenCompactMode:LayoutUpdate",scheduleMount);window.removeEventListener("ZenCompactMode:Toggled",scheduleMount);
@@ -922,33 +921,26 @@ try{if(typeof window!=="undefined"){
   }
   async function install(){
     if(dead||node||!enabled())return;
+    const source=window.__nocturneLibraryServices?.downloads;
+    // The independent service announces readiness in either Sine script order.
+    // Never attach a second native Downloads view as a fallback.
+    if(!source)return;
     const token=++epoch;
-    let source=null,ownedView=null;
-    const currentGeneration=()=>!dead&&token===epoch&&enabled()&&!window.closed;
-    const detach=async()=>{if(source&&ownedView)try{await source.removeView(ownedView);}catch{}};
+    const currentGeneration=()=>!dead&&token===epoch&&enabled()&&!window.closed&&window.__nocturneLibraryServices?.downloads===source;
     try{
-      const Downloads=window.Downloads||ChromeUtils.importESModule("resource://gre/modules/Downloads.sys.mjs").Downloads;
-      const PB=ChromeUtils.importESModule("resource://gre/modules/PrivateBrowsingUtils.sys.mjs").PrivateBrowsingUtils;
-      source=await Downloads.getList(PB.isWindowPrivate(window)?Downloads.PRIVATE:Downloads.PUBLIC);
+      await source.start();
       if(!currentGeneration())return;
       build();list=source;hydrating=true;
-      // Late addView replay must not mutate a replacement instance.
-      const guard=fn=>download=>{if(currentGeneration()&&view===ownedView)fn(download);};
-      ownedView={onDownloadAdded:guard(added),onDownloadChanged:guard(changed),onDownloadRemoved:guard(removed)};
-      view=ownedView;
-      await source.addView(ownedView);
-      if(!currentGeneration()||list!==source||view!==ownedView){await detach();return;}
-      hydrating=false;
-      // Hide only this window's confusing native flight. Do not write the
-      // global zen.downloads.download-animation preference or patch Zen.
-      root.setAttribute(ACTIVE,"true");
-      schedule(true);
+      const guard=fn=>download=>{if(currentGeneration()&&list===source)fn(download);};
+      unsubscribeDownloads=source.subscribeNative({onDownloadAdded:guard(added),onDownloadChanged:guard(changed),onDownloadRemoved:guard(removed)});
+      if(!currentGeneration()){teardown();return;}
+      hydrating=false;root.setAttribute(ACTIVE,"true");schedule(true);
     }catch(error){
-      const owned=token===epoch&&!dead;
-      if(owned){console.warn("[Nocturne] Download indicator:",error);teardown();}
-      await detach();
+      if(currentGeneration()){console.warn("[Nocturne] Download indicator service unavailable");teardown();}
     }
   }
+  function onServicesGone(){if(!dead)teardown();}
+  function onServicesReady(){if(!dead)sync();}
   function sync(){if(!initialized||dead)return;if(enabled())void install();else teardown();}
   function start(){initialized=true;sync();}
   function dispose(){
@@ -956,11 +948,13 @@ try{if(typeof window!=="undefined"){
     if(readyObserver)try{Services.obs.removeObserver(readyObserver,"browser-delayed-startup-finished");}catch{}
     readyObserver=null;try{prefs.removeObserver(PREF,sync);}catch{}
     window.removeEventListener("unload",dispose);
+    window.removeEventListener("Nocturne:ServicesGone",onServicesGone);window.removeEventListener("Nocturne:ServicesReady",onServicesReady);
     if(window[KEY]===api)delete window[KEY];
   }
   const api={getSnapshot:()=>snapshot,setHost,dispose};
   window[KEY]=api;window.addUnloadListener(dispose);window.addEventListener("unload",dispose,{once:true});
   window.addEventListener("Nocturne:OverlayReady",bindOverlay);bindOverlay();
+  window.addEventListener("Nocturne:ServicesGone",onServicesGone);window.addEventListener("Nocturne:ServicesReady",onServicesReady);
   prefs.addObserver(PREF,sync);
   if(window.gBrowserInit?.delayedStartupFinished)start();
   else{readyObserver=subject=>{if(subject!==window)return;Services.obs.removeObserver(readyObserver,"browser-delayed-startup-finished");readyObserver=null;start();};Services.obs.addObserver(readyObserver,"browser-delayed-startup-finished");}

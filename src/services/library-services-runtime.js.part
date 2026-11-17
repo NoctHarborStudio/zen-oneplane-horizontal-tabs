@@ -1,0 +1,39 @@
+/* Independent native data owner. No UI, commands, scans or disk cache. */
+(()=>{
+  const win=window,KEY="__nocturneLibraryServices";
+  if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
+  const BARRIER="__nocturneDownloadsDisposal";
+  const previous=win[KEY],barrier=previous?.dispose?.()||win[BARRIER]||Promise.resolve();
+  let dead=false,closing=null,historySessions=new Set();
+  const load=(path,key)=>ChromeUtils.importESModule(path)[key];
+  const privateWindow=()=>load("resource://gre/modules/PrivateBrowsingUtils.sys.mjs","PrivateBrowsingUtils").isWindowPrivate(win);
+  const allowed=()=>!dead&&!win.closed&&!privateWindow();
+  const downloads=createDownloadsService({barrier,idPrefix:"download-"+(win.crypto?.randomUUID?.()||String(win.performance.now())),loadList:()=>{
+    const D=win.Downloads||load("resource://gre/modules/Downloads.sys.mjs","Downloads");
+    return D.getList(privateWindow()?D.PRIVATE:D.PUBLIC);
+  },onError:()=>win.console.warn("[Nocturne] Downloads service listener failed")});
+  const closedTabs=createClosedTabsService({allowed,getClosed:()=>load("moz-src:///browser/components/sessionstore/SessionStore.sys.mjs","SessionStore").getClosedTabData({sourceWindow:win}),
+    observe(fn){const topic="sessionstore-closed-objects-changed",observer={observe:fn};Services.obs.addObserver(observer,topic);return()=>Services.obs.removeObserver(observer,topic);}});
+  function openHistory(onChange){
+    const session=createHistorySession({allowed,onChange,createQuery:()=>{
+      const PlacesQuery=load("resource://gre/modules/PlacesQuery.sys.mjs","PlacesQuery");return new PlacesQuery();
+    }});
+    let closed=false;
+    const handle={query:session.query,close(){if(closed)return;closed=true;historySessions.delete(handle);session.close();}};
+    historySessions.add(handle);return handle;
+  }
+  function dispose(){
+    if(closing)return closing;
+    dead=true;
+    win.removeEventListener("unload",dispose);
+    for(const s of [...historySessions])try{s.close();}catch{}
+    try{closedTabs.dispose();}catch{}
+    closing=downloads.dispose();win[BARRIER]=closing;
+    closing.finally(()=>{if(win[BARRIER]===closing)delete win[BARRIER];});
+    if(win[KEY]===api){delete win[KEY];win.dispatchEvent(new win.CustomEvent("Nocturne:ServicesGone"));}
+    return closing;
+  }
+  const api={downloads,openHistory,closedTabs,dispose};
+  win[KEY]=api;win.addUnloadListener(dispose);win.addEventListener("unload",dispose,{once:true});
+  win.dispatchEvent(new win.CustomEvent("Nocturne:ServicesReady"));
+})();

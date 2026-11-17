@@ -28,7 +28,7 @@ async function assemble(entries) {
   return parts.join("");
 }
 
-for (const [output, entries] of [["layout.uc.mjs", plan.javascript], ["chrome.css", plan.stylesheet], ["overlay.uc.mjs", plan.overlay]]) {
+for (const [output, entries] of [["layout.uc.mjs", plan.javascript], ["chrome.css", plan.stylesheet], ["overlay.uc.mjs", plan.overlay], ["library-services.uc.mjs", plan.libraryServices]]) {
   const data = await assemble(entries);
   const path = resolve(root, output);
   if (check) {
