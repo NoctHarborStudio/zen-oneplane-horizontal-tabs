@@ -1,3 +1,9 @@
+## 0.3.0-preview.18 — Visible startup favicons and smooth workspace Home label
+
+- Keep nested OnePlane buttons outside the generic startup opacity gate. The card itself owns its entrance and the isolated Magnetic Fold copy preserves its already decoded icon content.
+- Hold the visible Home/title label during outgoing and swap phases, then fade out the old label and fade in the settled incoming one over 280ms. Unchanged labels do not blink; normal hover timing and portal geometry remain unchanged.
+- Record mounted icon ancestor opacity and drawable geometry, plus Home label motion and geometry, without recording text or URLs. Preserve the 2 MB / three-session diagnostic budget.
+
 ## 0.3.0-preview.17 — Cached startup icons, magnetic Island hover and diagnostic capacity
 
 - Resolve lazy tab favicon addresses through native SessionStore and local Places cache. Predecode mirror images, wait at most 600ms, paint ready chrome favicon pixels directly in the isolated proxy and keep late image updates live; no page restoration or image readback.

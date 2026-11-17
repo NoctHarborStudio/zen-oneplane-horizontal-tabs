@@ -187,6 +187,20 @@
     Object.assign(clone.style,{position:"relative",inset:"auto",margin:"0",width:"100%",height:"100%",minWidth:"0",maxWidth:"none",minHeight:"0",maxHeight:"none",transform:"none",translate:"none",scale:"none",opacity:"1"});
     outer.append(clone);layer.append(outer);return outer;
   }
+  // A decoded image is not necessarily paintable: a captured zero-alpha
+  // ancestor, hidden display or collapsed icon box can still hide it.
+  // Inspect only local chrome geometry, never pixels or image addresses.
+  function iconPaintState(icon,boundary){
+    if(!icon||!boundary)return {visible:false,alpha:0,geometry:false};
+    let alpha=1,hidden=false;
+    for(let n=icon;n&&n!==boundary;n=n.parentElement){
+      const s=win.getComputedStyle(n);
+      alpha*=Number(s.opacity);
+      if(s.display==="none"||s.visibility!=="visible")hidden=true;
+    }
+    const r=icon.getBoundingClientRect(),geometry=r.width>0&&r.height>0;
+    return {visible:!hidden&&geometry&&alpha>0,alpha,geometry};
+  }
   function releasePending(){if(pendingTimer)win.clearTimeout(pendingTimer);pendingTimer=0;root.removeAttribute(PENDING);}
   let handoffFrame=0,handoffFrame2=0;
   function finishHandoff(){
@@ -230,6 +244,23 @@
       measuredHandles++;
     }
     if(measuredHandles)win.__nocturneTrace?.("center.group.geometry",()=>({owner,count:measuredHandles,maxOffsetError:handleError}),{sample:800});
+    // Inspect the actual mounted shadow copies before WAAPI changes
+    // their outer alpha and scale. Ignore the intentional real-card gate.
+    win.__nocturneTrace?.("center.icon.paint",()=>{
+      let total=0,paintable=0,zeroAlpha=0,zeroGeometry=0,sourceButtonZero=0,minAlpha=1;
+      for(const {n,c} of effects){
+        for(const b of c.n.querySelectorAll(".oneplane-tab-select"))
+          if(Number(win.getComputedStyle(b).opacity)===0)sourceButtonZero++;
+        for(const icon of n.querySelectorAll(".oneplane-tab-icon")){
+          const image=[...icon.children].find(x=>["canvas","img"].includes(x.localName)&&win.getComputedStyle(x).display!=="none");
+          const state=iconPaintState(image||icon,n);
+          total++;if(state.visible&&image)paintable++;
+          if(state.alpha===0)zeroAlpha++;if(!state.geometry)zeroGeometry++;
+          minAlpha=Math.min(minAlpha,state.alpha);
+        }
+      }
+      return {owner,total,paintable,zeroAlpha,zeroGeometry,sourceButtonZero,minAlpha};
+    },{sample:800});
     const running=[];
     for(const {n,frames} of effects){
       n.style.transform=frames[0].transform;n.style.opacity=String(frames[0].opacity);

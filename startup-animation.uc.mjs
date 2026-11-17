@@ -1,6 +1,6 @@
-// Nocturne preview.17: early trace, independent Sine script order.
+// Nocturne preview.18: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.17"};
+  const event="assembly.script",data={version:"0.3.0-preview.18"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -445,7 +445,10 @@ try{if(typeof window!=="undefined"){
       "#oneplane-tabs :is(.oneplane-tab,.oneplane-split-group,.oneplane-title-island,.oneplane-new-tab)",
       "#tabbrowser-tabs .tabbrowser-tab",
       "#PlacesToolbarItems > *",
-      "#nav-bar :is(toolbarbutton,button,.titlebar-button,[role=button])",
+      // OnePlane cards own their startup gate, including every child.
+      // Never hide the tab-select button independently: its computed opacity
+      // would be captured as zero by the shared shadow proxy.
+      "#nav-bar :is(toolbarbutton,button,.titlebar-button,[role=button]):not(#oneplane-tabs *)",
       "#zen-sidebar-top-buttons :is(toolbarbutton,button,.titlebar-button,[role=button])",
       ":is(#titlebar-buttonbox,#titlebar-buttonbox-container,#zen-window-controls,.titlebar-buttonbox-container) .titlebar-button"
     ];

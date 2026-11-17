@@ -65,3 +65,10 @@ test("typing or scrolling in Home does not abort startup, explicit toolbar inter
  assert.ok(source.includes("assembly.center.result"));
  assert.ok(source.includes("assembly.icons.ready"));
 });
+
+test("startup gate excludes nested OnePlane buttons from the generic toolbar gate",()=>{
+ const targets=source.slice(source.indexOf("const earlyTargets=["),source.indexOf("const waitingGate="));
+ assert.ok(targets.includes('#oneplane-tabs :is(.oneplane-tab,.oneplane-split-group,.oneplane-title-island,.oneplane-new-tab)'));
+ assert.ok(targets.includes('#nav-bar :is(toolbarbutton,button,.titlebar-button,[role=button]):not(#oneplane-tabs *)'));
+ assert.ok(!targets.includes('"#nav-bar :is(toolbarbutton,button,.titlebar-button,[role=button])",'));
+});

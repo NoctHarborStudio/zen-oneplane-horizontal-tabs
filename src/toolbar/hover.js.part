@@ -1,4 +1,48 @@
-  let islandTextAnimation = null;
+  let islandTextAnimation = null, islandTextTarget = null;
+  // One owner for all label changes. Keep the old label until it has
+  // faded; commit the newest target only if this transaction still owns it.
+  function setIslandTitle(title,animate){
+    if(islandTextTarget===title)return;
+    islandTextAnimation?.cancel();
+    const previous=islandTitle.textContent;
+    islandTextTarget=title;island.title=title;
+    if(!animate||!previous||!title||previous===title){
+      islandTitle.textContent=title;return;
+    }
+    const phase=root.getAttribute("data-zr-workspace-phase");
+    const duration=phase==="in"?280:150;
+    let effect=null,cancelled=false;
+    const token={cancel(){
+      cancelled=true;try{effect?.cancel();}catch{}
+      if(islandTextAnimation===token){islandTextAnimation=null;islandTextTarget=null;}
+    }};
+    islandTextAnimation=token;
+    const finish=()=>{
+      if(cancelled||islandTextAnimation!==token)return;
+      islandTitle.textContent=title;try{effect?.cancel();}catch{}
+      islandTextAnimation=null;
+    };
+    window.__nocturneTrace?.("island.title.motion",{phase,changed:true,duration},{sample:500});
+    try{
+      // Normal hover/selection stays immediate, as before. Only the
+      // workspace transition defers the label commit until the old fade.
+      if(phase!=="in"){
+        islandTitle.textContent=title;
+        effect=islandTitle.animate([{opacity:.35,translate:"0 2px"},{opacity:1,translate:"0 0"}],
+          {duration,easing:"ease-out"});
+        effect.finished.then(finish,finish);return;
+      }
+      effect=islandTitle.animate([{opacity:1,translate:"0 0"},{opacity:0,translate:"0 -2px"}],
+        {duration:Math.round(duration*.36),easing:"ease-in",fill:"both"});
+      effect.finished.then(()=>{
+        if(cancelled||dead||islandTextAnimation!==token)return;
+        const old=effect;islandTitle.textContent=title;
+        effect=islandTitle.animate([{opacity:0,translate:"0 2px"},{opacity:1,translate:"0 0"}],
+          {duration:Math.round(duration*.64),easing:"ease-out",fill:"both"});
+        old.cancel();return effect.finished.then(finish,finish);
+      }).catch(finish);
+    }catch{finish();}
+  }
   function refreshIslandTitle(){
     if(dead || !row.hasAttribute("data-op-show-island")) return;
     const item=dragNode && row.hasAttribute("data-op-dragging")?dragNode:
@@ -9,15 +53,13 @@
     const key=item||null;
     if(homeLease && (homeTitleKey!==key || homeNativeTitle!==nativeTitle)){homeTitleKey=key;homeNativeTitle=nativeTitle;markHomeTitleActivity();}
     const title=homeLease&&(homeLease.open||homeIdle||!nativeTitle)?"Home":nativeTitle;
-    if(islandTitle.textContent===title) return;
-    islandTextAnimation?.cancel();
-    const hadTitle=Boolean(islandTitle.textContent);
-    islandTitle.textContent=title;
-    island.title=title;
-    if(!root.hasAttribute("data-zr-workspace-phase") && cascadeState==="idle" && hadTitle && title && !reducedMotion.matches &&
-        prefs.getIntPref("zen.oneplane.animation-duration",160)!==0)
-      islandTextAnimation=islandTitle.animate([{opacity:.35,translate:"0 2px"},{opacity:1,translate:"0 0"}],
-        {duration:150,easing:"ease-out"});
+    const phase=root.getAttribute("data-zr-workspace-phase");
+    // Native selection may change several times during a workspace swap.
+    // Only the settled incoming selection may replace the visible label.
+    if(phase==="out"||phase==="swap")return;
+    const animate=cascadeState==="idle"&&!root.hasAttribute("data-zr-startup-phase")&&!root.hasAttribute("data-zr-closing")&&
+      !reducedMotion.matches&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0;
+    setIslandTitle(title,animate);
   }
   function applyHoverMode(){
     if(dead || row.hasAttribute("data-op-dragging")) return;

@@ -54,7 +54,7 @@ test("shared workspace card alpha is not multiplied by a second row fade",()=>{
  assert.ok(css.includes('data-zr-center-motion="workspace"'));
  assert.ok(css.includes('opacity:1!important;\n  --zr-workspace-ui-progress:var(--zr-workspace-progress);'));
  assert.ok(css.includes(':not([data-zr-workspace-phase="swap"])'));
- assert.ok(read("src/layout/visibility.js.part").includes('if(phase==="out"||phase==="swap"){clearTabHover()'));
+ assert.ok(read("src/layout/visibility.js.part").includes('if(phase==="out"||phase==="swap"){islandTextAnimation?.cancel();clearTabHover()'));
 });
 
 test("Home portal fades cards before crossing actual panel edges, including the lower row",()=>{
@@ -114,4 +114,18 @@ test("startup uses decoded chrome icons and lazy session cache without navigatio
  assert.ok(!source.includes("toDataURL("));
  assert.ok(!source.includes("getImageData("));
  assert.ok(read("startup-animation.uc.mjs").includes("engine?.warmIcons?.(row)"));
+});
+
+test("paint readiness detects the zero-opacity ancestor that hid decoded startup favicons",()=>{
+ const i=source.indexOf("function iconPaintState("),j=source.indexOf("function releasePending(",i);
+ const paint=new Function("win",source.slice(i,j)+"return iconPaintState")({getComputedStyle:n=>n.css});
+ const node=(parent,opacity=1,display="block",visibility="visible",width=16)=>({parentElement:parent,css:{opacity:String(opacity),display,visibility},getBoundingClientRect:()=>({width,height:16})});
+ const outer=node(null,0),card=node(outer),button=node(card,0),icon=node(button,.42),bitmap=node(icon);
+ assert.equal(paint(bitmap,outer).visible,false);
+ assert.equal(paint(bitmap,outer).alpha,0);
+ button.css.opacity="1";
+ assert.deepEqual(paint(bitmap,outer),{visible:true,alpha:.42,geometry:true});
+ icon.css.visibility="hidden";assert.equal(paint(bitmap,outer).visible,false);
+ icon.css.visibility="visible";assert.equal(paint(node(icon,1,"block","visible",0),outer).geometry,false);
+ assert.ok(source.includes('center.icon.paint'));
 });

@@ -1,6 +1,6 @@
-// Nocturne preview.17: early trace, independent Sine script order.
+// Nocturne preview.18: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="disassembly.script",data={version:"0.3.0-preview.17"};
+  const event="disassembly.script",data={version:"0.3.0-preview.18"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}

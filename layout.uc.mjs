@@ -1,7 +1,7 @@
-/* Nocturne preview.17 diagnostic recorder — read-only chrome telemetry.
+/* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.17",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.18",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -122,6 +122,8 @@
     const group=row?.querySelector(".oneplane-split-group"),handle=group?.querySelector(".oneplane-split-handle");
     if(group)wanted.set("split-group",group);if(handle)wanted.set("split-handle",handle);
     if(drag)wanted.set("source",drag);if(ghost)wanted.set("ghost",ghost);if(card)wanted.set("card",card);
+    const island=row?.querySelector(".oneplane-title-island"),label=island?.querySelector(".oneplane-island-title");
+    if(island)wanted.set("home-island",island);if(label)wanted.set("home-label",label);
     const hovered=row?.querySelector(".oneplane-tab[data-op-hovered]");if(hovered){wanted.set("hover-card",hovered);const lane=hovered.closest(".oneplane-overflow-lane,.oneplane-island-lane");if(lane)wanted.set("hover-lane",lane);}
     if(wanted.size===nodes.size&&[...wanted].every(([k,n])=>nodes.get(k)===n))return;
     observer.disconnect();nodes.clear();observer.observe(root,{attributes:true,attributeFilter:rootAttrs});
@@ -394,6 +396,20 @@
     Object.assign(clone.style,{position:"relative",inset:"auto",margin:"0",width:"100%",height:"100%",minWidth:"0",maxWidth:"none",minHeight:"0",maxHeight:"none",transform:"none",translate:"none",scale:"none",opacity:"1"});
     outer.append(clone);layer.append(outer);return outer;
   }
+  // A decoded image is not necessarily paintable: a captured zero-alpha
+  // ancestor, hidden display or collapsed icon box can still hide it.
+  // Inspect only local chrome geometry, never pixels or image addresses.
+  function iconPaintState(icon,boundary){
+    if(!icon||!boundary)return {visible:false,alpha:0,geometry:false};
+    let alpha=1,hidden=false;
+    for(let n=icon;n&&n!==boundary;n=n.parentElement){
+      const s=win.getComputedStyle(n);
+      alpha*=Number(s.opacity);
+      if(s.display==="none"||s.visibility!=="visible")hidden=true;
+    }
+    const r=icon.getBoundingClientRect(),geometry=r.width>0&&r.height>0;
+    return {visible:!hidden&&geometry&&alpha>0,alpha,geometry};
+  }
   function releasePending(){if(pendingTimer)win.clearTimeout(pendingTimer);pendingTimer=0;root.removeAttribute(PENDING);}
   let handoffFrame=0,handoffFrame2=0;
   function finishHandoff(){
@@ -437,6 +453,23 @@
       measuredHandles++;
     }
     if(measuredHandles)win.__nocturneTrace?.("center.group.geometry",()=>({owner,count:measuredHandles,maxOffsetError:handleError}),{sample:800});
+    // Inspect the actual mounted shadow copies before WAAPI changes
+    // their outer alpha and scale. Ignore the intentional real-card gate.
+    win.__nocturneTrace?.("center.icon.paint",()=>{
+      let total=0,paintable=0,zeroAlpha=0,zeroGeometry=0,sourceButtonZero=0,minAlpha=1;
+      for(const {n,c} of effects){
+        for(const b of c.n.querySelectorAll(".oneplane-tab-select"))
+          if(Number(win.getComputedStyle(b).opacity)===0)sourceButtonZero++;
+        for(const icon of n.querySelectorAll(".oneplane-tab-icon")){
+          const image=[...icon.children].find(x=>["canvas","img"].includes(x.localName)&&win.getComputedStyle(x).display!=="none");
+          const state=iconPaintState(image||icon,n);
+          total++;if(state.visible&&image)paintable++;
+          if(state.alpha===0)zeroAlpha++;if(!state.geometry)zeroGeometry++;
+          minAlpha=Math.min(minAlpha,state.alpha);
+        }
+      }
+      return {owner,total,paintable,zeroAlpha,zeroGeometry,sourceButtonZero,minAlpha};
+    },{sample:800});
     const running=[];
     for(const {n,frames} of effects){
       n.style.transform=frames[0].transform;n.style.opacity=String(frames[0].opacity);
@@ -4961,7 +4994,8 @@ function installTabStrip() {
     const phase=root.getAttribute("data-zr-workspace-phase"),active=!!phase;
     toolbarWrapper?.toggleAttribute("oneplane-workspace-hold",active);
     if(active){cancelHoverTimer();cancelIndicatorReturn();}
-    if(phase==="out"||phase==="swap"){clearTabHover();islandTextAnimation?.cancel();}
+    if(phase==="out"||phase==="swap"){islandTextAnimation?.cancel();clearTabHover();}
+    if(phase==="in")refreshIslandTitle();
     reconcilePanel();
     if(!active){refreshIslandTitle();scheduleGeometry();scheduleContour();}
   }
@@ -6401,7 +6435,51 @@ function installTabStrip() {
     toolbarWrapper?.removeAttribute("oneplane-home-hold");homeLease?.release();homeLease=null;
   }
 
-  let islandTextAnimation = null;
+  let islandTextAnimation = null, islandTextTarget = null;
+  // One owner for all label changes. Keep the old label until it has
+  // faded; commit the newest target only if this transaction still owns it.
+  function setIslandTitle(title,animate){
+    if(islandTextTarget===title)return;
+    islandTextAnimation?.cancel();
+    const previous=islandTitle.textContent;
+    islandTextTarget=title;island.title=title;
+    if(!animate||!previous||!title||previous===title){
+      islandTitle.textContent=title;return;
+    }
+    const phase=root.getAttribute("data-zr-workspace-phase");
+    const duration=phase==="in"?280:150;
+    let effect=null,cancelled=false;
+    const token={cancel(){
+      cancelled=true;try{effect?.cancel();}catch{}
+      if(islandTextAnimation===token){islandTextAnimation=null;islandTextTarget=null;}
+    }};
+    islandTextAnimation=token;
+    const finish=()=>{
+      if(cancelled||islandTextAnimation!==token)return;
+      islandTitle.textContent=title;try{effect?.cancel();}catch{}
+      islandTextAnimation=null;
+    };
+    window.__nocturneTrace?.("island.title.motion",{phase,changed:true,duration},{sample:500});
+    try{
+      // Normal hover/selection stays immediate, as before. Only the
+      // workspace transition defers the label commit until the old fade.
+      if(phase!=="in"){
+        islandTitle.textContent=title;
+        effect=islandTitle.animate([{opacity:.35,translate:"0 2px"},{opacity:1,translate:"0 0"}],
+          {duration,easing:"ease-out"});
+        effect.finished.then(finish,finish);return;
+      }
+      effect=islandTitle.animate([{opacity:1,translate:"0 0"},{opacity:0,translate:"0 -2px"}],
+        {duration:Math.round(duration*.36),easing:"ease-in",fill:"both"});
+      effect.finished.then(()=>{
+        if(cancelled||dead||islandTextAnimation!==token)return;
+        const old=effect;islandTitle.textContent=title;
+        effect=islandTitle.animate([{opacity:0,translate:"0 2px"},{opacity:1,translate:"0 0"}],
+          {duration:Math.round(duration*.64),easing:"ease-out",fill:"both"});
+        old.cancel();return effect.finished.then(finish,finish);
+      }).catch(finish);
+    }catch{finish();}
+  }
   function refreshIslandTitle(){
     if(dead || !row.hasAttribute("data-op-show-island")) return;
     const item=dragNode && row.hasAttribute("data-op-dragging")?dragNode:
@@ -6412,15 +6490,13 @@ function installTabStrip() {
     const key=item||null;
     if(homeLease && (homeTitleKey!==key || homeNativeTitle!==nativeTitle)){homeTitleKey=key;homeNativeTitle=nativeTitle;markHomeTitleActivity();}
     const title=homeLease&&(homeLease.open||homeIdle||!nativeTitle)?"Home":nativeTitle;
-    if(islandTitle.textContent===title) return;
-    islandTextAnimation?.cancel();
-    const hadTitle=Boolean(islandTitle.textContent);
-    islandTitle.textContent=title;
-    island.title=title;
-    if(!root.hasAttribute("data-zr-workspace-phase") && cascadeState==="idle" && hadTitle && title && !reducedMotion.matches &&
-        prefs.getIntPref("zen.oneplane.animation-duration",160)!==0)
-      islandTextAnimation=islandTitle.animate([{opacity:.35,translate:"0 2px"},{opacity:1,translate:"0 0"}],
-        {duration:150,easing:"ease-out"});
+    const phase=root.getAttribute("data-zr-workspace-phase");
+    // Native selection may change several times during a workspace swap.
+    // Only the settled incoming selection may replace the visible label.
+    if(phase==="out"||phase==="swap")return;
+    const animate=cascadeState==="idle"&&!root.hasAttribute("data-zr-startup-phase")&&!root.hasAttribute("data-zr-closing")&&
+      !reducedMotion.matches&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0;
+    setIslandTitle(title,animate);
   }
   function applyHoverMode(){
     if(dead || row.hasAttribute("data-op-dragging")) return;

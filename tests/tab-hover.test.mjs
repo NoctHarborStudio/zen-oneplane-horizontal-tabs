@@ -33,3 +33,27 @@ test("Island zoom reserves the exact painted width without descending or reveali
   assert.ok(Math.abs(width+2*margin-slot)<1e-9);
  }
 });
+
+test("workspace title retains its old text through swap then fades to latest target",async()=>{
+ const source=await readFile(new URL("../src/toolbar/hover.js.part",import.meta.url),"utf8");
+ const visibility=await readFile(new URL("../src/layout/visibility.js.part",import.meta.url),"utf8");
+ const a=source.indexOf("let islandTextAnimation"),b=source.indexOf("function refreshIslandTitle(",a);
+ const run=new Function("window",`
+  let phase="in",dead=false;const root={getAttribute:()=>phase};
+  const effects=[],island={title:"Home"},islandTitle={textContent:"Home",animate(frames,options){
+    let resolve,reject;const finished=new Promise((a,b)=>{resolve=a;reject=b;});
+    const e={frames,options,finished,resolve,cancel:()=>reject(Error("cancelled"))};effects.push(e);return e;}};
+  ${source.slice(a,b)}
+  return {setIslandTitle,islandTitle,effects,phase:p=>phase=p};
+ `)({__nocturneTrace(){}});
+ run.setIslandTitle("Home",true);assert.equal(run.effects.length,0);
+ run.setIslandTitle("New workspace",true);assert.equal(run.islandTitle.textContent,"Home");
+ assert.equal(run.effects[0].options.duration,101);
+ run.effects[0].resolve();await Promise.resolve();
+ assert.equal(run.islandTitle.textContent,"New workspace");assert.equal(run.effects.length,2);
+ run.effects[1].resolve();await Promise.resolve();await Promise.resolve();
+ run.setIslandTitle("New workspace",true);assert.equal(run.effects.length,2);
+ run.phase("idle");run.setIslandTitle("Hover",true);assert.equal(run.islandTitle.textContent,"Hover");
+ assert.ok(source.includes('if(phase==="out"||phase==="swap")return;'));
+ assert.ok(visibility.includes('if(phase==="in")refreshIslandTitle();'));
+});
