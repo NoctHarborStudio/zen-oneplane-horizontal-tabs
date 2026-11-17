@@ -1,6 +1,6 @@
-// Nocturne preview.33: early trace, independent Sine script order.
+// Nocturne preview.34: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="bookmarks.script",data={version:"0.3.0-preview.33"};
+  const event="bookmarks.script",data={version:"0.3.0-preview.34"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -98,7 +98,7 @@ function install() {
       length,hold:Math.min(length-1,read("hold",0,45,30)),curve:read("curve",25,300,65),
       radius:read("radius",4,24,24),padding:read("padding",0,20,0)};
   }
-  // Same contour geometry as OnePlane preview.33. The input is a fixed
+  // Same contour geometry as OnePlane preview.34. The input is a fixed
   // envelope of the RESTING bookmarks plus the maximum expansion budget,
   // not the animated getBoundingClientRect() values.
   function contourPath(width,base,deep,left,right,radius){

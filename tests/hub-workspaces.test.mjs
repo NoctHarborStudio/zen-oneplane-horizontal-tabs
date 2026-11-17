@@ -111,6 +111,7 @@ test("Hub Trash resets on a fresh opening and stale workspace deletion cannot ex
   const attrs=new Set();
   const state=new Function("native","tab","attrs",`
     let open=false,trashOpen=false,hubSession=0,destroyed=false,busy=false,contextId=null,confirmation=null,editId=null,purgePlan=null,drag=null,geometryFrame=0;
+    const window={__nocturneOverlay:{request:()=>true}};
     const panel={hidden:true,isConnected:true,querySelector:()=>null},mode={focus(){}},button={setAttribute(){},focus(){}},status={};
     const trashPanel={hasAttribute:k=>attrs.has(k),setAttribute:k=>attrs.add(k),removeAttribute:k=>attrs.delete(k),getBoundingClientRect(){}};
     const supported=()=>true,ensure=()=>{},setHold=()=>{},render=()=>{if(trashOpen)attrs.add("data-op-trash-open");else attrs.delete("data-op-trash-open");},

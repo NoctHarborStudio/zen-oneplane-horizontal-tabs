@@ -1,3 +1,7 @@
+## 0.3.0-preview.34 — Boot verification follow-up
+
+- Update test fixtures for the early boot prelude and existing Overlay ownership. Same startup behavior as preview.33.
+
 ## 0.3.0-preview.33 — Early Boot / slower wordmark
 
 - Prefer the startup controller first in the Sine manifest; if layout loads first, mount a shared brand-color cover before diagnostics and layout, then adopt it without a second overlay.

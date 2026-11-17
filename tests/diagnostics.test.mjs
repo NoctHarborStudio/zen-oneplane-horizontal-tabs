@@ -33,7 +33,8 @@ test("disabled recording never evaluates detail and private recording never writ
 });
 test("recorder is included at start of layout, versioned and avoids content fields",()=>{
  const layout=readFileSync(new URL("../layout.uc.mjs",import.meta.url),"utf8");
- assert.ok(layout.startsWith(source));assert.ok(source.includes(version));
+ const prelude=readFileSync(new URL("../src/core/boot-prelude.js.part",import.meta.url),"utf8");
+ assert.ok(layout.startsWith(prelude+source));assert.ok(source.includes(version));
  for(const forbidden of ["currentURI","contentDocument","contentWindow","documentURI","textContent","\.label","\.title"])assert.ok(!source.includes(forbidden),forbidden);
 });
 
