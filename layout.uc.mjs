@@ -5563,7 +5563,7 @@ function installTabStrip() {
     // never advances the animation; no requestAnimationFrame loop.
     animation.currentTime=progress*BUNNY_INSERT_DURATION;
     window.__nocturneTrace?.("drag.insert.seek",{p,progress,time:animation.currentTime},{throttle:85,sample:800});
-    if(progress===1)animation.finish();
+    if(progress===1)completeInsertion(animation);
     return true;
   }
   function finishInsertionAfterDrop(){
@@ -5573,8 +5573,19 @@ function installTabStrip() {
     holdToolbarForReturn();
     window.__nocturneTrace?.("drag.insert.drop-tail",{remaining:Math.max(0,BUNNY_INSERT_DURATION-(Number(animation.currentTime)||0))},{sample:800});
     // Only an actual accepted drop may run the remaining timeline.
-    animation.play();
+    if(Number(animation.currentTime)>=BUNNY_INSERT_DURATION)completeInsertion(animation);
+    else animation.play();
     return true;
+  }
+  function completeInsertion(animation){
+    if(dragInsertAnimation!==animation)return;
+    const node=dragInsertNode;
+    dragInsertAnimation=null;dragInsertNode=null;
+    // Commit the real source and hide the isolated visual together.
+    node.removeAttribute("data-op-reinsert");hideGhost();animation.cancel();
+    window.__nocturneTrace?.("drag.insert.finish",{mode:dragImageMode,afterDrop:dragInsertPending},{sample:800});
+    if(dragInsertPending){endDragVisual();return;}
+    refreshIndicator();
   }
   function cancelInsertion() {
     const animation = dragInsertAnimation,node=dragInsertNode;
@@ -5605,15 +5616,7 @@ function installTabStrip() {
     animation.pause();
     animation.currentTime=0;
     window.__nocturneTrace?.("drag.insert",{dx:start.x,dy:start.y,height:target.height,fromWidth:from.width,toWidth:target.width,duration:BUNNY_INSERT_DURATION,ghost:true,scrubbed:true},{sample:1800});
-    animation.onfinish=animation.oncancel=()=>{
-      if(dragInsertAnimation!==animation)return;
-      dragInsertAnimation=null;dragInsertNode=null;
-      // Commit the real source and hide the isolated visual together.
-      node.removeAttribute("data-op-reinsert");hideGhost();animation.cancel();
-      window.__nocturneTrace?.("drag.insert.finish",{mode:dragImageMode,afterDrop:dragInsertPending},{sample:800});
-      if(dragInsertPending){endDragVisual();return;}
-      refreshIndicator();
-    };
+    animation.onfinish=animation.oncancel=()=>completeInsertion(animation);
   }
   function setDragImageMode(mode, event) {
     if (!dragNode || mode === dragImageMode) return;

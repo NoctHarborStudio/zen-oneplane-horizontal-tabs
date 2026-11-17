@@ -133,7 +133,7 @@ test("early toolbar return drop finishes native ownership but retains the visual
   const read=p=>readFile(new URL("../src/interactions/"+p,import.meta.url),"utf8");
   const [end,img,ctrl,strip,engine]=await Promise.all([read("drag-end.js.part"),read("native-drag-image.js.part"),read("drag-controller.js.part"),read("strip-drag.js.part"),read("drag-engine.js.part")]);
   const a=end.indexOf("markHandled: "),b=end.indexOf("\n  };",a);
-  const setup=new Function("let dragHandled=false,draggedTab={},draggedGroup={},dragStartPoint={},dragImageMode='inline',dragInsertAnimation={currentTime:250},dragInsertPending=false,ended=0,finished=0,held=0;const BUNNY_INSERT_DURATION=400,window={};const finishNativeDragLifecycle=()=>++finished===1,endDragVisual=()=>ended++,holdToolbarForReturn=()=>held++;const controller={"+end.slice(a,b)+"};return {mark:controller.markHandled,read:()=>({dragHandled,draggedTab,draggedGroup,dragStartPoint,dragInsertPending,ended,finished,held})}")();
+  const setup=new Function("let dragHandled=false,draggedTab={},draggedGroup={},dragStartPoint={},dragImageMode='inline',dragInsertAnimation={currentTime:250},dragInsertPending=false,ended=0,finished=0,held=0;const BUNNY_INSERT_DURATION=400,window={};const finishNativeDragLifecycle=()=>++finished===1,endDragVisual=()=>ended++,holdToolbarForReturn=()=>held++,finishInsertionAfterDrop=()=>{dragInsertPending=true;holdToolbarForReturn();};const controller={"+end.slice(a,b)+"};return {mark:controller.markHandled,read:()=>({dragHandled,draggedTab,draggedGroup,dragStartPoint,dragInsertPending,ended,finished,held})}")();
   setup.mark(true);
   assert.deepEqual(setup.read(),{dragHandled:true,draggedTab:null,draggedGroup:null,dragStartPoint:null,dragInsertPending:true,ended:0,finished:1,held:1});
   setup.mark(true);assert.equal(setup.read().ended,0);
@@ -141,4 +141,18 @@ test("early toolbar return drop finishes native ownership but retains the visual
   assert.ok(ctrl.includes("dragInsertPending=false;"));
   assert.ok(strip.includes("sourceHandled(tab,true);"));
   assert.ok(engine.includes("if(dragInsertPending)endDragVisual();"));
+});
+
+test("Bunny insertion scrubs the pointer both ways, holds still and only plays on accepted drop",async()=>{
+  const {readFile}=await import("node:fs/promises");
+  const s=await readFile(new URL("../src/interactions/native-drag-image.js.part",import.meta.url),"utf8");
+  const a=s.indexOf("function bunnyInsertionProgress("),b=s.indexOf("function cancelInsertion(",a);
+  const harness=()=>new Function("let played=0,ended=0,hidden=0,cancelled=0,held=0,refreshed=0;let dragInsertAnimation={currentTime:0,play(){played++},cancel(){cancelled++}},dragInsertNode={removeAttribute(){}},dragInsertPending=false,dragImageMode='inline';const BUNNY_RETURN_THRESHOLD=.72,BUNNY_INSERT_DURATION=400,window={},holdToolbarForReturn=()=>held++,hideGhost=()=>hidden++,endDragVisual=()=>ended++,refreshIndicator=()=>refreshed++;"+s.slice(a,b)+"return {seekInsertion,finishInsertionAfterDrop,read:()=>({time:dragInsertAnimation?.currentTime,played,ended,hidden,cancelled,held,refreshed,pending:dragInsertPending})}")();
+  const f=harness();
+  for(const [p,expected] of [[.72,0],[.36,200],[.36,200],[.54,100],[.9,0],[.18,300]]){
+    assert.equal(f.seekInsertion(p),true);assert.ok(Math.abs(f.read().time-expected)<1e-7);assert.equal(f.read().played,0);
+  }
+  f.finishInsertionAfterDrop();assert.equal(f.read().time,300);assert.equal(f.read().played,1);assert.equal(f.read().pending,true);assert.equal(f.seekInsertion(.6),false);
+  const g=harness();g.seekInsertion(0);assert.equal(g.read().hidden,1);assert.equal(g.read().cancelled,1);assert.equal(g.read().played,0);assert.equal(g.finishInsertionAfterDrop(),false);
+  assert.ok(s.includes("animation.pause();"));assert.ok(s.includes("animation.currentTime=0;"));
 });
