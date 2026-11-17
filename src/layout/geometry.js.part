@@ -117,29 +117,29 @@
       refreshOverflowSlider();
     } finally {centering=false;}
   }
+  function measureToolbarGeometry(force=false){
+    if(dead||!hoverSupported()||!toolbarWrapper)return;
+    centerToolbar();
+    if(!force&&!adaptiveHeightDirty&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
+       window.performance.now()<panelSwitchUntil)return;
+    adaptiveHeightDirty=false;
+    const next=Math.round(Math.max(navbar?.getBoundingClientRect().height||0,row.getBoundingClientRect().height||0)+
+      (bookmarks&&!bookmarks.collapsed&&!bookmarks.hidden?bookmarks.getBoundingClientRect().height:0))+"px";
+    if(parseFloat(next)>0&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height")!==next)
+      toolbarWrapper.style.setProperty("--op-measured-toolbar-height",next);
+    refreshIndicator();scheduleContour();
+  }
   function scheduleGeometry(){
     if(dead||geometryFrame)return;
-    geometryFrame=window.requestAnimationFrame(()=>{
-      geometryFrame=0;
-      if(!hoverSupported()||!toolbarWrapper)return;
-      centerToolbar();
-      // Keep the earlier switch guard for vertical geometry and mask,
-      // not horizontal compensation. Old bias + new anchor = visible jump.
-      if(!adaptiveHeightDirty&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
-         window.performance.now()<panelSwitchUntil)return;
-      adaptiveHeightDirty=false;
-      const setLength=(node,name,value)=>{
-        const next=Math.max(0,Math.round(value))+"px";
-        if(node.style.getPropertyValue(name)!==next)node.style.setProperty(name,next);
-      };
-      const navHeight = Math.max(navbar?.getBoundingClientRect().height || 0,
-        row.getBoundingClientRect().height || 0);
-      const bookmarksHeight = bookmarks && !bookmarks.collapsed && !bookmarks.hidden
-        ? bookmarks.getBoundingClientRect().height : 0;
-      if (navHeight > 0) setLength(toolbarWrapper, "--op-measured-toolbar-height", navHeight + bookmarksHeight);
-      refreshIndicator();
-      scheduleContour();
-    });
+    geometryFrame=window.requestAnimationFrame(()=>{geometryFrame=0;measureToolbarGeometry();});
+  }
+  // Measure once under the workspace swap gate, before visible motion.
+  function prepareWorkspaceGeometry(){
+    if(dead)return;
+    if(frame){window.cancelAnimationFrame(frame);frame=0;sync();}
+    if(geometryFrame){window.cancelAnimationFrame(geometryFrame);geometryFrame=0;}
+    measureToolbarGeometry(true);paintContour(true);
+    window.__zenMagneticBookmarksShared?.prepareWorkspaceContour?.();
   }
   function observeGeometry() {
     if (!geometryObserver) return;

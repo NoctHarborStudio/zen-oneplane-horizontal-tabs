@@ -25,7 +25,8 @@ function cleanup() {
   if (!closing) cleanupStep("native layout update",()=>window.dispatchEvent(new CustomEvent("ZenCompactMode:LayoutUpdate")));
 }
 
-const controller = { get active() { return applied && !disposed; }, cleanup };
+const controller = { get active() { return applied && !disposed; }, cleanup,
+  prepareWorkspaceGeometry(){return removeTabStrip?.prepareWorkspaceGeometry?.();} };
 
 // One startup selection per browser process. Never redirect a projected
 // child, a private/unsynced window or a live reload of this mod.
@@ -83,6 +84,7 @@ async function activate() {
     window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>{
       if(disposed||window.closed)return;
       root.setAttribute("data-op-startup-ready","true");
+      if(window.__nocturneLayoutStartup===startupRecord)startupRecord.readyAt=window.performance.now();
       window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
     }));
   } catch (error) {
@@ -92,9 +94,11 @@ async function activate() {
 }
 
 const reloadingLayout=!!window[CONTROLLER];
+const startupRecord={initial:!reloadingLayout&&!window.__nocturneLayoutStartup,readyAt:null};
 if (!root.hasAttribute("popup-window") && typeof window.addUnloadListener === "function") {
   window[CONTROLLER]?.cleanup();
   window[CONTROLLER] = controller;
+  window.__nocturneLayoutStartup=startupRecord;
   root.setAttribute("data-op-startup-ready","pending");
   window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
   window.addEventListener("beforeunload", markClosing, true);

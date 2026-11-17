@@ -17,7 +17,8 @@ test("transition bypasses startup, disabled and reduced-motion states",()=>{
 });
 test("native switch stays single-owned and chrome-only",()=>{
  assert.ok(!source.includes("changeWorkspaceWithID="));
- assert.ok(!source.includes("tabbrowser-tabpanels"));
+ assert.ok(source.includes('get("tabbrowser-tabpanels")'));
+ assert.ok(!source.includes("contentDocument"));assert.ok(!source.includes("contentWindow"));assert.ok(source.includes("Keep the page opaque"));
  assert.ok(!source.includes("zen-main-browser-background"));
  assert.ok(source.includes('phase("swap");cancelEffects(tx);'));
  assert.ok(source.includes('phase("in");'));
@@ -115,4 +116,50 @@ test("new request retains hidden toolbar while old native switch is in flight",a
  finish();await f.flush();await f.advance();await f.advance();await Promise.all([a,b]);
  assert.deepEqual(f.events,["out","swap","in","idle"]);
  assert.equal(f.root.hasAttribute("data-zr-workspace-phase"),false);
+});
+
+test("shelf FLIP ratio is bounded and matches old/new heights",()=>{
+ const i=source.indexOf("function heightScale("),j=source.indexOf("function neutralTranslate(",i);
+ const ratio=new Function(source.slice(i,j)+"return heightScale;")();
+ assert.equal(ratio(80,120),80/120);assert.equal(ratio(120,80),1.5);
+ assert.equal(ratio(0,80),1);assert.equal(ratio(1000,1),4);
+});
+test("geometry lock is released once and leaves no temporary dimensions",()=>{
+ const i=source.indexOf("  let geometryLock=null;"),j=source.indexOf("  function phase(value)",i);
+ const run=new Function(`const attrs=new Set(),styles=new Map();
+ const node=(height,top=0)=>({isConnected:true,getBoundingClientRect:()=>({height,top}),style:{setProperty:(k,v)=>styles.set(k,v),removeProperty:k=>styles.delete(k)},setAttribute:k=>attrs.add(k),removeAttribute:k=>attrs.delete(k)});
+ const nodes={"zen-appcontent-navbar-wrapper":node(80),"oneplane-toolbar-surface":node(120),"PlacesToolbarItems":node(20,60),"tabbrowser-tabpanels":node(600,80)};
+ const get=k=>nodes[k],root={getAttribute:()=>"true"};
+ ${source.slice(i,j)}
+ lockGeometry();const locked=[...styles];const first=releaseGeometry();const second=releaseGeometry();
+ return {locked,old:first.surfaceHeight,top:first.bookmarkTop,empty:styles.size===0&&attrs.size===0,second};`);
+ assert.deepEqual(run(),{locked:[["--zr-workspace-height","80px"],["--zr-workspace-surface-height","120px"]],old:120,top:60,empty:true,second:null});
+});
+
+test("incoming shelf and page effects restore every owned style",()=>{
+ const start=source.indexOf("  function saveEffect("),end=source.indexOf("  async function settled(",start);
+ const restoreStart=source.indexOf("  function restore(tx)"),restoreEnd=source.indexOf("  function cleanup(tx",restoreStart);
+ const run=new Function(`const attrs=new Map(),effects=[];
+ const node=(height,top)=>{const a=new Map(),s=new Map();return {isConnected:true,hasAttribute:k=>a.has(k),setAttribute:(k,v)=>a.set(k,v),removeAttribute:k=>a.delete(k),
+ style:{getPropertyValue:k=>s.get(k)?.[0]||"",getPropertyPriority:k=>s.get(k)?.[1]||"",setProperty:(k,v,p)=>s.set(k,[v,p]),removeProperty:k=>s.delete(k)},getBoundingClientRect:()=>({height,top,width:800}),animate(frames){effects.push({node:this,frames});return {finished:Promise.resolve(),cancel(){}};},attrs:a,styles:s};};
+ const surface=node(160,0),page=node(600,120),bm=node(24,100),row=node(90,0),nav=node(90,0);
+ row.setAttribute("data-op-overflow-row","true");
+ const nodes={"oneplane-toolbar-surface":surface,"tabbrowser-tabpanels":page,"PlacesToolbarItems":bm,"oneplane-tabs":row,"nav-bar":nav};
+ const get=k=>nodes[k],root={getAttribute:()=>"true"},win={getComputedStyle:()=>({translate:"none"})};
+ const PROGRESS="--zr-workspace-progress",MARK="motion",SURFACE="surface",PAGE="page",MOVE="move",BACKING="backing";
+ const rect=n=>n?.getBoundingClientRect(),pause=()=>new Promise(()=>{});
+ ${source.slice(restoreStart,restoreEnd)}${source.slice(start,end)}
+ const tx={styles:new Map(),animations:new Set()};
+ animate(tx,[row,bm],false,{surfaceHeight:100,bookmarkTop:60,pageTop:80});
+ const count=effects.length,ratio=surface.style.getPropertyValue("--zr-workspace-height-scale"),pageOffset=page.style.getPropertyValue("--zr-workspace-page-y");
+ cancelEffects(tx);row.removeAttribute("data-op-overflow-row");return {count,ratio,pageOffset,clean:[surface,page,bm,row,nav].every(n=>!n.styles.size&&!n.attrs.size)};
+ `);
+ assert.deepEqual(run(),{count:5,ratio:"0.625",pageOffset:"-32px",clean:true});
+});
+
+test("two-row backing is gated during swap and animated separately from tabs",()=>{
+ assert.ok(source.includes('saveEffect(tx,nav,BACKING'));
+ assert.ok(source.includes('#nav-bar:has(#oneplane-tabs[data-op-overflow-row])'));
+ assert.ok(source.includes('background:transparent!important'));
+ assert.ok(source.includes('background:color-mix(in srgb,var(--op-surface-tint)'));
 });

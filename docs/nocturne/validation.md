@@ -78,3 +78,11 @@ Existing regression sources: OnePlane tests and docs/known-issues.md; Refined do
 - [x] Source fixes and fixtures for Downloads opacity, workspace stable surface, Escape and handoff (NC-023/024).
 - [ ] Verify empty text does not brighten at end of animation; compare workspace transition in wide/narrow/Compact and Escape before/during/after native swap. Distinguish web-page flash from toolbar flash.
 - [ ] Profile remaining visual stutter and contour ownership (NC-013/014/015); no assertion of improvement without real browser evidence.
+
+### Preview.5 acceptance
+
+- [x] Preview.4 user confirms Downloads color, tab/page flicker and Escape fixed.
+- [x] Source changes and targeted fixtures for NC-025–027.
+- [ ] Cold startup repeated at least three times, including slow session restore; no replay on Sine reload, no long blank chrome.
+- [ ] Switch between spaces with one and two rows in both directions, in Compact and persistent mode; no abrupt shelf height, no overlap, page remains opaque, motion visible.
+- [ ] Escape and quick switches do not leave temporary height, transform or hidden chrome. Home retains normal coverage and interaction.

@@ -126,8 +126,8 @@ function install() {
     }
     contourSurface=null;contourKey="";
   }
-  function updateContour(){
-    if(dead||addressSuspended||root.hasAttribute("data-op-bookmark-wave"))return;
+  function updateContour(force=false){
+    if(dead||(!force&&addressSuspended)||root.hasAttribute("data-op-bookmark-wave"))return;
     const surface=document.getElementById("oneplane-toolbar-surface"),row=document.getElementById("oneplane-tabs");
     if(!settings.enabled||!settings.stableBackground||!root.hasAttribute("oneplane-active")||
       root.getAttribute("zen-compact-mode")!=="true"||row?.getAttribute("data-ready")!=="true"||
@@ -145,7 +145,7 @@ function install() {
     const tr=container?window.getComputedStyle(container).translate:"none";
     const shift=tr&&tr!=="none"?(parseFloat(tr.split(/\s+/)[1])||0):0;
     const width=Math.max(1,Math.round(wr.width)),opt=contourSettings();
-    const base=Math.max(1,Math.round(Math.max(nav.bottom,rr.bottom)-wr.top-shift-5));
+    const base=Math.max(1,Math.round(Math.max(nav.bottom,rr.bottom)-wr.top-shift-(row.hasAttribute("data-op-overflow-row")?0:5)));
     let left=null,right=null,deep=base,largest=0;
     const controls=new Set([...list.children,...toolbar.querySelectorAll("toolbarbutton.bookmark-item, #PlacesChevron, #OtherBookmarks")]);
     for(const node of controls){
@@ -822,7 +822,7 @@ function install() {
     destroy();
     throw error;
   }
-  return {destroy,syncAddressState};
+  return {destroy,syncAddressState,prepareWorkspaceContour(){updateContour(true);}};
 }
 
 // One shared native controller per browser window, regardless of which
@@ -833,6 +833,7 @@ function createSharedRegistry(){
   let controller=null,scheduled=false;
   const registry={revision:REVISION,clients,
     syncAddressState(){controller?.syncAddressState();},
+    prepareWorkspaceContour(){controller?.prepareWorkspaceContour?.();},
     acquire(token){clients.add(token);ensure();},
     release(token){
       clients.delete(token);

@@ -4139,11 +4139,11 @@ function installTabStrip() {
       contourResize.observe(node);contourObserved.add(node);
     }
   }
-  function paintContour(){
-    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-op-bookmark-wave")||root.hasAttribute("data-zr-workspace-phase"))return;
+  function paintContour(force=false){
+    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-op-bookmark-wave")||(!force&&root.hasAttribute("data-zr-workspace-phase")))return;
     // A switch can briefly hide or resize native bookmark controls.
     // Retain the last valid mask until the native layout settles.
-    if(contourKey && window.performance.now()<panelSwitchUntil)return;
+    if(!force&&contourKey && window.performance.now()<panelSwitchUntil)return;
     const wrapper=toolbarWrapper.getBoundingClientRect();
     const nav=navbar?.getBoundingClientRect();
     if(wrapper.width<=0||!nav||nav.height<=0)return;
@@ -4338,29 +4338,29 @@ function installTabStrip() {
       refreshOverflowSlider();
     } finally {centering=false;}
   }
+  function measureToolbarGeometry(force=false){
+    if(dead||!hoverSupported()||!toolbarWrapper)return;
+    centerToolbar();
+    if(!force&&!adaptiveHeightDirty&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
+       window.performance.now()<panelSwitchUntil)return;
+    adaptiveHeightDirty=false;
+    const next=Math.round(Math.max(navbar?.getBoundingClientRect().height||0,row.getBoundingClientRect().height||0)+
+      (bookmarks&&!bookmarks.collapsed&&!bookmarks.hidden?bookmarks.getBoundingClientRect().height:0))+"px";
+    if(parseFloat(next)>0&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height")!==next)
+      toolbarWrapper.style.setProperty("--op-measured-toolbar-height",next);
+    refreshIndicator();scheduleContour();
+  }
   function scheduleGeometry(){
     if(dead||geometryFrame)return;
-    geometryFrame=window.requestAnimationFrame(()=>{
-      geometryFrame=0;
-      if(!hoverSupported()||!toolbarWrapper)return;
-      centerToolbar();
-      // Keep the earlier switch guard for vertical geometry and mask,
-      // not horizontal compensation. Old bias + new anchor = visible jump.
-      if(!adaptiveHeightDirty&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
-         window.performance.now()<panelSwitchUntil)return;
-      adaptiveHeightDirty=false;
-      const setLength=(node,name,value)=>{
-        const next=Math.max(0,Math.round(value))+"px";
-        if(node.style.getPropertyValue(name)!==next)node.style.setProperty(name,next);
-      };
-      const navHeight = Math.max(navbar?.getBoundingClientRect().height || 0,
-        row.getBoundingClientRect().height || 0);
-      const bookmarksHeight = bookmarks && !bookmarks.collapsed && !bookmarks.hidden
-        ? bookmarks.getBoundingClientRect().height : 0;
-      if (navHeight > 0) setLength(toolbarWrapper, "--op-measured-toolbar-height", navHeight + bookmarksHeight);
-      refreshIndicator();
-      scheduleContour();
-    });
+    geometryFrame=window.requestAnimationFrame(()=>{geometryFrame=0;measureToolbarGeometry();});
+  }
+  // Measure once under the workspace swap gate, before visible motion.
+  function prepareWorkspaceGeometry(){
+    if(dead)return;
+    if(frame){window.cancelAnimationFrame(frame);frame=0;sync();}
+    if(geometryFrame){window.cancelAnimationFrame(geometryFrame);geometryFrame=0;}
+    measureToolbarGeometry(true);paintContour(true);
+    window.__zenMagneticBookmarksShared?.prepareWorkspaceContour?.();
   }
   function observeGeometry() {
     if (!geometryObserver) return;
@@ -6656,6 +6656,7 @@ function installTabStrip() {
     destroy();
     throw error;
   }
+  destroy.prepareWorkspaceGeometry=prepareWorkspaceGeometry;
   return destroy;
 }
 
@@ -6686,7 +6687,8 @@ function cleanup() {
   if (!closing) cleanupStep("native layout update",()=>window.dispatchEvent(new CustomEvent("ZenCompactMode:LayoutUpdate")));
 }
 
-const controller = { get active() { return applied && !disposed; }, cleanup };
+const controller = { get active() { return applied && !disposed; }, cleanup,
+  prepareWorkspaceGeometry(){return removeTabStrip?.prepareWorkspaceGeometry?.();} };
 
 // One startup selection per browser process. Never redirect a projected
 // child, a private/unsynced window or a live reload of this mod.
@@ -6744,6 +6746,7 @@ async function activate() {
     window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>{
       if(disposed||window.closed)return;
       root.setAttribute("data-op-startup-ready","true");
+      if(window.__nocturneLayoutStartup===startupRecord)startupRecord.readyAt=window.performance.now();
       window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
     }));
   } catch (error) {
@@ -6753,9 +6756,11 @@ async function activate() {
 }
 
 const reloadingLayout=!!window[CONTROLLER];
+const startupRecord={initial:!reloadingLayout&&!window.__nocturneLayoutStartup,readyAt:null};
 if (!root.hasAttribute("popup-window") && typeof window.addUnloadListener === "function") {
   window[CONTROLLER]?.cleanup();
   window[CONTROLLER] = controller;
+  window.__nocturneLayoutStartup=startupRecord;
   root.setAttribute("data-op-startup-ready","pending");
   window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
   window.addEventListener("beforeunload", markClosing, true);

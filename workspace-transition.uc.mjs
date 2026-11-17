@@ -35,16 +35,39 @@
       return r.width>1&&r.height>1&&r.right>0&&r.left<win.innerWidth&&r.bottom>0&&r.top<win.innerHeight&&s.display!=="none"&&s.visibility!=="hidden";
     });
   }
+  let geometryLock=null;
+  const GEOMETRY="data-zr-workspace-geometry",SURFACE="data-zr-workspace-surface",PAGE="data-zr-workspace-page",MOVE="data-zr-workspace-row-move",BACKING="data-zr-workspace-backing";
+  const HEIGHT="--zr-workspace-height",SURFACE_HEIGHT="--zr-workspace-surface-height";
+  function rect(n){return n?.isConnected?n.getBoundingClientRect():null;}
+  function lockGeometry(){
+    if(geometryLock||root.getAttribute("oneplane-active")!=="true")return;
+    const wrapper=get("zen-appcontent-navbar-wrapper"),surface=get("oneplane-toolbar-surface");
+    const wr=rect(wrapper),sr=rect(surface);
+    if(!wr||!sr||wr.height<2||sr.height<2)return;
+    geometryLock={wrapper,surface,height:wr.height,surfaceHeight:sr.height,
+      bookmarkTop:rect(get("PlacesToolbarItems"))?.top??null,pageTop:rect(get("tabbrowser-tabpanels"))?.top??null};
+    wrapper.style.setProperty(HEIGHT,wr.height+"px");
+    surface.style.setProperty(SURFACE_HEIGHT,sr.height+"px");
+    wrapper.setAttribute(GEOMETRY,"true");
+  }
+  function releaseGeometry(){
+    const old=geometryLock;geometryLock=null;
+    if(!old)return null;
+    old.wrapper.removeAttribute(GEOMETRY);old.wrapper.style.removeProperty(HEIGHT);
+    old.surface.style.removeProperty(SURFACE_HEIGHT);
+    return old;
+  }
   function phase(value){
     if((root.getAttribute(PHASE)||null)===(value||null))return;
-    if(value)root.setAttribute(PHASE,value);else root.removeAttribute(PHASE);
+    if(value==="swap")lockGeometry();
+    if(value)root.setAttribute(PHASE,value);else {releaseGeometry();root.removeAttribute(PHASE);}
     try{win.__zenMagneticBookmarksShared?.syncAddressState?.();}catch(error){console.warn("[Nocturne] Workspace bookmarks:",error);}
     win.dispatchEvent(new win.CustomEvent("ZenRefined:WorkspaceTransition",{detail:{phase:value||"idle"}}));
   }
   function restore(tx){
     for(const [n,old] of tx.styles){
       for(const [k,v,p] of old){if(v)n.style.setProperty(k,v,p);else n.style.removeProperty(k);}
-      n.removeAttribute(MARK);
+      n.removeAttribute(MARK);n.removeAttribute(SURFACE);n.removeAttribute(PAGE);n.removeAttribute(MOVE);n.removeAttribute(BACKING);
     }
     tx.styles.clear();
   }
@@ -65,18 +88,52 @@
       const t=win.setTimeout(done,ms);tx.timers.add(t);tx.waiters.add(done);
     });
   }
-  function animate(tx,items,outgoing){
-    const length=outgoing?160:240,effects=[];
+  function saveEffect(tx,n,mark,properties){
+    if(!n?.isConnected)return false;
+    tx.styles.set(n,Object.keys(properties).map(k=>[k,n.style.getPropertyValue(k),n.style.getPropertyPriority(k)]));
+    for(const [k,v] of Object.entries(properties))n.style.setProperty(k,String(v));
+    n.setAttribute(mark,"true");return true;
+  }
+  function playEffect(tx,n,from,to,length,easing){
+    try{
+      const a=n.animate([{[PROGRESS]:String(from)},{[PROGRESS]:String(to)}],{duration:length,easing,fill:"both"});
+      tx.animations.add(a);return a.finished.catch(()=>{});
+    }catch{return Promise.resolve();}
+  }
+  function heightScale(oldHeight,newHeight){
+    return oldHeight>0&&newHeight>0?Math.max(.25,Math.min(4,oldHeight/newHeight)):1;
+  }
+  function neutralTranslate(n){
+    const t=win.getComputedStyle(n).translate;
+    return !t||t==="none"||/^0(?:px|%)?(?: 0(?:px|%)?){0,2}$/.test(t);
+  }
+  function animate(tx,items,outgoing,old=null){
+    const length=outgoing?180:300,effects=[],ease="cubic-bezier(.22,.75,.25,1)";
     for(const n of items){
-      if(!n.isConnected)continue;
-      tx.styles.set(n,[[PROGRESS,n.style.getPropertyValue(PROGRESS),n.style.getPropertyPriority(PROGRESS)]]);
-      n.style.setProperty(PROGRESS,outgoing?"1":"0");
-      n.setAttribute(MARK,"true");
-      try{
-        const a=n.animate([{[PROGRESS]:outgoing?"1":"0"},{[PROGRESS]:outgoing?"0":"1"}],
-          {duration:length,easing:"cubic-bezier(.25,.1,.25,1)",fill:"both"});
-        tx.animations.add(a);effects.push(a.finished.catch(()=>{}));
-      }catch{}
+      const dy=!outgoing&&n===get("PlacesToolbarItems")&&old?.bookmarkTop!=null?old.bookmarkTop-n.getBoundingClientRect().top:0;
+      const move=neutralTranslate(n),offset=Math.max(-180,Math.min(180,dy+(outgoing?-12:14)));
+      if(!saveEffect(tx,n,MARK,{[PROGRESS]:outgoing?1:0,"--zr-workspace-row-y":offset+"px"}))continue;
+      if(move)n.setAttribute(MOVE,"true");
+      effects.push(playEffect(tx,n,outgoing?1:0,outgoing?0:1,length,ease));
+    }
+    // The adaptive two-row nav has an independent opaque backing.
+    // Fade that paint along with the rows so it cannot jump in height
+    // while the main decorative surface is morphing.
+    const nav=get("nav-bar"),row=get("oneplane-tabs");
+    if(root.getAttribute("oneplane-active")==="true"&&row?.hasAttribute("data-op-overflow-row")&&
+      saveEffect(tx,nav,BACKING,{[PROGRESS]:outgoing?1:0}))
+      effects.push(playEffect(tx,nav,outgoing?1:0,outgoing?0:1,length,ease));
+    if(!outgoing){
+      const surface=get("oneplane-toolbar-surface"),sr=rect(surface);
+      if(old&&sr&&saveEffect(tx,surface,SURFACE,{[PROGRESS]:0,"--zr-workspace-height-scale":heightScale(old.surfaceHeight,sr.height)}))
+        effects.push(playEffect(tx,surface,0,1,length,ease));
+      const page=get("tabbrowser-tabpanels"),pr=rect(page);
+      // Keep the page opaque. Animate chrome deck only, no web DOM or captures.
+      if(root.getAttribute("oneplane-active")==="true"&&pr&&pr.width>1&&pr.height>1&&!page.hasAttribute("data-zr-home-covered")&&neutralTranslate(page)){
+        const dy=old?.pageTop!=null?old.pageTop-pr.top:0;
+        if(saveEffect(tx,page,PAGE,{[PROGRESS]:0,"--zr-workspace-page-y":Math.max(-180,Math.min(180,dy+8))+"px"}))
+          effects.push(playEffect(tx,page,0,1,length,ease));
+      }
     }
     return Promise.race([Promise.all(effects),pause(tx,length+60)]);
   }
@@ -140,8 +197,11 @@
       called=true;result=await invoke();
       if(tx.cancelled||req.superseded)return result;
       await settled(tx);
-      if(tx.cancelled||req.superseded||tx.skipMotion)return result;
-      const incoming=units(),motion=animate(tx,incoming,false);
+      if(tx.cancelled||req.superseded)return result;
+      const geometry=releaseGeometry();
+      try{win.__oneplaneLayoutController?.prepareWorkspaceGeometry?.();}catch(error){console.warn("[Nocturne] Workspace geometry:",error);}
+      if(tx.skipMotion)return result;
+      const incoming=units(),motion=animate(tx,incoming,false,geometry);
       phase("in");
       await motion;
       return result;
@@ -176,11 +236,19 @@
     try{win.CSS.registerProperty({name:PROGRESS,syntax:"<number>",inherits:false,initialValue:"1"});registered=true;}catch(e){registered=e.name==="InvalidModificationError";}
     // Scope important overrides to the animated chrome only; Magnetic
     // Bookmarks uses important translate/transform in its normal state.
-    const spec=":is(#zr-workspace-specificity,[data-zr-workspace-motion])".repeat(8);
+    const spec=":is(#zr-workspace-specificity,["+MARK+"],["+GEOMETRY+"],["+SURFACE+"],["+PAGE+"],["+BACKING+"],#nav-bar,#oneplane-toolbar-surface,#zen-appcontent-navbar-wrapper)".repeat(8);
     const motion=":root[data-zr-workspace-phase] ["+MARK+"]"+spec;
-    const sheet=motion+"{transition-property:none!important;opacity:var("+PROGRESS+")!important;pointer-events:none!important;}"+
+    const sheet=motion+"{transition-property:none!important;opacity:var("+PROGRESS+")!important;scale:calc(.94 + .06 * var("+PROGRESS+"))!important;transform-origin:center top!important;pointer-events:none!important;}"+
+      motion+'['+MOVE+']{translate:0 calc(var(--zr-workspace-row-y)*(1 - var('+PROGRESS+')))!important;}'+
       ':root[data-zr-workspace-phase="swap"] :is(#oneplane-tabs,#PlacesToolbarItems,#tabbrowser-tabs){opacity:0!important;pointer-events:none!important;}'+
-      ':root[data-zr-workspace-phase="swap"] :is(#oneplane-tabs *,#PlacesToolbarItems *){transition-property:none!important;pointer-events:none!important;}';
+      ':root[data-zr-workspace-phase="swap"] :is(#oneplane-tabs *,#PlacesToolbarItems *){transition-property:none!important;pointer-events:none!important;}'+
+      ':root:is([data-zr-workspace-phase="swap"],[data-zr-workspace-phase="in"]) #zen-appcontent-navbar-wrapper'+spec+'{transition-property:none!important;}'+
+      ':root[data-zr-workspace-phase] #zen-appcontent-navbar-wrapper['+GEOMETRY+']'+spec+'{height:var('+HEIGHT+')!important;min-height:var('+HEIGHT+')!important;max-height:var('+HEIGHT+')!important;}'+
+      ':root[data-zr-workspace-phase] #zen-appcontent-navbar-wrapper['+GEOMETRY+'] > #oneplane-toolbar-surface'+spec+'{height:var('+SURFACE_HEIGHT+')!important;}'+
+      ':root[oneplane-active="true"][data-zr-workspace-phase="swap"] #nav-bar:has(#oneplane-tabs[data-op-overflow-row])'+spec+'{background:transparent!important;}'+
+      ':root[oneplane-active="true"][data-zr-workspace-phase] #nav-bar['+BACKING+']'+spec+'{background:color-mix(in srgb,var(--op-surface-tint) calc(var('+PROGRESS+') * 100%),transparent)!important;transition-property:none!important;}'+
+      ':root[data-zr-workspace-phase] ['+SURFACE+']'+spec+'{scale:1 calc(var(--zr-workspace-height-scale) + (1 - var(--zr-workspace-height-scale))*var('+PROGRESS+'))!important;transform-origin:top center!important;transition-property:none!important;}'+
+      ':root[data-zr-workspace-phase] ['+PAGE+']'+spec+'{translate:0 calc(var(--zr-workspace-page-y)*(1 - var('+PROGRESS+')))!important;transition-property:none!important;}';
     try{uri=Services.io.newURI("data:text/css;charset=utf-8,"+encodeURIComponent(sheet));win.windowUtils.loadSheet(uri,win.windowUtils.USER_SHEET);}
     catch{uri=null;style=document.createElementNS("http://www.w3.org/1999/xhtml","style");style.textContent=sheet;root.append(style);}
     win[KEY]=api;win.addUnloadListener(dispose);win.addEventListener("unload",dispose,{once:true});

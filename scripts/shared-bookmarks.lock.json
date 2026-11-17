@@ -8,9 +8,9 @@
       "gitBlob": "927b9815c3132efa997a84ffb5c5ab38e4680489",
       "localOverride": {
         "repository": "NoctHarborStudio/zen-oneplane-horizontal-tabs",
-        "commit": "bbda1ca213df8b6c2f965c4c9957e66bbed54c42",
-        "gitBlob": "f69f0272aff5bb20c4e8fe0977a34f96643a788e",
-        "reason": "Nocturne-specific workspace motion suspension; original upstream blob retained as import provenance"
+        "commit": "ab9ce3b17c7646d5d9421530bfa53037f8cf9ba2",
+        "gitBlob": "513386f6b52b82bd684775d41f4ac1d31e86f474",
+        "reason": "Workspace motion suspension and final resting contour handoff; upstream import provenance unchanged"
       }
     },
     {

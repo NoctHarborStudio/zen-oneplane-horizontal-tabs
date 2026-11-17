@@ -53,6 +53,10 @@ NC-008/009/010/011/012/016 addressed; NC-021 initial compact host/hold/anchor im
 
 Preview.4 fixes NC-023 Downloads text opacity and NC-024 Workspace visual handoff; use two stable surface fades, keep the swap gate until native/mirror settling, and coordinate bookmark/hover state. Native page flicker and general geometry/contour optimization remain investigation items. See audit.md; no blanket motion rewrite.
 
+## B.5. Startup / workspace motion refinement
+
+Preview.4 user test confirms text and flicker fixes. Preview.5 addresses NC-025–027: cold readiness handshake, bounded workspace geometry hold and visual interpolation, coordinated row and page motion. Verify wide/narrow, one/two-row changes, Compact/persistent modes, Escape and cold startup in Zen. Continue measured stabilization before Unified Core/Vertical.
+
 ## C. Separate the lifecycle
 
 1. Introduce WindowContext/disposable ownership and explicit readiness while preserving existing script entry compatibility.
