@@ -2,11 +2,14 @@ name: Verify integration candidate
 on:
   push:
     branches: [integration/unified-core]
+  pull_request:
+    branches: [integration/unified-core]
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   verify:
+    name: Integration gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,6 +19,8 @@ jobs:
         with:
           node-version: "22"
       - name: Check package metadata
-        run: python scripts/verify-release.py --offline
+        run: |
+          python scripts/verify-release.py --offline
+          python scripts/check-publication.py
       - name: Check reproducible build and full regression suite
         run: npm run verify

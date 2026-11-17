@@ -1,6 +1,16 @@
 # Nocturne — verification and exit gates
 
-Planning checklist. All new integration/native verification items are pending.
+Active verification checklist. Historical unchecked items remain pending unless a specific source or native acceptance is recorded. Automated and native validation are separate.
+
+## Current package evidence (2026-11-17)
+
+- [Preview.34 CI](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/44190578246): 265/265 tests passed, 10 runtime scripts verified, reproducible build, Raw and codeload verified.
+- [Preview.35 CI](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/44192812308): 269/272 tests passed; diagnostics version assertion and two Downloads lifecycle fixtures failed. Metadata check passed; remote archive step skipped. Treat L2 as implemented but not accepted. Do not disable these checks.
+- [Preview.36 CI](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/44193186631): 270/272 tests passed. Diagnostic metadata fixed; two Downloads lifecycle tests still fail. Remote archive check was skipped.
+- [ ] Resolve remaining .36 failures in a candidate and verify the full suite before a new runtime publication.
+- [ ] Real Zen L2 parity: one native subscription, late addView cleanup, stale callbacks, Dock drag/progress/clear, private separation, disable/reload.
+- [ ] Native Boot/Bunny and workspace/close motion; no claim that all startup flashes can be eliminated.
+
 
 ## G0 — baseline
 

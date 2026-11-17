@@ -1,5 +1,7 @@
 # Nocturne — staged migration pipeline
 
+Current checkpoint (0.3.0-preview.36): Package Fusion is implemented and published; horizontal stabilization and Library L2 are in progress. Shared lifecycle extraction, vertical layout and public migration/rollback acceptance remain pending. See the [active roadmap](../roadmap.md). Historical milestones below retain their original context.
+
 This is a proposal in integration/unified-core. Do not advertise a Sine preview or change the current preview manifest until gates pass.
 
 ## A. Pin and inventory
@@ -61,9 +63,9 @@ Preview.4 user test confirms text and flicker fixes. Preview.5 addresses NC-025�
 
 Preview.6 is instrumentation only, default enabled. See diagnostics.md and audit.md (NC-025–030). Capture actual launch/close, native tab and workspace events, panel contour and drag thresholds. Prioritize confirmed regressions from user traces before new visual changes. Remove or default-disable detailed diagnostics after stabilization.
 
-## Independent feature backlog — Quick Download Drag (planned)
+## Independent feature — Quick Download Drag (implemented in preview.30)
 
-Status: planned, not a runtime change. Keep the preview.6 diagnostic gate and confirmed regression fixes ahead of this feature; do not combine it with tab dragging, contour or animation refactors.
+Status: implemented in preview.30; native platform validation is pending. Original planning context: Keep the preview.6 diagnostic gate and confirmed regression fixes ahead of this feature; do not combine it with tab dragging, contour or animation refactors.
 
 - Drag directly from the Downloads indicator to export the most recently **successfully completed** local download; a normal click must still open the existing Downloads Dock. No extra menu, second button or mandatory animation.
 - Implement within the shared `downloads-indicator.uc.mjs` controller, using its existing public/private native download list and history. The existing `latest` variable represents notification/batch activity, not necessarily the newest successful completion. Track completion ordering independently (including history hydration; define deterministic fallback if completion time is unavailable).
@@ -98,8 +100,8 @@ Prototype on feature/vertical-layout after shared core is stable. First mount na
 
 ## F. Branch and release policy
 
-- preview now carries the Nocturne developer preview (Package Fusion published at 0.3.0-preview.1); main untouched. Broad/stable promotion remains gated by native validation.
-- integration/unified-core starts at pinned OnePlane preview.62. Planning docs do not bump runtime version.
+- preview now carries the Nocturne developer preview (Package Fusion published at 0.3.0-preview.1); main is documentation only and now presents Nocturne. Broad/stable promotion remains gated by native validation.
+- integration/unified-core was created from pinned OnePlane preview.62; synchronize with the current preview before candidate work. Planning docs do not bump runtime version.
 - feature/vertical-layout starts from accepted common core.
 - Release numbering proposed: 0.3.x unified core; 0.4.x vertical; 1.0.0 after stable validation. Exact preview numbers chosen on release, not in planning docs.
 - No feature changes mixed with parity import. Native bugs fixed separately and merged into integration with recorded baseline change. Every phase has an exit gate; don't accumulate untested runtime changes.

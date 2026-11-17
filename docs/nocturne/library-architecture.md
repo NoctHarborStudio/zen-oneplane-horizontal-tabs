@@ -1,5 +1,5 @@
 # Nocturne Library — implementation RFC
-Status: approved visual direction (prototype 2); architecture / pure state foundation only. No runtime hook is enabled by this commit.
+Status: approved visual direction (prototype 2). L0 reducer, L1 overlay coordination and L2 data foundation exist in preview.35; L2 CI/native acceptance is pending. No Library shell or native shortcut interception yet.
 Baseline: 050f6f418ef7768f6affef843c7b8137a9ea8e65. Zen source reference: zen-browser/desktop@37e772656a612f19732506b38a4f985bb3cf95a6; verify exact installed Zen 1.24.2b APIs before enabling.
 
 ## Product contract
@@ -36,9 +36,9 @@ Documents/Pictures: downloaded files from shared service by verified file type a
 Private windows: default native History fallback, no public history/media scan; private downloads isolated and only native closed data for that window if verified. No disk writes of library data; only UI settings/opt-in folders in prefs, never queries or history.
 
 ## Pipeline and release gates
-L0 (this commit): RFC + pure reducer and unit tests. No production entrypoint/version bump.
-L1: per-window overlay coordinator and disposable scope; integrate Home/Hub/Dock/search ownership minimally, validate Escape/focus/reload/native fallback; no global UI rewrite.
-L2: extract shared Downloads service + adapters and parity tests before changing UI. Add History and closed-tab read-only adapters with native API contract tests. No duplicate download subscription.
+L0 (implemented): RFC + pure reducer and unit tests. No production entrypoint/version bump.
+L1 (implemented, native validation pending): per-window overlay coordinator and disposable scope; integrate Home/Hub/Dock/search ownership minimally, validate Escape/focus/reload/native fallback; no global UI rewrite.
+L2 (implemented in preview.35; CI/native gate pending): extract shared Downloads service + adapters and parity tests before changing UI. Add History and closed-tab read-only adapters with native API contract tests. No duplicate download subscription.
 L3: Library shell, responsive 5-section navigation, theme tokens, keyboard/focus, motion controller. Mount disabled by default or explicit preview pref; simulated loading/race tests. Extend deterministic build to independent library.uc.mjs output and scoped CSS; runtime syntax check already enumerates manifest scripts.
 L4: wire native History and Recently Closed, search pagination, background open/restore; verify actual Ctrl+H command ownership before enable. Native fallback on unready/unsupported.
 L5: wire shared Downloads and replace full Dock routing, keep recent + native file drag. Compare historical records, clear semantics and privacy; Ctrl+J routing only after parity.
