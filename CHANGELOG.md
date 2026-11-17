@@ -1,4 +1,6 @@
-## 0.3.0-preview.25 — Reversible Bunny and cold-start preflight
+## 0.3.0-preview.26 — Reversible Bunny and cold-start preflight
+
+- Publication follow-up to preview.25; synchronized Sine metadata.
 
 - Use one pointer-driven geometry curve for pulling a tab or Split View group out and returning it to its row. The same progress determines card position, compression and occupied slot width in both directions. Only an accepted early drop plays the remaining curve.
 - Keep the frozen card-local activation edge and native drop/placement semantics; eliminate separate return threshold, insertion keyframes and autonomous bounce during the gesture.
