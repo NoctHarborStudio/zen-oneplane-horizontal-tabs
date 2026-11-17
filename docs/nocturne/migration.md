@@ -61,6 +61,18 @@ Preview.4 user test confirms text and flicker fixes. Preview.5 addresses NC-025�
 
 Preview.6 is instrumentation only, default enabled. See diagnostics.md and audit.md (NC-025–030). Capture actual launch/close, native tab and workspace events, panel contour and drag thresholds. Prioritize confirmed regressions from user traces before new visual changes. Remove or default-disable detailed diagnostics after stabilization.
 
+## Independent feature backlog — Quick Download Drag (planned)
+
+Status: planned, not a runtime change. Keep the preview.6 diagnostic gate and confirmed regression fixes ahead of this feature; do not combine it with tab dragging, contour or animation refactors.
+
+- Drag directly from the Downloads indicator to export the most recently **successfully completed** local download; a normal click must still open the existing Downloads Dock. No extra menu, second button or mandatory animation.
+- Implement within the shared `downloads-indicator.uc.mjs` controller, using its existing public/private native download list and history. The existing `latest` variable represents notification/batch activity, not necessarily the newest successful completion. Track completion ordering independently (including history hydration; define deterministic fallback if completion time is unavailable).
+- Use native Gecko file drag-and-drop on the trusted `dragstart` event: validate succeeded/not blocked and synchronously verify the local file exists, then populate `application/x-moz-file` with an nsIFile and `text/uri-list` with the local file URI, following Firefox DownloadsView's native drag contract. Prefer copy-only semantics for this shortcut so the original is not moved unintentionally. Never fetch file bytes, create a temporary file, or expose a private download in a normal window.
+- Missing, deleted, incomplete, blocked or canceled files must not start a file drag. If the latest completed file has disappeared, cancel rather than silently export an older unrelated file. Preserve normal click and keyboard activation. Let native drag threshold distinguish click from drag; prevent conflicts with window movement, tab dragging and dock auto-open; clean up drag state on cancellation, dragend, disable, unload and host changes.
+- Test horizontal/native sidebar hosts, left/right and Compact modes, privacy separation, multiple simultaneous downloads with out-of-order completion, restored history, missing files, Escape and repeated gestures. Verify actual external file drops in Windows Explorer and compatible web/app upload targets in real Zen; native OS drag feedback is sufficient initially. No polling, persistent drag overlay, or per-frame layout work.
+
+Publish only with a dedicated tested runtime update after stabilization. Planning-only change: no manifest version or updatedAt bump.
+
 ## C. Separate the lifecycle
 
 1. Introduce WindowContext/disposable ownership and explicit readiness while preserving existing script entry compatibility.
