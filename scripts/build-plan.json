@@ -2,6 +2,10 @@
   "schema": 1,
   "javascript": [
     {
+      "path": "src/core/diagnostics.js.part",
+      "kind": "section"
+    },
+    {
       "path": "src/core/preferences.js.part",
       "kind": "section"
     },
