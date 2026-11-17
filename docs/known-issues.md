@@ -224,3 +224,133 @@ Shared Bunny bridge, moving active-section indicator, explicit extra-folder pick
 
 ### Bunny live drag popup — screen-edge snapping (0.3.0-preview.47)
 User reports the invisible native frame is magnetically constrained to screen edges. Gecko `nsMenuPopupFrame` applies screen constraints unless a chrome panel declares `flip="none"`; `nsBaseDragSession::DragMoved` calls the same popup positioning path. Set the attribute before attachment, preserving the existing single native drag widget and motion. Source and regression checks do not establish Windows runtime acceptance; verify edges, taskbar, adjacent monitors and cancellation. No new controller or cursor polling.
+
+
+## Nocturne 0.4.0 — cross-feature audit (open)
+
+Baseline preview.47; audit HEAD 39459794addcc0e0236edd12cd8a636d3b714265. All NC4 entries remain open. S = source-confirmed structure/defect, R = risk not reproduced in live Zen, V = verification gap. P0 = native data/lifecycle safety, P1 = architecture/UX, P2 = maintenance. Full evidence, prerequisites and exit criteria: [0.4.0 audit and pipeline](nocturne/pipeline-0.4.0.md). Existing OP/NC/MB records remain historical evidence; these cross-feature IDs do not imply new independent implementations or verified native bugs.
+
+### Initial inventory (NC4-001–032)
+
+| ID | Open issue / risk | Pipeline |
+| --- | --- | --- |
+| NC4-001 | Dual contour renderer | A4 |
+| NC4-002 | Fragmented startup readiness | A3 |
+| NC4-003 | Motion ownership gap | A3 |
+| NC4-004 | Independent geometry readers | A4 |
+| NC4-005 | Manual lifecycle cleanup | A1 |
+| NC4-006 | Process preference lease risk | A1 |
+| NC4-007 | Free startup claim consumed early | A2 |
+| NC4-008 | Workspace commands bypass shared queue | A2 |
+| NC4-009 | Partial Trash transfer | A2 |
+| NC4-010 | Projection and Trash native identity races | A2/A5 |
+| NC4-011 | Home subtree recreation | A3/A6 |
+| NC4-012 | URLbar presentation ownership | A3/A6 |
+| NC4-013 | Tab topology during motion | A4/A5 |
+| NC4-014 | Drag identity/visual separation | A5 |
+| NC4-015 | Multiple drag lifecycles | A5 |
+| NC4-016 | Duplicate file transfer payload | A5/A7 |
+| NC4-017 | Snap/coordinate policy overlap | A5 |
+| NC4-018 | Native hit regions | A4/A5/A6 |
+| NC4-019 | Partial overlay handoff | A6 |
+| NC4-020 | Downloads projections and list leases | A7 |
+| NC4-021 | Library history/pagination limits | A7 |
+| NC4-022 | Decoded image/file scan budget | A7 |
+| NC4-023 | Smart Search manager lifecycle | A6 |
+| NC4-024 | Page Progress request ordering | A7 |
+| NC4-025 | Diagnostics schema/budget | A0/A8 |
+| NC4-026 | Runtime version metadata drift | A0 |
+| NC4-027 | Documentation-only CI failure | A0 |
+| NC4-028 | Native validation gap | A0/A8 |
+| NC4-029 | Close lifecycle overlap | A1/A3/A8 |
+| NC4-030 | Implicit build dependencies | A1 |
+| NC4-031 | Focus and reduced motion | A6/A8 |
+| NC4-032 | Vertical host assumptions | A9 |
+
+### Deep source checkpoint — NC4-033–046
+
+#### NC4-033 — Native switch result is not a success certificate (S/R/P0)
+
+Zen 1.24.2b ZenSpaceManager.mjs:1962–2010 catches errors in changeWorkspace, resolves and returns the requested workspace; #performWorkspaceChange assigns activeWorkspace before containers are reconciled. Hub:958–971 checks only ID, Home:947–954 does not check native outcome, WorkspaceTransition:205–250 starts incoming after promise + quiet interval. The native semantics are source-confirmed; a failed live switch is not reproduced.
+
+**Required:** A2/A3: validate destination container and tab selection/topology plus native completion, distinguish partial/failed/pending. Inject failure after activeWorkspace assignment; no successful incoming motion based only on ID.
+
+#### NC4-034 — Native workspace deletion closes remaining owned tabs (S/R/P0)
+
+ZenSpaceManager.mjs:1487–1504 and 1743–1752: removeWorkspace calls #deleteWorkspaceOwnedTabs -> gBrowser.removeTabs before removal. Hub:341–365 correctly checks no owned tabs remain; native allStoredTabs is cached (3443–3494) and moveTabsToWorkspace invalidates cached tabs (1837–1885). Current guard is necessary, not evidence of present loss. Verify physical destination, exact ownership and cache freshness before invoking destructive native API.
+
+**Required:** A2: preserve guard, use native adapter and journal; assert zero real owned tabs before native deletion and verify actual outcome. Fault-inject partial move, stale cache, group and external tab changes.
+
+#### NC4-035 — Trash purge silently reports partial execution (S/P0)
+
+Hub:529–540 clears purgePlan, rechecks candidates, then breaks without reporting when single-window/eligibility changes; removeTab is not followed by result validation. Actual function fixture: three approved tabs, simulated second window after first remove -> only first invoked, result undefined. This is a confirmed partial-result gap, not proof of unexpected native deletion.
+
+**Required:** A2: report attempted/confirmed/retained/failed tabs and reasons; respect native beforeunload, avoid retries against stale approval; verify real removal, preserve remaining tabs.
+
+#### NC4-036 — Old Free initialization continues after disposal (S/P0)
+
+Bootstrap:34–58 claims startup, awaits createAndSaveWorkspace, then writes FREE_PREF and reorders before checking disposed. Actual extracted function with deferred mock native create: dispose before resolve -> pref write and reorder still happen, switch skipped. Zen's dontChange=true body normally performs save synchronously before promise resolution, so exact native race frequency unknown.
+
+**Required:** A1/A2: check generation after every await and before each native mutation; process command lease survives view disposal only for explicitly authorized in-flight action; reconcile partial native creation without deleting it.
+
+#### NC4-037 — One failed preference restoration blocks unrelated settings (S/P0)
+
+preferences.js.part:54–69 loops without per-key try/catch. Actual restorePrefs fixture: first native setter throws locked error -> later key not restored; backup not cleared. startup.uc.mjs handles keys individually, duplicate lifecycle policy.
+
+**Required:** A1: acquire/restore per-key with ownership journal, isolate failures and retain unresolved backup; locked pref, user edit and multiwindow tests. Do not clear backup until reconciliation.
+
+#### NC4-038 — Layout closing flag is never reset after cancelled close (S/R/P1)
+
+preferences.js.part:71–74 markClosing sets closing=true; bootstrap cleanup:26 skips ZenCompactMode:LayoutUpdate when closing. No reset in layout; startup.uc.mjs:93–97 has separate 1s reset. Native cancellation sequence pending.
+
+**Required:** A1: one lifecycle state distinguishes close intent, actual unload and cancelled close; verify beforeunload cancel then mod disable/reload, no native layout stale state.
+
+#### NC4-039 — Overlapping bookmark animation handles restore stale CSS state (S/P1)
+
+center-motion.js.part:288–300 bookmarks() snapshots shared CSS property and marker independently of active tab owner. Actual function fixture starts two handles, releases older then newer: after first release marker removed while second live; after both, marker=true and --zr-fold-bookmark-progress=1 remain. Not a live reproduction of overlapping callers.
+
+**Required:** A3: per-surface generation lease, cancel old handle before snapshot of next; stale release no-op, baseline restored exactly once. Add overlap and out-of-order release fixtures; verify startup/close/workspace/disable.
+
+#### NC4-040 — Projection input guard does not gate workspace switch (S/R/P1)
+
+Hub:874–939 records trusted pointer/keydown to set interacted and stop empty guard. After waitForProjectionReady, it still calls child.changeWorkspaceWithID before prepareProjectionStart checks interacted (765–766). A user who interacts before readiness can still be redirected; native occurrence pending.
+
+**Required:** A2/A5: distinguish explicit request to open requested workspace from user takeover, check intent/generation before changing child selection; don't steal focus or close child automatically; test manual input before/after ready.
+
+#### NC4-041 — Visual timeout does not resolve a stuck workspace command queue (S/R/P1)
+
+workspace-transition:21–31 gate.pending cleared only when native settles; run:196 waits in while loop; perform:217 watchdog cleans visuals only. This intentionally avoids overlapping native changes, but permanently unresolved native promise blocks later Home/Hub requests. Zen also waits its internal switch context (1967).
+
+**Required:** A2/A3: expose command pending/unknown state and recovery diagnostics; bounded UI wait and explicit native reconciliation, never clear live gate and start second mutation merely on visual timeout.
+
+#### NC4-042 — Unsplit happens before fallible reorder/adoption/window creation (S/R/P0)
+
+drag-controller:168–183, drag-end:33–36 call unsplitTab before moveNativeNextTo/adoptTab/replaceTabWithWindow, which may fail. Native ZenViewSplitter.mjs:211–255 removes entire group when fewer than 3 tabs. On failure split topology may already be changed; no live failure reproduced.
+
+**Required:** A5: preflight target, capability and identity before unsplit; native outcome and partial-result handling, no unsafe automatic rollback; test rejected adoption/missing move method/window creation failure with two- and multi-pane groups.
+
+#### NC4-043 — Temporary cross-window getter override needs failure-isolated cleanup (S/R/P1)
+
+Hub:1052–1149 installWorkspaceLinkScope replaces allUsedBrowsers on every live manager for synchronous URI lookup and patches UrlbarParentController prototype. Zen URILoadingHelper patch:27 uses this getter. A throwing restore can stop subsequent restores in reverse loop; full upstream UrlbarParentController implementation not reviewed, synchronous contract requires verification.
+
+**Required:** A1/A6: explicit native capability and narrow scoped lookup; per-manager try/finally restoration, reentrancy/foreign wrapper identity tests; verify native provider/URI helper path before deciding whether hook can be removed.
+
+#### NC4-044 — Layout resources are acquired before guarded mount block (S/R/P1)
+
+Build concatenates Hub controller initialization (hub/controller:1046; listeners registered 1041–1042), tab-state ResizeObserver construction (18), drag-controller global publication (drag-end) before window-lifecycle:129 try. If evaluation throws before that try, installTabStrip never returns destroy, bootstrap cleanup cannot release partial resources. Actual failure not injected yet.
+
+**Required:** A1: create acquisition scope before first side effect; register immediate rollback for every global/listener/observer; fail at each pre-mount site and check cleanup and fallback.
+
+#### NC4-045 — Projection diagnostics bypass unified JSON recorder (S/P2)
+
+Hub:689–698 projectionLog writes console.info only; key stages (opened, ready, start-prepared, failed, search-result) are not sent through __nocturneTrace by this function. Error String may contain arbitrary content in console. No demonstrated sensitive JSON leakage.
+
+**Required:** A0/A8: route bounded phase/result metadata through existing trace with transaction/window IDs, error name/reason enum, no URLs/paths/queries; verify local JSON persistence and privacy.
+
+#### NC4-046 — Close animation can overlap active interaction surfaces (R/P1)
+
+closing-animation:176–185 eligible checks startup/workspace/customization/fullscreen, but not tab drag, file drag, overlay, or URLbar morph; begin starts CenterMotion and bookmark handle. No native overlap reproduction, and trusted OS quit may bypass wrapper.
+
+**Required:** A3/A5/A6: terminal priority policy; cancel/settle visual owners without suppressing native close or forcing drop. Test close while drag/search/Library active, second close, cancellation, global quit.
+
+Four extracted-source mock fixtures confirmed NC4-035/036/037/039, not live Zen. Do not close these issues until relevant regression and native validation gates pass. No runtime changes in this audit.
