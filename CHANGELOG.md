@@ -1,3 +1,7 @@
+## 0.3.0-preview.10 — Publication metadata
+
+- Publish the complete shared Center Motion implementation from preview.9 with a strictly newer Sine version and timestamp. No additional runtime behavior changes.
+
 ## 0.3.0-preview.9 — Shared Center Motion
 
 - One window-local engine plans and plays card trajectories for startup, native close and workspace changes. Outer cards depart first; closing uses reversed keyframes. Freeze projection centering until release, then resynchronize.

@@ -1,4 +1,4 @@
-# Nocturne preview.9 diagnostics
+# Nocturne preview.10 diagnostics
 
 Recording remains enabled by default for this preview. Set `zen.nocturne.diagnostics.enabled` to false in about:config to disable. No network upload.
 
