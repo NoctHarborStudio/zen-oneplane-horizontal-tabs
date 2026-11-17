@@ -112,3 +112,33 @@ test("lane pull keeps the same visible ghost across repeated pointer events",asy
   assert.ok(s.includes("prepareLanePull();setPull(p);showLaneGhost(event,p)"));
   assert.ok(s.includes("clearLaneDrag();clearDropMarker();return;"));
 });
+
+test("Bunny insertion preserves travel before a visible compression and rebound",async()=>{
+  const {readFile}=await import("node:fs/promises");
+  const s=await readFile(new URL("../src/interactions/native-drag-image.js.part",import.meta.url),"utf8");
+  const a=s.indexOf("const BUNNY_INSERT_DURATION="),b=s.indexOf("function cancelInsertion(",a);
+  const {frames,duration}=new Function(s.slice(a,b)+"return {frames:bunnyInsertionFrames,duration:BUNNY_INSERT_DURATION}")();
+  assert.equal(duration,400);
+  const start={x:4,y:43,sx:1,sy:1},sx=36/42,sy=30/39,f=frames(start,sx,sy);
+  assert.deepEqual(f.map(x=>x.offset),[0,.30,.57,.77,.91,1]);
+  assert.equal(f[0].transform,"translate(4px,43px) scale(1,1)");
+  assert.ok(f[1].transform.includes(String(43*.57)+"px"));
+  assert.ok(f[2].transform.includes("scale("+sx*.43+","+sy*.69+")"));
+  assert.ok(f[3].transform.includes("scale("+sx*1.13+","+sy*.84+")"));
+  assert.equal(f.at(-1).transform,"translate(0px,0px) scale("+sx+","+sy+")");
+  assert.ok(s.includes('duration:BUNNY_INSERT_DURATION,easing:"linear"'));
+});
+test("early toolbar return drop finishes native ownership but retains the visual tail",async()=>{
+  const {readFile}=await import("node:fs/promises");
+  const read=p=>readFile(new URL("../src/interactions/"+p,import.meta.url),"utf8");
+  const [end,img,ctrl,strip,engine]=await Promise.all([read("drag-end.js.part"),read("native-drag-image.js.part"),read("drag-controller.js.part"),read("strip-drag.js.part"),read("drag-engine.js.part")]);
+  const a=end.indexOf("markHandled: "),b=end.indexOf("\n  };",a);
+  const setup=new Function("let dragHandled=false,draggedTab={},draggedGroup={},dragStartPoint={},dragImageMode='inline',dragInsertAnimation={currentTime:250},dragInsertPending=false,ended=0,finished=0,held=0;const BUNNY_INSERT_DURATION=400,window={};const finishNativeDragLifecycle=()=>++finished===1,endDragVisual=()=>ended++,holdToolbarForReturn=()=>held++;const controller={"+end.slice(a,b)+"};return {mark:controller.markHandled,read:()=>({dragHandled,draggedTab,draggedGroup,dragStartPoint,dragInsertPending,ended,finished,held})}")();
+  setup.mark(true);
+  assert.deepEqual(setup.read(),{dragHandled:true,draggedTab:null,draggedGroup:null,dragStartPoint:null,dragInsertPending:true,ended:0,finished:1,held:1});
+  setup.mark(true);assert.equal(setup.read().ended,0);
+  assert.ok(img.includes("if(dragInsertPending){endDragVisual();return;}"));
+  assert.ok(ctrl.includes("dragInsertPending=false;"));
+  assert.ok(strip.includes("sourceHandled(tab,true);"));
+  assert.ok(engine.includes("if(dragInsertPending)endDragVisual();"));
+});

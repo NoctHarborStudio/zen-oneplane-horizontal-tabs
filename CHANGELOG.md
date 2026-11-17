@@ -1,3 +1,9 @@
+## 0.3.0-preview.21 — Visible Bunny insertion
+
+- Replace the globally eased return with a 400ms phased approach, visible compression at the slot, rebound and exact resting geometry. Preserve the row-local pull and existing outward animation.
+- Finish the isolated return visual even when a native toolbar drop arrives early; finish the native drag immediately and clear pending visuals on a new gesture or cancellation.
+- Trace early-drop visual tails and add regression checks for phased keyframes and native/visual ownership.
+
 ## 0.3.0-preview.20 — Row-local Bunny
 
 - Freeze the actual dragged card's lower edge plus 3 CSS pixels at gesture start. Use a 30px pull distance with the existing detach/return hysteresis; upper and lower rows no longer share the panel's bottom edge.

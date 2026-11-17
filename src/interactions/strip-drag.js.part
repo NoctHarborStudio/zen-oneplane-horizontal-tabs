@@ -242,6 +242,7 @@
   function revealForDrag(event) {
     const tab = readDraggedTab(event);
     if (!hoverSupported() || !tab || !toolbarWrapper) return;
+    if(dragInsertPending)endDragVisual();
     const within = toolbarDragReturnZone(event);
     if(within)holdToolbarForReturn();
     if(tabOwner(tab)===window)clearPlacementPreview();
@@ -337,7 +338,9 @@
     const tab=readDraggedTab(event);
     if(!tab||!toolbarDragReturnZone(event))return;
     if(tabOwner(tab)===window&&dragDetachedOnce){
-      event.preventDefault();event.stopImmediatePropagation();sourceHandled(tab);schedule();return;
+      event.preventDefault();event.stopImmediatePropagation();
+      if(dragImageMode==="content")setDragImageMode("inline",event);
+      sourceHandled(tab,true);schedule();return;
     }
     onStripDrop(event);
   }

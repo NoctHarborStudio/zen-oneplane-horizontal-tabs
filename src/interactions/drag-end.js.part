@@ -43,13 +43,21 @@
       if(draggedTab||dead)return;
       clearLiveDrag();clearDropMarker();releaseDragReveal();refreshIndicator();
     },
-    markHandled: () => {
+    markHandled: (finishReturn=false) => {
       if(!finishNativeDragLifecycle())return;
       dragHandled = true;
-      endDragVisual();
+      const keep=finishReturn&&dragImageMode==="inline"&&!!dragInsertAnimation;
+      if(!keep)endDragVisual();
       draggedTab = null;
       draggedGroup = null;
       dragStartPoint=null;
+      // Native drop is committed now. Only the isolated visual remains
+      // until the return animation completes; no native session is held.
+      if(keep){
+        dragInsertPending=true;
+        holdToolbarForReturn();
+        window.__nocturneTrace?.("drag.insert.drop-tail",{remaining:Math.max(0,BUNNY_INSERT_DURATION-(Number(dragInsertAnimation.currentTime)||0))},{sample:800});
+      }
     }
   };
   window[DRAG_CONTROLLER] = dragController;

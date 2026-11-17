@@ -14,6 +14,7 @@
   let dragGhostAnimation = null;
   let dragLastPoint = null;
   let dragReentry = false, dragReturnFloor = 0, dragInsertAnimation = null, dragInsertNode = null;
+  let dragInsertPending=false; // visual tail only; native session is already finished
   let groupPullLayout = null;
   let pointerSearch = null, dragSearch = null, restoreSearchTimer = 0;
   const blankDragImage = html("canvas");

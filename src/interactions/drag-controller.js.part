@@ -1,4 +1,5 @@
   function endDragVisual() {
+    dragInsertPending=false;
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.visual.end",()=>({mode:dragImageMode,pull:dragPull,detached:dragDetachedOnce,ghost:!!dragGhost&&!dragGhost.hidden,shifted:dragShifted.size}),{sample:1800});
     clearPlacementPreview();
     cancelInsertion();
@@ -30,9 +31,9 @@
     restoreStartupSearch(search);
     reconcileTabCascade();
   }
-  function sourceHandled(tab) {
+  function sourceHandled(tab,finishReturn=false) {
     const source = tabOwner(tab)?.[DRAG_CONTROLLER];
-    source?.markHandled();
+    source?.markHandled(finishReturn);
   }
   function onDragStart(event, tab, group = null) {
     if (!hoverSupported() || !validNativeTab(tab) || !event.dataTransfer) {
@@ -41,6 +42,7 @@
     }
     const image = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
     if (!image) { event.preventDefault(); return; }
+    if(dragInsertPending)endDragVisual();
     cancelInsertion();
     cancelOverflowMotion();
     if(dragLifecycle.current())cancelActiveDrag("superseded");

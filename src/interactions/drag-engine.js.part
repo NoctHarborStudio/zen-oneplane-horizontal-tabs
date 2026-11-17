@@ -56,7 +56,10 @@
     const token=nativeDragToken;nativeDragToken=null;nativeDragIdentity=null;stopNativeDragWatch();
     return token!==null&&dragLifecycle.finish(token);
   }
-  function cancelActiveDrag(reason){return dragLifecycle.cancel(reason);}
+  function cancelActiveDrag(reason){
+    if(dragInsertPending)endDragVisual();
+    return dragLifecycle.cancel(reason);
+  }
   function installDragEngine(){
     const capture=true,handlers=[];
     const listen=(node,type,fn)=>{node.addEventListener(type,fn,capture);handlers.push([node,type,fn]);};
@@ -69,7 +72,7 @@
       else if(signal==="drop")current.onUp?.(event);
     }
     function freshPointer(event){
-      if(event.isTrusted&&dragLifecycle.current())cancelActiveDrag("new-pointerdown");
+      if(event.isTrusted&&(dragLifecycle.current()||dragInsertPending))cancelActiveDrag("new-pointerdown");
     }
     function mouseFallback(event){
       if(!event.isTrusted)return;
