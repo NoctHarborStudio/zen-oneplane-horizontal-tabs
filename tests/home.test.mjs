@@ -178,7 +178,10 @@ test("Home is primary: repeated clicks, Escape, background opens and real naviga
  const root=new Node(),host=new Node(),panels=new Node(),tabs=new Node();root.append(host);host.append(panels);
  const doc={documentElement:root,getElementById:id=>id==="zen-tabbox-wrapper"?host:id==="tabbrowser-tabpanels"?panels:null,createElementNS:()=>new Node()};
  const win=new Node();win.document=doc;win.console={warn(...args){throw Error(args.join(" "))}};win.matchMedia=()=>({matches:true});win.MutationObserver=class{observe(){} disconnect(){}};
- const blank=new Node(),page=new Node(),pending=new Node();
+ const blank=new Node(),page=new Node(),pending=new Node(),fresh=new Node();
+ const initialGlobal={isInitialDocument:true,documentURI:{spec:"about:blank"}};
+ fresh.linkedBrowser={currentURI:{spec:"about:blank"},browsingContext:{currentWindowGlobal:initialGlobal}};
+ const bar=new Node();bar.view={isOpen:false,close(){this.isOpen=false}};bar.blur=()=>{};win.gURLBar=bar;
  blank.setAttribute("zen-empty-tab","");blank.linkedBrowser={currentURI:{spec:"about:blank"}};
  page.linkedBrowser={currentURI:{spec:"https://example.org/"}};
  pending.setAttribute("pending","");pending.linkedBrowser={currentURI:{spec:"about:blank"}};
@@ -197,13 +200,37 @@ test("Home is primary: repeated clicks, Escape, background opens and real naviga
  assert.equal(panels.hasAttribute("data-zr-home-covered"),false);
  lease.show();lease.show();assert.equal(lease.open,true);
  win.gBrowser.selectedTab=pending;tabs.fire("TabSelect",{target:pending});assert.equal(lease.open,false);
+ // TabOpen/TabSelect sees the initial blank before a real navigation.
+ tabs.fire("TabOpen",{target:fresh});win.gBrowser.selectedTab=fresh;tabs.fire("TabSelect",{target:fresh});
+ assert.equal(lease.open,false);
+ progress.onLocationChange(fresh.linkedBrowser,{isTopLevel:true},{spec:"about:blank"});
+ assert.equal(lease.open,false);
+ win.fire("ZenURLBarClosed",{detail:{onElementPicked:true,onSwitch:true,closeSeq:3}});
+ assert.equal(lease.open,false);
+ fresh.linkedBrowser.currentURI={spec:"https://example.com/"};
+ fresh.linkedBrowser.browsingContext.currentWindowGlobal={isInitialDocument:false,documentURI:{spec:"https://example.com/"}};
+ progress.onLocationChange(fresh.linkedBrowser,{isTopLevel:true},fresh.linkedBrowser.currentURI);
+ progress.onStateChange(fresh.linkedBrowser,{isTopLevel:true},null,0x40010);
+ assert.equal(lease.open,false);
+ // A genuine native empty tab remains Home.
  win.gBrowser.selectedTab=blank;tabs.fire("TabSelect",{target:blank});assert.equal(lease.open,true);
  blank.removeAttribute("zen-empty-tab");blank.linkedBrowser.currentURI={spec:"https://example.net/"};
  progress.onLocationChange(blank.linkedBrowser,{isTopLevel:true},blank.linkedBrowser.currentURI);
  assert.equal(lease.open,false);
  blank.linkedBrowser.currentURI={spec:"about:blank"};
+ blank.linkedBrowser.browsingContext={currentWindowGlobal:{isInitialDocument:false,documentURI:{spec:"about:blank"}}};
+ blank.setAttribute("busy","");
  progress.onLocationChange(blank.linkedBrowser,{isTopLevel:true},blank.linkedBrowser.currentURI);
+ assert.equal(lease.open,false);
+ blank.removeAttribute("busy");progress.onStateChange(blank.linkedBrowser,{isTopLevel:true},null,0x40010);
  assert.equal(lease.open,true);
+ // Native search result selection must not resurrect a closed Home,
+ // even if the current committed tab is a real blank placeholder.
+ win.gBrowser.selectedTab=page;tabs.fire("TabSelect",{target:page});assert.equal(lease.open,false);
+ bar.view.isOpen=true;win.gBrowser.selectedTab=blank;tabs.fire("TabSelect",{target:blank});assert.equal(lease.open,false);
+ bar.view.isOpen=false;win.fire("ZenURLBarClosed",{detail:{onElementPicked:true,closeSeq:4}});assert.equal(lease.open,false);
+ win.fire("ZenURLBarClosed",{detail:{onSwitch:true,closeSeq:5}});assert.equal(lease.open,false);
+ win.fire("ZenURLBarClosed",{detail:{onSwitch:false,onElementPicked:false,closeSeq:6}});assert.equal(lease.open,true);
  lease.release();assert.equal(panels.hasAttribute("data-zr-home-covered"),false);
 });
 test("Home button invokes idempotent show instead of toggle",()=>{

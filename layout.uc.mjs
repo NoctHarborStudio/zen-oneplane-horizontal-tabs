@@ -338,7 +338,7 @@ function acquireZenHome(win, services) {
   panel.setAttribute("role","region");panel.setAttribute("aria-label","Home");
   const content=html("main","zh-content");panel.append(content);
   let open=false,editing=false,dead=false,switching=false,adding=false,dragId=null,focusHome=null,oldInert=false,covered=false,motion=null,searchToken=null,startupHome=false,homeOnPlaceholder=false;
-  let searchFrame=0,searchMotion=null,searchTimer=0,searchBar=null;
+  let searchFrame=0,searchMotion=null,searchTimer=0,searchBar=null,nativeCancelTab=null;
   let searchGeometry=null,searchLastHeight=0,searchCurrentHeight=0,searchClosing=false,searchReturn=null,searchReturnFrame=0;
   let searchInput=null,searchOriginalPlaceholder=null,searchSessionLabel=null;
   let searchSnapshot=null,searchSnapshotTimer=0,searchSnapshotObserver=null,searchSnapshotDirty=true,searchSnapshotView=null;
@@ -353,10 +353,21 @@ function acquireZenHome(win, services) {
   function allowed(){return !dead&&host.isConnected&&panels.isConnected&&!root.hasAttribute("customizing")&&root.getAttribute("inDOMFullscreen")!=="true"&&root.getAttribute("inFullscreen")!=="true"&&!root.hasAttribute("popup-window");}
   // Home is a primary destination, not a modal toggle.
   function isHomePlaceholder(tab,uri){
-    if(!tab||tab.closing)return false;
+    if(!tab||tab.closing||tab.hasAttribute("zen-glance-tab"))return false;
+    // Zen explicitly creates its permanent empty tab before selection.
     if(tab.hasAttribute("zen-empty-tab"))return true;
-    if(tab.hasAttribute("pending")||tab.hasAttribute("discarded")||tab.hasAttribute("busy")||tab.hasAttribute("zen-glance-tab"))return false;
-    try{return /^about:(blank|newtab|home)(?:[?#].*)?$/i.test(uri?.spec||tab.linkedBrowser?.currentURI?.spec||"");}catch{return false;}
+    if(tab.hasAttribute("pending")||tab.hasAttribute("discarded")||tab.hasAttribute("busy"))return false;
+    try{
+      const b=tab.linkedBrowser, spec=uri?.spec||b?.currentURI?.spec||"";
+      const empty=/^about:(blank|newtab|home)(?:[?#].*)?$/i;
+      if(!empty.test(spec)||b?.webProgress?.isLoadingDocument||
+         (b?.userTypedValue&&!empty.test(b.userTypedValue)))return false;
+      // An ordinary new browser begins with an INITIAL about:blank even
+      // when its requested destination is a real URL. Never expose Home
+      // until the parent-process WindowGlobal confirms a committed page.
+      const global=b?.browsingContext?.currentWindowGlobal;
+      return global?.isInitialDocument===false&&global.documentURI?.spec===spec;
+    }catch{return false;}
   }
   function ensurePrimaryHome(){
     if(open||switching||!allowed()||win.__oneplaneWorkspaceProjection||
@@ -372,6 +383,7 @@ function acquireZenHome(win, services) {
     close(focus);return true;
   }
   function onSelectedTab(){
+    nativeCancelTab=null;
     if(switching||!allowed())return;
     if(isHomePlaceholder(browser.selectedTab)){
       if(open)homeOnPlaceholder=true;else ensurePrimaryHome();
@@ -756,14 +768,28 @@ function acquireZenHome(win, services) {
     searchReturnFrame=win.requestAnimationFrame(tick);
   }
   function onSearchClosed(event){
-    if(!open){ensurePrimaryHome();return;}
     const detail=event.detail;
+    if(!open){
+      // A result pick or tab switch is navigation, not a Home request.
+      // Zen can dispatch this before the native view has finished closing.
+      nativeCancelTab=null;
+      if(detail&&!detail.onElementPicked&&!detail.onSwitch&&isHomePlaceholder(browser.selectedTab)){
+        nativeCancelTab=browser.selectedTab;
+        if(ensurePrimaryHome())nativeCancelTab=null;
+      }
+      return;
+    }
     if(!searchToken||detail?.closeSeq!==searchToken.id)return;
     if(detail.onElementPicked||detail.onSwitch)leaveHome();
     else animateSearchReturn("native-event");
   }
   function observeSearch(){
-    if(!searchToken||!searchBar){if(!open)ensurePrimaryHome();return;}
+    if(!searchToken||!searchBar){
+      if(!open&&nativeCancelTab&&nativeCancelTab===browser.selectedTab&&!nativeSearchOpen(win.gURLBar)){
+        nativeCancelTab=null;ensurePrimaryHome();
+      }
+      return;
+    }
     if(searchReturn)return;
     if(nativeSearchOpen(searchBar)){
       if(searchTimer)win.clearTimeout(searchTimer);searchTimer=0;return;
@@ -999,7 +1025,11 @@ function acquireZenHome(win, services) {
     root.append(style);host.append(panel);
     const observer={observe(){if(open)render();}};prefs.addObserver(PREF,observer);cleanups.push(()=>prefs.removeObserver(PREF,observer));
     listen(browser.tabContainer,"TabSelect",onSelectedTab);
-    // Background TabOpen is not an exit from Home.
+    // A selected, intentionally blank ordinary tab may finish loading
+    // after TabSelect. Recheck only the selected tab, never background opens.
+    listen(browser.tabContainer,"TabAttrModified",e=>{
+      if(!open&&e.target===browser.selectedTab&&e.detail?.changed?.some?.(name=>name==="busy"||name==="pending"||name==="discarded"||name==="zen-empty-tab"))ensurePrimaryHome();
+    });
     listen(win,"ZenWorkspaceDataChanged",()=>{if(open&&!switching)render();});
     listen(win,"ZenWorkspacesUIUpdate",()=>{if(open&&!switching)refreshWorkspaceSelection();});
     listen(win,"ZenURLBarClosed",onSearchClosed);
@@ -1057,6 +1087,11 @@ function acquireZenHome(win, services) {
         return;
       }
       if(open&&(!startupHome||homeOnPlaceholder)&&!searchActive())leaveHome();
+    },onStateChange(b,wp,request,flags){
+      // nsIWebProgressListener STATE_STOP | STATE_IS_NETWORK.
+      // The committed WindowGlobal can arrive after onLocationChange.
+      if(!open&&!switching&&b===browser.selectedBrowser&&wp?.isTopLevel&&
+         (flags&0x00000010)&&(flags&0x00040000))ensurePrimaryHome();
     }};
     if(typeof browser.addTabsProgressListener==="function"){browser.addTabsProgressListener(progress);cleanups.push(()=>browser.removeTabsProgressListener(progress));}
     win[KEY]=registry;const lease=registry.acquire();ensurePrimaryHome();return lease;

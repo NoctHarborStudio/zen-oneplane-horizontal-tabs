@@ -1,3 +1,9 @@
+## 0.2.0-preview.62 — Prevent Home flash during new tab navigation
+
+- Distinguish Zen's explicit empty tab and committed ordinary blank pages from a new browser's transient initial about:blank. Wait for the selected tab's committed WindowGlobal and load completion, not an arbitrary timeout.
+- Do not reopen Home on native URL bar result selection or tab switch. Only actual cancellation can request Home on a confirmed placeholder; background tabs never trigger it.
+- Preserve automatic startup, explicit Home and empty-tab fallback, and preview.61 search animations. Extend the Home runtime fixture with new-tab and search-close races. Live Zen validation pending.
+
 ## 0.2.0-preview.61 — Stable Smart Search collapse handoff
 
 - Stabilize chronological rails inside Home; avoid independent delayed dot animations during the shared reveal. Ordinary Smart Search retains its timeline animation.
