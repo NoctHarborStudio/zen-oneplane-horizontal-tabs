@@ -12,12 +12,13 @@ test("Library motion honors reduced motion and disabled animations",()=>{
 });
 import {readFileSync} from "node:fs";
 const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
-test("Library L3 is opt-in, built independently, and does not intercept native commands",()=>{
+test("Library L3 is opt-in, built independently, and guards experimental native command routing",()=>{
  const source=read("src/library/controller.js.part"),plan=JSON.parse(read("scripts/build-plan.json"));
- assert.deepEqual(plan.library.map(x=>x.path),["src/algorithms/library-state.mjs","src/library/geometry.mjs","src/library/controller.js.part"]);
+ assert.deepEqual(plan.library.map(x=>x.path),["src/algorithms/library-state.mjs","src/library/geometry.mjs","src/library/data.mjs","src/library/controller.js.part"]);
  assert.match(source,/getBoolPref\(PREF,false\)/);
  assert.match(source,/overlay\.request\(OWNER\)/);
  assert.match(source,/state\.motionEpoch===epoch/);
- assert.doesNotMatch(source,/key_gotoHistory|Browser:ShowAllHistory|Tools:Downloads|ZenLibrary\.toggle|Downloads\.getList/);
+ assert.doesNotMatch(source,/Tools:Downloads|ZenLibrary\.toggle|Downloads\.getList/);
+ assert.match(source,/getBoolPref\(SHORTCUT,false\)/);
  const pref=JSON.parse(read("preferences.json")).find(x=>x.property==="zen.nocturne.library.preview");assert.equal(pref.defaultValue,false);
 });

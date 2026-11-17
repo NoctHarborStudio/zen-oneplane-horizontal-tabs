@@ -1,5 +1,5 @@
 # Nocturne Library — implementation RFC
-Status: L3 experimental shell; L0–L2 foundations integrated. Native shortcuts and data are not yet wired.
+Status: L4 experimental native History and Recently Closed; L0–L3 integrated. Live command and focus validation pending.
 Baseline: 050f6f418ef7768f6affef843c7b8137a9ea8e65. Zen source reference: zen-browser/desktop@37e772656a612f19732506b38a4f985bb3cf95a6; verify exact installed Zen 1.24.2b APIs before enabling.
 
 ## Product contract
@@ -56,3 +56,6 @@ Shared per-window Downloads service owns the native addView/removeView lifecycle
 
 ## L3 implementation checkpoint (0.3.0-preview.39)
 Independent `library.uc.mjs` entrypoint, opt-in preference `zen.nocturne.library.preview` (false). Open from the browser chrome console with `window.__nocturneLibrary.open("history")`; `toggle(section)` and `close()` available. Center within tabpanels/browser client rect; five sections, focus loop, responsive glass panel and epoch-guarded WAAPI open/close/switch. Shared coordinator owns Escape/handoff; workspace/tab changes and unload release the shell. No native query or shortcut interception yet; placeholder is explicitly labeled. Native Gecko top-layer hit testing, focus behavior, visual timing, and real data are still pending L4–L7.
+
+## L4 implementation checkpoint (0.3.0-preview.41)
+History uses lazy `PlacesQuery` and Recently Closed uses source-window `SessionStore`. A single bounded query owner cancels stale results on input, section switch, close and service replacement; 160 ms debounce, 50 records per load, cap 500, default 120-day window. Page icons use Gecko `page-icon:` only for validated HTTP(S) URLs. Foreground/background opening uses native `openTrustedLinkIn`; closed tabs restore by exact current native `closedId` via `undoCloseById(id,true,window)`. No URL substitute for restore. Ctrl+H/History command capture at window (before Zen's document capture) requires both experimental preferences and native readiness; otherwise the event is untouched. The shortcut remains off by default until verified in a real Zen window. History and closed rows remain read-only apart from open/restore; destructive history actions are deferred. No file scans, no Ctrl+J routing, no public history in private windows. Live validation of actual Places data, keyboard focus, background restore and command event propagation remains necessary.

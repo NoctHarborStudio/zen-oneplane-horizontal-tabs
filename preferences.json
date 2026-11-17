@@ -638,5 +638,11 @@
     "property": "zen.nocturne.library.preview",
     "label": "Experimental Library shell (preview)",
     "defaultValue": false
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.nocturne.library.history-shortcut",
+    "label": "Experimental Library — Ctrl+H and History command",
+    "defaultValue": false
   }
 ]

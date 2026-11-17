@@ -358,6 +358,10 @@
       "kind": "esm-inline"
     },
     {
+      "path": "src/library/data.mjs",
+      "kind": "esm-inline"
+    },
+    {
       "path": "src/library/controller.js.part",
       "kind": "section"
     }

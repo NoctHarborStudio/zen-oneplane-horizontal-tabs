@@ -1,5 +1,5 @@
 // Closed tab identity is SessionStore's closedId, never a URL substitute.
-  export function createClosedTabsService({getClosed,allowed=()=>true,observe=()=>()=>{},now=Date.now}){
+  export function createClosedTabsService({getClosed,restoreNative,allowed=()=>true,observe=()=>()=>{},now=Date.now}){
     let dead=false;const subscriptions=new Set();
     function query({text="",days=120,limit=100}={}){
       if(dead||!allowed())throw Error("Closed tabs unavailable in this window");
@@ -15,6 +15,11 @@
       rows.sort((a,b)=>b.time-a.time);
       return Object.freeze({rows:Object.freeze(rows.slice(0,count)),limit:count,hasMore:rows.length>count});
     }
+    function restore(id,{background=false}={}){
+      if(dead||!allowed()||typeof restoreNative!=="function")return false;
+      if(!getClosed().some(tab=>tab.closedId===id))return false;
+      return restoreNative(id,!!background)!==false;
+    }
     function subscribe(fn){
       if(dead||!allowed())throw Error("Closed tabs unavailable in this window");
       const off=observe(()=>{if(!dead&&allowed())fn();});
@@ -22,5 +27,5 @@
       subscriptions.add(release);return release;
     }
     function dispose(){if(dead)return;dead=true;for(const off of [...subscriptions])off();}
-    return {query,subscribe,dispose};
+    return {query,subscribe,restore,dispose};
   }

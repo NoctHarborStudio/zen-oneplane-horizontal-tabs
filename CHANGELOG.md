@@ -1,3 +1,10 @@
+## 0.3.0-preview.41 — Library L4 native History & Recently Closed
+
+- Connect lazy PlacesQuery and source-window SessionStore; native page icons, date groups, search and bounded Load more.
+- Open HTTP(S) history in a new tab, including background opening; restore recently closed tabs by revalidated native closedId.
+- Cancel stale requests and release observers on section switch/close/reload. No public history in private windows.
+- Experimental Ctrl+H and History command routing, separate opt-in default off; native fallback on unsupported or unready windows. Live Zen routing and focus validation pending.
+
 ## 0.3.0-preview.40 — Native live Bunny drag popup
 
 - Replace repeated local/native image swaps with a mouse-transparent XUL panel drag image on Windows. Gecko moves the popup across applications via native DragMoved.

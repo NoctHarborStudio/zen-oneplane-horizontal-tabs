@@ -2031,6 +2031,19 @@
   #nocturne-library-preview .nl-primary{padding-inline:7px;font-size:12px;}
 }
 @media (prefers-reduced-transparency:reduce),(forced-colors:active){#nocturne-library-preview .nl-panel{background:Canvas;backdrop-filter:none;}}
+
+#nocturne-library-preview .nl-day{font-size:12px;font-weight:600;opacity:.68;margin:14px 8px 5px;}
+#nocturne-library-preview .nl-record{display:grid;grid-template-columns:20px minmax(0,1fr) auto;align-items:center;gap:10px;text-align:start;appearance:none;width:100%;border:0;border-radius:9px;padding:8px;background:transparent;color:inherit;font:inherit;cursor:pointer;}
+#nocturne-library-preview .nl-record:hover:not(:disabled){background:color-mix(in srgb,currentColor 9%,transparent);}
+#nocturne-library-preview .nl-record:disabled{opacity:.5;cursor:default;}
+#nocturne-library-preview .nl-favicon{width:16px;height:16px;object-fit:contain;}
+#nocturne-library-preview .nl-favicon[hidden]{display:block;visibility:hidden;}
+#nocturne-library-preview .nl-record-text{display:grid;gap:3px;min-width:0;}
+#nocturne-library-preview :is(.nl-record-title,.nl-record-url){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#nocturne-library-preview :is(.nl-record-url,.nl-time,.nl-limit){font-size:11px;opacity:.65;}
+#nocturne-library-preview .nl-action{appearance:none;border:1px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:8px;padding:8px 14px;background:transparent;color:inherit;font:inherit;cursor:pointer;}
+#nocturne-library-preview .nl-more{display:block;margin:12px auto;}
+#nocturne-library-preview .nl-limit{text-align:center;}
 /* Zen Refined — native dock indicator, transient details and page progress. */
 :root[data-zr-downloads-active] zen-download-animation,
 :root[data-zr-downloads-active] .zen-download-box-animation { display:none !important; }

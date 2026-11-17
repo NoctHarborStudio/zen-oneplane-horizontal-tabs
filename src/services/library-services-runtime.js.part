@@ -13,7 +13,27 @@
     return D.getList(privateWindow()?D.PRIVATE:D.PUBLIC);
   },onError:()=>win.console.warn("[Nocturne] Downloads service listener failed")});
   const closedTabs=createClosedTabsService({allowed,getClosed:()=>load("moz-src:///browser/components/sessionstore/SessionStore.sys.mjs","SessionStore").getClosedTabData({sourceWindow:win}),
+    restoreNative(id,background){
+      const store=load("moz-src:///browser/components/sessionstore/SessionStore.sys.mjs","SessionStore");
+      if(typeof store.undoCloseById!=="function"||!win.gBrowser)return false;
+      const selected=win.gBrowser.selectedTab;
+      store.undoCloseById(id,true,win);
+      if(background&&selected?.isConnected&&win.gBrowser.selectedTab!==selected)win.gBrowser.selectedTab=selected;
+      return true;
+    },
     observe(fn){const topic="sessionstore-closed-objects-changed",observer={observe:fn};Services.obs.addObserver(observer,topic);return()=>Services.obs.removeObserver(observer,topic);}});
+  function historyReady(){
+    if(!allowed())return false;
+    try{const p=load("resource://gre/modules/PlacesQuery.sys.mjs","PlacesQuery")?.prototype;
+      return typeof p?.getHistory==="function"&&typeof p.searchHistory==="function"&&typeof p.close==="function"&&typeof win.openTrustedLinkIn==="function";
+    }catch{return false;}
+  }
+  function openHistoryURL(value,{background=false}={}){
+    if(!allowed()||typeof win.openTrustedLinkIn!=="function")return false;
+    let url;try{url=new URL(value);}catch{return false;}
+    if(!["http:","https:"].includes(url.protocol)||url.username||url.password)return false;
+    win.openTrustedLinkIn(url.href,"tab",{inBackground:!!background});return true;
+  }
   function openHistory(onChange){
     const session=createHistorySession({allowed,onChange,createQuery:()=>{
       const PlacesQuery=load("resource://gre/modules/PlacesQuery.sys.mjs","PlacesQuery");return new PlacesQuery();
@@ -33,7 +53,7 @@
     if(win[KEY]===api){delete win[KEY];win.dispatchEvent(new win.CustomEvent("Nocturne:ServicesGone"));}
     return closing;
   }
-  const api={downloads,openHistory,closedTabs,dispose};
+  const api={downloads,openHistory,historyReady,openHistoryURL,closedTabs,dispose};
   win[KEY]=api;win.addUnloadListener(dispose);win.addEventListener("unload",dispose,{once:true});
   win.dispatchEvent(new win.CustomEvent("Nocturne:ServicesReady"));
 })();
