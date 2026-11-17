@@ -11,7 +11,8 @@
   const now=()=>win.performance.now(),get=id=>doc.getElementById(id);
   const enabled=()=>{try{return Services.prefs.getBoolPref(PREF,true);}catch{return true;}};
   const round=v=>Number.isFinite(v)?Math.round(v*100)/100:null;
-  const privateWindow=()=>{try{return root.hasAttribute("privatebrowsingmode")&&root.getAttribute("privatebrowsingmode")!=="false"||!!win.PrivateBrowsingUtils?.isWindowPrivate(win);}catch{return true;}};
+  let pb=null;try{pb=win.PrivateBrowsingUtils||ChromeUtils.importESModule("resource://gre/modules/PrivateBrowsingUtils.sys.mjs").PrivateBrowsingUtils;}catch{}
+  const privateWindow=()=>{try{return root.hasAttribute("privatebrowsingmode")&&root.getAttribute("privatebrowsingmode")!=="false"||!pb||pb.isWindowPrivate(win);}catch{return true;}};
   function safe(v,d=0){
     if(v==null||typeof v==="boolean")return v;
     if(typeof v==="number")return round(v);
@@ -24,7 +25,8 @@
   function exportData(){return {schema:1,version:VERSION,window:id,dropped,events:entries.slice()};}
   function dump(){return JSON.stringify(exportData(),null,2);}
   async function persist(){
-    if(privateWindow()||typeof IOUtils==="undefined"||typeof PathUtils==="undefined")return false;
+    if(privateWindow())return false;
+    if(typeof IOUtils==="undefined"||typeof PathUtils==="undefined"){if(!ioError){ioError=true;win.console.warn("[Nocturne diag] File API unavailable; use __nocturneDiagnostics.dump()");}return false;}
     try{
       if(!dir){
         const path=PathUtils.join(PathUtils.profileDir,"nocturne-diagnostics");
@@ -94,6 +96,13 @@
     const counts={native:browser?.tabs?.length??null,visible:browser?.visibleTabs?.length??null,mirror:row?.querySelectorAll(".oneplane-tab").length??null,
       selected:row?.querySelectorAll(".oneplane-tab[data-selected]").length??null,ghosts:doc.querySelectorAll(".oneplane-bunny-ghost").length};
     const metrics={};for(const [key,n] of nodes)metrics[key]=describe(n);
+    // Counts, not labels or favicon URLs. Identify partially applied
+    // startup/closing effects and the simultaneous source/ghost case.
+    if(row){
+      const marked=selector=>row.querySelectorAll(selector).length;
+      counts.startup=marked("[data-zr-startup-effect]");counts.closing=marked("[data-zr-close-effect]");
+      counts.detached=marked("[data-op-detached]");counts.laneGhost=marked("[data-op-lane-ghost]");
+    }
     const frame={count:gaps.length,max:gaps.length?round(Math.max(...gaps)):null,over25:gaps.filter(v=>v>25).length};gaps=[];
     return {root:attrState(root,rootAttrs),counts,frame,metrics};
   }

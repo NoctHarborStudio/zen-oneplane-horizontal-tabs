@@ -11,7 +11,8 @@
   const now=()=>win.performance.now(),get=id=>doc.getElementById(id);
   const enabled=()=>{try{return Services.prefs.getBoolPref(PREF,true);}catch{return true;}};
   const round=v=>Number.isFinite(v)?Math.round(v*100)/100:null;
-  const privateWindow=()=>{try{return root.hasAttribute("privatebrowsingmode")&&root.getAttribute("privatebrowsingmode")!=="false"||!!win.PrivateBrowsingUtils?.isWindowPrivate(win);}catch{return true;}};
+  let pb=null;try{pb=win.PrivateBrowsingUtils||ChromeUtils.importESModule("resource://gre/modules/PrivateBrowsingUtils.sys.mjs").PrivateBrowsingUtils;}catch{}
+  const privateWindow=()=>{try{return root.hasAttribute("privatebrowsingmode")&&root.getAttribute("privatebrowsingmode")!=="false"||!pb||pb.isWindowPrivate(win);}catch{return true;}};
   function safe(v,d=0){
     if(v==null||typeof v==="boolean")return v;
     if(typeof v==="number")return round(v);
@@ -24,7 +25,8 @@
   function exportData(){return {schema:1,version:VERSION,window:id,dropped,events:entries.slice()};}
   function dump(){return JSON.stringify(exportData(),null,2);}
   async function persist(){
-    if(privateWindow()||typeof IOUtils==="undefined"||typeof PathUtils==="undefined")return false;
+    if(privateWindow())return false;
+    if(typeof IOUtils==="undefined"||typeof PathUtils==="undefined"){if(!ioError){ioError=true;win.console.warn("[Nocturne diag] File API unavailable; use __nocturneDiagnostics.dump()");}return false;}
     try{
       if(!dir){
         const path=PathUtils.join(PathUtils.profileDir,"nocturne-diagnostics");
@@ -94,6 +96,13 @@
     const counts={native:browser?.tabs?.length??null,visible:browser?.visibleTabs?.length??null,mirror:row?.querySelectorAll(".oneplane-tab").length??null,
       selected:row?.querySelectorAll(".oneplane-tab[data-selected]").length??null,ghosts:doc.querySelectorAll(".oneplane-bunny-ghost").length};
     const metrics={};for(const [key,n] of nodes)metrics[key]=describe(n);
+    // Counts, not labels or favicon URLs. Identify partially applied
+    // startup/closing effects and the simultaneous source/ghost case.
+    if(row){
+      const marked=selector=>row.querySelectorAll(selector).length;
+      counts.startup=marked("[data-zr-startup-effect]");counts.closing=marked("[data-zr-close-effect]");
+      counts.detached=marked("[data-op-detached]");counts.laneGhost=marked("[data-op-lane-ghost]");
+    }
     const frame={count:gaps.length,max:gaps.length?round(Math.max(...gaps)):null,over25:gaps.filter(v=>v>25).length};gaps=[];
     return {root:attrState(root,rootAttrs),counts,frame,metrics};
   }
@@ -506,6 +515,7 @@ function acquireZenHome(win, services) {
     }catch{return false;}
   }
   function ensurePrimaryHome(){
+    typeof win!=="undefined"&&win.__nocturneTrace?.("home.ensure",()=>(null),{sample:1800});
     if(open||switching||!allowed()||win.__oneplaneWorkspaceProjection||
        root.getAttribute("data-op-startup-ready")==="pending"||
        nativeSearchOpen(win.gURLBar)||!isHomePlaceholder(browser.selectedTab))return false;
@@ -519,6 +529,7 @@ function acquireZenHome(win, services) {
     close(focus);return true;
   }
   function onSelectedTab(){
+    typeof win!=="undefined"&&win.__nocturneTrace?.("home.selected",()=>({open}),{sample:1800});
     nativeCancelTab=null;
     if(switching||!allowed())return;
     if(isHomePlaceholder(browser.selectedTab)){
@@ -528,6 +539,7 @@ function acquireZenHome(win, services) {
   function restore(){if(!covered)return;covered=false;panels.removeAttribute("data-zr-home-covered");if(!oldInert)panels.removeAttribute("inert");host.removeAttribute("data-zr-home-host");}
   function stopMotion(){motion?.cancel();motion=null;}
   function close(restoreFocus=false){
+    typeof win!=="undefined"&&win.__nocturneTrace?.("home.close",()=>({restoreFocus,open}),{sample:1800});
     if(!open)return;open=false;editing=false;adding=false;pinScrollTop=0;pinCustom=false;pinViewMode="home";panel.removeAttribute("data-zh-adding");dragId=null;startupHome=false;homeOnPlaceholder=false;finishSearchVisual();stopMotion();panel.hidden=true;restore();notify();
     if(restoreFocus)try{if(focusHome?.isConnected)focusHome.focus({preventScroll:true});else browser.selectedBrowser?.focus();}catch{}
     focusHome=null;
@@ -1059,6 +1071,7 @@ function acquireZenHome(win, services) {
     }
   }
   function switchHomeWorkspace(manager,id){
+    typeof win!=="undefined"&&win.__nocturneTrace?.("home.workspace.request",()=>({hasTransition:!!win.__zenRefinedWorkspaceTransition}),{sample:1800});
     const transition=win.__zenRefinedWorkspaceTransition;
     const native=()=>manager.changeWorkspaceWithID(id);
     return typeof transition?.run==="function"?transition.run(native):native();
@@ -1126,6 +1139,7 @@ function acquireZenHome(win, services) {
     if(grid)pinScrollTop=restorePinScroll(grid,pinScrollTop);
   }
   function show(startup=false){
+    typeof win!=="undefined"&&win.__nocturneTrace?.("home.show",()=>({startup,open}),{sample:1800});
     if(open||!allowed())return open;focusHome=doc.activeElement;startupHome=startup;homeOnPlaceholder=isHomePlaceholder(browser.selectedTab);
     try{
       // End an existing native startup search through its token-aware handler.
@@ -4002,6 +4016,7 @@ function installTabStrip() {
       if(!space){render();return;}if(space.active){contextId=null;confirmation=null;render();return;}
       busy=true;status.textContent="";render();
       try{switchGuard();const transition=window.__zenRefinedWorkspaceTransition;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("hub.workspace.request",()=>({hasTransition:!!transition}),{sample:1800});
         const change=()=>native.changeWorkspaceWithID(id);
         await (typeof transition?.run==="function"?transition.run(change):change());
         if(!destroyed){if(native.activeWorkspace!==id)throw Error("Workspace did not activate");contextId=null;confirmation=null;scheduleHubGeometry();}
@@ -5966,6 +5981,7 @@ function installTabStrip() {
     homeIdleTimer=window.setTimeout(()=>{homeIdleTimer=0;homeIdle=true;refreshIslandTitle();},5000);
   }
   function mountHome(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("home.mount",()=>(null),{sample:1800});
     try{homeLease=acquireZenHome(window,Services);}catch(error){console.warn("[OnePlane] Home unavailable",error);}
     island.toggleAttribute("data-op-home-enabled",!!homeLease);island.disabled=!homeLease;
     if(!homeLease)return;
@@ -6002,6 +6018,7 @@ function installTabStrip() {
     homeLease?.show();
   }
   function destroyHome(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("home.destroy",()=>(null),{sample:1800});
     clearHomeIdle();homeUnsubscribe?.();homeUnsubscribe=null;
     window.removeEventListener("OnePlane:StartupState",onHomeStartup);
     island.removeEventListener("click",onHomeTrigger);island.removeEventListener("dblclick",stopHomeDoubleClick);island.removeEventListener("pointerdown",stopHomePointer);

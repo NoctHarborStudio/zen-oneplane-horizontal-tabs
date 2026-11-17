@@ -6,6 +6,7 @@
     homeIdleTimer=window.setTimeout(()=>{homeIdleTimer=0;homeIdle=true;refreshIslandTitle();},5000);
   }
   function mountHome(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("home.mount",()=>(null),{sample:1800});
     try{homeLease=acquireZenHome(window,Services);}catch(error){console.warn("[OnePlane] Home unavailable",error);}
     island.toggleAttribute("data-op-home-enabled",!!homeLease);island.disabled=!homeLease;
     if(!homeLease)return;
@@ -42,6 +43,7 @@
     homeLease?.show();
   }
   function destroyHome(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("home.destroy",()=>(null),{sample:1800});
     clearHomeIdle();homeUnsubscribe?.();homeUnsubscribe=null;
     window.removeEventListener("OnePlane:StartupState",onHomeStartup);
     island.removeEventListener("click",onHomeTrigger);island.removeEventListener("dblclick",stopHomeDoubleClick);island.removeEventListener("pointerdown",stopHomePointer);

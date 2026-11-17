@@ -57,6 +57,10 @@ Preview.4 fixes NC-023 Downloads text opacity and NC-024 Workspace visual handof
 
 Preview.4 user test confirms text and flicker fixes. Preview.5 addresses NC-025–027: cold readiness handshake, bounded workspace geometry hold and visual interpolation, coordinated row and page motion. Verify wide/narrow, one/two-row changes, Compact/persistent modes, Escape and cold startup in Zen. Continue measured stabilization before Unified Core/Vertical.
 
+## B.6. Diagnostic gate after preview.5 regression report
+
+Preview.6 is instrumentation only, default enabled. See diagnostics.md and audit.md (NC-025–030). Capture actual launch/close, native tab and workspace events, panel contour and drag thresholds. Prioritize confirmed regressions from user traces before new visual changes. Remove or default-disable detailed diagnostics after stabilization.
+
 ## C. Separate the lifecycle
 
 1. Introduce WindowContext/disposable ownership and explicit readiness while preserving existing script entry compatibility.

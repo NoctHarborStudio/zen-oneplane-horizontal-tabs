@@ -1,3 +1,10 @@
+## 0.3.0-preview.6 — Diagnostic build
+
+- Read-only diagnostic recorder: sequenced, timestamped chrome lifecycle, native events, active animation state, sampled geometry, contour hashes, frame gaps, tab and ghost counts, and local bounded JSON export.
+- Instrument startup eligibility/targets/interruptions, closing restore/native command ordering, workspace bypass/phase/height, tab mirror/partition, compact hold and fade, drag pull thresholds/return zone/native image/ghost, address/Home/Hub and every runtime entrypoint.
+- Enabled by default for this diagnostic preview; set zen.nocturne.diagnostics.enabled=false to disable recording. No change to animation, drag, tab, native data or layout decisions.
+- Logs stay local in the profile's nocturne-diagnostics folder (recent runs retained); no URL/title/content/input/filename telemetry, no disk files for private windows. Final close write is best effort. Console provides key events; detailed samples are in JSON.
+
 ## 0.3.0-preview.5 — Startup and workspace geometry
 
 - Accept a recently ready initial layout during late Sine startup; do not replay on established windows. Wait for actual horizontal bounds, ignore duplicate resize events and allow a bounded 8s readiness window.

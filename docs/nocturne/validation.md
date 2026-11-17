@@ -86,3 +86,9 @@ Existing regression sources: OnePlane tests and docs/known-issues.md; Refined do
 - [ ] Cold startup repeated at least three times, including slow session restore; no replay on Sine reload, no long blank chrome.
 - [ ] Switch between spaces with one and two rows in both directions, in Compact and persistent mode; no abrupt shelf height, no overlap, page remains opaque, motion visible.
 - [ ] Escape and quick switches do not leave temporary height, transform or hidden chrome. Home retains normal coverage and interaction.
+
+### Preview.6 diagnostic gate
+
+- [x] Instrument startup/closing, native tab/workspace, mirror, geometry, fade, drag, address, Home/Hub, bookmarks, downloads and remaining script lifecycle.
+- [ ] Capture actual Zen traces for each reported issue; verify local JSON persistence, privacy and bounded overhead.
+- [ ] Fix confirmed issues and revalidate with diagnostics disabled.
