@@ -8,11 +8,7 @@
     const handled = dragHandled;
     const wasGroup = Boolean(draggedGroup);
     const start = dragStartPoint;
-    if(returned&&!dt?.mozUserCancelled&&dragImageMode==="content"){
-      positionGhost(event.clientX,event.clientY);
-      setDragImageMode("inline",event);
-      seekInsertion(bunnyPullProgress(event.clientY,dragEdge));
-    }
+    if(returned&&!dt?.mozUserCancelled)prepareBunnyDrop(event);
     const keep=returned&&!dt?.mozUserCancelled&&dragImageMode==="inline"&&!!dragInsertAnimation;
     draggedTab = null; draggedGroup = null; dragHandled = false; dragStartPoint = null;
     if(keep)finishInsertionAfterDrop();else endDragVisual();

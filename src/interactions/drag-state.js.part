@@ -5,7 +5,7 @@
   let draggedTab = null;
   let draggedGroup = null;
   let dragNode = null, dragImageMode = null, dragGrabRatio = .5, dragGrabY = .5;
-  const PULL_DISTANCE = 30, BUNNY_EDGE_PAD = 3, REORDER_BUFFER = 8, BUNNY_RETURN_THRESHOLD=.72;
+  const PULL_DISTANCE = 30, BUNNY_EDGE_PAD = 3, REORDER_BUFFER = 8, BUNNY_DETACH_THRESHOLD=.96;
   // Visual extraction belongs to the original card, not the native drop panel.
   function bunnyPullProgress(y,edge,distance=PULL_DISTANCE){
     return Math.max(0,Math.min(1,(y-edge)/distance));
@@ -13,7 +13,7 @@
   let dragGhost = null, dragGhostBody = null, dragPull = 0, dragEdge = 0, dragWidth = 0;
   let dragGhostAnimation = null;
   let dragLastPoint = null;
-  let dragReentry = false, dragReturnFloor = 0, dragInsertAnimation = null, dragInsertNode = null;
+  let dragBunnyAnchor=null, dragBunnyFull=null, dragInsertAnimation=null, dragInsertNode=null;
   let dragInsertPending=false; // visual tail only; native session is already finished
   let groupPullLayout = null;
   let pointerSearch = null, dragSearch = null, restoreSearchTimer = 0;

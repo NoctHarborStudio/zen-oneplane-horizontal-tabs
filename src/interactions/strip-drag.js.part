@@ -258,77 +258,35 @@
       const p = bunnyPullProgress(event.clientY,dragEdge);
       const lateralExit = event.clientX < toolbarWrapper.getBoundingClientRect().left ||
                           event.clientX > toolbarWrapper.getBoundingClientRect().right;
-      const threshold = dragImageMode === "content" || dragImageMode === "outside" ? BUNNY_RETURN_THRESHOLD : .96;
-      const detach = p >= threshold || lateralExit;
-    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.pull.decision",()=>({mode:dragImageMode,within,p,threshold,detach,lateralExit,edge:dragEdge,y:event.clientY,delta:event.clientY-dragEdge,measured:parseFloat(toolbarWrapper.style.getPropertyValue('--op-measured-toolbar-height'))||0,wrapperBottom:toolbarWrapper.getBoundingClientRect().bottom,rowBottom:row.getBoundingClientRect().bottom,navBottom:navbar?.getBoundingClientRect().bottom,detachedOnce:dragDetachedOnce,reentry:dragReentry,lane:useLaneDrop()}),{throttle:85,sample:1000});
-      const previous=dragImageMode;
-      if(previous==="content"&&!detach)positionGhost(event.clientX,event.clientY);
+      const threshold=BUNNY_DETACH_THRESHOLD;
+      const detach=p>=threshold||lateralExit;
+      window.__nocturneTrace?.("drag.pull.decision",()=>({mode:dragImageMode,within,p,threshold,detach,lateralExit,edge:dragEdge,y:event.clientY,detachedOnce:dragDetachedOnce,lane:useLaneDrop()}),{throttle:85,sample:1000});
+      if(dragImageMode==="inline"&&(p>0||detach)&&!dragBunnyAnchor)captureBunnyAnchor();
       setDragImageMode(detach ? "content" : "inline",event);
-      if(previous==="content"&&dragImageMode==="inline")dragReturnFloor=p;
-      if (dragImageMode === "content") {
+      if(dragImageMode==="content"){
         positionGhost(event.clientX,event.clientY);
-        clearLiveDrag(); clearDropMarker();
-        if(within){
-          // Keep the panel open but don't let the strip's bubble handler
-          // replace the content ghost while crossing the other lane.
-          event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";
-        }else releaseDragReveal();
+        clearDropMarker();
+        if(within){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";}
+        else releaseDragReveal();
         return;
       }
-      if (dragImageMode === "outside") {
+      if(dragImageMode==="outside"){
         if(within){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";previewStripDrag(event,tab);}
         else{clearLiveDrag();releaseDragReveal();}
         return;
       }
-      // While the button is held, the return timeline has exactly one
-      // owner: the pointer. Reversing within the band rewinds it.
-      if(dragInsertAnimation){
-        seekInsertion(p);
+      if(p>0&&paintBunnyPull(event,p)){
+        holdToolbarForReturn();
         if(within){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";}
         return;
       }
-      // Hysteresis suppresses a second pull only while continuing inward.
-      // Reversing direction rearms the pull, even without entering the row.
-      if(dragReentry){
-        if(p>dragReturnFloor+.06){
-          dragReentry=false;
-          window.__nocturneTrace?.("drag.return.rearm",{p,floor:dragReturnFloor},{sample:1000});
-        }else{
-          dragReturnFloor=Math.min(dragReturnFloor,p);
-          if(p===0&&!dragInsertAnimation)dragReentry=false;
-        }
-      }
-      if(dragInsertAnimation||dragReentry){
-        if(within){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";}
-        return;
-      }
-      if (p > 0) {
-        if(useLaneDrop()){
-          prepareLanePull();setPull(p);showLaneGhost(event,p);
-          if(!within)holdToolbarForReturn();
-          if(within){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";}
-          return;
-        }
-        if (draggedGroup) captureGroupPull(event);
-        if (groupPullLayout) row.setAttribute("data-op-group-pull","true");
-        else clearLiveDrag();
-        setPull(p);
-        if (!previewGroupPull(event)) followLocalSource(event,dragNode);
-        toolbarWrapper.setAttribute("oneplane-drag-hold","true");
-        if (dragRevealTimer) window.clearTimeout(dragRevealTimer);
-        dragRevealTimer = window.setTimeout(releaseDragReveal,500);
-        if (within) { event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect="move"; }
-        return;
-      }
-      clearGroupPull();
-      setPull(0);
+      if(dragBunnyAnchor)clearBunnyPull();
       if(dragDetachedOnce&&within){
-        // Visually return to the original native slot; no reorder.
         event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";
         clearLaneDrag();clearDropMarker();return;
       }
     } else if (!local) tabOwner(tab)?.[DRAG_CONTROLLER]?.outside(event);
-    if (!within && !(local && dragReentry && dragImageMode === "inline")) {
+    if (!within) {
       clearLiveDrag(); releaseDragReveal(); return;
     }
     toolbarWrapper.setAttribute("oneplane-drag-hold", "true");
@@ -347,11 +305,7 @@
     if(!tab||!toolbarDragReturnZone(event))return;
     if(tabOwner(tab)===window&&dragDetachedOnce){
       event.preventDefault();event.stopImmediatePropagation();
-      if(dragImageMode==="content"){
-        positionGhost(event.clientX,event.clientY);
-        setDragImageMode("inline",event);
-        seekInsertion(bunnyPullProgress(event.clientY,dragEdge));
-      }
+      prepareBunnyDrop(event);
       sourceHandled(tab,true);schedule();return;
     }
     onStripDrop(event);
