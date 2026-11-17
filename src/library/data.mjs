@@ -70,3 +70,10 @@ export function libraryHistoryCommand(event){
 export function libraryDownloadsCommand(event){
   return !!event&&!event.defaultPrevented&&["Tools:Downloads","key_openDownloads"].includes(event.target?.id);
 }
+
+export function libraryShortcutSection(event,os="WINNT"){
+  if(!event||event.defaultPrevented||event.isComposing||event.repeat||event.altKey||event.shiftKey)return null;
+  if(os==="Darwin"?(!event.metaKey||event.ctrlKey):(!event.ctrlKey||event.metaKey))return null;
+  const key=String(event.key||"").toLowerCase();
+  return key==="h"?"history":key==="j"?"downloads":null;
+}

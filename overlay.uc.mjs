@@ -69,5 +69,6 @@
   const api={...core,dispose};
   win[KEY]=api;win.addEventListener("keydown",key,true);win.addEventListener("unload",dispose,{once:true});win.addUnloadListener(dispose);
   // Late mounting and hot reload both rebind existing controllers.
+  try{win.__nocturneTrace?.("library.overlay.ready",{ready:true},{flush:true});}catch{}
   win.dispatchEvent(new win.CustomEvent("Nocturne:OverlayReady"));
 })();

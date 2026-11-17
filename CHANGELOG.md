@@ -1,3 +1,9 @@
+## 0.3.0-preview.46 — Library shortcut recovery
+
+- Route exact Ctrl+H/Ctrl+J (Cmd on macOS) at window keydown, retaining native command handling for menus and remapped keys. Consume only accepted actions; preserve native fallback on refusal.
+- Add fixed browser-client surface fallback if HTML popover cannot open; check actual visible dimensions before accepting. Recover state on exceptions.
+- Log Library script, service readiness, route and rejection reason without browsing data. Keep existing opt-in flags; real Zen validation pending. Retain preview.45 Bunny changes.
+
 ## 0.3.0-preview.45 — Bunny transparent native surface
 
 - Explicitly request a transparent Gecko popup widget before creation using nonzero corner radius and near-opaque root alpha. Clear both legacy and current panel background tokens and content surfaces. Preserve the swing stage geometry and native file payload.

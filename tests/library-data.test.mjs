@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {createLibraryData,libraryWebURL,libraryHistoryCommand} from "../src/library/data.mjs";
+import {createLibraryData,libraryWebURL,libraryHistoryCommand,libraryShortcutSection} from "../src/library/data.mjs";
 import {createClosedTabsService} from "../src/services/closed-tabs-service.mjs";
 const tick=()=>new Promise(r=>setImmediate(r));
 function fixture(){
@@ -52,4 +52,11 @@ test("forget closed tab revalidates native ID and private state",()=>{
  assert.equal(s.forget(2),false);assert.equal(s.forget(1),true);
  entries=[];assert.equal(s.forget(1),false);entries=[{closedId:1}];allowed=false;assert.equal(s.forget(1),false);
  assert.deepEqual(forgot,[1]);s.dispose();assert.equal(s.forget(1),false);
+});
+
+test("physical library shortcut recognizes exact platform accelerator and rejects repeats or modifiers",()=>{
+ const e={key:"H",ctrlKey:true};
+ assert.equal(libraryShortcutSection(e),"history");assert.equal(libraryShortcutSection({...e,key:"j"}),"downloads");
+ for(const patch of [{repeat:true},{isComposing:true},{altKey:true},{shiftKey:true},{metaKey:true},{defaultPrevented:true},{key:"x"},{ctrlKey:false}])assert.equal(libraryShortcutSection({...e,...patch}),null);
+ assert.equal(libraryShortcutSection(e,"Darwin"),null);assert.equal(libraryShortcutSection({key:"h",metaKey:true},"Darwin"),"history");
 });

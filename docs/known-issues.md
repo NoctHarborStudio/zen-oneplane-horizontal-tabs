@@ -218,3 +218,6 @@ Do not close these issues on source tests alone. Keep current Magnetic Bunny, Do
 
 ### Library preview.44 follow-up
 Shared Bunny bridge, moving active-section indicator, explicit extra-folder picker and confirmed history actions are implemented. The remaining release gates are real Gecko runtime validation, historical-only download parity and performance measurement; prior preview.42 limitations for these implemented items are superseded. The native Downloads view remains accessible for Places-only records. Test folder picker, consent toggle, scan reload barrier, OS-level drag including cancellation/return, History deletion on a disposable profile, command fallback and DPI. Do not enable experimental features by default until accepted.
+
+### Library shortcut recovery — 0.3.0-preview.46
+- Report: Ctrl+H opened nothing in preview.44. Exact cause not captured by old diagnostics. Added keydown route, fixed surface fallback, guarded open and Library-specific telemetry. Verify both opt-ins and native fallback; live test pending.

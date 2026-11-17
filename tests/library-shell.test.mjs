@@ -23,3 +23,17 @@ test("Library L3 is opt-in, built independently, and guards experimental native 
  assert.match(source,/getBoolPref\(DOWNLOADS_SHORTCUT,false\)/);
  const pref=JSON.parse(read("preferences.json")).find(x=>x.property==="zen.nocturne.library.preview");assert.equal(pref.defaultValue,false);
 });
+
+test("shortcut routing only consumes the event on a successful open and reports refusal",()=>{
+ const source=read("src/library/controller.js.part");
+ const code=source.slice(source.indexOf("  function route("),source.indexOf("  function onServicesGone("));
+ const calls=[];let allowed=true,opened=true,ready=true;
+ const win={__nocturneLibraryServices:{historyReady:()=>ready}},prefs={getBoolPref:()=>allowed};
+ const run=new Function("win","prefs","enabled","privateWindow","toggle","trace",`const SHORTCUT="history",DOWNLOADS_SHORTCUT="downloads";let nativeFallback=false,lastFailure=null;${code}return route;`)(win,prefs,()=>allowed,()=>false,()=>opened,(e,d)=>calls.push(d));
+ let consumed=0;const event={preventDefault(){consumed++;},stopImmediatePropagation(){consumed++;}};
+ assert.equal(run(event,"history","keydown"),true);assert.equal(consumed,2);
+ opened=false;assert.equal(run(event,"history","command"),false);assert.equal(consumed,2);
+ ready=false;assert.equal(run(event,"history","keydown"),false);assert.equal(calls.at(-1).reason,"history-unready");
+ allowed=false;assert.equal(run(event,"history","keydown"),false);assert.equal(calls.at(-1).reason,"disabled");
+ assert.match(source,/function showLayer\(/);assert.match(source,/layer.removeAttribute\("popover"\)/);
+});

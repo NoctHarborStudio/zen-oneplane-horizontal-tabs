@@ -1,18 +1,25 @@
 /* L5–L6: one Library shell for five native-backed sections. */
 (()=>{
   const win=window,doc=win.document,root=doc.documentElement,KEY="__nocturneLibrary",PREF="zen.nocturne.library.preview",OWNER="library",SHORTCUT="zen.nocturne.library.history-shortcut",DOWNLOADS_SHORTCUT="zen.nocturne.library.downloads-shortcut",MEDIA_PREF="zen.nocturne.library.local-media";
+  function trace(event,detail={}){
+    try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,{flush:true});
+      else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
+  }
+  trace("script",{version:"0.3.0-preview.46",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
   const labels={downloads:"All Downloads",documents:"Documents",history:"History",pictures:"Pictures",closed:"Recently Closed"};
   const summaries={downloads:"Download records and file actions",documents:"Downloaded documents and opted-in folders",history:"Browsing history and search",pictures:"Downloaded pictures and opted-in folders",closed:"Recently closed tabs in this window"};
-  let state=createLibraryState(),dead=false,lease=()=>{},shell=null,animations=[],frame=0,returnFocus=null,rows=new Map(),backgroundAction=false,renderedSection=null,dragSource=null,pendingResult=null,clearing=false,nativeFallback=false,confirmation=false,actionSerial=0,pendingClose=false,dragOwner=null,indicatorReady=false;
+  let state=createLibraryState(),dead=false,lease=()=>{},shell=null,animations=[],frame=0,returnFocus=null,rows=new Map(),backgroundAction=false,renderedSection=null,dragSource=null,pendingResult=null,clearing=false,nativeFallback=false,confirmation=false,actionSerial=0,pendingClose=false,dragOwner=null,indicatorReady=false,lastFailure=null;
   const data=createLibraryData({getServices:()=>win.__nocturneLibraryServices,onResult:renderResults,onError:renderError,onNotice:notice,schedule:(fn,ms)=>win.setTimeout(fn,ms),cancel:id=>win.clearTimeout(id)});
   const fileSection=()=>["downloads","documents","pictures"].includes(state.section);
   const enabled=()=>prefs.getBoolPref(PREF,false),active=()=>state.phase!=="closed";
   const duration=n=>libraryDuration(win.matchMedia("(prefers-reduced-motion: reduce)").matches,prefs.getIntPref("zen.oneplane.animation-duration",160)!==0,n);
   const make=(tag,cls,text)=>{const n=doc.createElementNS(NS,tag);if(cls)n.className=cls;if(text)n.textContent=text;return n;};
   function privateWindow(){try{return ChromeUtils.importESModule("resource://gre/modules/PrivateBrowsingUtils.sys.mjs").PrivateBrowsingUtils.isWindowPrivate(win);}catch{return true;}}
+  function fail(reason){lastFailure=reason;trace("open.rejected",{reason,section:state.section});return false;}
+  function diagnostics(probe=true){return {enabled:enabled(),historyShortcut:prefs.getBoolPref(SHORTCUT,false),downloadsShortcut:prefs.getBoolPref(DOWNLOADS_SHORTCUT,false),delayed:!!win.gBrowserInit?.delayedStartupFinished,private:privateWindow(),overlay:!!win.__nocturneOverlay,services:!!win.__nocturneLibraryServices,historyReady:probe?!!win.__nocturneLibraryServices?.historyReady?.():null,phase:state.phase,section:state.section,lastFailure};}
   function geometry(){
     if(!shell)return false;
     for(const id of ["tabbrowser-tabpanels","browser"]){
@@ -28,8 +35,8 @@
   function mount(){
     if(shell)return true;
     const layer=make("div");layer.id="nocturne-library-preview";layer.hidden=true;
-    if(typeof layer.showPopover!=="function"||typeof layer.hidePopover!=="function")return false;
-    layer.setAttribute("popover","manual");
+    const topLayer=typeof layer.showPopover==="function"&&typeof layer.hidePopover==="function";
+    if(topLayer)layer.setAttribute("popover","manual");
     const shade=make("div","nl-shade");shade.setAttribute("aria-hidden","true");
     const panel=make("section","nl-panel");panel.setAttribute("role","dialog");panel.setAttribute("aria-modal","true");panel.setAttribute("aria-labelledby","nl-title");panel.tabIndex=-1;
     const header=make("header","nl-header"),brand=make("span","nl-brand","Nocturne Library");
@@ -86,7 +93,7 @@
       const next=e.shiftKey?(i<=0?nodes.length-1:i-1):(i<0||i===nodes.length-1?0:i+1);
       e.preventDefault();nodes[next].focus();
     });
-    shell={layer,shade,panel,title,tabs,search,body,tools,status,sort,filter,clear,yes,no,native,refresh,more,nav,indicator,nativeHistory,historyRange,clearHistory,addFolder,resetFolders};return true;
+    shell={layer,shade,panel,title,tabs,search,body,tools,status,sort,filter,clear,yes,no,native,refresh,more,nav,indicator,nativeHistory,historyRange,clearHistory,addFolder,resetFolders,topLayer};return true;
   }
   function syncIndicator(animate=true){
     if(!shell||!active())return;
@@ -284,7 +291,7 @@
   function settle(epoch){if(current(epoch)){state=reduceLibrary(state,{type:"MOTION_DONE",epoch});cancelMotion();}}
   function hide(restore=true){
     data.stop();rows.clear();renderedSection=null;dragSource=null;dragOwner=null;indicatorReady=false;pendingResult=null;pendingClose=false;confirmation=false;clearing=false;++actionSerial;cancelMotion();if(frame)win.cancelAnimationFrame(frame);frame=0;
-    if(shell){try{if(shell.layer.matches(":popover-open"))shell.layer.hidePopover();}catch{}shell.layer.hidden=true;shell.indicator.hidden=true;shell.panel.inert=false;shell.body.replaceChildren();shell.search.value="";}
+    if(shell){try{if(shell.topLayer&&shell.layer.matches(":popover-open"))shell.layer.hidePopover();}catch{}shell.layer.removeAttribute("data-library-open");shell.layer.hidden=true;shell.indicator.hidden=true;shell.panel.inert=false;shell.body.replaceChildren();shell.search.value="";}
     const target=returnFocus;returnFocus=null;if(!restore||win.closed)return;
     try{if(target?.isConnected&&typeof target.focus==="function")target.focus({preventScroll:true});else win.gBrowser?.selectedBrowser?.focus();}catch{}
   }
@@ -301,15 +308,34 @@
       if(!current(epoch))return;state=reduceLibrary(state,{type:"MOTION_DONE",epoch});hide();
     });return true;
   }
+  function showLayer(){
+    const {layer}=shell;layer.hidden=false;layer.setAttribute("data-library-open","");
+    if(shell.topLayer)try{layer.showPopover();if(!layer.matches(":popover-open"))throw Error("not open");}
+    catch{layer.removeAttribute("popover");shell.topLayer=false;trace("surface.fallback",{reason:"popover-unavailable"});}
+    const rect=shell.panel.getBoundingClientRect();
+    return rect.width>0&&rect.height>0&&win.getComputedStyle(layer).display!=="none";
+  }
   function open(section="history"){
-    if(dead||dragSource||clearing||!enabled()||!LIBRARY_SECTIONS.includes(section)||!win.gBrowserInit?.delayedStartupFinished||win.fullScreen||privateWindow())return false;
+    lastFailure=null;
+    if(dead||dragSource||clearing)return fail("busy");
+    if(!enabled())return fail("disabled");
+    if(!LIBRARY_SECTIONS.includes(section))return fail("section");
+    if(!win.gBrowserInit?.delayedStartupFinished)return fail("startup");
+    if(win.fullScreen||privateWindow())return fail("window");
     const overlay=win.__nocturneOverlay;
-    if(!overlay||!mount()||!geometry()||!overlay.request(OWNER))return false;
+    if(!overlay)return fail("overlay-missing");
+    if(!win.__nocturneLibraryServices)return fail("services-missing");
+    try{return openInternal(section,overlay);}catch(error){trace("open.error",{name:error?.name||"Error"});try{closeNow(false);}catch{}return fail("exception");}
+  }
+  function openInternal(section,overlay){
+    if(!mount())return fail("mount");
+    if(!geometry())return fail("geometry");
+    if(!overlay.request(OWNER))return fail("overlay-busy");
     const before=state,next=reduceLibrary(state,{type:"OPEN",section});if(next===state)return true;
     const first=before.phase==="closed",reopening=before.phase==="closing";
     const panel=first?{opacity:0,transform:"translateY(8px) scale(.97)"}:sample(shell.panel),shade=first?{opacity:0}:sample(shell.shade),body=sample(shell.body);
     data.stop();renderedSection=null;confirmation=false;pendingResult=null;++actionSerial;cancelMotion();state=next;const epoch=state.motionEpoch;shell.panel.inert=false;
-    if(first){returnFocus=doc.activeElement;shell.layer.hidden=false;try{shell.layer.showPopover();}catch{closeNow();return false;}}
+    if(first){returnFocus=doc.activeElement;if(!showLayer()){closeNow();return fail("surface-hidden");}}
     renderHeader();
     if(state.phase==="opening"){
       renderBody();(shell.search.disabled?shell.tabs.get(state.section):shell.search).focus({preventScroll:true});
@@ -320,7 +346,7 @@
         return play(shell.body,[{opacity:0,transform:"translateX(6px)"},{opacity:1,transform:"none"}],duration(160)).then(()=>settle(epoch));
       });
     }
-    return true;
+    trace("open.accepted",{section,phase:state.phase,topLayer:shell.topLayer});return true;
   }
   function toggle(section="history"){return active()&&state.phase!=="closing"&&state.section===section?close():open(section);}
   function bindOverlay(){
@@ -333,16 +359,29 @@
   function onDragStart(e){if(active()&&!shell?.body.contains(e.target))onTab();}
   function onMediaPref(){if(active()&&["documents","pictures"].includes(state.section)){if(dragSource){pendingClose=true;return;}renderBody();}}
   function onWorkspace(e){if(active()&&e.detail?.phase!=="idle"){if(dragSource)pendingClose=true;else closeNow(false);}}
+  function route(e,section,origin){
+    if(!section||nativeFallback)return false;
+    const pref=section==="history"?SHORTCUT:DOWNLOADS_SHORTCUT,service=win.__nocturneLibraryServices;
+    let reason=null;
+    if(!enabled()||!prefs.getBoolPref(pref,false))reason="disabled";
+    else if(privateWindow())reason="private";
+    else if(!service)reason="services-missing";
+    else if(section==="history"&&!service.historyReady?.())reason="history-unready";
+    else if(section==="downloads"&&!service.downloads?.isReady?.()){reason="downloads-unready";void service.downloads?.start?.().catch(()=>{});}
+    if(!reason&&!toggle(section))reason=lastFailure||"toggle-rejected";
+    trace("shortcut",{section,origin,accepted:!reason,reason});
+    if(reason)return false;
+    e.preventDefault();e.stopImmediatePropagation();return true;
+  }
   function onCommand(e){
-    if(nativeFallback||!enabled()||privateWindow())return;
-    const service=win.__nocturneLibraryServices;
-    const history=prefs.getBoolPref(SHORTCUT,false)&&libraryHistoryCommand(e)&&service?.historyReady?.();
-    const wantsDownloads=prefs.getBoolPref(DOWNLOADS_SHORTCUT,false)&&libraryDownloadsCommand(e);
-    const downloads=wantsDownloads&&service?.downloads?.isReady?.();
-    if(wantsDownloads&&!downloads&&!dragSource)void service?.downloads?.start?.().catch(()=>{});
-    if(!history&&!downloads)return;
-    if(!toggle(history?"history":"downloads"))return;
-    e.preventDefault();e.stopImmediatePropagation();
+    route(e,libraryHistoryCommand(e)?"history":libraryDownloadsCommand(e)?"downloads":null,"command");
+  }
+  function onKey(e){
+    const section=libraryShortcutSection(e,Services.appinfo.OS);
+    if(!section)return;
+    // XUL commands are still supported for menus and customized keys.
+    // A handled physical key is consumed before Zen's command dispatch.
+    route(e,section,"keydown");
   }
   function onServicesGone(){if(active())closeNow();}
   function dispose(){
@@ -350,8 +389,8 @@
     for(const [name,fn] of listeners)win.removeEventListener(name,fn,true);
     try{prefs.removeObserver(PREF,onPref);prefs.removeObserver(MEDIA_PREF,onMediaPref);}catch{}shell?.layer.remove();shell=null;if(win[KEY]===api)delete win[KEY];
   }
-  const listeners=[["command",onCommand],["Nocturne:ServicesGone",onServicesGone],["Nocturne:OverlayReady",bindOverlay],["resize",resize],["TabSelect",onTab],["ZenRefined:WorkspaceTransition",onWorkspace],["dragstart",onDragStart],["unload",dispose]];
-  const api={open,toggle,close,getState:()=>({...state}),dispose};
+  const listeners=[["keydown",onKey],["command",onCommand],["Nocturne:ServicesGone",onServicesGone],["Nocturne:OverlayReady",bindOverlay],["resize",resize],["TabSelect",onTab],["ZenRefined:WorkspaceTransition",onWorkspace],["dragstart",onDragStart],["unload",dispose]];
+  const api={open,toggle,close,getState:()=>({...state}),getDiagnostics:diagnostics,dispose};
   win[KEY]=api;for(const [name,fn] of listeners)win.addEventListener(name,fn,true);
-  win.addUnloadListener(dispose);prefs.addObserver(PREF,onPref);prefs.addObserver(MEDIA_PREF,onMediaPref);bindOverlay();
+  win.addUnloadListener(dispose);prefs.addObserver(PREF,onPref);prefs.addObserver(MEDIA_PREF,onMediaPref);bindOverlay();trace("ready",diagnostics(false));
 })();
