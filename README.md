@@ -1,43 +1,61 @@
-# OnePlane — Horizontal Tab Bar for Zen Browser
+# Nocturne — by NoctHarborStudio
 
-Adaptive horizontal top tabs for [Zen Browser](https://zen-browser.app/), with hover-expandable tabs, a dynamic address bar, and an auto-hide single-row toolbar.
+**A unified, modular UI overhaul for [Zen Browser](https://zen-browser.app/).**
 
-OnePlane is designed to keep browser controls on a single horizontal plane at the top of the window, without permanently sacrificing screen space.
+Nocturne brings OnePlane and Zen Refined together into a single browser-chrome mod: adaptive horizontal tabs, native workspaces, Home, Hub, magnetic interactions, search, downloads and coordinated motion. It is not a browser fork or a replacement for Zen's native data model.
 
-> **Early development.** No stable release yet. The CSS prototype is based on Zen 1.24.2b source and has not been tested in a running browser.
+> **Development preview — not a stable release.** Target: Zen 1.24.2b / Sine 2.3.3. Features are implemented at different levels of native-browser validation. Use a disposable profile. See the [live preview README](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/README.md), [changelog](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/CHANGELOG.md) and [Actions](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions) for the current package and verification status.
 
-## Design goals
+## Features
 
-- Horizontal tab bar at the top of the window.
-- Icon-only tabs by default; hovering reveals the title and close control.
-- Compact address bar that expands when clicked or focused.
-- Tabs and address bar on the same row.
-- Native Compact Mode integration for top-edge reveal and automatic hiding.
-- Preserve native navigation, window controls, keyboard shortcuts and theme colors wherever possible.
+| Feature | Description |
+| --- | --- |
+| OnePlane Horizontal | Centered adaptive tab lanes, overflow rows, integrated address bar, Compact Mode, contour and fade. |
+| Home & Hub | Native workspaces, Free/Trash, pinned shortcuts, Home search and workspace/display interactions. |
+| Magnetic motion | Reversible Bunny tab drag, Magnetic Fold, native bookmark magnification and liquid indicators. |
+| Smart Search | Recent active tabs and native recommendations with exact tab selection. |
+| Downloads Dock | Native downloads, recent/full views, live progress and native drag of completed files. |
+| Page Progress | Symmetric page-load progress below the horizontal dock. |
+| Nocturne Boot & motion | Optional branded startup, Center Assembly/Disassembly and coordinated workspace transitions. |
 
-## Install the development preview with Sine
+Native tab/session data, folders, split views and workspace identities remain owned by Zen. Nocturne integrates with native commands rather than replacing the browser engine.
 
-**Use a disposable Zen profile.** Install Sine in that profile using its official instructions, then open Sine Mods in Zen Settings.
+## In development
 
-Paste this GitHub source into Sine's unpublished/local mod installation field:
+- **Nocturne Library:** overlay coordination and native data services are implemented in the development branch; the Library shell, History/Recently Closed UI, full Downloads integration and Documents/Pictures remain planned. Native shortcut interception is not enabled.
+- **Shared Core:** lifecycle ownership, layout hosts and native fallback.
+- **Extension / Utility Dock:** planned.
+- **Vertical Layout:** planned for the 0.4 development cycle, after horizontal stabilization.
 
-```text
-NoctHarborStudio/zen-oneplane-horizontal-tabs/tree/preview
+## Install with Sine
+
+1. Install [Sine](https://github.com/CosmoCreeper/Sine) in a disposable Zen profile.
+2. In Zen Settings → Sine Mods, install this unpublished GitHub source:
+
+   ```text
+   NoctHarborStudio/zen-oneplane-horizontal-tabs/tree/preview
+   ```
+
+3. Review the [source](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/tree/preview) before allowing unofficial mod scripts. Restart Zen if scripts have not loaded.
+
+**Migrating from OnePlane + Zen Refined:** disable the separate Zen Refined mod and restart before updating OnePlane. The existing OnePlane entry becomes Nocturne; its ID, installation URL and existing preference namespaces are retained. Do not run legacy Refined alongside Nocturne. Keep it disabled rather than deleting it until rollback has been tested.
+
+The repository retains its historical slug to preserve Sine updates. The `main` branch is documentation only; install from `preview`, not `main`.
+
+## Development
+
+Node.js 20+ (CI uses Node 22); no npm dependencies. Use the [development source](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/tree/preview).
+
+```sh
+npm run build
+npm run verify
 ```
 
-OnePlane now automatically configures the necessary native layout preferences when enabled in Sine. No manual changes to Zen's toolbar layout are required.
+- [Current roadmap](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/docs/roadmap.md) · [Architecture](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/docs/nocturne/architecture.md) · [Library RFC](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/docs/nocturne/library-architecture.md)
+- [Migration pipeline](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/docs/nocturne/migration.md) · [Validation gates](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/docs/nocturne/validation.md) · [Known issues](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/docs/known-issues.md)
+- [Diagnostics](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/docs/nocturne/diagnostics.md) · [Sine updates](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/docs/sine-updates.md) · [Changelog](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/CHANGELOG.md)
 
-**Script permission:** Sine 2.3.3 does not run JavaScript from unpublished GitHub mods unless the user explicitly allows unofficial mod scripts. OnePlane includes a small, auditable local browser-chrome script ([layout.uc.mjs](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/layout.uc.mjs)); it changes only Zen layout preferences and uses the native Compact Mode API. It makes no network requests. Do not enable unofficial scripts unless you trust the mods installed in that profile.
-
-Restart the test browser after updating from preview.1 if the script is not loaded immediately. Disable OnePlane in Sine to remove its layout and restore the original preferences on a best-effort basis. A narrow window or unsupported native layout falls back to Zen's own CSS.
-
-See the [installation guide](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/docs/installation.md) and [design and validation plan](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/docs/design.md).
-
-Horizontal scrolling, drag and drop, pinned tabs, folders, workspaces, extension controls and compatibility with other themes are not yet validated. Sine packaging was checked against its v2.3.3 source; installation has not been tested in a running browser.
-
-## Scope
-
-This project is exclusively about horizontal tabs and the integrated top toolbar. It does not change page backgrounds, loading animations, content spacing or unrelated browser styling.
+Automated tests do not replace live Zen testing. Native compatibility, startup paint before Sine injection, drag behavior, accessibility, mixed DPI, reload and rollback remain validation gates.
 
 ## License
 
