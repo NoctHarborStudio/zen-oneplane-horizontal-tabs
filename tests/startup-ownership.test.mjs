@@ -46,3 +46,14 @@ test("shutdown does not restore; external preference edits survive",()=>{
  const f=fixture(),a=f.mount();f.Services.startup.shuttingDown=true;a.unload();assert.deepEqual(f.states(),[false,false]);assert.ok(f.values.has(BACKUP));
  f.Services.startup.shuttingDown=false;const b=f.mount();f.values.set(TARGETS[0],true);b.unload();assert.equal(f.values.get(TARGETS[0]),true);assert.equal(f.values.has(TARGETS[1]),false);
 });
+
+test("legacy conflict diagnostic only warns for an enabled Refined entry",async()=>{
+ const section=source.slice(source.indexOf('const LEGACY_ID='),source.indexOf('function readBackup('));
+ const warn=new Function(section+"return warnLegacyConflict;")();
+ const id="9d788b55-d497-41da-8444-993c603e89e4",messages=[],logger={warn:m=>messages.push(m)};
+ for(const mods of [{},{[id]:{enabled:false}},{[id]:{enabled:true}}]){
+   assert.equal(await warn(async()=>mods,logger),mods[id]?.enabled===true);
+ }
+ assert.equal(await warn(async()=>{throw Error("unavailable");},logger),false);
+ assert.equal(messages.length,1);assert.ok(messages[0].includes("Disable it in Sine"));
+});

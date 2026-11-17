@@ -93,3 +93,7 @@ Semantic shared tokens for tint/glass, blur, radius, spacing, card sizes, focus,
 New memory management, Smart Context Menu, Extension Dock, redesign of Home, native tab replacement, full rebranding of all internal identifiers, automatic layout switching, new persistence, browser fork, repository rename, or deletion of the Refined repo. Keep old project history and known issues. No compatibility claim beyond tested Zen/Sine versions.
 
 See [migration pipeline](migration.md) and [validation gates](validation.md).
+
+## Stabilization checkpoint
+
+See [audit register](audit.md) for NC-001–NC-007. Preview.2 fixes narrow Downloads host detection and process-wide Startup ownership; adds a legacy warning, not coexistence support. Unified Core and native runtime gates remain pending.

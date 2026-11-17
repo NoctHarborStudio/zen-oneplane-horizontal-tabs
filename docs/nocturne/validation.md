@@ -19,6 +19,15 @@ Planning checklist. All new integration/native verification items are pending.
 - [ ] Startup Free, Trash, Hub, projection and native workspace sync preserved. No unsolicited workspace creation on reload/switch.
 - [ ] Sine test package update in separate profile, with old Refined disabled.
 
+## G1.1 — Package Stabilization
+
+- [x] Audit register and priorities recorded (see [audit.md](audit.md)).
+- [x] Narrow horizontal downloads host uses readiness, not width; source-level regression tests.
+- [x] Startup preference owner transfers between live windows; source-level regression tests.
+- [x] Read-only legacy Refined warning; no silent mod changes. Coexistence remains unsupported.
+- [ ] Real Zen checks for these fixes, CSS parity and legacy-disabled migration/rollback.
+- [ ] Resolve legacy coexistence / distribution policy before broad promotion.
+
 ## G2 — ownership and lifecycle
 
 - [ ] One per-window Home, Hub, bookmark indicator, download dock, progress line and motion owner; one provider per native provider manager. Count after multiple windows/reloads.

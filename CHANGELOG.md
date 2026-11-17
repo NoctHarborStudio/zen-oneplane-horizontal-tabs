@@ -1,3 +1,10 @@
+## 0.3.0-preview.2 — Package Stabilization
+
+- Fix Downloads Dock host selection on narrow adaptive OnePlane windows; use the same ready-strip and fullscreen/customization gate as layout CSS, watch readiness changes.
+- Coordinate startup placeholder preferences across live browser windows: one observer, transfer to surviving lease, restore only on last explicit mod unload, preserve normal exit.
+- Read Sine mod state only to warn about enabled legacy Zen Refined. This is not an interlock; disable legacy Refined and restart before using Nocturne.
+- Record all audit findings and remaining runtime/architecture gates in docs/nocturne/audit.md; add targeted regression fixtures. No layout or animation redesign.
+
 ## 0.3.0-preview.1 — Nocturne: unified package
 
 - Combine OnePlane preview.62 and Zen Refined preview.26 into one Sine mod, preserving OnePlane's package ID, update URL and all existing preference keys.

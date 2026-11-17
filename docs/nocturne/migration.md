@@ -32,6 +32,10 @@ Expected nine distinct runtime entries (existing layout + shared bookmarks + sev
 
 Sequence each import in a separate commit with tests. Do not clean up/reformat files while proving equivalence. Test a single package with legacy Refined disabled; compare against the two-mod baseline. If cascade differs, inspect computed style/geometry and fix explicitly rather than assuming import order is equivalent.
 
+## B.1. Package Stabilization (0.3.0-preview.2)
+
+See [audit register](audit.md), NC-001 through NC-007. Resolve confirmed Downloads and Startup ownership defects before refactoring the core. Legacy conflict warning is diagnostic only; full safe coexistence remains unvalidated. Record actual Windows Zen validation and computed-style parity; do not call the package stable based solely on CI. Keep the current developer preview usable with Refined disabled.
+
 ## C. Separate the lifecycle
 
 1. Introduce WindowContext/disposable ownership and explicit readiness while preserving existing script entry compatibility.
@@ -57,7 +61,7 @@ Prototype on feature/vertical-layout after shared core is stable. First mount na
 
 ## F. Branch and release policy
 
-- preview remains the working OnePlane line until promotion. main untouched.
+- preview now carries the Nocturne developer preview (Package Fusion published at 0.3.0-preview.1); main untouched. Broad/stable promotion remains gated by native validation.
 - integration/unified-core starts at pinned OnePlane preview.62. Planning docs do not bump runtime version.
 - feature/vertical-layout starts from accepted common core.
 - Release numbering proposed: 0.3.x unified core; 0.4.x vertical; 1.0.0 after stable validation. Exact preview numbers chosen on release, not in planning docs.

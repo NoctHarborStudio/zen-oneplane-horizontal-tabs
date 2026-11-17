@@ -8,6 +8,19 @@ const BACKUP="zen.refined.startup.previous-placeholders";
 const TARGETS=["browser.startup.blankWindow","browser.startup.preXulSkeletonUI"];
 const prefs=Services.prefs;
 const KEY="__zenRefinedStartupPlaceholders";
+const LEGACY_ID="9d788b55-d497-41da-8444-993c603e89e4";
+// Sine owns mod installation state. Read it only for diagnostics, never
+// change the other mod, and do not hold up browser startup.
+async function warnLegacyConflict(getMods,logger){
+  try{
+    const mods=await getMods();
+    if(mods?.[LEGACY_ID]?.enabled===true){
+      logger.warn("[Nocturne] Legacy Zen Refined is still enabled. Disable it in Sine and restart Zen; dual ownership is unsupported.");
+      return true;
+    }
+  }catch{} // optional diagnostics must not block startup
+  return false;
+}
 function readBackup(){
   try{const b=JSON.parse(prefs.getStringPref(BACKUP,"{}"));return b&&typeof b==="object"&&!Array.isArray(b)?b:{};}catch{return {};}
 }
@@ -52,8 +65,12 @@ let closing=false,disposed=false,closeTimer=0,observing=false;
 function otherOwner(){
   const windows=Services.wm.getEnumerator("navigator:browser");
   while(windows.hasMoreElements()){
-    const other=windows.getNext(),lease=other[KEY];
-    if(other!==window&&!other.closed&&lease?.active&&typeof lease.observe==="function")return lease;
+    const other=windows.getNext();
+    try{
+      if(other===window||other.closed)continue;
+      const lease=other[KEY];
+      if(lease?.active&&typeof lease.observe==="function")return lease;
+    }catch{} // a closing chrome window can become a dead wrapper
   }
   return null;
 }
@@ -96,5 +113,11 @@ if(typeof window.addUnloadListener==="function"&&!document.documentElement.hasAt
   window.addEventListener("beforeunload",beforeClose,true);
   window.addEventListener("unload",nativeUnload,{once:true});
   window.addUnloadListener(()=>cleanup(true));
-  if(!otherOwner()){observe();sync();}
+  if(!otherOwner()){
+    observe();sync();
+    void warnLegacyConflict(
+      ()=>ChromeUtils.importESModule("chrome://userscripts/content/core/utils.sys.mjs").default.getMods(),
+      console
+    );
+  }
 }
