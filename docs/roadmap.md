@@ -178,3 +178,7 @@ User reports Home is now primary, but window cannot be dragged from Home and the
 ## 0.3.0-preview.30 — Downloads native file drag
 
 Implemented native Gecko drag payload for the latest completed download on the toolbar indicator and individual completed files in Recent downloads and All downloads (shared row cache). Uses the actual nsIFile and file URI; copy/move negotiated by the OS or drop target. No file access outside the user-initiated drag, no partial/blocked/canceled files. Keep Open/Show in folder clicks independent and defer row reconciliation until dragend. Verify Windows Explorer/Desktop, web upload drop zones, cancellation, recent/full modes, deleted file, private list isolation and normal clicks in Zen. Native platform verification pending.
+
+## 0.3.0-preview.37 — Bunny downloads
+
+Native moz-icon artwork refreshes on completion. Shared toolbar/latest and recent/full file drag controller begins with a compact native preview and uses a live chrome ghost only after Gecko accepts the blank image. Restore the compact native preview outside the window; OS drops remain native. Spring lift, top-center grip, reversed swing, cancellation return, reduced-motion fallback. Live Windows icon rendering and image handoff need verification.

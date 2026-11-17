@@ -1,3 +1,9 @@
+## 0.3.0-preview.37 — Bunny file drag and system icons
+
+- Native file/application icons in Recent and All downloads, refreshed on completion.
+- Compact 186×51 file preview from all three sources; spring lift, top grip, reversed velocity-driven swing and return inside the window. Native payload retained; static compact preview outside.
+- Hold drag source and toolbar, clean up on dragend/disable and respect reduced motion. Add icon, motion and handoff tests.
+
 ## 0.3.0-preview.36 — Library L2 package verification
 
 - Synchronize diagnostic trace versions across all entrypoints and refresh bookmark provenance lock. No UI changes.
