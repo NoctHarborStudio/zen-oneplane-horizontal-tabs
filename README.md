@@ -4,9 +4,9 @@
 
 Nocturne combines OnePlane and Zen Refined in one browser-chrome mod. Native Zen remains the owner of tabs, sessions, workspaces and browser commands. Nocturne is not a browser fork.
 
-**Development preview: 0.3.0-preview.35** · Target: Zen 1.24.2b / Sine 2.3.3.
+**Development preview: 0.3.0-preview.36** · Target: Zen 1.24.2b / Sine 2.3.3.
 
-> Experimental software. Preview.35 contains Library L2 and has outstanding CI regressions; preview.34 passed all 265 automated tests. See [Actions](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions) and [validation](docs/nocturne/validation.md). Neither result establishes full native-browser compatibility. Use a disposable profile.
+> Experimental software. Preview.36 contains Library L2 and has two outstanding Downloads lifecycle test failures; preview.34 passed all 265 automated tests. See [Actions](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions) and [validation](docs/nocturne/validation.md). Neither result establishes full native-browser compatibility. Use a disposable profile.
 
 ## Features
 

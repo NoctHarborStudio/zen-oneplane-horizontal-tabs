@@ -1,6 +1,6 @@
 # Nocturne — current development roadmap
 
-Baseline: 0.3.0-preview.35 (2026-11-17). This is the active product roadmap; historical decisions are retained in [the OnePlane 0.2 roadmap](history/oneplane-0.2-roadmap.md). Implementation is not equivalent to native acceptance.
+Baseline: 0.3.0-preview.36 (2026-11-17). This is the active product roadmap; historical decisions are retained in [the OnePlane 0.2 roadmap](history/oneplane-0.2-roadmap.md). Implementation is not equivalent to native acceptance.
 
 ## Status and priorities
 
@@ -8,7 +8,7 @@ Baseline: 0.3.0-preview.35 (2026-11-17). This is the active product roadmap; his
 | --- | --- | --- |
 | Package Fusion | Implemented in 0.3.x | Native migration/rollback, legacy conflict policy |
 | Motion & UI Stabilization | In progress | Boot, Bunny, Fold, workspace changes, drag, narrow rows, real Zen performance |
-| Library L0–L2 | L0/L1 implemented; L2 published in .35, CI red | Fix diagnostics version and Downloads lifecycle regressions, native Dock parity |
+| Library L0–L2 | L0/L1 implemented; L2 published in .35, CI red | Resolve two Downloads lifecycle test failures, native Dock parity |
 | Library L3–L7 | Planned | Shell, History/Closed, Downloads, Documents/Pictures, acceptance |
 | Shared Core | Partial foundations; broader extraction planned | WindowContext/disposal, layout hosts, horizontal parity |
 | Extension / Utility Dock | Planned | Native controls, narrow/portrait geometry, accessibility |
@@ -17,7 +17,7 @@ Baseline: 0.3.0-preview.35 (2026-11-17). This is the active product roadmap; his
 
 ## Immediate work
 
-1. Restore a green candidate. Preview.35 has three failing tests (diagnostic version and two Downloads lifecycle tests). Diagnose rather than bypass them; keep the existing Sine identity and publish a new monotonic recovery version for runtime changes.
+1. Restore a green candidate. Preview.36 fixes the diagnostic version assertion from .35, but two Downloads lifecycle tests still fail. Diagnose rather than bypass them; keep the existing Sine identity and publish a new monotonic recovery version for runtime changes.
 2. Verify L2 in real Zen: native subscription uniqueness, Dock progress/actions/drag, private list isolation, stale callbacks, disable/reload and removal. No Library command interception until the later gate.
 3. Stabilize Nocturne Boot and coordinated motion with user traces: repeated cold launches, closing, workspace transitions, first icon readiness, reversible Bunny and Home/search handoff. Native window paint before Sine injection is outside the mod's control.
 4. Continue Library L3 after L2 acceptance; coordinate focus, Escape and overlay ownership before native command interception.

@@ -1,3 +1,7 @@
+## 0.3.0-preview.36 — Library L2 package verification
+
+- Synchronize diagnostic trace versions across all entrypoints and refresh bookmark provenance lock. No UI changes.
+
 ## 0.3.0-preview.35 — Library L2 native data services
 
 - Introduce a single per-window Downloads subscription, independent of the Dock preference, with native replay, immutable records, opaque IDs and validated actions. Dock consumes the same service; no second native list observer.

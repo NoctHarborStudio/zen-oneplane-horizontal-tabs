@@ -1,6 +1,6 @@
 # Nocturne — staged migration pipeline
 
-Current checkpoint (0.3.0-preview.35): Package Fusion is implemented and published; horizontal stabilization and Library L2 are in progress. Shared lifecycle extraction, vertical layout and public migration/rollback acceptance remain pending. See the [active roadmap](../roadmap.md). Historical milestones below retain their original context.
+Current checkpoint (0.3.0-preview.36): Package Fusion is implemented and published; horizontal stabilization and Library L2 are in progress. Shared lifecycle extraction, vertical layout and public migration/rollback acceptance remain pending. See the [active roadmap](../roadmap.md). Historical milestones below retain their original context.
 
 This is a proposal in integration/unified-core. Do not advertise a Sine preview or change the current preview manifest until gates pass.
 

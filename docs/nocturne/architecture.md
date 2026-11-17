@@ -1,6 +1,6 @@
 # N O C T U R N E — architecture RFC
 
-Status: target architecture RFC with implemented checkpoints. Package Fusion, horizontal layout, overlay coordination and Library L2 native data services exist in preview.35. A fully shared WindowContext, host registry and vertical adapter are not yet implemented. The proposed interfaces below are not a claim of runtime parity. See [current roadmap](../roadmap.md) and [Library RFC](library-architecture.md).
+Status: target architecture RFC with implemented checkpoints. Package Fusion, horizontal layout, overlay coordination and Library L2 native data services exist in preview.36. A fully shared WindowContext, host registry and vertical adapter are not yet implemented. The proposed interfaces below are not a claim of runtime parity. See [current roadmap](../roadmap.md) and [Library RFC](library-architecture.md).
 Product: Nocturne, a complete Zen browser UI modification by NoctHarborStudio, not a browser fork.
 Working repository: existing OnePlane repository; public package ID retained.
 Source baselines: OnePlane 0.2.0-preview.62 at 4281c4778f3851f939ad3cfdb01406238ff2d2a0; Zen Refined 0.6.0-preview.26 at 1926eacbe29782d80324ac277563aff514bf6943.

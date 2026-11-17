@@ -1,8 +1,8 @@
 # Known issues
 
-## Current triage — Nocturne 0.3.0-preview.35
+## Current triage — Nocturne 0.3.0-preview.36
 
-- **Open / CI:** diagnostics version assertion and two Downloads lifecycle tests fail in [preview.35](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/44192812308). Investigate L2 service/fixture ownership before promotion.
+- **Open / CI:** Two Downloads lifecycle tests fail in [preview.36](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/44193186631); the diagnostic version assertion from .35 is fixed. Investigate L2 service/fixture ownership before promotion.
 - **Open / native validation:** branded startup, pre-injection native window paint, reversible Magnetic Bunny, workspace/closing motion, native download drag and L2 Dock parity. Distinguish source fixes from user acceptance; see [validation](nocturne/validation.md).
 - **Superseded plans:** adaptive second-row tabs and native download drag have implementations; older notes describing them as only planned are historical, not proof of native acceptance. Vertical layout and Extension Dock remain planned.
 - **Distribution:** legacy Refined alongside Nocturne is unsupported; retain the existing Sine identity and URL.
