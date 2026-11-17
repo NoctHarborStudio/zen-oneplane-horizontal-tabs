@@ -237,14 +237,8 @@
     if(tabOwner(tab)===window)clearPlacementPreview();
     else tabOwner(tab)?.[DRAG_CONTROLLER]?.preview?.(event);
     const local = tabOwner(tab) === window;
-    if(local&&dragDetachedOnce&&within){
-      // A carried tab returning to its own toolbar is a cancellation,
-      // not a top-edge split or a reorder. Leave native tab order intact.
-      event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";
-      clearLiveDrag();clearDropMarker();
-      if(dragImageMode==="content")positionGhost(event.clientX,event.clientY);
-      return;
-    }
+    // A return still runs the visual state machine. Native cancellation
+    // remains owned by onToolbarDrop; do not reorder after detachment.
     if (local && dragNode) {
       dragLastPoint = {x:event.clientX,y:event.clientY};
       if (within && dragImageMode !== "content" && dragImageMode !== "outside")
@@ -255,7 +249,9 @@
       const threshold = dragImageMode === "content" || dragImageMode === "outside" ? .72 : .96;
       const detach = p >= threshold || lateralExit;
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.pull.decision",()=>({mode:dragImageMode,within,p,threshold,detach,lateralExit,edge:dragEdge,y:event.clientY,delta:event.clientY-dragEdge,measured:parseFloat(toolbarWrapper.style.getPropertyValue('--op-measured-toolbar-height'))||0,wrapperBottom:toolbarWrapper.getBoundingClientRect().bottom,rowBottom:row.getBoundingClientRect().bottom,navBottom:navbar?.getBoundingClientRect().bottom,detachedOnce:dragDetachedOnce,reentry:dragReentry,lane:useLaneDrop()}),{throttle:85,sample:1000});
+      const previous=dragImageMode;
       setDragImageMode(detach ? "content" : "inline",event);
+      if(previous==="content"&&dragImageMode==="inline")dragReturnFloor=p;
       if (dragImageMode === "content") {
         positionGhost(event.clientX,event.clientY);
         clearLiveDrag(); releaseDragReveal();
@@ -266,8 +262,22 @@
         else{clearLiveDrag();releaseDragReveal();}
         return;
       }
-      if (p === 0) dragReentry = false;
-      if (p > 0 && !dragReentry) {
+      // Hysteresis suppresses a second pull only while continuing inward.
+      // Reversing direction rearms the pull, even without entering the row.
+      if(dragReentry){
+        if(p>dragReturnFloor+.06){
+          dragReentry=false;
+          window.__nocturneTrace?.("drag.return.rearm",{p,floor:dragReturnFloor},{sample:1000});
+        }else{
+          dragReturnFloor=Math.min(dragReturnFloor,p);
+          if(p===0&&!dragInsertAnimation)dragReentry=false;
+        }
+      }
+      if(dragInsertAnimation||dragReentry){
+        if(within){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";}
+        return;
+      }
+      if (p > 0) {
         if(useLaneDrop()){
           clearLiveDrag();clearDropMarker();setPull(p);row.setAttribute("data-op-lane-drag","true");showLaneGhost(event,p);
           return;
@@ -285,6 +295,11 @@
       }
       clearGroupPull();
       setPull(0);
+      if(dragDetachedOnce&&within){
+        // Visually return to the original native slot; no reorder.
+        event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";
+        clearDropMarker();return;
+      }
     } else if (!local) tabOwner(tab)?.[DRAG_CONTROLLER]?.outside(event);
     if (!within && !(local && dragReentry && dragImageMode === "inline")) {
       clearLiveDrag(); releaseDragReveal(); return;

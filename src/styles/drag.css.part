@@ -35,7 +35,9 @@
     #oneplane-tabs[data-op-inline-drag]:not([data-op-lane-drag]) .oneplane-tab-list {
       overflow: visible !important;
     }
-    #oneplane-tabs [data-op-lane-ghost] {opacity:0!important;pointer-events:none!important;}
+    #oneplane-tabs[data-op-dragging] :is([data-op-lane-ghost],[data-op-reinsert]) {
+      visibility:hidden!important;opacity:0!important;pointer-events:none!important;
+    }
     #oneplane-tabs [data-op-drag-follow] {
       position: relative;
       z-index: 12 !important;
@@ -223,10 +225,9 @@
       #oneplane-tabs .oneplane-tab-icon { transition: none !important; }
     }
     /* The slot opens immediately; the card itself springs into it. */
-    #oneplane-tabs [data-op-reinsert] {
+    #oneplane-tabs[data-op-dragging] :is(.oneplane-tab,.oneplane-split-group)[data-op-reinsert] {
       transform-origin: center center !important;
       transition: none !important;
-      will-change: scale, translate;
       z-index: 12 !important;
     }
     #oneplane-tabs[data-op-dragging] [data-op-detached] { visibility: hidden !important; }

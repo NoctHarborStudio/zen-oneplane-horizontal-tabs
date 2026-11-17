@@ -9,7 +9,7 @@
   let dragGhost = null, dragGhostBody = null, dragPull = 0, dragEdge = 0, dragWidth = 0;
   let dragGhostAnimation = null;
   let dragLastPoint = null;
-  let dragReentry = false, dragInsertAnimation = null, dragInsertNode = null;
+  let dragReentry = false, dragReturnFloor = 0, dragInsertAnimation = null, dragInsertNode = null;
   let groupPullLayout = null;
   let pointerSearch = null, dragSearch = null, restoreSearchTimer = 0;
   const blankDragImage = html("canvas");

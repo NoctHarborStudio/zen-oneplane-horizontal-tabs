@@ -13,7 +13,7 @@
       dragNode?.style.removeProperty(name);
     hideGhost();
     dragGhost?.remove(); dragGhost = null; dragGhostBody = null;
-    dragPull = 0; dragLastPoint = null; dragReentry = false;dragDetachedOnce=false;
+    dragPull = 0; dragLastPoint = null; dragReentry = false;dragReturnFloor=0;dragDetachedOnce=false;
     dragNode = null;
     dragImageMode = null;
     row.removeAttribute("data-op-inline-drag");

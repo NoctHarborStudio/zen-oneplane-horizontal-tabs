@@ -1,3 +1,9 @@
+## 0.3.0-preview.19 — Continuous Bunny drag handoff
+
+- Re-arm pointer-driven pull on outward reversal after re-entry, rather than waiting for the pointer to reach the toolbar. Run the return state machine before applying native return cancellation.
+- Start Bunny extraction from the actual painted source rectangle and return the isolated ghost from its actual position and size to the original slot; hide the native mirror until the 320ms return finishes. Preserve native drop/cancel, group identity and outside-window drag policy.
+- Record measured handoff coordinates, rearm and completion; sample ghost body geometry. Preserve Magnetic Fold and the three-session / 2MB diagnostic limit.
+
 ## 0.3.0-preview.18 — Visible startup favicons and smooth workspace Home label
 
 - Keep nested OnePlane buttons outside the generic startup opacity gate. The card itself owns its entrance and the isolated Magnetic Fold copy preserves its already decoded icon content.

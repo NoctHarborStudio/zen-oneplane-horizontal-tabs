@@ -7,7 +7,7 @@
       indicatorHover:homeOpen?null:entries.get(browser.selectedTab)?.item;
     if(!item||!list.contains(item)||item.hasAttribute("data-op-detached")||
         item.closest(".oneplane-split-group[data-op-detached]"))return null;
-    if(dragging && (dragImageMode!=="inline" || dragPull>=.62))return null;
+    if(dragging && (dragImageMode!=="inline" || dragPull>=.62 || dragNode.hasAttribute("data-op-reinsert")))return null;
     // For a shrinking group use the visible ghost rather than its
     // invisible layout placeholder when determining vertical clearance.
     const visual=dragging && dragPull>0 && draggedGroup && dragGhost &&

@@ -9,7 +9,7 @@ function fixture({isPrivate=false,on=true,prior=null}={}){
  const win={performance:{now:()=>time},innerWidth:1200,innerHeight:800,PrivateBrowsingUtils:{isWindowPrivate:()=>isPrivate},console:{info:s=>logs.push(s),warn:s=>logs.push(s)},addUnloadListener(){},
  MutationObserver:class{observe(){}disconnect(){}},addEventListener(k,f){listeners.set(k,f);},removeEventListener(k){listeners.delete(k);},
  setTimeout(f,ms){const id=++serial;timers.set(id,{f,ms});return id;},clearTimeout:id=>timers.delete(id),requestAnimationFrame(f){const id=++serial;frames.set(id,f);return id;},cancelAnimationFrame:id=>frames.delete(id),
- __nocturneEarlyTrace:[{event:"assembly.script",t:0,data:{version:"0.3.0-preview.18"}}]};
+ __nocturneEarlyTrace:[{event:"assembly.script",t:0,data:{version:"0.3.0-preview.19"}}]};
  const io={readUTF8:async()=>JSON.stringify(prior),makeDirectory:async()=>{},getChildren:async()=>[],writeUTF8:async(path,data)=>writes.push({path,data})};
  const paths={profileDir:"profile",join:(...p)=>p.join("/"),filename:p=>p.split("/").at(-1)};
  new Function("window","document","Services","IOUtils","PathUtils",source)(win,doc,{prefs:{getBoolPref:()=>enabled}},io,paths);
@@ -32,7 +32,7 @@ test("disabled recording never evaluates detail and private recording never writ
 });
 test("recorder is included at start of layout, versioned and avoids content fields",()=>{
  const layout=readFileSync(new URL("../layout.uc.mjs",import.meta.url),"utf8");
- assert.ok(layout.startsWith(source));assert.ok(source.includes("0.3.0-preview.18"));
+ assert.ok(layout.startsWith(source));assert.ok(source.includes("0.3.0-preview.19"));
  for(const forbidden of ["currentURI","contentDocument","contentWindow","documentURI","textContent","\.label","\.title"])assert.ok(!source.includes(forbidden),forbidden);
 });
 

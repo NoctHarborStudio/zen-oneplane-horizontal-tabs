@@ -1,7 +1,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.18",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.19",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -121,7 +121,7 @@
     const ghost=doc.querySelector(".oneplane-bunny-ghost"),card=row?.querySelector(".oneplane-tab[data-selected]")||row?.querySelector(".oneplane-tab");
     const group=row?.querySelector(".oneplane-split-group"),handle=group?.querySelector(".oneplane-split-handle");
     if(group)wanted.set("split-group",group);if(handle)wanted.set("split-handle",handle);
-    if(drag)wanted.set("source",drag);if(ghost)wanted.set("ghost",ghost);if(card)wanted.set("card",card);
+    if(drag)wanted.set("source",drag);if(ghost){wanted.set("ghost",ghost);const body=ghost.querySelector(".oneplane-bunny-card");if(body)wanted.set("ghost-body",body);}if(card)wanted.set("card",card);
     const island=row?.querySelector(".oneplane-title-island"),label=island?.querySelector(".oneplane-island-title");
     if(island)wanted.set("home-island",island);if(label)wanted.set("home-label",label);
     const hovered=row?.querySelector(".oneplane-tab[data-op-hovered]");if(hovered){wanted.set("hover-card",hovered);const lane=hovered.closest(".oneplane-overflow-lane,.oneplane-island-lane");if(lane)wanted.set("hover-lane",lane);}
@@ -5155,7 +5155,7 @@ function installTabStrip() {
   let dragGhost = null, dragGhostBody = null, dragPull = 0, dragEdge = 0, dragWidth = 0;
   let dragGhostAnimation = null;
   let dragLastPoint = null;
-  let dragReentry = false, dragInsertAnimation = null, dragInsertNode = null;
+  let dragReentry = false, dragReturnFloor = 0, dragInsertAnimation = null, dragInsertNode = null;
   let groupPullLayout = null;
   let pointerSearch = null, dragSearch = null, restoreSearchTimer = 0;
   const blankDragImage = html("canvas");
@@ -5372,7 +5372,7 @@ function installTabStrip() {
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.ghost.hide",()=>({exists:!!dragGhost,mode:dragImageMode}),{throttle:100,sample:1200});
     if (dragGhostBody) dragGhostBody.style.removeProperty("transform");
   }
-  function showGhost(event, bounce) {
+  function showGhost(event, bounce, from=null) {
     makeDragGhost();
     if (!dragGhost) return;
     positionGhost(event.clientX, event.clientY);
@@ -5381,8 +5381,11 @@ function installTabStrip() {
     dragGhost.hidden = false;
     if (bounce && !reducedMotion.matches && prefs.getIntPref("zen.oneplane.animation-duration",160) !== 0) {
       dragGhostAnimation?.cancel();
+      const box=dragGhostBody.getBoundingClientRect();
+      const start=from?handoffTransform(from,{x:box.left+box.width/2,y:box.top+box.height/2,width:box.width,height:box.height}):{x:0,y:-8,sx:.34,sy:.45};
+      window.__nocturneTrace?.("drag.detach.handoff",{dx:start.x,dy:start.y,sx:start.sx,sy:start.sy},{sample:1200});
       dragGhostAnimation = dragGhostBody.animate([
-        {transform:"translateY(-8px) scale(.34,.45)",offset:0},
+        {transform:"translate("+start.x+"px,"+start.y+"px) scale("+start.sx+","+start.sy+")",offset:0},
         {transform:"translateY(5px) scale(1.22,.91)",offset:.24},
         {transform:"translateY(-3px) scale(.96,1.15)",offset:.43},
         {transform:"translateY(2px) scale(1.07,.95)",offset:.64},
@@ -5516,37 +5519,57 @@ function installTabStrip() {
       return true;
     } catch (error) { console.error("[OnePlane] Drag image transition:",error); return false; }
   }
-  function cancelInsertion() {
-    const animation = dragInsertAnimation;
-    dragInsertAnimation = null;
-    if (animation) animation.cancel();
-    dragInsertNode?.removeAttribute("data-op-reinsert");
-    dragInsertNode = null;
+  function dragPaintedBox(){
+    const n=dragGhost&&!dragGhost.hidden&&dragGhostBody?dragGhostBody:dragNode;
+    if(!n)return null;
+    const r=n.getBoundingClientRect();
+    return {x:r.left+r.width/2,y:r.top+r.height/2,width:r.width,height:r.height};
   }
-  function animateInsertion(event) {
-    cancelInsertion();
-    if (!dragNode || reducedMotion.matches ||
-        prefs.getIntPref("zen.oneplane.animation-duration",160) === 0) return;
-    const node = dragNode;
-    dragInsertNode = node;
+  function handoffTransform(from,to){
+    return {x:from.x-to.x,y:from.y-to.y,sx:Math.max(.03,from.width/Math.max(1,to.width)),
+      sy:Math.max(.03,from.height/Math.max(1,to.height))};
+  }
+  function cancelInsertion() {
+    const animation = dragInsertAnimation,node=dragInsertNode;
+    dragInsertAnimation=null;dragInsertNode=null;
+    if(animation)animation.cancel();
+    node?.removeAttribute("data-op-reinsert");
+    if(node)hideGhost();
+  }
+  function animateInsertion(from) {
+    if (!dragNode||!from||reducedMotion.matches||
+        prefs.getIntPref("zen.oneplane.animation-duration",160)===0){
+      dragNode?.removeAttribute("data-op-reinsert");hideGhost();return;
+    }
+    const node=dragNode;dragInsertNode=node;
+    makeDragGhost();
+    if(!dragGhost||!dragGhostBody){cancelInsertion();return;}
     node.setAttribute("data-op-reinsert","true");
-    const rect = node.getBoundingClientRect();
-    const dy = Math.max(-12,Math.min(34,event.clientY-(rect.top+rect.height/2)));
-    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.insert",()=>({dy,height:rect.height}),{sample:1800});
-    // Animate the real card (not just its icon), using individual transforms
-    // so horizontal tracking and native drop/slot positioning stay independent.
-    const animation = node.animate([
-      {translate:"0 "+dy+"px",scale:".78 .92",offset:0},
-      {translate:"0 -4px",scale:"1 .78",offset:.30},
-      {translate:"0 2px",scale:".94 1",offset:.56},
-      {translate:"0 -1px",scale:"1 .97",offset:.78},
-      {translate:"0 0",scale:"1 1",offset:1}
-    ],{duration:240,easing:"linear"});
+    const target=node.getBoundingClientRect();
+    const tx=target.left+target.width/2,ty=target.top+target.height/2;
+    positionGhost(tx,ty);dragGhost.hidden=false;
+    dragGhostBody.style.removeProperty("transform");
+    const box=dragGhostBody.getBoundingClientRect();
+    const to={x:box.left+box.width/2,y:box.top+box.height/2,width:box.width,height:box.height};
+    const start=handoffTransform(from,to),sx=target.width/Math.max(1,box.width),sy=target.height/Math.max(1,box.height);
+    const transform=(x,y,w,h)=>"translate("+x+"px,"+y+"px) scale("+w+","+h+")";
+    const frames=[
+      {transform:transform(start.x,start.y,start.sx,start.sy),offset:0},
+      {transform:transform(0,-5,sx*.91,sy*1.14),offset:.53},
+      {transform:transform(0,2,sx*1.12,sy*.87),offset:.75},
+      {transform:transform(0,-1,sx*.98,sy*1.025),offset:.9},
+      {transform:transform(0,0,sx,sy),offset:1}
+    ];
+    const animation=dragGhostBody.animate(frames,{duration:320,easing:"cubic-bezier(.2,.65,.25,1)",fill:"both"});
     dragInsertAnimation=animation;
+    window.__nocturneTrace?.("drag.insert",{dx:start.x,dy:start.y,height:target.height,fromWidth:from.width,toWidth:target.width,duration:320,ghost:true},{sample:1800});
     animation.onfinish=animation.oncancel=()=>{
-      if (dragInsertAnimation !== animation) return;
-      dragInsertAnimation=null; dragInsertNode=null;
-      node.removeAttribute("data-op-reinsert");
+      if(dragInsertAnimation!==animation)return;
+      dragInsertAnimation=null;dragInsertNode=null;
+      // Commit the real source and hide the isolated visual together.
+      node.removeAttribute("data-op-reinsert");hideGhost();animation.cancel();
+      window.__nocturneTrace?.("drag.insert.finish",{mode:dragImageMode},{sample:800});
+      refreshIndicator();
     };
   }
   function setDragImageMode(mode, event) {
@@ -5554,6 +5577,7 @@ function installTabStrip() {
     // Once OS owns the drag image, never draw a local duplicate on re-entry.
     if(dragImageMode==="outside")return;
     const previous = dragImageMode;
+    const from=dragPaintedBox();
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.mode.request",()=>({previous,requested:mode,pull:dragPull,edge:dragEdge,ghost:!!dragGhost&&!dragGhost.hidden}),{sample:1800});
     if (mode === "outside") {
       // Only the OS drag image is painted beyond this browser window.
@@ -5573,8 +5597,10 @@ function installTabStrip() {
       // Clear the OS image BEFORE displaying our local animated card.
       if (!updateNativeDragImage(blankDragImage,0,0,event)) return;
     }
-    dragImageMode = mode;
+    cancelInsertion();
     const detached = mode === "content" || mode === "outside";
+    if(!detached&&previous==="content")dragNode.setAttribute("data-op-reinsert","true");
+    dragImageMode = mode;
     dragNode.toggleAttribute("data-op-detached", detached);
     row.toggleAttribute("data-op-inline-drag", !detached);
     if (detached) {
@@ -5584,14 +5610,16 @@ function installTabStrip() {
       cancelInsertion();
       setPull(0);
       clearLiveDrag();
-      if (mode === "content") showGhost(event,previous === "inline");
+      if (mode === "content") showGhost(event,previous === "inline",from);
     } else {
       hideGhost();
+      clearLiveDrag();
+      dragNode.setAttribute("data-op-drag-follow","true");
       setPull(0);
       if (previous !== "inline") {
         dragReentry = true;
-        try { animateInsertion(event); } catch (error) {
-          cancelInsertion();
+        try { animateInsertion(from); } catch (error) {
+          cancelInsertion();dragNode?.removeAttribute("data-op-reinsert");
           console.error("[OnePlane] Insertion animation:",error);
         }
       }
@@ -5852,14 +5880,8 @@ function installTabStrip() {
     if(tabOwner(tab)===window)clearPlacementPreview();
     else tabOwner(tab)?.[DRAG_CONTROLLER]?.preview?.(event);
     const local = tabOwner(tab) === window;
-    if(local&&dragDetachedOnce&&within){
-      // A carried tab returning to its own toolbar is a cancellation,
-      // not a top-edge split or a reorder. Leave native tab order intact.
-      event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";
-      clearLiveDrag();clearDropMarker();
-      if(dragImageMode==="content")positionGhost(event.clientX,event.clientY);
-      return;
-    }
+    // A return still runs the visual state machine. Native cancellation
+    // remains owned by onToolbarDrop; do not reorder after detachment.
     if (local && dragNode) {
       dragLastPoint = {x:event.clientX,y:event.clientY};
       if (within && dragImageMode !== "content" && dragImageMode !== "outside")
@@ -5870,7 +5892,9 @@ function installTabStrip() {
       const threshold = dragImageMode === "content" || dragImageMode === "outside" ? .72 : .96;
       const detach = p >= threshold || lateralExit;
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.pull.decision",()=>({mode:dragImageMode,within,p,threshold,detach,lateralExit,edge:dragEdge,y:event.clientY,delta:event.clientY-dragEdge,measured:parseFloat(toolbarWrapper.style.getPropertyValue('--op-measured-toolbar-height'))||0,wrapperBottom:toolbarWrapper.getBoundingClientRect().bottom,rowBottom:row.getBoundingClientRect().bottom,navBottom:navbar?.getBoundingClientRect().bottom,detachedOnce:dragDetachedOnce,reentry:dragReentry,lane:useLaneDrop()}),{throttle:85,sample:1000});
+      const previous=dragImageMode;
       setDragImageMode(detach ? "content" : "inline",event);
+      if(previous==="content"&&dragImageMode==="inline")dragReturnFloor=p;
       if (dragImageMode === "content") {
         positionGhost(event.clientX,event.clientY);
         clearLiveDrag(); releaseDragReveal();
@@ -5881,8 +5905,22 @@ function installTabStrip() {
         else{clearLiveDrag();releaseDragReveal();}
         return;
       }
-      if (p === 0) dragReentry = false;
-      if (p > 0 && !dragReentry) {
+      // Hysteresis suppresses a second pull only while continuing inward.
+      // Reversing direction rearms the pull, even without entering the row.
+      if(dragReentry){
+        if(p>dragReturnFloor+.06){
+          dragReentry=false;
+          window.__nocturneTrace?.("drag.return.rearm",{p,floor:dragReturnFloor},{sample:1000});
+        }else{
+          dragReturnFloor=Math.min(dragReturnFloor,p);
+          if(p===0&&!dragInsertAnimation)dragReentry=false;
+        }
+      }
+      if(dragInsertAnimation||dragReentry){
+        if(within){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";}
+        return;
+      }
+      if (p > 0) {
         if(useLaneDrop()){
           clearLiveDrag();clearDropMarker();setPull(p);row.setAttribute("data-op-lane-drag","true");showLaneGhost(event,p);
           return;
@@ -5900,6 +5938,11 @@ function installTabStrip() {
       }
       clearGroupPull();
       setPull(0);
+      if(dragDetachedOnce&&within){
+        // Visually return to the original native slot; no reorder.
+        event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";
+        clearDropMarker();return;
+      }
     } else if (!local) tabOwner(tab)?.[DRAG_CONTROLLER]?.outside(event);
     if (!within && !(local && dragReentry && dragImageMode === "inline")) {
       clearLiveDrag(); releaseDragReveal(); return;
@@ -5976,7 +6019,7 @@ function installTabStrip() {
       dragNode?.style.removeProperty(name);
     hideGhost();
     dragGhost?.remove(); dragGhost = null; dragGhostBody = null;
-    dragPull = 0; dragLastPoint = null; dragReentry = false;dragDetachedOnce=false;
+    dragPull = 0; dragLastPoint = null; dragReentry = false;dragReturnFloor=0;dragDetachedOnce=false;
     dragNode = null;
     dragImageMode = null;
     row.removeAttribute("data-op-inline-drag");
@@ -6273,7 +6316,7 @@ function installTabStrip() {
       indicatorHover:homeOpen?null:entries.get(browser.selectedTab)?.item;
     if(!item||!list.contains(item)||item.hasAttribute("data-op-detached")||
         item.closest(".oneplane-split-group[data-op-detached]"))return null;
-    if(dragging && (dragImageMode!=="inline" || dragPull>=.62))return null;
+    if(dragging && (dragImageMode!=="inline" || dragPull>=.62 || dragNode.hasAttribute("data-op-reinsert")))return null;
     // For a shrinking group use the visible ghost rather than its
     // invisible layout placeholder when determining vertical clearance.
     const visual=dragging && dragPull>0 && draggedGroup && dragGhost &&

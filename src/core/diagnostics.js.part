@@ -1,7 +1,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.18",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.19",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -121,7 +121,7 @@
     const ghost=doc.querySelector(".oneplane-bunny-ghost"),card=row?.querySelector(".oneplane-tab[data-selected]")||row?.querySelector(".oneplane-tab");
     const group=row?.querySelector(".oneplane-split-group"),handle=group?.querySelector(".oneplane-split-handle");
     if(group)wanted.set("split-group",group);if(handle)wanted.set("split-handle",handle);
-    if(drag)wanted.set("source",drag);if(ghost)wanted.set("ghost",ghost);if(card)wanted.set("card",card);
+    if(drag)wanted.set("source",drag);if(ghost){wanted.set("ghost",ghost);const body=ghost.querySelector(".oneplane-bunny-card");if(body)wanted.set("ghost-body",body);}if(card)wanted.set("card",card);
     const island=row?.querySelector(".oneplane-title-island"),label=island?.querySelector(".oneplane-island-title");
     if(island)wanted.set("home-island",island);if(label)wanted.set("home-label",label);
     const hovered=row?.querySelector(".oneplane-tab[data-op-hovered]");if(hovered){wanted.set("hover-card",hovered);const lane=hovered.closest(".oneplane-overflow-lane,.oneplane-island-lane");if(lane)wanted.set("hover-lane",lane);}
