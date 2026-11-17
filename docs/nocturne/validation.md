@@ -32,8 +32,9 @@ Planning checklist. All new integration/native verification items are pending.
 
 - [x] Verify exact runtime import parity and missing Downloads host.
 - [x] Record reproduced races/faults NC-009/010/011/012/016.
-- [ ] Add regression tests and fix each reproduced defect.
-- [ ] Define persistent Downloads slot, idle access, host hold, geometry/overflow and keyboard/focus.
+- [x] Add regression tests and source fixes for NC-009/010/011/012/016.
+- [x] Implement initial compact Downloads slot, idle access, host hold, anchor and fixed width.
+- [ ] Verify actual Zen idle/active button, Compact hold through close, narrow width, fullscreen/customization, focus and overflow; full lower Utility Dock remains planned.
 - [ ] Profile inherited jerk; unify contour and motion ownership based on evidence. Confirm current Home and address visuals, Split View and drag.
 - [ ] Confirm runtime native fallback, Sine reload, multi-window and workspace transitions after fixes.
 

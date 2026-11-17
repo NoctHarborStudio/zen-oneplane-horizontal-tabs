@@ -33,20 +33,24 @@ See [full-audit-preview.2.md](full-audit-preview.2.md) for detailed source refer
 
 | ID | Priority | Finding | Status |
 | --- | --- | --- | --- |
-| NC-008 | P1 | Downloads host absent; fallback hides at idle | Confirmed source + user report; open |
-| NC-009 | P1 | Concurrent native workspace switches after visual supersession | Reproduced fixture; open |
-| NC-010 | P1 | Stale Downloads async rejection tears down new instance | Reproduced fixture; open |
-| NC-011 | P1 | Smart Search partial mount leaves provider | Reproduced fault fixture; open |
-| NC-012 | P1 | Layout cleanup exception blocks restoration | Reproduced fault fixture; open |
+| NC-008 | P1 | Downloads host absent; fallback hides at idle | Implemented in preview.3; permanent compact horizontal host; actual Zen visual validation pending |
+| NC-009 | P1 | Concurrent native workspace switches after visual supersession | Fixed in preview.3 for explicit Home/Hub transition calls; gate survives replacement, fixtures pass; native Zen validation pending |
+| NC-010 | P1 | Stale Downloads async rejection tears down new instance | Fixed in preview.3; generation-guarded callbacks/catch and late view cleanup; fixtures pass |
+| NC-011 | P1 | Smart Search partial mount leaves provider | Fixed in preview.3; transactional rollback and retained diagnostics; fixture passes |
+| NC-012 | P1 | Layout cleanup exception blocks restoration | Fixed in preview.3; best-effort teardown and independent native restoration; fixture passes |
 | NC-013 | P2 | Two Fade owners, differing overflow-row base | Confirmed source; visual impact needs trace |
 | NC-014 | P2 | Repeated geometry and Home/search handoff work | Profile required |
 | NC-015 | P2 | Uncoordinated motion property ownership | Source risk; profile and interaction tests |
-| NC-016 | P1 | Workspace unload executes delayed native switch | Reproduced fixture; open |
+| NC-016 | P1 | Workspace unload executes delayed native switch | Fixed in preview.3; pending commands cancelled on dispose, already-started operations settle; fixtures pass |
 | NC-017 | P2 | Global layout prefs/Free startup transaction | Source risk; process coordinator |
 | NC-018 | P2 | Partial Hub/drag operations on native failure | Source risk; fault tests |
 | NC-019 | P2 | Home/Hub lifecycle, focus and drag regions | Architecture debt |
 | NC-020 | P3 | Candidate CI, exact package tests and bookmark ownership lock | Pipeline debt |
-| NC-021 | P2 | Downloads host needs hold/anchor/overflow contract | Missing integration; design gate |
+| NC-021 | P2 | Downloads host needs hold/anchor/overflow contract | Initial host/hold/anchor implemented in preview.3; real narrow/customization/focus verification and full lower dock pending |
 | NC-022 | P3 | Page Progress root-fixed placement and missing dedicated tests | Design/test gap |
 
 No claim that every source risk manifests in actual Zen. Prioritize confirmed failures, then measured visual improvements; do not skip to Vertical before these gates.
+
+## Stabilization A implementation — preview.3
+
+Five reproduced failure paths are fixed and covered by regression fixtures. Downloads has a stable 30px slot near Hub, separate Compact hold and anchored overlay; speed is available in tooltip and details. The full lower-left Utility/Extension Dock remains a separate UI milestone. No change to native workspace/session data or animation timings. Native Zen validation remains required; no claim that all jitter is fixed.

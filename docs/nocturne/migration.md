@@ -43,7 +43,11 @@ See [audit register](audit.md), NC-001 through NC-007. Resolve confirmed Downloa
 - Stabilization A: NC-009/016 native workspace arbitration, NC-010/011 generation-safe feature mount, NC-012 reliable teardown, NC-008/021 Utility Dock host/hold/geometry prototype. Separate commits and tests; no blanket refactor.
 - Stabilization B: NC-013/014/015 controlled profile of animation/geometry/contour; one owner per surface, preserve accepted visuals.
 - Unified Core includes NC-017/018/019/020; Page Progress NC-022 test/host design. Native visual parity and migration gates remain NC-002/005/006/007.
-- All nine entrypoints reviewed. Audit docs are integration-branch only until next real runtime release. No preview version bump for docs-only changes.
+- All nine entrypoints reviewed. Audit docs are included with preview.3. Docs-only changes do not bump preview.
+
+## B.3. Stabilization A implementation (preview.3)
+
+NC-008/009/010/011/012/016 addressed; NC-021 initial compact host/hold/anchor implemented. Full lower Utility Dock remains planned. Candidate source tests and actual Zen acceptance are separate gates. Continue Stabilization B only after checking the new host and interaction regressions.
 
 ## C. Separate the lifecycle
 
