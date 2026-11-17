@@ -6,6 +6,10 @@
       "kind": "section"
     },
     {
+      "path": "src/core/center-motion.js.part",
+      "kind": "section"
+    },
+    {
       "path": "src/core/preferences.js.part",
       "kind": "section"
     },

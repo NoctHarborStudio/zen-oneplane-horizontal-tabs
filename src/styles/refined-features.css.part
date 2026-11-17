@@ -337,7 +337,6 @@
 :root[data-zr-workspace-phase] :is(#oneplane-tabs#oneplane-tabs#oneplane-tabs#oneplane-tabs, #PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems, #tabbrowser-tabs#tabbrowser-tabs#tabbrowser-tabs#tabbrowser-tabs)[data-zr-workspace-motion] {
   transition-property: none !important;
   opacity: var(--zr-workspace-progress) !important;
-  --zr-workspace-card-phase: var(--zr-workspace-progress);
   transform-origin: center top !important;
   pointer-events: none !important;
 }
@@ -370,8 +369,10 @@
   background:color-mix(in srgb,var(--op-surface-tint) calc(var(--zr-workspace-progress) * 100%),transparent)!important;
   transition-property: none !important;
 }
-:root[data-zr-workspace-phase] #oneplane-toolbar-surface#oneplane-toolbar-surface#oneplane-toolbar-surface#oneplane-toolbar-surface[data-zr-workspace-surface] {
+:root[data-zr-workspace-phase] #zen-appcontent-navbar-wrapper#zen-appcontent-navbar-wrapper > #oneplane-toolbar-surface#oneplane-toolbar-surface#oneplane-toolbar-surface#oneplane-toolbar-surface[data-zr-workspace-surface] {
   height: var(--zr-workspace-final-surface-height) !important;
+  min-height: var(--zr-workspace-final-surface-height) !important;
+  max-height: var(--zr-workspace-final-surface-height) !important;
   scale: 1 calc(var(--zr-workspace-height-scale) + (1 - var(--zr-workspace-height-scale)) * var(--zr-workspace-progress)) !important;
   transform-origin: top center !important;
   transition-property: none !important;
@@ -381,12 +382,6 @@
   transition-property: none !important;
 }
 
-/* The individual cards use the row's one native animation, not an
- * independent animation per card. Preserve their resting layout. */
-:root[data-zr-workspace-phase] #oneplane-tabs#oneplane-tabs#oneplane-tabs#oneplane-tabs[data-zr-workspace-motion] [data-zr-workspace-card] {
-  translate: calc(var(--zr-workspace-card-x) * (1 - var(--zr-workspace-card-phase, 1))) 0 !important;
-  transition-property: none !important;
-}
 :root[data-zr-workspace-phase] #zen-appcontent-navbar-wrapper#zen-appcontent-navbar-wrapper#zen-appcontent-navbar-wrapper#zen-appcontent-navbar-wrapper[data-zr-workspace-height-motion] {
   --zr-workspace-painted-height: calc(var(--zr-workspace-start-height) + (var(--zr-workspace-final-height) - var(--zr-workspace-start-height)) * var(--zr-workspace-progress));
   height: var(--zr-workspace-painted-height) !important;
@@ -396,3 +391,22 @@
 :root[data-zr-workspace-phase] #zen-appcontent-navbar-wrapper#zen-appcontent-navbar-wrapper :is(#nav-bar,#PersonalToolbar) {
   transition-property: none !important;
 }
+
+/* One shared card effect, independent of lifecycle controller. */
+:root[data-zr-center-motion] #oneplane-tabs#oneplane-tabs#oneplane-tabs#oneplane-tabs [data-zr-center-card] {
+  translate: var(--zr-center-x,0px) 0 !important;
+  opacity: var(--zr-center-alpha,1) !important;
+  transition: none !important;
+  pointer-events: none !important;
+}
+:root[data-zr-center-pending] #oneplane-tabs#oneplane-tabs#oneplane-tabs#oneplane-tabs :is(.oneplane-tab,.oneplane-split-group) {
+  opacity:0!important;transition:none!important;
+}
+:root:is([data-zr-center-motion],[data-zr-center-pending],[data-zr-closing],[data-zr-startup-phase],[data-zr-workspace-phase]) #oneplane-tabs#oneplane-tabs :is(#oneplane-tab-indicator,.oneplane-overflow-slider) {
+  opacity:0!important;visibility:hidden!important;transition:none!important;pointer-events:none!important;
+}
+:root:is([data-zr-center-motion],[data-zr-center-pending],[data-zr-closing],[data-zr-startup-phase],[data-zr-workspace-phase]) #oneplane-tabs#oneplane-tabs :is(.oneplane-tab-list,.oneplane-island-lane) {
+  scrollbar-color:transparent transparent!important;
+}
+:root[data-zr-closing] #zr-page-progress {opacity:0!important;visibility:hidden!important;transition:none!important;}
+:root[data-zr-closing] #oneplane-tabs#oneplane-tabs :is(.oneplane-tab-list,.oneplane-island-lane) {scrollbar-width:none!important;}

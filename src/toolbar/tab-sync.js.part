@@ -1,6 +1,6 @@
   function sync() {
     frame = 0;
-    if (dead) return;
+    if (dead||root.hasAttribute("data-zr-center-motion")) return;
     const homeOpen=row.hasAttribute("data-op-home-open");
     // Respect the current workspace and native visibility.
     const tabs = Array.from(browser.visibleTabs || browser.tabs || []).filter(
@@ -120,7 +120,7 @@
     if (!dead && !frame) frame = window.requestAnimationFrame(sync);
   }
   function revealSelectedInStrip(){
-    if(dead||cascadeState!=="idle")return;
+    if(dead||cascadeState!=="idle"||root.hasAttribute("data-zr-center-motion"))return;
     const item=entries.get(browser.selectedTab)?.item;
     if(!item||!list.contains(item))return;
     // Never scroll ancestors (native toolbar, page, or window).

@@ -1,6 +1,6 @@
-// Nocturne preview.8: early trace, independent Sine script order.
+// Nocturne preview.9: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="workspace.script",data={version:"0.3.0-preview.8"};
+  const event="workspace.script",data={version:"0.3.0-preview.9"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -81,7 +81,7 @@ try{if(typeof window!=="undefined"){
     }
     tx.styles.clear();
   }
-  function cancelEffects(tx){for(const a of tx.animations)try{a.cancel();}catch{}tx.animations.clear();restore(tx);}
+  function cancelEffects(tx){tx.center?.release();tx.center=null;for(const a of tx.animations)try{a.cancel();}catch{}tx.animations.clear();restore(tx);}
   function cleanup(tx,keepGate=false){
     if(active!==tx)return;
     tx.cancelled=true;
@@ -117,31 +117,17 @@ try{if(typeof window!=="undefined"){
     const t=win.getComputedStyle(n).translate;
     return !t||t==="none"||/^0(?:px|%)?(?: 0(?:px|%)?){0,2}$/.test(t);
   }
-  // Each visible card converges on the nearest in-lane point toward Home.
-  // The row drives one inherited progress variable; no per-card timers or
-  // layout reads during playback. Scroll clips and scroll positions stay intact.
-  function cardOffsets(row){
-    const list=row?.querySelector?.(".oneplane-tab-list");
-    if(!list)return [];
-    const island=row.querySelector(".oneplane-title-island"),ir=rect(island),rr=rect(row);
-    const center=ir?.width>1?ir.left+ir.width/2:rr.left+rr.width/2;
-    const cards=[];
-    for(const n of list.querySelectorAll(".oneplane-tab,.oneplane-split-group")){
-      if(n.classList.contains("oneplane-tab")&&n.closest(".oneplane-split-group"))continue;
-      const r=rect(n),lane=n.closest(".oneplane-island-lane")||list,lr=rect(lane);
-      if(!r||r.width<2||r.height<2||!neutralTranslate(n))continue;
-      const clip=lr?.width>1?lr:rect(list);
-      if(!clip||r.right<=clip.left||r.left>=clip.right)continue;
-      const anchor=Math.max(clip.left+r.width/2,Math.min(clip.right-r.width/2,center));
-      cards.push({n,dx:anchor-(r.left+r.width/2)});
-    }
-    return cards;
-  }
   function animate(tx,items,outgoing,old=null){
-    const length=outgoing?240:420,effects=[],ease=outgoing?"cubic-bezier(.4,0,.6,1)":"cubic-bezier(.25,.55,.25,1)";
-    const row=get("oneplane-tabs"),cards=items.includes(row)?cardOffsets(row):[];
-    for(const {n,dx} of cards)saveEffect(tx,n,"data-zr-workspace-card",{"--zr-workspace-card-x":dx+"px"});
-    if(typeof window!=="undefined")window.__nocturneTrace?.("workspace.cards",()=>({outgoing,count:cards.length,maxOffset:Math.max(0,...cards.map(c=>Math.abs(c.dx)))}),{sample:1800});
+    const length=outgoing?300:480,effects=[],ease="cubic-bezier(.25,.55,.25,1)";
+    const row=get("oneplane-tabs");
+    // Read all final geometry before any effect changes its painted rect.
+    const surface=get("oneplane-toolbar-surface"),sr=rect(surface),wrapper=get("zen-appcontent-navbar-wrapper"),wr=rect(wrapper);
+    const finalSurfaceHeight=surface?Number(surface.offsetHeight)||sr?.height:0;
+    const page=get("tabbrowser-tabpanels"),pr=rect(page);
+    if(row&&items.includes(row)){
+      tx.center=win.__nocturneCenterMotion?.start(row,{owner:"workspace",direction:outgoing?"out":"in",duration:length});
+      if(tx.center)effects.push(tx.center.finished);
+    }
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.animate",()=>({outgoing,length,targets:items.length,locked:!!old}),{sample:1800});
     for(const n of items){
       const dy=!outgoing&&n===get("PlacesToolbarItems")&&old?.bookmarkTop!=null?old.bookmarkTop-n.getBoundingClientRect().top:0;
@@ -158,15 +144,13 @@ try{if(typeof window!=="undefined"){
       saveEffect(tx,nav,BACKING,{[PROGRESS]:outgoing?1:0}))
       effects.push(playEffect(tx,nav,outgoing?1:0,outgoing?0:1,length,ease));
     if(!outgoing){
-      const surface=get("oneplane-toolbar-surface"),sr=rect(surface),wrapper=get("zen-appcontent-navbar-wrapper"),wr=rect(wrapper);
-      if(old&&sr&&saveEffect(tx,surface,SURFACE,{[PROGRESS]:0,"--zr-workspace-height-scale":heightScale(old.surfaceHeight,sr.height),"--zr-workspace-final-surface-height":sr.height+"px"}))
+      if(old&&sr&&saveEffect(tx,surface,SURFACE,{[PROGRESS]:0,"--zr-workspace-height-scale":heightScale(old.surfaceHeight,finalSurfaceHeight),"--zr-workspace-final-surface-height":finalSurfaceHeight+"px"}))
         effects.push(playEffect(tx,surface,0,1,length,ease));
       // Compact chrome is an overlay. Match its hitbox height to the same
       // timeline as the shelf and bookmarks without touching page layout.
       if(old&&wr&&root.getAttribute("zen-compact-mode")==="true"&&Math.abs(old.height-wr.height)>1&&
         saveEffect(tx,wrapper,"data-zr-workspace-height-motion",{[PROGRESS]:0,"--zr-workspace-start-height":old.height+"px","--zr-workspace-final-height":wr.height+"px"}))
         effects.push(playEffect(tx,wrapper,0,1,length,ease));
-      const page=get("tabbrowser-tabpanels"),pr=rect(page);
       // Keep the page opaque. Animate chrome deck only, no web DOM or captures.
       if(root.getAttribute("oneplane-active")==="true"&&pr&&pr.width>1&&pr.height>1&&!page.hasAttribute("data-zr-home-covered")&&neutralTranslate(page)){
         const dy=old?.pageTop!=null?old.pageTop-pr.top:0;
@@ -252,6 +236,7 @@ try{if(typeof window!=="undefined"){
         height:rect(get("zen-appcontent-navbar-wrapper"))?.height
       }),{sample:1000});
       await motion;
+      tx.center?.seal();
       return result;
     }catch(error){
       if(!called){called=true;cleanup(tx);return tx.superseded||req.superseded||dead||win.closed?undefined:invoke();}

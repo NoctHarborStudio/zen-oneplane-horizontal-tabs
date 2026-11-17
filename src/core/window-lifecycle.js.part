@@ -112,6 +112,7 @@
     for(const event of ["TabOpen","TabClose"]) cleanupStep("browser.tabContainer.removeEventListener(event,onTabOpenOrClose,true)",()=>{browser.tabContainer.removeEventListener(event,onTabOpenOrClose,true);});
     cleanupStep("window.removeEventListener(\"ZenWorkspaceDataChanged\", schedule)",()=>{window.removeEventListener("ZenWorkspaceDataChanged", schedule);});
     cleanupStep("window.removeEventListener(\"ZenRefined:WorkspaceTransition\",onWorkspaceMotion)",()=>{window.removeEventListener("ZenRefined:WorkspaceTransition",onWorkspaceMotion);});
+    cleanupStep("center motion listener",()=>window.removeEventListener("Nocturne:CenterMotionEnd",schedule));
     cleanupStep("toolbarWrapper?.removeAttribute(\"oneplane-workspace-hold\")",()=>{toolbarWrapper?.removeAttribute("oneplane-workspace-hold");});
     cleanupStep("window.removeEventListener(\"ZenTabIconChanged\",onNativeIconChanged,true)",()=>{window.removeEventListener("ZenTabIconChanged",onNativeIconChanged,true);});
     cleanupStep("window.removeEventListener(\"OnePlane:SyncedIconChanged\",schedule)",()=>{window.removeEventListener("OnePlane:SyncedIconChanged",schedule);});
@@ -182,6 +183,7 @@
     for(const event of ["TabOpen","TabClose"])browser.tabContainer.addEventListener(event,onTabOpenOrClose,true);
     window.addEventListener("ZenWorkspaceDataChanged", schedule);
     window.addEventListener("ZenRefined:WorkspaceTransition",onWorkspaceMotion);
+    window.addEventListener("Nocturne:CenterMotionEnd",schedule);
     onWorkspaceMotion();
     window.addEventListener("ZenTabIconChanged",onNativeIconChanged,true);
     window.addEventListener("OnePlane:SyncedIconChanged",schedule);

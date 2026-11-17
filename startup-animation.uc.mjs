@@ -1,6 +1,6 @@
-// Nocturne preview.8: early trace, independent Sine script order.
+// Nocturne preview.9: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.8"};
+  const event="assembly.script",data={version:"0.3.0-preview.9"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -62,6 +62,7 @@ try{if(typeof window!=="undefined"){
   let dead=false,playing=false,settling=false,raf=0,timer=0,settled=false,nativeReady=false,readyAt=0,holdNode=null;
   let nativeObserver=null,style=null,lateObserver=null,lateResize=null,lateFrame=0,playStart=0,finishAt=0,sheetURI=null,nativeTimer=0;
   const animations=new Map(),owned=new Map(),seen=new Set(),baseline=new Set();
+  let centerHandle=null;
   const EXISTING="data-zr-startup-existing";
   const MANAGED="data-zr-startup-managed",EFFECT="data-zr-startup-effect",MOVE="data-zr-startup-move",CLIP="data-zr-startup-clip",PROGRESS="--zr-startup-progress";
   let registered=false;
@@ -89,6 +90,8 @@ try{if(typeof window!=="undefined"){
     nativeObserver=null;
     for(const a of animations.keys())try{a.cancel();}catch{}
     animations.clear();
+    centerHandle?.seal();centerHandle?.release();centerHandle=null;
+    window.__nocturneCenterMotion?.releasePending();
     for(const n of [...owned.keys()])restore(n);
     for(const n of seen)n.removeAttribute(MANAGED);
     seen.clear();
@@ -113,6 +116,7 @@ try{if(typeof window!=="undefined"){
     // The native background and page have never been touched.
     // Finish active effects from current values, not a different frame.
     root.setAttribute(PHASE,"settling");
+    if(typeof centerHandle!=="undefined"){centerHandle?.seal();centerHandle?.release();centerHandle=null;}
     lateObserver?.disconnect();lateObserver=null;lateResize?.disconnect();lateResize=null;
     if(lateFrame)window.cancelAnimationFrame(lateFrame);lateFrame=0;
     if(timer)window.clearTimeout(timer);
@@ -285,27 +289,9 @@ try{if(typeof window!=="undefined"){
       revealBookmarks(window.innerWidth/2,true);
       const row=get("oneplane-tabs"),url=get("urlbar-container"),center=window.innerWidth/2;
       controls(row,url,center,true);
-      if(row&&root.getAttribute("oneplane-active")==="true")for(const t of collectTabs(row,center))if(!seen.has(t.n))reveal(t.n,{x:t.dx,delay:90,length:540,late:true});
+      // Cards inserted after the snapshot appear in their real slots.
+      // Never restart an already-playing train for late mirror mutations.
     });
-  }
-  function collectTabs(row,center){
-    const list=row.querySelector(".oneplane-tab-list"),units=[];
-    if(!list)return units;
-    for(const n of list.querySelectorAll(".oneplane-tab,.oneplane-split-group")){
-      if(n.classList.contains("oneplane-tab")&&n.closest(".oneplane-split-group"))continue;
-      const r=bounds(n,true);if(!r)continue;
-      // Avoid animating offscreen tabs in a scroll lane.
-      const lane=n.closest(".oneplane-island-lane")||list,lr=lane.getBoundingClientRect();
-      if(lr.width>1&&(r.right<=lr.left||r.left>=lr.right))continue;
-      const mid=r.left+r.width/2;
-      // Converge toward Home without crossing the lane's scroll clip.
-      // display:contents lanes have no box; fall back to the actual list.
-      const clip=lr.width>1?lr:list.getBoundingClientRect();
-      const anchor=Math.max(clip.left+r.width/2,Math.min(clip.right-r.width/2,center));
-      units.push({n,r,mid,dx:anchor-mid,distance:Math.abs(mid-center)});
-    }
-    units.sort((a,b)=>a.distance-b.distance);
-    return units;
   }
   function launch(one){
     typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.launch",()=>({one,paintCount:window.windowUtils?.paintCount,phase:root.getAttribute(PHASE),ready:root.getAttribute(READY),age:now()-started}),{sample:1800});
@@ -324,12 +310,14 @@ try{if(typeof window!=="undefined"){
       // its parent during its independent entrance.
       if(ur&&!floating)openFromCenter(url,45,410);
       if(one&&rr){
-        const tabs=collectTabs(row,center),far=Math.max(1,...tabs.map(x=>x.distance));
-        for(const t of tabs){
-          // Every real tab/group begins near the central anchor and fans
-          // outward. Distance controls timing, not a fixed tab count.
-          slide(t.n,t.dx,0,80+Math.min(110,t.distance/far*110),540);
-        }
+        const engine=window.__nocturneCenterMotion;
+        const cards=[...row.querySelectorAll(".oneplane-tab,.oneplane-split-group")];
+        const gated=root.hasAttribute("data-zr-center-pending");
+        const painted=!gated&&cards.some(n=>baseline.has(n));
+        // Remove per-card startup gates together, including split members.
+        for(const n of cards){n.setAttribute(MANAGED,"true");seen.add(n);}
+        if(!painted)centerHandle=engine?.start(row,{owner:"startup",direction:"in",duration:Math.round(650*scale),delay:Math.round(55*scale)});
+        else engine?.releasePending();
         const plus=row.querySelector(".oneplane-new-tab");if(bounds(plus,true))slide(plus,-26,0,280,390);
         if(ir)openFromCenter(island,45,410);
       }else{

@@ -1,12 +1,21 @@
-/* Nocturne preview.8 diagnostic recorder — read-only chrome telemetry.
+/* Nocturne preview.9 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.8",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.9",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const id=Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
-  const fileName="nocturne-"+id+".json",entries=[],last=new Map(),nodes=new Map(),removers=[];
+  const fileName="nocturne-diagnostics.json",entries=[],last=new Map(),nodes=new Map(),removers=[];
+  // Cross-window queue: all currently open browser windows share the same
+  // coordinator object. Persist operations never race read/modify/write.
+  const STORE="__nocturneDiagnosticStore";
+  let store=null;
+  try{const windows=Services.wm.getEnumerator("navigator:browser");while(windows.hasMoreElements()){const w=windows.getNext();if(w!==win&&w[STORE]){store=w[STORE];break;}}}catch{}
+  if(!store)store={tail:Promise.resolve(),sessions:null};
+  win[STORE]=store;
+  let previousMetrics={},sampleIndex=0;
+  const changedAttrs=new WeakMap();
   let seq=0,dropped=0,dead=false,timer=0,writeTimer=0,writing=null,dirty=false,until=0,raf=0,frameLast=0,gaps=[],dir=null,ioError=false,observer=null,nativeContainer=null;
   const now=()=>win.performance.now(),get=id=>doc.getElementById(id);
   const enabled=()=>{try{return Services.prefs.getBoolPref(PREF,true);}catch{return true;}};
@@ -22,28 +31,44 @@
     if(typeof v!=="object"||Object.getPrototypeOf(v)!==Object.prototype&&Object.getPrototypeOf(v)!==null)return null;
     return Object.fromEntries(Object.entries(v).slice(0,45).map(([k,x])=>[k,safe(x,d+1)]));
   }
-  function exportData(){return {schema:1,version:VERSION,window:id,dropped,events:entries.slice()};}
+  function exportData(){return {schema:2,version:VERSION,window:id,dropped,events:entries.slice()};}
   function dump(){return JSON.stringify(exportData(),null,2);}
   async function persist(){
     if(privateWindow())return false;
     if(typeof IOUtils==="undefined"||typeof PathUtils==="undefined"){if(!ioError){ioError=true;win.console.warn("[Nocturne diag] File API unavailable; use __nocturneDiagnostics.dump()");}return false;}
-    try{
-      if(!dir){
-        const path=PathUtils.join(PathUtils.profileDir,"nocturne-diagnostics");
-        await IOUtils.makeDirectory(path,{ignoreExisting:true});dir=path;
-        try{
-          const files=(await IOUtils.getChildren(dir)).filter(p=>/^nocturne-[a-z0-9]+-[a-z0-9]+\.json$/.test(PathUtils.filename(p))).sort();
-          for(const p of files.slice(0,Math.max(0,files.length-7)))if(PathUtils.filename(p)!==fileName)await IOUtils.remove(p,{ignoreAbsent:true});
-        }catch{}
-      }
-      let data=JSON.stringify(exportData());
-      if(data.length>1500000){const count=Math.min(entries.length-1,Math.ceil(entries.length*(1-1200000/data.length)));if(count>0){entries.splice(0,count);dropped+=count;data=JSON.stringify(exportData());}}
-      const path=PathUtils.join(dir,fileName);
-      await IOUtils.writeUTF8(path,data,{tmpPath:path+".tmp"});
-      return true;
-    }catch(error){if(!ioError){ioError=true;try{win.console.warn("[Nocturne diag] Local file unavailable; use __nocturneDiagnostics.dump()",error?.name||"Error");}catch{}}return false;}
+    const session={...exportData(),updated:Date.now()};
+    const task=async()=>{
+      try{
+        if(!dir){dir=PathUtils.join(PathUtils.profileDir,"nocturne-diagnostics");await IOUtils.makeDirectory(dir,{ignoreExisting:true});}
+        const path=PathUtils.join(dir,fileName);
+        if(!store.sessions){
+          let old=null;try{old=JSON.parse(await IOUtils.readUTF8(path));}catch{}
+          store.sessions=old?.schema===2&&Array.isArray(old.sessions)?old.sessions.filter(x=>x&&Array.isArray(x.events)):[];
+        }
+        const sessions=store.sessions.filter(x=>x.window!==session.window);
+        sessions.push(session);
+        sessions.sort((a,b)=>(a.updated||0)-(b.updated||0));
+        while(sessions.length>4)sessions.shift();
+        let data=JSON.stringify({schema:2,version:VERSION,sessions},null,2);
+        while(data.length>450000&&sessions.length>1){
+          sessions.shift();data=JSON.stringify({schema:2,version:VERSION,sessions},null,2);
+        }
+        while(data.length>450000&&session.events.length>1){
+          const count=Math.min(session.events.length-1,Math.max(1,Math.ceil(session.events.length*.15)));
+          session.events.splice(0,count);session.dropped+=count;
+          data=JSON.stringify({schema:2,version:VERSION,sessions},null,2);
+        }
+        await IOUtils.writeUTF8(path,data,{tmpPath:path+".tmp"});
+        store.sessions=sessions;
+        // Remove only our old per-window diagnostic files after a successful
+        // replacement. Nothing outside this directory is touched.
+        try{for(const p of await IOUtils.getChildren(dir))if(/^nocturne-[a-z0-9]+-[a-z0-9]+\.json$/.test(PathUtils.filename(p))&&PathUtils.filename(p)!==fileName)await IOUtils.remove(p,{ignoreAbsent:true});}catch{}
+        return true;
+      }catch(error){if(!ioError){ioError=true;try{win.console.warn("[Nocturne diag] Local file unavailable; use __nocturneDiagnostics.dump()",error?.name||"Error");}catch{}}return false;}
+    };
+    const job=store.tail.then(task,task);store.tail=job.catch(()=>{});return job;
   }
-  function scheduleWrite(){if(!writeTimer&&!dead&&!privateWindow())writeTimer=win.setTimeout(()=>{writeTimer=0;void flush();},900);}
+  function scheduleWrite(){if(!writeTimer&&!dead&&!privateWindow())writeTimer=win.setTimeout(()=>{writeTimer=0;void flush();},2200);}
   function flush(){
     if(writeTimer){win.clearTimeout(writeTimer);writeTimer=0;}
     if(writing)return writing.then(()=>dirty?flush():true);
@@ -66,9 +91,9 @@
       if(options.sample)arm(options.sample===true?1600:options.sample);
     }catch{}
   }
-  const rootAttrs=["oneplane-active","data-op-startup-ready","data-zr-startup-phase","data-zr-closing","data-zr-workspace-phase","data-op-bookmark-wave","zen-compact-mode","customizing","inDOMFullscreen","inFullscreen"];
-  const attrs=[...rootAttrs,"data-op-panel-open","oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold","oneplane-home-hold","oneplane-workspace-hold","oneplane-download-hold","zen-has-hover","has-popup-menu","zen-compact-mode-active","data-ready","data-op-overflow-row","data-op-adaptive-compact","data-op-dragging","data-op-inline-drag","data-op-lane-drag","data-op-group-pull","data-op-live-drag","data-op-drag-commit","data-op-url-phase","data-op-home-open","data-op-lane-ghost","data-op-detached","data-op-pulling","data-op-drag-follow","data-op-reinsert","data-zr-bm-stable-contour","data-zr-workspace-geometry","data-zr-workspace-motion","data-zr-workspace-card","data-zr-workspace-height-motion","data-zr-workspace-surface","data-zr-workspace-page","data-zr-home-covered","data-zr-startup-effect","data-zr-close-effect","hidden","collapsed","open","focused"];
-  const targets=["zen-appcontent-navbar-wrapper","zen-appcontent-navbar-container","oneplane-toolbar-surface","nav-bar","oneplane-tabs","oneplane-overflow-tabs","PersonalToolbar","PlacesToolbarItems","urlbar-container","urlbar","tabbrowser-tabpanels","zen-shared-home","zr-download-indicator"];
+  const rootAttrs=["data-zr-center-motion","data-zr-center-pending","oneplane-active","data-op-startup-ready","data-zr-startup-phase","data-zr-closing","data-zr-workspace-phase","data-op-bookmark-wave","zen-compact-mode","customizing","inDOMFullscreen","inFullscreen"];
+  const attrs=[...rootAttrs,"data-op-panel-open","oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold","oneplane-home-hold","oneplane-workspace-hold","oneplane-download-hold","zen-has-hover","has-popup-menu","zen-compact-mode-active","data-ready","data-op-overflow-row","data-op-adaptive-compact","data-op-dragging","data-op-inline-drag","data-op-lane-drag","data-op-group-pull","data-op-live-drag","data-op-drag-commit","data-op-url-phase","data-op-home-open","data-op-lane-ghost","data-op-detached","data-op-pulling","data-op-drag-follow","data-op-reinsert","data-zr-bm-stable-contour","data-zr-workspace-geometry","data-zr-workspace-motion","data-zr-center-card","data-zr-workspace-height-motion","data-zr-workspace-surface","data-zr-workspace-page","data-zr-home-covered","data-zr-startup-effect","data-zr-close-effect","hidden","collapsed","open","focused"];
+  const targets=["zr-page-progress","oneplane-tab-indicator","oneplane-overflow-slider","zen-appcontent-navbar-wrapper","zen-appcontent-navbar-container","oneplane-toolbar-surface","nav-bar","oneplane-tabs","oneplane-overflow-tabs","PersonalToolbar","PlacesToolbarItems","urlbar-container","urlbar","tabbrowser-tabpanels","zen-shared-home","zr-download-indicator"];
   function attrState(n,keys=attrs){const out={};for(const k of keys)if(n.hasAttribute(k))out[k]=n.getAttribute(k)||true;return out;}
   function observeTargets(){
     if(!observer)return;
@@ -88,7 +113,7 @@
     const hash=x=>{let h=0;for(let i=0;i<x.length;i++)h=(Math.imul(h,31)+x.charCodeAt(i))|0;return x.length?x.length+":"+h:null;};
     return {rect:[round(r.left),round(r.top),round(r.width),round(r.height)],opacity:s.opacity,visibility:s.visibility,display:s.display,translate:s.translate,scale:s.scale,transform:s.transform,transition:s.transitionProperty,height:s.height,
       measure:n.style?.getPropertyValue("--op-measured-toolbar-height")||null,contour:n.style?.getPropertyValue("--op-contour-height")||null,bmContour:n.style?.getPropertyValue("--zr-bm-contour-height")||null,
-      mask:hash(mask),bmMask:hash(bm),progress:s.getPropertyValue("--zr-workspace-progress").trim()||null,startupProgress:s.getPropertyValue("--zr-startup-progress").trim()||null,startupBase:n.style?.getPropertyValue("--zr-startup-base-opacity")||null,attrs:attrState(n),animations:anim};
+      mask:hash(mask),bmMask:hash(bm),centerX:s.getPropertyValue("--zr-center-x").trim()||null,centerAlpha:s.getPropertyValue("--zr-center-alpha").trim()||null,progress:s.getPropertyValue("--zr-workspace-progress").trim()||null,startupProgress:s.getPropertyValue("--zr-startup-progress").trim()||null,startupBase:n.style?.getPropertyValue("--zr-startup-base-opacity")||null,attrs:attrState(n),animations:anim};
   }
   function snapshot(){
     observeTargets();
@@ -100,15 +125,29 @@
     // startup/closing effects and the simultaneous source/ghost case.
     if(row){
       const marked=selector=>row.querySelectorAll(selector).length;
-      counts.startup=marked("[data-zr-startup-effect]");counts.closing=marked("[data-zr-close-effect]");
+      counts.startup=marked("[data-zr-startup-effect]");counts.closing=marked("[data-zr-close-effect]");counts.center=marked("[data-zr-center-card]");
       counts.detached=marked("[data-op-detached]");counts.laneGhost=marked("[data-op-lane-ghost]");
     }
     const frame={count:gaps.length,max:gaps.length?round(Math.max(...gaps)):null,over25:gaps.filter(v=>v>25).length};gaps=[];
-    return {root:attrState(root,rootAttrs),counts,frame,metrics};
+    // Periodic keyframes permit reconstructing a delta stream after ring
+    // trimming. Changed properties only; missing nodes are explicit nulls.
+    const full=sampleIndex++%10===0,delta={};
+    if(full)Object.assign(delta,metrics);
+    else{
+      for(const key of new Set([...Object.keys(previousMetrics),...Object.keys(metrics)])){
+        const old=previousMetrics[key],next=metrics[key];
+        if(!next){if(old)delta[key]=null;continue;}
+        if(!old){delta[key]=next;continue;}
+        const diff={};for(const k of Object.keys(next))if(JSON.stringify(next[k])!==JSON.stringify(old[k]))diff[k]=next[k];
+        if(Object.keys(diff).length)delta[key]=diff;
+      }
+    }
+    previousMetrics=metrics;
+    return {root:attrState(root,rootAttrs),counts,frame,full,metrics:delta};
   }
   function frameTick(t){raf=0;if(dead||!enabled()||now()>until)return;if(frameLast&&gaps.length<300)gaps.push(t-frameLast);frameLast=t;raf=win.requestAnimationFrame(frameTick);}
-  function sample(){timer=0;if(dead||!enabled()||now()>until){frameLast=0;return;}record("sample",snapshot);timer=win.setTimeout(sample,140);}
-  function arm(ms=1600){if(dead||!enabled())return;until=Math.max(until,now()+Math.min(8000,Math.max(100,ms)));if(!timer)timer=win.setTimeout(sample,50);if(!raf){frameLast=0;raf=win.requestAnimationFrame(frameTick);}}
+  function sample(){timer=0;if(dead||!enabled()||now()>until){frameLast=0;return;}record("sample",snapshot);timer=win.setTimeout(sample,180);}
+  function arm(ms=1600){if(dead||!enabled())return;until=Math.max(until,now()+Math.min(3000,Math.max(100,ms)));if(!timer)timer=win.setTimeout(sample,50);if(!raf){frameLast=0;raf=win.requestAnimationFrame(frameTick);}}
   function listen(target,type,fn){target.addEventListener(type,fn,true);removers.push(()=>target.removeEventListener(type,fn,true));}
   function bindNative(){
     const tc=win.gBrowser?.tabContainer;if(!tc||nativeContainer===tc)return;nativeContainer=tc;
@@ -127,8 +166,8 @@
   try{
     observer=new win.MutationObserver(records=>{
       if(!enabled())return;
-      const changes=[];for(const r of records){const key=r.target===root?"root":[...nodes].find(x=>x[1]===r.target)?.[0];if(key)changes.push({node:key,attr:r.attributeName,value:r.target.getAttribute(r.attributeName)});}
-      if(changes.length)record("chrome.attributes",()=>changes,{sample:1500});
+      const changes=[];for(const r of records){const key=r.target===root?"root":[...nodes].find(x=>x[1]===r.target)?.[0];if(key){const value=r.target.getAttribute(r.attributeName),cache=changedAttrs.get(r.target)||new Map();if(cache.has(r.attributeName)&&cache.get(r.attributeName)===value)continue;cache.set(r.attributeName,value);changedAttrs.set(r.target,cache);changes.push({node:key,attr:r.attributeName,value});}}
+      if(changes.length)record("chrome.attributes",()=>changes);
     });
     observer.observe(root,{attributes:true,attributeFilter:rootAttrs});
     for(const type of ["OnePlane:StartupState","ZenRefined:WorkspaceTransition","ZenWorkspaceDataChanged","ZenCompactMode:Toggled","ZenCompactMode:LayoutUpdate","OnePlane:DownloadHostChanged","ZenViewSplitter:SplitViewActivated","ZenViewSplitter:SplitViewDeactivated","sizemodechange","resize","activate","deactivate","beforecustomization","aftercustomization"]){
@@ -141,6 +180,149 @@
     for(const item of early)record(item.event,()=>({earlyAt:item.t,...item.data}),{sample:2000});
     win.addUnloadListener(dispose);listen(win,"unload",dispose);
   }catch(error){record("diagnostics.setup-error",{name:error?.name});dispose();}
+})();
+/* Nocturne Center Motion — shared deterministic card choreography.
+ * One geometry snapshot; no per-frame JavaScript, timers per card or clones. */
+(()=>{
+  const win=window,root=document.documentElement,KEY="__nocturneCenterMotion";
+  if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
+  win[KEY]?.dispose?.();
+  const MARK="data-zr-center-card",OWNER="data-zr-center-motion",PENDING="data-zr-center-pending";
+  const X="--zr-center-x",A="--zr-center-alpha";
+  const ease="cubic-bezier(.25,.55,.25,1)";
+  let active=null,pendingTimer=0,dead=false;
+  let registered=true;
+  for(const name of [X,A])try{win.CSS.registerProperty({name,syntax:name===X?"<length>":"<number>",inherits:false,initialValue:name===X?"0px":"1"});}
+  catch(e){if(e.name!=="InvalidModificationError")registered=false;}
+  // Pure planner: near edges measured outward from a common anchor.
+  // Outer cards leave first. Later cards wait until the preceding card
+  // has cleared their entire width plus the actual resting gap.
+  function planLane(cards,center){
+    const result=[];
+    for(const side of [-1,1]){
+      const group=cards.filter(c=>(c.left+c.right)/2<center?side===-1:side===1)
+        .sort((a,b)=>side===1?b.left-a.left:a.right-b.right);
+      if(!group.length)continue;
+      const inner=group.at(-1),anchor=side===1?inner.left:inner.right;
+      let start=0,previous=null;
+      for(const c of group){
+        const width=c.right-c.left,near=Math.max(0,side*(side===1?c.left-anchor:c.right-anchor));
+        if(previous){
+          const gap=Math.max(0,Math.min(3,previous.near-near-width));
+          start+=width+gap;
+        }
+        const item={...c,side,near,start,dx:-side*near};
+        result.push(item);previous=item;
+      }
+    }
+    return result;
+  }
+  function keyframes(item,total,reverse=false){
+    const start=item.start/total,end=(item.start+item.near)/total;
+    const fade=Math.min(1,(item.start+Math.min(24,Math.max(8,item.near)))/total);
+    const points=[...new Set([0,start,end,fade,1])].sort((a,b)=>a-b);
+    const frames=points.map(offset=>{
+      const travel=Math.max(0,Math.min(item.near,offset*total-item.start));
+      const alpha=Math.max(0,Math.min(1,(offset-start)/Math.max(.00001,fade-start)));
+      return {offset,[X]:(item.dx+item.side*travel)+"px",[A]:String(alpha*item.opacity)};
+    });
+    return reverse?frames.reverse().map(f=>({...f,offset:1-f.offset})):frames;
+  }
+  function collect(row){
+    const list=row?.querySelector(".oneplane-tab-list");
+    if(!list)return [];
+    const rr=row.getBoundingClientRect(),ir=row.querySelector(".oneplane-title-island")?.getBoundingClientRect();
+    const center=ir?.width>1?ir.left+ir.width/2:rr.left+rr.width/2;
+    const groups=new Map();
+    for(const n of list.querySelectorAll(".oneplane-tab,.oneplane-split-group")){
+      if(n.classList.contains("oneplane-tab")&&n.closest(".oneplane-split-group"))continue;
+      const r=n.getBoundingClientRect(),s=win.getComputedStyle(n);
+      if(r.width<2||r.height<2||s.visibility==="hidden"||s.display==="none"||!Number(s.opacity))continue;
+      const lane=n.closest(".oneplane-island-lane")||list,lr=lane.getBoundingClientRect();
+      const clip=lr.width>1?lr:list.getBoundingClientRect();
+      if(r.right<=clip.left||r.left>=clip.right)continue;
+      // Native nonzero translation belongs to a different interaction.
+      if(s.translate!=="none"&&!/^0(?:px|%)?(?: 0(?:px|%)?){0,2}$/.test(s.translate||"0px"))continue;
+      if(!groups.has(lane))groups.set(lane,[]);
+      groups.get(lane).push({n,left:r.left,right:r.right,opacity:Number(s.opacity)});
+    }
+    return [...groups.values()].flatMap(cards=>planLane(cards,center));
+  }
+  function releasePending(){if(pendingTimer)win.clearTimeout(pendingTimer);pendingTimer=0;root.removeAttribute(PENDING);}
+  function start(row,{owner,direction="in",duration=520,delay=0}={}){
+    stopSelection();active?.release();releasePending();
+    if(dead||!registered||!row)return null;
+    const cards=collect(row);
+    if(!cards.length)return null;
+    const total=Math.max(24,...cards.map(c=>c.start+Math.max(c.near,24))),effects=[],saved=[];
+    root.setAttribute(OWNER,owner);
+    for(const c of cards){
+      const n=c.n,old=[X,A].map(k=>[k,n.style.getPropertyValue(k),n.style.getPropertyPriority(k)]);
+      saved.push({n,old,mark:n.getAttribute(MARK)});
+      const frames=keyframes(c,total,direction==="out");
+      n.style.setProperty(X,frames[0][X]);n.style.setProperty(A,frames[0][A]);n.setAttribute(MARK,"true");
+      try{const a=n.animate(frames,{duration,delay,easing:ease,fill:"both"});effects.push({a,n,frames});}
+      catch{n.style.setProperty(X,frames.at(-1)[X]);n.style.setProperty(A,frames.at(-1)[A]);}
+    }
+    let released=false;
+    const handle={count:cards.length,finished:Promise.all(effects.map(({a})=>a.finished.catch(()=>{}))),
+      seal(){for(const {a} of effects)try{a.finish();}catch{}},
+      release(){
+        if(released)return;released=true;
+        for(const {a} of effects)try{a.cancel();}catch{}
+        for(const {n,old,mark} of saved){
+          for(const [k,v,p] of old){if(v)n.style.setProperty(k,v,p);else n.style.removeProperty(k);}
+          if(mark===null)n.removeAttribute(MARK);else n.setAttribute(MARK,mark);
+        }
+        if(active===handle){active=null;root.removeAttribute(OWNER);if(!win.closed)win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd"));}
+      }};
+    active=handle;
+    win.__nocturneTrace?.("center.motion",()=>({owner,direction,count:cards.length,duration,travel:total}),{sample:duration+250});
+    return handle;
+  }
+  function dispose(){
+    if(dead)return;dead=true;releasePending();stopSelection();selectionContainer?.removeEventListener("TabSelect",onSelect);win.removeEventListener("OnePlane:StartupState",bindSelection);
+    if(!root.hasAttribute("data-zr-closing"))active?.release();
+    if(win[KEY]===api)delete win[KEY];
+  }
+  // Ordinary selection uses the same ownership boundary but never delays
+  // native TabSelect. Animate the chrome deck, not remote page DOM.
+  let selection=null,selectionContainer=null,lastTab=null;
+  function stopSelection(){if(selection){try{selection.cancel();}catch{}selection=null;}}
+  function onSelect(){
+    const browser=win.gBrowser,next=browser?.selectedTab,previous=lastTab;lastTab=next;
+    stopSelection();
+    if(!next||!previous||next===previous||active||root.hasAttribute(PENDING)||
+       ["data-zr-startup-phase","data-zr-workspace-phase","data-zr-closing","customizing","inDOMFullscreen","inFullscreen"].some(k=>root.hasAttribute(k))||
+       win.matchMedia("(prefers-reduced-motion: reduce)").matches||Services.prefs.getIntPref("zen.oneplane.animation-duration",160)===0||
+       next.hasAttribute("zen-empty-tab")||next.hasAttribute("split-view")||previous.hasAttribute("split-view"))return;
+    const deck=document.getElementById("tabbrowser-tabpanels");
+    if(!deck||deck.hasAttribute("data-zr-home-covered")||deck.querySelector(".browserSidebarContainer[zen-split='true']"))return;
+    const tabs=Array.from(browser.visibleTabs||browser.tabs||[]),from=tabs.indexOf(previous),to=tabs.indexOf(next);
+    if(from<0||to<0||from===to)return;
+    const dx=to>from?10:-10;
+    try{
+      const a=deck.animate([{opacity:.72,translate:dx+"px 0"},{opacity:1,translate:"0px 0px"}],{duration:180,easing:ease});
+      selection=a;a.finished.then(()=>{if(selection===a)selection=null;},()=>{});
+      win.__nocturneTrace?.("selection.motion",{direction:Math.sign(dx),duration:180},{sample:400});
+    }catch{}
+  }
+  function bindSelection(){
+    const tc=win.gBrowser?.tabContainer;if(!tc||tc===selectionContainer)return;
+    selectionContainer?.removeEventListener("TabSelect",onSelect);
+    selectionContainer=tc;lastTab=win.gBrowser.selectedTab;tc.addEventListener("TabSelect",onSelect);
+  }
+  win.addEventListener("OnePlane:StartupState",bindSelection);
+  bindSelection();
+  const api={start,releasePending,dispose};win[KEY]=api;
+  // The layout entrypoint runs before its own projection. Gate only a
+  // genuinely new window, never a Sine reload. Fail open on missing Assembly.
+  try{
+    if(!win.__nocturneLayoutStartup&&win.performance.now()<1800&&Services.prefs.getBoolPref("zen.refined.startup.animation",true)&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches){
+      root.setAttribute(PENDING,"true");pendingTimer=win.setTimeout(releasePending,1800);
+    }
+  }catch{}
+  win.addUnloadListener(dispose);
 })();
 /* OnePlane — local, reversible Zen layout configuration.
  * Runs only in browser.xhtml via Sine; no network or page access.
@@ -4390,7 +4572,7 @@ function installTabStrip() {
     return 3+widths.reduce((sum,w)=>sum+Math.max(0,w)+3,0)+Math.max(0,expansion);
   }
   function centerToolbar(){
-    if(centering||!hoverSupported()||!toolbarWrapper)return;
+    if(centering||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-center-motion"))return;
     centering=true;
     try {
       const targetRect = target.getBoundingClientRect();
@@ -6424,7 +6606,7 @@ function installTabStrip() {
   }
   function sync() {
     frame = 0;
-    if (dead) return;
+    if (dead||root.hasAttribute("data-zr-center-motion")) return;
     const homeOpen=row.hasAttribute("data-op-home-open");
     // Respect the current workspace and native visibility.
     const tabs = Array.from(browser.visibleTabs || browser.tabs || []).filter(
@@ -6544,7 +6726,7 @@ function installTabStrip() {
     if (!dead && !frame) frame = window.requestAnimationFrame(sync);
   }
   function revealSelectedInStrip(){
-    if(dead||cascadeState!=="idle")return;
+    if(dead||cascadeState!=="idle"||root.hasAttribute("data-zr-center-motion"))return;
     const item=entries.get(browser.selectedTab)?.item;
     if(!item||!list.contains(item))return;
     // Never scroll ancestors (native toolbar, page, or window).
@@ -6710,6 +6892,7 @@ function installTabStrip() {
     for(const event of ["TabOpen","TabClose"]) cleanupStep("browser.tabContainer.removeEventListener(event,onTabOpenOrClose,true)",()=>{browser.tabContainer.removeEventListener(event,onTabOpenOrClose,true);});
     cleanupStep("window.removeEventListener(\"ZenWorkspaceDataChanged\", schedule)",()=>{window.removeEventListener("ZenWorkspaceDataChanged", schedule);});
     cleanupStep("window.removeEventListener(\"ZenRefined:WorkspaceTransition\",onWorkspaceMotion)",()=>{window.removeEventListener("ZenRefined:WorkspaceTransition",onWorkspaceMotion);});
+    cleanupStep("center motion listener",()=>window.removeEventListener("Nocturne:CenterMotionEnd",schedule));
     cleanupStep("toolbarWrapper?.removeAttribute(\"oneplane-workspace-hold\")",()=>{toolbarWrapper?.removeAttribute("oneplane-workspace-hold");});
     cleanupStep("window.removeEventListener(\"ZenTabIconChanged\",onNativeIconChanged,true)",()=>{window.removeEventListener("ZenTabIconChanged",onNativeIconChanged,true);});
     cleanupStep("window.removeEventListener(\"OnePlane:SyncedIconChanged\",schedule)",()=>{window.removeEventListener("OnePlane:SyncedIconChanged",schedule);});
@@ -6780,6 +6963,7 @@ function installTabStrip() {
     for(const event of ["TabOpen","TabClose"])browser.tabContainer.addEventListener(event,onTabOpenOrClose,true);
     window.addEventListener("ZenWorkspaceDataChanged", schedule);
     window.addEventListener("ZenRefined:WorkspaceTransition",onWorkspaceMotion);
+    window.addEventListener("Nocturne:CenterMotionEnd",schedule);
     onWorkspaceMotion();
     window.addEventListener("ZenTabIconChanged",onNativeIconChanged,true);
     window.addEventListener("OnePlane:SyncedIconChanged",schedule);

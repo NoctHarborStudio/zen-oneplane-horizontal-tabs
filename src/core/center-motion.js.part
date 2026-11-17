@@ -1,0 +1,143 @@
+/* Nocturne Center Motion — shared deterministic card choreography.
+ * One geometry snapshot; no per-frame JavaScript, timers per card or clones. */
+(()=>{
+  const win=window,root=document.documentElement,KEY="__nocturneCenterMotion";
+  if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
+  win[KEY]?.dispose?.();
+  const MARK="data-zr-center-card",OWNER="data-zr-center-motion",PENDING="data-zr-center-pending";
+  const X="--zr-center-x",A="--zr-center-alpha";
+  const ease="cubic-bezier(.25,.55,.25,1)";
+  let active=null,pendingTimer=0,dead=false;
+  let registered=true;
+  for(const name of [X,A])try{win.CSS.registerProperty({name,syntax:name===X?"<length>":"<number>",inherits:false,initialValue:name===X?"0px":"1"});}
+  catch(e){if(e.name!=="InvalidModificationError")registered=false;}
+  // Pure planner: near edges measured outward from a common anchor.
+  // Outer cards leave first. Later cards wait until the preceding card
+  // has cleared their entire width plus the actual resting gap.
+  function planLane(cards,center){
+    const result=[];
+    for(const side of [-1,1]){
+      const group=cards.filter(c=>(c.left+c.right)/2<center?side===-1:side===1)
+        .sort((a,b)=>side===1?b.left-a.left:a.right-b.right);
+      if(!group.length)continue;
+      const inner=group.at(-1),anchor=side===1?inner.left:inner.right;
+      let start=0,previous=null;
+      for(const c of group){
+        const width=c.right-c.left,near=Math.max(0,side*(side===1?c.left-anchor:c.right-anchor));
+        if(previous){
+          const gap=Math.max(0,Math.min(3,previous.near-near-width));
+          start+=width+gap;
+        }
+        const item={...c,side,near,start,dx:-side*near};
+        result.push(item);previous=item;
+      }
+    }
+    return result;
+  }
+  function keyframes(item,total,reverse=false){
+    const start=item.start/total,end=(item.start+item.near)/total;
+    const fade=Math.min(1,(item.start+Math.min(24,Math.max(8,item.near)))/total);
+    const points=[...new Set([0,start,end,fade,1])].sort((a,b)=>a-b);
+    const frames=points.map(offset=>{
+      const travel=Math.max(0,Math.min(item.near,offset*total-item.start));
+      const alpha=Math.max(0,Math.min(1,(offset-start)/Math.max(.00001,fade-start)));
+      return {offset,[X]:(item.dx+item.side*travel)+"px",[A]:String(alpha*item.opacity)};
+    });
+    return reverse?frames.reverse().map(f=>({...f,offset:1-f.offset})):frames;
+  }
+  function collect(row){
+    const list=row?.querySelector(".oneplane-tab-list");
+    if(!list)return [];
+    const rr=row.getBoundingClientRect(),ir=row.querySelector(".oneplane-title-island")?.getBoundingClientRect();
+    const center=ir?.width>1?ir.left+ir.width/2:rr.left+rr.width/2;
+    const groups=new Map();
+    for(const n of list.querySelectorAll(".oneplane-tab,.oneplane-split-group")){
+      if(n.classList.contains("oneplane-tab")&&n.closest(".oneplane-split-group"))continue;
+      const r=n.getBoundingClientRect(),s=win.getComputedStyle(n);
+      if(r.width<2||r.height<2||s.visibility==="hidden"||s.display==="none"||!Number(s.opacity))continue;
+      const lane=n.closest(".oneplane-island-lane")||list,lr=lane.getBoundingClientRect();
+      const clip=lr.width>1?lr:list.getBoundingClientRect();
+      if(r.right<=clip.left||r.left>=clip.right)continue;
+      // Native nonzero translation belongs to a different interaction.
+      if(s.translate!=="none"&&!/^0(?:px|%)?(?: 0(?:px|%)?){0,2}$/.test(s.translate||"0px"))continue;
+      if(!groups.has(lane))groups.set(lane,[]);
+      groups.get(lane).push({n,left:r.left,right:r.right,opacity:Number(s.opacity)});
+    }
+    return [...groups.values()].flatMap(cards=>planLane(cards,center));
+  }
+  function releasePending(){if(pendingTimer)win.clearTimeout(pendingTimer);pendingTimer=0;root.removeAttribute(PENDING);}
+  function start(row,{owner,direction="in",duration=520,delay=0}={}){
+    stopSelection();active?.release();releasePending();
+    if(dead||!registered||!row)return null;
+    const cards=collect(row);
+    if(!cards.length)return null;
+    const total=Math.max(24,...cards.map(c=>c.start+Math.max(c.near,24))),effects=[],saved=[];
+    root.setAttribute(OWNER,owner);
+    for(const c of cards){
+      const n=c.n,old=[X,A].map(k=>[k,n.style.getPropertyValue(k),n.style.getPropertyPriority(k)]);
+      saved.push({n,old,mark:n.getAttribute(MARK)});
+      const frames=keyframes(c,total,direction==="out");
+      n.style.setProperty(X,frames[0][X]);n.style.setProperty(A,frames[0][A]);n.setAttribute(MARK,"true");
+      try{const a=n.animate(frames,{duration,delay,easing:ease,fill:"both"});effects.push({a,n,frames});}
+      catch{n.style.setProperty(X,frames.at(-1)[X]);n.style.setProperty(A,frames.at(-1)[A]);}
+    }
+    let released=false;
+    const handle={count:cards.length,finished:Promise.all(effects.map(({a})=>a.finished.catch(()=>{}))),
+      seal(){for(const {a} of effects)try{a.finish();}catch{}},
+      release(){
+        if(released)return;released=true;
+        for(const {a} of effects)try{a.cancel();}catch{}
+        for(const {n,old,mark} of saved){
+          for(const [k,v,p] of old){if(v)n.style.setProperty(k,v,p);else n.style.removeProperty(k);}
+          if(mark===null)n.removeAttribute(MARK);else n.setAttribute(MARK,mark);
+        }
+        if(active===handle){active=null;root.removeAttribute(OWNER);if(!win.closed)win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd"));}
+      }};
+    active=handle;
+    win.__nocturneTrace?.("center.motion",()=>({owner,direction,count:cards.length,duration,travel:total}),{sample:duration+250});
+    return handle;
+  }
+  function dispose(){
+    if(dead)return;dead=true;releasePending();stopSelection();selectionContainer?.removeEventListener("TabSelect",onSelect);win.removeEventListener("OnePlane:StartupState",bindSelection);
+    if(!root.hasAttribute("data-zr-closing"))active?.release();
+    if(win[KEY]===api)delete win[KEY];
+  }
+  // Ordinary selection uses the same ownership boundary but never delays
+  // native TabSelect. Animate the chrome deck, not remote page DOM.
+  let selection=null,selectionContainer=null,lastTab=null;
+  function stopSelection(){if(selection){try{selection.cancel();}catch{}selection=null;}}
+  function onSelect(){
+    const browser=win.gBrowser,next=browser?.selectedTab,previous=lastTab;lastTab=next;
+    stopSelection();
+    if(!next||!previous||next===previous||active||root.hasAttribute(PENDING)||
+       ["data-zr-startup-phase","data-zr-workspace-phase","data-zr-closing","customizing","inDOMFullscreen","inFullscreen"].some(k=>root.hasAttribute(k))||
+       win.matchMedia("(prefers-reduced-motion: reduce)").matches||Services.prefs.getIntPref("zen.oneplane.animation-duration",160)===0||
+       next.hasAttribute("zen-empty-tab")||next.hasAttribute("split-view")||previous.hasAttribute("split-view"))return;
+    const deck=document.getElementById("tabbrowser-tabpanels");
+    if(!deck||deck.hasAttribute("data-zr-home-covered")||deck.querySelector(".browserSidebarContainer[zen-split='true']"))return;
+    const tabs=Array.from(browser.visibleTabs||browser.tabs||[]),from=tabs.indexOf(previous),to=tabs.indexOf(next);
+    if(from<0||to<0||from===to)return;
+    const dx=to>from?10:-10;
+    try{
+      const a=deck.animate([{opacity:.72,translate:dx+"px 0"},{opacity:1,translate:"0px 0px"}],{duration:180,easing:ease});
+      selection=a;a.finished.then(()=>{if(selection===a)selection=null;},()=>{});
+      win.__nocturneTrace?.("selection.motion",{direction:Math.sign(dx),duration:180},{sample:400});
+    }catch{}
+  }
+  function bindSelection(){
+    const tc=win.gBrowser?.tabContainer;if(!tc||tc===selectionContainer)return;
+    selectionContainer?.removeEventListener("TabSelect",onSelect);
+    selectionContainer=tc;lastTab=win.gBrowser.selectedTab;tc.addEventListener("TabSelect",onSelect);
+  }
+  win.addEventListener("OnePlane:StartupState",bindSelection);
+  bindSelection();
+  const api={start,releasePending,dispose};win[KEY]=api;
+  // The layout entrypoint runs before its own projection. Gate only a
+  // genuinely new window, never a Sine reload. Fail open on missing Assembly.
+  try{
+    if(!win.__nocturneLayoutStartup&&win.performance.now()<1800&&Services.prefs.getBoolPref("zen.refined.startup.animation",true)&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches){
+      root.setAttribute(PENDING,"true");pendingTimer=win.setTimeout(releasePending,1800);
+    }
+  }catch{}
+  win.addUnloadListener(dispose);
+})();

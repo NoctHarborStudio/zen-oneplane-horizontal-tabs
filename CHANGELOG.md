@@ -1,3 +1,11 @@
+## 0.3.0-preview.9 — Shared Center Motion
+
+- One window-local engine plans and plays card trajectories for startup, native close and workspace changes. Outer cards depart first; closing uses reversed keyframes. Freeze projection centering until release, then resynchronize.
+- Gate cold projections before first reveal; never replay already-painted cards when a late loader misses the gate. Suppress transient strip indicators, slider and scrollbars during choreography.
+- Fix the final unscaled shelf height before applying FLIP scale; bound both min/max height to prevent double growth during wrapper interpolation.
+- Add a short incoming directional glide for ordinary native TabSelect, without delaying selection or capturing web content.
+- Replace per-window diagnostic files with a readable bounded file of up to four sessions, delta snapshots and serialized writes. Old per-window files are removed after successful replacement.
+
 ## 0.3.0-preview.8 — Center motion and adaptive rows
 
 - Keep startup waiting gates until each effect owns its node; sample resting opacity with transitions disabled. Move visible cards toward Home within their actual scroll lane and use a longer reveal with earlier onset.

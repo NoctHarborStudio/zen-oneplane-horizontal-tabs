@@ -52,7 +52,7 @@ test("startup waits for horizontal readiness and ignores duplicate resize",()=>{
 
 test("startup keeps the waiting gate until targets own their resting styles",()=>{
  const launch=source.slice(source.indexOf("function launch("),source.indexOf("function schedule(){"));
- assert.ok(launch.indexOf('slide(t.n,t.dx')<launch.indexOf('root.setAttribute(PHASE,"playing")'));
+ assert.ok(launch.indexOf('engine?.start(row')<launch.indexOf('root.setAttribute(PHASE,"playing")'));
  assert.ok(source.includes(':is(#zr-startup-specificity,[data-zr-startup-managed])'));
- assert.ok(source.includes('const anchor=Math.max(clip.left+r.width/2'));
+ assert.ok(source.includes('const painted=!gated&&cards.some(n=>baseline.has(n))'));
 });

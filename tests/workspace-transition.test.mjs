@@ -9,8 +9,8 @@ test("workspace animates stable surfaces and card offsets with shared progress",
  assert.ok(source.includes('const candidates=[one?row:get("tabbrowser-tabs"),get("PlacesToolbarItems")]'));
  assert.ok(!source.includes("--zr-workspace-dx"));
  assert.ok(!source.includes("--zr-workspace-dy"));
- assert.ok(source.includes("cardOffsets(row)"));
- assert.ok(css.includes("--zr-workspace-card-phase: var(--zr-workspace-progress)"));
+ assert.ok(source.includes("win.__nocturneCenterMotion?.start(row"));
+ assert.ok(css.includes("--zr-center-x"));
 });
 test("transition bypasses startup, disabled and reduced-motion states",()=>{
  const state={dead:false,busy:false,reduced:false,startup:false,enabled:true,fullscreen:false};
@@ -177,17 +177,13 @@ test("workspace uses packaged style motion and locks geometry before outgoing ef
 
 test("compact geometry and card displacement share the incoming timeline",()=>{
  assert.ok(css.includes("--zr-workspace-painted-height"));
- assert.ok(css.includes("var(--zr-workspace-card-x) * (1 - var(--zr-workspace-card-phase, 1))"));
- assert.ok(source.includes('const length=outgoing?240:420'));
+ assert.ok(css.includes("var(--zr-center-x,0px)"));
+ assert.ok(source.includes('const length=outgoing?300:480'));
  assert.ok(source.includes('old.bookmarkTop-n.getBoundingClientRect().top'));
 });
-test("card convergence stays inside the scroll lane",()=>{
- const i=source.indexOf("function cardOffsets("),j=source.indexOf("function animate(",i);
- const run=new Function(`const box=(left,width)=>({left,right:left+width,width,height:30});
- const lane={getBoundingClientRect:()=>box(100,200)};
- const card={getBoundingClientRect:()=>box(110,40),classList:{contains:()=>true},closest:s=>s===".oneplane-island-lane"?lane:null};
- const list={querySelectorAll:()=>[card]},row={querySelector:s=>s===".oneplane-tab-list"?list:{getBoundingClientRect:()=>box(350,100)},getBoundingClientRect:()=>box(100,600)};
- const rect=n=>n?.getBoundingClientRect(),neutralTranslate=()=>true;
- ${source.slice(i,j)} return cardOffsets(row)[0].dx;`);
- assert.equal(run(),150);
+test("workspace delegates card trajectories to the shared engine and fixes the unscaled surface height",()=>{
+ assert.ok(source.includes("Number(surface.offsetHeight)||sr?.height"));
+ assert.ok(css.includes("min-height: var(--zr-workspace-final-surface-height) !important"));
+ assert.ok(css.includes("max-height: var(--zr-workspace-final-surface-height) !important"));
+ assert.ok(!source.includes("function cardOffsets("));
 });

@@ -1,6 +1,6 @@
-// Nocturne preview.8: early trace, independent Sine script order.
+// Nocturne preview.9: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="disassembly.script",data={version:"0.3.0-preview.8"};
+  const event="disassembly.script",data={version:"0.3.0-preview.9"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -18,7 +18,7 @@ try{if(typeof window!=="undefined"){
   if(typeof window.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   window[KEY]?.();
   let dead=false,owner=null,original=null,wrapped=null,observer=null,style=null,sheet=null;
-  const animations=new Set(),owned=new Map();
+  const animations=new Set(),owned=new Map();let centerHandle=null;
 
   function makeCloseController({eligible,begin,clear,seal=()=>{},isClosed=()=>false,later,cancelLater,invoke}){
     let pending=null,timer=null,committing=false;
@@ -84,14 +84,6 @@ try{if(typeof window!=="undefined"){
       const t=visible(n);if(t)add(n,0,-14,false,Math.max(0,55-Math.abs(t.r.left+t.r.width/2-center)*.09),280);
     }
     if(rr){
-      const list=row.querySelector(".oneplane-tab-list");
-      for(const n of list?.querySelectorAll(".oneplane-tab,.oneplane-split-group")||[]){
-        if(n.classList.contains("oneplane-tab")&&n.closest(".oneplane-split-group"))continue;
-        const t=visible(n),lane=n.closest(".oneplane-island-lane")||list,lr=lane?.getBoundingClientRect();
-        if(!t||!lr||t.r.right<=lr.left||t.r.left>=lr.right)continue;
-        const dx=clamp(center-t.r.left-t.r.width/2,-360,360);
-        add(n,dx,0,false,Math.max(65,155-Math.abs(dx)*.22),320);
-      }
       add(row.querySelector(".oneplane-new-tab"),-26,0,false,80,300);
       add(island,0,0,true,150,320);
     }else{
@@ -115,7 +107,7 @@ try{if(typeof window!=="undefined"){
   function restore(){
     typeof window!=="undefined"&&window.__nocturneTrace?.("disassembly.restore",()=>({effects:animations.size,owned:owned.size,closing:root.hasAttribute('data-zr-closing')}),{sample:1000,flush:true});
     for(const a of animations)try{a.cancel();}catch{}
-    animations.clear();
+    animations.clear();centerHandle?.release();centerHandle=null;
     for(const [n,record] of owned){
       for(const [k,v] of record.styles){
         if(v.value)n.style.setProperty(k,v.value,v.priority);else n.style.removeProperty(k);
@@ -152,6 +144,7 @@ try{if(typeof window!=="undefined"){
       catch{sheet=null;style=document.createElementNS("http://www.w3.org/1999/xhtml","style");style.textContent=css;root.append(style);}
     }
     root.setAttribute("data-zr-closing","true");
+    centerHandle=window.__nocturneCenterMotion?.start(get("oneplane-tabs"),{owner:"close",direction:"out",duration:480});
     for(const {n,x,y,clip,delay,length,opacity} of targets){
       try{
         let frames;
@@ -171,19 +164,19 @@ try{if(typeof window!=="undefined"){
       }catch(e){console.warn("[Zen Refined] Close effect:",e);}
     }
     typeof window!=="undefined"&&window.__nocturneTrace?.("disassembly.effects",()=>({count:animations.size,owned:owned.size,duration:DURATION}),{sample:1000,flush:true});
-    return animations.size>0;
+    return animations.size>0||!!centerHandle?.count;
   }
   function eligible(args){
     const event=args[0];
     return !dead&&!window.closed&&!Services.startup.shuttingDown&&
       prefs.getBoolPref(PREF,true)&&!reduced.matches&&!!event?.isTrusted&&
       !root.hasAttribute("customizing")&&root.getAttribute("inDOMFullscreen")!=="true"&&
-      !root.hasAttribute("data-zr-startup-phase");
+      !root.hasAttribute("data-zr-startup-phase")&&!root.hasAttribute("data-zr-workspace-phase");
   }
   const controller=makeCloseController({
     eligible,begin,clear:restore,isClosed:()=>window.closed,
     seal:()=>{
-      for(const a of animations)try{a.finish();}catch{}
+      centerHandle?.seal();for(const a of animations)try{a.finish();}catch{}
       window.__nocturneTrace?.("disassembly.sealed",()=>({effects:animations.size,closing:root.hasAttribute("data-zr-closing")}),{flush:true});
     },
     later:(fn,ms)=>window.setTimeout(fn,ms),cancelLater:id=>window.clearTimeout(id),

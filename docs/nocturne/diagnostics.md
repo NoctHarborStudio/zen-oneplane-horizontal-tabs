@@ -1,22 +1,21 @@
-# Nocturne preview.8 diagnostics
+# Nocturne preview.9 diagnostics
 
-Preview.7 retains diagnostics while correcting startup opacity, card convergence and workspace geometry. Drag behavior is unchanged. Recording is enabled by default. Set `zen.nocturne.diagnostics.enabled` to false in about:config to disable it (or restart after changing it to prevent any early traces). There is no network upload.
+Recording remains enabled by default for this preview. Set `zen.nocturne.diagnostics.enabled` to false in about:config to disable. No network upload.
 
 ## Collect
 
-1. Restart Zen completely. Open Browser Console (Ctrl+Shift+J). Look for `[Nocturne diag ...]` and version 0.3.0-preview.8.
-2. Reproduce normal tab selection and workspace switching separately, one/two rows, reveal/collapse, drag out/back, and native close. Each window has a unique diagnostic ID. Do not share unrelated console logs unless needed.
-3. Open about:support > Profile Folder > Open Folder, then `nocturne-diagnostics`. Attach the newest JSON files, including the previous (closed) window's file. They are updated asynchronously, so the very last unload event is best effort.
-4. Fallback: evaluate `window.__nocturneDiagnostics.dump()` in the parent Browser Console. If the console context does not expose the browser window, use `Services.wm.getMostRecentWindow("navigator:browser").__nocturneDiagnostics.dump()`. To explicitly persist, call `await Services.wm.getMostRecentWindow("navigator:browser").__nocturneDiagnostics.flush()`. Optional `mark("drag-out-in")` adds a short test label; never enter private information.
-5. Recorder is bounded to 1600 events and trims old entries when serializing a large snapshot. Recent files retained; private windows are not written to disk. Logs contain no page URL, title, search text, downloads filename or page contents. Window-relative coordinates, dimensions, timings, counts, state names and animation metadata only.
+Restart Zen completely, reproduce the issue, and open about:support > Profile Folder > Open Folder > nocturne-diagnostics. Attach the single `nocturne-diagnostics.json` file. It contains up to four recent window sessions and is formatted with indentation; total serialized size is capped at approximately 450 KB. Old per-window Nocturne diagnostic JSON files are removed after the first successful replacement. Save them separately first if you need older traces.
 
-## Read
+Fallback: `Services.wm.getMostRecentWindow("navigator:browser").__nocturneDiagnostics.dump()` in Browser Console. `await Services.wm.getMostRecentWindow("navigator:browser").__nocturneDiagnostics.flush()` explicitly persists. Private windows never write. Closing/unload persistence remains best effort.
 
-- assembly.*: eligibility, native/layout readiness, launch, targets, interruptions, settle and finish.
-- disassembly.*: native close request, effect count, restore and native invocation (compare times).
-- native.TabSelect vs workspace.*: ordinary selection vs explicit workspace animation. Bypass reports startup, active interaction, reduced motion and registration.
-- panel.*, geometry.*, contour.*, bookmarks.contour, chrome.attributes and sample: measured/painted height, two contour owners, hold flags, frame gaps, style and animation state.
-- drag.*: threshold, return decision, pull, mode, source and ghost state, native image, insertion, drop and cancellation.
-- Other runtime owners and Home/Hub/address record lifecycle events; no arbitrary text is captured.
+## Format
 
-Sampling is active-event driven and rate-limited; diagnostics itself adds some overhead. Do not use the trace as an absolute FPS benchmark. Sine hot reload and process shutdown can prevent the final async write; console and prior disk snapshots remain fallback evidence.
+Schema 2: sessions contain version, window, dropped, updated, events. Sample metrics are a full keyframe every tenth sample (`full:true`), otherwise only changed properties; a null node means removal. Samples run during active events, not continuously during idle. A trimmed session can start with a delta: read from the next full sample.
+
+- center.motion: owner, direction, count, duration and total travel.
+- assembly.*, disassembly.*, workspace.*: lifecycle and phase.
+- selection.motion: normal tab switch direction and duration.
+- sample: card offset/opacity, geometry, scroll indicators and frame gaps.
+- drag.*: native drag lifecycle.
+
+Logs contain no page URL, title, search text, downloads filename or page contents. Frame measurements are diagnostic, not an absolute FPS benchmark.
