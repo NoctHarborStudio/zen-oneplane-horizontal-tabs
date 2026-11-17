@@ -47,3 +47,6 @@ L7: live Zen/Sine validation on disposable profile; wide/portrait/620/360 CSS px
 
 ## Open decisions
 Exact installed Gecko command routing order, native top-layer focus behavior, PlacesQuery disposal/pagination contract, historical download coverage and canonical service API, native scanner availability and safe thumbnail formats need live validation. Geometry/motion durations above are proposed tunables, not measured FPS claims. No new product dependencies, no database, no old Zen Refined work.
+
+## L1 implementation checkpoint (0.3.0-preview.32)
+Independent overlay.uc.mjs build output; registered Home-search, Hub and Downloads. Live owner predicates cover closing motion and native file drag; guarded synchronous handoff avoids overlapping panels; passive download notifications cannot displace active owners. Escape dispatch honors native XUL popups and leaves Home search handling native. Home search currently defers rather than forcibly closing when competing for a handoff. Library focus lease, native search bridge and command interception remain L3/L4 tasks. Native drag, popup order, startup and hot reload require live Zen validation. No shortcut interception or Library UI yet.

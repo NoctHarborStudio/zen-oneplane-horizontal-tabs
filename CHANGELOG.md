@@ -1,3 +1,9 @@
+## 0.3.0-preview.32 — Library L1 overlay ownership foundation
+
+- Independent per-window overlay coordinator, late registration, reload-safe unregister, guarded synchronous handoff and Escape arbitration.
+- Home remains a destination; its native search defers competing overlays. Hub and Downloads yield only when safe. Passive download flights cannot displace another owner; native file drag and in-flight operations are not canceled.
+- Preserve preview.31 branded boot and synchronized assembly. No Ctrl+H interception or Library view yet; existing downloads views stay intact. Native verification pending.
+
 ## 0.3.0-preview.31 — Nocturne Boot Sequence
 
 - Show a lightweight, optional browser-chrome splash with a local vector mark and Nocturne wordmark during cold restore. No network assets, blur or web-page changes.
