@@ -1,7 +1,7 @@
-/* Nocturne preview.7 diagnostic recorder — read-only chrome telemetry.
+/* Nocturne preview.8 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.7",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.8",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -67,7 +67,7 @@
     }catch{}
   }
   const rootAttrs=["oneplane-active","data-op-startup-ready","data-zr-startup-phase","data-zr-closing","data-zr-workspace-phase","data-op-bookmark-wave","zen-compact-mode","customizing","inDOMFullscreen","inFullscreen"];
-  const attrs=[...rootAttrs,"data-op-panel-open","oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold","oneplane-home-hold","oneplane-workspace-hold","oneplane-download-hold","zen-has-hover","has-popup-menu","zen-compact-mode-active","data-ready","data-op-overflow-row","data-op-adaptive-compact","data-op-dragging","data-op-inline-drag","data-op-lane-drag","data-op-group-pull","data-op-live-drag","data-op-drag-commit","data-op-url-phase","data-op-home-open","data-op-lane-ghost","data-op-detached","data-op-pulling","data-op-drag-follow","data-op-reinsert","data-zr-bm-stable-contour","data-zr-workspace-geometry","data-zr-workspace-motion","data-zr-workspace-surface","data-zr-workspace-page","data-zr-home-covered","data-zr-startup-effect","data-zr-close-effect","hidden","collapsed","open","focused"];
+  const attrs=[...rootAttrs,"data-op-panel-open","oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold","oneplane-home-hold","oneplane-workspace-hold","oneplane-download-hold","zen-has-hover","has-popup-menu","zen-compact-mode-active","data-ready","data-op-overflow-row","data-op-adaptive-compact","data-op-dragging","data-op-inline-drag","data-op-lane-drag","data-op-group-pull","data-op-live-drag","data-op-drag-commit","data-op-url-phase","data-op-home-open","data-op-lane-ghost","data-op-detached","data-op-pulling","data-op-drag-follow","data-op-reinsert","data-zr-bm-stable-contour","data-zr-workspace-geometry","data-zr-workspace-motion","data-zr-workspace-card","data-zr-workspace-height-motion","data-zr-workspace-surface","data-zr-workspace-page","data-zr-home-covered","data-zr-startup-effect","data-zr-close-effect","hidden","collapsed","open","focused"];
   const targets=["zen-appcontent-navbar-wrapper","zen-appcontent-navbar-container","oneplane-toolbar-surface","nav-bar","oneplane-tabs","oneplane-overflow-tabs","PersonalToolbar","PlacesToolbarItems","urlbar-container","urlbar","tabbrowser-tabpanels","zen-shared-home","zr-download-indicator"];
   function attrState(n,keys=attrs){const out={};for(const k of keys)if(n.hasAttribute(k))out[k]=n.getAttribute(k)||true;return out;}
   function observeTargets(){
@@ -88,7 +88,7 @@
     const hash=x=>{let h=0;for(let i=0;i<x.length;i++)h=(Math.imul(h,31)+x.charCodeAt(i))|0;return x.length?x.length+":"+h:null;};
     return {rect:[round(r.left),round(r.top),round(r.width),round(r.height)],opacity:s.opacity,visibility:s.visibility,display:s.display,translate:s.translate,scale:s.scale,transform:s.transform,transition:s.transitionProperty,height:s.height,
       measure:n.style?.getPropertyValue("--op-measured-toolbar-height")||null,contour:n.style?.getPropertyValue("--op-contour-height")||null,bmContour:n.style?.getPropertyValue("--zr-bm-contour-height")||null,
-      mask:hash(mask),bmMask:hash(bm),progress:s.getPropertyValue("--zr-workspace-progress").trim()||null,attrs:attrState(n),animations:anim};
+      mask:hash(mask),bmMask:hash(bm),progress:s.getPropertyValue("--zr-workspace-progress").trim()||null,startupProgress:s.getPropertyValue("--zr-startup-progress").trim()||null,startupBase:n.style?.getPropertyValue("--zr-startup-base-opacity")||null,attrs:attrState(n),animations:anim};
   }
   function snapshot(){
     observeTargets();
@@ -1500,11 +1500,11 @@ function installTabStrip() {
     row.toggleAttribute("data-op-overflow-row",plan.hasSecondRow);
     row.toggleAttribute("data-op-adaptive-compact",plan.mode!=="wide");
     row.toggleAttribute("data-op-bottom-plus",!plan.topPlus);
-    bottomLane.hidden=!plan.hasSecondRow;
+    if(bottomLane.hidden===plan.hasSecondRow)bottomLane.hidden=!plan.hasSecondRow;
     if(changed){
     typeof window!=="undefined"&&window.__nocturneTrace?.("tabs.partition.height",()=>({second:plan.hasSecondRow,mode:plan.mode,left:plan.topLeft.length,right:plan.topRight.length,lower:plan.lower.length,phase:root.getAttribute('data-zr-workspace-phase')}),{sample:1800});
       overflowRevealAnimation?.cancel();overflowRevealAnimation=null;
-      if(plan.hasSecondRow&&row.hasAttribute("data-ready")&&cascadeState==="idle"&&!reducedMotion.matches&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0){
+      if(plan.hasSecondRow&&!root.hasAttribute("data-zr-workspace-phase")&&!root.hasAttribute("data-zr-startup-phase")&&row.hasAttribute("data-ready")&&cascadeState==="idle"&&!reducedMotion.matches&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0){
         try{overflowRevealAnimation=bottomLane.animate([{opacity:0},{opacity:1}],{duration:160,easing:"ease-out"});}catch{}
       }
       adaptiveHeightDirty=true;contourKey=null;
@@ -1530,7 +1530,7 @@ function installTabStrip() {
       }
     }else{
       mountLaneNodes(list,order);
-      leftLane.remove();rightLane.remove();bottomLane.remove();bottomLane.hidden=true;
+      leftLane.remove();rightLane.remove();bottomLane.remove();if(!bottomLane.hidden)bottomLane.hidden=true;
       if(row.hasAttribute("data-op-overflow-row")){adaptiveHeightDirty=true;contourKey=null;scheduleGeometry();}
       for(const attr of ["data-op-overflow-row","data-op-adaptive-compact","data-op-bottom-plus"])row.removeAttribute(attr);
     }

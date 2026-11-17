@@ -5,10 +5,12 @@ const source=readFileSync(new URL("../workspace-transition.uc.mjs",import.meta.u
 const css=readFileSync(new URL("../chrome.css",import.meta.url),"utf8");
 const i=source.indexOf("function eligible("),j=source.indexOf("function units()",i);
 const eligible=new Function(source.slice(i,j)+"return eligible;")();
-test("workspace animates stable surfaces without per-tab translation",()=>{
+test("workspace animates stable surfaces and card offsets with shared progress",()=>{
  assert.ok(source.includes('const candidates=[one?row:get("tabbrowser-tabs"),get("PlacesToolbarItems")]'));
  assert.ok(!source.includes("--zr-workspace-dx"));
  assert.ok(!source.includes("--zr-workspace-dy"));
+ assert.ok(source.includes("cardOffsets(row)"));
+ assert.ok(css.includes("--zr-workspace-card-phase: var(--zr-workspace-progress)"));
 });
 test("transition bypasses startup, disabled and reduced-motion states",()=>{
  const state={dead:false,busy:false,reduced:false,startup:false,enabled:true,fullscreen:false};
@@ -155,7 +157,7 @@ test("incoming shelf and page effects restore every owned style",()=>{
  const count=effects.length,ratio=surface.style.getPropertyValue("--zr-workspace-height-scale"),pageOffset=page.style.getPropertyValue("--zr-workspace-page-y");
  cancelEffects(tx);row.removeAttribute("data-op-overflow-row");return {count,ratio,pageOffset,clean:[surface,page,bm,row,nav].every(n=>!n.styles.size&&!n.attrs.size)};
  `);
- assert.deepEqual(run(),{count:5,ratio:"0.625",pageOffset:"-32px",clean:true});
+ assert.deepEqual(run(),{count:5,ratio:"0.625",pageOffset:"-40px",clean:true});
 });
 
 test("two-row backing is gated during swap and animated separately from tabs",()=>{
@@ -171,4 +173,21 @@ test("workspace uses packaged style motion and locks geometry before outgoing ef
  assert.ok(css.includes("height: var(--zr-workspace-height) !important"));
  assert.ok(source.includes('if(value==="out"||value==="swap")lockGeometry();'));
  assert.ok(!source.includes("loadSheet("));
+});
+
+test("compact geometry and card displacement share the incoming timeline",()=>{
+ assert.ok(css.includes("--zr-workspace-painted-height"));
+ assert.ok(css.includes("var(--zr-workspace-card-x) * (1 - var(--zr-workspace-card-phase, 1))"));
+ assert.ok(source.includes('const length=outgoing?240:420'));
+ assert.ok(source.includes('old.bookmarkTop-n.getBoundingClientRect().top'));
+});
+test("card convergence stays inside the scroll lane",()=>{
+ const i=source.indexOf("function cardOffsets("),j=source.indexOf("function animate(",i);
+ const run=new Function(`const box=(left,width)=>({left,right:left+width,width,height:30});
+ const lane={getBoundingClientRect:()=>box(100,200)};
+ const card={getBoundingClientRect:()=>box(110,40),classList:{contains:()=>true},closest:s=>s===".oneplane-island-lane"?lane:null};
+ const list={querySelectorAll:()=>[card]},row={querySelector:s=>s===".oneplane-tab-list"?list:{getBoundingClientRect:()=>box(350,100)},getBoundingClientRect:()=>box(100,600)};
+ const rect=n=>n?.getBoundingClientRect(),neutralTranslate=()=>true;
+ ${source.slice(i,j)} return cardOffsets(row)[0].dx;`);
+ assert.equal(run(),150);
 });

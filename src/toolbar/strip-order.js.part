@@ -20,11 +20,11 @@
     row.toggleAttribute("data-op-overflow-row",plan.hasSecondRow);
     row.toggleAttribute("data-op-adaptive-compact",plan.mode!=="wide");
     row.toggleAttribute("data-op-bottom-plus",!plan.topPlus);
-    bottomLane.hidden=!plan.hasSecondRow;
+    if(bottomLane.hidden===plan.hasSecondRow)bottomLane.hidden=!plan.hasSecondRow;
     if(changed){
     typeof window!=="undefined"&&window.__nocturneTrace?.("tabs.partition.height",()=>({second:plan.hasSecondRow,mode:plan.mode,left:plan.topLeft.length,right:plan.topRight.length,lower:plan.lower.length,phase:root.getAttribute('data-zr-workspace-phase')}),{sample:1800});
       overflowRevealAnimation?.cancel();overflowRevealAnimation=null;
-      if(plan.hasSecondRow&&row.hasAttribute("data-ready")&&cascadeState==="idle"&&!reducedMotion.matches&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0){
+      if(plan.hasSecondRow&&!root.hasAttribute("data-zr-workspace-phase")&&!root.hasAttribute("data-zr-startup-phase")&&row.hasAttribute("data-ready")&&cascadeState==="idle"&&!reducedMotion.matches&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0){
         try{overflowRevealAnimation=bottomLane.animate([{opacity:0},{opacity:1}],{duration:160,easing:"ease-out"});}catch{}
       }
       adaptiveHeightDirty=true;contourKey=null;
@@ -50,7 +50,7 @@
       }
     }else{
       mountLaneNodes(list,order);
-      leftLane.remove();rightLane.remove();bottomLane.remove();bottomLane.hidden=true;
+      leftLane.remove();rightLane.remove();bottomLane.remove();if(!bottomLane.hidden)bottomLane.hidden=true;
       if(row.hasAttribute("data-op-overflow-row")){adaptiveHeightDirty=true;contourKey=null;scheduleGeometry();}
       for(const attr of ["data-op-overflow-row","data-op-adaptive-compact","data-op-bottom-plus"])row.removeAttribute(attr);
     }

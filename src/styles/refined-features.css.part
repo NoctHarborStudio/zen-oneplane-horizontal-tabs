@@ -337,7 +337,7 @@
 :root[data-zr-workspace-phase] :is(#oneplane-tabs#oneplane-tabs#oneplane-tabs#oneplane-tabs, #PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems, #tabbrowser-tabs#tabbrowser-tabs#tabbrowser-tabs#tabbrowser-tabs)[data-zr-workspace-motion] {
   transition-property: none !important;
   opacity: var(--zr-workspace-progress) !important;
-  scale: calc(.94 + .06 * var(--zr-workspace-progress)) !important;
+  --zr-workspace-card-phase: var(--zr-workspace-progress);
   transform-origin: center top !important;
   pointer-events: none !important;
 }
@@ -371,11 +371,28 @@
   transition-property: none !important;
 }
 :root[data-zr-workspace-phase] #oneplane-toolbar-surface#oneplane-toolbar-surface#oneplane-toolbar-surface#oneplane-toolbar-surface[data-zr-workspace-surface] {
+  height: var(--zr-workspace-final-surface-height) !important;
   scale: 1 calc(var(--zr-workspace-height-scale) + (1 - var(--zr-workspace-height-scale)) * var(--zr-workspace-progress)) !important;
   transform-origin: top center !important;
   transition-property: none !important;
 }
 :root[data-zr-workspace-phase] #tabbrowser-tabpanels#tabbrowser-tabpanels#tabbrowser-tabpanels#tabbrowser-tabpanels[data-zr-workspace-page] {
   translate: 0 calc(var(--zr-workspace-page-y) * (1 - var(--zr-workspace-progress))) !important;
+  transition-property: none !important;
+}
+
+/* The individual cards use the row's one native animation, not an
+ * independent animation per card. Preserve their resting layout. */
+:root[data-zr-workspace-phase] #oneplane-tabs#oneplane-tabs#oneplane-tabs#oneplane-tabs[data-zr-workspace-motion] [data-zr-workspace-card] {
+  translate: calc(var(--zr-workspace-card-x) * (1 - var(--zr-workspace-card-phase, 1))) 0 !important;
+  transition-property: none !important;
+}
+:root[data-zr-workspace-phase] #zen-appcontent-navbar-wrapper#zen-appcontent-navbar-wrapper#zen-appcontent-navbar-wrapper#zen-appcontent-navbar-wrapper[data-zr-workspace-height-motion] {
+  --zr-workspace-painted-height: calc(var(--zr-workspace-start-height) + (var(--zr-workspace-final-height) - var(--zr-workspace-start-height)) * var(--zr-workspace-progress));
+  height: var(--zr-workspace-painted-height) !important;
+  min-height: var(--zr-workspace-painted-height) !important;
+  max-height: var(--zr-workspace-painted-height) !important;
+}
+:root[data-zr-workspace-phase] #zen-appcontent-navbar-wrapper#zen-appcontent-navbar-wrapper :is(#nav-bar,#PersonalToolbar) {
   transition-property: none !important;
 }

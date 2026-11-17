@@ -1,3 +1,10 @@
+## 0.3.0-preview.8 — Center motion and adaptive rows
+
+- Keep startup waiting gates until each effect owns its node; sample resting opacity with transitions disabled. Move visible cards toward Home within their actual scroll lane and use a longer reveal with earlier onset.
+- Replace workspace whole-row scaling with individual in-lane card convergence driven by one shared progress animation. Keep the native swap transaction and closing behavior unchanged.
+- Synchronize compact toolbar height, bookmark vertical displacement and decorative surface with a single incoming timeline; avoid a separate overflow-row entrance during startup/workspace motion.
+- Avoid redundant overflow visibility mutations and record startup resting opacity/progress and workspace card count. Native visual validation pending.
+
 ## 0.3.0-preview.7 — Motion regression fixes
 
 - Keep Center Disassembly effects sealed through the synchronous native close; restore only when the window remains open or the native command fails.

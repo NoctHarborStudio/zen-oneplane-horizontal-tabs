@@ -1,6 +1,6 @@
-// Nocturne preview.7: early trace, independent Sine script order.
+// Nocturne preview.8: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="workspace.script",data={version:"0.3.0-preview.7"};
+  const event="workspace.script",data={version:"0.3.0-preview.8"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -77,6 +77,7 @@ try{if(typeof window!=="undefined"){
     for(const [n,old] of tx.styles){
       for(const [k,v,p] of old){if(v)n.style.setProperty(k,v,p);else n.style.removeProperty(k);}
       n.removeAttribute(MARK);n.removeAttribute(SURFACE);n.removeAttribute(PAGE);n.removeAttribute(MOVE);n.removeAttribute(BACKING);
+      n.removeAttribute("data-zr-workspace-card");n.removeAttribute("data-zr-workspace-height-motion");
     }
     tx.styles.clear();
   }
@@ -116,12 +117,35 @@ try{if(typeof window!=="undefined"){
     const t=win.getComputedStyle(n).translate;
     return !t||t==="none"||/^0(?:px|%)?(?: 0(?:px|%)?){0,2}$/.test(t);
   }
+  // Each visible card converges on the nearest in-lane point toward Home.
+  // The row drives one inherited progress variable; no per-card timers or
+  // layout reads during playback. Scroll clips and scroll positions stay intact.
+  function cardOffsets(row){
+    const list=row?.querySelector?.(".oneplane-tab-list");
+    if(!list)return [];
+    const island=row.querySelector(".oneplane-title-island"),ir=rect(island),rr=rect(row);
+    const center=ir?.width>1?ir.left+ir.width/2:rr.left+rr.width/2;
+    const cards=[];
+    for(const n of list.querySelectorAll(".oneplane-tab,.oneplane-split-group")){
+      if(n.classList.contains("oneplane-tab")&&n.closest(".oneplane-split-group"))continue;
+      const r=rect(n),lane=n.closest(".oneplane-island-lane")||list,lr=rect(lane);
+      if(!r||r.width<2||r.height<2||!neutralTranslate(n))continue;
+      const clip=lr?.width>1?lr:rect(list);
+      if(!clip||r.right<=clip.left||r.left>=clip.right)continue;
+      const anchor=Math.max(clip.left+r.width/2,Math.min(clip.right-r.width/2,center));
+      cards.push({n,dx:anchor-(r.left+r.width/2)});
+    }
+    return cards;
+  }
   function animate(tx,items,outgoing,old=null){
-    const length=outgoing?180:300,effects=[],ease="cubic-bezier(.22,.75,.25,1)";
+    const length=outgoing?240:420,effects=[],ease=outgoing?"cubic-bezier(.4,0,.6,1)":"cubic-bezier(.25,.55,.25,1)";
+    const row=get("oneplane-tabs"),cards=items.includes(row)?cardOffsets(row):[];
+    for(const {n,dx} of cards)saveEffect(tx,n,"data-zr-workspace-card",{"--zr-workspace-card-x":dx+"px"});
+    if(typeof window!=="undefined")window.__nocturneTrace?.("workspace.cards",()=>({outgoing,count:cards.length,maxOffset:Math.max(0,...cards.map(c=>Math.abs(c.dx)))}),{sample:1800});
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.animate",()=>({outgoing,length,targets:items.length,locked:!!old}),{sample:1800});
     for(const n of items){
       const dy=!outgoing&&n===get("PlacesToolbarItems")&&old?.bookmarkTop!=null?old.bookmarkTop-n.getBoundingClientRect().top:0;
-      const move=neutralTranslate(n),offset=Math.max(-180,Math.min(180,dy+(outgoing?-12:14)));
+      const move=n!==row&&neutralTranslate(n),offset=Math.max(-180,Math.min(180,dy));
       if(!saveEffect(tx,n,MARK,{[PROGRESS]:outgoing?1:0,"--zr-workspace-row-y":offset+"px"}))continue;
       if(move)n.setAttribute(MOVE,"true");
       effects.push(playEffect(tx,n,outgoing?1:0,outgoing?0:1,length,ease));
@@ -129,19 +153,24 @@ try{if(typeof window!=="undefined"){
     // The adaptive two-row nav has an independent opaque backing.
     // Fade that paint along with the rows so it cannot jump in height
     // while the main decorative surface is morphing.
-    const nav=get("nav-bar"),row=get("oneplane-tabs");
+    const nav=get("nav-bar");
     if(root.getAttribute("oneplane-active")==="true"&&row?.hasAttribute("data-op-overflow-row")&&
       saveEffect(tx,nav,BACKING,{[PROGRESS]:outgoing?1:0}))
       effects.push(playEffect(tx,nav,outgoing?1:0,outgoing?0:1,length,ease));
     if(!outgoing){
-      const surface=get("oneplane-toolbar-surface"),sr=rect(surface);
-      if(old&&sr&&saveEffect(tx,surface,SURFACE,{[PROGRESS]:0,"--zr-workspace-height-scale":heightScale(old.surfaceHeight,sr.height)}))
+      const surface=get("oneplane-toolbar-surface"),sr=rect(surface),wrapper=get("zen-appcontent-navbar-wrapper"),wr=rect(wrapper);
+      if(old&&sr&&saveEffect(tx,surface,SURFACE,{[PROGRESS]:0,"--zr-workspace-height-scale":heightScale(old.surfaceHeight,sr.height),"--zr-workspace-final-surface-height":sr.height+"px"}))
         effects.push(playEffect(tx,surface,0,1,length,ease));
+      // Compact chrome is an overlay. Match its hitbox height to the same
+      // timeline as the shelf and bookmarks without touching page layout.
+      if(old&&wr&&root.getAttribute("zen-compact-mode")==="true"&&Math.abs(old.height-wr.height)>1&&
+        saveEffect(tx,wrapper,"data-zr-workspace-height-motion",{[PROGRESS]:0,"--zr-workspace-start-height":old.height+"px","--zr-workspace-final-height":wr.height+"px"}))
+        effects.push(playEffect(tx,wrapper,0,1,length,ease));
       const page=get("tabbrowser-tabpanels"),pr=rect(page);
       // Keep the page opaque. Animate chrome deck only, no web DOM or captures.
       if(root.getAttribute("oneplane-active")==="true"&&pr&&pr.width>1&&pr.height>1&&!page.hasAttribute("data-zr-home-covered")&&neutralTranslate(page)){
         const dy=old?.pageTop!=null?old.pageTop-pr.top:0;
-        if(saveEffect(tx,page,PAGE,{[PROGRESS]:0,"--zr-workspace-page-y":Math.max(-180,Math.min(180,dy+8))+"px"}))
+        if(saveEffect(tx,page,PAGE,{[PROGRESS]:0,"--zr-workspace-page-y":Math.max(-180,Math.min(180,dy))+"px"}))
           effects.push(playEffect(tx,page,0,1,length,ease));
       }
     }
@@ -158,8 +187,8 @@ try{if(typeof window!=="undefined"){
         attributeFilter:["hidden","collapsed","data-selected","data-op-overflow-row","data-op-split-active"]
       });
       // Bounded quiet interval after the native switch and mirror update.
-      await pause(tx,105);
-      while(!tx.cancelled&&win.performance.now()-start<525&&win.performance.now()-changed<100)await pause(tx,35);
+      await pause(tx,70);
+      while(!tx.cancelled&&win.performance.now()-start<400&&win.performance.now()-changed<65)await pause(tx,25);
     }finally{observer?.disconnect();}
   }
   async function run(nativeSwitch){

@@ -1,6 +1,6 @@
-// Nocturne preview.7: early trace, independent Sine script order.
+// Nocturne preview.8: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.7"};
+  const event="assembly.script",data={version:"0.3.0-preview.8"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -68,7 +68,7 @@ try{if(typeof window!=="undefined"){
   try{window.CSS.registerProperty({name:PROGRESS,syntax:"<number>",inherits:false,initialValue:"1"});registered=true;}
   catch(e){registered=e.name==="InvalidModificationError";}
   const inputs=["pointerdown","keydown","wheel","dragstart","beforecustomization"];
-  const EASE="cubic-bezier(.33,0,.22,1)";
+  const EASE="cubic-bezier(.25,.55,.25,1)";
   const FADE="cubic-bezier(.32,.12,.3,1)";
   function hold(){
     const w=get("zen-appcontent-navbar-wrapper");
@@ -181,9 +181,12 @@ try{if(typeof window!=="undefined"){
     // Remove the pending gate before sampling native opacity. All changes
     // occur synchronously, before the next paint.
     n.setAttribute(MANAGED,"true");
+    // Keep transitions disabled while sampling the ungated resting style.
+    // Re-enabling them here captures the previous zero-opacity transition.
     const cs=window.getComputedStyle(n),opacity=Number(cs.opacity);
     if(!Number.isFinite(opacity)||opacity<=0){n.removeAttribute(MANAGED);return false;}
     seen.add(n);
+    if(n.matches?.(".oneplane-tab,.oneplane-split-group"))window.__nocturneTrace?.("assembly.card.rest",()=>({opacity,x,y}),{throttle:80});
     const alreadyPainted=baseline.has(n)||late&&!clip&&!n.matches?.("#PlacesToolbarItems > *");
     const initial=alreadyPainted ? .72 : 0;
     if(alreadyPainted)clip=false;
@@ -282,7 +285,7 @@ try{if(typeof window!=="undefined"){
       revealBookmarks(window.innerWidth/2,true);
       const row=get("oneplane-tabs"),url=get("urlbar-container"),center=window.innerWidth/2;
       controls(row,url,center,true);
-      if(row&&root.getAttribute("oneplane-active")==="true")for(const t of collectTabs(row,center))if(!seen.has(t.n))reveal(t.n,{x:Math.max(-360,Math.min(360,center-t.mid)),delay:155,length:435,late:true});
+      if(row&&root.getAttribute("oneplane-active")==="true")for(const t of collectTabs(row,center))if(!seen.has(t.n))reveal(t.n,{x:t.dx,delay:90,length:540,late:true});
     });
   }
   function collectTabs(row,center){
@@ -293,8 +296,13 @@ try{if(typeof window!=="undefined"){
       const r=bounds(n,true);if(!r)continue;
       // Avoid animating offscreen tabs in a scroll lane.
       const lane=n.closest(".oneplane-island-lane")||list,lr=lane.getBoundingClientRect();
-      if(r.right<=lr.left||r.left>=lr.right)continue;
-      const mid=r.left+r.width/2;units.push({n,r,mid,distance:Math.abs(mid-center)});
+      if(lr.width>1&&(r.right<=lr.left||r.left>=lr.right))continue;
+      const mid=r.left+r.width/2;
+      // Converge toward Home without crossing the lane's scroll clip.
+      // display:contents lanes have no box; fall back to the actual list.
+      const clip=lr.width>1?lr:list.getBoundingClientRect();
+      const anchor=Math.max(clip.left+r.width/2,Math.min(clip.right-r.width/2,center));
+      units.push({n,r,mid,dx:anchor-mid,distance:Math.abs(mid-center)});
     }
     units.sort((a,b)=>a.distance-b.distance);
     return units;
@@ -306,10 +314,10 @@ try{if(typeof window!=="undefined"){
       const row=get("oneplane-tabs"),url=get("urlbar-container");
       const bookmarks=get("PersonalToolbar"),items=get("PlacesToolbarItems");
       const floating=floatingBar();
-      // Release early control gates before sampling native opacity, in one task.
-      root.setAttribute(PHASE,"playing");
-      const ur=bounds(url),rr=one?bounds(row):null;
-      const island=one?row?.querySelector(".oneplane-title-island"):null,ir=bounds(island);
+      // Retain the waiting gate until the initial effects own their nodes.
+      // Bounds ignore the gate; each target is ungated synchronously by reveal().
+      const ur=bounds(url,true),rr=one?bounds(row,true):null;
+      const island=one?row?.querySelector(".oneplane-title-island"):null,ir=bounds(island,true);
       const center=ir?ir.left+ir.width/2:one&&rr?rr.left+rr.width/2:ur?ur.left+ur.width/2:window.innerWidth/2;
       playStart=now();finishAt=playStart+duration+80;
       // The native floating field may be a top-layer popover; never clip
@@ -320,10 +328,9 @@ try{if(typeof window!=="undefined"){
         for(const t of tabs){
           // Every real tab/group begins near the central anchor and fans
           // outward. Distance controls timing, not a fixed tab count.
-          const dx=Math.max(-360,Math.min(360,center-t.mid));
-          slide(t.n,dx,0,155+Math.min(150,t.distance/far*150),435);
+          slide(t.n,t.dx,0,80+Math.min(110,t.distance/far*110),540);
         }
-        const plus=row.querySelector(".oneplane-new-tab");if(bounds(plus))slide(plus,-26,0,340,390);
+        const plus=row.querySelector(".oneplane-new-tab");if(bounds(plus,true))slide(plus,-26,0,280,390);
         if(ir)openFromCenter(island,45,410);
       }else{
         // Move actual native tabs instead of fading the acrylic sidebar.
@@ -331,13 +338,14 @@ try{if(typeof window!=="undefined"){
         const dx=sr&&sr.left>=window.innerWidth/2?18:-18;
         let i=0;
         for(const tab of get("tabbrowser-tabs")?.querySelectorAll(".tabbrowser-tab")||[]){
-          if(!bounds(tab))continue;
+          if(!bounds(tab,true))continue;
           slide(tab,dx,0,155+Math.min(i++*12,120),445);
         }
       }
       controls(row,url,center);
       revealBookmarks(center);
       if(floating)openFromCenter(floating,590,440);
+      root.setAttribute(PHASE,"playing");
       // Places and Zen's floating input can initialize after chrome-ready.
       // Keep only these late nodes gated until they receive their effect.
       lateObserver=new MutationObserver(scheduleLate);
@@ -433,6 +441,9 @@ try{if(typeof window!=="undefined"){
       ${active} #urlbar:is([zen-floating-urlbar="true"],[zen-newtab]):not([data-zr-startup-managed],[data-zr-startup-existing])${gate},
       ${active} #PlacesToolbarItems > :not([data-zr-startup-managed],[data-zr-startup-existing])${gate} {
         opacity: 0 !important;
+        transition-property: none !important;
+      }
+      :root[data-zr-startup-phase] [data-zr-startup-managed]${":is(#zr-startup-specificity,[data-zr-startup-managed])".repeat(8)} {
         transition-property: none !important;
       }
       ${base} {
