@@ -208,3 +208,10 @@ Priority: P0 blocks startup redesign; P1 must be addressed or explicitly mitigat
 | MB-015 | P1 (release engineering) | Migration policy says docs-only changes do not bump runtime version, while preview CI requires a strict manifest increase relative to HEAD^ on every push. | Keep planning separate from runtime releases. Future CI change must classify documentation-only changes safely, validate the last actual manifest revision, and retain full monotonic checks for runtime releases (including multi-commit pushes). This audit does not change CI behavior. |
 
 Do not close these issues on source tests alone. Keep current Magnetic Bunny, Downloads/Library, Hub, native search, workspace transitions and closing behavior unchanged unless an explicit ownership integration requires a separately tested change. No new Sine runtime entrypoint or independent startup controller.
+
+## Nocturne Library functional preview — 0.3.0-preview.42
+- All five views implemented; live Zen/Sine acceptance not yet run. Keep experimental settings off until tested.
+- Native DownloadsCommon includes Places-only historical records; Library uses current shared Downloads list, native Downloads button remains available for full history.
+- Library drag uses native file payload; Dock retains Bunny. Shared Bunny animation on Library rows is not yet integrated.
+- Local folders opt-in only; scanner defaults to bounded system roots, no custom picker. Native scan cannot be canceled once dispatched, stale results are ignored. Verify Windows cloud files, DPI, Gecko image decoding and file drag.
+- Verify focus, command order, top-layer hit testing, private windows and real startup/shutdown; automatic tests do not replace runtime testing.

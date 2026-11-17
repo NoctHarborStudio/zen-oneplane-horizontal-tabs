@@ -2,7 +2,7 @@
 
 A unified UI modification for [Zen Browser](https://zen-browser.app/), combining OnePlane and Zen Refined. Nocturne is not a browser fork.
 
-**Development preview: 0.3.0-preview.41** · Target: Zen 1.24.2b / Sine 2.3.3. Native verification of this combined package is pending.
+**Development preview: 0.3.0-preview.42** · Target: Zen 1.24.2b / Sine 2.3.3. Native verification of this combined package is pending.
 
 ## Features
 
@@ -10,11 +10,11 @@ A unified UI modification for [Zen Browser](https://zen-browser.app/), combining
 - **Home & Hub:** native workspace integration, Free/Trash, pinned shortcuts, projection and split/tab interactions.
 - **Smart Search:** recent active tabs and native recommendations, with native tab selection.
 - **Magnetic Bookmarks:** native bookmark magnification, liquid indicator and stable contour.
-- **Downloads Dock:** permanent compact horizontal toolbar slot, native downloads, live progress, recent/full list and native Bunny drag of completed files and system file icons.
+- **Downloads Dock:** permanent compact horizontal toolbar slot, native downloads, live progress, recent list, Library handoff (legacy full list fallback) and native Bunny drag of completed files and system file icons.
 - **Page Progress:** compact native-position indicator: unfold, symmetric network progress, center collapse.
 - **Nocturne Boot / Center Assembly:** lightweight branded startup while session, icons and geometry prepare; synchronized reveal, with a fail-open timeout and optional splash.
 - **Center Disassembly / Workspace Transition:** existing coordinated animations.
-- **Library (experimental):** centered five-section Library with native History and Recently Closed, search, pagination and optional History command routing. Other sections remain placeholders. See [Library RFC](docs/nocturne/library-architecture.md).
+- **Library (experimental):** centered five-section Library with native History, Recently Closed, All Downloads, Documents and Pictures, search, pagination, file actions, opt-in local folder scan and optional Ctrl+H/Ctrl+J. The native downloads view remains available for older Places records. See [Library RFC](docs/nocturne/library-architecture.md).
 - Vertical layout is planned, not implemented in this release.
 
 ## Upgrade from OnePlane + Zen Refined

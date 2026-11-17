@@ -55,44 +55,119 @@ function libraryClientRect(rect,width,height){
   return right-left<220||bottom-top<200?null:{left,top,width:right-left,height:bottom-top};
 }
 function libraryDuration(reduced,enabled,normal){return reduced||!enabled?0:normal;}
+// Local file classification and explicitly enabled scan sessions.
+const MEDIA_EXTENSIONS=Object.freeze({
+ documents:Object.freeze(["pdf","txt","md","rtf","doc","docx","odt","xls","xlsx","ods","ppt","pptx","odp","csv","epub"]),
+ pictures:Object.freeze(["png","jpg","jpeg","webp","gif","bmp","avif","heic","heif","tiff","tif","ico","svg"])
+});
+function mediaKind(name){
+ const match=/\.([^.\\/]+)$/.exec(String(name));const ext=match?.[1].toLowerCase();
+ return Object.keys(MEDIA_EXTENSIONS).find(k=>MEDIA_EXTENSIONS[k].includes(ext))||null;
+}
+function mediaPathKey(path,windows=false){
+ const value=String(path);return windows?value.replace(/\\/g,"/").toLowerCase():value;
+}
+function safeRaster(name,size){
+ return /\.(png|jpe?g|webp|avif|gif|bmp)$/i.test(String(name))&&Number.isFinite(size)&&size>0&&size<=2097152;
+}
+function downloadFileStatus(row){
+ return row.blocked?"Blocked":row.active?"Downloading":row.failed?"Failed":row.canceled?"Canceled":row.partial?"Paused":row.success?(row.exists?"Completed":"File missing"):"Stopped";
+}
+function queryDownloadRows(rows,{section="downloads",text="",limit=50,sort="new",filter="all"}={}){
+ const term=String(text).trim().toLowerCase();
+ const list=rows.filter(r=>(section==="downloads"||(r.success&&r.exists&&!r.partial&&!r.blocked&&mediaKind(r.name)===section))&&
+   (!term||r.name.toLowerCase().includes(term))&&(filter==="all"||(filter==="active"?r.active:filter==="completed"?r.success:!r.active&&!r.success)));
+ list.sort((a,b)=>Number(b.active)-Number(a.active)||(sort==="size"?((b.total||b.bytes)-(a.total||a.bytes)):sort==="old"?a.time-b.time:b.time-a.time)||a.id.localeCompare(b.id));
+ return Object.freeze({rows:Object.freeze(list.slice(0,limit)),limit,hasMore:list.length>limit});
+}
+function createMediaService({scan,allowed=()=>true,windows=false,describe,perform}){
+ let dead=false,serial=0,pending=Promise.resolve();const handles=new Map();
+ function open(section,downloadPaths=()=>new Set()){
+   if(dead||!allowed()||!MEDIA_EXTENSIONS[section])throw Error("Media unavailable");
+   let closed=false,owned=new Set(),cache=null,revision=0;
+   async function refresh(){
+     const token=++revision;
+     const task=pending.catch(()=>{}).then(()=>closed||dead||!allowed()||token!==revision?[]:scan(section));
+     pending=task.catch(()=>{});const files=await task;
+     if(closed||dead||!allowed()||token!==revision)return null;
+     for(const id of owned)handles.delete(id);owned.clear();
+     const result=[],seen=new Set(downloadPaths());
+     for(const f of files.slice(0,300)){
+       if(!f?.path||f.cloudPlaceholder||mediaKind(f.path)!==section)continue;
+       const key=mediaPathKey(f.path,windows);if(seen.has(key))continue;seen.add(key);
+       const id="local-"+(++serial),row=describe(f,id);
+       if(!row)continue;
+       handles.set(id,f.path);owned.add(id);result.push(Object.freeze(row));
+     }
+     cache=Object.freeze(result);return cache;
+   }
+   return {refresh,rows:()=>{const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const id of owned)handles.delete(id);owned.clear();cache=null;}};
+ }
+ function action(id,kind){if(dead||!allowed()||!handles.has(id)||!["open","reveal"].includes(kind))return false;return perform(handles.get(id),kind);}
+ function dispose(){dead=true;handles.clear();}
+ return {open,action,dispose};
+}
 // Own one bounded query session, reject stale results before rendering.
-function createLibraryData({getServices,onResult,onError,schedule,cancel}){
-  let section=null,source=null,session=null,off=null,timer=null,epoch=0,sessionEpoch=0,limit=50,text="",dead=false;
+function createLibraryData({getServices,onResult,onError,onNotice=()=>{},schedule,cancel}){
+  let section=null,source=null,session=null,off=null,timer=null,epoch=0,sessionEpoch=0,limit=50,text="",sort="new",filter="all",dead=false,media=null;
+  const files=s=>["downloads","documents","pictures"].includes(s);
   function stop(){
     ++epoch;++sessionEpoch;if(timer!==null){cancel(timer);timer=null;}
-    try{off?.();}catch{}off=null;try{if(section==="history")session?.close();}catch{}session=null;source=null;section=null;limit=50;text="";
+    try{off?.();}catch{}off=null;try{if(section==="history")session?.close();}catch{}
+    try{media?.close();}catch{}media=null;session=null;source=null;section=null;limit=50;text="";sort="new";filter="all";
   }
   const current=(token,owner)=>!dead&&token===epoch&&source===owner&&getServices()===owner;
   async function load(){
     if(dead||!session||!source)return;
     const token=++epoch,owner=source;
-    try{const result=await session.query({text,limit});if(current(token,owner)&&result)onResult(result);}
+    try{const result=await session.query(files(section)?{text,limit,sort,filter}:{text,limit});if(current(token,owner)&&result)onResult(result);}
     catch{if(current(token,owner))onError();}
   }
-  function queue(){
+  function queue(throttle=false){
+    if(throttle&&timer!==null)return;
     ++epoch;if(timer!==null)cancel(timer);
     timer=schedule(()=>{timer=null;void load();},160);
   }
+  function immediate(){if(timer!==null)cancel(timer);timer=null;void load();}
+  async function refresh(){
+    const owner=source,token=sessionEpoch,m=media;if(!m)return false;
+    try{await m.refresh();if(dead||sessionEpoch!==token||source!==owner||getServices()!==owner)return false;immediate();return true;}
+    catch{if(!dead&&sessionEpoch===token&&source===owner)onNotice("Local folders could not be scanned. Showing downloaded files.");return false;}
+  }
   function start(next,query=""){
-    stop();if(dead||!["history","closed"].includes(next))return false;
+    stop();if(dead||!["history","closed","downloads","documents","pictures"].includes(next))return false;
     section=next;text=query;source=getServices();
     if(!source){onError();return false;}
+    const owner=source,sessionToken=sessionEpoch;
+    const valid=()=>!dead&&source===owner&&section===next&&sessionToken===sessionEpoch&&getServices()===owner;
+    const changed=()=>{if(valid())queue(files(next));};
+    if(files(next)){
+      if(!owner.downloads){onError();return false;}
+      void (async()=>{
+        try{
+          await owner.downloads.start();if(!valid())return;
+          off=owner.downloads.subscribe(changed);
+          session={query:args=>queryDownloadRows([...owner.downloads.getSnapshot(),...(media?.rows()||[])],{...args,section:next})};
+          if(next!=="downloads")try{media=owner.openMedia?.(next)||null;}catch{onNotice("Local folders unavailable.");}
+          immediate();if(media)void refresh();
+        }catch{if(valid())onError();}
+      })();
+      return true;
+    }
     try{
-      const owner=source,sessionToken=sessionEpoch;
-      const changed=()=>{if(!dead&&source===owner&&section===next&&sessionToken===sessionEpoch)queue();};
       if(next==="history")session=owner.openHistory(changed);
       else{session=owner.closedTabs;off=session.subscribe(changed);}
       void load();return true;
     }catch{stop();onError();return false;}
   }
-  function immediate(){if(timer!==null)cancel(timer);timer=null;void load();}
   function search(query,now=false){
-    if(!session)return;const next=String(query).slice(0,1024);
+    if(!section)return;const next=String(query).slice(0,1024);
     if(next!==text){text=next;limit=50;}
-    if(now)immediate();else queue();
+    if(!session)return;if(now)immediate();else queue();
   }
+  function options(nextSort,nextFilter){sort=nextSort;filter=nextFilter;limit=50;immediate();}
   function more(){if(!session||limit>=500)return false;limit=Math.min(500,limit+50);immediate();return true;}
-  return {start,stop,search,more,retry:immediate,dispose(){stop();dead=true;}};
+  return {start,stop,search,options,more,refresh,retry:immediate,dispose(){stop();dead=true;}};
 }
 function libraryWebURL(value){
   try{const u=new URL(value);return ["http:","https:"].includes(u.protocol)&&!u.username&&!u.password?u.href:null;}catch{return null;}
@@ -100,16 +175,20 @@ function libraryWebURL(value){
 function libraryHistoryCommand(event){
   return !!event&&!event.defaultPrevented&&["Browser:ShowAllHistory","key_gotoHistory"].includes(event.target?.id);
 }
-/* L4: opt-in native History and Recently Closed. */
+function libraryDownloadsCommand(event){
+  return !!event&&!event.defaultPrevented&&["Tools:Downloads","key_openDownloads"].includes(event.target?.id);
+}
+/* L5–L6: one Library shell for five native-backed sections. */
 (()=>{
-  const win=window,doc=win.document,root=doc.documentElement,KEY="__nocturneLibrary",PREF="zen.nocturne.library.preview",OWNER="library",SHORTCUT="zen.nocturne.library.history-shortcut";
+  const win=window,doc=win.document,root=doc.documentElement,KEY="__nocturneLibrary",PREF="zen.nocturne.library.preview",OWNER="library",SHORTCUT="zen.nocturne.library.history-shortcut",DOWNLOADS_SHORTCUT="zen.nocturne.library.downloads-shortcut",MEDIA_PREF="zen.nocturne.library.local-media";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
   const labels={downloads:"All Downloads",documents:"Documents",history:"History",pictures:"Pictures",closed:"Recently Closed"};
   const summaries={downloads:"Download records and file actions",documents:"Downloaded documents and opted-in folders",history:"Browsing history and search",pictures:"Downloaded pictures and opted-in folders",closed:"Recently closed tabs in this window"};
-  let state=createLibraryState(),dead=false,lease=()=>{},shell=null,animations=[],frame=0,returnFocus=null,rows=new Map(),backgroundAction=false,renderedSection=null;
-  const data=createLibraryData({getServices:()=>win.__nocturneLibraryServices,onResult:renderResults,onError:renderError,schedule:(fn,ms)=>win.setTimeout(fn,ms),cancel:id=>win.clearTimeout(id)});
+  let state=createLibraryState(),dead=false,lease=()=>{},shell=null,animations=[],frame=0,returnFocus=null,rows=new Map(),backgroundAction=false,renderedSection=null,dragSource=null,pendingResult=null,clearing=false,nativeFallback=false,confirmation=false,actionSerial=0,pendingClose=false;
+  const data=createLibraryData({getServices:()=>win.__nocturneLibraryServices,onResult:renderResults,onError:renderError,onNotice:notice,schedule:(fn,ms)=>win.setTimeout(fn,ms),cancel:id=>win.clearTimeout(id)});
+  const fileSection=()=>["downloads","documents","pictures"].includes(state.section);
   const enabled=()=>prefs.getBoolPref(PREF,false),active=()=>state.phase!=="closed";
   const duration=n=>libraryDuration(win.matchMedia("(prefers-reduced-motion: reduce)").matches,prefs.getIntPref("zen.oneplane.animation-duration",160)!==0,n);
   const make=(tag,cls,text)=>{const n=doc.createElementNS(NS,tag);if(cls)n.className=cls;if(text)n.textContent=text;return n;};
@@ -158,20 +237,95 @@ function libraryHistoryCommand(event){
     search.addEventListener("input",()=>{state=reduceLibrary(state,{type:"QUERY",value:search.value});if(renderedSection===state.section)data.search(state.query);});
     search.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();if(renderedSection===state.section)data.search(state.query,true);}});
     const body=make("div","nl-body");body.id="nl-body";body.setAttribute("role","tabpanel");body.tabIndex=0;
-    panel.append(header,nav,search,body);layer.append(shade,panel);root.append(layer);
+    const tools=make("div","nl-tools"),status=make("div","nl-status");status.setAttribute("role","status");status.hidden=true;
+    const sort=make("select","nl-select");sort.setAttribute("aria-label","Sort files");
+    for(const [v,t] of [["new","Newest"],["old","Oldest"],["size","Largest"]]){const o=make("option","",t);o.value=v;sort.append(o);}
+    const filter=make("select","nl-select");filter.setAttribute("aria-label","Filter downloads");
+    for(const [v,t] of [["all","All"],["active","Active"],["completed","Completed"],["other","Other"]]){const o=make("option","",t);o.value=v;filter.append(o);}
+    function options(){state=reduceLibrary(reduceLibrary(state,{type:"SORT",value:sort.value}),{type:"FILTER",value:filter.value});data.options(state.sort,state.filter);}
+    sort.addEventListener("change",options);filter.addEventListener("change",options);
+    const button=(name,fn)=>{const b=make("button","nl-action",name);b.type="button";b.addEventListener("click",fn);return b;};
+    const clear=button("Clear finished records",()=>{confirmation=true;syncTools();});
+    const yes=button("Confirm clear",()=>void clearDownloads());
+    const no=button("Cancel",()=>{confirmation=false;syncTools();clear.focus();});
+    const native=button("Native downloads",openNativeDownloads);
+    const refresh=button("Refresh folders",()=>{const epoch=state.motionEpoch;notice("Scanning opted-in folders…");void data.refresh().then(ok=>{if(ok&&current(epoch))notice("");});});
+    const more=button("Load more",()=>{more.disabled=true;if(!data.more())more.disabled=false;});more.classList.add("nl-more");
+    tools.append(sort,filter,clear,yes,no,native,refresh);
+    panel.append(header,nav,search,tools,status,body);layer.append(shade,panel);root.append(layer);
     shade.addEventListener("pointerdown",e=>{if(e.button===0){e.preventDefault();close();}});
     panel.addEventListener("keydown",e=>{
       if(e.key!=="Tab")return;
-      const nodes=[dismiss,tabs.get(state.section),...(search.disabled?[]:[search]),body,...body.querySelectorAll("button:not([disabled])")],i=nodes.indexOf(doc.activeElement);
+      const nodes=[dismiss,tabs.get(state.section),...(search.disabled?[]:[search]),...tools.querySelectorAll("button:not([disabled]):not([hidden]),select:not([disabled]):not([hidden])"),body,...body.querySelectorAll("button:not([disabled])")],i=nodes.indexOf(doc.activeElement);
       const next=e.shiftKey?(i<=0?nodes.length-1:i-1):(i<0||i===nodes.length-1?0:i+1);
       e.preventDefault();nodes[next].focus();
     });
-    shell={layer,shade,panel,title,tabs,search,body};return true;
+    shell={layer,shade,panel,title,tabs,search,body,tools,status,sort,filter,clear,yes,no,native,refresh,more};return true;
   }
   function renderHeader(){
     const {title,tabs,search,body}=shell;title.textContent=labels[state.section];
     for(const [id,b] of tabs){const selected=id===state.section;b.setAttribute("aria-selected",String(selected));b.tabIndex=selected?0:-1;}
-    search.placeholder="Search "+labels[state.section].toLowerCase();search.value=state.query;body.setAttribute("aria-labelledby","nl-tab-"+state.section);
+    search.placeholder="Search "+labels[state.section].toLowerCase();search.value=state.query;body.setAttribute("aria-labelledby","nl-tab-"+state.section);syncTools();
+  }
+  function notice(message){
+    if(!shell||!active()||state.phase==="closing")return;
+    shell.status.textContent=message;shell.status.hidden=!message;
+  }
+  function syncTools(){
+    if(!shell)return;const f=fileSection(),d=state.section==="downloads",local=f&&!d&&prefs.getBoolPref(MEDIA_PREF,false);
+    shell.tools.hidden=!f;shell.sort.hidden=!f;shell.sort.value=state.sort;
+    shell.filter.hidden=!d;shell.filter.value=state.filter;
+    shell.clear.hidden=!d||confirmation;shell.clear.disabled=clearing||!win.__nocturneLibraryServices?.downloads?.getSnapshot().some(r=>r.clearable);
+    shell.yes.hidden=shell.no.hidden=!d||!confirmation;shell.yes.disabled=shell.no.disabled=clearing;
+    shell.native.hidden=!d;shell.refresh.hidden=!local;
+  }
+  async function clearDownloads(){
+    if(!confirmation||clearing||state.section!=="downloads")return;
+    const source=win.__nocturneLibraryServices,token=++actionSerial;clearing=true;syncTools();
+    try{
+      const result=await source.downloads.clearCompleted();
+      if(token===actionSerial&&active()&&state.section==="downloads")notice(result.failed?"Some records could not be cleared. Files were not deleted.":"Cleared "+result.removed+" finished records. Files were not deleted.");
+    }catch{if(token===actionSerial)notice("Could not clear completed records.");}
+    finally{if(token===actionSerial){clearing=false;confirmation=false;syncTools();data.retry();}}
+  }
+  function openNativeDownloads(){
+    const command=doc.getElementById("Tools:Downloads");
+    if(!command||typeof command.doCommand!=="function"){notice("Native downloads command unavailable.");return;}
+    closeNow(false);nativeFallback=true;try{command.doCommand();}finally{nativeFallback=false;}
+  }
+  function fileBytes(n){if(!Number.isFinite(n)||n<=0)return "0 B";let i=0;while(n>=1024&&i<3){n/=1024;i++;}return n.toFixed(i?1:0)+" "+["B","KB","MB","GB"][i];}
+  async function fileAction(entry,kind){
+    const row=entry.record,source=win.__nocturneLibraryServices,epoch=state.motionEpoch;
+    if(!row||!source||rows.get(row.id)!==entry||!active()||dragSource||clearing||state.phase==="closing"||renderedSection!==state.section)return;
+    try{
+      const ok=await (row.kind==="local"?source.media.action(row.id,kind):source.downloads.action(row.id,kind));
+      if(!ok&&current(epoch))notice("File unavailable or action not permitted.");
+    }catch{if(current(epoch))notice("Could not "+kind+" the file.");}
+  }
+  function createFileRow(){
+    const node=make("div","nl-file-record"),icon=make("img","nl-file-icon"),copy=make("div","nl-record-text"),title=make("span","nl-record-title"),url=make("span","nl-record-url"),track=make("progress","nl-progress"),actions=make("div","nl-file-actions");
+    icon.alt="";icon.loading="lazy";icon.decoding="async";icon.draggable=false;track.max=100;track.setAttribute("aria-label","Download progress");
+    const entry={node,icon,title,url,track,record:null};
+    const button=(name,kind)=>{const b=make("button","nl-action",name);b.type="button";b.addEventListener("click",()=>void fileAction(entry,kind));actions.append(b);return b;};
+    entry.open=button("Open","open");entry.reveal=button("Folder","reveal");entry.remove=button("Remove","remove");
+    copy.append(title,url,track);node.append(icon,copy,actions);
+    icon.addEventListener("error",()=>{const fallback=entry.record?.icon;if(fallback&&icon.getAttribute("src")!==fallback)icon.src=fallback;else icon.hidden=true;});
+    node.addEventListener("dragstart",e=>{
+      if(e.target.closest?.("button")||entry.record?.kind!=="download"||!win.__nocturneLibraryServices?.downloads.drag(entry.record.id,e,node)){e.preventDefault();return;}
+      dragSource=node;e.stopPropagation();node.setAttribute("data-file-dragging","");
+    });
+    node.addEventListener("dragend",()=>{if(dragSource!==node)return;dragSource=null;node.removeAttribute("data-file-dragging");const p=pendingResult;pendingResult=null;if(pendingClose){pendingClose=false;closeNow(false);return;}if(p?.error)renderError();else if(p)renderResults(p);});
+    return entry;
+  }
+  function updateFileRow(entry,row){
+    entry.record=row;entry.node.dataset.recordId=row.id;entry.title.textContent=row.name;
+    const completed=row.success&&!row.failed&&!row.canceled&&!row.partial&&!row.blocked&&row.exists;
+    const status=row.kind==="local"?"Local folder":downloadFileStatus(row);
+    entry.url.textContent=status+" · "+fileBytes(row.total||row.bytes)+(row.active&&row.speed?" · "+fileBytes(row.speed)+"/s":"");
+    entry.track.hidden=!row.active;if(row.known)entry.track.value=Math.min(100,100*row.bytes/row.total);else entry.track.removeAttribute("value");
+    entry.open.disabled=entry.reveal.disabled=!completed;entry.remove.hidden=row.kind==="local";entry.remove.disabled=!row.clearable;
+    entry.node.draggable=!!(completed&&row.kind==="download");
+    const src=row.thumbnail||row.icon;if(src&&entry.icon.getAttribute("src")!==src){entry.icon.hidden=false;entry.icon.src=src;}
   }
   function placeholder(title,note,action){
     const box=make("div","nl-placeholder");box.append(make("strong","",title),make("p","",note));
@@ -180,6 +334,7 @@ function libraryHistoryCommand(event){
   }
   function renderError(){
     if(!active()||state.phase==="closing"||renderedSection!==state.section)return;
+    if(dragSource){pendingResult={error:true};return;}
     rows.clear();placeholder("Library data unavailable","Try again or use the native Zen Library.",()=>renderBody());
   }
   function activateRow(row,background){
@@ -204,11 +359,13 @@ function libraryHistoryCommand(event){
   }
   function renderResults(result){
     if(!active()||state.phase==="closing"||renderedSection!==state.section)return;
-    const body=shell.body,focusId=doc.activeElement?.dataset?.recordId;
+    if(dragSource){pendingResult=result;return;}syncTools();
+    const body=shell.body,focusId=doc.activeElement?.closest?.("[data-record-id]")?.dataset?.recordId,focused=doc.activeElement;
     const oldScroll=body.scrollTop,ordered=[],live=new Set();let lastDay=null;
     for(const row of result.rows){
       if(live.has(row.id))continue;live.add(row.id);
-      let entry=rows.get(row.id);if(!entry){entry=createRow();rows.set(row.id,entry);}
+      let entry=rows.get(row.id);if(!entry){entry=fileSection()?createFileRow():createRow();rows.set(row.id,entry);}
+      if(fileSection()){updateFileRow(entry,row);ordered.push(entry.node);continue;}
       entry.record=row;entry.node.dataset.recordId=row.id;
       entry.title.textContent=row.title;entry.url.textContent=row.url;
       const safe=libraryWebURL(row.url);entry.node.disabled=row.kind==="history"&&!safe;
@@ -223,17 +380,19 @@ function libraryHistoryCommand(event){
     for(const id of rows.keys())if(!live.has(id))rows.delete(id);
     if(!ordered.length){placeholder(state.query?"No matching results":"Nothing to show","No records in this section for the selected period.");return;}
     if(result.hasMore&&result.limit<500){
-      const more=make("button","nl-action nl-more","Load more");more.type="button";more.addEventListener("click",()=>{more.disabled=true;data.more();});ordered.push(more);
+      shell.more.disabled=false;ordered.push(shell.more);
     }else if(result.hasMore){ordered.push(make("p","nl-limit","Showing up to 500 records. Use search to narrow results."));}
-    body.replaceChildren(...ordered);body.scrollTop=oldScroll;
-    if(focusId&&rows.has(focusId))rows.get(focusId).node.focus({preventScroll:true});
+    // Keep the same DOM node in place for progress-only updates.
+    const unchanged=body.children.length===ordered.length&&ordered.every((n,i)=>body.children[i]===n);
+    if(!unchanged){const keep=new Set(ordered);for(const child of [...body.children])if(!keep.has(child))child.remove();
+      for(let i=0;i<ordered.length;i++)if(body.children[i]!==ordered[i])body.insertBefore(ordered[i],body.children[i]||null);body.scrollTop=oldScroll;
+      if(focusId&&rows.has(focusId)){if(focused?.isConnected)focused.focus({preventScroll:true});else rows.get(focusId).node.querySelector?.("button:not([disabled])")?.focus({preventScroll:true});}}
+
   }
   function renderBody(){
     rows.clear();shell.body.scrollTop=0;renderedSection=state.section;
-    const connected=state.section==="history"||state.section==="closed";
-    shell.search.disabled=!connected;
-    if(connected){placeholder("Loading…","Reading native browser records.");data.start(state.section,state.query);}
-    else{data.stop();placeholder(summaries[state.section],"Preview shell — native data and actions will be connected in L5–L6.");}
+    shell.search.disabled=false;notice("");syncTools();
+    placeholder("Loading…","Reading native browser records.");data.start(state.section,state.query);
   }
   function sample(n){const c=win.getComputedStyle(n);return {opacity:c.opacity,transform:c.transform};}
   function cancelMotion(){for(const a of animations)try{a.cancel();}catch{}animations=[];}
@@ -244,7 +403,7 @@ function libraryHistoryCommand(event){
   const current=epoch=>!dead&&state.motionEpoch===epoch;
   function settle(epoch){if(current(epoch)){state=reduceLibrary(state,{type:"MOTION_DONE",epoch});cancelMotion();}}
   function hide(restore=true){
-    data.stop();rows.clear();renderedSection=null;cancelMotion();if(frame)win.cancelAnimationFrame(frame);frame=0;
+    data.stop();rows.clear();renderedSection=null;dragSource=null;pendingResult=null;pendingClose=false;confirmation=false;clearing=false;++actionSerial;cancelMotion();if(frame)win.cancelAnimationFrame(frame);frame=0;
     if(shell){try{if(shell.layer.matches(":popover-open"))shell.layer.hidePopover();}catch{}shell.layer.hidden=true;shell.panel.inert=false;shell.body.replaceChildren();shell.search.value="";}
     const target=returnFocus;returnFocus=null;if(!restore||win.closed)return;
     try{if(target?.isConnected&&typeof target.focus==="function")target.focus({preventScroll:true});else win.gBrowser?.selectedBrowser?.focus();}catch{}
@@ -253,6 +412,8 @@ function libraryHistoryCommand(event){
     if(!active())return;state=reduceLibrary(state,{type:"CLOSE"});state=reduceLibrary(state,{type:"MOTION_DONE",epoch:state.motionEpoch});hide(restore);
   }
   function close(){
+    if(dragSource||clearing)return false;
+    if(confirmation){confirmation=false;syncTools();return true;}
     const next=reduceLibrary(state,{type:"CLOSE"});if(next===state)return false;
     state=next;data.stop();const epoch=state.motionEpoch,panel=sample(shell.panel),shade=sample(shell.shade);
     cancelMotion();shell.panel.inert=true;
@@ -261,13 +422,13 @@ function libraryHistoryCommand(event){
     });return true;
   }
   function open(section="history"){
-    if(dead||!enabled()||!LIBRARY_SECTIONS.includes(section)||!win.gBrowserInit?.delayedStartupFinished||win.fullScreen||privateWindow())return false;
+    if(dead||dragSource||clearing||!enabled()||!LIBRARY_SECTIONS.includes(section)||!win.gBrowserInit?.delayedStartupFinished||win.fullScreen||privateWindow())return false;
     const overlay=win.__nocturneOverlay;
     if(!overlay||!mount()||!geometry()||!overlay.request(OWNER))return false;
     const before=state,next=reduceLibrary(state,{type:"OPEN",section});if(next===state)return true;
     const first=before.phase==="closed",reopening=before.phase==="closing";
     const panel=first?{opacity:0,transform:"translateY(8px) scale(.97)"}:sample(shell.panel),shade=first?{opacity:0}:sample(shell.shade),body=sample(shell.body);
-    data.stop();renderedSection=null;cancelMotion();state=next;const epoch=state.motionEpoch;shell.panel.inert=false;
+    data.stop();renderedSection=null;confirmation=false;pendingResult=null;++actionSerial;cancelMotion();state=next;const epoch=state.motionEpoch;shell.panel.inert=false;
     if(first){returnFocus=doc.activeElement;shell.layer.hidden=false;try{shell.layer.showPopover();}catch{closeNow();return false;}}
     renderHeader();
     if(state.phase==="opening"){
@@ -284,26 +445,33 @@ function libraryHistoryCommand(event){
   function toggle(section="history"){return active()&&state.phase!=="closing"&&state.section===section?close():open(section);}
   function bindOverlay(){
     lease();const overlay=win.__nocturneOverlay;
-    lease=overlay?.register(OWNER,{priority:60,isActive:active,canYield:()=>true,yield(){closeNow(false);return true;},onEscape(){return close()||active();}})||(()=>{});
+    lease=overlay?.register(OWNER,{priority:60,isActive:active,canYield:()=>!dragSource&&!clearing,yield(){if(dragSource||clearing)return false;closeNow(false);return true;},onEscape(){return close()||active();}})||(()=>{});
     if(active()&&!overlay?.request(OWNER))closeNow();
   }
-  function onPref(){if(!enabled())closeNow();}
-  function onTab(){if(active()&&!backgroundAction)closeNow(false);}
-  function onWorkspace(e){if(active()&&e.detail?.phase!=="idle")closeNow(false);}
+  function onPref(){if(!enabled()){if(dragSource)pendingClose=true;else closeNow();}}
+  function onTab(){if(active()&&!backgroundAction){if(dragSource)pendingClose=true;else closeNow(false);}}
+  function onDragStart(e){if(active()&&!shell?.body.contains(e.target))onTab();}
+  function onMediaPref(){if(active()&&["documents","pictures"].includes(state.section)){if(dragSource){pendingClose=true;return;}renderBody();}}
+  function onWorkspace(e){if(active()&&e.detail?.phase!=="idle"){if(dragSource)pendingClose=true;else closeNow(false);}}
   function onCommand(e){
-    if(!enabled()||!prefs.getBoolPref(SHORTCUT,false)||!libraryHistoryCommand(e))return;
-    if(privateWindow()||!win.__nocturneLibraryServices?.historyReady?.())return;
-    if(!toggle("history"))return;
+    if(nativeFallback||!enabled()||privateWindow())return;
+    const service=win.__nocturneLibraryServices;
+    const history=prefs.getBoolPref(SHORTCUT,false)&&libraryHistoryCommand(e)&&service?.historyReady?.();
+    const wantsDownloads=prefs.getBoolPref(DOWNLOADS_SHORTCUT,false)&&libraryDownloadsCommand(e);
+    const downloads=wantsDownloads&&service?.downloads?.isReady?.();
+    if(wantsDownloads&&!downloads&&!dragSource)void service?.downloads?.start?.().catch(()=>{});
+    if(!history&&!downloads)return;
+    if(!toggle(history?"history":"downloads"))return;
     e.preventDefault();e.stopImmediatePropagation();
   }
   function onServicesGone(){if(active())closeNow();}
   function dispose(){
     if(dead)return;closeNow(false);dead=true;data.dispose();lease();cancelMotion();if(frame)win.cancelAnimationFrame(frame);
     for(const [name,fn] of listeners)win.removeEventListener(name,fn,true);
-    try{prefs.removeObserver(PREF,onPref);}catch{}shell?.layer.remove();shell=null;if(win[KEY]===api)delete win[KEY];
+    try{prefs.removeObserver(PREF,onPref);prefs.removeObserver(MEDIA_PREF,onMediaPref);}catch{}shell?.layer.remove();shell=null;if(win[KEY]===api)delete win[KEY];
   }
-  const listeners=[["command",onCommand],["Nocturne:ServicesGone",onServicesGone],["Nocturne:OverlayReady",bindOverlay],["resize",resize],["TabSelect",onTab],["ZenRefined:WorkspaceTransition",onWorkspace],["dragstart",onTab],["unload",dispose]];
+  const listeners=[["command",onCommand],["Nocturne:ServicesGone",onServicesGone],["Nocturne:OverlayReady",bindOverlay],["resize",resize],["TabSelect",onTab],["ZenRefined:WorkspaceTransition",onWorkspace],["dragstart",onDragStart],["unload",dispose]];
   const api={open,toggle,close,getState:()=>({...state}),dispose};
   win[KEY]=api;for(const [name,fn] of listeners)win.addEventListener(name,fn,true);
-  win.addUnloadListener(dispose);prefs.addObserver(PREF,onPref);bindOverlay();
+  win.addUnloadListener(dispose);prefs.addObserver(PREF,onPref);prefs.addObserver(MEDIA_PREF,onMediaPref);bindOverlay();
 })();

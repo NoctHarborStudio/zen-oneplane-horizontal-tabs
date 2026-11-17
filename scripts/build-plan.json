@@ -332,6 +332,10 @@
   ],
   "libraryServices": [
     {
+      "path": "src/services/media-service.mjs",
+      "kind": "esm-inline"
+    },
+    {
       "path": "src/services/downloads-service.mjs",
       "kind": "esm-inline"
     },
@@ -355,6 +359,10 @@
     },
     {
       "path": "src/library/geometry.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/services/media-service.mjs",
       "kind": "esm-inline"
     },
     {

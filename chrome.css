@@ -1996,7 +1996,7 @@
 #nocturne-library-preview::backdrop{background:transparent;}
 #nocturne-library-preview .nl-shade{position:absolute;inset:0;background:#0005;}
 #nocturne-library-preview .nl-panel{
-  position:relative;display:grid;grid-template-rows:auto auto auto minmax(0,1fr);gap:14px;
+  position:relative;display:flex;flex-direction:column;gap:14px;
   box-sizing:border-box;width:min(960px,calc(100% - 40px));height:min(740px,calc(100% - 40px));
   min-width:0;min-height:0;padding:20px;border-radius:16px;overflow:hidden;font:menu;
   color:CanvasText;background:color-mix(in srgb,Canvas 86%,transparent);backdrop-filter:blur(30px);
@@ -2015,8 +2015,8 @@
 #nocturne-library-preview .nl-tab[aria-selected="true"]{background:color-mix(in srgb,currentColor 12%,transparent);}
 #nocturne-library-preview .nl-tab[aria-selected="true"]::after{content:"";position:absolute;bottom:2px;left:25%;right:25%;height:2px;border-radius:2px;background:AccentColor;}
 #nocturne-library-preview .nl-search{appearance:none;box-sizing:border-box;width:100%;min-width:0;min-height:36px;padding:8px 12px;border-radius:9px;border:1px solid color-mix(in srgb,currentColor 13%,transparent);background:color-mix(in srgb,currentColor 6%,transparent);color:inherit;font:inherit;}
-#nocturne-library-preview :is(button,input,[tabindex]):focus-visible{outline:2px solid AccentColor;outline-offset:-2px;}
-#nocturne-library-preview .nl-body{min-height:0;overflow:auto;overscroll-behavior:contain;}
+#nocturne-library-preview :is(button,input,select,[tabindex]):focus-visible{outline:2px solid AccentColor;outline-offset:-2px;}
+#nocturne-library-preview .nl-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;}
 #nocturne-library-preview .nl-placeholder{min-height:100%;display:grid;align-content:center;justify-items:center;gap:8px;text-align:center;padding:16px;box-sizing:border-box;}
 #nocturne-library-preview .nl-placeholder p{max-width:38ch;margin:0;opacity:.65;font-size:12px;}
 @container (max-width:620px){
@@ -2044,6 +2044,22 @@
 #nocturne-library-preview .nl-action{appearance:none;border:1px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:8px;padding:8px 14px;background:transparent;color:inherit;font:inherit;cursor:pointer;}
 #nocturne-library-preview .nl-more{display:block;margin:12px auto;}
 #nocturne-library-preview .nl-limit{text-align:center;}
+
+#nocturne-library-preview .nl-tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:0 4px 4px;}
+#nocturne-library-preview :is(.nl-tools,.nl-status,.nl-progress,.nl-action)[hidden]{display:none!important;}
+#nocturne-library-preview .nl-select{max-width:132px;background:transparent;color:inherit;border:1px solid color-mix(in srgb,currentColor 18%,transparent);border-radius:7px;padding:6px;font:inherit;}
+#nocturne-library-preview .nl-status{font-size:12px;padding:4px 8px;opacity:.8;}
+#nocturne-library-preview .nl-file-record{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 8px;border-radius:9px;}
+#nocturne-library-preview .nl-file-record:hover{background:color-mix(in srgb,currentColor 6%,transparent);}
+#nocturne-library-preview .nl-file-icon{width:32px;height:32px;object-fit:contain;}
+#nocturne-library-preview .nl-file-actions{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;}
+#nocturne-library-preview .nl-file-actions .nl-action{font-size:11px;padding:6px 8px;}
+#nocturne-library-preview .nl-progress{height:4px;width:100%;accent-color:currentColor;}
+#nocturne-library-preview .nl-file-record[data-file-dragging]{opacity:.65;}
+@container (max-width:540px){#nocturne-library-preview .nl-file-record{grid-template-columns:32px minmax(0,1fr);}#nocturne-library-preview .nl-file-actions{grid-column:2;justify-content:flex-start;}}
+
+#nocturne-library-preview .nl-panel > :not(.nl-body){flex-shrink:0;}
+#nocturne-library-preview .nl-file-icon[hidden]{display:block;visibility:hidden;}
 /* Zen Refined — native dock indicator, transient details and page progress. */
 :root[data-zr-downloads-active] zen-download-animation,
 :root[data-zr-downloads-active] .zen-download-box-animation { display:none !important; }

@@ -1,5 +1,57 @@
+// Local file classification and explicitly enabled scan sessions.
+const MEDIA_EXTENSIONS=Object.freeze({
+ documents:Object.freeze(["pdf","txt","md","rtf","doc","docx","odt","xls","xlsx","ods","ppt","pptx","odp","csv","epub"]),
+ pictures:Object.freeze(["png","jpg","jpeg","webp","gif","bmp","avif","heic","heif","tiff","tif","ico","svg"])
+});
+function mediaKind(name){
+ const match=/\.([^.\\/]+)$/.exec(String(name));const ext=match?.[1].toLowerCase();
+ return Object.keys(MEDIA_EXTENSIONS).find(k=>MEDIA_EXTENSIONS[k].includes(ext))||null;
+}
+function mediaPathKey(path,windows=false){
+ const value=String(path);return windows?value.replace(/\\/g,"/").toLowerCase():value;
+}
+function safeRaster(name,size){
+ return /\.(png|jpe?g|webp|avif|gif|bmp)$/i.test(String(name))&&Number.isFinite(size)&&size>0&&size<=2097152;
+}
+function downloadFileStatus(row){
+ return row.blocked?"Blocked":row.active?"Downloading":row.failed?"Failed":row.canceled?"Canceled":row.partial?"Paused":row.success?(row.exists?"Completed":"File missing"):"Stopped";
+}
+function queryDownloadRows(rows,{section="downloads",text="",limit=50,sort="new",filter="all"}={}){
+ const term=String(text).trim().toLowerCase();
+ const list=rows.filter(r=>(section==="downloads"||(r.success&&r.exists&&!r.partial&&!r.blocked&&mediaKind(r.name)===section))&&
+   (!term||r.name.toLowerCase().includes(term))&&(filter==="all"||(filter==="active"?r.active:filter==="completed"?r.success:!r.active&&!r.success)));
+ list.sort((a,b)=>Number(b.active)-Number(a.active)||(sort==="size"?((b.total||b.bytes)-(a.total||a.bytes)):sort==="old"?a.time-b.time:b.time-a.time)||a.id.localeCompare(b.id));
+ return Object.freeze({rows:Object.freeze(list.slice(0,limit)),limit,hasMore:list.length>limit});
+}
+function createMediaService({scan,allowed=()=>true,windows=false,describe,perform}){
+ let dead=false,serial=0,pending=Promise.resolve();const handles=new Map();
+ function open(section,downloadPaths=()=>new Set()){
+   if(dead||!allowed()||!MEDIA_EXTENSIONS[section])throw Error("Media unavailable");
+   let closed=false,owned=new Set(),cache=null,revision=0;
+   async function refresh(){
+     const token=++revision;
+     const task=pending.catch(()=>{}).then(()=>closed||dead||!allowed()||token!==revision?[]:scan(section));
+     pending=task.catch(()=>{});const files=await task;
+     if(closed||dead||!allowed()||token!==revision)return null;
+     for(const id of owned)handles.delete(id);owned.clear();
+     const result=[],seen=new Set(downloadPaths());
+     for(const f of files.slice(0,300)){
+       if(!f?.path||f.cloudPlaceholder||mediaKind(f.path)!==section)continue;
+       const key=mediaPathKey(f.path,windows);if(seen.has(key))continue;seen.add(key);
+       const id="local-"+(++serial),row=describe(f,id);
+       if(!row)continue;
+       handles.set(id,f.path);owned.add(id);result.push(Object.freeze(row));
+     }
+     cache=Object.freeze(result);return cache;
+   }
+   return {refresh,rows:()=>{const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const id of owned)handles.delete(id);owned.clear();cache=null;}};
+ }
+ function action(id,kind){if(dead||!allowed()||!handles.has(id)||!["open","reveal"].includes(kind))return false;return perform(handles.get(id),kind);}
+ function dispose(){dead=true;handles.clear();}
+ return {open,action,dispose};
+}
 // One native list subscription per window, independent of any view.
-  function createDownloadsService({loadList,barrier=Promise.resolve(),onError=()=>{},idPrefix="download"}){
+  function createDownloadsService({loadList,barrier=Promise.resolve(),onError=()=>{},idPrefix="download",describeFile=()=>({}),dragFile=()=>false}){
     let dead=false,source=null,pending=null,detaching=null,ready=false,serial=0;
     const records=new Map(),byId=new Map(),listeners=new Set(),nativeListeners=new Set();
     const report=()=>{try{onError();}catch{}};
@@ -12,7 +64,7 @@
         time:number(Number(d.startTime)),bytes:number(d.currentBytes),total:number(d.totalBytes),speed:number(d.speed),
         known:!!d.hasProgress&&number(d.totalBytes)>0,active:!d.stopped&&!d.succeeded&&!d.error&&!d.canceled,
         success:!!d.succeeded,failed:!!d.error,canceled:!!d.canceled,partial:!!d.hasPartialData,blocked:!!d.hasBlockedData,
-        exists:d.target?.exists!==false,clearable:clearable(d)});
+        exists:d.target?.exists!==false,clearable:clearable(d),kind:"download",...describeFile(d)});
     }
     function emit(kind,d){
       if(dead)return;
@@ -77,6 +129,14 @@
       return false;
     }
     function action(id,kind){return actionNative(byId.get(id),kind);}
+    function pathKeys(windows=false){return new Set([...records.keys()].filter(d=>completed(d)&&d.target?.exists!==false).map(d=>d.target?.path).filter(Boolean).map(p=>windows?String(p).replace(/\\/g,"/").toLowerCase():String(p)));}
+    function drag(id,event,node){const d=byId.get(id);return !!(!dead&&ready&&d&&completed(d)&&dragFile(d,event,node));}
+    async function clearCompleted(){
+      const targets=[...records.keys()].filter(clearable);let removed=0,failed=0;
+      for(const d of targets)try{if(await actionNative(d,"remove"))removed++;}catch{failed++;}
+      return {removed,failed};
+    }
+    function isReady(){return !dead&&ready;}
     function dispose(){
       if(detaching)return detaching;
       dead=true;ready=false;listeners.clear();nativeListeners.clear();records.clear();byId.clear();
@@ -85,7 +145,7 @@
       detaching=(async()=>{try{await pending;}catch{}await detach();})();
       return detaching;
     }
-    return {start,subscribeNative,subscribe,getSnapshot,action,actionNative,remove:d=>actionNative(d,"remove"),dispose};
+    return {start,subscribeNative,subscribe,getSnapshot,action,actionNative,pathKeys,drag,clearCompleted,isReady,remove:d=>actionNative(d,"remove"),dispose};
   }
 // PlacesQuery uses a Map of grouped visits or an array of search results.
   function createHistorySession({createQuery,allowed=()=>true,onChange=()=>{},now=Date.now}){
@@ -150,7 +210,7 @@
     function dispose(){if(dead)return;dead=true;for(const off of [...subscriptions])off();}
     return {query,subscribe,restore,dispose};
   }
-/* Independent native data owner. No UI, commands, scans or disk cache. */
+/* Independent native data owner. No UI, startup scans or disk cache. */
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
@@ -160,7 +220,29 @@
   const load=(path,key)=>ChromeUtils.importESModule(path)[key];
   const privateWindow=()=>load("resource://gre/modules/PrivateBrowsingUtils.sys.mjs","PrivateBrowsingUtils").isWindowPrivate(win);
   const allowed=()=>!dead&&!win.closed&&!privateWindow();
-  const downloads=createDownloadsService({barrier,idPrefix:"download-"+(win.crypto?.randomUUID?.()||String(win.performance.now())),loadList:()=>{
+  const mediaAllowed=()=>allowed()&&Services.prefs.getBoolPref("zen.nocturne.library.local-media",false);
+  const windows=Services.appinfo.OS==="WINNT";
+  const fileFor=path=>new (load("resource://gre/modules/FileUtils.sys.mjs","FileUtils").File)(path);
+  const scanner=()=>Cc["@mozilla.org/zen/library-files;1"].getService(Ci.nsIZenLibraryFiles);
+  const iconFor=path=>"moz-icon://"+(path||".unknown")+"?size=32";
+  function scanMedia(section){
+    const roots=[];
+    for(const key of section==="documents"?["DfltDwnld","Docs"]:["DfltDwnld","Pict"]){
+      try{const f=Services.dirsvc.get(key,Ci.nsIFile);if(f?.path)roots.push(f.path);}catch{}
+    }
+    if(section==="pictures")try{const f=Services.dirsvc.get("Home",Ci.nsIFile);f.append("Pictures");roots.push(f.path);}catch{}
+    return new Promise((resolve,reject)=>{try{scanner().scanMedia([...new Set(roots)],MEDIA_EXTENSIONS[section],2,60,300,files=>resolve(Array.from(files)));}catch(e){reject(e);}});
+  }
+  const media=createMediaService({scan:scanMedia,allowed:mediaAllowed,windows,
+    describe(f,id){const name=f.path.split(/[\\/]/).pop();return {id,kind:"local",name,time:Number(f.lastModified)||0,bytes:Number(f.size)||0,total:Number(f.size)||0,success:true,exists:true,icon:iconFor(f.path),thumbnail:safeRaster(name,Number(f.size))?Services.io.newFileURI(fileFor(f.path)).spec:null};},
+    perform(path,kind){try{const f=fileFor(path);if(!f.exists()||!f.isFile()||scanner().isCloudPlaceholder(path))return false;if(kind==="open")f.launch();else f.reveal();return true;}catch{return false;}}});
+  function dragFile(d,event,node){
+    if(!allowed()||!event?.isTrusted||!d.target?.path||d.target.exists===false)return false;
+    try{const f=fileFor(d.target.path),dt=event.dataTransfer;if(!f.exists()||!f.isFile()||!dt?.mozSetDataAt)return false;
+      dt.mozSetDataAt("application/x-moz-file",f,0);dt.setData("text/uri-list",Services.io.newFileURI(f).spec);dt.effectAllowed="copyMove";dt.addElement?.(node);return true;
+    }catch{return false;}
+  }
+  const downloads=createDownloadsService({describeFile:d=>({icon:iconFor(d.target?.path)}),dragFile,barrier,idPrefix:"download-"+(win.crypto?.randomUUID?.()||String(win.performance.now())),loadList:()=>{
     const D=win.Downloads||load("resource://gre/modules/Downloads.sys.mjs","Downloads");
     return D.getList(privateWindow()?D.PRIVATE:D.PUBLIC);
   },onError:()=>win.console.warn("[Nocturne] Downloads service listener failed")});
@@ -175,7 +257,7 @@
     },
     observe(fn){const topic="sessionstore-closed-objects-changed",observer={observe:fn};Services.obs.addObserver(observer,topic);return()=>Services.obs.removeObserver(observer,topic);}});
   function historyReady(){
-    if(!allowed())return false;
+    try{if(!allowed())return false;}catch{return false;}
     try{const p=load("resource://gre/modules/PlacesQuery.sys.mjs","PlacesQuery")?.prototype;
       return typeof p?.getHistory==="function"&&typeof p.searchHistory==="function"&&typeof p.close==="function"&&typeof win.openTrustedLinkIn==="function";
     }catch{return false;}
@@ -200,12 +282,13 @@
     win.removeEventListener("unload",dispose);
     for(const s of [...historySessions])try{s.close();}catch{}
     try{closedTabs.dispose();}catch{}
+    media.dispose();
     closing=downloads.dispose();win[BARRIER]=closing;
     closing.finally(()=>{if(win[BARRIER]===closing)delete win[BARRIER];});
     if(win[KEY]===api){delete win[KEY];win.dispatchEvent(new win.CustomEvent("Nocturne:ServicesGone"));}
     return closing;
   }
-  const api={downloads,openHistory,historyReady,openHistoryURL,closedTabs,dispose};
+  const api={downloads,openHistory,historyReady,openHistoryURL,closedTabs,media,openMedia:section=>mediaAllowed()?media.open(section,()=>downloads.pathKeys(windows)):null,dispose};
   win[KEY]=api;win.addUnloadListener(dispose);win.addEventListener("unload",dispose,{once:true});
   win.dispatchEvent(new win.CustomEvent("Nocturne:ServicesReady"));
 })();

@@ -644,5 +644,17 @@
     "property": "zen.nocturne.library.history-shortcut",
     "label": "Experimental Library — Ctrl+H and History command",
     "defaultValue": false
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.nocturne.library.downloads-shortcut",
+    "label": "Experimental Library — Ctrl+J and Downloads command",
+    "defaultValue": false
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.nocturne.library.local-media",
+    "label": "Library — scan Downloads, Documents and Pictures folders",
+    "defaultValue": false
   }
 ]

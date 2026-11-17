@@ -1,4 +1,4 @@
-/* Independent native data owner. No UI, commands, scans or disk cache. */
+/* Independent native data owner. No UI, startup scans or disk cache. */
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
@@ -8,7 +8,29 @@
   const load=(path,key)=>ChromeUtils.importESModule(path)[key];
   const privateWindow=()=>load("resource://gre/modules/PrivateBrowsingUtils.sys.mjs","PrivateBrowsingUtils").isWindowPrivate(win);
   const allowed=()=>!dead&&!win.closed&&!privateWindow();
-  const downloads=createDownloadsService({barrier,idPrefix:"download-"+(win.crypto?.randomUUID?.()||String(win.performance.now())),loadList:()=>{
+  const mediaAllowed=()=>allowed()&&Services.prefs.getBoolPref("zen.nocturne.library.local-media",false);
+  const windows=Services.appinfo.OS==="WINNT";
+  const fileFor=path=>new (load("resource://gre/modules/FileUtils.sys.mjs","FileUtils").File)(path);
+  const scanner=()=>Cc["@mozilla.org/zen/library-files;1"].getService(Ci.nsIZenLibraryFiles);
+  const iconFor=path=>"moz-icon://"+(path||".unknown")+"?size=32";
+  function scanMedia(section){
+    const roots=[];
+    for(const key of section==="documents"?["DfltDwnld","Docs"]:["DfltDwnld","Pict"]){
+      try{const f=Services.dirsvc.get(key,Ci.nsIFile);if(f?.path)roots.push(f.path);}catch{}
+    }
+    if(section==="pictures")try{const f=Services.dirsvc.get("Home",Ci.nsIFile);f.append("Pictures");roots.push(f.path);}catch{}
+    return new Promise((resolve,reject)=>{try{scanner().scanMedia([...new Set(roots)],MEDIA_EXTENSIONS[section],2,60,300,files=>resolve(Array.from(files)));}catch(e){reject(e);}});
+  }
+  const media=createMediaService({scan:scanMedia,allowed:mediaAllowed,windows,
+    describe(f,id){const name=f.path.split(/[\\/]/).pop();return {id,kind:"local",name,time:Number(f.lastModified)||0,bytes:Number(f.size)||0,total:Number(f.size)||0,success:true,exists:true,icon:iconFor(f.path),thumbnail:safeRaster(name,Number(f.size))?Services.io.newFileURI(fileFor(f.path)).spec:null};},
+    perform(path,kind){try{const f=fileFor(path);if(!f.exists()||!f.isFile()||scanner().isCloudPlaceholder(path))return false;if(kind==="open")f.launch();else f.reveal();return true;}catch{return false;}}});
+  function dragFile(d,event,node){
+    if(!allowed()||!event?.isTrusted||!d.target?.path||d.target.exists===false)return false;
+    try{const f=fileFor(d.target.path),dt=event.dataTransfer;if(!f.exists()||!f.isFile()||!dt?.mozSetDataAt)return false;
+      dt.mozSetDataAt("application/x-moz-file",f,0);dt.setData("text/uri-list",Services.io.newFileURI(f).spec);dt.effectAllowed="copyMove";dt.addElement?.(node);return true;
+    }catch{return false;}
+  }
+  const downloads=createDownloadsService({describeFile:d=>({icon:iconFor(d.target?.path)}),dragFile,barrier,idPrefix:"download-"+(win.crypto?.randomUUID?.()||String(win.performance.now())),loadList:()=>{
     const D=win.Downloads||load("resource://gre/modules/Downloads.sys.mjs","Downloads");
     return D.getList(privateWindow()?D.PRIVATE:D.PUBLIC);
   },onError:()=>win.console.warn("[Nocturne] Downloads service listener failed")});
@@ -23,7 +45,7 @@
     },
     observe(fn){const topic="sessionstore-closed-objects-changed",observer={observe:fn};Services.obs.addObserver(observer,topic);return()=>Services.obs.removeObserver(observer,topic);}});
   function historyReady(){
-    if(!allowed())return false;
+    try{if(!allowed())return false;}catch{return false;}
     try{const p=load("resource://gre/modules/PlacesQuery.sys.mjs","PlacesQuery")?.prototype;
       return typeof p?.getHistory==="function"&&typeof p.searchHistory==="function"&&typeof p.close==="function"&&typeof win.openTrustedLinkIn==="function";
     }catch{return false;}
@@ -48,12 +70,13 @@
     win.removeEventListener("unload",dispose);
     for(const s of [...historySessions])try{s.close();}catch{}
     try{closedTabs.dispose();}catch{}
+    media.dispose();
     closing=downloads.dispose();win[BARRIER]=closing;
     closing.finally(()=>{if(win[BARRIER]===closing)delete win[BARRIER];});
     if(win[KEY]===api){delete win[KEY];win.dispatchEvent(new win.CustomEvent("Nocturne:ServicesGone"));}
     return closing;
   }
-  const api={downloads,openHistory,historyReady,openHistoryURL,closedTabs,dispose};
+  const api={downloads,openHistory,historyReady,openHistoryURL,closedTabs,media,openMedia:section=>mediaAllowed()?media.open(section,()=>downloads.pathKeys(windows)):null,dispose};
   win[KEY]=api;win.addUnloadListener(dispose);win.addEventListener("unload",dispose,{once:true});
   win.dispatchEvent(new win.CustomEvent("Nocturne:ServicesReady"));
 })();

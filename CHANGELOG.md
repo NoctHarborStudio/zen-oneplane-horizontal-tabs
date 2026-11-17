@@ -1,3 +1,10 @@
+## 0.3.0-preview.42 — Library L5–L7 functional preview
+
+- Connect All Downloads, Documents and Pictures to the shared Downloads service with bounded search, sorting, status, progress, native file icons, open/reveal/remove and confirmed finished-record clearing.
+- Route Dock All Downloads to the Library when it accepts the handoff; retain existing compact Dock and full fallback. Ctrl+J routing remains opt-in; native download history remains reachable.
+- Optional native Zen folder scan only on media section entry/refresh, with limits, path deduplication, cloud exclusion and lazy small raster previews. No private media scans or local-file deletion.
+- Native file drag in Library; existing Bunny drag remains in Dock. Regression coverage for source lifetime, privacy, scan serialization, throttled updates and guarded actions. Live Zen/Sine validation remains a release gate.
+
 ## 0.3.0-preview.41 — Library L4 native History & Recently Closed
 
 - Connect lazy PlacesQuery and source-window SessionStore; native page icons, date groups, search and bounded Load more.

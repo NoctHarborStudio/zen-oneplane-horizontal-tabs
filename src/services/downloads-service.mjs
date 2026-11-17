@@ -1,5 +1,5 @@
 // One native list subscription per window, independent of any view.
-  export function createDownloadsService({loadList,barrier=Promise.resolve(),onError=()=>{},idPrefix="download"}){
+  export function createDownloadsService({loadList,barrier=Promise.resolve(),onError=()=>{},idPrefix="download",describeFile=()=>({}),dragFile=()=>false}){
     let dead=false,source=null,pending=null,detaching=null,ready=false,serial=0;
     const records=new Map(),byId=new Map(),listeners=new Set(),nativeListeners=new Set();
     const report=()=>{try{onError();}catch{}};
@@ -12,7 +12,7 @@
         time:number(Number(d.startTime)),bytes:number(d.currentBytes),total:number(d.totalBytes),speed:number(d.speed),
         known:!!d.hasProgress&&number(d.totalBytes)>0,active:!d.stopped&&!d.succeeded&&!d.error&&!d.canceled,
         success:!!d.succeeded,failed:!!d.error,canceled:!!d.canceled,partial:!!d.hasPartialData,blocked:!!d.hasBlockedData,
-        exists:d.target?.exists!==false,clearable:clearable(d)});
+        exists:d.target?.exists!==false,clearable:clearable(d),kind:"download",...describeFile(d)});
     }
     function emit(kind,d){
       if(dead)return;
@@ -77,6 +77,14 @@
       return false;
     }
     function action(id,kind){return actionNative(byId.get(id),kind);}
+    function pathKeys(windows=false){return new Set([...records.keys()].filter(d=>completed(d)&&d.target?.exists!==false).map(d=>d.target?.path).filter(Boolean).map(p=>windows?String(p).replace(/\\/g,"/").toLowerCase():String(p)));}
+    function drag(id,event,node){const d=byId.get(id);return !!(!dead&&ready&&d&&completed(d)&&dragFile(d,event,node));}
+    async function clearCompleted(){
+      const targets=[...records.keys()].filter(clearable);let removed=0,failed=0;
+      for(const d of targets)try{if(await actionNative(d,"remove"))removed++;}catch{failed++;}
+      return {removed,failed};
+    }
+    function isReady(){return !dead&&ready;}
     function dispose(){
       if(detaching)return detaching;
       dead=true;ready=false;listeners.clear();nativeListeners.clear();records.clear();byId.clear();
@@ -85,5 +93,5 @@
       detaching=(async()=>{try{await pending;}catch{}await detach();})();
       return detaching;
     }
-    return {start,subscribeNative,subscribe,getSnapshot,action,actionNative,remove:d=>actionNative(d,"remove"),dispose};
+    return {start,subscribeNative,subscribe,getSnapshot,action,actionNative,pathKeys,drag,clearCompleted,isReady,remove:d=>actionNative(d,"remove"),dispose};
   }

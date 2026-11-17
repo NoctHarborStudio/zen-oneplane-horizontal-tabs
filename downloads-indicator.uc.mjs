@@ -1,6 +1,6 @@
 // Nocturne preview.40: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="downloads.script",data={version:"0.3.0-preview.41"};
+  const event="downloads.script",data={version:"0.3.0-preview.42"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -424,7 +424,7 @@ try{if(typeof window!=="undefined"){
     dockTitle.textContent="Recent downloads";
     headerNormal=make("div","zr-dock-header-normal");headerConfirm=make("div","zr-dock-header-confirm");headerConfirm.hidden=true;
     const actions=make("div","zr-dock-header-actions");
-    allButton=action("All downloads","zr-dock-all",()=>openDock(true));
+    allButton=action("All downloads","zr-dock-all",()=>{if(window.__nocturneLibrary?.open("downloads"))return;openDock(true);});
     clearButton=action("Clear","zr-dock-clear",()=>setConfirm(true));clearButton.disabled=true;clearButton.hidden=true;
     const close=action("×","zr-dock-close",()=>closeDock(true));close.setAttribute("aria-label","Close downloads");close.setAttribute("title","Close downloads");
     actions.append(allButton,clearButton,close);headerNormal.append(dockTitle,actions);

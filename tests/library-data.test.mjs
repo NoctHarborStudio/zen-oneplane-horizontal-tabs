@@ -27,7 +27,7 @@ test("same-section reopen ignores old observer and service replacement suppresse
  f.replace();f.requests[1].resolve({rows:["stale"]});await tick();assert.deepEqual(f.results,[]);f.data.dispose();
 });
 test("bounded pagination and no queries on other sections",()=>{
- const f=fixture();assert.equal(f.data.start("pictures"),false);assert.equal(f.requests.length,0);f.data.start("closed");
+ const f=fixture();assert.equal(f.data.start("unsupported"),false);assert.equal(f.requests.length,0);f.data.start("closed");
  for(let i=0;i<9;i++)assert.equal(f.data.more(),true);assert.equal(f.data.more(),false);assert.equal(f.requests.at(-1).args.limit,500);f.data.dispose();
 });
 test("history URL rejects privileged, local, credential and executable schemes",()=>{
