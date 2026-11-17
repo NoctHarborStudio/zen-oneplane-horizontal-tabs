@@ -1,6 +1,6 @@
-// Nocturne preview.23: early trace, independent Sine script order.
+// Nocturne preview.25: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.23"};
+  const event="assembly.script",data={version:"0.3.0-preview.25"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -308,7 +308,9 @@ try{if(typeof window!=="undefined"){
     if(dead||playing||settling)return;playing=true;
     try{
       // Prime the resting contour while the startup gate is still held.
+      const preflightAt=now();
       if(one)try{window.__oneplaneLayoutController?.prepareWorkspaceGeometry?.();}catch{}
+      window.__nocturneTrace?.("assembly.preflight",{elapsed:now()-preflightAt},{sample:1000});
       const row=get("oneplane-tabs"),url=get("urlbar-container");
       const bookmarks=get("PersonalToolbar"),items=get("PlacesToolbarItems");
       const floating=floatingBar();

@@ -119,7 +119,7 @@
     } finally {centering=false;}
   }
   function measureToolbarGeometry(force=false){
-    if(dead||!hoverSupported()||!toolbarWrapper)return;
+    if(dead||!hoverSupported()||!toolbarWrapper||(!force&&root.hasAttribute("data-zr-center-motion")))return;
     centerToolbar();
     if(!force&&!adaptiveHeightDirty&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
        window.performance.now()<panelSwitchUntil)return;

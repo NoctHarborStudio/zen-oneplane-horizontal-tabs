@@ -183,7 +183,7 @@
       update();
     }
     const outer=document.createElementNS("http://www.w3.org/1999/xhtml","div");
-    Object.assign(outer.style,{position:"absolute",left:(c.r.left-rr.left)+"px",top:(c.r.top-rr.top)+"px",width:c.r.width+"px",height:c.r.height+"px",transformOrigin:"center",pointerEvents:"none"});
+    Object.assign(outer.style,{position:"absolute",left:(c.r.left-rr.left)+"px",top:(c.r.top-rr.top)+"px",width:c.r.width+"px",height:c.r.height+"px",transformOrigin:"center",willChange:"transform, opacity",pointerEvents:"none"});
     Object.assign(clone.style,{position:"relative",inset:"auto",margin:"0",width:"100%",height:"100%",minWidth:"0",maxWidth:"none",minHeight:"0",maxHeight:"none",transform:"none",translate:"none",scale:"none",opacity:"1"});
     outer.append(clone);layer.append(outer);return outer;
   }

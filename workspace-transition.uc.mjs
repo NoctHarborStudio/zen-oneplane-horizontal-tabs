@@ -1,6 +1,6 @@
-// Nocturne preview.23: early trace, independent Sine script order.
+// Nocturne preview.25: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="workspace.script",data={version:"0.3.0-preview.23"};
+  const event="workspace.script",data={version:"0.3.0-preview.25"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -160,12 +160,21 @@ try{if(typeof window!=="undefined"){
       observer=new win.MutationObserver(()=>{changed=win.performance.now();});
       for(const n of [get("PlacesToolbarItems"),get("oneplane-tabs")||get("tabbrowser-tabs")])if(n)observer.observe(n,{
         childList:true,subtree:true,attributes:true,
-        attributeFilter:["hidden","collapsed","data-selected","data-ready","data-op-overflow-row","data-op-adaptive-compact","data-op-home-open","data-op-split-active"]
+        attributeFilter:["hidden","collapsed","src","data-selected","data-ready","data-op-overflow-row","data-op-adaptive-compact","data-op-home-open","data-op-split-active"]
       });
       // Bounded quiet interval after the native switch and mirror update.
       const quiet=tx.sequence===1?100:65;
       await pause(tx,quiet+10);
-      while(!tx.cancelled&&win.performance.now()-start<400&&win.performance.now()-changed<quiet)await pause(tx,25);
+      let icons=null;
+      while(!tx.cancelled&&win.performance.now()-start<400){
+        // The first incoming workspace may lazily initialize its chrome
+        // images. Keep the swap gate until geometry and icon readiness
+        // agree, with the same bounded fail-open deadline.
+        if(tx.sequence===1)icons=win.__nocturneCenterMotion?.warmIcons?.(get("oneplane-tabs"))||null;
+        if(win.performance.now()-changed>=quiet&&(!icons||icons.pending+icons.missing===0))break;
+        await pause(tx,25);
+      }
+      win.__nocturneTrace?.("workspace.preflight.icons",()=>({sequence:tx.sequence,pending:icons?.pending??null,missing:icons?.missing??null}),{sample:800});
       win.__nocturneTrace?.("workspace.settled",()=>({sequence:tx.sequence,elapsed:win.performance.now()-start,quiet:win.performance.now()-changed}),{sample:1000});
     }finally{observer?.disconnect();}
   }

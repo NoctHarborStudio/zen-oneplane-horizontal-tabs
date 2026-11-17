@@ -1,7 +1,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.23",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.25",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -86,7 +86,10 @@
     };
     const job=store.tail.then(task,task);store.tail=job.catch(()=>{});return job;
   }
-  function scheduleWrite(){if(!writeTimer&&!dead&&!privateWindow())writeTimer=win.setTimeout(()=>{writeTimer=0;void flush();},2200);}
+  function startupPlaying(){return root.getAttribute("data-zr-startup-phase")==="playing";}
+  function scheduleWrite(){if(!writeTimer&&!dead&&!privateWindow())writeTimer=win.setTimeout(()=>{
+    writeTimer=0;if(startupPlaying()){scheduleWrite();return;}void flush();
+  },2200);}
   function flush(){
     if(writeTimer){win.clearTimeout(writeTimer);writeTimer=0;}
     if(writing)return writing.then(()=>dirty?flush():true);
@@ -139,7 +142,12 @@
       measure:n.style?.getPropertyValue("--op-measured-toolbar-height")||null,contour:n.style?.getPropertyValue("--op-contour-height")||null,bmContour:n.style?.getPropertyValue("--zr-bm-contour-height")||null,
       mask:hash(mask),bmMask:hash(bm),centerX:s.getPropertyValue("--zr-center-x").trim()||null,centerAlpha:s.getPropertyValue("--zr-center-alpha").trim()||null,progress:s.getPropertyValue("--zr-workspace-progress").trim()||null,startupProgress:s.getPropertyValue("--zr-startup-progress").trim()||null,startupBase:n.style?.getPropertyValue("--zr-startup-base-opacity")||null,attrs:attrState(n),animations:anim};
   }
+  function frameSummary(){const frame={count:gaps.length,max:gaps.length?round(Math.max(...gaps)):null,over25:gaps.filter(v=>v>25).length};gaps=[];return frame;}
   function snapshot(){
+    // The cold start itself is the workload under investigation. Don't
+    // force dozens of style/layout reads or animation enumerations mid-run.
+    // Keep the frame-gap stream and resume full geometry on handoff.
+    if(startupPlaying())return {root:attrState(root,rootAttrs),frame:frameSummary(),full:false,metrics:{},light:true};
     observeTargets();
     const row=get("oneplane-tabs"),browser=win.gBrowser;
     const counts={native:browser?.tabs?.length??null,visible:browser?.visibleTabs?.length??null,mirror:row?.querySelectorAll(".oneplane-tab").length??null,
@@ -154,7 +162,7 @@
       const images=[...row.querySelectorAll(".oneplane-tab-icon img")];counts.iconsReady=images.filter(n=>!n.hidden&&n.complete&&n.naturalWidth>0).length;counts.iconsTotal=images.length;
       counts.detached=marked("[data-op-detached]");counts.laneGhost=marked("[data-op-lane-ghost]");
     }
-    const frame={count:gaps.length,max:gaps.length?round(Math.max(...gaps)):null,over25:gaps.filter(v=>v>25).length};gaps=[];
+    const frame=frameSummary();
     // Periodic keyframes permit reconstructing a delta stream after ring
     // trimming. Changed properties only; missing nodes are explicit nulls.
     const full=sampleIndex++%10===0,delta={};
@@ -392,7 +400,7 @@
       update();
     }
     const outer=document.createElementNS("http://www.w3.org/1999/xhtml","div");
-    Object.assign(outer.style,{position:"absolute",left:(c.r.left-rr.left)+"px",top:(c.r.top-rr.top)+"px",width:c.r.width+"px",height:c.r.height+"px",transformOrigin:"center",pointerEvents:"none"});
+    Object.assign(outer.style,{position:"absolute",left:(c.r.left-rr.left)+"px",top:(c.r.top-rr.top)+"px",width:c.r.width+"px",height:c.r.height+"px",transformOrigin:"center",willChange:"transform, opacity",pointerEvents:"none"});
     Object.assign(clone.style,{position:"relative",inset:"auto",margin:"0",width:"100%",height:"100%",minWidth:"0",maxWidth:"none",minHeight:"0",maxHeight:"none",transform:"none",translate:"none",scale:"none",opacity:"1"});
     outer.append(clone);layer.append(outer);return outer;
   }
@@ -4706,7 +4714,7 @@ function installTabStrip() {
     }
   }
   function paintContour(force=false){
-    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-op-bookmark-wave")||document.getElementById("PlacesToolbarItems")?.hasAttribute("data-zr-fold-bookmarks")||(!force&&root.hasAttribute("data-zr-workspace-phase")))return;
+    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-op-bookmark-wave")||document.getElementById("PlacesToolbarItems")?.hasAttribute("data-zr-fold-bookmarks")||(!force&&(root.hasAttribute("data-zr-workspace-phase")||root.getAttribute("data-zr-startup-phase")==="playing"||root.hasAttribute("data-zr-center-motion"))))return;
     // A switch can briefly hide or resize native bookmark controls.
     // Retain the last valid mask until the native layout settles.
     if(!force&&contourKey && window.performance.now()<panelSwitchUntil)return;
@@ -4770,7 +4778,7 @@ function installTabStrip() {
     contourFrame=0;
     if(dead)return;
     paintContour();
-    if(now<contourUntil && hoverSupported()&&!root.hasAttribute("data-op-bookmark-wave")&&!root.hasAttribute("data-zr-workspace-phase"))contourFrame=window.requestAnimationFrame(stepContour);
+    if(now<contourUntil && hoverSupported()&&!root.hasAttribute("data-op-bookmark-wave")&&!root.hasAttribute("data-zr-workspace-phase")&&root.getAttribute("data-zr-startup-phase")!=="playing"&&!root.hasAttribute("data-zr-center-motion"))contourFrame=window.requestAnimationFrame(stepContour);
   }
   function scheduleContour(){
     if(!dead&&!contourFrame)contourFrame=window.requestAnimationFrame(stepContour);
@@ -4908,7 +4916,7 @@ function installTabStrip() {
     } finally {centering=false;}
   }
   function measureToolbarGeometry(force=false){
-    if(dead||!hoverSupported()||!toolbarWrapper)return;
+    if(dead||!hoverSupported()||!toolbarWrapper||(!force&&root.hasAttribute("data-zr-center-motion")))return;
     centerToolbar();
     if(!force&&!adaptiveHeightDirty&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
        window.performance.now()<panelSwitchUntil)return;
