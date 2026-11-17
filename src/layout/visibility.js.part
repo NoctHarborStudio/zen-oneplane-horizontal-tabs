@@ -18,6 +18,7 @@
     const state=panelDecision(open,direct,native,window.performance.now(),panelSwitchUntil,panelCloseSince);
     panelCloseSince=state.closeSince;
     if(open!==state.open){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("panel.open.change",()=>({from:open,to:state.open,direct,native,holds:PANEL_HOLD_FLAGS.filter(k=>toolbarWrapper.hasAttribute(k)),pointerInside,wait:state.wait}),{sample:1800});
       toolbarWrapper.toggleAttribute("data-op-panel-open",state.open);
       if(state.open)scheduleContour();
       else clearTabHover(true);
@@ -25,6 +26,7 @@
     if(state.wait>0)panelTimer=window.setTimeout(reconcilePanel,Math.ceil(state.wait)+1);
   }
   function onWorkspaceMotion(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("panel.workspace.motion",()=>({phase:root.getAttribute('data-zr-workspace-phase')}),{sample:1800});
     const phase=root.getAttribute("data-zr-workspace-phase"),active=!!phase;
     toolbarWrapper?.toggleAttribute("oneplane-workspace-hold",active);
     if(active){cancelHoverTimer();cancelIndicatorReturn();}
@@ -35,6 +37,7 @@
   function guardPanelSwitch(){
     if(!hoverSupported())return;
     panelSwitchUntil=window.performance.now()+PANEL_SWITCH_GRACE;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("panel.switch.guard",()=>({until:panelSwitchUntil}),{throttle:120,sample:1200});
     if(panelSwitchTimer)window.clearTimeout(panelSwitchTimer);
     panelSwitchTimer=window.setTimeout(()=>{
       panelSwitchTimer=0;

@@ -112,6 +112,7 @@
     centerToolbar();
     refreshIndicator();
     refreshIslandTitle();
+    typeof window!=="undefined"&&window.__nocturneTrace?.("tabs.sync",()=>({native:tabs.length,mirror:visualTabs.length,groups:groups.length,entries:entries.size,overflow:row.hasAttribute('data-op-overflow-row'),homeOpen,phase:root.getAttribute('data-zr-workspace-phase')}),{throttle:120,sample:1200});
     scheduleGeometry();
   }
 
@@ -133,6 +134,7 @@
     }
   }
   function onSelect() {
+    typeof window!=="undefined"&&window.__nocturneTrace?.("tabs.select",()=>({home:row.hasAttribute('data-op-home-open'),phase:root.getAttribute('data-zr-workspace-phase'),overflow:row.hasAttribute('data-op-overflow-row')}),{sample:1800});
     markHomeTitleActivity();
     indicatorSelectionChanged();
     guardRestoredAddress(browser.selectedTab);

@@ -1,3 +1,9 @@
+// Nocturne preview.6: early trace, independent Sine script order.
+try{if(typeof window!=="undefined"){
+  const event="startup-prefs.script",data={version:"0.3.0-preview.6"};
+  if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
+  else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
+}}catch{}
 /* Zen Refined — startup placeholders. Only these two native prefs are
  * changed, and only while the corresponding Sine option is enabled.
  * Persist ownership across normal exits because the skeleton is created
@@ -26,6 +32,7 @@ function readBackup(){
 }
 function persist(){try{prefs.savePrefFile(null);}catch(error){console.warn("[Zen Refined] Could not save startup preferences",error);}}
 function apply(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("startup-prefs.apply",()=>(null),{sample:1800});
   const backup=readBackup();let changed=false;
   for(const name of TARGETS){
     try{
@@ -41,6 +48,7 @@ function apply(){
   if(changed)persist();
 }
 function restore(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("startup-prefs.restore",()=>(null),{sample:1800});
   const backup=readBackup();let changed=false;
   for(const name of TARGETS){
     const old=backup[name];if(!old||typeof old.user!=="boolean"||typeof old.value!=="boolean")continue;

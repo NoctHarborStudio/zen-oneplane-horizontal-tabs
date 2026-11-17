@@ -3,6 +3,7 @@
     // Ignore late or duplicate dragend after cancel/handled drop.
     const placement=placementAt(event,true);
     const returned=!placement&&pointInSourceWindow(event)&&dragDetachedOnce&&toolbarDragReturnZone(event);
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.end",()=>({returned,placement:!!placement,detached:dragDetachedOnce,handled:dragHandled,drop:dt?.dropEffect,cancelled:!!dt?.mozUserCancelled}),{sample:1800});
     if(!finishNativeDragLifecycle(event,tab))return;
     const handled = dragHandled;
     const wasGroup = Boolean(draggedGroup);

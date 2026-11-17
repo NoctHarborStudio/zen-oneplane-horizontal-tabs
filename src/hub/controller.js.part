@@ -961,6 +961,7 @@
       if(!space){render();return;}if(space.active){contextId=null;confirmation=null;render();return;}
       busy=true;status.textContent="";render();
       try{switchGuard();const transition=window.__zenRefinedWorkspaceTransition;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("hub.workspace.request",()=>({hasTransition:!!transition}),{sample:1800});
         const change=()=>native.changeWorkspaceWithID(id);
         await (typeof transition?.run==="function"?transition.run(change):change());
         if(!destroyed){if(native.activeWorkspace!==id)throw Error("Workspace did not activate");contextId=null;confirmation=null;scheduleHubGeometry();}

@@ -36,6 +36,7 @@
     }
     dragGhost.append(dragGhostBody);
     root.append(dragGhost);
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.ghost.create",()=>({group:!!draggedGroup,members:members.length}),{sample:1800});
   }
   function positionGhost(x, y) {
     if (!dragGhost) return;
@@ -45,6 +46,7 @@
   function hideGhost() {
     dragGhostAnimation?.cancel(); dragGhostAnimation = null;
     if (dragGhost) dragGhost.hidden = true;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.ghost.hide",()=>({exists:!!dragGhost,mode:dragImageMode}),{throttle:100,sample:1200});
     if (dragGhostBody) dragGhostBody.style.removeProperty("transform");
   }
   function showGhost(event, bounce) {
@@ -52,6 +54,7 @@
     if (!dragGhost) return;
     positionGhost(event.clientX, event.clientY);
     dragGhostBody.style.removeProperty("transform");
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.ghost.show",()=>({bounce,mode:dragImageMode}),{sample:1800});
     dragGhost.hidden = false;
     if (bounce && !reducedMotion.matches && prefs.getIntPref("zen.oneplane.animation-duration",160) !== 0) {
       dragGhostAnimation?.cancel();

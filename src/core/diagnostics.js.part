@@ -1,0 +1,144 @@
+/* Nocturne preview.6 diagnostic recorder — read-only chrome telemetry.
+ * No content, URLs, titles, input values or native identifiers. */
+(()=>{
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.6",PREF="zen.nocturne.diagnostics.enabled";
+  if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
+  if(win.__nocturneDiagnostics?.version===VERSION)return;
+  try{win.__nocturneDiagnostics?.dispose?.();}catch{}
+  const id=Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
+  const fileName="nocturne-"+id+".json",entries=[],last=new Map(),nodes=new Map(),removers=[];
+  let seq=0,dropped=0,dead=false,timer=0,writeTimer=0,writing=null,dirty=false,until=0,raf=0,frameLast=0,gaps=[],dir=null,ioError=false,observer=null,nativeContainer=null;
+  const now=()=>win.performance.now(),get=id=>doc.getElementById(id);
+  const enabled=()=>{try{return Services.prefs.getBoolPref(PREF,true);}catch{return true;}};
+  const round=v=>Number.isFinite(v)?Math.round(v*100)/100:null;
+  let pb=null;try{pb=win.PrivateBrowsingUtils||ChromeUtils.importESModule("resource://gre/modules/PrivateBrowsingUtils.sys.mjs").PrivateBrowsingUtils;}catch{}
+  const privateWindow=()=>{try{return root.hasAttribute("privatebrowsingmode")&&root.getAttribute("privatebrowsingmode")!=="false"||!pb||pb.isWindowPrivate(win);}catch{return true;}};
+  function safe(v,d=0){
+    if(v==null||typeof v==="boolean")return v;
+    if(typeof v==="number")return round(v);
+    if(typeof v==="string")return v.slice(0,180);
+    if(d>=6)return null;
+    if(Array.isArray(v))return v.slice(0,32).map(x=>safe(x,d+1));
+    if(typeof v!=="object"||Object.getPrototypeOf(v)!==Object.prototype&&Object.getPrototypeOf(v)!==null)return null;
+    return Object.fromEntries(Object.entries(v).slice(0,45).map(([k,x])=>[k,safe(x,d+1)]));
+  }
+  function exportData(){return {schema:1,version:VERSION,window:id,dropped,events:entries.slice()};}
+  function dump(){return JSON.stringify(exportData(),null,2);}
+  async function persist(){
+    if(privateWindow())return false;
+    if(typeof IOUtils==="undefined"||typeof PathUtils==="undefined"){if(!ioError){ioError=true;win.console.warn("[Nocturne diag] File API unavailable; use __nocturneDiagnostics.dump()");}return false;}
+    try{
+      if(!dir){
+        const path=PathUtils.join(PathUtils.profileDir,"nocturne-diagnostics");
+        await IOUtils.makeDirectory(path,{ignoreExisting:true});dir=path;
+        try{
+          const files=(await IOUtils.getChildren(dir)).filter(p=>/^nocturne-[a-z0-9]+-[a-z0-9]+\.json$/.test(PathUtils.filename(p))).sort();
+          for(const p of files.slice(0,Math.max(0,files.length-7)))if(PathUtils.filename(p)!==fileName)await IOUtils.remove(p,{ignoreAbsent:true});
+        }catch{}
+      }
+      let data=JSON.stringify(exportData());
+      if(data.length>1500000){const count=Math.min(entries.length-1,Math.ceil(entries.length*(1-1200000/data.length)));if(count>0){entries.splice(0,count);dropped+=count;data=JSON.stringify(exportData());}}
+      const path=PathUtils.join(dir,fileName);
+      await IOUtils.writeUTF8(path,data,{tmpPath:path+".tmp"});
+      return true;
+    }catch(error){if(!ioError){ioError=true;try{win.console.warn("[Nocturne diag] Local file unavailable; use __nocturneDiagnostics.dump()",error?.name||"Error");}catch{}}return false;}
+  }
+  function scheduleWrite(){if(!writeTimer&&!dead&&!privateWindow())writeTimer=win.setTimeout(()=>{writeTimer=0;void flush();},900);}
+  function flush(){
+    if(writeTimer){win.clearTimeout(writeTimer);writeTimer=0;}
+    if(writing)return writing.then(()=>dirty?flush():true);
+    if(!dirty)return Promise.resolve(false);
+    dirty=false;
+    writing=persist().finally(()=>{writing=null;if(dirty&&!dead)scheduleWrite();});
+    return writing;
+  }
+  function record(event,detail=null,options={}){
+    if(dead||!enabled())return;
+    try{
+      const t=now(),key=options.key||event,interval=options.throttle||0;
+      if(interval&&last.has(key)&&t-last.get(key)<interval)return;
+      last.set(key,t);
+      const item={n:++seq,t:round(t),event,data:safe(typeof detail==="function"?detail():detail)};
+      entries.push(item);if(entries.length>1600){entries.shift();dropped++;}
+      dirty=true;
+      if(event!=="sample")win.console.info("[Nocturne diag "+id+"] "+JSON.stringify(item));
+      if(options.flush)void flush();else scheduleWrite();
+      if(options.sample)arm(options.sample===true?1600:options.sample);
+    }catch{}
+  }
+  const rootAttrs=["oneplane-active","data-op-startup-ready","data-zr-startup-phase","data-zr-closing","data-zr-workspace-phase","data-op-bookmark-wave","zen-compact-mode","customizing","inDOMFullscreen","inFullscreen"];
+  const attrs=[...rootAttrs,"data-op-panel-open","oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold","oneplane-home-hold","oneplane-workspace-hold","oneplane-download-hold","zen-has-hover","has-popup-menu","zen-compact-mode-active","data-ready","data-op-overflow-row","data-op-adaptive-compact","data-op-dragging","data-op-inline-drag","data-op-lane-drag","data-op-group-pull","data-op-live-drag","data-op-drag-commit","data-op-url-phase","data-op-home-open","data-op-lane-ghost","data-op-detached","data-op-pulling","data-op-drag-follow","data-op-reinsert","data-zr-bm-stable-contour","data-zr-workspace-geometry","data-zr-workspace-motion","data-zr-workspace-surface","data-zr-workspace-page","data-zr-home-covered","data-zr-startup-effect","data-zr-close-effect","hidden","collapsed","open","focused"];
+  const targets=["zen-appcontent-navbar-wrapper","zen-appcontent-navbar-container","oneplane-toolbar-surface","nav-bar","oneplane-tabs","oneplane-overflow-tabs","PersonalToolbar","PlacesToolbarItems","urlbar-container","urlbar","tabbrowser-tabpanels","zen-shared-home","zr-download-indicator"];
+  function attrState(n,keys=attrs){const out={};for(const k of keys)if(n.hasAttribute(k))out[k]=n.getAttribute(k)||true;return out;}
+  function observeTargets(){
+    if(!observer)return;
+    const wanted=new Map(targets.map(k=>[k,get(k)]).filter(x=>x[1]));
+    const row=get("oneplane-tabs"),drag=row?.querySelector("[data-op-drag-follow],[data-op-detached],[data-op-pulling]");
+    const ghost=doc.querySelector(".oneplane-bunny-ghost"),card=row?.querySelector(".oneplane-tab[data-selected]")||row?.querySelector(".oneplane-tab");
+    if(drag)wanted.set("source",drag);if(ghost)wanted.set("ghost",ghost);if(card)wanted.set("card",card);
+    if(wanted.size===nodes.size&&[...wanted].every(([k,n])=>nodes.get(k)===n))return;
+    observer.disconnect();nodes.clear();observer.observe(root,{attributes:true,attributeFilter:rootAttrs});
+    for(const [k,n] of wanted){nodes.set(k,n);observer.observe(n,{attributes:true,attributeFilter:attrs});}
+  }
+  function describe(n){
+    if(!n?.isConnected)return null;
+    const r=n.getBoundingClientRect(),s=win.getComputedStyle(n);
+    let anim=[];try{anim=n.getAnimations().slice(0,6).map(a=>({state:a.playState,t:round(Number(a.currentTime)),duration:round(Number(a.effect?.getTiming()?.duration)),type:a.constructor?.name}));}catch{}
+    const mask=n.style?.getPropertyValue("--op-contour-mask")||"",bm=n.style?.getPropertyValue("--zr-bm-contour-mask")||"";
+    const hash=x=>{let h=0;for(let i=0;i<x.length;i++)h=(Math.imul(h,31)+x.charCodeAt(i))|0;return x.length?x.length+":"+h:null;};
+    return {rect:[round(r.left),round(r.top),round(r.width),round(r.height)],opacity:s.opacity,visibility:s.visibility,display:s.display,translate:s.translate,scale:s.scale,transform:s.transform,transition:s.transitionProperty,height:s.height,
+      measure:n.style?.getPropertyValue("--op-measured-toolbar-height")||null,contour:n.style?.getPropertyValue("--op-contour-height")||null,bmContour:n.style?.getPropertyValue("--zr-bm-contour-height")||null,
+      mask:hash(mask),bmMask:hash(bm),attrs:attrState(n),animations:anim};
+  }
+  function snapshot(){
+    observeTargets();
+    const row=get("oneplane-tabs"),browser=win.gBrowser;
+    const counts={native:browser?.tabs?.length??null,visible:browser?.visibleTabs?.length??null,mirror:row?.querySelectorAll(".oneplane-tab").length??null,
+      selected:row?.querySelectorAll(".oneplane-tab[data-selected]").length??null,ghosts:doc.querySelectorAll(".oneplane-bunny-ghost").length};
+    const metrics={};for(const [key,n] of nodes)metrics[key]=describe(n);
+    // Counts, not labels or favicon URLs. Identify partially applied
+    // startup/closing effects and the simultaneous source/ghost case.
+    if(row){
+      const marked=selector=>row.querySelectorAll(selector).length;
+      counts.startup=marked("[data-zr-startup-effect]");counts.closing=marked("[data-zr-close-effect]");
+      counts.detached=marked("[data-op-detached]");counts.laneGhost=marked("[data-op-lane-ghost]");
+    }
+    const frame={count:gaps.length,max:gaps.length?round(Math.max(...gaps)):null,over25:gaps.filter(v=>v>25).length};gaps=[];
+    return {root:attrState(root,rootAttrs),counts,frame,metrics};
+  }
+  function frameTick(t){raf=0;if(dead||!enabled()||now()>until)return;if(frameLast&&gaps.length<300)gaps.push(t-frameLast);frameLast=t;raf=win.requestAnimationFrame(frameTick);}
+  function sample(){timer=0;if(dead||!enabled()||now()>until){frameLast=0;return;}record("sample",snapshot);timer=win.setTimeout(sample,140);}
+  function arm(ms=1600){if(dead||!enabled())return;until=Math.max(until,now()+Math.min(8000,Math.max(100,ms)));if(!timer)timer=win.setTimeout(sample,50);if(!raf){frameLast=0;raf=win.requestAnimationFrame(frameTick);}}
+  function listen(target,type,fn){target.addEventListener(type,fn,true);removers.push(()=>target.removeEventListener(type,fn,true));}
+  function bindNative(){
+    const tc=win.gBrowser?.tabContainer;if(!tc||nativeContainer===tc)return;nativeContainer=tc;
+    for(const type of ["TabSelect","TabOpen","TabClose","TabMove","TabPinned","TabUnpinned"])listen(tc,type,()=>record("native."+type,()=>({total:win.gBrowser?.tabs?.length,visible:win.gBrowser?.visibleTabs?.length}),{sample:1800}));
+  }
+  function dispose(){
+    if(dead)return;
+    record("diagnostics.dispose",()=>({closed:win.closed,phase:attrState(root,rootAttrs)}),{flush:true});
+    dead=true;observer?.disconnect();for(const off of removers)try{off();}catch{}
+    if(timer)win.clearTimeout(timer);if(writeTimer)win.clearTimeout(writeTimer);if(raf)win.cancelAnimationFrame(raf);
+    timer=writeTimer=raf=0;void flush();
+    if(win.__nocturneTrace===record)delete win.__nocturneTrace;if(win.__nocturneDiagnostics===api)delete win.__nocturneDiagnostics;
+  }
+  const api={version:VERSION,fileName,dump,flush,dispose,mark:label=>record("user.mark",{label:String(label).slice(0,80)},{sample:2500,flush:true})};
+  win.__nocturneDiagnostics=api;win.__nocturneTrace=record;
+  try{
+    observer=new win.MutationObserver(records=>{
+      if(!enabled())return;
+      const changes=[];for(const r of records){const key=r.target===root?"root":[...nodes].find(x=>x[1]===r.target)?.[0];if(key)changes.push({node:key,attr:r.attributeName,value:r.target.getAttribute(r.attributeName)});}
+      if(changes.length)record("chrome.attributes",()=>changes,{sample:1500});
+    });
+    observer.observe(root,{attributes:true,attributeFilter:rootAttrs});
+    for(const type of ["OnePlane:StartupState","ZenRefined:WorkspaceTransition","ZenWorkspaceDataChanged","ZenCompactMode:Toggled","ZenCompactMode:LayoutUpdate","OnePlane:DownloadHostChanged","ZenViewSplitter:SplitViewActivated","ZenViewSplitter:SplitViewDeactivated","sizemodechange","resize","activate","deactivate","beforecustomization","aftercustomization"]){
+      listen(win,type,()=>{if(!enabled())return;bindNative();observeTargets();record("event."+type,()=>({phase:attrState(root,rootAttrs),size:[win.innerWidth,win.innerHeight]}),{sample:2000,throttle:70});});
+    }
+    for(const type of ["beforeunload","pagehide","unload"])listen(win,type,()=>record("window."+type,()=>({phase:attrState(root,rootAttrs),closed:win.closed}),{flush:true}));
+    bindNative();observeTargets();
+    record("diagnostics.ready",()=>({version:VERSION,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished,size:[win.innerWidth,win.innerHeight],private:privateWindow()}),{sample:6000,flush:true});
+    const early=win.__nocturneEarlyTrace||[];delete win.__nocturneEarlyTrace;
+    for(const item of early)record(item.event,()=>({earlyAt:item.t,...item.data}),{sample:2000});
+    win.addUnloadListener(dispose);listen(win,"unload",dispose);
+  }catch(error){record("diagnostics.setup-error",{name:error?.name});dispose();}
+})();

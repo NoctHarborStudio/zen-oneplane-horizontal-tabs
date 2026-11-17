@@ -1,3 +1,147 @@
+/* Nocturne preview.6 diagnostic recorder — read-only chrome telemetry.
+ * No content, URLs, titles, input values or native identifiers. */
+(()=>{
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.6",PREF="zen.nocturne.diagnostics.enabled";
+  if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
+  if(win.__nocturneDiagnostics?.version===VERSION)return;
+  try{win.__nocturneDiagnostics?.dispose?.();}catch{}
+  const id=Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
+  const fileName="nocturne-"+id+".json",entries=[],last=new Map(),nodes=new Map(),removers=[];
+  let seq=0,dropped=0,dead=false,timer=0,writeTimer=0,writing=null,dirty=false,until=0,raf=0,frameLast=0,gaps=[],dir=null,ioError=false,observer=null,nativeContainer=null;
+  const now=()=>win.performance.now(),get=id=>doc.getElementById(id);
+  const enabled=()=>{try{return Services.prefs.getBoolPref(PREF,true);}catch{return true;}};
+  const round=v=>Number.isFinite(v)?Math.round(v*100)/100:null;
+  let pb=null;try{pb=win.PrivateBrowsingUtils||ChromeUtils.importESModule("resource://gre/modules/PrivateBrowsingUtils.sys.mjs").PrivateBrowsingUtils;}catch{}
+  const privateWindow=()=>{try{return root.hasAttribute("privatebrowsingmode")&&root.getAttribute("privatebrowsingmode")!=="false"||!pb||pb.isWindowPrivate(win);}catch{return true;}};
+  function safe(v,d=0){
+    if(v==null||typeof v==="boolean")return v;
+    if(typeof v==="number")return round(v);
+    if(typeof v==="string")return v.slice(0,180);
+    if(d>=6)return null;
+    if(Array.isArray(v))return v.slice(0,32).map(x=>safe(x,d+1));
+    if(typeof v!=="object"||Object.getPrototypeOf(v)!==Object.prototype&&Object.getPrototypeOf(v)!==null)return null;
+    return Object.fromEntries(Object.entries(v).slice(0,45).map(([k,x])=>[k,safe(x,d+1)]));
+  }
+  function exportData(){return {schema:1,version:VERSION,window:id,dropped,events:entries.slice()};}
+  function dump(){return JSON.stringify(exportData(),null,2);}
+  async function persist(){
+    if(privateWindow())return false;
+    if(typeof IOUtils==="undefined"||typeof PathUtils==="undefined"){if(!ioError){ioError=true;win.console.warn("[Nocturne diag] File API unavailable; use __nocturneDiagnostics.dump()");}return false;}
+    try{
+      if(!dir){
+        const path=PathUtils.join(PathUtils.profileDir,"nocturne-diagnostics");
+        await IOUtils.makeDirectory(path,{ignoreExisting:true});dir=path;
+        try{
+          const files=(await IOUtils.getChildren(dir)).filter(p=>/^nocturne-[a-z0-9]+-[a-z0-9]+\.json$/.test(PathUtils.filename(p))).sort();
+          for(const p of files.slice(0,Math.max(0,files.length-7)))if(PathUtils.filename(p)!==fileName)await IOUtils.remove(p,{ignoreAbsent:true});
+        }catch{}
+      }
+      let data=JSON.stringify(exportData());
+      if(data.length>1500000){const count=Math.min(entries.length-1,Math.ceil(entries.length*(1-1200000/data.length)));if(count>0){entries.splice(0,count);dropped+=count;data=JSON.stringify(exportData());}}
+      const path=PathUtils.join(dir,fileName);
+      await IOUtils.writeUTF8(path,data,{tmpPath:path+".tmp"});
+      return true;
+    }catch(error){if(!ioError){ioError=true;try{win.console.warn("[Nocturne diag] Local file unavailable; use __nocturneDiagnostics.dump()",error?.name||"Error");}catch{}}return false;}
+  }
+  function scheduleWrite(){if(!writeTimer&&!dead&&!privateWindow())writeTimer=win.setTimeout(()=>{writeTimer=0;void flush();},900);}
+  function flush(){
+    if(writeTimer){win.clearTimeout(writeTimer);writeTimer=0;}
+    if(writing)return writing.then(()=>dirty?flush():true);
+    if(!dirty)return Promise.resolve(false);
+    dirty=false;
+    writing=persist().finally(()=>{writing=null;if(dirty&&!dead)scheduleWrite();});
+    return writing;
+  }
+  function record(event,detail=null,options={}){
+    if(dead||!enabled())return;
+    try{
+      const t=now(),key=options.key||event,interval=options.throttle||0;
+      if(interval&&last.has(key)&&t-last.get(key)<interval)return;
+      last.set(key,t);
+      const item={n:++seq,t:round(t),event,data:safe(typeof detail==="function"?detail():detail)};
+      entries.push(item);if(entries.length>1600){entries.shift();dropped++;}
+      dirty=true;
+      if(event!=="sample")win.console.info("[Nocturne diag "+id+"] "+JSON.stringify(item));
+      if(options.flush)void flush();else scheduleWrite();
+      if(options.sample)arm(options.sample===true?1600:options.sample);
+    }catch{}
+  }
+  const rootAttrs=["oneplane-active","data-op-startup-ready","data-zr-startup-phase","data-zr-closing","data-zr-workspace-phase","data-op-bookmark-wave","zen-compact-mode","customizing","inDOMFullscreen","inFullscreen"];
+  const attrs=[...rootAttrs,"data-op-panel-open","oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold","oneplane-home-hold","oneplane-workspace-hold","oneplane-download-hold","zen-has-hover","has-popup-menu","zen-compact-mode-active","data-ready","data-op-overflow-row","data-op-adaptive-compact","data-op-dragging","data-op-inline-drag","data-op-lane-drag","data-op-group-pull","data-op-live-drag","data-op-drag-commit","data-op-url-phase","data-op-home-open","data-op-lane-ghost","data-op-detached","data-op-pulling","data-op-drag-follow","data-op-reinsert","data-zr-bm-stable-contour","data-zr-workspace-geometry","data-zr-workspace-motion","data-zr-workspace-surface","data-zr-workspace-page","data-zr-home-covered","data-zr-startup-effect","data-zr-close-effect","hidden","collapsed","open","focused"];
+  const targets=["zen-appcontent-navbar-wrapper","zen-appcontent-navbar-container","oneplane-toolbar-surface","nav-bar","oneplane-tabs","oneplane-overflow-tabs","PersonalToolbar","PlacesToolbarItems","urlbar-container","urlbar","tabbrowser-tabpanels","zen-shared-home","zr-download-indicator"];
+  function attrState(n,keys=attrs){const out={};for(const k of keys)if(n.hasAttribute(k))out[k]=n.getAttribute(k)||true;return out;}
+  function observeTargets(){
+    if(!observer)return;
+    const wanted=new Map(targets.map(k=>[k,get(k)]).filter(x=>x[1]));
+    const row=get("oneplane-tabs"),drag=row?.querySelector("[data-op-drag-follow],[data-op-detached],[data-op-pulling]");
+    const ghost=doc.querySelector(".oneplane-bunny-ghost"),card=row?.querySelector(".oneplane-tab[data-selected]")||row?.querySelector(".oneplane-tab");
+    if(drag)wanted.set("source",drag);if(ghost)wanted.set("ghost",ghost);if(card)wanted.set("card",card);
+    if(wanted.size===nodes.size&&[...wanted].every(([k,n])=>nodes.get(k)===n))return;
+    observer.disconnect();nodes.clear();observer.observe(root,{attributes:true,attributeFilter:rootAttrs});
+    for(const [k,n] of wanted){nodes.set(k,n);observer.observe(n,{attributes:true,attributeFilter:attrs});}
+  }
+  function describe(n){
+    if(!n?.isConnected)return null;
+    const r=n.getBoundingClientRect(),s=win.getComputedStyle(n);
+    let anim=[];try{anim=n.getAnimations().slice(0,6).map(a=>({state:a.playState,t:round(Number(a.currentTime)),duration:round(Number(a.effect?.getTiming()?.duration)),type:a.constructor?.name}));}catch{}
+    const mask=n.style?.getPropertyValue("--op-contour-mask")||"",bm=n.style?.getPropertyValue("--zr-bm-contour-mask")||"";
+    const hash=x=>{let h=0;for(let i=0;i<x.length;i++)h=(Math.imul(h,31)+x.charCodeAt(i))|0;return x.length?x.length+":"+h:null;};
+    return {rect:[round(r.left),round(r.top),round(r.width),round(r.height)],opacity:s.opacity,visibility:s.visibility,display:s.display,translate:s.translate,scale:s.scale,transform:s.transform,transition:s.transitionProperty,height:s.height,
+      measure:n.style?.getPropertyValue("--op-measured-toolbar-height")||null,contour:n.style?.getPropertyValue("--op-contour-height")||null,bmContour:n.style?.getPropertyValue("--zr-bm-contour-height")||null,
+      mask:hash(mask),bmMask:hash(bm),attrs:attrState(n),animations:anim};
+  }
+  function snapshot(){
+    observeTargets();
+    const row=get("oneplane-tabs"),browser=win.gBrowser;
+    const counts={native:browser?.tabs?.length??null,visible:browser?.visibleTabs?.length??null,mirror:row?.querySelectorAll(".oneplane-tab").length??null,
+      selected:row?.querySelectorAll(".oneplane-tab[data-selected]").length??null,ghosts:doc.querySelectorAll(".oneplane-bunny-ghost").length};
+    const metrics={};for(const [key,n] of nodes)metrics[key]=describe(n);
+    // Counts, not labels or favicon URLs. Identify partially applied
+    // startup/closing effects and the simultaneous source/ghost case.
+    if(row){
+      const marked=selector=>row.querySelectorAll(selector).length;
+      counts.startup=marked("[data-zr-startup-effect]");counts.closing=marked("[data-zr-close-effect]");
+      counts.detached=marked("[data-op-detached]");counts.laneGhost=marked("[data-op-lane-ghost]");
+    }
+    const frame={count:gaps.length,max:gaps.length?round(Math.max(...gaps)):null,over25:gaps.filter(v=>v>25).length};gaps=[];
+    return {root:attrState(root,rootAttrs),counts,frame,metrics};
+  }
+  function frameTick(t){raf=0;if(dead||!enabled()||now()>until)return;if(frameLast&&gaps.length<300)gaps.push(t-frameLast);frameLast=t;raf=win.requestAnimationFrame(frameTick);}
+  function sample(){timer=0;if(dead||!enabled()||now()>until){frameLast=0;return;}record("sample",snapshot);timer=win.setTimeout(sample,140);}
+  function arm(ms=1600){if(dead||!enabled())return;until=Math.max(until,now()+Math.min(8000,Math.max(100,ms)));if(!timer)timer=win.setTimeout(sample,50);if(!raf){frameLast=0;raf=win.requestAnimationFrame(frameTick);}}
+  function listen(target,type,fn){target.addEventListener(type,fn,true);removers.push(()=>target.removeEventListener(type,fn,true));}
+  function bindNative(){
+    const tc=win.gBrowser?.tabContainer;if(!tc||nativeContainer===tc)return;nativeContainer=tc;
+    for(const type of ["TabSelect","TabOpen","TabClose","TabMove","TabPinned","TabUnpinned"])listen(tc,type,()=>record("native."+type,()=>({total:win.gBrowser?.tabs?.length,visible:win.gBrowser?.visibleTabs?.length}),{sample:1800}));
+  }
+  function dispose(){
+    if(dead)return;
+    record("diagnostics.dispose",()=>({closed:win.closed,phase:attrState(root,rootAttrs)}),{flush:true});
+    dead=true;observer?.disconnect();for(const off of removers)try{off();}catch{}
+    if(timer)win.clearTimeout(timer);if(writeTimer)win.clearTimeout(writeTimer);if(raf)win.cancelAnimationFrame(raf);
+    timer=writeTimer=raf=0;void flush();
+    if(win.__nocturneTrace===record)delete win.__nocturneTrace;if(win.__nocturneDiagnostics===api)delete win.__nocturneDiagnostics;
+  }
+  const api={version:VERSION,fileName,dump,flush,dispose,mark:label=>record("user.mark",{label:String(label).slice(0,80)},{sample:2500,flush:true})};
+  win.__nocturneDiagnostics=api;win.__nocturneTrace=record;
+  try{
+    observer=new win.MutationObserver(records=>{
+      if(!enabled())return;
+      const changes=[];for(const r of records){const key=r.target===root?"root":[...nodes].find(x=>x[1]===r.target)?.[0];if(key)changes.push({node:key,attr:r.attributeName,value:r.target.getAttribute(r.attributeName)});}
+      if(changes.length)record("chrome.attributes",()=>changes,{sample:1500});
+    });
+    observer.observe(root,{attributes:true,attributeFilter:rootAttrs});
+    for(const type of ["OnePlane:StartupState","ZenRefined:WorkspaceTransition","ZenWorkspaceDataChanged","ZenCompactMode:Toggled","ZenCompactMode:LayoutUpdate","OnePlane:DownloadHostChanged","ZenViewSplitter:SplitViewActivated","ZenViewSplitter:SplitViewDeactivated","sizemodechange","resize","activate","deactivate","beforecustomization","aftercustomization"]){
+      listen(win,type,()=>{if(!enabled())return;bindNative();observeTargets();record("event."+type,()=>({phase:attrState(root,rootAttrs),size:[win.innerWidth,win.innerHeight]}),{sample:2000,throttle:70});});
+    }
+    for(const type of ["beforeunload","pagehide","unload"])listen(win,type,()=>record("window."+type,()=>({phase:attrState(root,rootAttrs),closed:win.closed}),{flush:true}));
+    bindNative();observeTargets();
+    record("diagnostics.ready",()=>({version:VERSION,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished,size:[win.innerWidth,win.innerHeight],private:privateWindow()}),{sample:6000,flush:true});
+    const early=win.__nocturneEarlyTrace||[];delete win.__nocturneEarlyTrace;
+    for(const item of early)record(item.event,()=>({earlyAt:item.t,...item.data}),{sample:2000});
+    win.addUnloadListener(dispose);listen(win,"unload",dispose);
+  }catch(error){record("diagnostics.setup-error",{name:error?.name});dispose();}
+})();
 /* OnePlane — local, reversible Zen layout configuration.
  * Runs only in browser.xhtml via Sine; no network or page access.
  */
@@ -70,6 +214,7 @@ function restorePrefs() {
 
 function markClosing(event) {
   if (event.target === document) closing = true;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.markClosing",()=>({closing}),{flush:true});
 }
 
 
@@ -370,6 +515,7 @@ function acquireZenHome(win, services) {
     }catch{return false;}
   }
   function ensurePrimaryHome(){
+    typeof win!=="undefined"&&win.__nocturneTrace?.("home.ensure",()=>(null),{sample:1800});
     if(open||switching||!allowed()||win.__oneplaneWorkspaceProjection||
        root.getAttribute("data-op-startup-ready")==="pending"||
        nativeSearchOpen(win.gURLBar)||!isHomePlaceholder(browser.selectedTab))return false;
@@ -383,6 +529,7 @@ function acquireZenHome(win, services) {
     close(focus);return true;
   }
   function onSelectedTab(){
+    typeof win!=="undefined"&&win.__nocturneTrace?.("home.selected",()=>({open}),{sample:1800});
     nativeCancelTab=null;
     if(switching||!allowed())return;
     if(isHomePlaceholder(browser.selectedTab)){
@@ -392,6 +539,7 @@ function acquireZenHome(win, services) {
   function restore(){if(!covered)return;covered=false;panels.removeAttribute("data-zr-home-covered");if(!oldInert)panels.removeAttribute("inert");host.removeAttribute("data-zr-home-host");}
   function stopMotion(){motion?.cancel();motion=null;}
   function close(restoreFocus=false){
+    typeof win!=="undefined"&&win.__nocturneTrace?.("home.close",()=>({restoreFocus,open}),{sample:1800});
     if(!open)return;open=false;editing=false;adding=false;pinScrollTop=0;pinCustom=false;pinViewMode="home";panel.removeAttribute("data-zh-adding");dragId=null;startupHome=false;homeOnPlaceholder=false;finishSearchVisual();stopMotion();panel.hidden=true;restore();notify();
     if(restoreFocus)try{if(focusHome?.isConnected)focusHome.focus({preventScroll:true});else browser.selectedBrowser?.focus();}catch{}
     focusHome=null;
@@ -923,6 +1071,7 @@ function acquireZenHome(win, services) {
     }
   }
   function switchHomeWorkspace(manager,id){
+    typeof win!=="undefined"&&win.__nocturneTrace?.("home.workspace.request",()=>({hasTransition:!!win.__zenRefinedWorkspaceTransition}),{sample:1800});
     const transition=win.__zenRefinedWorkspaceTransition;
     const native=()=>manager.changeWorkspaceWithID(id);
     return typeof transition?.run==="function"?transition.run(native):native();
@@ -990,6 +1139,7 @@ function acquireZenHome(win, services) {
     if(grid)pinScrollTop=restorePinScroll(grid,pinScrollTop);
   }
   function show(startup=false){
+    typeof win!=="undefined"&&win.__nocturneTrace?.("home.show",()=>({startup,open}),{sample:1800});
     if(open||!allowed())return open;focusHome=doc.activeElement;startupHome=startup;homeOnPlaceholder=isHomePlaceholder(browser.selectedTab);
     try{
       // End an existing native startup search through its token-aware handler.
@@ -1352,6 +1502,7 @@ function installTabStrip() {
     row.toggleAttribute("data-op-bottom-plus",!plan.topPlus);
     bottomLane.hidden=!plan.hasSecondRow;
     if(changed){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("tabs.partition.height",()=>({second:plan.hasSecondRow,mode:plan.mode,left:plan.topLeft.length,right:plan.topRight.length,lower:plan.lower.length,phase:root.getAttribute('data-zr-workspace-phase')}),{sample:1800});
       overflowRevealAnimation?.cancel();overflowRevealAnimation=null;
       if(plan.hasSecondRow&&row.hasAttribute("data-ready")&&cascadeState==="idle"&&!reducedMotion.matches&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0){
         try{overflowRevealAnimation=bottomLane.animate([{opacity:0},{opacity:1}],{duration:160,easing:"ease-out"});}catch{}
@@ -1885,6 +2036,7 @@ function installTabStrip() {
       cascadeAnimations.has(indicator)?parseFloat(window.getComputedStyle(indicator).opacity)||0:0;
     cancelCascadeAnimations();
     cascadeState=opening?"hiding":"showing";
+    typeof window!=="undefined"&&window.__nocturneTrace?.("address.cascade",()=>({state:cascadeState,generation:cascadeGeneration,opening}),{sample:1800});
     row.setAttribute("data-op-cascade",cascadeState);
     row.inert=true;
     setBookmarkWave(cascadeState);
@@ -2000,6 +2152,7 @@ function installTabStrip() {
     addressDiagnosticsFrame=window.requestAnimationFrame(sample);
   }
   function finishAddressPhase(a){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("address.finish",()=>({phase:a.name,engine:a.engine}),{sample:1800});
     if(dead||addressTransition!==a)return;
     a.report?.();
     if(a.name!=="closing-wave"){
@@ -2032,6 +2185,7 @@ function installTabStrip() {
     }
   }
   function beginAddressPhase(name,from,to,duration,layoutWidth=Math.max(from.width,to.width)){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("address.begin",()=>({name,fromWidth:from.width,toWidth:to.width,duration,layoutWidth}),{sample:1800});
     // Cancel only after sampling the previous visual position. Keep
     // the native editor, selection, results and popup anchors intact.
     stopAddressAnimations();
@@ -2407,6 +2561,7 @@ function installTabStrip() {
     dragWatchTimer=window.setTimeout(check,250);
   }
   function cancelNativeDrag(reason){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.lifecycle.cancel",()=>({reason,token:nativeDragToken,mode:dragImageMode}),{sample:1800});
     nativeDragToken=null;nativeDragIdentity=null;stopNativeDragWatch();
     dragHandled=true;dragStartPoint=null;draggedTab=null;draggedGroup=null;
     // Do not reopen the start-page search after an interrupted OS gesture.
@@ -2426,6 +2581,7 @@ function installTabStrip() {
   function startNativeDragLifecycle(event,tab){
     if(dragLifecycle.current())dragLifecycle.cancel("superseded");
     nativeDragToken=dragLifecycle.begin("tab",{onCancel:cancelNativeDrag});
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.lifecycle.begin",()=>({token:nativeDragToken}),{sample:1800});
     if(nativeDragToken!==null){nativeDragIdentity={target:event.target,tab};watchNativeDrag(nativeDragToken);}
     return nativeDragToken!==null;
   }
@@ -3860,6 +4016,7 @@ function installTabStrip() {
       if(!space){render();return;}if(space.active){contextId=null;confirmation=null;render();return;}
       busy=true;status.textContent="";render();
       try{switchGuard();const transition=window.__zenRefinedWorkspaceTransition;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("hub.workspace.request",()=>({hasTransition:!!transition}),{sample:1800});
         const change=()=>native.changeWorkspaceWithID(id);
         await (typeof transition?.run==="function"?transition.run(change):change());
         if(!destroyed){if(native.activeWorkspace!==id)throw Error("Workspace did not activate");contextId=null;confirmation=null;scheduleHubGeometry();}
@@ -4195,6 +4352,7 @@ function installTabStrip() {
     const key=[width,height,base,deep,left,right,...Object.values(settings)].join(":");
     if(key===contourKey)return;
     contourKey=key;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("contour.paint",()=>({force,width,height,base,deep,left,right,overflow:compactRows,phase:root.getAttribute('data-zr-workspace-phase')}),{throttle:100,sample:1200});
     surface.style.setProperty("--op-contour-height",height+"px");
     surface.style.setProperty("--op-contour-mask",contourImage(width,height,base,deep,left,right,settings));
   }
@@ -4346,6 +4504,7 @@ function installTabStrip() {
     adaptiveHeightDirty=false;
     const next=Math.round(Math.max(navbar?.getBoundingClientRect().height||0,row.getBoundingClientRect().height||0)+
       (bookmarks&&!bookmarks.collapsed&&!bookmarks.hidden?bookmarks.getBoundingClientRect().height:0))+"px";
+    if(toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height")!==next)typeof window!=="undefined"&&window.__nocturneTrace?.("geometry.height",()=>({old:toolbarWrapper.style.getPropertyValue('--op-measured-toolbar-height'),next,force,overflow:row.hasAttribute('data-op-overflow-row'),phase:root.getAttribute('data-zr-workspace-phase')}),{sample:1800});
     if(parseFloat(next)>0&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height")!==next)
       toolbarWrapper.style.setProperty("--op-measured-toolbar-height",next);
     refreshIndicator();scheduleContour();
@@ -4356,6 +4515,7 @@ function installTabStrip() {
   }
   // Measure once under the workspace swap gate, before visible motion.
   function prepareWorkspaceGeometry(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("geometry.workspace.prepare",()=>({frame:!!frame,geometryFrame:!!geometryFrame}),{sample:1800});
     if(dead)return;
     if(frame){window.cancelAnimationFrame(frame);frame=0;sync();}
     if(geometryFrame){window.cancelAnimationFrame(geometryFrame);geometryFrame=0;}
@@ -4414,6 +4574,7 @@ function installTabStrip() {
     const state=panelDecision(open,direct,native,window.performance.now(),panelSwitchUntil,panelCloseSince);
     panelCloseSince=state.closeSince;
     if(open!==state.open){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("panel.open.change",()=>({from:open,to:state.open,direct,native,holds:PANEL_HOLD_FLAGS.filter(k=>toolbarWrapper.hasAttribute(k)),pointerInside,wait:state.wait}),{sample:1800});
       toolbarWrapper.toggleAttribute("data-op-panel-open",state.open);
       if(state.open)scheduleContour();
       else clearTabHover(true);
@@ -4421,6 +4582,7 @@ function installTabStrip() {
     if(state.wait>0)panelTimer=window.setTimeout(reconcilePanel,Math.ceil(state.wait)+1);
   }
   function onWorkspaceMotion(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("panel.workspace.motion",()=>({phase:root.getAttribute('data-zr-workspace-phase')}),{sample:1800});
     const phase=root.getAttribute("data-zr-workspace-phase"),active=!!phase;
     toolbarWrapper?.toggleAttribute("oneplane-workspace-hold",active);
     if(active){cancelHoverTimer();cancelIndicatorReturn();}
@@ -4431,6 +4593,7 @@ function installTabStrip() {
   function guardPanelSwitch(){
     if(!hoverSupported())return;
     panelSwitchUntil=window.performance.now()+PANEL_SWITCH_GRACE;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("panel.switch.guard",()=>({until:panelSwitchUntil}),{throttle:120,sample:1200});
     if(panelSwitchTimer)window.clearTimeout(panelSwitchTimer);
     panelSwitchTimer=window.setTimeout(()=>{
       panelSwitchTimer=0;
@@ -4787,6 +4950,7 @@ function installTabStrip() {
     }
     dragGhost.append(dragGhostBody);
     root.append(dragGhost);
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.ghost.create",()=>({group:!!draggedGroup,members:members.length}),{sample:1800});
   }
   function positionGhost(x, y) {
     if (!dragGhost) return;
@@ -4796,6 +4960,7 @@ function installTabStrip() {
   function hideGhost() {
     dragGhostAnimation?.cancel(); dragGhostAnimation = null;
     if (dragGhost) dragGhost.hidden = true;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.ghost.hide",()=>({exists:!!dragGhost,mode:dragImageMode}),{throttle:100,sample:1200});
     if (dragGhostBody) dragGhostBody.style.removeProperty("transform");
   }
   function showGhost(event, bounce) {
@@ -4803,6 +4968,7 @@ function installTabStrip() {
     if (!dragGhost) return;
     positionGhost(event.clientX, event.clientY);
     dragGhostBody.style.removeProperty("transform");
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.ghost.show",()=>({bounce,mode:dragImageMode}),{sample:1800});
     dragGhost.hidden = false;
     if (bounce && !reducedMotion.matches && prefs.getIntPref("zen.oneplane.animation-duration",160) !== 0) {
       dragGhostAnimation?.cancel();
@@ -4921,6 +5087,7 @@ function installTabStrip() {
   function setPull(progress) {
     if (!dragNode) return;
     dragPull = progress;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.pull.paint",()=>({progress,mode:dragImageMode,width:dragWidth,group:!!draggedGroup}),{throttle:100,sample:1200});
     dragNode.toggleAttribute("data-op-pulling", progress > 0);
     dragNode.style.setProperty("--op-pull-width", Math.max(0,dragWidth*(1-.95*progress)).toFixed(2)+"px");
     dragNode.style.setProperty("--op-pull-y", (17*progress).toFixed(2)+"px");
@@ -4956,6 +5123,7 @@ function installTabStrip() {
     node.setAttribute("data-op-reinsert","true");
     const rect = node.getBoundingClientRect();
     const dy = Math.max(-12,Math.min(34,event.clientY-(rect.top+rect.height/2)));
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.insert",()=>({dy,height:rect.height}),{sample:1800});
     // Animate the real card (not just its icon), using individual transforms
     // so horizontal tracking and native drop/slot positioning stay independent.
     const animation = node.animate([
@@ -4977,6 +5145,7 @@ function installTabStrip() {
     // Once OS owns the drag image, never draw a local duplicate on re-entry.
     if(dragImageMode==="outside")return;
     const previous = dragImageMode;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.mode.request",()=>({previous,requested:mode,pull:dragPull,edge:dragEdge,ghost:!!dragGhost&&!dragGhost.hidden}),{sample:1800});
     if (mode === "outside") {
       // Only the OS drag image is painted beyond this browser window.
       makeDragGhost();
@@ -4988,6 +5157,7 @@ function installTabStrip() {
       dragGhost.hidden = false;
       const box = dragGhostBody.getBoundingClientRect();
       const ok = updateNativeDragImage(dragGhostBody,Math.round(box.width/2),Math.round(box.height/2),event);
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.native-image",()=>({ok,width:box.width,height:box.height}),{sample:1800});
       hideGhost();
       if (!ok) { if (previous === "content") showGhost(event,false); return; }
     } else if (previous === "outside") {
@@ -5019,6 +5189,7 @@ function installTabStrip() {
     }
     if (draggedTab && !draggedGroup) measureSplitGroup(splitGroup(draggedTab));
     refreshIndicator();
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.mode.applied",()=>({mode:dragImageMode,previous,detached:dragNode?.hasAttribute('data-op-detached'),laneGhost:dragNode?.hasAttribute('data-op-lane-ghost'),ghost:!!dragGhost&&!dragGhost.hidden,reentry:dragReentry}),{sample:1800});
     refreshIslandTitle();
   }
   function followLocalSource(event, node) {
@@ -5103,6 +5274,7 @@ function installTabStrip() {
     dragGhost.hidden=false;
     positionGhost(event.clientX,event.clientY);
     dragGhostBody.style.transform=pull?"scale("+Math.max(.12,1-.8*pull)+")":"";
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.lane.ghost",()=>({pull,mode:dragImageMode,sourceHidden:dragNode.hasAttribute('data-op-lane-ghost'),detached:dragNode.hasAttribute('data-op-detached'),ghost:!dragGhost.hidden}),{throttle:100,sample:1200});
   }
   function previewLaneDrag(event,tab,entry){
     if(dragShifted.size||row.hasAttribute("data-op-live-drag"))clearLiveDrag();
@@ -5288,6 +5460,7 @@ function installTabStrip() {
                           event.clientX > toolbarWrapper.getBoundingClientRect().right;
       const threshold = dragImageMode === "content" || dragImageMode === "outside" ? .72 : .96;
       const detach = p >= threshold || lateralExit;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.pull.decision",()=>({mode:dragImageMode,within,p,threshold,detach,lateralExit,edge:dragEdge,y:event.clientY,delta:event.clientY-dragEdge,measured:parseFloat(toolbarWrapper.style.getPropertyValue('--op-measured-toolbar-height'))||0,wrapperBottom:toolbarWrapper.getBoundingClientRect().bottom,rowBottom:row.getBoundingClientRect().bottom,navBottom:navbar?.getBoundingClientRect().bottom,detachedOnce:dragDetachedOnce,reentry:dragReentry,lane:useLaneDrop()}),{throttle:85,sample:1000});
       setDragImageMode(detach ? "content" : "inline",event);
       if (dragImageMode === "content") {
         positionGhost(event.clientX,event.clientY);
@@ -5380,6 +5553,7 @@ function installTabStrip() {
     },80);
   }
   function endDragVisual() {
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.visual.end",()=>({mode:dragImageMode,pull:dragPull,detached:dragDetachedOnce,ghost:!!dragGhost&&!dragGhost.hidden,shifted:dragShifted.size}),{sample:1800});
     clearPlacementPreview();
     cancelInsertion();
     const search = dragSearch;
@@ -5430,6 +5604,7 @@ function installTabStrip() {
     const compactWidth = parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab")) || 36;
     dragWidth = group ? (22 + image.querySelectorAll(".oneplane-tab").length*(compactWidth+3)) : compactWidth;
     dragEdge = toolbarWrapper?.getBoundingClientRect().bottom || grabbed.bottom;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.start.geometry",()=>({group:!!group,edge:dragEdge,width:dragWidth,grabX:dragGrabRatio,grabY:dragGrabY,pullDistance:PULL_DISTANCE,overflow:row.hasAttribute('data-op-overflow-row'),panelHeight:toolbarWrapper?.getBoundingClientRect().height}),{sample:1800});
     dragLastPoint = {x:event.clientX,y:event.clientY};
     clearTabHover();
     if (group && (splitGroup(tab) !== group || groupMembers(group).length < 2)) {
@@ -5497,6 +5672,7 @@ function installTabStrip() {
     const group = source?.group();
     if (owner === window && dragNode) { setDragImageMode("inline",event); setPull(0); }
     const dest = previewStripDrag(event, tab) || dropTarget(event);
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.drop",()=>({local:owner===window,group:!!group,dest:!!dest?.native,before:dest?.before,mode:dragImageMode}),{sample:1800});
     if(!dest?.native){
       if(owner===window)source?.markHandled();
       clearLiveDrag();clearDropMarker();return;
@@ -5606,6 +5782,7 @@ function installTabStrip() {
     // Ignore late or duplicate dragend after cancel/handled drop.
     const placement=placementAt(event,true);
     const returned=!placement&&pointInSourceWindow(event)&&dragDetachedOnce&&toolbarDragReturnZone(event);
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.end",()=>({returned,placement:!!placement,detached:dragDetachedOnce,handled:dragHandled,drop:dt?.dropEffect,cancelled:!!dt?.mozUserCancelled}),{sample:1800});
     if(!finishNativeDragLifecycle(event,tab))return;
     const handled = dragHandled;
     const wasGroup = Boolean(draggedGroup);
@@ -5804,6 +5981,7 @@ function installTabStrip() {
     homeIdleTimer=window.setTimeout(()=>{homeIdleTimer=0;homeIdle=true;refreshIslandTitle();},5000);
   }
   function mountHome(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("home.mount",()=>(null),{sample:1800});
     try{homeLease=acquireZenHome(window,Services);}catch(error){console.warn("[OnePlane] Home unavailable",error);}
     island.toggleAttribute("data-op-home-enabled",!!homeLease);island.disabled=!homeLease;
     if(!homeLease)return;
@@ -5840,6 +6018,7 @@ function installTabStrip() {
     homeLease?.show();
   }
   function destroyHome(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("home.destroy",()=>(null),{sample:1800});
     clearHomeIdle();homeUnsubscribe?.();homeUnsubscribe=null;
     window.removeEventListener("OnePlane:StartupState",onHomeStartup);
     island.removeEventListener("click",onHomeTrigger);island.removeEventListener("dblclick",stopHomeDoubleClick);island.removeEventListener("pointerdown",stopHomePointer);
@@ -6357,6 +6536,7 @@ function installTabStrip() {
     centerToolbar();
     refreshIndicator();
     refreshIslandTitle();
+    typeof window!=="undefined"&&window.__nocturneTrace?.("tabs.sync",()=>({native:tabs.length,mirror:visualTabs.length,groups:groups.length,entries:entries.size,overflow:row.hasAttribute('data-op-overflow-row'),homeOpen,phase:root.getAttribute('data-zr-workspace-phase')}),{throttle:120,sample:1200});
     scheduleGeometry();
   }
 
@@ -6378,6 +6558,7 @@ function installTabStrip() {
     }
   }
   function onSelect() {
+    typeof window!=="undefined"&&window.__nocturneTrace?.("tabs.select",()=>({home:row.hasAttribute('data-op-home-open'),phase:root.getAttribute('data-zr-workspace-phase'),overflow:row.hasAttribute('data-op-overflow-row')}),{sample:1800});
     markHomeTitleActivity();
     indicatorSelectionChanged();
     guardRestoredAddress(browser.selectedTab);
@@ -6416,6 +6597,7 @@ function installTabStrip() {
   });
 
   function destroy() {
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.strip.destroy",()=>({dead}),{flush:true});
     if (dead) return;
     dead = true;
     cleanupStep("destroyHome()",()=>{destroyHome();});
@@ -6666,6 +6848,7 @@ function cleanupStep(label,fn){
   try{fn();}catch(error){console.warn("[Nocturne] Cleanup "+label+":",error);}
 }
 function cleanup() {
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.cleanup.begin",()=>({disposed,applied,closing}),{flush:true});
   if (disposed) return;
   disposed = true;
   cleanupStep("active flag",()=>root.removeAttribute("oneplane-active"));
@@ -6720,9 +6903,11 @@ async function initializeFreeAtStartup(){
 }
 
 async function activate() {
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.activate.begin",()=>({reloadingLayout}),{sample:1800});
   try {
     await window.SessionStore?.promiseAllWindowsRestored;
     await window.gZenWorkspaces?.promiseInitialized;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.native.ready",()=>({closed:window.closed}),{sample:1800});
     if (disposed || window.closed || root.hasAttribute("popup-window")) return;
     if(!reloadingLayout)await initializeFreeAtStartup();
     if(disposed||window.closed)return;
@@ -6738,6 +6923,7 @@ async function activate() {
     // Configure the hide target without forcing Compact Mode on.
     manager.hideToolbar();
     removeTabStrip = installTabStrip();
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.strip.installed",()=>({installed:!!removeTabStrip}),{sample:1800});
     // Native state changes and animations remain owned by Zen.
     root.setAttribute("oneplane-active", "true");
     // Publish readiness after activation has allowed geometry and the
@@ -6746,6 +6932,7 @@ async function activate() {
     window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>{
       if(disposed||window.closed)return;
       root.setAttribute("data-op-startup-ready","true");
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.ready",()=>({paintCount:window.windowUtils?.paintCount}),{sample:3000,flush:true});
       if(window.__nocturneLayoutStartup===startupRecord)startupRecord.readyAt=window.performance.now();
       window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
     }));

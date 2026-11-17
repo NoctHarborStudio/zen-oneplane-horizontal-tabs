@@ -68,6 +68,7 @@
     dragGhost.hidden=false;
     positionGhost(event.clientX,event.clientY);
     dragGhostBody.style.transform=pull?"scale("+Math.max(.12,1-.8*pull)+")":"";
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.lane.ghost",()=>({pull,mode:dragImageMode,sourceHidden:dragNode.hasAttribute('data-op-lane-ghost'),detached:dragNode.hasAttribute('data-op-detached'),ghost:!dragGhost.hidden}),{throttle:100,sample:1200});
   }
   function previewLaneDrag(event,tab,entry){
     if(dragShifted.size||row.hasAttribute("data-op-live-drag"))clearLiveDrag();
@@ -253,6 +254,7 @@
                           event.clientX > toolbarWrapper.getBoundingClientRect().right;
       const threshold = dragImageMode === "content" || dragImageMode === "outside" ? .72 : .96;
       const detach = p >= threshold || lateralExit;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.pull.decision",()=>({mode:dragImageMode,within,p,threshold,detach,lateralExit,edge:dragEdge,y:event.clientY,delta:event.clientY-dragEdge,measured:parseFloat(toolbarWrapper.style.getPropertyValue('--op-measured-toolbar-height'))||0,wrapperBottom:toolbarWrapper.getBoundingClientRect().bottom,rowBottom:row.getBoundingClientRect().bottom,navBottom:navbar?.getBoundingClientRect().bottom,detachedOnce:dragDetachedOnce,reentry:dragReentry,lane:useLaneDrop()}),{throttle:85,sample:1000});
       setDragImageMode(detach ? "content" : "inline",event);
       if (dragImageMode === "content") {
         positionGhost(event.clientX,event.clientY);

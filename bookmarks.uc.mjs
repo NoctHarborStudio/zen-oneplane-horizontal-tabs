@@ -1,3 +1,9 @@
+// Nocturne preview.6: early trace, independent Sine script order.
+try{if(typeof window!=="undefined"){
+  const event="bookmarks.script",data={version:"0.3.0-preview.6"};
+  if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
+  else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
+}}catch{}
 /* Zen Refined — Magnetic Bookmarks
  * Native bookmarks only. No page content, network requests or browser preference
  * changes. Reads its own settings and OnePlane's contour preferences.
@@ -172,6 +178,7 @@ function install() {
     const key=[width,height,base,deep,left,right,...Object.values(opt)].join(":");
     if(contourSurface===surface&&contourKey===key)return;
     contourSurface=surface;contourKey=key;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("bookmarks.contour",()=>({force,width,height,base,deep,left,right,phase:root.getAttribute('data-zr-workspace-phase')}),{throttle:100,sample:1200});
     surface.style.setProperty("--zr-bm-contour-height",height+"px");
     surface.style.setProperty("--zr-bm-contour-mask",contourImage(width,height,base,deep,left,right,opt));
     surface.setAttribute("data-zr-bm-stable-contour","true");
@@ -784,6 +791,7 @@ function install() {
     [window,"resize",scheduleContour,false]
   ];
   function destroy() {
+    typeof window!=="undefined"&&window.__nocturneTrace?.("bookmarks.destroy",()=>(null),{flush:true});
     if (dead) return;
     dead = true;
     clear(true);

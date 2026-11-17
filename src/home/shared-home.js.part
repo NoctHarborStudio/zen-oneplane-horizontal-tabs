@@ -295,6 +295,7 @@ function acquireZenHome(win, services) {
     }catch{return false;}
   }
   function ensurePrimaryHome(){
+    typeof win!=="undefined"&&win.__nocturneTrace?.("home.ensure",()=>(null),{sample:1800});
     if(open||switching||!allowed()||win.__oneplaneWorkspaceProjection||
        root.getAttribute("data-op-startup-ready")==="pending"||
        nativeSearchOpen(win.gURLBar)||!isHomePlaceholder(browser.selectedTab))return false;
@@ -308,6 +309,7 @@ function acquireZenHome(win, services) {
     close(focus);return true;
   }
   function onSelectedTab(){
+    typeof win!=="undefined"&&win.__nocturneTrace?.("home.selected",()=>({open}),{sample:1800});
     nativeCancelTab=null;
     if(switching||!allowed())return;
     if(isHomePlaceholder(browser.selectedTab)){
@@ -317,6 +319,7 @@ function acquireZenHome(win, services) {
   function restore(){if(!covered)return;covered=false;panels.removeAttribute("data-zr-home-covered");if(!oldInert)panels.removeAttribute("inert");host.removeAttribute("data-zr-home-host");}
   function stopMotion(){motion?.cancel();motion=null;}
   function close(restoreFocus=false){
+    typeof win!=="undefined"&&win.__nocturneTrace?.("home.close",()=>({restoreFocus,open}),{sample:1800});
     if(!open)return;open=false;editing=false;adding=false;pinScrollTop=0;pinCustom=false;pinViewMode="home";panel.removeAttribute("data-zh-adding");dragId=null;startupHome=false;homeOnPlaceholder=false;finishSearchVisual();stopMotion();panel.hidden=true;restore();notify();
     if(restoreFocus)try{if(focusHome?.isConnected)focusHome.focus({preventScroll:true});else browser.selectedBrowser?.focus();}catch{}
     focusHome=null;
@@ -848,6 +851,7 @@ function acquireZenHome(win, services) {
     }
   }
   function switchHomeWorkspace(manager,id){
+    typeof win!=="undefined"&&win.__nocturneTrace?.("home.workspace.request",()=>({hasTransition:!!win.__zenRefinedWorkspaceTransition}),{sample:1800});
     const transition=win.__zenRefinedWorkspaceTransition;
     const native=()=>manager.changeWorkspaceWithID(id);
     return typeof transition?.run==="function"?transition.run(native):native();
@@ -915,6 +919,7 @@ function acquireZenHome(win, services) {
     if(grid)pinScrollTop=restorePinScroll(grid,pinScrollTop);
   }
   function show(startup=false){
+    typeof win!=="undefined"&&win.__nocturneTrace?.("home.show",()=>({startup,open}),{sample:1800});
     if(open||!allowed())return open;focusHome=doc.activeElement;startupHome=startup;homeOnPlaceholder=isHomePlaceholder(browser.selectedTab);
     try{
       // End an existing native startup search through its token-aware handler.

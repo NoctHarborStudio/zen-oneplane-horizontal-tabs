@@ -1,3 +1,9 @@
+// Nocturne preview.6: early trace, independent Sine script order.
+try{if(typeof window!=="undefined"){
+  const event="downloads.script",data={version:"0.3.0-preview.6"};
+  if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
+  else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
+}}catch{}
 /* Zen Refined — Download Indicator. Native download events, no polling,
  * no interception of downloads, no file/network access. One view per window.
  * Horizontal layout hosts the same view; native sidebar remains the fallback. */
@@ -351,6 +357,7 @@
     const track=make("span","zr-download-track"),f=make("span","zr-download-fill");track.append(f);return [track,f];
   }
   function build(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("downloads.build",()=>(null),{sample:1800});
     node=make("button","zr-download-indicator");node.id="zr-download-indicator";node.type="button";
     node.setAttribute("aria-label","Show download details");node.setAttribute("title","Downloads");node.setAttribute("aria-expanded","false");node.setAttribute("data-state","idle");
     speed=make("span","zr-download-speed");
@@ -647,6 +654,7 @@
     if(node&&node.hasAttribute("panelopen")!==hold)node.toggleAttribute("panelopen",hold);
   }
   function syncHostedHold(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("downloads.hold",()=>({cardOpen,dockOpen,flight:!!flight}),{throttle:150,sample:1000});
     const wrapper=get("zen-appcontent-navbar-wrapper");
     const hold=!dead&&onePlane()&&!!node?.hasAttribute("data-zr-hosted")&&
       !!(cardOpen||dockOpen||flight||dock?.hasAttribute("data-closing"));
@@ -776,6 +784,7 @@
   function added(d){if(!hydrating)fresh.add(d);changed(d);}
   function removed(d){if(history.delete(d)){historyOrder=null;recentOrder=null;}if(batch.delete(d)){if(latest===d)latest=null;schedule(true);}else if(dockOpen||cardOpen)schedule();}
   function teardown(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("downloads.teardown",()=>(null),{flush:true});
     ++epoch;
     if(updateTimer)window.clearTimeout(updateTimer);updateTimer=0;cancelHide();cancelFlight();cancelPanel();cardOpen=dockOpen=false;manualHold=false;sidebarOrigin=false;dock?.removeAttribute("data-closing");syncDownloadHolds();stopFollow();overlayUntil=0;
     if(layoutFrame)window.cancelAnimationFrame(layoutFrame);layoutFrame=0;
