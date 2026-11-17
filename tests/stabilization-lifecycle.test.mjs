@@ -1,35 +1,56 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
+import {createDownloadsService} from "../src/services/downloads-service.mjs";
 const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 const downloads=read("downloads-indicator.uc.mjs");
 const segment=downloads.slice(downloads.indexOf("  async function install(){"),downloads.indexOf("  function sync(){"));
-function downloadFixture(Downloads){
- return new Function("Downloads",`let dead=false,node=null,epoch=0,view=null,list=null,hydrating=false,teardowns=0,events=0;
- const window={Downloads,closed:false};const ChromeUtils={importESModule:()=>({PrivateBrowsingUtils:{isWindowPrivate:()=>false}})};
+function downloadFixture(source){
+ return new Function("source",`let dead=false,node=null,epoch=0,unsubscribeDownloads=null,list=null,hydrating=false,teardowns=0,events=0;
+ const window={__nocturneLibraryServices:{downloads:source},closed:false};
  const console={warn(){}};const root={setAttribute(){}};const ACTIVE="active";let enabledFlag=true;const enabled=()=>enabledFlag;
  function build(){node={};}function added(){events++;}function changed(){events++;}function removed(){events++;}
- function schedule(){}function teardown(){epoch++;node=null;list=null;view=null;hydrating=false;teardowns++;}
+ function schedule(){}function teardown(){epoch++;unsubscribeDownloads?.();unsubscribeDownloads=null;node=null;list=null;hydrating=false;teardowns++;}
  ${segment}
- return {install,disable(){enabledFlag=false;teardown();},enable(){enabledFlag=true;},status:()=>({node:!!node,epoch,teardowns,hydrating,events})};`)(Downloads);
+ return {install,replace(source){teardown();window.__nocturneLibraryServices={downloads:source};},disable(){enabledFlag=false;teardown();},enable(){enabledFlag=true;},status:()=>({node:!!node,epoch,teardowns,hydrating,events})};`)(source);
 }
-test("old rejected download view cannot tear down replacement or replay events",async()=>{
- let rejectOld,oldView,detached=0;
- const oldList={addView:v=>{oldView=v;return new Promise((r,j)=>rejectOld=j);},removeView:async v=>{assert.equal(v,oldView);detached++;}};
- const newList={addView:async()=>{},removeView:async()=>{}};let calls=0;
- const f=downloadFixture({getList:async()=>++calls===1?oldList:newList,PUBLIC:"public"});
- const old=f.install();await Promise.resolve();await Promise.resolve();
- f.disable();f.enable();await f.install();const before=f.status();
- oldView.onDownloadAdded({});rejectOld(Error("late failure"));await old;
- assert.deepEqual(f.status(),before);assert.equal(detached,1);
+function pendingList(){
+ let resolve,reject,enter,view,removed=0;
+ const entered=new Promise(r=>enter=r);
+ const pending=new Promise((r,j)=>{resolve=r;reject=j;});
+ const list={addView(v){view=v;enter();return pending;},async removeView(v){assert.equal(v,view);removed++;}};
+ return {list,entered,resolve,reject,emit(kind,d){view[kind](d);},removed:()=>removed};
+}
+test("old rejected download service cannot tear down replacement or replay events",async()=>{
+ const oldList=pendingList();
+ const source=createDownloadsService({loadList:async()=>oldList.list});
+ const f=downloadFixture(source);const old=f.install();await oldList.entered;
+ const barrier=source.dispose();
+ let newView,addCount=0;
+ const next=createDownloadsService({barrier,loadList:async()=>({async addView(v){newView=v;addCount++;},async removeView(){}})});
+ f.replace(next);const replacement=f.install();
+ oldList.emit("onDownloadAdded",{});assert.equal(addCount,0);
+ oldList.reject(Error("late failure"));await old;await replacement;
+ assert.equal(oldList.removed(),1);assert.equal(addCount,1);
+ const before=f.status();assert.equal(before.node,true);assert.equal(before.events,0);
+ oldList.emit("onDownloadAdded",{});assert.deepEqual(f.status(),before);
+ newView.onDownloadAdded({});assert.equal(f.status().events,1);await next.dispose();
 });
-test("late successful addView is detached even if old teardown already ran",async()=>{
- let resolveOld,oldView,removed=0;
- const oldList={addView:v=>{oldView=v;return new Promise(r=>resolveOld=r);},removeView:async v=>{assert.equal(v,oldView);removed++;}};
- const f=downloadFixture({getList:async()=>oldList,PUBLIC:"public"});
- const old=f.install();await Promise.resolve();await Promise.resolve();f.disable();
- oldView.onDownloadChanged({});resolveOld();await old;
- assert.equal(removed,1);assert.equal(f.status().events,0);assert.equal(f.status().node,false);
+test("late successful addView is detached by the service after Dock teardown",async()=>{
+ const oldList=pendingList(),source=createDownloadsService({loadList:async()=>oldList.list});
+ const f=downloadFixture(source);const old=f.install();await oldList.entered;f.disable();
+ const disposal=source.dispose();oldList.emit("onDownloadChanged",{});oldList.resolve();
+ await old;await disposal;
+ assert.equal(oldList.removed(),1);assert.equal(f.status().events,0);assert.equal(f.status().node,false);
+});
+test("Dock disable and re-enable share the same in-flight native subscription",async()=>{
+ const native=pendingList(),source=createDownloadsService({loadList:async()=>native.list});
+ const f=downloadFixture(source);const old=f.install();await native.entered;
+ f.disable();f.enable();const next=f.install();native.emit("onDownloadAdded",{});native.resolve();
+ await Promise.all([old,next]);assert.equal(f.status().node,true);assert.equal(f.status().events,1);
+ native.emit("onDownloadChanged",{});assert.equal(f.status().events,2);
+ f.disable();native.emit("onDownloadChanged",{});assert.equal(f.status().events,2);
+ assert.equal(native.removed(),0);await source.dispose();assert.equal(native.removed(),1);
 });
 test("layout cleanup continues after feature disposal throws",()=>{
  const src=read("src/core/bootstrap.js.part"),cleanup=src.slice(0,src.indexOf("const controller ="));
