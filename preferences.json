@@ -632,5 +632,11 @@
     "property": "zen.refined.workspace.transition",
     "label": "Center workspace transition (Home and Hub)",
     "defaultValue": true
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.nocturne.library.preview",
+    "label": "Experimental Library shell (preview)",
+    "defaultValue": false
   }
 ]

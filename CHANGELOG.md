@@ -1,3 +1,9 @@
+## 0.3.0-preview.39 — Library L3 experimental shell
+
+- Add independent centered five-section Library preview, accessible tab navigation, responsive client geometry, reduced-motion-aware transitions and overlay arbitration.
+- Disabled by default; enable Experimental Library shell and open via browser-chrome console `window.__nocturneLibrary.open("history")`. No native shortcut interception, IO or file scanning yet.
+- Migrate Dock lifecycle tests to the shared Downloads service; synchronize diagnostic versions and package metadata.
+
 ## 0.3.0-preview.38 — Bunny lifecycle verification
 
 - Cover native/hosted toolbar holds during file drag and animated return in the existing wave fixtures.

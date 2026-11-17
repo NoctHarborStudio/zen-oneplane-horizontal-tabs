@@ -20,7 +20,7 @@ async function assemble(entries) {
       // Only named imports between our pure modules and named exports
       // of function/const declarations are supported by this first-stage
       // compiler. Preserve existing order and closure semantics exactly.
-      source = source.replace(/^import [^\n]+\n/gm, "").replace(/^  export (function|const) /gm, "  $1 ");
+      source = source.replace(/^import [^\n]+\n/gm, "").replace(/^([ \t]*)export (function|const) /gm, "$1$2 ");
       if (/^\s*(import|export)\s/m.test(source)) throw new Error("Unsupported ESM declaration in " + path);
     } else if (kind !== "section") throw new Error("Unknown source kind: " + kind);
     parts.push(source);
@@ -28,7 +28,7 @@ async function assemble(entries) {
   return parts.join("");
 }
 
-for (const [output, entries] of [["layout.uc.mjs", plan.javascript], ["chrome.css", plan.stylesheet], ["overlay.uc.mjs", plan.overlay], ["library-services.uc.mjs", plan.libraryServices]]) {
+for (const [output, entries] of [["layout.uc.mjs", plan.javascript], ["chrome.css", plan.stylesheet], ["overlay.uc.mjs", plan.overlay], ["library-services.uc.mjs", plan.libraryServices], ["library.uc.mjs", plan.library]]) {
   const data = await assemble(entries);
   const path = resolve(root, output);
   if (check) {

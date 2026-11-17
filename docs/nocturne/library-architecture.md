@@ -1,5 +1,5 @@
 # Nocturne Library — implementation RFC
-Status: approved visual direction (prototype 2); architecture / pure state foundation only. No runtime hook is enabled by this commit.
+Status: L3 experimental shell; L0–L2 foundations integrated. Native shortcuts and data are not yet wired.
 Baseline: 050f6f418ef7768f6affef843c7b8137a9ea8e65. Zen source reference: zen-browser/desktop@37e772656a612f19732506b38a4f985bb3cf95a6; verify exact installed Zen 1.24.2b APIs before enabling.
 
 ## Product contract
@@ -53,3 +53,6 @@ Independent overlay.uc.mjs build output; registered Home-search, Hub and Downloa
 
 ## L2 implementation checkpoint (0.3.0-preview.35)
 Shared per-window Downloads service owns the native addView/removeView lifecycle; Dock subscribes to native event replay for existing progress and drag behavior, Library will consume immutable snapshots/opaque IDs. Service is lazy and independent of Dock preference; disposal barrier prevents overlapping views on Sine reload. Open/reveal/remove revalidate membership and state; clear remains native session-list only. PlacesQuery sessions and source-window SessionStore read-only adapter are lazy, bounded, privacy-gated, and disposable. No Places historical download merge or library commands enabled. Real Zen API and live Dock parity still require verification.
+
+## L3 implementation checkpoint (0.3.0-preview.39)
+Independent `library.uc.mjs` entrypoint, opt-in preference `zen.nocturne.library.preview` (false). Open from the browser chrome console with `window.__nocturneLibrary.open("history")`; `toggle(section)` and `close()` available. Center within tabpanels/browser client rect; five sections, focus loop, responsive glass panel and epoch-guarded WAAPI open/close/switch. Shared coordinator owns Escape/handoff; workspace/tab changes and unload release the shell. No native query or shortcut interception yet; placeholder is explicitly labeled. Native Gecko top-layer hit testing, focus behavior, visual timing, and real data are still pending L4–L7.

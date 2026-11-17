@@ -1,0 +1,48 @@
+
+/* Library L3: isolated, responsive browser-chrome preview. */
+#nocturne-library-preview[hidden]{display:none!important;}
+#nocturne-library-preview {
+  position:fixed!important;margin:0!important;padding:0!important;border:0!important;
+  right:auto!important;bottom:auto!important;max-width:none!important;max-height:none!important;
+  overflow:hidden!important;background:transparent!important;color:CanvasText!important;
+  box-sizing:border-box!important;container-type:inline-size;-moz-window-dragging:no-drag!important;
+}
+#nocturne-library-preview:popover-open{display:grid!important;place-items:center;}
+#nocturne-library-preview::backdrop{background:transparent;}
+#nocturne-library-preview .nl-shade{position:absolute;inset:0;background:#0005;}
+#nocturne-library-preview .nl-panel{
+  position:relative;display:grid;grid-template-rows:auto auto auto minmax(0,1fr);gap:14px;
+  box-sizing:border-box;width:min(960px,calc(100% - 40px));height:min(740px,calc(100% - 40px));
+  min-width:0;min-height:0;padding:20px;border-radius:16px;overflow:hidden;font:menu;
+  color:CanvasText;background:color-mix(in srgb,Canvas 86%,transparent);backdrop-filter:blur(30px);
+  border:1px solid color-mix(in srgb,CanvasText 15%,transparent);box-shadow:0 20px 75px #0005;
+}
+#nocturne-library-preview .nl-header,#nocturne-library-preview .nl-nav{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;}
+#nocturne-library-preview .nl-brand{font-size:11px;opacity:.65;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#nocturne-library-preview .nl-title{margin:0;font-size:20px;font-weight:650;text-align:center;}
+#nocturne-library-preview :is(.nl-dismiss,.nl-tab){appearance:none;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;border-radius:9px;min-height:32px;}
+#nocturne-library-preview .nl-dismiss{justify-self:end;width:32px;font-size:23px;}
+#nocturne-library-preview :is(.nl-dismiss,.nl-tab):hover{background:color-mix(in srgb,currentColor 10%,transparent);}
+#nocturne-library-preview .nl-nav-side{display:flex;gap:4px;min-width:0;}
+#nocturne-library-preview .nl-nav-right{justify-content:flex-end;}
+#nocturne-library-preview .nl-tab{padding:5px 10px;font-size:11px;position:relative;}
+#nocturne-library-preview .nl-primary{font-size:14px;font-weight:650;padding-inline:18px;}
+#nocturne-library-preview .nl-tab[aria-selected="true"]{background:color-mix(in srgb,currentColor 12%,transparent);}
+#nocturne-library-preview .nl-tab[aria-selected="true"]::after{content:"";position:absolute;bottom:2px;left:25%;right:25%;height:2px;border-radius:2px;background:AccentColor;}
+#nocturne-library-preview .nl-search{appearance:none;box-sizing:border-box;width:100%;min-width:0;min-height:36px;padding:8px 12px;border-radius:9px;border:1px solid color-mix(in srgb,currentColor 13%,transparent);background:color-mix(in srgb,currentColor 6%,transparent);color:inherit;font:inherit;}
+#nocturne-library-preview :is(button,input,[tabindex]):focus-visible{outline:2px solid AccentColor;outline-offset:-2px;}
+#nocturne-library-preview .nl-body{min-height:0;overflow:auto;overscroll-behavior:contain;}
+#nocturne-library-preview .nl-placeholder{min-height:100%;display:grid;align-content:center;justify-items:center;gap:8px;text-align:center;padding:16px;box-sizing:border-box;}
+#nocturne-library-preview .nl-placeholder p{max-width:38ch;margin:0;opacity:.65;font-size:12px;}
+@container (max-width:620px){
+  #nocturne-library-preview .nl-panel{width:calc(100% - 24px);height:calc(100% - 24px);padding:12px;gap:9px;}
+  #nocturne-library-preview .nl-nav-side{flex-direction:column;gap:2px;}
+  #nocturne-library-preview .nl-tab{padding:4px 5px;}
+  #nocturne-library-preview .nl-title{font-size:16px;}
+}
+@container (max-width:360px){
+  #nocturne-library-preview .nl-panel{width:calc(100% - 16px);height:calc(100% - 16px);padding:8px;}
+  #nocturne-library-preview .nl-brand{font-size:10px;}
+  #nocturne-library-preview .nl-primary{padding-inline:7px;font-size:12px;}
+}
+@media (prefers-reduced-transparency:reduce),(forced-colors:active){#nocturne-library-preview .nl-panel{background:Canvas;backdrop-filter:none;}}

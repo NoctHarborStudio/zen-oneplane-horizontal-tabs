@@ -312,6 +312,10 @@
       "kind": "section"
     },
     {
+      "path": "src/styles/library.css.part",
+      "kind": "section"
+    },
+    {
       "path": "src/styles/refined-features.css.part",
       "kind": "section"
     }
@@ -341,6 +345,20 @@
     },
     {
       "path": "src/services/library-services-runtime.js.part",
+      "kind": "section"
+    }
+  ],
+  "library": [
+    {
+      "path": "src/algorithms/library-state.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/library/geometry.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/library/controller.js.part",
       "kind": "section"
     }
   ]
