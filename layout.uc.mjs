@@ -1,7 +1,7 @@
-/* Nocturne preview.12 diagnostic recorder — read-only chrome telemetry.
+/* Nocturne preview.13 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.12",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.13",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -4559,7 +4559,8 @@ function installTabStrip() {
     // Keep the top short. Include the bottom of the actual tab row
     // (including its reserved hover room), not the bookmarks row.
     const compactRows=row.hasAttribute("data-op-overflow-row");
-    const base=Math.max(1,Math.round(Math.max(nav.bottom,row.getBoundingClientRect().bottom)-wrapper.top-shiftY-(compactRows?0:5)));
+    const trim=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-contour-trim"))||5;
+    const base=Math.max(1,Math.round(Math.max(nav.bottom,row.getBoundingClientRect().bottom)-wrapper.top-shiftY-trim));
     let left=null,right=null,deep=base;
     if(bookmarks && !bookmarks.hidden && !bookmarks.collapsed){
       const style=window.getComputedStyle(bookmarks);

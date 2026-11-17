@@ -19,7 +19,13 @@
     --op-window-drag-room: 16px;
     @media(max-width:760px){--op-window-drag-room:4px;}
     @media(max-width:480px){--op-window-drag-room:4px;}
-    --op-top-row-height:calc(var(--op-height) + 18px);
+    /* Shared row metrics: adding a row never moves the first row. */
+    --op-hover-reserve:18px;
+    --op-hover-bottom-pad:10px;
+    --op-lane-inline-pad:1px;
+    --op-top-row-height:calc(var(--op-height) + var(--op-hover-reserve));
+    --op-row-center:calc((var(--op-top-row-height) - var(--op-hover-bottom-pad)) / 2);
+    --op-contour-trim:5px;
     --op-tab: 36px;
     --op-tab-open: 180px;
     --op-url: 180px;
@@ -79,10 +85,10 @@
 
     #nav-bar {
       overflow:visible!important;
-      min-height:calc(var(--op-height) + 18px) !important;
+      min-height:var(--op-top-row-height) !important;
     }
     #nav-bar-customization-target {
-      min-height:calc(var(--op-height) + 18px) !important;
+      min-height:var(--op-top-row-height) !important;
       display: flex !important;
       align-items: center !important;
       min-width: 0 !important;

@@ -1,6 +1,6 @@
-// Nocturne preview.12: early trace, independent Sine script order.
+// Nocturne preview.13: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="bookmarks.script",data={version:"0.3.0-preview.12"};
+  const event="bookmarks.script",data={version:"0.3.0-preview.13"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -151,7 +151,8 @@ function install() {
     const tr=container?window.getComputedStyle(container).translate:"none";
     const shift=tr&&tr!=="none"?(parseFloat(tr.split(/\s+/)[1])||0):0;
     const width=Math.max(1,Math.round(wr.width)),opt=contourSettings();
-    const base=Math.max(1,Math.round(Math.max(nav.bottom,rr.bottom)-wr.top-shift-(row.hasAttribute("data-op-overflow-row")?0:5)));
+    const trim=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-contour-trim"))||5;
+    const base=Math.max(1,Math.round(Math.max(nav.bottom,rr.bottom)-wr.top-shift-trim));
     let left=null,right=null,deep=base,largest=0;
     const controls=new Set([...list.children,...toolbar.querySelectorAll("toolbarbutton.bookmark-item, #PlacesChevron, #OtherBookmarks")]);
     for(const node of controls){

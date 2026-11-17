@@ -38,10 +38,30 @@ test("window resize and native size mode reflow are lifecycle-owned",()=>{
  assert.deepEqual(calls,["hover","cascade","actions","center","layout","sync","reveal"]);
 });
 
-test("compact lane padding and hidden tracks override the wide lane cascade",()=>{
- assert.ok(tabs.includes("padding-block-end:0!important;"));
- assert.ok(tabs.includes("padding-inline:1px!important;"));
+test("one and two rows share the same card center, padding and final-row reserve",()=>{
+ assert.ok(base.includes("--op-hover-reserve:18px;"));
+ assert.ok(base.includes("--op-hover-bottom-pad:10px;"));
+ assert.ok(base.includes("--op-lane-inline-pad:1px;"));
+ assert.ok(base.includes("--op-row-center:calc((var(--op-top-row-height) - var(--op-hover-bottom-pad)) / 2);"));
+ assert.equal((tabs.match(/padding:0 var\(--op-lane-inline-pad\) var\(--op-hover-bottom-pad\);/g)||[]).length,2);
+ assert.equal((tabs.match(/top:var\(--op-row-center\);/g)||[]).length,2);
+ assert.ok(tabs.includes("top:calc(var(--op-top-row-height) + var(--op-row-center))!important;"));
+ assert.ok(!tabs.includes("padding-block-end:0!important;"));
+ assert.ok(!tabs.includes("top:calc(var(--op-top-row-height)/2)!important;"));
  assert.ok(tabs.includes(".oneplane-island-lane {scrollbar-width:none!important;}"));
+ // Both modes have the same first center and trailing clearance.
+ const height=34,reserve=18,pad=10,card=height-4,pitch=height+reserve,center=(pitch-pad)/2;
+ assert.equal(center,21);
+ for(const rows of [1,2])assert.equal(rows*pitch-((rows-1)*pitch+center+card/2),16);
+});
+test("both contour owners use a fixed row-independent trim",()=>{
+ const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
+ for(const s of [read("src/layout/contour-controller.js.part"),read("bookmarks.uc.mjs")]){
+  assert.ok(s.includes('getPropertyValue("--op-contour-trim")'));
+  assert.ok(!s.includes("compactRows?0:5"));
+  assert.ok(!s.includes('hasAttribute("data-op-overflow-row")?0:5'));
+ }
+ assert.ok(base.includes("--op-contour-trim:5px;"));
 });
 
 

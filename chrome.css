@@ -19,7 +19,13 @@
     --op-window-drag-room: 16px;
     @media(max-width:760px){--op-window-drag-room:4px;}
     @media(max-width:480px){--op-window-drag-room:4px;}
-    --op-top-row-height:calc(var(--op-height) + 18px);
+    /* Shared row metrics: adding a row never moves the first row. */
+    --op-hover-reserve:18px;
+    --op-hover-bottom-pad:10px;
+    --op-lane-inline-pad:1px;
+    --op-top-row-height:calc(var(--op-height) + var(--op-hover-reserve));
+    --op-row-center:calc((var(--op-top-row-height) - var(--op-hover-bottom-pad)) / 2);
+    --op-contour-trim:5px;
     --op-tab: 36px;
     --op-tab-open: 180px;
     --op-url: 180px;
@@ -79,10 +85,10 @@
 
     #nav-bar {
       overflow:visible!important;
-      min-height:calc(var(--op-height) + 18px) !important;
+      min-height:var(--op-top-row-height) !important;
     }
     #nav-bar-customization-target {
-      min-height:calc(var(--op-height) + 18px) !important;
+      min-height:var(--op-top-row-height) !important;
       display: flex !important;
       align-items: center !important;
       min-width: 0 !important;
@@ -474,10 +480,8 @@
       flex: 0 1 auto !important;
       min-width: 0 !important;
       width: calc(var(--op-tab-count, 0) * (var(--op-tab) + 3px) + var(--op-split-count, 0) * 25px + var(--op-tab-open) + 3px) !important;
-      --op-hover-reserve:18px;
-      --op-hover-bottom-pad:10px;
-      height: calc(var(--op-height) + var(--op-hover-reserve)) !important;
-      min-height: calc(var(--op-height) + var(--op-hover-reserve)) !important;
+      height: var(--op-top-row-height) !important;
+      min-height: var(--op-top-row-height) !important;
       align-items: center;
       gap: 3px;
       margin-inline: 2px;
@@ -540,7 +544,7 @@
       gap:3px;
       min-width:0;
       height:100%;
-      padding:0 3px var(--op-hover-bottom-pad);
+      padding:0 var(--op-lane-inline-pad) var(--op-hover-bottom-pad);
       box-sizing:border-box;
       overflow-x:auto;
       overflow-y:hidden;
@@ -560,12 +564,12 @@
     #oneplane-tabs[data-op-show-island]:not([data-op-island-tight]) .oneplane-new-tab {
       position:absolute;right:auto;
       left:min(calc(100% - var(--op-tab)),calc(50% + var(--op-island-width,180px) / 2 + 3px + var(--op-right-plus-offset,100%)));
-      top:calc(50% - var(--op-hover-bottom-pad)/2);translate:0 -50%;
+      top:var(--op-row-center);translate:0 -50%;
       z-index:3;
     }
     #oneplane-tabs[data-op-show-island]:not([data-op-island-tight]) .oneplane-title-island {
       position:absolute;display:flex;align-items:center;justify-content:center;
-      left:50%;top:calc(50% - var(--op-hover-bottom-pad)/2);translate:-50% -50%;
+      left:50%;top:var(--op-row-center);translate:-50% -50%;
       width:var(--op-island-width,180px);height:calc(var(--op-height) - 6px);
       box-sizing:border-box;padding-inline:10px;
       border-radius:999px;
@@ -771,7 +775,6 @@
     }
     /* The second lane is a real part of the tab strip. Its viewport may
        extend beneath the side controls, but it never extends past the window. */
-    #oneplane-tabs[data-op-show-island] {--op-top-row-height:calc(var(--op-height) + var(--op-hover-reserve));}
     #oneplane-tabs[data-op-show-island] .oneplane-tab-list {position:relative;translate:none;}
     #oneplane-tabs .oneplane-overflow-lane[hidden] {display:none!important;}
     #oneplane-tabs[data-op-overflow-row] {
@@ -789,16 +792,15 @@
       translate:-50% 0;justify-content:safe center;
       width:max(0px,calc(var(--op-overflow-width,100%) - 2 * (var(--op-tab) + 3px)));
       height:var(--op-top-row-height);--op-tab-open:var(--op-bottom-open,180px);
+      box-sizing:border-box;align-items:center;
+      padding:0 var(--op-lane-inline-pad) var(--op-hover-bottom-pad);
       overflow-x:auto!important;overflow-y:hidden!important;
     }
-    #oneplane-tabs[data-op-overflow-row] .oneplane-title-island,
-    #oneplane-tabs[data-op-overflow-row] .oneplane-new-tab{
-      top:calc((var(--op-top-row-height) - var(--op-hover-bottom-pad))/2)!important;
-    }
+    /* The first row inherits the same center in both layouts. */
     #oneplane-tabs[data-op-bottom-plus] .oneplane-island-right {margin-inline-end:0!important;}
     #oneplane-tabs[data-op-bottom-plus] .oneplane-new-tab {
       left:calc(50% + var(--op-overflow-width,100%)/2 - var(--op-tab))!important;
-      top:calc(var(--op-top-row-height) + (var(--op-top-row-height) - var(--op-hover-bottom-pad))/2)!important;
+      top:calc(var(--op-top-row-height) + var(--op-row-center))!important;
     }
     #oneplane-tabs[data-op-adaptive-compact] :is(.oneplane-island-left,.oneplane-island-right) {
       --op-tab-open:var(--op-tab);
@@ -820,17 +822,9 @@
     #oneplane-tabs[data-op-lane-drag] .oneplane-island-lane {overflow-x:auto!important;overflow-y:hidden!important;}
     #oneplane-tabs[data-op-lane-drag]:not([data-op-show-island]) .oneplane-tab-list {overflow-x:auto!important;overflow-y:hidden!important;}
 
-    /* Compact rows share the same top-row center as native navigation.
-       Keep all three viewports scrollable without an extra visible track. */
-    #oneplane-tabs[data-op-overflow-row] :is(.oneplane-island-left,.oneplane-island-right) {
-      padding-block-end:0!important;
-      padding-inline:1px!important;
-    }
+    /* All lanes retain the same card center and hover reserve. The
+       dedicated bottom slider uses that reserve without consuming layout. */
     #oneplane-tabs[data-op-overflow-row] .oneplane-island-lane {scrollbar-width:none!important;}
-    #oneplane-tabs[data-op-overflow-row] .oneplane-title-island,
-    #oneplane-tabs[data-op-overflow-row]:not([data-op-bottom-plus]) .oneplane-new-tab {
-      top:calc(var(--op-top-row-height)/2)!important;
-    }
     #oneplane-tabs[data-op-overflow-row] #oneplane-tab-indicator {display:none!important;}
     #oneplane-tabs[data-op-overflow-row] .oneplane-tab[data-selected] {
       box-shadow:inset 0 0 0 1px color-mix(in srgb,currentColor 22%,transparent);

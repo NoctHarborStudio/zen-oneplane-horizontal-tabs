@@ -1,3 +1,9 @@
+## 0.3.0-preview.13 — Consistent row geometry
+
+- Share the same 52px row pitch, 21px vertical center, 10px bottom reserve and 1px horizontal lane inset across single and adaptive two-row modes. The second row extends downward without moving Home or upper cards. Keep the bottom slider in its reserved space.
+- Both contour producers use the same fixed trim regardless of row count. Preserve Magnetic Fold and native row allocation, including compact capacity.
+- Add regression checks for matching first-row center, last-row clearance and contour trim.
+
 ## 0.3.0-preview.12 — Magnetic Fold Home portal
 
 - Fade chrome card proxies according to their scaled bounds and the real Home rectangle, rather than distance to its center alone. Clip the isolated animation layer at the Home boundary as a safety net. Preserve the reversible fold, timings and native layout.
