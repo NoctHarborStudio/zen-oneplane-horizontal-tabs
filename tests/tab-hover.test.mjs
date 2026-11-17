@@ -19,3 +19,17 @@ test("hover progress is registered once and controls equal-axis zoom and exact r
     }
   }
 });
+
+test("Island zoom reserves the exact painted width without descending or revealing titles",async()=>{
+ const css=await readFile(new URL("../src/styles/drag.css.part",import.meta.url),"utf8");
+ const geometry=await readFile(new URL("../src/layout/geometry.js.part",import.meta.url),"utf8");
+ const island=css.slice(css.indexOf("/* Island: grow"),css.indexOf("/* Keep the combined"));
+ assert.ok(island.includes("--op-hover-slot:calc(var(--op-tab) * var(--op-hover-zoom))"));
+ assert.ok(island.includes("scale:var(--op-hover-zoom);translate:0 0;"));
+ assert.ok(island.includes("margin-inline:calc((var(--op-hover-slot) - var(--op-hover-base)) / 2)"));
+ assert.ok(geometry.includes("const hoverReserve=Math.ceil(tabWidth*.20)"));
+ for(const width of [32,36,44])for(const delta of [.12,.20])for(let i=0;i<=100;i++){
+  const zoom=1+delta*i/100,slot=width*zoom,margin=(slot-width)/2;
+  assert.ok(Math.abs(width+2*margin-slot)<1e-9);
+ }
+});

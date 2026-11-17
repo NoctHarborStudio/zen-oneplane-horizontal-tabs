@@ -342,7 +342,7 @@
     #oneplane-tabs[data-op-adaptive-compact] :is(.oneplane-island-left,.oneplane-island-right) .oneplane-tab-title {
       max-width:0!important;opacity:0!important;
     }
-    #oneplane-tabs[data-op-adaptive-compact] :is(.oneplane-island-left,.oneplane-island-right) .oneplane-tab {
+    #oneplane-tabs[data-op-adaptive-compact]:not([data-op-hover-mode="island"]) :is(.oneplane-island-left,.oneplane-island-right) .oneplane-tab {
       --op-hover-zoom-delta:.05!important;--op-hover-descent:3px!important;
     }
     #oneplane-tabs[data-op-overflow-row] .oneplane-island-lane {

@@ -87,18 +87,31 @@
       --op-hover-zoom-delta:.05;
       --op-hover-descent:1px;
     }
-    #oneplane-tabs[data-op-hover-mode="island"]:not([data-op-dragging]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) {
-      scale:1.05;
-      translate:0 3px;
+    /* Island: grow the icon card and its exact horizontal slot together.
+       The centered Home remains fixed, while neighbors move in normal flow.
+       No title expansion or vertical translation in this mode. */
+    #oneplane-tabs[data-op-hover-mode="island"]:not([data-op-dragging]) .oneplane-tab:not([data-op-reinsert]) {
+      --op-hover-zoom-delta:.20;
+      --op-hover-zoom:calc(1 + var(--op-hover-progress) * var(--op-hover-zoom-delta));
+      --op-hover-slot:calc(var(--op-tab) * var(--op-hover-zoom));
+      --op-hover-base:var(--op-tab);
+      width:var(--op-hover-base);flex-basis:var(--op-hover-base);
+      margin-inline:calc((var(--op-hover-slot) - var(--op-hover-base)) / 2);
+      scale:var(--op-hover-zoom);translate:0 0;
+      transition:--op-hover-progress var(--op-tab-speed) var(--op-tab-ease),
+        background-color var(--op-tab-speed) ease,transform 170ms cubic-bezier(.22,.72,.2,1),opacity 120ms ease;
     }
-    #oneplane-tabs[data-op-hover-mode="island"]:not([data-op-dragging]) .oneplane-split-group .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) {
-      translate:0 1px;
+    #oneplane-tabs[data-op-hover-mode="island"]:not([data-op-dragging]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) {
+      --op-hover-progress:1;
+    }
+    #oneplane-tabs[data-op-hover-mode="island"]:not([data-op-dragging]) .oneplane-split-group .oneplane-tab:not([data-op-reinsert]) {
+      --op-hover-zoom-delta:.12;
     }
     /* Keep the combined card + icon zoom near the original 128%, not 154%. */
     #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) .oneplane-tab-icon img {
       scale:1.22;
     }
-    #oneplane-tabs:not([data-op-dragging],[data-op-hover-mode="island"]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) .oneplane-tab-icon img {
+    #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) .oneplane-tab-icon img {
       scale:1.067;
     }
     #oneplane-tabs:not([data-op-dragging],[data-op-hover-mode="island"]) .oneplane-split-group .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) .oneplane-tab-icon img {

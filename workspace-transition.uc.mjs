@@ -1,6 +1,6 @@
-// Nocturne preview.16: early trace, independent Sine script order.
+// Nocturne preview.17: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="workspace.script",data={version:"0.3.0-preview.16"};
+  const event="workspace.script",data={version:"0.3.0-preview.17"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -13,7 +13,7 @@ try{if(typeof window!=="undefined"){
   const get=id=>document.getElementById(id);
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
-  let dead=false,active=null,request=null,registered=false;
+  let dead=false,active=null,request=null,registered=false,transitionCount=0;
   // This gate survives replacement of the visual controller in the same
   // window. Native work already in flight cannot be cancelled by WAAPI.
   const GATE="__nocturneWorkspaceCommandGate";
@@ -67,11 +67,14 @@ try{if(typeof window!=="undefined"){
   }
   function phase(value){
     if((root.getAttribute(PHASE)||null)===(value||null))return;
-    if(value==="out"||value==="swap")lockGeometry();
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.phase",()=>({from:root.getAttribute(PHASE),to:value,locked:!!geometryLock}),{sample:1800});
     if(value)root.setAttribute(PHASE,value);else {releaseGeometry();root.removeAttribute(PHASE);}
     try{win.__zenMagneticBookmarksShared?.syncAddressState?.();}catch(error){console.warn("[Nocturne] Workspace bookmarks:",error);}
     win.dispatchEvent(new win.CustomEvent("ZenRefined:WorkspaceTransition",{detail:{phase:value||"idle"}}));
+    // First collapse hover decorations and acquire the panel hold, then
+    // snapshot resting geometry. No extra painted frame between these steps.
+    if(value==="out"||value==="swap")lockGeometry();
+    win.__nocturneTrace?.("workspace.visual.boundary",()=>({phase:value||"idle",sequence:active?.sequence||transitionCount,panelOpen:get("zen-appcontent-navbar-wrapper")?.hasAttribute("data-op-panel-open"),height:rect(get("zen-appcontent-navbar-wrapper"))?.height,surface:rect(get("oneplane-toolbar-surface"))?.height,bookmarkTop:rect(get("PlacesToolbarItems"))?.top}),{sample:1200});
   }
   function restore(tx){
     for(const [n,old] of tx.styles){
@@ -157,11 +160,13 @@ try{if(typeof window!=="undefined"){
       observer=new win.MutationObserver(()=>{changed=win.performance.now();});
       for(const n of [get("PlacesToolbarItems"),get("oneplane-tabs")||get("tabbrowser-tabs")])if(n)observer.observe(n,{
         childList:true,subtree:true,attributes:true,
-        attributeFilter:["hidden","collapsed","data-selected","data-op-overflow-row","data-op-split-active"]
+        attributeFilter:["hidden","collapsed","data-selected","data-ready","data-op-overflow-row","data-op-adaptive-compact","data-op-home-open","data-op-split-active"]
       });
       // Bounded quiet interval after the native switch and mirror update.
-      await pause(tx,70);
-      while(!tx.cancelled&&win.performance.now()-start<400&&win.performance.now()-changed<65)await pause(tx,25);
+      const quiet=tx.sequence===1?100:65;
+      await pause(tx,quiet+10);
+      while(!tx.cancelled&&win.performance.now()-start<400&&win.performance.now()-changed<quiet)await pause(tx,25);
+      win.__nocturneTrace?.("workspace.settled",()=>({sequence:tx.sequence,elapsed:win.performance.now()-start,quiet:win.performance.now()-changed}),{sample:1000});
     }finally{observer?.disconnect();}
   }
   async function run(nativeSwitch){
@@ -197,7 +202,7 @@ try{if(typeof window!=="undefined"){
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.bypass",()=>({registered,interacting,reduced:reduced.matches,startup:root.getAttribute('data-zr-startup-phase'),ready:root.getAttribute('data-op-startup-ready')}),{sample:1800});
       phase(null);return invoke();
     }
-    const tx={animations:new Set(),styles:new Map(),timers:new Set(),waiters:new Set(),cancelled:false,superseded:false,skipMotion:false};active=tx;
+    const tx={animations:new Set(),styles:new Map(),timers:new Set(),waiters:new Set(),cancelled:false,superseded:false,skipMotion:false,sequence:++transitionCount};active=tx;
     // Native switching owns its own promise; visual gating must never
     // remain stuck if that promise is slow or fails to settle.
     tx.timers.add(win.setTimeout(()=>cleanup(tx),3500));

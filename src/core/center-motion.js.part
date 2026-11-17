@@ -7,6 +7,9 @@
   const MARK="data-zr-center-card",OWNER="data-zr-center-motion",PENDING="data-zr-center-pending";
   const B="--zr-fold-bookmark-progress";
   try{win.CSS.registerProperty({name:B,syntax:"<number>",inherits:false,initialValue:"1"});}catch{}
+  // Gecko user sheets may not register @property. The JS registration
+  // guarantees smooth interpolation of the shared hover slot.
+  try{win.CSS.registerProperty({name:"--op-hover-progress",syntax:"<number>",inherits:false,initialValue:"0"});}catch{}
   let active=null,pendingTimer=0,dead=false;
   // Magnetic Fold, ported from Motion Lab B. p=0 docked, p=1 resting.
   const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
@@ -81,11 +84,26 @@
   // projection queries and lane scroll clips. No page snapshots or native
   // tabs are copied, and the proxies cannot receive focus or pointer input.
   const paintProps=["display","position","inset","top","right","bottom","left","box-sizing","width","height","min-width","max-width","min-height","max-height","flex","flex-direction","flex-wrap","align-items","align-self","justify-content","place-items","gap","padding","margin","overflow","border","border-radius","box-shadow","background","color","font","font-family","font-size","font-weight","font-style","line-height","white-space","text-overflow","text-align","object-fit","fill","stroke","stroke-width","opacity","visibility","filter","transform","translate","scale","grid-template-columns","grid-template-rows","grid-auto-flow","grid-auto-columns","grid-auto-rows","align-content","justify-items","justify-self","place-content","row-gap","column-gap"];
+  const decodeSources=new WeakMap();
+  function warmIcons(row){
+    for(const img of row?.querySelectorAll(".oneplane-tab-icon img")||[]){
+      const value=img.getAttribute("src");if(!value||decodeSources.get(img)===value)continue;
+      decodeSources.set(img,value);try{img.decode?.()?.catch(()=>{});}catch{}
+    }
+    return iconStats(row);
+  }
   function iconStats(row){
     const images=[...row?.querySelectorAll(".oneplane-tab-icon img")||[]];
-    let ready=0,pending=0,missing=0;
-    for(const img of images){if(!img.getAttribute("src"))missing++;else if(!img.hidden&&img.complete&&img.naturalWidth>0)ready++;else pending++;}
-    return {total:images.length,ready,pending,missing};
+    let ready=0,pending=0,missing=0,failed=0,cached=0;
+    for(const img of images){
+      const value=img.getAttribute("src");
+      if(!value)missing++;
+      else if(!img.hidden&&img.complete&&img.naturalWidth>0)ready++;
+      else if(img.complete&&!img.naturalWidth)failed++;
+      else pending++;
+      if(value?.startsWith("page-icon:"))cached++;
+    }
+    return {total:images.length,ready,pending,missing,failed,cached};
   }
   // Fixed local geometry prevents native button/grid defaults in the
   // shadow tree from reflowing a Split View handle or its member cards.
@@ -123,18 +141,38 @@
       if(!src.matches?.(".oneplane-tab-icon img"))continue;
       const fallback=document.createElementNS("http://www.w3.org/1999/xhtml","span");
       fallback.textContent="•";Object.assign(fallback.style,{position:"absolute",inset:"0",display:"grid",placeItems:"center",fontSize:"17px",opacity:".6",pointerEvents:"none"});
-      img.parentNode.append(fallback);
+      const canvas=document.createElementNS("http://www.w3.org/1999/xhtml","canvas");
+      canvas.width=canvas.height=32;
+      Object.assign(canvas.style,{position:"absolute",inset:"0",width:"16px",height:"16px",display:"none",pointerEvents:"none"});
+      img.parentNode.append(canvas,fallback);
       Object.assign(img.style,{position:"absolute",inset:"0",width:"16px",height:"16px",objectFit:"contain"});
-      let current=null,wasReady=false;
+      let current=null,wasReady=false,bitmapSource=null;
       function paint(){
-        const ready=!!current&&!src.hidden&&img.complete&&img.naturalWidth>0;
-        img.style.display=ready?"block":"none";fallback.style.visibility=ready?"hidden":"visible";
-        if(ready&&!wasReady){stats.iconLoads++;win.__nocturneTrace?.("center.icon.ready",()=>({owner:root.getAttribute(OWNER),ready:stats.iconLoads,total:stats.icons}),{throttle:100});}
+        // Paint an already decoded chrome favicon directly. A detached
+        // clone can otherwise have its own asynchronous image request.
+        // No canvas readback, disk cache, content or URL telemetry.
+        if(current&&bitmapSource!==current&&!src.hidden&&src.complete&&src.naturalWidth>0){
+          try{
+            const ctx=canvas.getContext("2d");
+            if(ctx){
+              const w=src.naturalWidth,h=src.naturalHeight||w,k=32/Math.max(w,h);
+              ctx.clearRect(0,0,32,32);ctx.drawImage(src,(32-w*k)/2,(32-h*k)/2,w*k,h*k);
+              bitmapSource=current;stats.bitmapIcons++;
+            }
+          }catch{stats.bitmapFailures++;}
+        }
+        const bitmap=!!current&&bitmapSource===current;
+        const image=!!current&&img.complete&&img.naturalWidth>0;
+        const ready=bitmap||image;
+        canvas.style.display=bitmap?"block":"none";
+        img.style.display=!bitmap&&image?"block":"none";img.style.visibility="visible";
+        fallback.style.visibility=ready?"hidden":"visible";
+        if(ready&&!wasReady){stats.iconLoads++;win.__nocturneTrace?.("center.icon.ready",()=>({owner:root.getAttribute(OWNER),ready:stats.iconLoads,total:stats.icons,bitmap}),{throttle:100});}
         wasReady=ready;
       }
       function update(){
         const value=src.getAttribute("src");
-        if(value!==current){current=value;img.hidden=false;if(value)img.setAttribute("src",value);else img.removeAttribute("src");}
+        if(value!==current){current=value;bitmapSource=null;wasReady=false;img.hidden=false;if(value)img.setAttribute("src",value);else img.removeAttribute("src");}
         paint();
       }
       stats.icons++;
@@ -172,7 +210,7 @@
     Object.assign(host.style,{position:"absolute",inset:"0",zIndex:"14",pointerEvents:"none",overflow:"visible"});
     const hub=cards[0].hub;
     if(hub)host.style.clipPath=portalClip(hub,rr,win.innerWidth,win.innerHeight);
-    let layer;try{layer=host.attachShadow({mode:"closed"});}catch{root.removeAttribute("data-zr-fold-measuring");return null;}const effects=[],saved=[],cleanups=[],stats={groups:0,handles:0,handleOffset:0,icons:0,iconLoads:0};
+    let layer;try{layer=host.attachShadow({mode:"closed"});}catch{root.removeAttribute("data-zr-fold-measuring");return null;}const effects=[],saved=[],cleanups=[],stats={groups:0,handles:0,handleOffset:0,icons:0,iconLoads:0,bitmapIcons:0,bitmapFailures:0};
     // Measure and build all proxies before hiding any real card.
     try{
       for(const c of cards){const n=proxy(c,layer,rr,cleanups,stats),frames=keyframes(c,direction==="out");effects.push({n,frames,c});}
@@ -211,7 +249,7 @@
         if(active===handle){active=null;root.removeAttribute(OWNER);if(!win.closed)win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd"));}
       }};
     active=handle;
-    win.__nocturneTrace?.("center.motion",()=>({owner,direction,count:cards.length,duration,mode:"magnetic-fold",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length,groups:stats.groups,handles:stats.handles,handleOffset:stats.handleOffset,icons:iconStats(row),animated:running.length}),{sample:duration+250});
+    win.__nocturneTrace?.("center.motion",()=>({owner,direction,count:cards.length,duration,mode:"magnetic-fold",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length,groups:stats.groups,handles:stats.handles,handleOffset:stats.handleOffset,icons:iconStats(row),bitmapIcons:stats.bitmapIcons,bitmapFailures:stats.bitmapFailures,animated:running.length}),{sample:duration+250});
     return handle;
   }
   // Bookmarks use the Lab's center squeeze, not individual vertical slides.
@@ -258,7 +296,7 @@
   }
   win.addEventListener("OnePlane:StartupState",bindSelection);
   bindSelection();
-  const api={start,bookmarks,iconStats,releasePending,dispose};win[KEY]=api;
+  const api={start,bookmarks,iconStats,warmIcons,releasePending,dispose};win[KEY]=api;
   // The layout entrypoint runs before its own projection. Gate only a
   // genuinely new window, never a Sine reload. Fail open on missing Assembly.
   try{

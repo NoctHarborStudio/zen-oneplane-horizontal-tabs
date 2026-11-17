@@ -7,8 +7,8 @@
     const gap = 3;
     const widths = members.reduce((total, node) => {
       const style = window.getComputedStyle(node);
-      // Hover scale is purely visual and must not change group layout.
-      return total + node.offsetWidth + (parseFloat(style.marginInlineEnd) || 0);
+      // Include both reserved margins; never use the painted scale twice.
+      return total + node.offsetWidth + (parseFloat(style.marginInlineStart) || 0) + (parseFloat(style.marginInlineEnd) || 0);
     }, 0);
     const width = 22 + widths + gap * members.length;
     const next = Math.max(0,width).toFixed(2) + "px";

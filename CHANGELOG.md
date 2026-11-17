@@ -1,3 +1,10 @@
+## 0.3.0-preview.17 — Cached startup icons, magnetic Island hover and diagnostic capacity
+
+- Resolve lazy tab favicon addresses through native SessionStore and local Places cache. Predecode mirror images, wait at most 600ms, paint ready chrome favicon pixels directly in the isolated proxy and keep late image updates live; no page restoration or image readback.
+- Island hover now reserves the exact enlarged horizontal slot and zooms uniformly without downward translation. Keep Home anchored, split members inside their group and adaptive rows stable.
+- Suspend bookmark hover before capturing outgoing workspace geometry; prime resting contours before startup motion, avoid measuring squashed bookmarks, and add a slightly longer bounded quiet interval for the first workspace switch.
+- Retain the newest three diagnostic sessions in one pretty JSON file, up to 2,000,000 UTF-8 bytes total, with 3,200 events per live session and additional hover, favicon and workspace-boundary telemetry.
+
 ## 0.3.0-preview.16 — Stable split proxies and startup icons
 
 - Freeze measured Split View handle, dots and member geometry in the shared animation proxy. Record mounted handle offset errors.

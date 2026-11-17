@@ -482,3 +482,10 @@
   opacity:0!important;transition:none!important;
 }
 :root[data-zr-center-handoff] #PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems {transition:none!important;}
+
+/* A hover cannot follow a card into a lifecycle snapshot. Reset its
+ * reserved slot and painted scale before the shared engine measures. */
+:root:is([data-zr-startup-phase],[data-zr-closing],[data-zr-workspace-phase],[data-zr-center-motion]) #oneplane-tabs#oneplane-tabs#oneplane-tabs .oneplane-tab {
+  --op-hover-progress:0!important;
+  scale:1!important;translate:0 0!important;
+}

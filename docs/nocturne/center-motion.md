@@ -11,3 +11,5 @@ Preview 16 adds a portal boundary: calculate the signed separating gap between t
 Preview 16 unifies row metrics: the first card and Home center are 21 CSS px from the row origin in both modes; adding a row adds exactly 52 CSS px to the strip. Both contour owners use a 5px trim. The motion engine is unchanged.
 
 Preview 16 preserves the measured relative bounds of split group children and handle dots, adds a bounded 350ms startup favicon readiness wait, and tracks only image changes inside the active proxy. Keyboard/scroll input outside the chrome no longer interrupts the startup fold. Native tab geometry and trajectory timings remain unchanged.
+
+Preview 17: warm native mirror icon decoding before the startup fold (600ms maximum). Ready favicons are drawn from the existing chrome image into a small transient canvas, without pixel readback; URL clones and placeholders remain the fallback. The Island hover reserves the scaled slot through symmetric margins rather than moving the card down. Startup primes the resting contour and both contour owners skip measuring the squeezed bookmarks.

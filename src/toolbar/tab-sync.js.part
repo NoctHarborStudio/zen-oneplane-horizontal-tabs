@@ -165,7 +165,7 @@
         win.dispatchEvent(new win.CustomEvent("OnePlane:SyncedIconChanged"));
     }
   }
-  const events = ["TabOpen", "TabClose", "TabMove", "TabAttrModified", "TabPinned", "TabUnpinned", "TabShow", "TabHide", "TabBrowserInserted", "TabBrowserDiscarded", "ZenTabRemovedFromSplit"];
+  const events = ["SSTabRestoring", "SSTabRestored", "TabOpen", "TabClose", "TabMove", "TabAttrModified", "TabPinned", "TabUnpinned", "TabShow", "TabHide", "TabBrowserInserted", "TabBrowserDiscarded", "ZenTabRemovedFromSplit"];
   const tabObserver = new MutationObserver(schedule);
   const workspaceObserver = new MutationObserver(schedule);
   const toolbarObserver = new MutationObserver(() => {

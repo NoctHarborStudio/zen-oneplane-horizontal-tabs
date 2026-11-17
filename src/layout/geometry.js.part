@@ -91,11 +91,12 @@
         applyStripPartition(layout);
         row.toggleAttribute("data-op-island-compact",!iconHome&&layout.title===32);
         const widthOf=indices=>indices.reduce((n,i)=>n+widths[i]+3,6);
-        const expandReserve=iconHome&&layout.mode==="wide"?Math.max(0,openWidth-tabWidth):0;
+        const hoverReserve=Math.ceil(tabWidth*.20);
+        const expandReserve=layout.mode==="wide"?(iconHome?Math.max(0,openWidth-tabWidth):hoverReserve):0;
         const half=Math.max(widthOf(layout.topLeft),widthOf(layout.topRight)+(layout.topPlus?tabWidth+3:0),tabWidth+9)+expandReserve;
         const topWidth=layout.mode==="wide"?Math.min(available,layout.title+6+2*half):Math.max(layout.title+6,available);
         const bottomBudget=Math.max(tabWidth+6,window.innerWidth-24);
-        const lowerNatural=widthOf(layout.lower)+2*(tabWidth+3)+(iconHome?Math.max(0,openWidth-tabWidth):0);
+        const lowerNatural=widthOf(layout.lower)+2*(tabWidth+3)+(iconHome?Math.max(0,openWidth-tabWidth):hoverReserve);
         const bottomWidth=Math.min(bottomBudget,Math.max(3*tabWidth+12,lowerNatural));
         setLength(row,"--op-island-width",layout.title);
         setLength(row,"--op-island-row-width",Math.max(layout.title+6,topWidth));

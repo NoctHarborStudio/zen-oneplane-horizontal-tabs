@@ -1,7 +1,7 @@
-/* Nocturne preview.16 diagnostic recorder — read-only chrome telemetry.
+/* Nocturne preview.17 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.16",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.17",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -34,6 +34,27 @@
   }
   function exportData(){return {schema:2,version:VERSION,window:id,started,dropped,startup:startupEvents.slice(),events:entries.slice()};}
   function dump(){return JSON.stringify(exportData(),null,2);}
+  const MAX_FILE_BYTES=2000000,SESSION_BYTES=620000,MAX_EVENTS=3200;
+  const bytes=value=>new TextEncoder().encode(value).length;
+  function trimEvents(s){
+    if(s.events.length<=1)return false;
+    const count=Math.min(s.events.length-1,Math.max(1,Math.ceil(s.events.length*.15)));
+    s.events.splice(0,count);s.dropped=(s.dropped||0)+count;return true;
+  }
+  function packSessions(sessions){
+    const pack=()=>JSON.stringify({schema:2,version:VERSION,sessions},null,2);
+    for(let i=0;i<sessions.length;i++){
+      const s=sessions[i]={...sessions[i],events:sessions[i].events.slice()};
+      while(bytes(JSON.stringify(s,null,2))>SESSION_BYTES&&trimEvents(s)){}
+    }
+    let data=pack();
+    while(bytes(data)>MAX_FILE_BYTES){
+      const s=sessions.filter(s=>s.events.length>1).sort((a,b)=>b.events.length-a.events.length)[0];
+      if(!s||!trimEvents(s))break;
+      data=pack();
+    }
+    return data;
+  }
   async function persist(){
     if(privateWindow())return false;
     if(typeof IOUtils==="undefined"||typeof PathUtils==="undefined"){if(!ioError){ioError=true;win.console.warn("[Nocturne diag] File API unavailable; use __nocturneDiagnostics.dump()");}return false;}
@@ -53,14 +74,8 @@
         while(sessions.length>3)sessions.shift();
         // Trim each session independently instead of sacrificing older
         // sessions when one recent recording is long.
-        for(let i=0;i<sessions.length;i++){
-          const s=sessions[i]={...sessions[i],events:sessions[i].events.slice()};
-          while(JSON.stringify(s,null,2).length>145000&&s.events.length>1){
-            const count=Math.min(s.events.length-1,Math.max(1,Math.ceil(s.events.length*.15)));
-            s.events.splice(0,count);s.dropped=(s.dropped||0)+count;
-          }
-        }
-        const data=JSON.stringify({schema:2,version:VERSION,sessions},null,2);
+        const data=packSessions(sessions);
+        if(bytes(data)>MAX_FILE_BYTES)throw Error("Diagnostic session exceeds byte budget");
         await IOUtils.writeUTF8(path,data,{tmpPath:path+".tmp"});
         store.sessions=sessions;
         // Remove only our old per-window diagnostic files after a successful
@@ -88,7 +103,7 @@
       last.set(key,t);
       const item={n:++seq,t:round(t),event,data:safe(typeof detail==="function"?detail():detail)};
       if(startupEvents.length<100&&(/^(assembly\.|layout\.)/.test(event)||event.startsWith("center.")&&item.data?.owner==="startup"))startupEvents.push(item);
-      entries.push(item);if(entries.length>1600){entries.shift();dropped++;}
+      entries.push(item);if(entries.length>MAX_EVENTS){entries.shift();dropped++;}
       dirty=true;
       if(event!=="sample")win.console.info("[Nocturne diag "+id+"] "+JSON.stringify(item));
       if(options.flush)void flush();else scheduleWrite();
@@ -107,6 +122,7 @@
     const group=row?.querySelector(".oneplane-split-group"),handle=group?.querySelector(".oneplane-split-handle");
     if(group)wanted.set("split-group",group);if(handle)wanted.set("split-handle",handle);
     if(drag)wanted.set("source",drag);if(ghost)wanted.set("ghost",ghost);if(card)wanted.set("card",card);
+    const hovered=row?.querySelector(".oneplane-tab[data-op-hovered]");if(hovered){wanted.set("hover-card",hovered);const lane=hovered.closest(".oneplane-overflow-lane,.oneplane-island-lane");if(lane)wanted.set("hover-lane",lane);}
     if(wanted.size===nodes.size&&[...wanted].every(([k,n])=>nodes.get(k)===n))return;
     observer.disconnect();nodes.clear();observer.observe(root,{attributes:true,attributeFilter:rootAttrs});
     for(const [k,n] of wanted){nodes.set(k,n);observer.observe(n,{attributes:true,attributeFilter:attrs});}
@@ -117,7 +133,7 @@
     let anim=[];try{anim=n.getAnimations().slice(0,6).map(a=>({state:a.playState,t:round(Number(a.currentTime)),duration:round(Number(a.effect?.getTiming()?.duration)),type:a.constructor?.name}));}catch{}
     const mask=n.style?.getPropertyValue("--op-contour-mask")||"",bm=n.style?.getPropertyValue("--zr-bm-contour-mask")||"";
     const hash=x=>{let h=0;for(let i=0;i<x.length;i++)h=(Math.imul(h,31)+x.charCodeAt(i))|0;return x.length?x.length+":"+h:null;};
-    return {rect:[round(r.left),round(r.top),round(r.width),round(r.height)],opacity:s.opacity,visibility:s.visibility,display:s.display,translate:s.translate,scale:s.scale,transform:s.transform,transition:s.transitionProperty,height:s.height,
+    return {rect:[round(r.left),round(r.top),round(r.width),round(r.height)],opacity:s.opacity,visibility:s.visibility,display:s.display,translate:s.translate,scale:s.scale,transform:s.transform,transition:s.transitionProperty,height:s.height,width:s.width,margin:[s.marginInlineStart,s.marginInlineEnd],hoverProgress:s.getPropertyValue("--op-hover-progress").trim()||null,
       measure:n.style?.getPropertyValue("--op-measured-toolbar-height")||null,contour:n.style?.getPropertyValue("--op-contour-height")||null,bmContour:n.style?.getPropertyValue("--zr-bm-contour-height")||null,
       mask:hash(mask),bmMask:hash(bm),centerX:s.getPropertyValue("--zr-center-x").trim()||null,centerAlpha:s.getPropertyValue("--zr-center-alpha").trim()||null,progress:s.getPropertyValue("--zr-workspace-progress").trim()||null,startupProgress:s.getPropertyValue("--zr-startup-progress").trim()||null,startupBase:n.style?.getPropertyValue("--zr-startup-base-opacity")||null,attrs:attrState(n),animations:anim};
   }
@@ -198,6 +214,9 @@
   const MARK="data-zr-center-card",OWNER="data-zr-center-motion",PENDING="data-zr-center-pending";
   const B="--zr-fold-bookmark-progress";
   try{win.CSS.registerProperty({name:B,syntax:"<number>",inherits:false,initialValue:"1"});}catch{}
+  // Gecko user sheets may not register @property. The JS registration
+  // guarantees smooth interpolation of the shared hover slot.
+  try{win.CSS.registerProperty({name:"--op-hover-progress",syntax:"<number>",inherits:false,initialValue:"0"});}catch{}
   let active=null,pendingTimer=0,dead=false;
   // Magnetic Fold, ported from Motion Lab B. p=0 docked, p=1 resting.
   const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
@@ -272,11 +291,26 @@
   // projection queries and lane scroll clips. No page snapshots or native
   // tabs are copied, and the proxies cannot receive focus or pointer input.
   const paintProps=["display","position","inset","top","right","bottom","left","box-sizing","width","height","min-width","max-width","min-height","max-height","flex","flex-direction","flex-wrap","align-items","align-self","justify-content","place-items","gap","padding","margin","overflow","border","border-radius","box-shadow","background","color","font","font-family","font-size","font-weight","font-style","line-height","white-space","text-overflow","text-align","object-fit","fill","stroke","stroke-width","opacity","visibility","filter","transform","translate","scale","grid-template-columns","grid-template-rows","grid-auto-flow","grid-auto-columns","grid-auto-rows","align-content","justify-items","justify-self","place-content","row-gap","column-gap"];
+  const decodeSources=new WeakMap();
+  function warmIcons(row){
+    for(const img of row?.querySelectorAll(".oneplane-tab-icon img")||[]){
+      const value=img.getAttribute("src");if(!value||decodeSources.get(img)===value)continue;
+      decodeSources.set(img,value);try{img.decode?.()?.catch(()=>{});}catch{}
+    }
+    return iconStats(row);
+  }
   function iconStats(row){
     const images=[...row?.querySelectorAll(".oneplane-tab-icon img")||[]];
-    let ready=0,pending=0,missing=0;
-    for(const img of images){if(!img.getAttribute("src"))missing++;else if(!img.hidden&&img.complete&&img.naturalWidth>0)ready++;else pending++;}
-    return {total:images.length,ready,pending,missing};
+    let ready=0,pending=0,missing=0,failed=0,cached=0;
+    for(const img of images){
+      const value=img.getAttribute("src");
+      if(!value)missing++;
+      else if(!img.hidden&&img.complete&&img.naturalWidth>0)ready++;
+      else if(img.complete&&!img.naturalWidth)failed++;
+      else pending++;
+      if(value?.startsWith("page-icon:"))cached++;
+    }
+    return {total:images.length,ready,pending,missing,failed,cached};
   }
   // Fixed local geometry prevents native button/grid defaults in the
   // shadow tree from reflowing a Split View handle or its member cards.
@@ -314,18 +348,38 @@
       if(!src.matches?.(".oneplane-tab-icon img"))continue;
       const fallback=document.createElementNS("http://www.w3.org/1999/xhtml","span");
       fallback.textContent="•";Object.assign(fallback.style,{position:"absolute",inset:"0",display:"grid",placeItems:"center",fontSize:"17px",opacity:".6",pointerEvents:"none"});
-      img.parentNode.append(fallback);
+      const canvas=document.createElementNS("http://www.w3.org/1999/xhtml","canvas");
+      canvas.width=canvas.height=32;
+      Object.assign(canvas.style,{position:"absolute",inset:"0",width:"16px",height:"16px",display:"none",pointerEvents:"none"});
+      img.parentNode.append(canvas,fallback);
       Object.assign(img.style,{position:"absolute",inset:"0",width:"16px",height:"16px",objectFit:"contain"});
-      let current=null,wasReady=false;
+      let current=null,wasReady=false,bitmapSource=null;
       function paint(){
-        const ready=!!current&&!src.hidden&&img.complete&&img.naturalWidth>0;
-        img.style.display=ready?"block":"none";fallback.style.visibility=ready?"hidden":"visible";
-        if(ready&&!wasReady){stats.iconLoads++;win.__nocturneTrace?.("center.icon.ready",()=>({owner:root.getAttribute(OWNER),ready:stats.iconLoads,total:stats.icons}),{throttle:100});}
+        // Paint an already decoded chrome favicon directly. A detached
+        // clone can otherwise have its own asynchronous image request.
+        // No canvas readback, disk cache, content or URL telemetry.
+        if(current&&bitmapSource!==current&&!src.hidden&&src.complete&&src.naturalWidth>0){
+          try{
+            const ctx=canvas.getContext("2d");
+            if(ctx){
+              const w=src.naturalWidth,h=src.naturalHeight||w,k=32/Math.max(w,h);
+              ctx.clearRect(0,0,32,32);ctx.drawImage(src,(32-w*k)/2,(32-h*k)/2,w*k,h*k);
+              bitmapSource=current;stats.bitmapIcons++;
+            }
+          }catch{stats.bitmapFailures++;}
+        }
+        const bitmap=!!current&&bitmapSource===current;
+        const image=!!current&&img.complete&&img.naturalWidth>0;
+        const ready=bitmap||image;
+        canvas.style.display=bitmap?"block":"none";
+        img.style.display=!bitmap&&image?"block":"none";img.style.visibility="visible";
+        fallback.style.visibility=ready?"hidden":"visible";
+        if(ready&&!wasReady){stats.iconLoads++;win.__nocturneTrace?.("center.icon.ready",()=>({owner:root.getAttribute(OWNER),ready:stats.iconLoads,total:stats.icons,bitmap}),{throttle:100});}
         wasReady=ready;
       }
       function update(){
         const value=src.getAttribute("src");
-        if(value!==current){current=value;img.hidden=false;if(value)img.setAttribute("src",value);else img.removeAttribute("src");}
+        if(value!==current){current=value;bitmapSource=null;wasReady=false;img.hidden=false;if(value)img.setAttribute("src",value);else img.removeAttribute("src");}
         paint();
       }
       stats.icons++;
@@ -363,7 +417,7 @@
     Object.assign(host.style,{position:"absolute",inset:"0",zIndex:"14",pointerEvents:"none",overflow:"visible"});
     const hub=cards[0].hub;
     if(hub)host.style.clipPath=portalClip(hub,rr,win.innerWidth,win.innerHeight);
-    let layer;try{layer=host.attachShadow({mode:"closed"});}catch{root.removeAttribute("data-zr-fold-measuring");return null;}const effects=[],saved=[],cleanups=[],stats={groups:0,handles:0,handleOffset:0,icons:0,iconLoads:0};
+    let layer;try{layer=host.attachShadow({mode:"closed"});}catch{root.removeAttribute("data-zr-fold-measuring");return null;}const effects=[],saved=[],cleanups=[],stats={groups:0,handles:0,handleOffset:0,icons:0,iconLoads:0,bitmapIcons:0,bitmapFailures:0};
     // Measure and build all proxies before hiding any real card.
     try{
       for(const c of cards){const n=proxy(c,layer,rr,cleanups,stats),frames=keyframes(c,direction==="out");effects.push({n,frames,c});}
@@ -402,7 +456,7 @@
         if(active===handle){active=null;root.removeAttribute(OWNER);if(!win.closed)win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd"));}
       }};
     active=handle;
-    win.__nocturneTrace?.("center.motion",()=>({owner,direction,count:cards.length,duration,mode:"magnetic-fold",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length,groups:stats.groups,handles:stats.handles,handleOffset:stats.handleOffset,icons:iconStats(row),animated:running.length}),{sample:duration+250});
+    win.__nocturneTrace?.("center.motion",()=>({owner,direction,count:cards.length,duration,mode:"magnetic-fold",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length,groups:stats.groups,handles:stats.handles,handleOffset:stats.handleOffset,icons:iconStats(row),bitmapIcons:stats.bitmapIcons,bitmapFailures:stats.bitmapFailures,animated:running.length}),{sample:duration+250});
     return handle;
   }
   // Bookmarks use the Lab's center squeeze, not individual vertical slides.
@@ -449,7 +503,7 @@
   }
   win.addEventListener("OnePlane:StartupState",bindSelection);
   bindSelection();
-  const api={start,bookmarks,iconStats,releasePending,dispose};win[KEY]=api;
+  const api={start,bookmarks,iconStats,warmIcons,releasePending,dispose};win[KEY]=api;
   // The layout entrypoint runs before its own projection. Gate only a
   // genuinely new window, never a Sine reload. Fail open on missing Assembly.
   try{
@@ -4616,7 +4670,7 @@ function installTabStrip() {
     }
   }
   function paintContour(force=false){
-    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-op-bookmark-wave")||(!force&&root.hasAttribute("data-zr-workspace-phase")))return;
+    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-op-bookmark-wave")||document.getElementById("PlacesToolbarItems")?.hasAttribute("data-zr-fold-bookmarks")||(!force&&root.hasAttribute("data-zr-workspace-phase")))return;
     // A switch can briefly hide or resize native bookmark controls.
     // Retain the last valid mask until the native layout settles.
     if(!force&&contourKey && window.performance.now()<panelSwitchUntil)return;
@@ -4644,7 +4698,7 @@ function installTabStrip() {
           if(node.hidden||node.collapsed||node.getAttribute("hidden")==="true"||
             node.getAttribute("collapsed")==="true")continue;
           const s=window.getComputedStyle(node);
-          if(s.display==="none"||s.visibility!=="visible"||Number(s.opacity)===0)continue;
+          if(s.display==="none"||s.visibility!=="visible"||(!force&&Number(s.opacity)===0))continue;
           const b=node.getBoundingClientRect();
           if(b.width<1||b.height<1||b.right<=bm.left||b.left>=bm.right||
             b.bottom<=bm.top||b.top>=bm.bottom)continue;
@@ -4790,11 +4844,12 @@ function installTabStrip() {
         applyStripPartition(layout);
         row.toggleAttribute("data-op-island-compact",!iconHome&&layout.title===32);
         const widthOf=indices=>indices.reduce((n,i)=>n+widths[i]+3,6);
-        const expandReserve=iconHome&&layout.mode==="wide"?Math.max(0,openWidth-tabWidth):0;
+        const hoverReserve=Math.ceil(tabWidth*.20);
+        const expandReserve=layout.mode==="wide"?(iconHome?Math.max(0,openWidth-tabWidth):hoverReserve):0;
         const half=Math.max(widthOf(layout.topLeft),widthOf(layout.topRight)+(layout.topPlus?tabWidth+3:0),tabWidth+9)+expandReserve;
         const topWidth=layout.mode==="wide"?Math.min(available,layout.title+6+2*half):Math.max(layout.title+6,available);
         const bottomBudget=Math.max(tabWidth+6,window.innerWidth-24);
-        const lowerNatural=widthOf(layout.lower)+2*(tabWidth+3)+(iconHome?Math.max(0,openWidth-tabWidth):0);
+        const lowerNatural=widthOf(layout.lower)+2*(tabWidth+3)+(iconHome?Math.max(0,openWidth-tabWidth):hoverReserve);
         const bottomWidth=Math.min(bottomBudget,Math.max(3*tabWidth+12,lowerNatural));
         setLength(row,"--op-island-width",layout.title);
         setLength(row,"--op-island-row-width",Math.max(layout.title+6,topWidth));
@@ -5033,8 +5088,8 @@ function installTabStrip() {
     const gap = 3;
     const widths = members.reduce((total, node) => {
       const style = window.getComputedStyle(node);
-      // Hover scale is purely visual and must not change group layout.
-      return total + node.offsetWidth + (parseFloat(style.marginInlineEnd) || 0);
+      // Include both reserved margins; never use the painted scale twice.
+      return total + node.offsetWidth + (parseFloat(style.marginInlineStart) || 0) + (parseFloat(style.marginInlineEnd) || 0);
     }, 0);
     const width = 22 + widths + gap * members.length;
     const next = Math.max(0,width).toFixed(2) + "px";
@@ -6385,7 +6440,7 @@ function installTabStrip() {
   }
   const hoverModePreferenceObserver={observe(){applyHoverMode();}};
   function selectHover(item, x = null) {
-    if (root.hasAttribute("data-zr-workspace-phase") || cascadeState!=="idle" || !item || !list.contains(item)) return;
+    if (root.hasAttribute("data-zr-center-motion")||root.hasAttribute("data-zr-closing")||root.hasAttribute("data-zr-workspace-phase") || cascadeState!=="idle" || !item || !list.contains(item)) return;
     cancelHoverTimer();
     cancelIndicatorReturn();
     hoverX = x;
@@ -6395,6 +6450,7 @@ function installTabStrip() {
       hoverTab = item;
       item.setAttribute("data-op-hovered", "true");
       item.toggleAttribute("data-op-expanded",row.getAttribute("data-op-hover-mode")!=="island");
+      window.__nocturneTrace?.("tabs.hover",()=>({mode:row.getAttribute("data-op-hover-mode"),lower:item.closest(".oneplane-overflow-lane")===bottomLane,group:!!item.closest(".oneplane-split-group")}),{sample:800,throttle:100});
     }
     indicatorHover = item;
     refreshIndicator();
@@ -6604,7 +6660,7 @@ function installTabStrip() {
     if(!bottomLane.hidden&&now<overflowSliderUntil)overflowSliderFrame=window.requestAnimationFrame(tickOverflowSlider);
   }
   function onOverflowWidthTransition(event){
-    if(bottomLane.hidden||!["width","flex-basis","max-width"].includes(event.propertyName))return;
+    if(bottomLane.hidden||!["width","flex-basis","max-width","--op-hover-progress"].includes(event.propertyName))return;
     if(event.type==="transitionrun"){
       overflowSliderUntil=window.performance.now()+500;
       if(!overflowSliderFrame)overflowSliderFrame=window.requestAnimationFrame(tickOverflowSlider);
@@ -6640,11 +6696,22 @@ function installTabStrip() {
     bottomLane.removeEventListener("scroll",refreshOverflowSlider);
     for(const type of ["transitionrun","transitionend","transitioncancel"])bottomLane.removeEventListener(type,onOverflowWidthTransition);
   }
+  // Lazy Zen/Gecko tabs may not yet have a linked browser with a real URI.
+  // Read the session's local lazy URL without restoring or navigating it.
+  let faviconSessionStore=null;
+  try{faviconSessionStore=window.SessionStore||ChromeUtils.importESModule("resource:///modules/sessionstore/SessionStore.sys.mjs").SessionStore;}catch{}
+  function faviconPage(tab){
+    const valid=v=>typeof v==="string"&&/^https?:\/\//i.test(v);
+    let lazy=null,current=null;
+    try{lazy=(tab.ownerDocument.defaultView.SessionStore||faviconSessionStore)?.getLazyTabValue?.(tab,"url");}catch{}
+    try{current=tab.linkedBrowser?.currentURI?.spec;}catch{}
+    return [lazy,current,tab._originalUrl].find(valid)||"";
+  }
   function favicon(tab) {
     const local=t=>{
       const sources=[t.getAttribute("image"),t.querySelector(".tab-icon-image")?.getAttribute("src")];
       try{sources.push(t.ownerDocument.defaultView.gBrowser.getIcon(t));}catch{}
-      return sources.find(src=>/^(data:image\/|chrome:|resource:|moz-anno:|page-icon:|blob:)/i.test(src||""))||"";
+      return sources.find(src=>/^(data:image\/|chrome:|resource:|moz-anno:|page-icon:|blob:)/i.test(src||"")&&!/defaultFavicon\.svg(?:$|[?#])/i.test(src))||"";
     };
     const direct=local(tab);
     if(direct)return direct;
@@ -6657,11 +6724,11 @@ function installTabStrip() {
         const peer=win.gZenWindowSync.getItemFromWindow(win,tab.id);
         if(!peer||!win.gBrowser?.isTab(peer)||peer.closing||peer.getAttribute("zen-workspace-id")!==tab.getAttribute("zen-workspace-id"))continue;
         const icon=local(peer);if(icon&&!icon.startsWith("blob:"))return icon;
-        const page=peer.linkedBrowser?.currentURI?.spec||"";
+        const page=faviconPage(peer);
         if(/^https?:/i.test(page))return "page-icon:"+page;
       }
     }
-    const page=tab.linkedBrowser?.currentURI?.spec||"";
+    const page=faviconPage(tab);
     return /^https?:/i.test(page)?"page-icon:"+page:"";
   }
 
@@ -6675,7 +6742,12 @@ function installTabStrip() {
     const img = html("img");
     img.alt = "";
     img.draggable = false;
-    img.addEventListener("error", () => { img.hidden = true; });
+    img.addEventListener("error", () => {
+      const page=faviconPage(tab),fallback=page?"page-icon:"+page:"";
+      if(fallback&&img.getAttribute("src")!==fallback){img.hidden=false;img.setAttribute("src",fallback);}
+      else img.hidden=true;
+    });
+    img.decoding="async";
     img.addEventListener("load", () => { img.hidden = false; });
     icon.append(img);
     const audio = html("span", "oneplane-tab-audio");
@@ -6909,7 +6981,7 @@ function installTabStrip() {
         win.dispatchEvent(new win.CustomEvent("OnePlane:SyncedIconChanged"));
     }
   }
-  const events = ["TabOpen", "TabClose", "TabMove", "TabAttrModified", "TabPinned", "TabUnpinned", "TabShow", "TabHide", "TabBrowserInserted", "TabBrowserDiscarded", "ZenTabRemovedFromSplit"];
+  const events = ["SSTabRestoring", "SSTabRestored", "TabOpen", "TabClose", "TabMove", "TabAttrModified", "TabPinned", "TabUnpinned", "TabShow", "TabHide", "TabBrowserInserted", "TabBrowserDiscarded", "ZenTabRemovedFromSplit"];
   const tabObserver = new MutationObserver(schedule);
   const workspaceObserver = new MutationObserver(schedule);
   const toolbarObserver = new MutationObserver(() => {

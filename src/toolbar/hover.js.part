@@ -37,7 +37,7 @@
   }
   const hoverModePreferenceObserver={observe(){applyHoverMode();}};
   function selectHover(item, x = null) {
-    if (root.hasAttribute("data-zr-workspace-phase") || cascadeState!=="idle" || !item || !list.contains(item)) return;
+    if (root.hasAttribute("data-zr-center-motion")||root.hasAttribute("data-zr-closing")||root.hasAttribute("data-zr-workspace-phase") || cascadeState!=="idle" || !item || !list.contains(item)) return;
     cancelHoverTimer();
     cancelIndicatorReturn();
     hoverX = x;
@@ -47,6 +47,7 @@
       hoverTab = item;
       item.setAttribute("data-op-hovered", "true");
       item.toggleAttribute("data-op-expanded",row.getAttribute("data-op-hover-mode")!=="island");
+      window.__nocturneTrace?.("tabs.hover",()=>({mode:row.getAttribute("data-op-hover-mode"),lower:item.closest(".oneplane-overflow-lane")===bottomLane,group:!!item.closest(".oneplane-split-group")}),{sample:800,throttle:100});
     }
     indicatorHover = item;
     refreshIndicator();
@@ -256,7 +257,7 @@
     if(!bottomLane.hidden&&now<overflowSliderUntil)overflowSliderFrame=window.requestAnimationFrame(tickOverflowSlider);
   }
   function onOverflowWidthTransition(event){
-    if(bottomLane.hidden||!["width","flex-basis","max-width"].includes(event.propertyName))return;
+    if(bottomLane.hidden||!["width","flex-basis","max-width","--op-hover-progress"].includes(event.propertyName))return;
     if(event.type==="transitionrun"){
       overflowSliderUntil=window.performance.now()+500;
       if(!overflowSliderFrame)overflowSliderFrame=window.requestAnimationFrame(tickOverflowSlider);

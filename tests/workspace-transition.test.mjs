@@ -187,3 +187,11 @@ test("workspace delegates card trajectories to the shared engine and fixes the u
  assert.ok(css.includes("max-height: var(--zr-workspace-final-surface-height) !important"));
  assert.ok(!source.includes("function cardOffsets("));
 });
+
+test("workspace captures resting geometry after hover suspension and labels first transition",()=>{
+ const phase=source.slice(source.indexOf("function phase(value)"),source.indexOf("function restore(tx)"));
+ assert.ok(phase.indexOf("syncAddressState")<phase.indexOf("lockGeometry()"));
+ assert.ok(phase.indexOf("dispatchEvent")<phase.indexOf("lockGeometry()"));
+ assert.ok(source.includes("tx.sequence===1?100:65"));
+ assert.ok(source.includes("workspace.visual.boundary"));
+});

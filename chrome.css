@@ -811,7 +811,7 @@
     #oneplane-tabs[data-op-adaptive-compact] :is(.oneplane-island-left,.oneplane-island-right) .oneplane-tab-title {
       max-width:0!important;opacity:0!important;
     }
-    #oneplane-tabs[data-op-adaptive-compact] :is(.oneplane-island-left,.oneplane-island-right) .oneplane-tab {
+    #oneplane-tabs[data-op-adaptive-compact]:not([data-op-hover-mode="island"]) :is(.oneplane-island-left,.oneplane-island-right) .oneplane-tab {
       --op-hover-zoom-delta:.05!important;--op-hover-descent:3px!important;
     }
     #oneplane-tabs[data-op-overflow-row] .oneplane-island-lane {
@@ -1089,18 +1089,31 @@
       --op-hover-zoom-delta:.05;
       --op-hover-descent:1px;
     }
-    #oneplane-tabs[data-op-hover-mode="island"]:not([data-op-dragging]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) {
-      scale:1.05;
-      translate:0 3px;
+    /* Island: grow the icon card and its exact horizontal slot together.
+       The centered Home remains fixed, while neighbors move in normal flow.
+       No title expansion or vertical translation in this mode. */
+    #oneplane-tabs[data-op-hover-mode="island"]:not([data-op-dragging]) .oneplane-tab:not([data-op-reinsert]) {
+      --op-hover-zoom-delta:.20;
+      --op-hover-zoom:calc(1 + var(--op-hover-progress) * var(--op-hover-zoom-delta));
+      --op-hover-slot:calc(var(--op-tab) * var(--op-hover-zoom));
+      --op-hover-base:var(--op-tab);
+      width:var(--op-hover-base);flex-basis:var(--op-hover-base);
+      margin-inline:calc((var(--op-hover-slot) - var(--op-hover-base)) / 2);
+      scale:var(--op-hover-zoom);translate:0 0;
+      transition:--op-hover-progress var(--op-tab-speed) var(--op-tab-ease),
+        background-color var(--op-tab-speed) ease,transform 170ms cubic-bezier(.22,.72,.2,1),opacity 120ms ease;
     }
-    #oneplane-tabs[data-op-hover-mode="island"]:not([data-op-dragging]) .oneplane-split-group .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) {
-      translate:0 1px;
+    #oneplane-tabs[data-op-hover-mode="island"]:not([data-op-dragging]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) {
+      --op-hover-progress:1;
+    }
+    #oneplane-tabs[data-op-hover-mode="island"]:not([data-op-dragging]) .oneplane-split-group .oneplane-tab:not([data-op-reinsert]) {
+      --op-hover-zoom-delta:.12;
     }
     /* Keep the combined card + icon zoom near the original 128%, not 154%. */
     #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) .oneplane-tab-icon img {
       scale:1.22;
     }
-    #oneplane-tabs:not([data-op-dragging],[data-op-hover-mode="island"]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) .oneplane-tab-icon img {
+    #oneplane-tabs:not([data-op-dragging]) .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) .oneplane-tab-icon img {
       scale:1.067;
     }
     #oneplane-tabs:not([data-op-dragging],[data-op-hover-mode="island"]) .oneplane-split-group .oneplane-tab[data-op-hovered]:not([data-op-reinsert]) .oneplane-tab-icon img {
@@ -2437,3 +2450,10 @@
   opacity:0!important;transition:none!important;
 }
 :root[data-zr-center-handoff] #PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems {transition:none!important;}
+
+/* A hover cannot follow a card into a lifecycle snapshot. Reset its
+ * reserved slot and painted scale before the shared engine measures. */
+:root:is([data-zr-startup-phase],[data-zr-closing],[data-zr-workspace-phase],[data-zr-center-motion]) #oneplane-tabs#oneplane-tabs#oneplane-tabs .oneplane-tab {
+  --op-hover-progress:0!important;
+  scale:1!important;translate:0 0!important;
+}

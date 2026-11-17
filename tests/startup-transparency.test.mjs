@@ -61,7 +61,7 @@ test("typing or scrolling in Home does not abort startup, explicit toolbar inter
  const a=source.indexOf("function interrupt("),b=source.indexOf("let viewport=",a);
  const run=new Function(source.slice(a,b)+'let playing=true,calls=0;function decision(){}function settle(){calls++}const target=toolbar=>({closest:()=>toolbar?{}:null});for(const type of ["keydown","wheel","pointerdown"])interrupt({type,isTrusted:true,target:target(false)});interrupt({type:"keydown",isTrusted:true,target:target(true)});interrupt({type:"pointerdown",isTrusted:false,target:target(true)});interrupt({type:"pointerdown",isTrusted:true,target:target(true)});return calls;');
  assert.equal(run(),1);
- assert.ok(source.includes("now()-iconWaitAt<350"));
+ assert.ok(source.includes("now()-iconWaitAt<600"));
  assert.ok(source.includes("assembly.center.result"));
  assert.ok(source.includes("assembly.icons.ready"));
 });

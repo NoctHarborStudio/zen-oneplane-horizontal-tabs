@@ -22,7 +22,7 @@
     }
   }
   function paintContour(force=false){
-    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-op-bookmark-wave")||(!force&&root.hasAttribute("data-zr-workspace-phase")))return;
+    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-op-bookmark-wave")||document.getElementById("PlacesToolbarItems")?.hasAttribute("data-zr-fold-bookmarks")||(!force&&root.hasAttribute("data-zr-workspace-phase")))return;
     // A switch can briefly hide or resize native bookmark controls.
     // Retain the last valid mask until the native layout settles.
     if(!force&&contourKey && window.performance.now()<panelSwitchUntil)return;
@@ -50,7 +50,7 @@
           if(node.hidden||node.collapsed||node.getAttribute("hidden")==="true"||
             node.getAttribute("collapsed")==="true")continue;
           const s=window.getComputedStyle(node);
-          if(s.display==="none"||s.visibility!=="visible"||Number(s.opacity)===0)continue;
+          if(s.display==="none"||s.visibility!=="visible"||(!force&&Number(s.opacity)===0))continue;
           const b=node.getBoundingClientRect();
           if(b.width<1||b.height<1||b.right<=bm.left||b.left>=bm.right||
             b.bottom<=bm.top||b.top>=bm.bottom)continue;

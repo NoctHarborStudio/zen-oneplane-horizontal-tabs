@@ -36,7 +36,7 @@ test("legacy late registration yields and reclaims without concurrent controller
   assert.equal(win.shared,undefined);
 });
 
-test("workspace swap suspends magnetic bookmarks until incoming fade ends",()=>{
+test("workspace outgoing phase suspends magnetic bookmarks before geometry lock",()=>{
  const source=readFileSync(new URL("../bookmarks.uc.mjs",import.meta.url),"utf8");
  const code=source.slice(source.indexOf("function syncAddressState(){"),source.indexOf("// Measure the native row"));
  const run=new Function(`let addressSuspended=false,addressPointer=null,lastPointer=null,phase=null,wave=false,clears=0,resumes=0;
@@ -45,5 +45,5 @@ test("workspace swap suspends magnetic bookmarks until incoming fade ends",()=>{
  ${code}
  const states=[];for(const p of ["out","swap","in",null]){phase=p;syncAddressState();states.push(addressSuspended);}
  return {states,clears,resumes};`);
- assert.deepEqual(run(),{states:[false,true,true,false],clears:1,resumes:1});
+ assert.deepEqual(run(),{states:[true,true,true,false],clears:1,resumes:1});
 });

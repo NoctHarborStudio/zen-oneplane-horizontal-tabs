@@ -102,3 +102,16 @@ test("icon updates remain live in the proxy without layout or private URL loggin
  const active=sync.slice(sync.indexOf('if(root.hasAttribute("data-zr-center-motion"))'),sync.indexOf("const homeOpen="));
  assert.ok(active.includes("refreshEntryIcon(tab,entry)"));assert.ok(!active.includes("centerToolbar()"));
 });
+
+test("startup uses decoded chrome icons and lazy session cache without navigation",()=>{
+ const tab=read("src/toolbar/tab-view.js.part");
+ const a=tab.indexOf("function faviconPage("),b=tab.indexOf("function favicon(",a);
+ const getPage=new Function("faviconSessionStore",tab.slice(a,b)+"return faviconPage;")({getLazyTabValue:()=>"https://example.org"});
+ assert.equal(getPage({ownerDocument:{defaultView:{}},linkedBrowser:{currentURI:{spec:"about:blank"}}}),"https://example.org");
+ assert.ok(source.includes("ctx.drawImage(src,"));
+ assert.ok(source.includes("img.decode?.()"));
+ assert.ok(source.includes("bitmapSource===current"));
+ assert.ok(!source.includes("toDataURL("));
+ assert.ok(!source.includes("getImageData("));
+ assert.ok(read("startup-animation.uc.mjs").includes("engine?.warmIcons?.(row)"));
+});

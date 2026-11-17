@@ -1,6 +1,6 @@
-// Nocturne preview.16: early trace, independent Sine script order.
+// Nocturne preview.17: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="bookmarks.script",data={version:"0.3.0-preview.16"};
+  const event="bookmarks.script",data={version:"0.3.0-preview.17"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -50,7 +50,7 @@ function install() {
   let addressSuspended=false, addressPointer=null;
   function syncAddressState(){
     const workspacePhase=root.getAttribute("data-zr-workspace-phase");
-    const next=root.hasAttribute("data-op-bookmark-wave")||workspacePhase==="swap"||workspacePhase==="in";
+    const next=root.hasAttribute("data-op-bookmark-wave")||workspacePhase==="out"||workspacePhase==="swap"||workspacePhase==="in";
     if(next===addressSuspended)return;
     addressSuspended=next;
     if(next){
@@ -133,7 +133,7 @@ function install() {
     contourSurface=null;contourKey="";
   }
   function updateContour(force=false){
-    if(dead||(!force&&addressSuspended)||root.hasAttribute("data-op-bookmark-wave"))return;
+    if(dead||(!force&&addressSuspended)||root.hasAttribute("data-op-bookmark-wave")||list.hasAttribute("data-zr-fold-bookmarks"))return;
     const surface=document.getElementById("oneplane-toolbar-surface"),row=document.getElementById("oneplane-tabs");
     if(!settings.enabled||!settings.stableBackground||!root.hasAttribute("oneplane-active")||
       root.getAttribute("zen-compact-mode")!=="true"||row?.getAttribute("data-ready")!=="true"||
@@ -158,7 +158,7 @@ function install() {
     for(const node of controls){
       if(node.hidden||node.collapsed||node.getAttribute("hidden")==="true"||node.getAttribute("collapsed")==="true")continue;
       const style=window.getComputedStyle(node),r=node.getBoundingClientRect();
-      if(style.display==="none"||style.visibility!=="visible"||Number(style.opacity)===0||r.width<1||r.height<1||
+      if(style.display==="none"||style.visibility!=="visible"||(!force&&Number(style.opacity)===0)||r.width<1||r.height<1||
         r.right<=bm.left||r.left>=bm.right||r.bottom<=bm.top||r.top>=bm.bottom)continue;
       left=left===null?r.left-wr.left:Math.min(left,r.left-wr.left);
       right=right===null?r.right-wr.left:Math.max(right,r.right-wr.left);

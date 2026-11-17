@@ -1,8 +1,19 @@
+  // Lazy Zen/Gecko tabs may not yet have a linked browser with a real URI.
+  // Read the session's local lazy URL without restoring or navigating it.
+  let faviconSessionStore=null;
+  try{faviconSessionStore=window.SessionStore||ChromeUtils.importESModule("resource:///modules/sessionstore/SessionStore.sys.mjs").SessionStore;}catch{}
+  function faviconPage(tab){
+    const valid=v=>typeof v==="string"&&/^https?:\/\//i.test(v);
+    let lazy=null,current=null;
+    try{lazy=(tab.ownerDocument.defaultView.SessionStore||faviconSessionStore)?.getLazyTabValue?.(tab,"url");}catch{}
+    try{current=tab.linkedBrowser?.currentURI?.spec;}catch{}
+    return [lazy,current,tab._originalUrl].find(valid)||"";
+  }
   function favicon(tab) {
     const local=t=>{
       const sources=[t.getAttribute("image"),t.querySelector(".tab-icon-image")?.getAttribute("src")];
       try{sources.push(t.ownerDocument.defaultView.gBrowser.getIcon(t));}catch{}
-      return sources.find(src=>/^(data:image\/|chrome:|resource:|moz-anno:|page-icon:|blob:)/i.test(src||""))||"";
+      return sources.find(src=>/^(data:image\/|chrome:|resource:|moz-anno:|page-icon:|blob:)/i.test(src||"")&&!/defaultFavicon\.svg(?:$|[?#])/i.test(src))||"";
     };
     const direct=local(tab);
     if(direct)return direct;
@@ -15,11 +26,11 @@
         const peer=win.gZenWindowSync.getItemFromWindow(win,tab.id);
         if(!peer||!win.gBrowser?.isTab(peer)||peer.closing||peer.getAttribute("zen-workspace-id")!==tab.getAttribute("zen-workspace-id"))continue;
         const icon=local(peer);if(icon&&!icon.startsWith("blob:"))return icon;
-        const page=peer.linkedBrowser?.currentURI?.spec||"";
+        const page=faviconPage(peer);
         if(/^https?:/i.test(page))return "page-icon:"+page;
       }
     }
-    const page=tab.linkedBrowser?.currentURI?.spec||"";
+    const page=faviconPage(tab);
     return /^https?:/i.test(page)?"page-icon:"+page:"";
   }
 
@@ -33,7 +44,12 @@
     const img = html("img");
     img.alt = "";
     img.draggable = false;
-    img.addEventListener("error", () => { img.hidden = true; });
+    img.addEventListener("error", () => {
+      const page=faviconPage(tab),fallback=page?"page-icon:"+page:"";
+      if(fallback&&img.getAttribute("src")!==fallback){img.hidden=false;img.setAttribute("src",fallback);}
+      else img.hidden=true;
+    });
+    img.decoding="async";
     img.addEventListener("load", () => { img.hidden = false; });
     icon.append(img);
     const audio = html("span", "oneplane-tab-audio");

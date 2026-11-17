@@ -1,6 +1,6 @@
-// Nocturne preview.16: early trace, independent Sine script order.
+// Nocturne preview.17: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.16"};
+  const event="assembly.script",data={version:"0.3.0-preview.17"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -307,6 +307,8 @@ try{if(typeof window!=="undefined"){
     typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.launch",()=>({one,paintCount:window.windowUtils?.paintCount,phase:root.getAttribute(PHASE),ready:root.getAttribute(READY),age:now()-started}),{sample:1800});
     if(dead||playing||settling)return;playing=true;
     try{
+      // Prime the resting contour while the startup gate is still held.
+      if(one)try{window.__oneplaneLayoutController?.prepareWorkspaceGeometry?.();}catch{}
       const row=get("oneplane-tabs"),url=get("urlbar-container");
       const bookmarks=get("PersonalToolbar"),items=get("PlacesToolbarItems");
       const floating=floatingBar();
@@ -389,9 +391,9 @@ try{if(typeof window!=="undefined"){
     if(one){
       const engine=window.__nocturneCenterMotion;
       if(!iconWaitAt)iconWaitAt=now();
-      if(now()-iconCheckAt>=75){iconCheckAt=now();iconStatus=engine?.iconStats?.(row)||null;}
+      if(now()-iconCheckAt>=75){iconCheckAt=now();iconStatus=engine?.warmIcons?.(row)||engine?.iconStats?.(row)||null;}
       const waiting=iconStatus&&(iconStatus.pending+iconStatus.missing)>0;
-      if(waiting&&now()-iconWaitAt<350){schedule();return;}
+      if(waiting&&now()-iconWaitAt<600){schedule();return;}
       decision("assembly.icons.ready",{...iconStatus,wait:now()-iconWaitAt,timeout:!!waiting});
     }
     typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.ready",()=>({one,active,state,expected,nativeReady,settled}),{sample:2500});
