@@ -22,13 +22,14 @@
   // A late loader cannot conceal an already-displayed interface seamlessly.
   if(typeof window.addUnloadListener!=="function"||window[SEEN]||root.hasAttribute("popup-window"))return;
   window[SEEN]=true;
-  function startupEligible(painted,delayed,oneState,age){
-    return age<6500&&(!painted||!delayed||oneState==="pending");
+  function startupEligible(painted,delayed,oneState,age,cold=null){
+    const recentCold=!!(cold?.initial&&Number.isFinite(cold.readyAt)&&age-cold.readyAt>=0&&age-cold.readyAt<=1800);
+    return age<8000&&(!painted||!delayed||oneState==="pending"||recentCold);
   }
   let lateStart=!canStartBeforePaint(window.windowUtils,document.readyState);
   if(!prefs.getBoolPref(ENABLE,true)||reduced.matches||window.closed||
       root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"||
-      !startupEligible(lateStart,window.gBrowserInit?.delayedStartupFinished,root.getAttribute(READY),now()))return;
+      !startupEligible(lateStart,window.gBrowserInit?.delayedStartupFinished,root.getAttribute(READY),now(),window.__nocturneLayoutStartup))return;
   // Sine saves the previous default as a user value. Upgrade that exact
   // 760ms default once; preserve every other choice, and allow users to
   // select 760ms again after the migration.
@@ -41,7 +42,7 @@
   }catch{}
   const duration=Math.max(400,Math.min(1500,prefs.getIntPref(DURATION,1050)));
   const scale=duration/1050;
-  const started=now(),deadline=started+5000;
+  const started=now(),deadline=started+8000;
   let dead=false,playing=false,settling=false,raf=0,timer=0,settled=false,nativeReady=false,readyAt=0,holdNode=null;
   let nativeObserver=null,style=null,lateObserver=null,lateResize=null,lateFrame=0,playStart=0,finishAt=0,sheetURI=null;
   const animations=new Map(),owned=new Map(),seen=new Set(),baseline=new Set();
@@ -113,8 +114,13 @@
     }
     timer=window.setTimeout(finish,155);
   }
-  function interrupt(){settle();}
-  function onResize(){if(playing)settle();}
+  function interrupt(event){if(event?.isTrusted!==false)settle();}
+  let viewport=[window.innerWidth,window.innerHeight];
+  function onResize(){
+    const next=[window.innerWidth,window.innerHeight];
+    const changed=Math.abs(next[0]-viewport[0])>1||Math.abs(next[1]-viewport[1])>1;
+    viewport=next;if(playing&&changed)settle();
+  }
   function preferenceChanged(){if(reduced.matches)finish();else if(!prefs.getBoolPref(ENABLE,true))settle();}
   function bounds(n,ignoreOpacity=false){
     if(!n||n.hidden||n.collapsed)return null;
@@ -342,9 +348,10 @@
     // Wait for optional integration only if it is actually present. Old
     // OnePlane versions are accepted if already active and visible.
     if(state==="pending"||(expected&&!active&&state!=="true")){schedule();return;}
-    if(!expected&&now()-readyAt<120){schedule();return;}
+    if(!expected&&now()-readyAt<350){schedule();return;}
     if(active&&state==="true"&&root.getAttribute("zen-compact-mode")==="true"&&!holdNode?.hasAttribute("data-op-panel-open")){schedule();return;}
-    const one=Boolean(active&&bounds(row)&&(root.getAttribute("zen-compact-mode")!=="true"||holdNode?.hasAttribute("data-op-panel-open")));
+    const one=Boolean(active&&bounds(row,true)&&(root.getAttribute("zen-compact-mode")!=="true"||holdNode?.hasAttribute("data-op-panel-open")));
+    if(active&&!one){schedule();return;}
     // A narrow/hidden legacy strip falls back to native UI, never forces
     // a layout preference. With pending integration, fail open on timeout.
     if(!get("nav-bar")&&!get("navigator-toolbox")){schedule();return;}

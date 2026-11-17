@@ -17,7 +17,8 @@ test("transition bypasses startup, disabled and reduced-motion states",()=>{
 });
 test("native switch stays single-owned and chrome-only",()=>{
  assert.ok(!source.includes("changeWorkspaceWithID="));
- assert.ok(!source.includes("tabbrowser-tabpanels"));
+ assert.ok(source.includes('get("tabbrowser-tabpanels")'));
+ assert.ok(!source.includes("contentDocument"));assert.ok(!source.includes("contentWindow"));assert.ok(source.includes("Keep the page opaque"));
  assert.ok(!source.includes("zen-main-browser-background"));
  assert.ok(source.includes('phase("swap");cancelEffects(tx);'));
  assert.ok(source.includes('phase("in");'));
@@ -115,4 +116,22 @@ test("new request retains hidden toolbar while old native switch is in flight",a
  finish();await f.flush();await f.advance();await f.advance();await Promise.all([a,b]);
  assert.deepEqual(f.events,["out","swap","in","idle"]);
  assert.equal(f.root.hasAttribute("data-zr-workspace-phase"),false);
+});
+
+test("shelf FLIP ratio is bounded and matches old/new heights",()=>{
+ const i=source.indexOf("function heightScale("),j=source.indexOf("function neutralTranslate(",i);
+ const ratio=new Function(source.slice(i,j)+"return heightScale;")();
+ assert.equal(ratio(80,120),80/120);assert.equal(ratio(120,80),1.5);
+ assert.equal(ratio(0,80),1);assert.equal(ratio(1000,1),4);
+});
+test("geometry lock is released once and leaves no temporary dimensions",()=>{
+ const i=source.indexOf("  let geometryLock=null;"),j=source.indexOf("  function phase(value)",i);
+ const run=new Function(`const attrs=new Set(),styles=new Map();
+ const node=(height,top=0)=>({isConnected:true,getBoundingClientRect:()=>({height,top}),style:{setProperty:(k,v)=>styles.set(k,v),removeProperty:k=>styles.delete(k)},setAttribute:k=>attrs.add(k),removeAttribute:k=>attrs.delete(k)});
+ const nodes={"zen-appcontent-navbar-wrapper":node(80),"oneplane-toolbar-surface":node(120),"PlacesToolbarItems":node(20,60),"tabbrowser-tabpanels":node(600,80)};
+ const get=k=>nodes[k],root={getAttribute:()=>"true"};
+ ${source.slice(i,j)}
+ lockGeometry();const locked=[...styles];const first=releaseGeometry();const second=releaseGeometry();
+ return {locked,old:first.surfaceHeight,top:first.bookmarkTop,empty:styles.size===0&&attrs.size===0,second};`);
+ assert.deepEqual(run(),{locked:[["--zr-workspace-height","80px"],["--zr-workspace-surface-height","120px"]],old:120,top:60,empty:true,second:null});
 });

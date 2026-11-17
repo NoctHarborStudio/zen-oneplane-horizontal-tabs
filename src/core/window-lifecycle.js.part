@@ -239,6 +239,7 @@
     destroy();
     throw error;
   }
+  destroy.prepareWorkspaceGeometry=prepareWorkspaceGeometry;
   return destroy;
 }
 
