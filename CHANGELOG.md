@@ -1,3 +1,8 @@
+## 0.3.0-preview.14 — Horizontal download wave orientation
+
+- Rotate the hosted downloads wave to originate below the toolbar, travel down the left edge, then across the bottom. Use a top bridge with unchanged resting content coordinates and reverse the same contour on close.
+- Keep native left/right sidebar paths unchanged. Measure resting height correctly when the hosted reveal is interrupted.
+
 ## 0.3.0-preview.13 — Consistent row geometry
 
 - Share the same 52px row pitch, 21px vertical center, 10px bottom reserve and 1px horizontal lane inset across single and adaptive two-row modes. The second row extends downward without moving Home or upper cards. Keep the bottom slider in its reserved space.

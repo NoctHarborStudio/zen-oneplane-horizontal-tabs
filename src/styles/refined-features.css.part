@@ -153,6 +153,16 @@
   padding-left:calc(12px + var(--zr-wave-extension,32px));
   translate:calc(var(--zr-overlay-x,6px) - var(--zr-wave-extension,32px)) var(--zr-overlay-y,8px);
 }
+/* Horizontal host: bridge above, with unchanged resting content geometry. */
+#zr-download-dock:is([data-entering],[data-closing])[data-side="top"] {
+  width:var(--zr-overlay-width,430px);
+  padding-top:calc(12px + var(--zr-wave-extension,32px));
+  max-height:calc(100vh - var(--zr-overlay-y,8px) - 12px + var(--zr-wave-extension,32px));
+  translate:var(--zr-overlay-x,6px) calc(var(--zr-overlay-y,8px) - var(--zr-wave-extension,32px));
+}
+#zr-download-dock[data-full]:is([data-entering],[data-closing])[data-side="top"] {
+  height:calc(100vh - var(--zr-overlay-y,8px) - 12px + var(--zr-wave-extension,32px));
+}
 #zr-download-dock[data-entering] > * { animation:zr-panel-content-in 780ms linear both; }
 #zr-download-dock[data-closing] > * { animation:zr-panel-content-in 780ms linear reverse both; }
 /* Finish at the actual resting opacity, not a brighter temporary value. */
