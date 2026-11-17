@@ -1,27 +1,28 @@
+// Each release is isolated: one feature failure must not prevent native
+// preference restoration or the remaining controller cleanup.
+function cleanupStep(label,fn){
+  try{fn();}catch(error){console.warn("[Nocturne] Cleanup "+label+":",error);}
+}
 function cleanup() {
   if (disposed) return;
   disposed = true;
-  root.removeAttribute("oneplane-active");
-  root.removeAttribute("data-op-startup-ready");
-  window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
-  removeTabStrip?.();
+  cleanupStep("active flag",()=>root.removeAttribute("oneplane-active"));
+  cleanupStep("ready flag",()=>root.removeAttribute("data-op-startup-ready"));
+  cleanupStep("startup event",()=>window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState")));
+  cleanupStep("tab strip",()=>removeTabStrip?.());
   removeTabStrip = null;
   if (startupObserver) {
-    Services.obs.removeObserver(startupObserver, "browser-delayed-startup-finished");
+    cleanupStep("startup observer",()=>Services.obs.removeObserver(startupObserver, "browser-delayed-startup-finished"));
     startupObserver = null;
   }
-  window.removeEventListener("beforeunload", markClosing, true);
-  window.removeEventListener("unload", cleanup);
+  cleanupStep("beforeunload",()=>window.removeEventListener("beforeunload", markClosing, true));
+  cleanupStep("unload",()=>window.removeEventListener("unload", cleanup));
   const wasApplied = applied;
   applied = false;
   if (window[CONTROLLER] === controller) delete window[CONTROLLER];
   if (!wasApplied) return;
-  try {
-    if (!otherActiveWindow()) restorePrefs();
-    if (!closing) window.dispatchEvent(new CustomEvent("ZenCompactMode:LayoutUpdate"));
-  } catch (error) {
-    console.error("[OnePlane] Could not completely restore layout:", error);
-  }
+  cleanupStep("layout preferences",()=>{if (!otherActiveWindow()) restorePrefs();});
+  if (!closing) cleanupStep("native layout update",()=>window.dispatchEvent(new CustomEvent("ZenCompactMode:LayoutUpdate")));
 }
 
 const controller = { get active() { return applied && !disposed; }, cleanup };

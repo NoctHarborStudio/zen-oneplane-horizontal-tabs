@@ -97,3 +97,11 @@ See [migration pipeline](migration.md) and [validation gates](validation.md).
 ## Stabilization checkpoint
 
 See [audit register](audit.md) for NC-001–NC-007. Preview.2 fixes narrow Downloads host detection and process-wide Startup ownership; adds a legacy warning, not coexistence support. Unified Core and native runtime gates remain pending.
+
+## Full source audit checkpoint
+
+The [full preview.2 audit](full-audit-preview.2.md) documents actual cross-controller dependencies, source parity, missing Downloads host and reproduced lifecycle races. Resolve Stabilization A before vertical; measure animation ownership/geometry issues in Stabilization B. The target architecture remains a proposal, not yet implemented.
+
+## Stabilization A implementation
+
+Preview.3 adds the per-window persistent workspace command gate (explicit Home/Hub calls), Downloads generation fencing, Smart Search rollback, best-effort layout teardown and a 30px Horizontal Downloads slot with a dedicated hold. These are incremental runtime contracts, not a completed Unified Core. The bottom Utility Dock, process-level native command service and shared motion/contour ownership remain planned.

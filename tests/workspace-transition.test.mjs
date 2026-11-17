@@ -38,10 +38,11 @@ function lifecycleFixture(){
    CustomEvent:class{constructor(type,o){this.type=type;this.detail=o.detail;}},dispatchEvent:e=>events.push(e.detail.phase),
    MutationObserver:class{observe(){} disconnect(){}},setTimeout(fn,ms){const n=++id;timers.set(n,{fn,at:clock+ms});return n;},clearTimeout:n=>timers.delete(n)};
  const doc={documentElement:root,getElementById:k=>k==="PlacesToolbarItems"?bookmarks:null};
- new Function("window","document","Services","console",source)(win,doc,{prefs,io:{newURI:x=>x}},{warn(){}});
+ const reinstall=()=>new Function("window","document","Services","console",source)(win,doc,{prefs,io:{newURI:x=>x}},{warn(){}});
+ reinstall();
  async function flush(){for(let j=0;j<12;j++)await Promise.resolve();}
  async function advance(){await flush();const next=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];if(next){timers.delete(next[0]);clock=next[1].at;next[1].fn();}await flush();}
- return {win,root,bookmarks,old,fresh,events,timers,advance,flush};
+ return {win,root,bookmarks,old,fresh,events,timers,advance,flush,reinstall};
 }
 test("workspace transition keeps native callback single, phases ordered and styles restored",async()=>{
  const f=lifecycleFixture();let calls=0;
@@ -66,4 +67,33 @@ test("slow native switch cannot leave the chrome hidden indefinitely",async()=>{
  await f.advance();await f.advance();
  assert.equal(f.root.hasAttribute("data-zr-workspace-phase"),false);
  resolve("native");assert.equal(await result,"native");assert.equal(f.timers.size,0);
+});
+
+test("native calls serialize and coalesce a newer queued request",async()=>{
+ const f=lifecycleFixture(),calls=[];let resolveOld;
+ const api=f.win.__zenRefinedWorkspaceTransition;
+ const a=api.run(()=>{calls.push("old-start");return new Promise(r=>resolveOld=()=>{calls.push("old-end");r("old");});});
+ await f.flush();assert.deepEqual(calls,["old-start"]);
+ const b=api.run(()=>calls.push("superseded"));
+ const c=api.run(()=>calls.push("new"));
+ await f.flush();assert.deepEqual(calls,["old-start"]);
+ resolveOld();await f.flush();await f.advance();await f.advance();
+ await Promise.all([a,b,c]);assert.deepEqual(calls,["old-start","old-end","new"]);
+});
+test("dispose cancels unstarted native command",async()=>{
+ const f=lifecycleFixture();let calls=0;
+ const api=f.win.__zenRefinedWorkspaceTransition;
+ const result=api.run(()=>calls++);api.dispose();await f.flush();await result;
+ assert.equal(calls,0);assert.equal(f.timers.size,0);
+});
+test("replacement waits for already started native command",async()=>{
+ const f=lifecycleFixture(),calls=[];let resolveOld;
+ const a=f.win.__zenRefinedWorkspaceTransition.run(()=>{calls.push("old");return new Promise(r=>resolveOld=r);});
+ await f.flush();
+ // Reinstall actual script in the same window; the gate must survive.
+ f.reinstall();
+ const b=f.win.__zenRefinedWorkspaceTransition.run(()=>calls.push("new"));
+ await f.flush();assert.deepEqual(calls,["old"]);
+ resolveOld();await f.flush();await f.advance();await f.advance();await Promise.all([a,b]);
+ assert.deepEqual(calls,["old","new"]);
 });

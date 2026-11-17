@@ -1,6 +1,6 @@
 /* Zen Refined — Download Indicator. Native download events, no polling,
  * no interception of downloads, no file/network access. One view per window.
- * A future OnePlane Extension Dock can host the same view via setHost(). */
+ * Horizontal layout hosts the same view; native sidebar remains the fallback. */
 (() => {
   const root=document.documentElement,prefs=Services.prefs;
   const PREF="zen.refined.downloads.indicator",STATS_PREF="zen.refined.downloads.statistics",KEY="__zenRefinedDownloadIndicator";
@@ -16,7 +16,7 @@
   let flight=null,flightAnimation=null,panelAnimation=null,panelToken=0,entering=false,manualHold=false,sidebarOrigin=false,overlayLayer=null;
   let layoutFrame=0,resizeObserver=null,observedSidebar=null,anchor=null,lastClick=null,cardOpen=false,flightToken=0,flightTimer=0,latest=null;
   let updateTimer=0,hideTimer=0,readyObserver=null,layoutObserver=null,initialized=false,hydrating=false;
-  let lastDockRect=null,followFrame=0,followUntil=0,overlayUntil=0;
+  let lastDockRect=null,followFrame=0,followUntil=0,overlayUntil=0,heldWrapper=null;
   let dock=null,dockList=null,dockEmpty=null,dockMore=null,dockBackdrop=null,dockNotice=null,dockOpen=false,limit=30;
   const history=new Map(),rows=new Map();
   let historyOrder=null,recentOrder=null,dockHeight=0,allButton=null,dockTitle=null,dockSort=null;
@@ -139,6 +139,17 @@
       lastDockRect={edge,top:y,height,x,y:iconY,side:resolved,seedW:i.width||19,seedH:i.height||19};
       return lastDockRect;
     }
+    if(node?.hasAttribute("data-zr-hosted")){
+      const n=node.getBoundingClientRect(),i=icon.getBoundingClientRect();
+      // Keep the panel below its real toolbar anchor and follow its reveal.
+      if(n.width>2&&n.height>2){
+        const x=clamp(i.width?i.left+i.width/2:n.left+n.width/2,8,w-8);
+        const top=clamp(n.bottom+4,8,Math.max(8,window.innerHeight-160));
+        const y=clamp(i.height?i.top+i.height/2:n.top+n.height/2,8,Math.max(8,window.innerHeight-8));
+        lastDockRect={edge:clamp(n.left,0,w),top,height:n.height,x,y,side:"left",seedW:i.width||16,seedH:i.height||16};
+        return lastDockRect;
+      }
+    }
     if(node&&visible(node)){
       const n=node.getBoundingClientRect(),i=icon.getBoundingClientRect();
       lastDockRect={edge:right?n.left:n.right,top:n.top,height:n.height,x:i.left+i.width/2,y:i.top+i.height/2,side:side(),seedW:i.width||19,seedH:i.height||19};
@@ -234,7 +245,8 @@
     updateOverlayMask(r);
     const width=Math.min(OVERLAY_WIDTH,Math.max(1,w-12));
     setVar(dock,"--zr-wave-extension",WAVE_EXTENSION+"px");
-    const x=clamp(right?r.edge-width-8:r.edge+8,6,w-width-6);
+    const hosted=node.hasAttribute("data-zr-hosted");
+    const x=clamp(hosted?r.x-20:right?r.edge-width-8:r.edge+8,6,w-width-6);
     // Both modes share the same top and x. Full mode fills the remaining
     // viewport, including the real bottom margin, with an inner scroll area.
     const y=clamp(r.top,8,Math.max(8,h-160));
@@ -242,8 +254,8 @@
     setVar(dock,"--zr-overlay-x",x+"px");setVar(dock,"--zr-overlay-y",y+"px");
     if(dock.getAttribute("data-side")!==r.side)dock.setAttribute("data-side",r.side);
     if(!following||!dockHeight)dockHeight=dock.offsetHeight||Math.max(1,h-y-12);
-    setVar(dockBackdrop,"--zr-outside-left",(right?0:Math.max(0,r.edge))+"px");
-    setVar(dockBackdrop,"--zr-outside-right",(right?Math.max(0,w-r.edge):0)+"px");
+    setVar(dockBackdrop,"--zr-outside-left",(hosted||right?0:Math.max(0,r.edge))+"px");
+    setVar(dockBackdrop,"--zr-outside-right",(!hosted&&right?Math.max(0,w-r.edge):0)+"px");
     return following?undefined:panelGeometry(r,width,dockHeight,x,y);
   }
   function cancelPanel(){
@@ -282,13 +294,14 @@
   }
   function mount(){
     if(!node||dead)return;
-    const one=onePlane(),slot=one&&(host?.isConnected?host:get("oneplane-download-indicator-slot"));
+    const one=onePlane(),candidate=host?.isConnected?host:get("oneplane-download-indicator-slot");
+    const slot=one&&candidate?.isConnected&&candidate.ownerDocument===document?candidate:null;
     const placement=!one?nativeAnchor():null;
     const toolbox=get("navigator-toolbox");
     const native=!!placement;
     const parent=slot||placement?.parent||root;
     const before=placement?.before;
-    anchor=before||null;
+    anchor=slot||before||null;
     const changed=node.parentElement!==parent||(native&&!!before&&before!==node&&node.nextElementSibling!==before);
     const oldSide=node.getAttribute("data-side");
     if(changed){
@@ -300,15 +313,16 @@
     node.toggleAttribute("data-zr-native",native);
     node.toggleAttribute("data-zr-oneplane",!!one&&!slot);
     node.setAttribute("data-side",side());
-    syncSidebarHold();
+    syncDownloadHolds();
     // Only OnePlane without a host (or an unsupported missing toolbox)
     // uses the floating fallback. A hidden native sidebar never reparents.
     node.toggleAttribute("data-fallback",!slot&&!native);
     root.toggleAttribute("data-zr-downloads-native",native);
     if(changed||(oldSide&&oldSide!==side())){lastDockRect=null;syncTheme(node,dock); }
-    if(toolbox!==observedSidebar){
+    if(toolbox!==observedSidebar||changed){
       resizeObserver?.disconnect();observedSidebar=toolbox;if(toolbox)resizeObserver?.observe(toolbox);
       if(dock)resizeObserver?.observe(dock);
+      if(slot)resizeObserver?.observe(slot);
     }
     // Cache the last visible location on structural/visibility changes.
     if(cardOpen||dockOpen||current()<overlayUntil){positionOverlays();follow();}
@@ -473,7 +487,7 @@
     dock.inert=true;dock.setAttribute("aria-hidden","true");
     node?.setAttribute("aria-expanded","false");updateLive();
     if(restoreFocus&&visible(node))node.focus?.({preventScroll:true});
-    const done=()=>{dock?.removeAttribute("data-closing");manualHold=false;sidebarOrigin=false;syncSidebarHold();};
+    const done=()=>{dock?.removeAttribute("data-closing");manualHold=false;sidebarOrigin=false;syncDownloadHolds();};
     if(!g||progress<=0){done();return;}
     const reverse=reverseWave(g.frames,progress);
     const start=progress<1&&startClip.startsWith("path(")?
@@ -632,16 +646,29 @@
     const hold=!dead&&sidebarOrigin&&!!node?.hasAttribute("data-zr-native")&&!!(cardOpen||dockOpen||dock?.hasAttribute("data-closing"));
     if(node&&node.hasAttribute("panelopen")!==hold)node.toggleAttribute("panelopen",hold);
   }
+  function syncHostedHold(){
+    const wrapper=get("zen-appcontent-navbar-wrapper");
+    const hold=!dead&&onePlane()&&!!node?.hasAttribute("data-zr-hosted")&&
+      !!(cardOpen||dockOpen||flight||dock?.hasAttribute("data-closing"));
+    if(heldWrapper&&(!hold||heldWrapper!==wrapper)){
+      heldWrapper.removeAttribute("oneplane-download-hold");heldWrapper=null;
+    }
+    if(hold&&wrapper){
+      heldWrapper=wrapper;
+      if(!wrapper.hasAttribute("oneplane-download-hold"))wrapper.setAttribute("oneplane-download-hold","true");
+    }
+  }
+  function syncDownloadHolds(){syncSidebarHold();syncHostedHold();}
   function updateLive(){
     node?.toggleAttribute("data-live",snapshot.active>0||cardOpen||dockOpen||!!flight);
-    syncSidebarHold();
+    syncDownloadHolds();
   }
   function pinPanel(fromIndicator=false){
     if(!cardOpen&&!dockOpen)return;
     // A click inside an auto notification pins only the downloads surface.
     // Only an explicit indicator click is allowed to acquire the sidebar.
     manualHold=true;if(fromIndicator)sidebarOrigin=true;
-    cancelHide();syncSidebarHold();follow(800);
+    cancelHide();syncDownloadHolds();follow(800);
   }
   function openCard(manual=false){
     if(!dock||!node||dead||dockOpen)return;
@@ -677,7 +704,7 @@
     const token=flightToken;
     flight=make("span","zr-download-flight");flight.setAttribute("aria-hidden","true");
     const glyph=make("span","zr-download-icon");flight.append(glyph);
-    flight.style.setProperty("left",x+"px");flight.style.setProperty("top",y+"px");overlayLayer.append(flight);syncTheme(flight);
+    flight.style.setProperty("left",x+"px");flight.style.setProperty("top",y+"px");overlayLayer.append(flight);syncTheme(flight);syncHostedHold();
     try{
       // A short compositor-friendly curved flight; no frame callbacks,
       // no bouncing, and the card opens only after it reaches the icon.
@@ -704,6 +731,9 @@
     else fill.style.removeProperty("--zr-download-progress");
     const text=s.active?speedText(s.speed):"";
     if(speed.textContent!==text)speed.textContent=text;
+    const label=text?"Downloads — "+text:"Downloads";
+    if(node.getAttribute("title")!==label)node.setAttribute("title",label);
+    if(node.getAttribute("aria-label")!==label)node.setAttribute("aria-label",label);
     if(cardOpen)renderRecent();
     if(dockOpen)renderDock();
     // No geometry reads on ordinary transfer updates.
@@ -747,10 +777,10 @@
   function removed(d){if(history.delete(d)){historyOrder=null;recentOrder=null;}if(batch.delete(d)){if(latest===d)latest=null;schedule(true);}else if(dockOpen||cardOpen)schedule();}
   function teardown(){
     ++epoch;
-    if(updateTimer)window.clearTimeout(updateTimer);updateTimer=0;cancelHide();cancelFlight();cancelPanel();cardOpen=dockOpen=false;manualHold=false;sidebarOrigin=false;dock?.removeAttribute("data-closing");syncSidebarHold();stopFollow();overlayUntil=0;
+    if(updateTimer)window.clearTimeout(updateTimer);updateTimer=0;cancelHide();cancelFlight();cancelPanel();cardOpen=dockOpen=false;manualHold=false;sidebarOrigin=false;dock?.removeAttribute("data-closing");syncDownloadHolds();stopFollow();overlayUntil=0;
     if(layoutFrame)window.cancelAnimationFrame(layoutFrame);layoutFrame=0;
     resizeObserver?.disconnect();resizeObserver=null;observedSidebar=anchor=null;
-    if(list&&view)try{list.removeView(view);}catch{}
+    if(list&&view)try{Promise.resolve(list.removeView(view)).catch(()=>{});}catch{}
     list=view=null;hydrating=false;
     layoutObserver?.disconnect();layoutObserver=null;
     window.removeEventListener("resize",scheduleMount);window.removeEventListener("OnePlane:DownloadHostChanged",scheduleMount);
@@ -768,21 +798,31 @@
   async function install(){
     if(dead||node||!enabled())return;
     const token=++epoch;
+    let source=null,ownedView=null;
+    const currentGeneration=()=>!dead&&token===epoch&&enabled()&&!window.closed;
+    const detach=async()=>{if(source&&ownedView)try{await source.removeView(ownedView);}catch{}};
     try{
       const Downloads=window.Downloads||ChromeUtils.importESModule("resource://gre/modules/Downloads.sys.mjs").Downloads;
       const PB=ChromeUtils.importESModule("resource://gre/modules/PrivateBrowsingUtils.sys.mjs").PrivateBrowsingUtils;
-      const source=await Downloads.getList(PB.isWindowPrivate(window)?Downloads.PRIVATE:Downloads.PUBLIC);
-      if(dead||token!==epoch||!enabled()||window.closed)return;
+      source=await Downloads.getList(PB.isWindowPrivate(window)?Downloads.PRIVATE:Downloads.PUBLIC);
+      if(!currentGeneration())return;
       build();list=source;hydrating=true;
-      view={onDownloadAdded:added,onDownloadChanged:changed,onDownloadRemoved:removed};
-      await list.addView(view);
-      if(dead||token!==epoch||list!==source)return;
+      // Late addView replay must not mutate a replacement instance.
+      const guard=fn=>download=>{if(currentGeneration()&&view===ownedView)fn(download);};
+      ownedView={onDownloadAdded:guard(added),onDownloadChanged:guard(changed),onDownloadRemoved:guard(removed)};
+      view=ownedView;
+      await source.addView(ownedView);
+      if(!currentGeneration()||list!==source||view!==ownedView){await detach();return;}
       hydrating=false;
       // Hide only this window's confusing native flight. Do not write the
       // global zen.downloads.download-animation preference or patch Zen.
       root.setAttribute(ACTIVE,"true");
       schedule(true);
-    }catch(error){console.warn("[Zen Refined] Download indicator:",error);teardown();}
+    }catch(error){
+      const owned=token===epoch&&!dead;
+      if(owned){console.warn("[Nocturne] Download indicator:",error);teardown();}
+      await detach();
+    }
   }
   function sync(){if(!initialized||dead)return;if(enabled())void install();else teardown();}
   function start(){initialized=true;sync();}

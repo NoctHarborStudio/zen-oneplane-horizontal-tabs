@@ -135,7 +135,7 @@
   function onCompactChanged() {
     hub.onMode();
     if(!hoverSupported()){cancelActiveDrag("unsupported-layout");closeNativeTabMenu();}
-    if(hoverSupported())ensureWindowCaptions();
+    if(hoverSupported()){ensureWindowCaptions();ensureDownloadHost();}
     else restoreWindowCaptions();
     if (!hoverSupported()) { clearHover(); clearTabHover(); releaseAddressHold(); clearAddressAnimation(); addressWasOpen = false; }
     else if (nativeInlineOpen(addressBar()) && !addressTransition && !addressSettling) addressWidths();

@@ -14,6 +14,22 @@ function installTabStrip() {
   };
   const row = html("div");
   row.id = "oneplane-tabs";
+  // A fixed-size feature slot, independent of tab mirror membership.
+  // Empty slots consume no space. The Downloads controller owns its button.
+  const downloadHost=html("div","oneplane-download-host");
+  downloadHost.id="oneplane-download-indicator-slot";
+  downloadHost.setAttribute("skipintoolbarset","true");
+  downloadHost.setAttribute("removable","false");
+  function ensureDownloadHost(){
+    if(downloadHost.parentElement===target)return;
+    target.append(downloadHost);
+    window.dispatchEvent(new window.CustomEvent("OnePlane:DownloadHostChanged"));
+  }
+  function releaseDownloadHost(){
+    downloadHost.remove();
+    window.__zenRefinedDownloadIndicator?.setHost?.(null);
+    window.dispatchEvent(new window.CustomEvent("OnePlane:DownloadHostChanged"));
+  }
   row.setAttribute("skipintoolbarset", "true");
   row.setAttribute("removable", "false");
   const compactSearch=html("button","oneplane-compact-search");

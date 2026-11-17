@@ -26,3 +26,31 @@ Status: source-level stabilization in preview.2; Windows Zen validation remains 
 ## Implementation decisions
 
 No layout, animation, preference IDs, Sine package ID, or session/workspace data changed in preview.2. The existing nine runtime entries remain. Import ledger describes the original import, not a permanent hash constraint for subsequent controller fixes. The legacy diagnostic uses Sine 2.3.3's read-only utils.getMods API; if unavailable, it silently skips diagnostics. It cannot prevent CSS conflicts or old code running after a new controller, and must not be presented as coexistence support. Shared Startup ownership uses the native browser-window enumerator rather than a persistent process registry; later Unified Core can generalize the lease.
+
+## Full audit expansion — 0.3.0-preview.2
+
+See [full-audit-preview.2.md](full-audit-preview.2.md) for detailed source references, execution graph, comparison and reproduction evidence. Developer reports the package works in Zen with inherited jitter and missing real Downloads UI placement. NC-001/003 source fixes remain; runtime details not exhaustively validated.
+
+| ID | Priority | Finding | Status |
+| --- | --- | --- | --- |
+| NC-008 | P1 | Downloads host absent; fallback hides at idle | Implemented in preview.3; permanent compact horizontal host; actual Zen visual validation pending |
+| NC-009 | P1 | Concurrent native workspace switches after visual supersession | Fixed in preview.3 for explicit Home/Hub transition calls; gate survives replacement, fixtures pass; native Zen validation pending |
+| NC-010 | P1 | Stale Downloads async rejection tears down new instance | Fixed in preview.3; generation-guarded callbacks/catch and late view cleanup; fixtures pass |
+| NC-011 | P1 | Smart Search partial mount leaves provider | Fixed in preview.3; transactional rollback and retained diagnostics; fixture passes |
+| NC-012 | P1 | Layout cleanup exception blocks restoration | Fixed in preview.3; best-effort teardown and independent native restoration; fixture passes |
+| NC-013 | P2 | Two Fade owners, differing overflow-row base | Confirmed source; visual impact needs trace |
+| NC-014 | P2 | Repeated geometry and Home/search handoff work | Profile required |
+| NC-015 | P2 | Uncoordinated motion property ownership | Source risk; profile and interaction tests |
+| NC-016 | P1 | Workspace unload executes delayed native switch | Fixed in preview.3; pending commands cancelled on dispose, already-started operations settle; fixtures pass |
+| NC-017 | P2 | Global layout prefs/Free startup transaction | Source risk; process coordinator |
+| NC-018 | P2 | Partial Hub/drag operations on native failure | Source risk; fault tests |
+| NC-019 | P2 | Home/Hub lifecycle, focus and drag regions | Architecture debt |
+| NC-020 | P3 | Candidate CI, exact package tests and bookmark ownership lock | Pipeline debt |
+| NC-021 | P2 | Downloads host needs hold/anchor/overflow contract | Initial host/hold/anchor implemented in preview.3; real narrow/customization/focus verification and full lower dock pending |
+| NC-022 | P3 | Page Progress root-fixed placement and missing dedicated tests | Design/test gap |
+
+No claim that every source risk manifests in actual Zen. Prioritize confirmed failures, then measured visual improvements; do not skip to Vertical before these gates.
+
+## Stabilization A implementation — preview.3
+
+Five reproduced failure paths are fixed and covered by regression fixtures. Downloads has a stable 30px slot near Hub, separate Compact hold and anchored overlay; speed is available in tooltip and details. The full lower-left Utility/Extension Dock remains a separate UI milestone. No change to native workspace/session data or animation timings. Native Zen validation remains required; no claim that all jitter is fixed.

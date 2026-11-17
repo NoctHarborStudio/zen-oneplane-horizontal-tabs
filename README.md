@@ -2,7 +2,7 @@
 
 A unified UI modification for [Zen Browser](https://zen-browser.app/), combining OnePlane and Zen Refined. Nocturne is not a browser fork.
 
-**Development preview: 0.3.0-preview.2** · Target: Zen 1.24.2b / Sine 2.3.3. Native verification of this combined package is pending.
+**Development preview: 0.3.0-preview.3** · Target: Zen 1.24.2b / Sine 2.3.3. Native verification of this combined package is pending.
 
 ## Features
 
@@ -10,7 +10,7 @@ A unified UI modification for [Zen Browser](https://zen-browser.app/), combining
 - **Home & Hub:** native workspace integration, Free/Trash, pinned shortcuts, projection and split/tab interactions.
 - **Smart Search:** recent active tabs and native recommendations, with native tab selection.
 - **Magnetic Bookmarks:** native bookmark magnification, liquid indicator and stable contour.
-- **Downloads Dock:** native downloads, live progress and recent/full list.
+- **Downloads Dock:** permanent compact horizontal toolbar slot, native downloads, live progress and recent/full list.
 - **Page Progress:** center-out loading line.
 - **Center Assembly / Disassembly / Workspace Transition:** existing coordinated animations.
 - Vertical layout is planned, not implemented in this release.
@@ -34,6 +34,7 @@ Node 20+; no npm dependencies. Edit source fragments in src/ for the horizontal 
 - [Nocturne architecture](docs/nocturne/architecture.md)
 - [Migration pipeline](docs/nocturne/migration.md)
 - [Stabilization audit](docs/nocturne/audit.md)
+- [Full preview.2 audit](docs/nocturne/full-audit-preview.2.md)
 - [Validation gates](docs/nocturne/validation.md)
 - [Import provenance](docs/nocturne/import-ledger.json)
 - [Historical OnePlane README](docs/nocturne/oneplane-baseline-readme.md)

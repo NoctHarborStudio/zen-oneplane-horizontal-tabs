@@ -1,3 +1,12 @@
+## 0.3.0-preview.3 — Stabilization A
+
+- Serialize explicit native workspace switches across Home and Hub, coalesce pending requests and preserve the in-flight gate across controller reload. Disposing cancels commands not yet started.
+- Guard Download view callbacks and async failures by generation; detach late views without touching a replacement.
+- Roll back partially installed Smart Search providers, wrappers and listeners; retain diagnostic status until unload.
+- Isolate layout teardown operations so later releases and native preference restoration continue after a feature failure.
+- Add a real 30px Downloads host in the left navigation group, fixed dimensions, progress line and speed tooltip, anchored panel and independent Compact hold. The full lower Utility/Extension Dock remains planned.
+- Add regression fixtures and full candidate verification before publishing. Existing animation timelines unchanged.
+
 ## 0.3.0-preview.2 — Package Stabilization
 
 - Fix Downloads Dock host selection on narrow adaptive OnePlane windows; use the same ready-strip and fullscreen/customization gate as layout CSS, watch readiness changes.
