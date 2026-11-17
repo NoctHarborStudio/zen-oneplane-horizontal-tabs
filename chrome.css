@@ -2095,7 +2095,7 @@
 /* Real painted bridge, not an out-of-bounds clip of the resting box.
    Extra padding preserves the content width; the left variant offsets
    its border box so the resting content coordinates never move. */
-#zr-download-dock:is([data-entering],[data-closing]) {
+#zr-download-dock:is([data-entering],[data-closing]):not([data-side="top"]) {
   width:calc(var(--zr-overlay-width,430px) + var(--zr-wave-extension,32px));
   border-color:transparent;
   box-shadow:none;
@@ -2108,15 +2108,13 @@
   padding-left:calc(12px + var(--zr-wave-extension,32px));
   translate:calc(var(--zr-overlay-x,6px) - var(--zr-wave-extension,32px)) var(--zr-overlay-y,8px);
 }
-/* Horizontal host: bridge above, with unchanged resting content geometry. */
-#zr-download-dock:is([data-entering],[data-closing])[data-side="top"] {
-  width:var(--zr-overlay-width,430px);
-  padding-top:calc(12px + var(--zr-wave-extension,32px));
-  max-height:calc(100vh - var(--zr-overlay-y,8px) - 12px + var(--zr-wave-extension,32px));
-  translate:var(--zr-overlay-x,6px) calc(var(--zr-overlay-y,8px) - var(--zr-wave-extension,32px));
-}
-#zr-download-dock[data-full]:is([data-entering],[data-closing])[data-side="top"] {
-  height:calc(100vh - var(--zr-overlay-y,8px) - 12px + var(--zr-wave-extension,32px));
+/* The horizontal wave is a clip inside the resting panel. Keep the
+   same border, paint, padding and dimensions before and after motion.
+   The resting clip also avoids a shadow appearing only on the last frame. */
+#zr-download-dock[data-side="top"] {
+  clip-path:inset(0px round 12px);
+  box-shadow:none;
+  overflow:hidden;
 }
 #zr-download-dock[data-entering] > * { animation:zr-panel-content-in 780ms linear both; }
 #zr-download-dock[data-closing] > * { animation:zr-panel-content-in 780ms linear reverse both; }
@@ -2168,7 +2166,7 @@
 /* A translucent native-painted surface, without fading its text or controls. */
 #zr-download-dock { background:transparent;isolation:isolate; }
 #zr-download-dock::before { content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;background:var(--zr-download-surface);opacity:.88;pointer-events:none; }
-#zr-download-dock:is([data-entering],[data-closing])::before {
+#zr-download-dock:is([data-entering],[data-closing]):not([data-side="top"])::before {
   inset:-1px;border-radius:0;
 }
 #zr-download-dock:is([data-open],[data-closing]) { backdrop-filter:blur(12px); }

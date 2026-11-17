@@ -113,30 +113,33 @@ test("download content animation finishes at resting opacity",()=>{
  assert.ok(css.includes(".zr-dock-notice { --zr-dock-rest-opacity:.8;"));
 });
 
-test("hosted horizontal wave rotates canonical contour down then right",()=>{
- const h=160,w=430,x=40,y=60,iconX=60,iconY=42;
- const g=geometry({hosted:true,side:"left",x:iconX,y:iconY},w,h,x,y).g;
- const canonical=geometry({side:"right",edge:h+18,x:h+18,y:20},h,w,0,0).g;
+test("hosted horizontal wave reveals down then right inside resting bounds",()=>{
  const points=f=>[...f.clipPath.matchAll(/-?\d+\.\d+/g)].map(m=>Number(m[0]));
  const box=f=>{const p=points(f),xs=p.filter((_,i)=>i%2===0),ys=p.filter((_,i)=>i%2===1);return {l:Math.min(...xs),r:Math.max(...xs),t:Math.min(...ys),b:Math.max(...ys)};};
- assert.equal(g.orientation,"top");assert.equal(g.width,w);assert.equal(g.height,h);
- for(let i=0;i<g.frames.length;i++){
-   const a=points(g.frames[i]),b=points(canonical.frames[i]);
-   for(let k=0;k<a.length;k+=2){assert.ok(Math.abs(a[k]-b[k+1])<.002);assert.ok(Math.abs(a[k+1]+b[k]-g.extent)<.002);}
+ for(const [w,h] of [[430,160],[430,700],[240,100],[100,80]]){
+   const x=40,y=60,iconX=60,iconY=42;
+   const {g,reverseWave}=geometry({hosted:true,side:"left",x:iconX,y:iconY},w,h,x,y);
+   assert.equal(g.orientation,"top");assert.equal(g.width,w);assert.equal(g.height,h);
+   assert.equal(g.extent,h);
+   const seed=box(g.frames[0]),mid=box(g.frames[6]),last=box(g.frames.at(-1));
+   assert.ok(Math.abs((seed.l+seed.r)/2-20)<.002);
+   assert.ok(Math.abs((seed.t+seed.b)/2-6)<.002);
+   assert.ok(mid.b>h*.9);
+   assert.ok(mid.r<w*.65);
+   for(const f of g.frames){
+     const b=box(f);assert.ok(b.l>=0&&b.t>=0&&b.r<=w&&b.b<=h);
+   }
+   assert.deepEqual(last,{l:0,r:w,t:0,b:h});
+   assert.deepEqual(reverseWave(g.frames).map(f=>f.clipPath),g.frames.slice(0,-1).reverse().map(f=>f.clipPath));
  }
- const seed=box(g.frames[0]),mid=box(g.frames[6]),last=box(g.frames.at(-1));
- assert.ok(Math.abs((seed.l+seed.r)/2-20)<.002);
- assert.ok(Math.abs((seed.t+seed.b)/2-14)<.002);
- assert.ok(mid.b>h*.9);assert.ok(mid.r<w*.5);
- assert.deepEqual(last,{l:0,r:w,t:32,b:h+32});
- const {reverseWave}=geometry({hosted:true,side:"left",x:iconX,y:iconY},w,h,x,y);
- assert.deepEqual(reverseWave(g.frames).map(f=>f.clipPath),g.frames.slice(0,-1).reverse().map(f=>f.clipPath));
 });
-test("hosted bridge is above the resting panel and preserves width",()=>{
+test("hosted wave keeps a single resting box and surface in every state",()=>{
  const css=readFileSync(new URL("../src/styles/refined-features.css.part",import.meta.url),"utf8");
- assert.ok(css.includes('[data-side="top"] {\n  width:var(--zr-overlay-width,430px);'));
- assert.ok(css.includes('padding-top:calc(12px + var(--zr-wave-extension,32px))'));
- assert.ok(css.includes('calc(var(--zr-overlay-y,8px) - var(--zr-wave-extension,32px))'));
+ assert.ok(css.includes('#zr-download-dock:is([data-entering],[data-closing]):not([data-side="top"]) {'));
+ assert.ok(css.includes('#zr-download-dock:is([data-entering],[data-closing]):not([data-side="top"])::before {'));
+ assert.ok(css.includes('#zr-download-dock[data-side="top"] {\n  clip-path:inset(0px round 12px);'));
+ assert.ok(!css.includes('[data-side="top"] {\n  width:var(--zr-overlay-width,430px);'));
+ assert.ok(!css.includes('padding-top:calc(12px + var(--zr-wave-extension,32px))'));
  assert.ok(source.includes('const orientation=hosted?"top":r.side;'));
- assert.ok(source.includes('measured-(extended?WAVE_EXTENSION:0)'));
+ assert.ok(source.includes('if(!following||!dockHeight)dockHeight=dock.offsetHeight'));
 });

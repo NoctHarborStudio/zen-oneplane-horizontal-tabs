@@ -1,3 +1,9 @@
+## 0.3.0-preview.15 — Fixed horizontal download wave geometry
+
+- Keep hosted downloads in the resting border box for the entire opening and closing wave. No extra 32px top bridge, padding, translation or final geometry change. Seed stays inside the panel's top edge; the contour still grows down and then right.
+- Preserve the same border and background in every horizontal state. Use a resting rounded clip and no pop-in shadow. Native sidebar bridge and timing remain unchanged.
+- Test bounds and final contour at several panel sizes, including full-height downloads.
+
 ## 0.3.0-preview.14 — Horizontal download wave orientation
 
 - Rotate the hosted downloads wave to originate below the toolbar, travel down the left edge, then across the bottom. Use a top bridge with unchanged resting content coordinates and reverse the same contour on close.

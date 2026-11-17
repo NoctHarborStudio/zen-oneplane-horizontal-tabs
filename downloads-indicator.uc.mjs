@@ -193,11 +193,12 @@ try{if(typeof window!=="undefined"){
   const WAVE_EXTENSION=32;
   function panelGeometry(r,width,height,x,y){
     if(r.hosted){
-      // Rotate the canonical right-sidebar contour. The toolbar is above
-      // the panel: reveal down the left edge, then across the bottom.
-      const seedX=clamp(r.x-x,1,Math.max(1,width-1));
-      const gap=clamp(y-r.y,0,WAVE_EXTENSION-13);
-      const g=sideWaveGeometry({side:"top",edge:height+gap,x:height+gap,y:seedX},height,width,0,0);
+      // Rotate the canonical contour within the RESTING border box.
+      // The hosted seed sits just inside the top edge below the icon.
+      // Unlike a sidebar, the toolbar must never be painted over.
+      const seedX=clamp(r.x-x,Math.min(1,width/2),Math.max(width/2,width-1));
+      const depth=Math.min(6,height/2),edge=height-depth;
+      const g=sideWaveGeometry({side:"top",edge,x:edge,y:seedX},height,width,0,0);
       return {...g,x,y,width,height,orientation:"top"};
     }
     return sideWaveGeometry(r,width,height,x,y);
@@ -206,9 +207,9 @@ try{if(typeof window!=="undefined"){
     // The animated border box really includes the bridge to the sidebar.
     // Coordinates are measured from the far edge of the resting panel.
     // No translating a clipped rectangle through the gap.
-    const extent=width+WAVE_EXTENSION;
+    const top=r.side==="top",extent=width+(top?0:WAVE_EXTENSION);
     const edge=Number.isFinite(r.edge)?r.edge:r.x;
-    const anchor=clamp(r.side==="left"?x+width-edge:edge-x,0,extent-13);
+    const anchor=clamp(r.side==="left"?x+width-edge:edge-x,0,extent-(top?Math.min(6,extent/2):13));
     const cy=clamp(r.y-y,1,Math.max(1,height-1));
     const strip=Math.min(12,cy,Math.max(0,height-cy));
     const bridge=Math.min(extent,anchor+12);
@@ -271,13 +272,7 @@ try{if(typeof window!=="undefined"){
     setVar(dock,"--zr-overlay-x",x+"px");setVar(dock,"--zr-overlay-y",y+"px");
     const orientation=hosted?"top":r.side;
     if(dock.getAttribute("data-side")!==orientation)dock.setAttribute("data-side",orientation);
-    if(!following||!dockHeight){
-      // The top bridge adds height during motion. Measure the resting
-      // panel even when an opening wave is interrupted by closing.
-      const extended=orientation==="top"&&(dock.hasAttribute("data-entering")||dock.hasAttribute("data-closing"));
-      const measured=dock.offsetHeight;
-      dockHeight=measured?Math.max(1,measured-(extended?WAVE_EXTENSION:0)):Math.max(1,h-y-12);
-    }
+    if(!following||!dockHeight)dockHeight=dock.offsetHeight||Math.max(1,h-y-12);
     setVar(dockBackdrop,"--zr-outside-left",(hosted||right?0:Math.max(0,r.edge))+"px");
     setVar(dockBackdrop,"--zr-outside-right",(!hosted&&right?Math.max(0,w-r.edge):0)+"px");
     return following?undefined:panelGeometry({...r,hosted},width,dockHeight,x,y);
