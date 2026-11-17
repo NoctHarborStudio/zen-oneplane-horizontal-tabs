@@ -20,7 +20,7 @@ export function queryDownloadRows(rows,{section="downloads",text="",limit=50,sor
  const term=String(text).trim().toLowerCase();
  const list=rows.filter(r=>(section==="downloads"||(r.success&&r.exists&&!r.partial&&!r.blocked&&mediaKind(r.name)===section))&&
    (!term||r.name.toLowerCase().includes(term))&&(filter==="all"||(filter==="active"?r.active:filter==="completed"?r.success:!r.active&&!r.success)));
- list.sort((a,b)=>Number(b.active)-Number(a.active)||(sort==="size"?((b.total||b.bytes)-(a.total||a.bytes)):sort==="old"?a.time-b.time:b.time-a.time)||a.id.localeCompare(b.id));
+ list.sort((a,b)=>Number(!!b.active)-Number(!!a.active)||(sort==="size"?((b.total||b.bytes||0)-(a.total||a.bytes||0)):sort==="old"?a.time-b.time:b.time-a.time)||a.id.localeCompare(b.id));
  return Object.freeze({rows:Object.freeze(list.slice(0,limit)),limit,hasMore:list.length>limit});
 }
 export function createMediaService({scan,allowed=()=>true,windows=false,describe,perform}){

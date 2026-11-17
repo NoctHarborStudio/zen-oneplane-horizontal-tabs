@@ -1,3 +1,7 @@
+## 0.3.0-preview.43 — Library file ordering regression fix
+
+- Normalize absent active flags for local media and unknown sizes before sorting; active downloads remain first. Retain all preview.42 Library features.
+
 ## 0.3.0-preview.42 — Library L5–L7 functional preview
 
 - Connect All Downloads, Documents and Pictures to the shared Downloads service with bounded search, sorting, status, progress, native file icons, open/reveal/remove and confirmed finished-record clearing.
