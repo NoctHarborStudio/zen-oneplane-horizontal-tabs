@@ -44,32 +44,17 @@
     dragGhost.style.top = y + "px";
   }
   function hideGhost() {
-    dragGhostAnimation?.cancel(); dragGhostAnimation = null;
     if (dragGhost) dragGhost.hidden = true;
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.ghost.hide",()=>({exists:!!dragGhost,mode:dragImageMode}),{throttle:100,sample:1200});
     if (dragGhostBody) dragGhostBody.style.removeProperty("transform");
   }
-  function showGhost(event, bounce, from=null) {
+  function showGhost(event) {
     makeDragGhost();
-    if (!dragGhost) return;
-    positionGhost(event.clientX, event.clientY);
+    if(!dragGhost)return;
+    positionGhost(event.clientX,event.clientY);
     dragGhostBody.style.removeProperty("transform");
-    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.ghost.show",()=>({bounce,mode:dragImageMode}),{sample:1800});
-    dragGhost.hidden = false;
-    if (bounce && !reducedMotion.matches && prefs.getIntPref("zen.oneplane.animation-duration",160) !== 0) {
-      dragGhostAnimation?.cancel();
-      const box=dragGhostBody.getBoundingClientRect();
-      const start=from?handoffTransform(from,{x:box.left+box.width/2,y:box.top+box.height/2,width:box.width,height:box.height}):{x:0,y:-8,sx:.34,sy:.45};
-      window.__nocturneTrace?.("drag.detach.handoff",{dx:start.x,dy:start.y,sx:start.sx,sy:start.sy},{sample:1200});
-      dragGhostAnimation = dragGhostBody.animate([
-        {transform:"translate("+start.x+"px,"+start.y+"px) scale("+start.sx+","+start.sy+")",offset:0},
-        {transform:"translateY(5px) scale(1.22,.91)",offset:.24},
-        {transform:"translateY(-3px) scale(.96,1.15)",offset:.43},
-        {transform:"translateY(2px) scale(1.07,.95)",offset:.64},
-        {transform:"translateY(-1px) scale(.99,1.03)",offset:.83},
-        {transform:"translateY(0) scale(1)",offset:1}
-      ], {duration:360,easing:"linear"});
-    }
+    dragGhost.hidden=false;
+    window.__nocturneTrace?.("drag.ghost.show",{mode:dragImageMode},{sample:800});
   }
   function captureGroupPull(event) {
     if (groupPullLayout || !draggedGroup || !isStripNode(dragNode)) return;

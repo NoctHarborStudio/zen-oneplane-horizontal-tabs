@@ -63,7 +63,7 @@ test("Bunny uses one reversible curve for card and slot, including split groups"
   assert.ok(strip.includes("const p = bunnyPullProgress(event.clientY,dragEdge)"));
   assert.ok(strip.includes("const threshold=BUNNY_DETACH_THRESHOLD"));
   assert.ok(strip.includes("if(p>0&&paintBunnyPull(event,p))"));
-  assert.ok(img.includes("setPull(t);"));
+  assert.ok(img.includes("setPull(t,pose.slot);"));
   assert.ok(img.includes("bunnyPose(t*(1-u),anchor,point,full)"));
   assert.ok(!img.includes("bunnyInsertionFrames"));assert.ok(!strip.includes("seekInsertion"));
   assert.ok(!strip.includes("const p = within?0"));

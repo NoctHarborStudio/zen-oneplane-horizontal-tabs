@@ -68,12 +68,12 @@
     row.removeAttribute("data-op-group-pull");
     hideGhost();
   }
-  function setPull(progress) {
+  function setPull(progress,slot=1-.95*progress) {
     if (!dragNode) return;
     dragPull = progress;
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.pull.paint",()=>({progress,mode:dragImageMode,width:dragWidth,group:!!draggedGroup}),{throttle:100,sample:1200});
     dragNode.toggleAttribute("data-op-pulling", progress > 0);
-    dragNode.style.setProperty("--op-pull-width", Math.max(0,dragWidth*(1-.95*progress)).toFixed(2)+"px");
+    dragNode.style.setProperty("--op-pull-width", Math.max(0,dragWidth*slot).toFixed(2)+"px");
     dragNode.style.setProperty("--op-pull-y", (17*progress).toFixed(2)+"px");
     dragNode.style.setProperty("--op-pull-scale-y", String(Math.max(.12,1.055-.91*progress)));
     dragNode.style.setProperty("--op-pull-scale-x", String(Math.max(.08,1.055-.98*progress)));

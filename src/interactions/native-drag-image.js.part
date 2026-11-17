@@ -14,10 +14,6 @@
     const r=n.getBoundingClientRect();
     return {x:r.left+r.width/2,y:r.top+r.height/2,width:r.width,height:r.height};
   }
-  function handoffTransform(from,to){
-    return {x:from.x-to.x,y:from.y-to.y,sx:Math.max(.03,from.width/Math.max(1,to.width)),
-      sy:Math.max(.03,from.height/Math.max(1,to.height))};
-  }
   // Single spatial trajectory, sampled in either direction. No separate
   // insertion keyframes or time-based animation during an active gesture.
   function bunnyPose(progress,anchor,point,full){
@@ -39,7 +35,8 @@
     makeDragGhost();
     if(!dragGhost||!dragGhostBody){dragBunnyAnchor=null;return false;}
     dragGhost.hidden=false;dragGhostBody.style.removeProperty("transform");
-    dragBunnyFull={width:dragGhostBody.offsetWidth,height:dragGhostBody.offsetHeight};
+    const full=dragGhostBody.getBoundingClientRect();
+    dragBunnyFull={width:full.width,height:full.height};
     hideGhost();
     if(!dragBunnyFull.width||!dragBunnyFull.height){dragBunnyAnchor=null;dragBunnyFull=null;return false;}
     return true;
@@ -48,7 +45,7 @@
     if(!captureBunnyAnchor())return false;
     const t=bunnyProgress(p),pose=bunnyPose(t,dragBunnyAnchor,{x:event.clientX,y:event.clientY},dragBunnyFull);
     dragNode.setAttribute("data-op-lane-ghost","true");
-    setPull(t);
+    setPull(t,pose.slot);
     dragGhost.hidden=false;
     positionGhost(pose.x,pose.y);
     dragGhostBody.style.transform="scale("+pose.width/dragBunnyFull.width+","+pose.height/dragBunnyFull.height+")";
@@ -120,7 +117,7 @@
       const ok = updateNativeDragImage(dragGhostBody,Math.round(box.width/2),Math.round(box.height/2),event);
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.native-image",()=>({ok,width:box.width,height:box.height}),{sample:1800});
       hideGhost();
-      if (!ok) { if (previous === "content") showGhost(event,false); return; }
+      if (!ok) { if (previous === "content") showGhost(event); return; }
     } else if (previous === "outside") {
       // Clear the OS image BEFORE displaying our local animated card.
       if (!updateNativeDragImage(blankDragImage,0,0,event)) return;
@@ -137,7 +134,7 @@
       cancelInsertion();
       setPull(0);
       clearLiveDrag();
-      if (mode === "content") showGhost(event,false);
+      if (mode === "content") showGhost(event);
     } else {
       hideGhost();
       clearLiveDrag();

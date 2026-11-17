@@ -5168,7 +5168,6 @@ function installTabStrip() {
     return Math.max(0,Math.min(1,(y-edge)/distance));
   }
   let dragGhost = null, dragGhostBody = null, dragPull = 0, dragEdge = 0, dragWidth = 0;
-  let dragGhostAnimation = null;
   let dragLastPoint = null;
   let dragBunnyAnchor=null, dragBunnyFull=null, dragInsertAnimation=null, dragInsertNode=null;
   let dragInsertPending=false; // visual tail only; native session is already finished
@@ -5383,32 +5382,17 @@ function installTabStrip() {
     dragGhost.style.top = y + "px";
   }
   function hideGhost() {
-    dragGhostAnimation?.cancel(); dragGhostAnimation = null;
     if (dragGhost) dragGhost.hidden = true;
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.ghost.hide",()=>({exists:!!dragGhost,mode:dragImageMode}),{throttle:100,sample:1200});
     if (dragGhostBody) dragGhostBody.style.removeProperty("transform");
   }
-  function showGhost(event, bounce, from=null) {
+  function showGhost(event) {
     makeDragGhost();
-    if (!dragGhost) return;
-    positionGhost(event.clientX, event.clientY);
+    if(!dragGhost)return;
+    positionGhost(event.clientX,event.clientY);
     dragGhostBody.style.removeProperty("transform");
-    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.ghost.show",()=>({bounce,mode:dragImageMode}),{sample:1800});
-    dragGhost.hidden = false;
-    if (bounce && !reducedMotion.matches && prefs.getIntPref("zen.oneplane.animation-duration",160) !== 0) {
-      dragGhostAnimation?.cancel();
-      const box=dragGhostBody.getBoundingClientRect();
-      const start=from?handoffTransform(from,{x:box.left+box.width/2,y:box.top+box.height/2,width:box.width,height:box.height}):{x:0,y:-8,sx:.34,sy:.45};
-      window.__nocturneTrace?.("drag.detach.handoff",{dx:start.x,dy:start.y,sx:start.sx,sy:start.sy},{sample:1200});
-      dragGhostAnimation = dragGhostBody.animate([
-        {transform:"translate("+start.x+"px,"+start.y+"px) scale("+start.sx+","+start.sy+")",offset:0},
-        {transform:"translateY(5px) scale(1.22,.91)",offset:.24},
-        {transform:"translateY(-3px) scale(.96,1.15)",offset:.43},
-        {transform:"translateY(2px) scale(1.07,.95)",offset:.64},
-        {transform:"translateY(-1px) scale(.99,1.03)",offset:.83},
-        {transform:"translateY(0) scale(1)",offset:1}
-      ], {duration:360,easing:"linear"});
-    }
+    dragGhost.hidden=false;
+    window.__nocturneTrace?.("drag.ghost.show",{mode:dragImageMode},{sample:800});
   }
   function captureGroupPull(event) {
     if (groupPullLayout || !draggedGroup || !isStripNode(dragNode)) return;
@@ -5512,12 +5496,12 @@ function installTabStrip() {
     row.removeAttribute("data-op-group-pull");
     hideGhost();
   }
-  function setPull(progress) {
+  function setPull(progress,slot=1-.95*progress) {
     if (!dragNode) return;
     dragPull = progress;
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.pull.paint",()=>({progress,mode:dragImageMode,width:dragWidth,group:!!draggedGroup}),{throttle:100,sample:1200});
     dragNode.toggleAttribute("data-op-pulling", progress > 0);
-    dragNode.style.setProperty("--op-pull-width", Math.max(0,dragWidth*(1-.95*progress)).toFixed(2)+"px");
+    dragNode.style.setProperty("--op-pull-width", Math.max(0,dragWidth*slot).toFixed(2)+"px");
     dragNode.style.setProperty("--op-pull-y", (17*progress).toFixed(2)+"px");
     dragNode.style.setProperty("--op-pull-scale-y", String(Math.max(.12,1.055-.91*progress)));
     dragNode.style.setProperty("--op-pull-scale-x", String(Math.max(.08,1.055-.98*progress)));
@@ -5541,10 +5525,6 @@ function installTabStrip() {
     const r=n.getBoundingClientRect();
     return {x:r.left+r.width/2,y:r.top+r.height/2,width:r.width,height:r.height};
   }
-  function handoffTransform(from,to){
-    return {x:from.x-to.x,y:from.y-to.y,sx:Math.max(.03,from.width/Math.max(1,to.width)),
-      sy:Math.max(.03,from.height/Math.max(1,to.height))};
-  }
   // Single spatial trajectory, sampled in either direction. No separate
   // insertion keyframes or time-based animation during an active gesture.
   function bunnyPose(progress,anchor,point,full){
@@ -5566,7 +5546,8 @@ function installTabStrip() {
     makeDragGhost();
     if(!dragGhost||!dragGhostBody){dragBunnyAnchor=null;return false;}
     dragGhost.hidden=false;dragGhostBody.style.removeProperty("transform");
-    dragBunnyFull={width:dragGhostBody.offsetWidth,height:dragGhostBody.offsetHeight};
+    const full=dragGhostBody.getBoundingClientRect();
+    dragBunnyFull={width:full.width,height:full.height};
     hideGhost();
     if(!dragBunnyFull.width||!dragBunnyFull.height){dragBunnyAnchor=null;dragBunnyFull=null;return false;}
     return true;
@@ -5575,7 +5556,7 @@ function installTabStrip() {
     if(!captureBunnyAnchor())return false;
     const t=bunnyProgress(p),pose=bunnyPose(t,dragBunnyAnchor,{x:event.clientX,y:event.clientY},dragBunnyFull);
     dragNode.setAttribute("data-op-lane-ghost","true");
-    setPull(t);
+    setPull(t,pose.slot);
     dragGhost.hidden=false;
     positionGhost(pose.x,pose.y);
     dragGhostBody.style.transform="scale("+pose.width/dragBunnyFull.width+","+pose.height/dragBunnyFull.height+")";
@@ -5647,7 +5628,7 @@ function installTabStrip() {
       const ok = updateNativeDragImage(dragGhostBody,Math.round(box.width/2),Math.round(box.height/2),event);
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.native-image",()=>({ok,width:box.width,height:box.height}),{sample:1800});
       hideGhost();
-      if (!ok) { if (previous === "content") showGhost(event,false); return; }
+      if (!ok) { if (previous === "content") showGhost(event); return; }
     } else if (previous === "outside") {
       // Clear the OS image BEFORE displaying our local animated card.
       if (!updateNativeDragImage(blankDragImage,0,0,event)) return;
@@ -5664,7 +5645,7 @@ function installTabStrip() {
       cancelInsertion();
       setPull(0);
       clearLiveDrag();
-      if (mode === "content") showGhost(event,false);
+      if (mode === "content") showGhost(event);
     } else {
       hideGhost();
       clearLiveDrag();
