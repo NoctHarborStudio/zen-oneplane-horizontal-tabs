@@ -205,6 +205,7 @@ function restorePrefs() {
 
 function markClosing(event) {
   if (event.target === document) closing = true;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.markClosing",()=>({closing}),{flush:true});
 }
 
 
@@ -1487,6 +1488,7 @@ function installTabStrip() {
     row.toggleAttribute("data-op-bottom-plus",!plan.topPlus);
     bottomLane.hidden=!plan.hasSecondRow;
     if(changed){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("tabs.partition.height",()=>({second:plan.hasSecondRow,mode:plan.mode,left:plan.topLeft.length,right:plan.topRight.length,lower:plan.lower.length,phase:root.getAttribute('data-zr-workspace-phase')}),{sample:1800});
       overflowRevealAnimation?.cancel();overflowRevealAnimation=null;
       if(plan.hasSecondRow&&row.hasAttribute("data-ready")&&cascadeState==="idle"&&!reducedMotion.matches&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0){
         try{overflowRevealAnimation=bottomLane.animate([{opacity:0},{opacity:1}],{duration:160,easing:"ease-out"});}catch{}
@@ -2020,6 +2022,7 @@ function installTabStrip() {
       cascadeAnimations.has(indicator)?parseFloat(window.getComputedStyle(indicator).opacity)||0:0;
     cancelCascadeAnimations();
     cascadeState=opening?"hiding":"showing";
+    typeof window!=="undefined"&&window.__nocturneTrace?.("address.cascade",()=>({state:cascadeState,generation:cascadeGeneration,opening}),{sample:1800});
     row.setAttribute("data-op-cascade",cascadeState);
     row.inert=true;
     setBookmarkWave(cascadeState);
@@ -2135,6 +2138,7 @@ function installTabStrip() {
     addressDiagnosticsFrame=window.requestAnimationFrame(sample);
   }
   function finishAddressPhase(a){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("address.finish",()=>({phase:a.name,engine:a.engine}),{sample:1800});
     if(dead||addressTransition!==a)return;
     a.report?.();
     if(a.name!=="closing-wave"){
@@ -2167,6 +2171,7 @@ function installTabStrip() {
     }
   }
   function beginAddressPhase(name,from,to,duration,layoutWidth=Math.max(from.width,to.width)){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("address.begin",()=>({name,fromWidth:from.width,toWidth:to.width,duration,layoutWidth}),{sample:1800});
     // Cancel only after sampling the previous visual position. Keep
     // the native editor, selection, results and popup anchors intact.
     stopAddressAnimations();
@@ -4330,6 +4335,7 @@ function installTabStrip() {
     const key=[width,height,base,deep,left,right,...Object.values(settings)].join(":");
     if(key===contourKey)return;
     contourKey=key;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("contour.paint",()=>({force,width,height,base,deep,left,right,overflow:compactRows,phase:root.getAttribute('data-zr-workspace-phase')}),{throttle:100,sample:1200});
     surface.style.setProperty("--op-contour-height",height+"px");
     surface.style.setProperty("--op-contour-mask",contourImage(width,height,base,deep,left,right,settings));
   }
@@ -4481,6 +4487,7 @@ function installTabStrip() {
     adaptiveHeightDirty=false;
     const next=Math.round(Math.max(navbar?.getBoundingClientRect().height||0,row.getBoundingClientRect().height||0)+
       (bookmarks&&!bookmarks.collapsed&&!bookmarks.hidden?bookmarks.getBoundingClientRect().height:0))+"px";
+    if(toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height")!==next)typeof window!=="undefined"&&window.__nocturneTrace?.("geometry.height",()=>({old:toolbarWrapper.style.getPropertyValue('--op-measured-toolbar-height'),next,force,overflow:row.hasAttribute('data-op-overflow-row'),phase:root.getAttribute('data-zr-workspace-phase')}),{sample:1800});
     if(parseFloat(next)>0&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height")!==next)
       toolbarWrapper.style.setProperty("--op-measured-toolbar-height",next);
     refreshIndicator();scheduleContour();
@@ -4491,6 +4498,7 @@ function installTabStrip() {
   }
   // Measure once under the workspace swap gate, before visible motion.
   function prepareWorkspaceGeometry(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("geometry.workspace.prepare",()=>({frame:!!frame,geometryFrame:!!geometryFrame}),{sample:1800});
     if(dead)return;
     if(frame){window.cancelAnimationFrame(frame);frame=0;sync();}
     if(geometryFrame){window.cancelAnimationFrame(geometryFrame);geometryFrame=0;}
@@ -4549,6 +4557,7 @@ function installTabStrip() {
     const state=panelDecision(open,direct,native,window.performance.now(),panelSwitchUntil,panelCloseSince);
     panelCloseSince=state.closeSince;
     if(open!==state.open){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("panel.open.change",()=>({from:open,to:state.open,direct,native,holds:PANEL_HOLD_FLAGS.filter(k=>toolbarWrapper.hasAttribute(k)),pointerInside,wait:state.wait}),{sample:1800});
       toolbarWrapper.toggleAttribute("data-op-panel-open",state.open);
       if(state.open)scheduleContour();
       else clearTabHover(true);
@@ -4556,6 +4565,7 @@ function installTabStrip() {
     if(state.wait>0)panelTimer=window.setTimeout(reconcilePanel,Math.ceil(state.wait)+1);
   }
   function onWorkspaceMotion(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("panel.workspace.motion",()=>({phase:root.getAttribute('data-zr-workspace-phase')}),{sample:1800});
     const phase=root.getAttribute("data-zr-workspace-phase"),active=!!phase;
     toolbarWrapper?.toggleAttribute("oneplane-workspace-hold",active);
     if(active){cancelHoverTimer();cancelIndicatorReturn();}
@@ -4566,6 +4576,7 @@ function installTabStrip() {
   function guardPanelSwitch(){
     if(!hoverSupported())return;
     panelSwitchUntil=window.performance.now()+PANEL_SWITCH_GRACE;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("panel.switch.guard",()=>({until:panelSwitchUntil}),{throttle:120,sample:1200});
     if(panelSwitchTimer)window.clearTimeout(panelSwitchTimer);
     panelSwitchTimer=window.setTimeout(()=>{
       panelSwitchTimer=0;
@@ -6492,6 +6503,7 @@ function installTabStrip() {
     centerToolbar();
     refreshIndicator();
     refreshIslandTitle();
+    typeof window!=="undefined"&&window.__nocturneTrace?.("tabs.sync",()=>({native:tabs.length,mirror:visualTabs.length,groups:groups.length,entries:entries.size,overflow:row.hasAttribute('data-op-overflow-row'),homeOpen,phase:root.getAttribute('data-zr-workspace-phase')}),{throttle:120,sample:1200});
     scheduleGeometry();
   }
 
@@ -6513,6 +6525,7 @@ function installTabStrip() {
     }
   }
   function onSelect() {
+    typeof window!=="undefined"&&window.__nocturneTrace?.("tabs.select",()=>({home:row.hasAttribute('data-op-home-open'),phase:root.getAttribute('data-zr-workspace-phase'),overflow:row.hasAttribute('data-op-overflow-row')}),{sample:1800});
     markHomeTitleActivity();
     indicatorSelectionChanged();
     guardRestoredAddress(browser.selectedTab);
@@ -6551,6 +6564,7 @@ function installTabStrip() {
   });
 
   function destroy() {
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.strip.destroy",()=>({dead}),{flush:true});
     if (dead) return;
     dead = true;
     cleanupStep("destroyHome()",()=>{destroyHome();});
@@ -6801,6 +6815,7 @@ function cleanupStep(label,fn){
   try{fn();}catch(error){console.warn("[Nocturne] Cleanup "+label+":",error);}
 }
 function cleanup() {
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.cleanup.begin",()=>({disposed,applied,closing}),{flush:true});
   if (disposed) return;
   disposed = true;
   cleanupStep("active flag",()=>root.removeAttribute("oneplane-active"));
@@ -6855,9 +6870,11 @@ async function initializeFreeAtStartup(){
 }
 
 async function activate() {
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.activate.begin",()=>({reloadingLayout}),{sample:1800});
   try {
     await window.SessionStore?.promiseAllWindowsRestored;
     await window.gZenWorkspaces?.promiseInitialized;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.native.ready",()=>({closed:window.closed}),{sample:1800});
     if (disposed || window.closed || root.hasAttribute("popup-window")) return;
     if(!reloadingLayout)await initializeFreeAtStartup();
     if(disposed||window.closed)return;
@@ -6873,6 +6890,7 @@ async function activate() {
     // Configure the hide target without forcing Compact Mode on.
     manager.hideToolbar();
     removeTabStrip = installTabStrip();
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.strip.installed",()=>({installed:!!removeTabStrip}),{sample:1800});
     // Native state changes and animations remain owned by Zen.
     root.setAttribute("oneplane-active", "true");
     // Publish readiness after activation has allowed geometry and the
@@ -6881,6 +6899,7 @@ async function activate() {
     window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>{
       if(disposed||window.closed)return;
       root.setAttribute("data-op-startup-ready","true");
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.ready",()=>({paintCount:window.windowUtils?.paintCount}),{sample:3000,flush:true});
       if(window.__nocturneLayoutStartup===startupRecord)startupRecord.readyAt=window.performance.now();
       window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
     }));

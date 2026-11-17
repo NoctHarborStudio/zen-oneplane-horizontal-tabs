@@ -125,6 +125,7 @@
     adaptiveHeightDirty=false;
     const next=Math.round(Math.max(navbar?.getBoundingClientRect().height||0,row.getBoundingClientRect().height||0)+
       (bookmarks&&!bookmarks.collapsed&&!bookmarks.hidden?bookmarks.getBoundingClientRect().height:0))+"px";
+    if(toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height")!==next)typeof window!=="undefined"&&window.__nocturneTrace?.("geometry.height",()=>({old:toolbarWrapper.style.getPropertyValue('--op-measured-toolbar-height'),next,force,overflow:row.hasAttribute('data-op-overflow-row'),phase:root.getAttribute('data-zr-workspace-phase')}),{sample:1800});
     if(parseFloat(next)>0&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height")!==next)
       toolbarWrapper.style.setProperty("--op-measured-toolbar-height",next);
     refreshIndicator();scheduleContour();
@@ -135,6 +136,7 @@
   }
   // Measure once under the workspace swap gate, before visible motion.
   function prepareWorkspaceGeometry(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("geometry.workspace.prepare",()=>({frame:!!frame,geometryFrame:!!geometryFrame}),{sample:1800});
     if(dead)return;
     if(frame){window.cancelAnimationFrame(frame);frame=0;sync();}
     if(geometryFrame){window.cancelAnimationFrame(geometryFrame);geometryFrame=0;}

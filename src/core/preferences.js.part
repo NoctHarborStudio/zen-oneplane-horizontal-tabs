@@ -70,6 +70,7 @@ function restorePrefs() {
 
 function markClosing(event) {
   if (event.target === document) closing = true;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.markClosing",()=>({closing}),{flush:true});
 }
 
 

@@ -22,6 +22,7 @@
     row.toggleAttribute("data-op-bottom-plus",!plan.topPlus);
     bottomLane.hidden=!plan.hasSecondRow;
     if(changed){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("tabs.partition.height",()=>({second:plan.hasSecondRow,mode:plan.mode,left:plan.topLeft.length,right:plan.topRight.length,lower:plan.lower.length,phase:root.getAttribute('data-zr-workspace-phase')}),{sample:1800});
       overflowRevealAnimation?.cancel();overflowRevealAnimation=null;
       if(plan.hasSecondRow&&row.hasAttribute("data-ready")&&cascadeState==="idle"&&!reducedMotion.matches&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0){
         try{overflowRevealAnimation=bottomLane.animate([{opacity:0},{opacity:1}],{duration:160,easing:"ease-out"});}catch{}

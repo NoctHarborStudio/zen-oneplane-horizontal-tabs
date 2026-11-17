@@ -4,6 +4,7 @@ function cleanupStep(label,fn){
   try{fn();}catch(error){console.warn("[Nocturne] Cleanup "+label+":",error);}
 }
 function cleanup() {
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.cleanup.begin",()=>({disposed,applied,closing}),{flush:true});
   if (disposed) return;
   disposed = true;
   cleanupStep("active flag",()=>root.removeAttribute("oneplane-active"));
@@ -58,9 +59,11 @@ async function initializeFreeAtStartup(){
 }
 
 async function activate() {
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.activate.begin",()=>({reloadingLayout}),{sample:1800});
   try {
     await window.SessionStore?.promiseAllWindowsRestored;
     await window.gZenWorkspaces?.promiseInitialized;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.native.ready",()=>({closed:window.closed}),{sample:1800});
     if (disposed || window.closed || root.hasAttribute("popup-window")) return;
     if(!reloadingLayout)await initializeFreeAtStartup();
     if(disposed||window.closed)return;
@@ -76,6 +79,7 @@ async function activate() {
     // Configure the hide target without forcing Compact Mode on.
     manager.hideToolbar();
     removeTabStrip = installTabStrip();
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.strip.installed",()=>({installed:!!removeTabStrip}),{sample:1800});
     // Native state changes and animations remain owned by Zen.
     root.setAttribute("oneplane-active", "true");
     // Publish readiness after activation has allowed geometry and the
@@ -84,6 +88,7 @@ async function activate() {
     window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>{
       if(disposed||window.closed)return;
       root.setAttribute("data-op-startup-ready","true");
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.ready",()=>({paintCount:window.windowUtils?.paintCount}),{sample:3000,flush:true});
       if(window.__nocturneLayoutStartup===startupRecord)startupRecord.readyAt=window.performance.now();
       window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
     }));

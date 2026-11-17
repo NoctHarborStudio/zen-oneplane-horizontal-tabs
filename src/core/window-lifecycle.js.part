@@ -1,4 +1,5 @@
   function destroy() {
+    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.strip.destroy",()=>({dead}),{flush:true});
     if (dead) return;
     dead = true;
     cleanupStep("destroyHome()",()=>{destroyHome();});

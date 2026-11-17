@@ -140,6 +140,7 @@
       cascadeAnimations.has(indicator)?parseFloat(window.getComputedStyle(indicator).opacity)||0:0;
     cancelCascadeAnimations();
     cascadeState=opening?"hiding":"showing";
+    typeof window!=="undefined"&&window.__nocturneTrace?.("address.cascade",()=>({state:cascadeState,generation:cascadeGeneration,opening}),{sample:1800});
     row.setAttribute("data-op-cascade",cascadeState);
     row.inert=true;
     setBookmarkWave(cascadeState);
