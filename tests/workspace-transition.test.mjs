@@ -135,3 +135,23 @@ test("geometry lock is released once and leaves no temporary dimensions",()=>{
  return {locked,old:first.surfaceHeight,top:first.bookmarkTop,empty:styles.size===0&&attrs.size===0,second};`);
  assert.deepEqual(run(),{locked:[["--zr-workspace-height","80px"],["--zr-workspace-surface-height","120px"]],old:120,top:60,empty:true,second:null});
 });
+
+test("incoming shelf and page effects restore every owned style",()=>{
+ const start=source.indexOf("  function saveEffect("),end=source.indexOf("  async function settled(",start);
+ const restoreStart=source.indexOf("  function restore(tx)"),restoreEnd=source.indexOf("  function cleanup(tx",restoreStart);
+ const run=new Function(`const attrs=new Map(),effects=[];
+ const node=(height,top)=>{const a=new Map(),s=new Map();return {isConnected:true,hasAttribute:k=>a.has(k),setAttribute:(k,v)=>a.set(k,v),removeAttribute:k=>a.delete(k),
+ style:{getPropertyValue:k=>s.get(k)?.[0]||"",getPropertyPriority:k=>s.get(k)?.[1]||"",setProperty:(k,v,p)=>s.set(k,[v,p]),removeProperty:k=>s.delete(k)},getBoundingClientRect:()=>({height,top,width:800}),animate(frames){effects.push({node:this,frames});return {finished:Promise.resolve(),cancel(){}};},attrs:a,styles:s};};
+ const surface=node(160,0),page=node(600,120),bm=node(24,100),row=node(90,0);
+ const nodes={"oneplane-toolbar-surface":surface,"tabbrowser-tabpanels":page,"PlacesToolbarItems":bm};
+ const get=k=>nodes[k],root={getAttribute:()=>"true"},win={getComputedStyle:()=>({translate:"none"})};
+ const PROGRESS="--zr-workspace-progress",MARK="motion",SURFACE="surface",PAGE="page",MOVE="move";
+ const rect=n=>n?.getBoundingClientRect(),pause=()=>new Promise(()=>{});
+ ${source.slice(restoreStart,restoreEnd)}${source.slice(start,end)}
+ const tx={styles:new Map(),animations:new Set()};
+ animate(tx,[row,bm],false,{surfaceHeight:100,bookmarkTop:60,pageTop:80});
+ const count=effects.length,ratio=surface.style.getPropertyValue("--zr-workspace-height-scale"),pageOffset=page.style.getPropertyValue("--zr-workspace-page-y");
+ cancelEffects(tx);return {count,ratio,pageOffset,clean:[surface,page,bm,row].every(n=>!n.styles.size&&!n.attrs.size)};
+ `);
+ assert.deepEqual(run(),{count:4,ratio:"0.625",pageOffset:"-32px",clean:true});
+});

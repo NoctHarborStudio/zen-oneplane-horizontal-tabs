@@ -229,13 +229,13 @@
     try{win.CSS.registerProperty({name:PROGRESS,syntax:"<number>",inherits:false,initialValue:"1"});registered=true;}catch(e){registered=e.name==="InvalidModificationError";}
     // Scope important overrides to the animated chrome only; Magnetic
     // Bookmarks uses important translate/transform in its normal state.
-    const spec=":is(#zr-workspace-specificity,["+MARK+"],["+GEOMETRY+"],["+SURFACE+"],["+PAGE+"],#oneplane-toolbar-surface)".repeat(8);
+    const spec=":is(#zr-workspace-specificity,["+MARK+"],["+GEOMETRY+"],["+SURFACE+"],["+PAGE+"],#oneplane-toolbar-surface,#zen-appcontent-navbar-wrapper)".repeat(8);
     const motion=":root[data-zr-workspace-phase] ["+MARK+"]"+spec;
     const sheet=motion+"{transition-property:none!important;opacity:var("+PROGRESS+")!important;scale:calc(.97 + .03 * var("+PROGRESS+"))!important;transform-origin:center top!important;pointer-events:none!important;}"+
       motion+'['+MOVE+']{translate:0 calc(var(--zr-workspace-row-y)*(1 - var('+PROGRESS+')))!important;}'+
       ':root[data-zr-workspace-phase="swap"] :is(#oneplane-tabs,#PlacesToolbarItems,#tabbrowser-tabs){opacity:0!important;pointer-events:none!important;}'+
       ':root[data-zr-workspace-phase="swap"] :is(#oneplane-tabs *,#PlacesToolbarItems *){transition-property:none!important;pointer-events:none!important;}'+
-      ':root[data-zr-workspace-phase] #zen-appcontent-navbar-wrapper{transition-property:none!important;}'+
+      ':root:is([data-zr-workspace-phase="swap"],[data-zr-workspace-phase="in"]) #zen-appcontent-navbar-wrapper'+spec+'{transition-property:none!important;}'+
       ':root[data-zr-workspace-phase] #zen-appcontent-navbar-wrapper['+GEOMETRY+']'+spec+'{height:var('+HEIGHT+')!important;min-height:var('+HEIGHT+')!important;max-height:var('+HEIGHT+')!important;}'+
       ':root[data-zr-workspace-phase] #zen-appcontent-navbar-wrapper['+GEOMETRY+'] > #oneplane-toolbar-surface'+spec+'{height:var('+SURFACE_HEIGHT+')!important;}'+
       ':root[data-zr-workspace-phase] ['+SURFACE+']'+spec+'{scale:1 calc(var(--zr-workspace-height-scale) + (1 - var(--zr-workspace-height-scale))*var('+PROGRESS+'))!important;transform-origin:top center!important;transition-property:none!important;}'+

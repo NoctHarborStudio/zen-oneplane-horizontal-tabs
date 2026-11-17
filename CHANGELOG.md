@@ -1,3 +1,11 @@
+## 0.3.0-preview.5 — Startup and workspace geometry
+
+- Accept a recently ready initial layout during late Sine startup; do not replay on established windows. Wait for actual horizontal bounds, ignore duplicate resize events and allow a bounded 8s readiness window.
+- Keep the previous toolbar and contour height during workspace swap, measure the final geometry once, interpolate the decorative surface height with a compositor-scale effect. Restore temporary geometry on every exit.
+- Restore a short coordinated row motion (fade + small displacement/scale) instead of opacity alone; keep per-tab animation disabled during workspace rebuild.
+- Add an opaque incoming chrome-page slide, excluding covered Home and non-neutral native transforms; no content injection, page capture or reload.
+- Correct magnetic contour overflow-row offset and synchronize final mask before reveal. Preserve serialized native operations and Escape safety. Native visual testing pending.
+
 ## 0.3.0-preview.4 — Workspace and Downloads visual stabilization
 
 - End Downloads content animation at each child's actual resting opacity, eliminating the empty-message and notice brightness snap.
