@@ -36,7 +36,7 @@
     });
   }
   let geometryLock=null;
-  const GEOMETRY="data-zr-workspace-geometry",SURFACE="data-zr-workspace-surface",PAGE="data-zr-workspace-page",MOVE="data-zr-workspace-row-move";
+  const GEOMETRY="data-zr-workspace-geometry",SURFACE="data-zr-workspace-surface",PAGE="data-zr-workspace-page",MOVE="data-zr-workspace-row-move",BACKING="data-zr-workspace-backing";
   const HEIGHT="--zr-workspace-height",SURFACE_HEIGHT="--zr-workspace-surface-height";
   function rect(n){return n?.isConnected?n.getBoundingClientRect():null;}
   function lockGeometry(){
@@ -67,7 +67,7 @@
   function restore(tx){
     for(const [n,old] of tx.styles){
       for(const [k,v,p] of old){if(v)n.style.setProperty(k,v,p);else n.style.removeProperty(k);}
-      n.removeAttribute(MARK);n.removeAttribute(SURFACE);n.removeAttribute(PAGE);n.removeAttribute(MOVE);
+      n.removeAttribute(MARK);n.removeAttribute(SURFACE);n.removeAttribute(PAGE);n.removeAttribute(MOVE);n.removeAttribute(BACKING);
     }
     tx.styles.clear();
   }
@@ -111,11 +111,18 @@
     const length=outgoing?180:300,effects=[],ease="cubic-bezier(.22,.75,.25,1)";
     for(const n of items){
       const dy=!outgoing&&n===get("PlacesToolbarItems")&&old?.bookmarkTop!=null?old.bookmarkTop-n.getBoundingClientRect().top:0;
-      const move=neutralTranslate(n),offset=Math.max(-180,Math.min(180,dy+(outgoing?-6:8)));
+      const move=neutralTranslate(n),offset=Math.max(-180,Math.min(180,dy+(outgoing?-12:14)));
       if(!saveEffect(tx,n,MARK,{[PROGRESS]:outgoing?1:0,"--zr-workspace-row-y":offset+"px"}))continue;
       if(move)n.setAttribute(MOVE,"true");
       effects.push(playEffect(tx,n,outgoing?1:0,outgoing?0:1,length,ease));
     }
+    // The adaptive two-row nav has an independent opaque backing.
+    // Fade that paint along with the rows so it cannot jump in height
+    // while the main decorative surface is morphing.
+    const nav=get("nav-bar"),row=get("oneplane-tabs");
+    if(root.getAttribute("oneplane-active")==="true"&&row?.hasAttribute("data-op-overflow-row")&&
+      saveEffect(tx,nav,BACKING,{[PROGRESS]:outgoing?1:0}))
+      effects.push(playEffect(tx,nav,outgoing?1:0,outgoing?0:1,length,ease));
     if(!outgoing){
       const surface=get("oneplane-toolbar-surface"),sr=rect(surface);
       if(old&&sr&&saveEffect(tx,surface,SURFACE,{[PROGRESS]:0,"--zr-workspace-height-scale":heightScale(old.surfaceHeight,sr.height)}))
@@ -229,15 +236,17 @@
     try{win.CSS.registerProperty({name:PROGRESS,syntax:"<number>",inherits:false,initialValue:"1"});registered=true;}catch(e){registered=e.name==="InvalidModificationError";}
     // Scope important overrides to the animated chrome only; Magnetic
     // Bookmarks uses important translate/transform in its normal state.
-    const spec=":is(#zr-workspace-specificity,["+MARK+"],["+GEOMETRY+"],["+SURFACE+"],["+PAGE+"],#oneplane-toolbar-surface,#zen-appcontent-navbar-wrapper)".repeat(8);
+    const spec=":is(#zr-workspace-specificity,["+MARK+"],["+GEOMETRY+"],["+SURFACE+"],["+PAGE+"],["+BACKING+"],#nav-bar,#oneplane-toolbar-surface,#zen-appcontent-navbar-wrapper)".repeat(8);
     const motion=":root[data-zr-workspace-phase] ["+MARK+"]"+spec;
-    const sheet=motion+"{transition-property:none!important;opacity:var("+PROGRESS+")!important;scale:calc(.97 + .03 * var("+PROGRESS+"))!important;transform-origin:center top!important;pointer-events:none!important;}"+
+    const sheet=motion+"{transition-property:none!important;opacity:var("+PROGRESS+")!important;scale:calc(.94 + .06 * var("+PROGRESS+"))!important;transform-origin:center top!important;pointer-events:none!important;}"+
       motion+'['+MOVE+']{translate:0 calc(var(--zr-workspace-row-y)*(1 - var('+PROGRESS+')))!important;}'+
       ':root[data-zr-workspace-phase="swap"] :is(#oneplane-tabs,#PlacesToolbarItems,#tabbrowser-tabs){opacity:0!important;pointer-events:none!important;}'+
       ':root[data-zr-workspace-phase="swap"] :is(#oneplane-tabs *,#PlacesToolbarItems *){transition-property:none!important;pointer-events:none!important;}'+
       ':root:is([data-zr-workspace-phase="swap"],[data-zr-workspace-phase="in"]) #zen-appcontent-navbar-wrapper'+spec+'{transition-property:none!important;}'+
       ':root[data-zr-workspace-phase] #zen-appcontent-navbar-wrapper['+GEOMETRY+']'+spec+'{height:var('+HEIGHT+')!important;min-height:var('+HEIGHT+')!important;max-height:var('+HEIGHT+')!important;}'+
       ':root[data-zr-workspace-phase] #zen-appcontent-navbar-wrapper['+GEOMETRY+'] > #oneplane-toolbar-surface'+spec+'{height:var('+SURFACE_HEIGHT+')!important;}'+
+      ':root[oneplane-active="true"][data-zr-workspace-phase="swap"] #nav-bar:has(#oneplane-tabs[data-op-overflow-row])'+spec+'{background:transparent!important;}'+
+      ':root[oneplane-active="true"][data-zr-workspace-phase] #nav-bar['+BACKING+']'+spec+'{background:color-mix(in srgb,var(--op-surface-tint) calc(var('+PROGRESS+') * 100%),transparent)!important;transition-property:none!important;}'+
       ':root[data-zr-workspace-phase] ['+SURFACE+']'+spec+'{scale:1 calc(var(--zr-workspace-height-scale) + (1 - var(--zr-workspace-height-scale))*var('+PROGRESS+'))!important;transform-origin:top center!important;transition-property:none!important;}'+
       ':root[data-zr-workspace-phase] ['+PAGE+']'+spec+'{translate:0 calc(var(--zr-workspace-page-y)*(1 - var('+PROGRESS+')))!important;transition-property:none!important;}';
     try{uri=Services.io.newURI("data:text/css;charset=utf-8,"+encodeURIComponent(sheet));win.windowUtils.loadSheet(uri,win.windowUtils.USER_SHEET);}

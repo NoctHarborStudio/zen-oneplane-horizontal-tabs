@@ -62,3 +62,5 @@ User reports the permanent Downloads button, idle/active access, progress, panel
 ## Preview.4 acceptance and preview.5 follow-up
 
 User confirms NC-023 Downloads text color fixed, NC-024 tab and page flicker gone and Escape safe. Remaining: NC-025 intermittent cold startup assembly (late startup gate, readiness mismatch, duplicate resize interruption are source causes; actual frequency unmeasured); NC-026 abrupt dock height during workspace row changes; NC-027 request for richer workspace and page motion. Preview.5 adds recent initial-layout handshake, bounded readiness, stable height through swap and one-shot final geometry/contour handoff, coordinated whole-row translation/scale and opaque incoming page deck motion. No per-tab travel, page capture or native workspace change. Full runtime validation remains open; do not close NC-013/014/015 broadly based on these fixes. Downloads appearance and controls unchanged.
+
+Preview.5 also fades the independent solid nav-bar backing in two-row mode with the workspace surfaces. This avoids exposing a new solid shelf before the height interpolation. No change to ordinary non-workspace toolbar CSS.
