@@ -1,6 +1,6 @@
-// Nocturne preview.40: early trace, independent Sine script order.
+// Nocturne preview.45: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="downloads.script",data={version:"0.3.0-preview.44"};
+  const event="downloads.script",data={version:"0.3.0-preview.45"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -653,16 +653,28 @@ try{if(typeof window!=="undefined"){
     syncFileIcon(icon,d,32);body.append(name,meta);card.append(grip,icon.box,body);
     return {card,icon,body,grip};
   }
+  function filePopupSurface(popup){
+    try{
+      const s=window.getComputedStyle(popup),stage=window.getComputedStyle(fileStage);
+      const inner=popup.shadowRoot?.querySelector('[part~="content"], .panel-arrowcontent, .panel-content');
+      const part=inner?window.getComputedStyle(inner):null;
+      return {background:s.backgroundColor,appearance:s.appearance,opacity:s.opacity,radius:s.borderTopLeftRadius,stage:stage.backgroundColor,part:part?.backgroundColor??null,panelBackground:s.getPropertyValue("--panel-background-color").trim()};
+    }catch{return null;}
+  }
   function prepareFilePopup(){
     if(filePopup?.isConnected)return true;
     const set=get("mainPopupSet");if(!set||typeof document.createXULElement!=="function")return false;
     const popup=document.createXULElement("panel");if(typeof popup.getOuterScreenRect!=="function")return false;
     popup.id="zr-file-bunny-popup";
+    // Gecko GetFrameTransparency checks root opacity and corner radius
+    // before inspecting theme/background. Select a transparent native
+    // widget before it is created; a transparent child alone is not enough.
+    for(const [k,v] of Object.entries({"appearance":"none","background":"transparent","border":"0","border-radius":"1px","opacity":".999","pointer-events":"none","--panel-background-color":"transparent","--panel-background":"transparent","--panel-padding":"0px","--panel-border-color":"transparent","--panel-border-radius":"0px","--panel-shadow":"none","--panel-box-shadow-margin":"0px"}))popup.style.setProperty(k,v,"important");
     for(const [k,v] of Object.entries({noautohide:"true",noautofocus:"true",level:"top",mousethrough:"always",consumeoutsideclicks:"false",animate:"false","aria-hidden":"true"}))popup.setAttribute(k,v);
     const stage=make("div","zr-file-bunny-stage");popup.append(stage);set.append(popup);filePopup=popup;fileStage=stage;
     popup.addEventListener("popupshown",()=>{
       const q=fileBunny;if(!q||q.popup!==popup||q.ending||q.shown)return;
-      q.shown=true;q.started=q.last=current();fileBunnyTrace("popup-shown",{state:popup.state},{sample:1500});tickFilePopup(q);
+      q.shown=true;q.started=q.last=current();fileBunnyTrace("popup-shown",{state:popup.state,surface:filePopupSurface(popup)},{sample:1500});tickFilePopup(q);
     });
     popup.addEventListener("popuphidden",()=>{
       const q=fileBunny;if(q?.popup===popup)fileBunnyTrace("popup-hidden",{ending:q.ending,frames:q.frames},{flush:true});
@@ -739,7 +751,7 @@ try{if(typeof window!=="undefined"){
       q.watch=0;if(fileBunny!==q||q.ending)return;
       const session=fileDragSession();if(session===null){if(++q.missing>=3){endFileDrag(source,undefined,"watchdog");return;}}else q.missing=0;
       if(q.mode==="popup"&&!q.shown){
-        if(q.popup.state==="open"){q.shown=true;q.started=q.last=current();fileBunnyTrace("popup-shown",{state:"open",via:"watch"});tickFilePopup(q);}
+        if(q.popup.state==="open"){q.shown=true;q.started=q.last=current();fileBunnyTrace("popup-shown",{state:"open",via:"watch",surface:filePopupSurface(q.popup)});tickFilePopup(q);}
         else if(current()-now>700&&!q.reported){q.reported=true;fileBunnyTrace("popup-not-shown",{state:q.popup.state,session:!!session},{flush:true});}
       }
       q.watch=window.setTimeout(watch,200);

@@ -1,3 +1,8 @@
+## 0.3.0-preview.45 — Bunny transparent native surface
+
+- Explicitly request a transparent Gecko popup widget before creation using nonzero corner radius and near-opaque root alpha. Clear both legacy and current panel background tokens and content surfaces. Preserve the swing stage geometry and native file payload.
+- Record computed popup and stage surface styles at popup-shown to diagnose opaque Windows backgrounds. Actual native compositing remains to be verified on Windows.
+
 ## 0.3.0-preview.44 — Library integrated release candidate
 
 - Reuse the existing Dock Bunny engine for Library download rows, with native drag fallback if the Dock is unavailable. Hold the row until the drag and return animation finish.

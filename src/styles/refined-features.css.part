@@ -228,8 +228,10 @@
 #zr-download-dock .zr-dock-row[data-file-lift] > * {opacity:.12}
 #zr-download-indicator[data-file-lift] .zr-download-icon {opacity:.38}
 /* Single Gecko native live file drag popup; no mouse interception. */
-#zr-file-bunny-popup {appearance:none!important;-moz-appearance:none!important;background:transparent!important;border:0!important;padding:0!important;margin:0!important;pointer-events:none!important;-moz-window-shadow:none!important;--panel-background:transparent!important;--panel-border-color:transparent!important;--panel-padding:0px!important;--panel-shadow:none!important;--panel-border-radius:0px!important}
+#zr-file-bunny-popup {appearance:none!important;-moz-appearance:none!important;background:transparent!important;border:0!important;border-radius:1px!important;opacity:.999!important;padding:0!important;margin:0!important;pointer-events:none!important;-moz-window-shadow:none!important;--panel-background:transparent!important;--panel-background-color:transparent!important;--panel-border-color:transparent!important;--panel-padding:0px!important;--panel-shadow:none!important;--panel-box-shadow-margin:0px!important;--panel-border-radius:0px!important}
 #zr-file-bunny-popup::part(content) {background:transparent!important;border:0!important;padding:0!important;margin:0!important;box-shadow:none!important;overflow:visible!important}
+#zr-file-bunny-popup :is(.panel-arrowcontainer,.panel-arrowcontent,.panel-content) {background:transparent!important;border:0!important;padding:0!important;margin:0!important;box-shadow:none!important;}
+#zr-file-bunny-popup .zr-file-bunny-stage {background:transparent!important;box-shadow:none!important;}
 .zr-file-bunny-stage {position:relative;display:block;flex:none;width:344px;height:154px;overflow:visible;pointer-events:none!important}
 .zr-file-bunny-ghost {position:fixed!important;left:0;top:0;z-index:2147483647!important;pointer-events:none!important;will-change:transform;--zr-file-lift:0}
 .zr-file-bunny-ghost[hidden] {display:none!important}

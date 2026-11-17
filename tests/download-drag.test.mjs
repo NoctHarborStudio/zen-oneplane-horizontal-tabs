@@ -107,3 +107,12 @@ test("Library uses the existing Bunny owner and releases the external drag lease
  assert.match(library,/if\(dragSource\)\{pendingResult=result;return;\}/);
  assert.match(library,/syncIndicator\(false\)/);
 });
+
+test("native drag popup requests transparent window before widget creation",()=>{
+ assert.ok(source.includes('"border-radius":"1px","opacity":".999"'));
+ assert.ok(source.includes('"--panel-background-color":"transparent"'));
+ assert.ok(source.includes('surface:filePopupSurface(popup)'));
+ assert.ok(css.includes('border-radius:1px!important;opacity:.999!important'));
+ assert.ok(css.includes('--panel-background-color:transparent!important'));
+ assert.ok(css.includes('#zr-file-bunny-popup .zr-file-bunny-stage {background:transparent!important'));
+});
