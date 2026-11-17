@@ -1,3 +1,10 @@
+## 0.3.0-preview.33 — Early Boot / slower wordmark
+
+- Prefer the startup controller first in the Sine manifest; if layout loads first, mount a shared brand-color cover before diagnostics and layout, then adopt it without a second overlay.
+- Keep the mark entrance and readable hold for at least 1010 ms before a 320 ms exit, with a short background-only lead when needed.
+- Stage Home from the early waiting phase, keep the eight-second fail-open guard, and log readiness once instead of every frame.
+- Native window paint before Sine injection cannot be hidden by a mod; no operating-system settings changed.
+
 ## 0.3.0-preview.32 — Library L1 overlay ownership foundation
 
 - Independent per-window overlay coordinator, late registration, reload-safe unregister, guarded synchronous handoff and Escape arbitration.

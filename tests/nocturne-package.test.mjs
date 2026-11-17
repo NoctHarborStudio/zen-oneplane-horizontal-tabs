@@ -7,6 +7,7 @@ test("Nocturne retains Sine identity and one entry per runtime owner",()=>{
  assert.equal(manifest.id,"8b2e214c-e1ba-4b81-9fbf-e08161bf2da4");
  assert.equal(manifest.homepage,"https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/tree/preview");
  assert.equal(manifest.version,JSON.parse(read("package.json")).version);
+ assert.equal(Object.keys(manifest.scripts)[0],"startup-animation.uc.mjs");
  assert.deepEqual(Object.keys(manifest.scripts).sort(),["bookmarks.uc.mjs","closing-animation.uc.mjs","downloads-indicator.uc.mjs","layout.uc.mjs","overlay.uc.mjs","page-progress.uc.mjs","smart-search.uc.mjs","startup-animation.uc.mjs","startup.uc.mjs","workspace-transition.uc.mjs"]);
  for(const name of Object.keys(manifest.scripts))assert.ok(read(name).length>0);
 });

@@ -2,6 +2,10 @@
   "schema": 1,
   "javascript": [
     {
+      "path": "src/core/boot-prelude.js.part",
+      "kind": "section"
+    },
+    {
       "path": "src/core/diagnostics.js.part",
       "kind": "section"
     },

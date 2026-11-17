@@ -1,7 +1,45 @@
+/* Nocturne boot prelude: cover the chrome before layout or telemetry work.
+ * The assembly controller adopts this exact node; a missing controller
+ * cannot leave the browser covered. No profile or OS changes. */
+(()=>{
+  const win=window,root=document.documentElement,prefs=Services.prefs;
+  const KEY="__nocturneEarlyBoot",PHASE="data-zr-startup-phase",BOOT="data-nocturne-boot";
+  if(win[KEY]||win.__zenRefinedStartupAnimationSeen||win.__nocturneLayoutStartup||
+     typeof win.addUnloadListener!=="function"||win.closed||root.hasAttribute("popup-window")||
+     root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"||
+     win.performance.now()>=3500||!prefs.getBoolPref("zen.refined.startup.animation",true)||
+     !prefs.getBoolPref("zen.nocturne.boot.enabled",true)||win.matchMedia("(prefers-reduced-motion: reduce)").matches)return;
+  let node=null,timer=0,claimed=false,oldPhase=root.getAttribute(PHASE);
+  const cleanup=()=>{
+    if(claimed)return;
+    if(timer)win.clearTimeout(timer);timer=0;
+    node?.remove();root.removeAttribute(BOOT);
+    if(root.getAttribute(PHASE)==="waiting"){if(oldPhase===null)root.removeAttribute(PHASE);else root.setAttribute(PHASE,oldPhase);}
+    if(win[KEY]===record)delete win[KEY];
+  };
+  const record={node:null,at:0,adopt(){
+    if(claimed||!node?.isConnected)return null;
+    claimed=true;if(timer)win.clearTimeout(timer);timer=0;
+    if(win[KEY]===record)delete win[KEY];
+    return {node,at:record.at};
+  },cleanup};
+  try{
+    node=document.createElementNS("http://www.w3.org/1999/xhtml","div");
+    node.id="nocturne-boot";node.setAttribute("aria-hidden","true");node.inert=true;
+    Object.assign(node.style,{position:"fixed",inset:"0",zIndex:"2147483647",display:"grid",placeItems:"center",background:"#111219",color:"#e4e5ef",pointerEvents:"none",overflow:"hidden",willChange:"opacity"});
+    node.style.setProperty("-moz-window-dragging","default","important");
+    root.append(node);record.node=node;record.at=win.performance.now();win[KEY]=record;
+    root.setAttribute(BOOT,"waiting");root.setAttribute(PHASE,"waiting");
+    const data={age:record.at,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished};
+    if(win.__nocturneTrace)win.__nocturneTrace("boot.prelude",data,{sample:1800});
+    else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"boot.prelude",t:record.at,data});}
+    timer=win.setTimeout(cleanup,8000);win.addUnloadListener(cleanup);
+  }catch{cleanup();}
+})();
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.32",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.33",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -105,7 +143,7 @@
       if(interval&&last.has(key)&&t-last.get(key)<interval)return;
       last.set(key,t);
       const item={n:++seq,t:round(t),event,data:safe(typeof detail==="function"?detail():detail)};
-      if(startupEvents.length<100&&(/^(assembly\.|layout\.)/.test(event)||event.startsWith("center.")&&item.data?.owner==="startup"))startupEvents.push(item);
+      if(startupEvents.length<100&&(/^(assembly\.|layout\.|boot\.)/.test(event)||event.startsWith("center.")&&item.data?.owner==="startup"))startupEvents.push(item);
       entries.push(item);if(entries.length>MAX_EVENTS){entries.shift();dropped++;}
       dirty=true;
       if(event!=="sample")win.console.info("[Nocturne diag "+id+"] "+JSON.stringify(item));
@@ -113,7 +151,7 @@
       if(options.sample)arm(options.sample===true?1600:options.sample);
     }catch{}
   }
-  const rootAttrs=["data-zr-center-handoff","data-zr-center-motion","data-zr-center-pending","oneplane-active","data-op-startup-ready","data-zr-startup-phase","data-zr-closing","data-zr-workspace-phase","data-op-bookmark-wave","zen-compact-mode","customizing","inDOMFullscreen","inFullscreen"];
+  const rootAttrs=["data-zr-center-handoff","data-zr-center-motion","data-zr-center-pending","oneplane-active","data-op-startup-ready","data-zr-startup-phase","data-nocturne-boot","data-zr-closing","data-zr-workspace-phase","data-op-bookmark-wave","zen-compact-mode","customizing","inDOMFullscreen","inFullscreen"];
   const attrs=[...rootAttrs,"data-op-panel-open","oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold","oneplane-home-hold","oneplane-workspace-hold","oneplane-download-hold","zen-has-hover","has-popup-menu","zen-compact-mode-active","data-ready","data-op-overflow-row","data-op-adaptive-compact","data-op-dragging","data-op-inline-drag","data-op-lane-drag","data-op-group-pull","data-op-live-drag","data-op-drag-commit","data-op-url-phase","data-op-home-open","data-op-lane-ghost","data-op-magnetic-pull","data-op-magnetic-source","data-op-detached","data-op-pulling","data-op-drag-follow","data-op-reinsert","data-zr-bm-stable-contour","data-zr-workspace-geometry","data-zr-workspace-motion","data-zr-center-card","data-zr-workspace-height-motion","data-zr-workspace-surface","data-zr-workspace-page","data-zr-home-covered","data-zr-startup-effect","data-zr-close-effect","hidden","collapsed","open","focused"];
   const targets=["titlebar-buttonbox","titlebar-max","titlebar-restore","titlebar-close","zr-page-progress","oneplane-tab-indicator","oneplane-overflow-slider","zen-appcontent-navbar-wrapper","zen-appcontent-navbar-container","oneplane-toolbar-surface","nav-bar","oneplane-tabs","oneplane-overflow-tabs","PersonalToolbar","PlacesToolbarItems","urlbar-container","urlbar","tabbrowser-tabpanels","zen-shared-home","zr-download-indicator"];
   function attrState(n,keys=attrs){const out={};for(const k of keys)if(n.hasAttribute(k))out[k]=n.getAttribute(k)||true;return out;}

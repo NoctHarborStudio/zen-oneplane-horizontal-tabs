@@ -1,6 +1,6 @@
-// Nocturne preview.31: early trace, independent Sine script order.
+// Nocturne preview.33: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.31"};
+  const event="assembly.script",data={version:"0.3.0-preview.33"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -44,7 +44,7 @@ try{if(typeof window!=="undefined"){
     root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"?"native-mode":
     !startupEligible(lateStart,check.delayed,check.ready,check.age,window.__nocturneLayoutStartup)?"late-established-window":null;
   decision("assembly.eligible.check",{...check,reason});
-  if(reason)return;
+  if(reason){window.__nocturneEarlyBoot?.cleanup?.();return;}
   window[SEEN]=true;
   // Sine saves the previous default as a user value. Upgrade that exact
   // 760ms default once; preserve every other choice, and allow users to
@@ -73,7 +73,7 @@ try{if(typeof window!=="undefined"){
   let registered=false;
   try{window.CSS.registerProperty({name:PROGRESS,syntax:"<number>",inherits:false,initialValue:"1"});registered=true;}
   catch(e){registered=e.name==="InvalidModificationError";}
-  const BOOT_PREF="zen.nocturne.boot.enabled",BOOT_MIN=650,BOOT_EXIT=280;
+  const BOOT_PREF="zen.nocturne.boot.enabled",BOOT_MIN=1010,BOOT_EXIT=320,BOOT_LEAD=150,BOOT_ENTER=460;
   let boot=null,bootMark=null,bootEffects=[],bootAt=0,bootTimer=0,bootFrame=0,bootPreparing=false;
   const inputs=["pointerdown","keydown","wheel","dragstart","beforecustomization"];
   const EASE="cubic-bezier(.25,.55,.25,1)";
@@ -82,10 +82,11 @@ try{if(typeof window!=="undefined"){
     return now>=deadline||now-shown>=min&&now-quietSince>=120;
   }
   function mountBoot(){
-    if(!prefs.getBoolPref(BOOT_PREF,true))return;
+    if(!prefs.getBoolPref(BOOT_PREF,true)){window.__nocturneEarlyBoot?.cleanup?.();return;}
     try{
       // Chrome-only, no network assets, no blur, no page mutation.
-      boot=html("div");boot.id="nocturne-boot";boot.setAttribute("aria-hidden","true");boot.inert=true;
+      const early=window.__nocturneEarlyBoot?.adopt?.();
+      boot=early?.node||html("div");boot.id="nocturne-boot";boot.setAttribute("aria-hidden","true");boot.inert=true;
       Object.assign(boot.style,{position:"fixed",inset:"0",zIndex:"2147483647",display:"grid",placeItems:"center",background:"#111219",color:"#e4e5ef",pointerEvents:"none",overflow:"hidden",willChange:"opacity"});
       boot.style.setProperty("-moz-window-dragging","default","important");
       bootMark=html("div");
@@ -98,10 +99,14 @@ try{if(typeof window!=="undefined"){
       star.setAttribute("d","M55 12 L57 19 L64 21 L57 23 L55 30 L53 23 L46 21 L53 19Z");star.setAttribute("fill","#e4e5ef");svg.append(moon,star);
       const label=html("div");label.textContent="NOCTURNE";
       Object.assign(label.style,{font:"300 24px system-ui, sans-serif",letterSpacing:"7px",paddingInlineStart:"7px"});
-      bootMark.append(svg,label);boot.append(bootMark);root.append(boot);
+      bootMark.append(svg,label);boot.append(bootMark);if(!early)root.append(boot);
       root.setAttribute("data-nocturne-boot","waiting");bootAt=now();
-      bootEffects.push(bootMark.animate([{opacity:0,transform:"translateY(9px) scale(.94)"},{opacity:1,transform:"translateY(0) scale(1)"}],{duration:380,easing:"cubic-bezier(.2,.75,.25,1)",fill:"both"}));
-      decision("boot.show",{age:bootAt-started});
+      // First show the brand background, then ease in the mark. The
+      // minimum readable hold is measured from this logo clock, not
+      // from the earlier blank prelude.
+      const lead=Math.max(0,BOOT_LEAD-(early?bootAt-early.at:0));
+      bootEffects.push(bootMark.animate([{opacity:0,transform:"translateY(7px) scale(.96)"},{opacity:1,transform:"translateY(0) scale(1)"}],{delay:lead,duration:BOOT_ENTER,easing:"cubic-bezier(.2,.75,.25,1)",fill:"both"}));
+      decision("boot.show",{age:bootAt-started,adopted:!!early,backgroundAt:early?.at??bootAt,lead,minimum:BOOT_MIN,exit:BOOT_EXIT});
     }catch(error){removeBoot();decision("boot.error",{name:error?.name});}
   }
   function removeBoot(){
@@ -123,8 +128,8 @@ try{if(typeof window!=="undefined"){
     bootFrame=window.requestAnimationFrame(()=>{
       bootFrame=0;if(dead||boot!==overlay)return;
       try{
-        bootEffects.push(bootMark.animate([{opacity:1,transform:"scale(1)"},{opacity:0,transform:"scale(.94)"}],{duration:180,easing:"ease-in",fill:"both"}));
-        const fade=overlay.animate([{opacity:1},{opacity:0}],{delay:80,duration:BOOT_EXIT-80,easing:"ease-in-out",fill:"both"});
+        bootEffects.push(bootMark.animate([{opacity:1,transform:"scale(1)"},{opacity:0,transform:"scale(.94)"}],{duration:260,easing:"ease-in-out",fill:"both"}));
+        const fade=overlay.animate([{opacity:1},{opacity:0}],{delay:110,duration:BOOT_EXIT-110,easing:"ease-in-out",fill:"both"});
         bootEffects.push(fade);fade.finished.then(done,done);
         bootTimer=window.setTimeout(done,BOOT_EXIT+150);
       }catch{done();}
@@ -507,9 +512,11 @@ try{if(typeof window!=="undefined"){
       }
       const waiting=!!(iconStatus&&(iconStatus.pending+iconStatus.missing)>0||homeIcons?.pending>0);
       if(waiting&&now()-iconWaitAt<(boot?1400:600)){schedule();return;}
-      decision("assembly.icons.ready",{...iconStatus,homeIcons,wait:now()-iconWaitAt,timeout:!!waiting});
+      // Log readiness once, after the minimum splash duration has elapsed.
+      // The frame loop must not fill the startup event buffer.
+
     }
-    typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.ready",()=>({one,active,state,expected,nativeReady,settled}),{sample:2500});
+ 
     // A narrow/hidden legacy strip falls back to native UI, never forces
     // a layout preference. With pending integration, fail open on timeout.
     if(!get("nav-bar")&&!get("navigator-toolbox")){schedule();return;}
@@ -519,6 +526,8 @@ try{if(typeof window!=="undefined"){
       if(!bootReady(now(),bootAt,BOOT_MIN,quietSince,deadline-BOOT_EXIT-200)){schedule();return;}
       decision("boot.ready",{elapsed:now()-bootAt,quiet:now()-quietSince});
     }
+    if(one)decision("assembly.icons.ready",{...iconStatus,homeIcons,wait:now()-iconWaitAt,timeout:!!(iconStatus&&(iconStatus.pending+iconStatus.missing)>0||homeIcons?.pending>0)});
+    window.__nocturneTrace?.("assembly.ready",{one,active,state,expected,nativeReady,settled},{sample:2500});
     if(timer)window.clearTimeout(timer);
     console.info("[Zen Refined] Center Assembly launch: "+(one?"OnePlane":"native"));
     launch(one);

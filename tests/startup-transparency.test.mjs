@@ -93,11 +93,11 @@ test("cold assembly stages panel, cards, bookmarks and Home on one bounded timel
 test("boot waits for minimum visibility and a quiet readiness window, with hard deadline",()=>{
  const a=source.indexOf("function bootReady("),b=source.indexOf("function mountBoot(",a);
  const ready=new Function(source.slice(a,b)+"return bootReady")();
- assert.equal(ready(649,0,650,0,8000),false);
- assert.equal(ready(650,0,650,530,8000),true);
- assert.equal(ready(700,0,650,650,8000),false);
- assert.equal(ready(8000,0,650,7999,8000),true);
- assert.ok(source.includes('if(!prefs.getBoolPref(BOOT_PREF,true))return;'));
+ assert.equal(ready(1009,0,1010,0,8000),false);
+ assert.equal(ready(1010,0,1010,890,8000),true);
+ assert.equal(ready(1100,0,1010,1050,8000),false);
+ assert.equal(ready(8000,0,1010,7999,8000),true);
+ assert.ok(source.includes('if(!prefs.getBoolPref(BOOT_PREF,true)){window.__nocturneEarlyBoot?.cleanup?.();return;}'));
  assert.ok(source.includes('root.append(boot)'));
  assert.ok(source.includes('boot.inert=true'));
  assert.ok(source.includes('pointerEvents:"none"'));
@@ -116,4 +116,18 @@ test("all prepared effects remain paused until the boot handoff",()=>{
  assert.ok(center.includes('if(paused){a.pause();a.currentTime=0;}'));
  const home=readFileSync(new URL("../src/home/shared-home.js.part",import.meta.url),"utf8");
  assert.ok(home.includes('if(timeline.paused){a.pause();a.currentTime=0;}'));
+});
+
+test("early boot is installed before layout and adopted without duplicate cover",()=>{
+ const pre=readFileSync(new URL("../src/core/boot-prelude.js.part",import.meta.url),"utf8");
+ const layout=readFileSync(new URL("../layout.uc.mjs",import.meta.url),"utf8");
+ const manifest=JSON.parse(readFileSync(new URL("../theme.json",import.meta.url),"utf8"));
+ assert.ok(layout.startsWith(pre));
+ assert.equal(Object.keys(manifest.scripts)[0],"startup-animation.uc.mjs");
+ assert.ok(pre.includes('win.__zenRefinedStartupAnimationSeen||win.__nocturneLayoutStartup'));
+ assert.ok(pre.includes('timer=win.setTimeout(cleanup,8000)'));
+ assert.ok(source.includes('const early=window.__nocturneEarlyBoot?.adopt?.()'));
+ assert.ok(source.includes('if(!early)root.append(boot)'));
+ assert.ok(source.includes('BOOT_MIN=1010,BOOT_EXIT=320,BOOT_LEAD=150,BOOT_ENTER=460'));
+ assert.ok(source.indexOf('decision("boot.ready"')<source.indexOf('decision("assembly.icons.ready"'));
 });
