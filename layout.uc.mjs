@@ -1,7 +1,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.27",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.28",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -5168,7 +5168,7 @@ function installTabStrip() {
     return Math.max(0,Math.min(1,(y-edge)/distance));
   }
   let dragGhost = null, dragGhostBody = null, dragPull = 0, dragEdge = 0, dragWidth = 0;
-  let dragLastPoint = null;
+  let dragLastPoint = null, dragReturnPoint = null;
   let dragBunnyAnchor=null, dragBunnyFull=null, dragBunnyLayout=null, dragInsertAnimation=null, dragInsertNode=null;
   let dragInsertPending=false; // visual tail only; native session is already finished
   let groupPullLayout = null;
@@ -5656,6 +5656,9 @@ function installTabStrip() {
     dragInsertAnimation.play();return true;
   }
   function prepareBunnyDrop(event){
+    // Remember the actual accepted pointer for the normal hover handoff.
+    // This also covers a fully inserted card with no remaining animation.
+    dragReturnPoint={x:event.clientX,y:event.clientY};
     const state=dragBunnyLayout;
     if(!dragNode||!state||dragImageMode==="outside"||state.progress<=0||reducedMotion.matches||
         prefs.getIntPref("zen.oneplane.animation-duration",160)===0)return false;
@@ -5674,7 +5677,7 @@ function installTabStrip() {
         paintBunnyAt(p,{x:bunnyMix(old.x,dest.x,k),y:bunnyMix(old.y,dest.y,k)});
         if(u<1){frame=window.requestAnimationFrame(tick);return;}
         dragInsertAnimation=null;dragInsertNode=null;node.removeAttribute("data-op-reinsert");
-        if(dragInsertPending)endDragVisual();
+        if(dragInsertPending)endDragVisual(true);
       };
       frame=window.requestAnimationFrame(tick);
     }};
@@ -6032,7 +6035,12 @@ function installTabStrip() {
       if(dragBunnyAnchor)clearBunnyPull();
       if(dragDetachedOnce&&within){
         event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";
-        clearLaneDrag();clearDropMarker();return;
+        clearLaneDrag();clearDropMarker();
+        // clearLiveDrag() during capture removed the old follow marker.
+        // At zero progress the real source owns the drag artwork again,
+        // including its border and icon state, even on repeated dragovers.
+        dragNode.setAttribute("data-op-drag-follow","true");
+        refreshIndicator();return;
       }
     } else if (!local) tabOwner(tab)?.[DRAG_CONTROLLER]?.outside(event);
     if (!within) {
@@ -6097,7 +6105,24 @@ function installTabStrip() {
       } catch(error) { console.error("[OnePlane] Restore startup search:",error); }
     },80);
   }
-  function endDragVisual() {
+  function restoreReturnedHover(source,point){
+    if(!source||!point||!hoverSupported()||!list.contains(source))return false;
+    const hit=source.matches(".oneplane-tab")?source:
+      Array.from(source.querySelectorAll(".oneplane-tab")).find(n=>{
+        const r=n.getBoundingClientRect();
+        return point.x>=r.left&&point.x<r.right&&point.y>=r.top&&point.y<r.bottom;
+      });
+    if(!hit)return false;
+    const r=hit.getBoundingClientRect(),lane=hit.closest(".oneplane-island-lane")||list,clip=lane.getBoundingClientRect();
+    if(point.x<Math.max(r.left,clip.left)||point.x>=Math.min(r.right,clip.right)||
+        point.y<Math.max(r.top,clip.top)||point.y>=Math.min(r.bottom,clip.bottom))return false;
+    selectHover(hit,point.x);
+    lastHoverPointer={...point};
+    return hoverTab===hit;
+  }
+  function endDragVisual(restoreReturn=false) {
+    const returnedSource=restoreReturn?dragNode:null,returnedPoint=restoreReturn?dragReturnPoint:null;
+    dragReturnPoint=null;
     dragInsertPending=false;
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.visual.end",()=>({mode:dragImageMode,pull:dragPull,detached:dragDetachedOnce,ghost:!!dragGhost&&!dragGhost.hidden,shifted:dragShifted.size}),{sample:1800});
     clearPlacementPreview();
@@ -6126,6 +6151,10 @@ function installTabStrip() {
     for (const entry of splitEntries.values()) entry.box.removeAttribute("data-op-group-dragging");
     splitZone.removeAttribute("data-op-dragging");
     splitZone.removeAttribute("data-op-side");
+    if(returnedSource){
+      const restored=restoreReturnedHover(returnedSource,returnedPoint);
+      window.__nocturneTrace?.("drag.return.highlight",{restored},{sample:800});
+    }
     refreshIndicator();
     refreshIslandTitle();
     restoreStartupSearch(search);
@@ -6340,7 +6369,7 @@ function installTabStrip() {
     if(returned&&!dt?.mozUserCancelled)prepareBunnyDrop(event);
     const keep=returned&&!dt?.mozUserCancelled&&dragImageMode==="inline"&&!!dragInsertAnimation;
     draggedTab = null; draggedGroup = null; dragHandled = false; dragStartPoint = null;
-    if(keep)finishInsertionAfterDrop();else endDragVisual();
+    if(keep)finishInsertionAfterDrop();else endDragVisual(returned&&!dt?.mozUserCancelled);
     if (returned || wasGroup || !start || handled || dt?.mozUserCancelled || dt?.dropEffect !== "none" ||
         !validNativeTab(tab) || tabOwner(tab) !== window) return;
     // A cancelled drag or a drop within this window must never create
@@ -6378,7 +6407,7 @@ function installTabStrip() {
       if(!finishNativeDragLifecycle())return;
       dragHandled = true;
       const keep=finishReturn&&dragImageMode==="inline"&&!!dragInsertAnimation;
-      if(!keep)endDragVisual();
+      if(!keep)endDragVisual(finishReturn);
       draggedTab = null;
       draggedGroup = null;
       dragStartPoint=null;

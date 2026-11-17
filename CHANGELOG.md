@@ -1,3 +1,9 @@
+## 0.3.0-preview.28 — Bunny highlight handoff
+
+- Restore the real card's drag-follow highlight when Magnetic Bunny returns to zero progress, including repeated dragovers.
+- On an accepted local return, restore normal hover and indicator ownership if the release point remains over the returned card; do not change native tab selection or restore hover on cancelled gestures.
+- Keep Magnetic Bunny geometry unchanged.
+
 ## 0.3.0-preview.27 — Magnetic Bunny / Home compression
 
 - Port Motion Lab option 02: smooth anchored slot compression, same-side outer neighbors move toward Home, and the card follows the slot until it clears its own row.

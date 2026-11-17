@@ -1,4 +1,21 @@
-  function endDragVisual() {
+  function restoreReturnedHover(source,point){
+    if(!source||!point||!hoverSupported()||!list.contains(source))return false;
+    const hit=source.matches(".oneplane-tab")?source:
+      Array.from(source.querySelectorAll(".oneplane-tab")).find(n=>{
+        const r=n.getBoundingClientRect();
+        return point.x>=r.left&&point.x<r.right&&point.y>=r.top&&point.y<r.bottom;
+      });
+    if(!hit)return false;
+    const r=hit.getBoundingClientRect(),lane=hit.closest(".oneplane-island-lane")||list,clip=lane.getBoundingClientRect();
+    if(point.x<Math.max(r.left,clip.left)||point.x>=Math.min(r.right,clip.right)||
+        point.y<Math.max(r.top,clip.top)||point.y>=Math.min(r.bottom,clip.bottom))return false;
+    selectHover(hit,point.x);
+    lastHoverPointer={...point};
+    return hoverTab===hit;
+  }
+  function endDragVisual(restoreReturn=false) {
+    const returnedSource=restoreReturn?dragNode:null,returnedPoint=restoreReturn?dragReturnPoint:null;
+    dragReturnPoint=null;
     dragInsertPending=false;
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.visual.end",()=>({mode:dragImageMode,pull:dragPull,detached:dragDetachedOnce,ghost:!!dragGhost&&!dragGhost.hidden,shifted:dragShifted.size}),{sample:1800});
     clearPlacementPreview();
@@ -27,6 +44,10 @@
     for (const entry of splitEntries.values()) entry.box.removeAttribute("data-op-group-dragging");
     splitZone.removeAttribute("data-op-dragging");
     splitZone.removeAttribute("data-op-side");
+    if(returnedSource){
+      const restored=restoreReturnedHover(returnedSource,returnedPoint);
+      window.__nocturneTrace?.("drag.return.highlight",{restored},{sample:800});
+    }
     refreshIndicator();
     refreshIslandTitle();
     restoreStartupSearch(search);

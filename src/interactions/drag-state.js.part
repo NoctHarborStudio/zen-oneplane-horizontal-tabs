@@ -11,7 +11,7 @@
     return Math.max(0,Math.min(1,(y-edge)/distance));
   }
   let dragGhost = null, dragGhostBody = null, dragPull = 0, dragEdge = 0, dragWidth = 0;
-  let dragLastPoint = null;
+  let dragLastPoint = null, dragReturnPoint = null;
   let dragBunnyAnchor=null, dragBunnyFull=null, dragBunnyLayout=null, dragInsertAnimation=null, dragInsertNode=null;
   let dragInsertPending=false; // visual tail only; native session is already finished
   let groupPullLayout = null;

@@ -145,6 +145,9 @@
     dragInsertAnimation.play();return true;
   }
   function prepareBunnyDrop(event){
+    // Remember the actual accepted pointer for the normal hover handoff.
+    // This also covers a fully inserted card with no remaining animation.
+    dragReturnPoint={x:event.clientX,y:event.clientY};
     const state=dragBunnyLayout;
     if(!dragNode||!state||dragImageMode==="outside"||state.progress<=0||reducedMotion.matches||
         prefs.getIntPref("zen.oneplane.animation-duration",160)===0)return false;
@@ -163,7 +166,7 @@
         paintBunnyAt(p,{x:bunnyMix(old.x,dest.x,k),y:bunnyMix(old.y,dest.y,k)});
         if(u<1){frame=window.requestAnimationFrame(tick);return;}
         dragInsertAnimation=null;dragInsertNode=null;node.removeAttribute("data-op-reinsert");
-        if(dragInsertPending)endDragVisual();
+        if(dragInsertPending)endDragVisual(true);
       };
       frame=window.requestAnimationFrame(tick);
     }};

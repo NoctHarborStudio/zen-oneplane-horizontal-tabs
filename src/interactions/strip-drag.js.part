@@ -283,7 +283,12 @@
       if(dragBunnyAnchor)clearBunnyPull();
       if(dragDetachedOnce&&within){
         event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";
-        clearLaneDrag();clearDropMarker();return;
+        clearLaneDrag();clearDropMarker();
+        // clearLiveDrag() during capture removed the old follow marker.
+        // At zero progress the real source owns the drag artwork again,
+        // including its border and icon state, even on repeated dragovers.
+        dragNode.setAttribute("data-op-drag-follow","true");
+        refreshIndicator();return;
       }
     } else if (!local) tabOwner(tab)?.[DRAG_CONTROLLER]?.outside(event);
     if (!within) {

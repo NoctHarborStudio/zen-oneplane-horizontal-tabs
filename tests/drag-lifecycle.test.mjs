@@ -104,9 +104,32 @@ test("early toolbar return drop finishes native ownership but retains the visual
   setup.mark(true);
   assert.deepEqual(setup.read(),{dragHandled:true,draggedTab:null,draggedGroup:null,dragStartPoint:null,dragInsertPending:true,ended:0,finished:1,held:1});
   setup.mark(true);assert.equal(setup.read().ended,0);
-  assert.ok(img.includes("if(dragInsertPending)endDragVisual();"));
+  assert.ok(img.includes("if(dragInsertPending)endDragVisual(true);"));
   assert.ok(ctrl.includes("dragInsertPending=false;"));
   assert.ok(strip.includes("prepareBunnyDrop(event);"));
   assert.ok(strip.includes("sourceHandled(tab,true);"));
   assert.ok(engine.includes("if(dragInsertPending)endDragVisual();"));
+});
+
+test("Bunny return restores source highlight and hover only on the visible card",async()=>{
+  const {readFile}=await import("node:fs/promises");
+  const read=p=>readFile(new URL("../src/interactions/"+p,import.meta.url),"utf8");
+  const [ctrl,strip,end,img]=await Promise.all([read("drag-controller.js.part"),read("strip-drag.js.part"),read("drag-end.js.part"),read("native-drag-image.js.part")]);
+  const a=strip.indexOf("if(dragDetachedOnce&&within)"),b=strip.indexOf("} else if (!local)",a);
+  const branch=strip.slice(a,b);
+  const attrs=new Set();let refresh=0;
+  const restore=new Function("event","dragNode","clearLaneDrag","clearDropMarker","refreshIndicator","const dragDetachedOnce=true,within=true;"+branch);
+  const event={preventDefault(){},stopPropagation(){},dataTransfer:{}};
+  const node={setAttribute:k=>attrs.add(k)};
+  for(let i=0;i<3;i++)restore(event,node,()=>attrs.delete("data-op-drag-follow"),()=>{},()=>refresh++);
+  assert.ok(attrs.has("data-op-drag-follow"));assert.equal(refresh,3);
+  const start=ctrl.indexOf("function restoreReturnedHover("),stop=ctrl.indexOf("function endDragVisual(",start);
+  const clip={getBoundingClientRect:()=>({left:5,right:70,top:0,bottom:50})};
+  const card={matches:()=>true,getBoundingClientRect:()=>({left:10,right:46,top:6,bottom:36}),closest:()=>clip};
+  const h=new Function("list","hoverSupported","let hoverTab=null,lastHoverPointer=null;const selectHover=(n)=>hoverTab=n;"+ctrl.slice(start,stop)+"return restoreReturnedHover")({contains:()=>true},()=>true);
+  assert.equal(h(card,{x:20,y:20}),true);assert.equal(h(card,{x:50,y:20}),false);assert.equal(h(card,{x:20,y:40}),false);
+  assert.equal(h(card,null),false);
+  assert.ok(end.includes("endDragVisual(returned&&!dt?.mozUserCancelled)"));
+  assert.ok(end.includes("if(!keep)endDragVisual(finishReturn);"));
+  assert.ok(img.includes("dragReturnPoint={x:event.clientX,y:event.clientY}"));
 });

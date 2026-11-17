@@ -11,7 +11,7 @@
     if(returned&&!dt?.mozUserCancelled)prepareBunnyDrop(event);
     const keep=returned&&!dt?.mozUserCancelled&&dragImageMode==="inline"&&!!dragInsertAnimation;
     draggedTab = null; draggedGroup = null; dragHandled = false; dragStartPoint = null;
-    if(keep)finishInsertionAfterDrop();else endDragVisual();
+    if(keep)finishInsertionAfterDrop();else endDragVisual(returned&&!dt?.mozUserCancelled);
     if (returned || wasGroup || !start || handled || dt?.mozUserCancelled || dt?.dropEffect !== "none" ||
         !validNativeTab(tab) || tabOwner(tab) !== window) return;
     // A cancelled drag or a drop within this window must never create
@@ -49,7 +49,7 @@
       if(!finishNativeDragLifecycle())return;
       dragHandled = true;
       const keep=finishReturn&&dragImageMode==="inline"&&!!dragInsertAnimation;
-      if(!keep)endDragVisual();
+      if(!keep)endDragVisual(finishReturn);
       draggedTab = null;
       draggedGroup = null;
       dragStartPoint=null;
