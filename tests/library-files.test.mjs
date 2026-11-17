@@ -49,3 +49,22 @@ test("clear finished records never removes active, partial or blocked downloads"
 test("download routing only recognizes native downloads command IDs",()=>{
  assert.equal(libraryDownloadsCommand({target:{id:"Tools:Downloads"}}),true);assert.equal(libraryDownloadsCommand({target:{id:"key_openDownloads"}}),true);assert.equal(libraryDownloadsCommand({target:{id:"key_gotoHistory"}}),false);assert.equal(libraryDownloadsCommand({target:{id:"Tools:Downloads"},defaultPrevented:true}),false);
 });
+
+test("opaque native access is restricted to existing completed records",async()=>{
+ let view;const d={stopped:true,succeeded:true,target:{path:"x.png",exists:true}};
+ const service=createDownloadsService({loadList:async()=>({addView(v){view=v;v.onDownloadAdded(d);},removeView(){}})});
+ await service.start();const id=service.getSnapshot()[0].id;
+ assert.equal(service.withNative(id,x=>x===d),true);assert.equal(service.withNative("unknown",()=>assert.fail("unknown ID")),false);
+ d.hasPartialData=true;assert.equal(service.withNative(id,()=>assert.fail("partial")),false);
+ d.hasPartialData=false;view.onDownloadRemoved(d);assert.equal(service.withNative(id,()=>assert.fail("removed")),false);
+ await service.dispose();
+});
+
+test("media reload waits for previous native scan to release",async()=>{
+ const gate=deferred();let scans=0;
+ const first=createMediaService({scan:()=>gate.promise,describe:()=>({}),perform:()=>true});
+ const session=first.open("pictures");const result=session.refresh();await tick();session.close();
+ const barrier=first.dispose();const second=createMediaService({barrier,scan:async()=>{scans++;return [];},describe:()=>({}),perform:()=>true});
+ const next=second.open("documents"),read=next.refresh();await tick();assert.equal(scans,0);gate.resolve([]);
+ assert.equal(await result,null);await read;assert.equal(scans,1);next.close();await second.dispose();
+});

@@ -85,3 +85,25 @@ test("drag telemetry includes popup readiness, motion and final summary",()=>{
  for(const event of ["start","popup-shown","popup-not-shown","tick","end","popup-hidden","return-finish"])assert.ok(source.includes('fileBunnyTrace("'+event+'"'));
  assert.ok(source.includes("maxAngle:q.maxAngle"));assert.ok(source.includes("maxGap:q.maxGap"));assert.ok(source.includes("q.missing>=3"));
 });
+
+test("Library uses the existing Bunny owner and releases the external drag lease once",()=>{
+ const code=section("  function finishExternalDrag(","  function clearFileBunny(");
+ let externalDrag=null,fileDragSource=null,fileBunny=null,dead=false,node={},cardOpen=false,dockOpen=false;
+ const document={},window={__nocturneOverlay:{current:()=>"library"}},sourceNode={isConnected:true,ownerDocument:document,closest:()=>true};
+ const calls=[];let list={withNative:(id,fn)=>id==="valid"&&fn({id})};
+ const run=new Function("document","window","node","list","sourceNode","calls",`
+ let externalDrag=null,fileDragSource=null,fileBunny=null,dead=false,cardOpen=false,dockOpen=false;
+ function beginFileDrag(e,s,d){fileDragSource=s;calls.push(d.id);return true;}
+ function endFileDrag(s,e){fileDragSource=null;finishExternalDrag();}
+ ${code}
+ return {beginExternalDrag,endExternalDrag,finishExternalDrag,get:()=>externalDrag};`)(document,window,node,list,sourceNode,calls);
+ assert.equal(run.beginExternalDrag({},sourceNode,"invalid",()=>{}),false);
+ assert.equal(run.beginExternalDrag({},sourceNode,"valid",()=>calls.push("done")),true);
+ assert.equal(run.beginExternalDrag({},sourceNode,"valid",()=>{}),false);
+ assert.equal(run.endExternalDrag(sourceNode,{}),true);run.finishExternalDrag();
+ assert.deepEqual(calls,["valid","done"]);assert.equal(run.get(),null);
+ const library=readFileSync(new URL("../src/library/controller.js.part",import.meta.url),"utf8");
+ assert.match(library,/beginExternalDrag\?\.\(e,node,entry\.record\.id,finish\)/);
+ assert.match(library,/if\(dragSource\)\{pendingResult=result;return;\}/);
+ assert.match(library,/syncIndicator\(false\)/);
+});

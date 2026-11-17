@@ -80,8 +80,8 @@ function queryDownloadRows(rows,{section="downloads",text="",limit=50,sort="new"
  list.sort((a,b)=>Number(!!b.active)-Number(!!a.active)||(sort==="size"?((b.total||b.bytes||0)-(a.total||a.bytes||0)):sort==="old"?a.time-b.time:b.time-a.time)||a.id.localeCompare(b.id));
  return Object.freeze({rows:Object.freeze(list.slice(0,limit)),limit,hasMore:list.length>limit});
 }
-function createMediaService({scan,allowed=()=>true,windows=false,describe,perform}){
- let dead=false,serial=0,pending=Promise.resolve();const handles=new Map();
+function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,windows=false,describe,perform}){
+ let dead=false,serial=0,pending=Promise.resolve(barrier);const handles=new Map();
  function open(section,downloadPaths=()=>new Set()){
    if(dead||!allowed()||!MEDIA_EXTENSIONS[section])throw Error("Media unavailable");
    let closed=false,owned=new Set(),cache=null,revision=0;
@@ -104,7 +104,7 @@ function createMediaService({scan,allowed=()=>true,windows=false,describe,perfor
    return {refresh,rows:()=>{const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const id of owned)handles.delete(id);owned.clear();cache=null;}};
  }
  function action(id,kind){if(dead||!allowed()||!handles.has(id)||!["open","reveal"].includes(kind))return false;return perform(handles.get(id),kind);}
- function dispose(){dead=true;handles.clear();}
+ function dispose(){dead=true;handles.clear();return pending.catch(()=>{});}
  return {open,action,dispose};
 }
 // Own one bounded query session, reject stale results before rendering.
@@ -186,7 +186,7 @@ function libraryDownloadsCommand(event){
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
   const labels={downloads:"All Downloads",documents:"Documents",history:"History",pictures:"Pictures",closed:"Recently Closed"};
   const summaries={downloads:"Download records and file actions",documents:"Downloaded documents and opted-in folders",history:"Browsing history and search",pictures:"Downloaded pictures and opted-in folders",closed:"Recently closed tabs in this window"};
-  let state=createLibraryState(),dead=false,lease=()=>{},shell=null,animations=[],frame=0,returnFocus=null,rows=new Map(),backgroundAction=false,renderedSection=null,dragSource=null,pendingResult=null,clearing=false,nativeFallback=false,confirmation=false,actionSerial=0,pendingClose=false;
+  let state=createLibraryState(),dead=false,lease=()=>{},shell=null,animations=[],frame=0,returnFocus=null,rows=new Map(),backgroundAction=false,renderedSection=null,dragSource=null,pendingResult=null,clearing=false,nativeFallback=false,confirmation=false,actionSerial=0,pendingClose=false,dragOwner=null,indicatorReady=false;
   const data=createLibraryData({getServices:()=>win.__nocturneLibraryServices,onResult:renderResults,onError:renderError,onNotice:notice,schedule:(fn,ms)=>win.setTimeout(fn,ms),cancel:id=>win.clearTimeout(id)});
   const fileSection=()=>["downloads","documents","pictures"].includes(state.section);
   const enabled=()=>prefs.getBoolPref(PREF,false),active=()=>state.phase!=="closed";
@@ -203,7 +203,7 @@ function libraryDownloadsCommand(event){
     return false;
   }
   function resize(){
-    if(!active()||frame)return;frame=win.requestAnimationFrame(()=>{frame=0;if(active()&&!geometry())closeNow();});
+    if(!active()||frame)return;frame=win.requestAnimationFrame(()=>{frame=0;if(active()){if(!geometry())closeNow();else syncIndicator(false);}});
   }
   function mount(){
     if(shell)return true;
@@ -232,7 +232,7 @@ function libraryDownloadsCommand(event){
       tabs.set(section,button);
       if(section==="history")button.classList.add("nl-primary");else (["downloads","documents"].includes(section)?left:right).append(button);
     }
-    nav.append(left,tabs.get("history"),right);
+    const indicator=make("span","nl-nav-indicator");indicator.hidden=true;indicator.setAttribute("aria-hidden","true");nav.append(left,tabs.get("history"),right,indicator);
     const search=make("input","nl-search");search.type="search";search.autocomplete="off";search.maxLength=1024;search.setAttribute("aria-label","Search Library");
     search.addEventListener("input",()=>{state=reduceLibrary(state,{type:"QUERY",value:search.value});if(renderedSection===state.section)data.search(state.query);});
     search.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();if(renderedSection===state.section)data.search(state.query,true);}});
@@ -249,9 +249,15 @@ function libraryDownloadsCommand(event){
     const yes=button("Confirm clear",()=>void clearDownloads());
     const no=button("Cancel",()=>{confirmation=false;syncTools();clear.focus();});
     const native=button("Native downloads",openNativeDownloads);
+    const nativeHistory=button("Native history",()=>openNativeCommand("Browser:ShowAllHistory"));
+    const historyRange=make("select","nl-select");historyRange.setAttribute("aria-label","History clearing time range");
+    for(const [v,t] of [[1,"Last hour"],[24,"Last day"],[168,"Last 7 days"]]){const o=make("option","",t);o.value=String(v);historyRange.append(o);}
+    const clearHistory=button("Clear history…",()=>void clearRecentHistory(Number(historyRange.value)));
+    const addFolder=button("Add folder…",()=>void changeFolders(false));
+    const resetFolders=button("Reset extra folders",()=>void changeFolders(true));
     const refresh=button("Refresh folders",()=>{const epoch=state.motionEpoch;notice("Scanning opted-in folders…");void data.refresh().then(ok=>{if(ok&&current(epoch))notice("");});});
     const more=button("Load more",()=>{more.disabled=true;if(!data.more())more.disabled=false;});more.classList.add("nl-more");
-    tools.append(sort,filter,clear,yes,no,native,refresh);
+    tools.append(sort,filter,clear,yes,no,native,nativeHistory,historyRange,clearHistory,refresh,addFolder,resetFolders);
     panel.append(header,nav,search,tools,status,body);layer.append(shade,panel);root.append(layer);
     shade.addEventListener("pointerdown",e=>{if(e.button===0){e.preventDefault();close();}});
     panel.addEventListener("keydown",e=>{
@@ -260,12 +266,21 @@ function libraryDownloadsCommand(event){
       const next=e.shiftKey?(i<=0?nodes.length-1:i-1):(i<0||i===nodes.length-1?0:i+1);
       e.preventDefault();nodes[next].focus();
     });
-    shell={layer,shade,panel,title,tabs,search,body,tools,status,sort,filter,clear,yes,no,native,refresh,more};return true;
+    shell={layer,shade,panel,title,tabs,search,body,tools,status,sort,filter,clear,yes,no,native,refresh,more,nav,indicator,nativeHistory,historyRange,clearHistory,addFolder,resetFolders};return true;
+  }
+  function syncIndicator(animate=true){
+    if(!shell||!active())return;
+    const {nav,tabs,indicator}=shell,tab=tabs.get(state.section);
+    // Offset geometry is independent of the panel's opening transform.
+    const width=Math.max(12,tab.offsetWidth*.5),x=tab.offsetLeft+(tab.offsetWidth-width)/2,y=tab.offsetTop+tab.offsetHeight-3;
+    if(!tab.offsetWidth)return;
+    if(!animate||!indicatorReady){indicator.style.transition="none";}else indicator.style.transition=duration(220)?"transform 220ms cubic-bezier(.2,.75,.2,1), width 220ms cubic-bezier(.2,.75,.2,1)":"none";
+    indicator.style.transform="translate("+x+"px,"+y+"px)";indicator.style.width=width+"px";indicatorReady=true;indicator.hidden=false;
   }
   function renderHeader(){
     const {title,tabs,search,body}=shell;title.textContent=labels[state.section];
     for(const [id,b] of tabs){const selected=id===state.section;b.setAttribute("aria-selected",String(selected));b.tabIndex=selected?0:-1;}
-    search.placeholder="Search "+labels[state.section].toLowerCase();search.value=state.query;body.setAttribute("aria-labelledby","nl-tab-"+state.section);syncTools();
+    search.placeholder="Search "+labels[state.section].toLowerCase();search.value=state.query;body.setAttribute("aria-labelledby","nl-tab-"+state.section);syncTools();syncIndicator();
   }
   function notice(message){
     if(!shell||!active()||state.phase==="closing")return;
@@ -273,11 +288,12 @@ function libraryDownloadsCommand(event){
   }
   function syncTools(){
     if(!shell)return;const f=fileSection(),d=state.section==="downloads",local=f&&!d&&prefs.getBoolPref(MEDIA_PREF,false);
-    shell.tools.hidden=!f;shell.sort.hidden=!f;shell.sort.value=state.sort;
+    shell.tools.hidden=!f&&state.section!=="history";shell.sort.hidden=!f;shell.sort.value=state.sort;
     shell.filter.hidden=!d;shell.filter.value=state.filter;
     shell.clear.hidden=!d||confirmation;shell.clear.disabled=clearing||!win.__nocturneLibraryServices?.downloads?.getSnapshot().some(r=>r.clearable);
     shell.yes.hidden=shell.no.hidden=!d||!confirmation;shell.yes.disabled=shell.no.disabled=clearing;
-    shell.native.hidden=!d;shell.refresh.hidden=!local;
+    shell.native.hidden=!d;shell.refresh.hidden=shell.addFolder.hidden=shell.resetFolders.hidden=!local;
+    shell.nativeHistory.hidden=shell.historyRange.hidden=shell.clearHistory.hidden=state.section!=="history";
   }
   async function clearDownloads(){
     if(!confirmation||clearing||state.section!=="downloads")return;
@@ -288,10 +304,38 @@ function libraryDownloadsCommand(event){
     }catch{if(token===actionSerial)notice("Could not clear completed records.");}
     finally{if(token===actionSerial){clearing=false;confirmation=false;syncTools();data.retry();}}
   }
-  function openNativeDownloads(){
-    const command=doc.getElementById("Tools:Downloads");
-    if(!command||typeof command.doCommand!=="function"){notice("Native downloads command unavailable.");return;}
+  function openNativeDownloads(){return openNativeCommand("Tools:Downloads");}
+  function openNativeCommand(id){
+    const command=doc.getElementById(id);
+    if(!command||typeof command.doCommand!=="function"){notice("Native command unavailable.");return;}
     closeNow(false);nativeFallback=true;try{command.doCommand();}finally{nativeFallback=false;}
+  }
+  async function changeFolders(reset){
+    if(!active()||dragSource||clearing||!["documents","pictures"].includes(state.section)||!prefs.getBoolPref(MEDIA_PREF,false))return;
+    const epoch=state.motionEpoch,service=win.__nocturneLibraryServices;
+    if(reset&&!win.confirm("Remove all extra Library folders? No files will be deleted."))return;
+    let ok=false;try{ok=reset?service.clearFolders():await service.chooseFolder();}catch{}
+    if(!current(epoch)||!active()||state.phase==="closing")return;
+    if(ok){notice("Refreshing folders…");void data.refresh().then(done=>{if(done&&current(epoch))notice("");});}
+  }
+  async function clearRecentHistory(hours){
+    if(!active()||state.section!=="history"||clearing)return;
+    const epoch=state.motionEpoch;if(!win.confirm("Remove browser history from the last "+hours+" hour(s)? This cannot be undone.")||!current(epoch))return;
+    try{
+      const ok=await win.__nocturneLibraryServices?.clearHistoryRange(hours);
+      if(current(epoch)){notice(ok?"History cleared.":"History could not be cleared.");data.retry();}
+    }catch{if(current(epoch))notice("History could not be cleared.");}
+  }
+  async function historyAction(entry,kind){
+    const row=entry.record,service=win.__nocturneLibraryServices,epoch=state.motionEpoch;
+    if(!row||!service||rows.get(row.id)!==entry||renderedSection!==state.section||!active()||state.phase==="closing")return;
+    try{
+      if(kind==="copy"){if(service.copyHistoryURL(row.url))notice("Address copied.");return;}
+      const msg=row.kind==="closed"?"Forget this recently closed tab? It will no longer be restorable.":"Remove this page and its visits from browser history?";
+      if(!win.confirm(msg)||!current(epoch)||rows.get(row.id)!==entry||entry.record!==row)return;
+      const ok=row.kind==="closed"?service.closedTabs.forget(row.closedId):await service.removeHistoryURL(row.url);
+      if(current(epoch)){notice(ok?"Record removed.":"Record could not be removed.");data.retry();}
+    }catch{if(current(epoch))notice("History action unavailable.");}
   }
   function fileBytes(n){if(!Number.isFinite(n)||n<=0)return "0 B";let i=0;while(n>=1024&&i<3){n/=1024;i++;}return n.toFixed(i?1:0)+" "+["B","KB","MB","GB"][i];}
   async function fileAction(entry,kind){
@@ -310,12 +354,26 @@ function libraryDownloadsCommand(event){
     entry.open=button("Open","open");entry.reveal=button("Folder","reveal");entry.remove=button("Remove","remove");
     copy.append(title,url,track);node.append(icon,copy,actions);
     icon.addEventListener("error",()=>{const fallback=entry.record?.icon;if(fallback&&icon.getAttribute("src")!==fallback)icon.src=fallback;else icon.hidden=true;});
+    let actionPress=false;
+    node.addEventListener("pointerdown",e=>{actionPress=!!e.target.closest?.("button");});
     node.addEventListener("dragstart",e=>{
-      if(e.target.closest?.("button")||entry.record?.kind!=="download"||!win.__nocturneLibraryServices?.downloads.drag(entry.record.id,e,node)){e.preventDefault();return;}
+      if(actionPress||e.target.closest?.("button")||entry.record?.kind!=="download"||dragSource||clearing){e.preventDefault();return;}
+      const finish=()=>finishDrag(node);
+      const dock=win.__zenRefinedDownloadIndicator;
+      if(dock?.beginExternalDrag?.(e,node,entry.record.id,finish)){dragOwner=dock;}
+      else if(!win.__nocturneLibraryServices?.downloads.drag(entry.record.id,e,node)){e.preventDefault();return;}
       dragSource=node;e.stopPropagation();node.setAttribute("data-file-dragging","");
     });
-    node.addEventListener("dragend",()=>{if(dragSource!==node)return;dragSource=null;node.removeAttribute("data-file-dragging");const p=pendingResult;pendingResult=null;if(pendingClose){pendingClose=false;closeNow(false);return;}if(p?.error)renderError();else if(p)renderResults(p);});
+    node.addEventListener("dragend",e=>{
+      if(dragSource!==node)return;
+      if(dragOwner?.endExternalDrag?.(node,e))return;
+      finishDrag(node);
+    });
     return entry;
+  }
+  function finishDrag(node){
+    if(dragSource!==node)return;dragSource=null;dragOwner=null;node.removeAttribute("data-file-dragging");
+    const p=pendingResult;pendingResult=null;if(pendingClose){pendingClose=false;closeNow(false);return;}if(p?.error)renderError();else if(p)renderResults(p);
   }
   function updateFileRow(entry,row){
     entry.record=row;entry.node.dataset.recordId=row.id;entry.title.textContent=row.name;
@@ -347,15 +405,17 @@ function libraryDownloadsCommand(event){
     else renderError();
   }
   function createRow(){
-    const node=make("button","nl-record");node.type="button";
-    const icon=make("img","nl-favicon");icon.alt="";icon.loading="lazy";icon.decoding="async";
+    const node=make("div","nl-history-row"),main=make("button","nl-record");main.type="button";
+    const icon=make("img","nl-favicon");icon.alt="";icon.loading="lazy";icon.decoding="async";icon.draggable=false;
     const copy=make("span","nl-record-text"),title=make("span","nl-record-title"),url=make("span","nl-record-url"),time=make("time","nl-time");
-    copy.append(title,url);node.append(icon,copy,time);
-    const entry={node,icon,title,url,time,record:null};
-    node.addEventListener("click",e=>activateRow(entry.record,e.ctrlKey||e.metaKey));
-    node.addEventListener("auxclick",e=>{if(e.button===1){e.preventDefault();activateRow(entry.record,true);}});
-    icon.addEventListener("error",()=>{icon.hidden=true;});
-    return entry;
+    copy.append(title,url);main.append(icon,copy,time);node.append(main);
+    const entry={node,main,icon,title,url,time,record:null};
+    const actions=make("div","nl-history-actions");
+    const button=(name,kind)=>{const b=make("button","nl-action",name);b.type="button";b.addEventListener("click",()=>void historyAction(entry,kind));actions.append(b);return b;};
+    entry.copy=button("Copy","copy");entry.forget=button("Remove","forget");node.append(actions);
+    main.addEventListener("click",e=>activateRow(entry.record,e.ctrlKey||e.metaKey));
+    main.addEventListener("auxclick",e=>{if(e.button===1){e.preventDefault();activateRow(entry.record,true);}});
+    icon.addEventListener("error",()=>{icon.hidden=true;});return entry;
   }
   function renderResults(result){
     if(!active()||state.phase==="closing"||renderedSection!==state.section)return;
@@ -368,7 +428,7 @@ function libraryDownloadsCommand(event){
       if(fileSection()){updateFileRow(entry,row);ordered.push(entry.node);continue;}
       entry.record=row;entry.node.dataset.recordId=row.id;
       entry.title.textContent=row.title;entry.url.textContent=row.url;
-      const safe=libraryWebURL(row.url);entry.node.disabled=row.kind==="history"&&!safe;
+      const safe=libraryWebURL(row.url);entry.main.disabled=row.kind==="history"&&!safe;entry.forget.disabled=row.kind==="history"&&!safe;entry.forget.textContent=row.kind==="closed"?"Forget":"Remove";
       if(safe&&entry.icon.getAttribute("src")!=="page-icon:"+safe){entry.icon.hidden=false;entry.icon.src="page-icon:"+safe;}
       if(!safe){entry.icon.removeAttribute("src");entry.icon.hidden=true;}
       const date=new Date(row.time),day=date.toLocaleDateString();
@@ -403,8 +463,8 @@ function libraryDownloadsCommand(event){
   const current=epoch=>!dead&&state.motionEpoch===epoch;
   function settle(epoch){if(current(epoch)){state=reduceLibrary(state,{type:"MOTION_DONE",epoch});cancelMotion();}}
   function hide(restore=true){
-    data.stop();rows.clear();renderedSection=null;dragSource=null;pendingResult=null;pendingClose=false;confirmation=false;clearing=false;++actionSerial;cancelMotion();if(frame)win.cancelAnimationFrame(frame);frame=0;
-    if(shell){try{if(shell.layer.matches(":popover-open"))shell.layer.hidePopover();}catch{}shell.layer.hidden=true;shell.panel.inert=false;shell.body.replaceChildren();shell.search.value="";}
+    data.stop();rows.clear();renderedSection=null;dragSource=null;dragOwner=null;indicatorReady=false;pendingResult=null;pendingClose=false;confirmation=false;clearing=false;++actionSerial;cancelMotion();if(frame)win.cancelAnimationFrame(frame);frame=0;
+    if(shell){try{if(shell.layer.matches(":popover-open"))shell.layer.hidePopover();}catch{}shell.layer.hidden=true;shell.indicator.hidden=true;shell.panel.inert=false;shell.body.replaceChildren();shell.search.value="";}
     const target=returnFocus;returnFocus=null;if(!restore||win.closed)return;
     try{if(target?.isConnected&&typeof target.focus==="function")target.focus({preventScroll:true});else win.gBrowser?.selectedBrowser?.focus();}catch{}
   }

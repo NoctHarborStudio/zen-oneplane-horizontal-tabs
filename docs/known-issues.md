@@ -215,3 +215,6 @@ Do not close these issues on source tests alone. Keep current Magnetic Bunny, Do
 - Library drag uses native file payload; Dock retains Bunny. Shared Bunny animation on Library rows is not yet integrated.
 - Local folders opt-in only; scanner defaults to bounded system roots, no custom picker. Native scan cannot be canceled once dispatched, stale results are ignored. Verify Windows cloud files, DPI, Gecko image decoding and file drag.
 - Verify focus, command order, top-layer hit testing, private windows and real startup/shutdown; automatic tests do not replace runtime testing.
+
+### Library preview.44 follow-up
+Shared Bunny bridge, moving active-section indicator, explicit extra-folder picker and confirmed history actions are implemented. The remaining release gates are real Gecko runtime validation, historical-only download parity and performance measurement; prior preview.42 limitations for these implemented items are superseded. The native Downloads view remains accessible for Places-only records. Test folder picker, consent toggle, scan reload barrier, OS-level drag including cancellation/return, History deletion on a disposable profile, command fallback and DPI. Do not enable experimental features by default until accepted.

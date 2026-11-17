@@ -2013,7 +2013,10 @@
 #nocturne-library-preview .nl-tab{padding:5px 10px;font-size:11px;position:relative;}
 #nocturne-library-preview .nl-primary{font-size:14px;font-weight:650;padding-inline:18px;}
 #nocturne-library-preview .nl-tab[aria-selected="true"]{background:color-mix(in srgb,currentColor 12%,transparent);}
-#nocturne-library-preview .nl-tab[aria-selected="true"]::after{content:"";position:absolute;bottom:2px;left:25%;right:25%;height:2px;border-radius:2px;background:AccentColor;}
+#nocturne-library-preview .nl-nav{position:relative;}
+#nocturne-library-preview .nl-nav-side,#nocturne-library-preview .nl-tab{position:static;}
+#nocturne-library-preview .nl-nav-indicator{position:absolute;left:0;top:0;height:2px;border-radius:2px;background:AccentColor;pointer-events:none;}
+#nocturne-library-preview .nl-nav-indicator[hidden]{display:none;}
 #nocturne-library-preview .nl-search{appearance:none;box-sizing:border-box;width:100%;min-width:0;min-height:36px;padding:8px 12px;border-radius:9px;border:1px solid color-mix(in srgb,currentColor 13%,transparent);background:color-mix(in srgb,currentColor 6%,transparent);color:inherit;font:inherit;}
 #nocturne-library-preview :is(button,input,select,[tabindex]):focus-visible{outline:2px solid AccentColor;outline-offset:-2px;}
 #nocturne-library-preview .nl-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;}
@@ -2060,6 +2063,14 @@
 
 #nocturne-library-preview .nl-panel > :not(.nl-body){flex-shrink:0;}
 #nocturne-library-preview .nl-file-icon[hidden]{display:block;visibility:hidden;}
+
+#nocturne-library-preview .nl-file-record[data-file-lift]{outline:1px dashed color-mix(in srgb,currentColor 20%,transparent);}
+#nocturne-library-preview .nl-file-record[data-file-lift] > *{opacity:.12;}
+
+#nocturne-library-preview .nl-history-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px;}
+#nocturne-library-preview .nl-history-actions{display:flex;gap:4px;align-items:center;}
+#nocturne-library-preview .nl-history-actions .nl-action{font-size:10px;padding:5px 7px;}
+@container (max-width:480px){#nocturne-library-preview .nl-history-row{grid-template-columns:minmax(0,1fr);}#nocturne-library-preview .nl-history-actions{justify-content:flex-end;}}
 /* Zen Refined — native dock indicator, transient details and page progress. */
 :root[data-zr-downloads-active] zen-download-animation,
 :root[data-zr-downloads-active] .zen-download-box-animation { display:none !important; }

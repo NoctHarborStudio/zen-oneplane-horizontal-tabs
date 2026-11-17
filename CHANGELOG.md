@@ -1,3 +1,11 @@
+## 0.3.0-preview.44 — Library integrated release candidate
+
+- Reuse the existing Dock Bunny engine for Library download rows, with native drag fallback if the Dock is unavailable. Hold the row until the drag and return animation finish.
+- Animate a single section indicator; resize does not replay the entrance.
+- Add explicit native folder picker (up to eight extra roots), reset extra folders, and scan barrier across service reload.
+- Copy history addresses, confirm removal of page history or bounded time-range visits, and forget closed tabs by revalidated native ID. Native History and Downloads shortcuts remain accessible.
+- Keep all experimental features gated pending real Zen/Sine acceptance; old Places-only downloads remain available in the native Downloads view.
+
 ## 0.3.0-preview.43 — Library file ordering regression fix
 
 - Normalize absent active flags for local media and unknown sizes before sorting; active downloads remain first. Retain all preview.42 Library features.

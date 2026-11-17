@@ -78,6 +78,7 @@
     }
     function action(id,kind){return actionNative(byId.get(id),kind);}
     function pathKeys(windows=false){return new Set([...records.keys()].filter(d=>completed(d)&&d.target?.exists!==false).map(d=>d.target?.path).filter(Boolean).map(p=>windows?String(p).replace(/\\/g,"/").toLowerCase():String(p)));}
+    function withNative(id,fn){const d=byId.get(id);return !!(!dead&&ready&&d&&completed(d)&&typeof fn==="function"&&fn(d));}
     function drag(id,event,node){const d=byId.get(id);return !!(!dead&&ready&&d&&completed(d)&&dragFile(d,event,node));}
     async function clearCompleted(){
       const targets=[...records.keys()].filter(clearable);let removed=0,failed=0;
@@ -93,5 +94,5 @@
       detaching=(async()=>{try{await pending;}catch{}await detach();})();
       return detaching;
     }
-    return {start,subscribeNative,subscribe,getSnapshot,action,actionNative,pathKeys,drag,clearCompleted,isReady,remove:d=>actionNative(d,"remove"),dispose};
+    return {start,subscribeNative,subscribe,getSnapshot,action,actionNative,pathKeys,withNative,drag,clearCompleted,isReady,remove:d=>actionNative(d,"remove"),dispose};
   }

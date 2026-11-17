@@ -23,8 +23,8 @@ function queryDownloadRows(rows,{section="downloads",text="",limit=50,sort="new"
  list.sort((a,b)=>Number(!!b.active)-Number(!!a.active)||(sort==="size"?((b.total||b.bytes||0)-(a.total||a.bytes||0)):sort==="old"?a.time-b.time:b.time-a.time)||a.id.localeCompare(b.id));
  return Object.freeze({rows:Object.freeze(list.slice(0,limit)),limit,hasMore:list.length>limit});
 }
-function createMediaService({scan,allowed=()=>true,windows=false,describe,perform}){
- let dead=false,serial=0,pending=Promise.resolve();const handles=new Map();
+function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,windows=false,describe,perform}){
+ let dead=false,serial=0,pending=Promise.resolve(barrier);const handles=new Map();
  function open(section,downloadPaths=()=>new Set()){
    if(dead||!allowed()||!MEDIA_EXTENSIONS[section])throw Error("Media unavailable");
    let closed=false,owned=new Set(),cache=null,revision=0;
@@ -47,7 +47,7 @@ function createMediaService({scan,allowed=()=>true,windows=false,describe,perfor
    return {refresh,rows:()=>{const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const id of owned)handles.delete(id);owned.clear();cache=null;}};
  }
  function action(id,kind){if(dead||!allowed()||!handles.has(id)||!["open","reveal"].includes(kind))return false;return perform(handles.get(id),kind);}
- function dispose(){dead=true;handles.clear();}
+ function dispose(){dead=true;handles.clear();return pending.catch(()=>{});}
  return {open,action,dispose};
 }
 // One native list subscription per window, independent of any view.
@@ -130,6 +130,7 @@ function createMediaService({scan,allowed=()=>true,windows=false,describe,perfor
     }
     function action(id,kind){return actionNative(byId.get(id),kind);}
     function pathKeys(windows=false){return new Set([...records.keys()].filter(d=>completed(d)&&d.target?.exists!==false).map(d=>d.target?.path).filter(Boolean).map(p=>windows?String(p).replace(/\\/g,"/").toLowerCase():String(p)));}
+    function withNative(id,fn){const d=byId.get(id);return !!(!dead&&ready&&d&&completed(d)&&typeof fn==="function"&&fn(d));}
     function drag(id,event,node){const d=byId.get(id);return !!(!dead&&ready&&d&&completed(d)&&dragFile(d,event,node));}
     async function clearCompleted(){
       const targets=[...records.keys()].filter(clearable);let removed=0,failed=0;
@@ -145,7 +146,7 @@ function createMediaService({scan,allowed=()=>true,windows=false,describe,perfor
       detaching=(async()=>{try{await pending;}catch{}await detach();})();
       return detaching;
     }
-    return {start,subscribeNative,subscribe,getSnapshot,action,actionNative,pathKeys,drag,clearCompleted,isReady,remove:d=>actionNative(d,"remove"),dispose};
+    return {start,subscribeNative,subscribe,getSnapshot,action,actionNative,pathKeys,withNative,drag,clearCompleted,isReady,remove:d=>actionNative(d,"remove"),dispose};
   }
 // PlacesQuery uses a Map of grouped visits or an array of search results.
   function createHistorySession({createQuery,allowed=()=>true,onChange=()=>{},now=Date.now}){
@@ -180,7 +181,7 @@ function createMediaService({scan,allowed=()=>true,windows=false,describe,perfor
     return {query,close};
   }
 // Closed tab identity is SessionStore's closedId, never a URL substitute.
-  function createClosedTabsService({getClosed,restoreNative,allowed=()=>true,observe=()=>()=>{},now=Date.now}){
+  function createClosedTabsService({getClosed,restoreNative,forgetNative,allowed=()=>true,observe=()=>()=>{},now=Date.now}){
     let dead=false;const subscriptions=new Set();
     function query({text="",days=120,limit=100}={}){
       if(dead||!allowed())throw Error("Closed tabs unavailable in this window");
@@ -201,6 +202,7 @@ function createMediaService({scan,allowed=()=>true,windows=false,describe,perfor
       if(!getClosed().some(tab=>tab.closedId===id))return false;
       return restoreNative(id,!!background)!==false;
     }
+    function forget(id){if(dead||!allowed()||typeof forgetNative!=="function"||!getClosed().some(tab=>tab.closedId===id))return false;return forgetNative(id)!==false;}
     function subscribe(fn){
       if(dead||!allowed())throw Error("Closed tabs unavailable in this window");
       const off=observe(()=>{if(!dead&&allowed())fn();});
@@ -208,14 +210,15 @@ function createMediaService({scan,allowed=()=>true,windows=false,describe,perfor
       subscriptions.add(release);return release;
     }
     function dispose(){if(dead)return;dead=true;for(const off of [...subscriptions])off();}
-    return {query,subscribe,restore,dispose};
+    return {query,subscribe,restore,forget,dispose};
   }
 /* Independent native data owner. No UI, startup scans or disk cache. */
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
-  const BARRIER="__nocturneDownloadsDisposal";
+  const BARRIER="__nocturneDownloadsDisposal",MEDIA_BARRIER="__nocturneMediaDisposal";
   const previous=win[KEY],barrier=previous?.dispose?.()||win[BARRIER]||Promise.resolve();
+  const mediaBarrier=win[MEDIA_BARRIER]||Promise.resolve();
   let dead=false,closing=null,historySessions=new Set();
   const load=(path,key)=>ChromeUtils.importESModule(path)[key];
   const privateWindow=()=>load("resource://gre/modules/PrivateBrowsingUtils.sys.mjs","PrivateBrowsingUtils").isWindowPrivate(win);
@@ -225,15 +228,37 @@ function createMediaService({scan,allowed=()=>true,windows=false,describe,perfor
   const fileFor=path=>new (load("resource://gre/modules/FileUtils.sys.mjs","FileUtils").File)(path);
   const scanner=()=>Cc["@mozilla.org/zen/library-files;1"].getService(Ci.nsIZenLibraryFiles);
   const iconFor=path=>"moz-icon://"+(path||".unknown")+"?size=32";
+  const folderPref="zen.nocturne.library.custom-folders";
+  function customFolders(){
+    try{const value=JSON.parse(Services.prefs.getStringPref(folderPref,"[]"));
+      return Array.isArray(value)?value.filter(v=>typeof v==="string"&&v.length>0&&v.length<=4096).slice(0,8):[];
+    }catch{return [];}
+  }
+  async function chooseFolder(){
+    if(!mediaAllowed()||!win.browsingContext)return false;
+    try{
+      const picker=Cc["@mozilla.org/filepicker;1"].createInstance(Ci.nsIFilePicker);
+      picker.init(win.browsingContext,"Choose a Library folder",Ci.nsIFilePicker.modeGetFolder);
+      const result=await new Promise(resolve=>picker.open(resolve));
+      if(result!==Ci.nsIFilePicker.returnOK||!mediaAllowed()||!picker.file?.isDirectory())return false;
+      const path=picker.file.path,paths=customFolders();
+      if(paths.some(p=>mediaPathKey(p,windows)===mediaPathKey(path,windows)))return true;
+      if(paths.length>=8)return false;
+      Services.prefs.setStringPref(folderPref,JSON.stringify([...paths,path]));return true;
+    }catch{return false;}
+  }
+  function clearFolders(){
+    if(!mediaAllowed())return false;Services.prefs.clearUserPref(folderPref);return true;
+  }
   function scanMedia(section){
     const roots=[];
     for(const key of section==="documents"?["DfltDwnld","Docs"]:["DfltDwnld","Pict"]){
       try{const f=Services.dirsvc.get(key,Ci.nsIFile);if(f?.path)roots.push(f.path);}catch{}
     }
     if(section==="pictures")try{const f=Services.dirsvc.get("Home",Ci.nsIFile);f.append("Pictures");roots.push(f.path);}catch{}
-    return new Promise((resolve,reject)=>{try{scanner().scanMedia([...new Set(roots)],MEDIA_EXTENSIONS[section],2,60,300,files=>resolve(Array.from(files)));}catch(e){reject(e);}});
+    return new Promise((resolve,reject)=>{try{scanner().scanMedia([...new Map([...roots,...customFolders()].map(p=>[mediaPathKey(p,windows),p])).values()],MEDIA_EXTENSIONS[section],2,60,300,files=>resolve(Array.from(files)));}catch(e){reject(e);}});
   }
-  const media=createMediaService({scan:scanMedia,allowed:mediaAllowed,windows,
+  const media=createMediaService({scan:scanMedia,barrier:mediaBarrier,allowed:mediaAllowed,windows,
     describe(f,id){const name=f.path.split(/[\\/]/).pop();return {id,kind:"local",name,time:Number(f.lastModified)||0,bytes:Number(f.size)||0,total:Number(f.size)||0,success:true,exists:true,icon:iconFor(f.path),thumbnail:safeRaster(name,Number(f.size))?Services.io.newFileURI(fileFor(f.path)).spec:null};},
     perform(path,kind){try{const f=fileFor(path);if(!f.exists()||!f.isFile()||scanner().isCloudPlaceholder(path))return false;if(kind==="open")f.launch();else f.reveal();return true;}catch{return false;}}});
   function dragFile(d,event,node){
@@ -255,6 +280,7 @@ function createMediaService({scan,allowed=()=>true,windows=false,describe,perfor
       if(background&&selected?.isConnected&&win.gBrowser.selectedTab!==selected)win.gBrowser.selectedTab=selected;
       return true;
     },
+    forgetNative(id){const store=load("moz-src:///browser/components/sessionstore/SessionStore.sys.mjs","SessionStore");if(typeof store.forgetClosedTabById!=="function")return false;store.forgetClosedTabById(id);return true;},
     observe(fn){const topic="sessionstore-closed-objects-changed",observer={observe:fn};Services.obs.addObserver(observer,topic);return()=>Services.obs.removeObserver(observer,topic);}});
   function historyReady(){
     try{if(!allowed())return false;}catch{return false;}
@@ -267,6 +293,21 @@ function createMediaService({scan,allowed=()=>true,windows=false,describe,perfor
     let url;try{url=new URL(value);}catch{return false;}
     if(!["http:","https:"].includes(url.protocol)||url.username||url.password)return false;
     win.openTrustedLinkIn(url.href,"tab",{inBackground:!!background});return true;
+  }
+  function copyHistoryURL(value){
+    if(!allowed()||typeof value!=="string"||!value||value.length>65536)return false;
+    try{Cc["@mozilla.org/widget/clipboardhelper;1"].getService(Ci.nsIClipboardHelper).copyString(value);return true;}catch{return false;}
+  }
+  async function removeHistoryURL(value){
+    if(!allowed())return false;let url;
+    try{url=new URL(value);}catch{return false;}
+    if(!["http:","https:"].includes(url.protocol)||url.username||url.password)return false;
+    await load("moz-src:///browser/components/places/PlacesUtils.sys.mjs","PlacesUtils").history.remove(url.href);return true;
+  }
+  async function clearHistoryRange(hours){
+    if(!allowed()||![1,24,168].includes(hours))return false;
+    const endDate=new Date(),beginDate=new Date(endDate.getTime()-hours*3600000);
+    await load("moz-src:///browser/components/places/PlacesUtils.sys.mjs","PlacesUtils").history.removeVisitsByFilter({beginDate,endDate});return true;
   }
   function openHistory(onChange){
     const session=createHistorySession({allowed,onChange,createQuery:()=>{
@@ -282,13 +323,14 @@ function createMediaService({scan,allowed=()=>true,windows=false,describe,perfor
     win.removeEventListener("unload",dispose);
     for(const s of [...historySessions])try{s.close();}catch{}
     try{closedTabs.dispose();}catch{}
-    media.dispose();
+    const mediaClosing=media.dispose();win[MEDIA_BARRIER]=mediaClosing;
+    mediaClosing.finally(()=>{if(win[MEDIA_BARRIER]===mediaClosing)delete win[MEDIA_BARRIER];});
     closing=downloads.dispose();win[BARRIER]=closing;
     closing.finally(()=>{if(win[BARRIER]===closing)delete win[BARRIER];});
     if(win[KEY]===api){delete win[KEY];win.dispatchEvent(new win.CustomEvent("Nocturne:ServicesGone"));}
     return closing;
   }
-  const api={downloads,openHistory,historyReady,openHistoryURL,closedTabs,media,openMedia:section=>mediaAllowed()?media.open(section,()=>downloads.pathKeys(windows)):null,dispose};
+  const api={downloads,openHistory,historyReady,openHistoryURL,closedTabs,copyHistoryURL,removeHistoryURL,clearHistoryRange,media,chooseFolder,clearFolders,openMedia:section=>mediaAllowed()?media.open(section,()=>downloads.pathKeys(windows)):null,dispose};
   win[KEY]=api;win.addUnloadListener(dispose);win.addEventListener("unload",dispose,{once:true});
   win.dispatchEvent(new win.CustomEvent("Nocturne:ServicesReady"));
 })();

@@ -1,6 +1,6 @@
 // Nocturne preview.40: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="downloads.script",data={version:"0.3.0-preview.43"};
+  const event="downloads.script",data={version:"0.3.0-preview.44"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -25,7 +25,7 @@ try{if(typeof window!=="undefined"){
   let lastDockRect=null,followFrame=0,followUntil=0,overlayUntil=0,heldWrapper=null;
   let dock=null,dockList=null,dockEmpty=null,dockMore=null,dockBackdrop=null,dockNotice=null,dockOpen=false,limit=30;
   const history=new Map(),rows=new Map();
-  let fileDragSource=null,dragClickSource=null,FileUtils=null,fileBunny=null,fileIconWarm=null,filePopup=null,fileStage=null;
+  let externalDrag=null,fileDragSource=null,dragClickSource=null,FileUtils=null,fileBunny=null,fileIconWarm=null,filePopup=null,fileStage=null;
   const FILE_CARD_W=186,FILE_CARD_H=51,FILE_LIFT=320,FILE_RETURN=480,FILE_GRIP_X=172,FILE_GRIP_Y=48;
   let historyOrder=null,recentOrder=null,dockHeight=0,allButton=null,dockTitle=null,dockSort=null;
   const OVERLAY_WIDTH=430,RECENT_LIMIT=4;
@@ -747,12 +747,29 @@ try{if(typeof window!=="undefined"){
     q.watch=window.setTimeout(watch,200);
     fileBunnyTrace("start",{indicator:q.fromIndicator,reduced:reduced.matches,mode:q.mode,os:Services.appinfo.OS,seed:[seed.w,seed.h]},{sample:1500});
   }
+  function finishExternalDrag(){
+    const held=externalDrag;if(!held)return;externalDrag=null;
+    try{held.done();}catch{}
+  }
+  function beginExternalDrag(event,source,id,done){
+    if(dead||!node||!list||fileDragSource||fileBunny?.ending||externalDrag||cardOpen||dockOpen||typeof done!=="function")return false;
+    if(!source?.isConnected||source.ownerDocument!==document||!source.closest?.("#nocturne-library-preview"))return false;
+    if(window.__nocturneOverlay?.current()!=="library")return false;
+    const accepted=list.withNative(id,d=>beginFileDrag(event,source,d));
+    if(!accepted)return false;
+    externalDrag={source,done};return true;
+  }
+  function endExternalDrag(source,event){
+    if(externalDrag?.source!==source)return false;
+    endFileDrag(source,event);return true;
+  }
   function clearFileBunny(){
     const q=fileBunny;if(!q)return;fileBunny=null;stopFileBunnyFrame(q);if(q.watch)window.clearTimeout(q.watch);
     q.source.removeAttribute("data-file-lift");
     if(q.popup){try{if(q.popup.state!=="closed")q.popup.hidePopup();}catch{}fileStage?.replaceChildren();}
     q.visual.card.remove();q.ghost?.remove();q.native.card.remove();
     if(q.ending&&!dead&&node){syncDownloadHolds();schedule(true);scheduleMount();}
+    if(externalDrag?.source===q.source&&!fileDragSource)finishExternalDrag();
   }
   function finishFileBunny(e,reason="dragend"){
     const q=fileBunny;if(!q)return;if(q.watch)window.clearTimeout(q.watch);q.watch=0;stopFileBunnyFrame(q);
@@ -800,6 +817,7 @@ try{if(typeof window!=="undefined"){
     if(fileDragSource!==source)return;
     source.removeAttribute("data-file-dragging");fileDragSource=null;
     finishFileBunny(e,reason);syncDownloadHolds();
+    if(externalDrag?.source===source&&!fileBunny?.ending)finishExternalDrag();
     // Reconcile queued rows only after the platform drag releases the source.
     if(!dead){schedule(true);scheduleMount();if(cardOpen)armHide();}
   }
@@ -938,7 +956,7 @@ try{if(typeof window!=="undefined"){
   function bindOverlay(){
     unregisterOverlay();
     unregisterOverlay=window.__nocturneOverlay?.register("downloads",{
-      priority:10,isActive:()=>!dead&&!!(cardOpen||dockOpen||flight||dock?.hasAttribute("data-closing")||fileDragSource),
+      priority:10,isActive:()=>!dead&&!!(cardOpen||dockOpen||flight||dock?.hasAttribute("data-closing")||fileDragSource&&!externalDrag),
       canYield:()=>!fileDragSource&&!clearing,
       yield:yieldDownloads,onEscape:handleOverlayEscape
     })||(()=>{});
@@ -1100,7 +1118,7 @@ try{if(typeof window!=="undefined"){
     try{prefs.removeObserver(SIDE,scheduleMount);}catch{}
     try{prefs.removeObserver(STATS_PREF,refreshStatistics);}catch{}
     if(fileBunny)fileBunny.ending=false;clearFileBunny();filePopup?.remove();filePopup=fileStage=null;fileIconWarm=null;
-    fileDragSource?.removeAttribute("data-file-dragging");fileDragSource=dragClickSource=null;FileUtils=null;syncDownloadHolds();
+    fileDragSource?.removeAttribute("data-file-dragging");fileDragSource=dragClickSource=null;FileUtils=null;syncDownloadHolds();finishExternalDrag();
     node?.remove();node=fill=speed=icon=null;host=null;batch.clear();fresh=new WeakSet();latest=lastClick=null;
     dock?.remove();overlayLayer?.remove();dockBackdrop?.remove();dock=dockList=dockEmpty=dockMore=dockBackdrop=dockNotice=overlayLayer=null;history.clear();rows.clear();historyOrder=recentOrder=null;limit=30;dockHeight=0;allButton=dockTitle=dockSort=null;
     sortKey="time";sortDir=-1;headerNormal=headerConfirm=clearButton=sortTime=sortSize=yesButton=noButton=null;confirming=clearing=false;
@@ -1139,7 +1157,7 @@ try{if(typeof window!=="undefined"){
     window.removeEventListener("Nocturne:ServicesGone",onServicesGone);window.removeEventListener("Nocturne:ServicesReady",onServicesReady);
     if(window[KEY]===api)delete window[KEY];
   }
-  const api={getSnapshot:()=>snapshot,setHost,dispose};
+  const api={getSnapshot:()=>snapshot,setHost,beginExternalDrag,endExternalDrag,dispose};
   window[KEY]=api;window.addUnloadListener(dispose);window.addEventListener("unload",dispose,{once:true});
   window.addEventListener("Nocturne:OverlayReady",bindOverlay);bindOverlay();
   window.addEventListener("Nocturne:ServicesGone",onServicesGone);window.addEventListener("Nocturne:ServicesReady",onServicesReady);

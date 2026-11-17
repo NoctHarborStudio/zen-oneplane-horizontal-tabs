@@ -45,3 +45,11 @@ test("closed tab restore revalidates exact native id and privacy at action time"
  assert.equal(s.restore(12,{background:true}),true);entries=[];assert.equal(s.restore(12),false);entries=[{closedId:12}];allowed=false;assert.equal(s.restore(12),false);
  assert.deepEqual(calls,[[12,true]]);s.dispose();assert.equal(s.restore(12),false);
 });
+
+test("forget closed tab revalidates native ID and private state",()=>{
+ let entries=[{closedId:1}],allowed=true,forgot=[];
+ const s=createClosedTabsService({getClosed:()=>entries,allowed:()=>allowed,forgetNative:id=>forgot.push(id)});
+ assert.equal(s.forget(2),false);assert.equal(s.forget(1),true);
+ entries=[];assert.equal(s.forget(1),false);entries=[{closedId:1}];allowed=false;assert.equal(s.forget(1),false);
+ assert.deepEqual(forgot,[1]);s.dispose();assert.equal(s.forget(1),false);
+});

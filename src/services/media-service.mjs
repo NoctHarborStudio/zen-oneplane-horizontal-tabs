@@ -23,8 +23,8 @@ export function queryDownloadRows(rows,{section="downloads",text="",limit=50,sor
  list.sort((a,b)=>Number(!!b.active)-Number(!!a.active)||(sort==="size"?((b.total||b.bytes||0)-(a.total||a.bytes||0)):sort==="old"?a.time-b.time:b.time-a.time)||a.id.localeCompare(b.id));
  return Object.freeze({rows:Object.freeze(list.slice(0,limit)),limit,hasMore:list.length>limit});
 }
-export function createMediaService({scan,allowed=()=>true,windows=false,describe,perform}){
- let dead=false,serial=0,pending=Promise.resolve();const handles=new Map();
+export function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,windows=false,describe,perform}){
+ let dead=false,serial=0,pending=Promise.resolve(barrier);const handles=new Map();
  function open(section,downloadPaths=()=>new Set()){
    if(dead||!allowed()||!MEDIA_EXTENSIONS[section])throw Error("Media unavailable");
    let closed=false,owned=new Set(),cache=null,revision=0;
@@ -47,6 +47,6 @@ export function createMediaService({scan,allowed=()=>true,windows=false,describe
    return {refresh,rows:()=>{const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const id of owned)handles.delete(id);owned.clear();cache=null;}};
  }
  function action(id,kind){if(dead||!allowed()||!handles.has(id)||!["open","reveal"].includes(kind))return false;return perform(handles.get(id),kind);}
- function dispose(){dead=true;handles.clear();}
+ function dispose(){dead=true;handles.clear();return pending.catch(()=>{});}
  return {open,action,dispose};
 }
