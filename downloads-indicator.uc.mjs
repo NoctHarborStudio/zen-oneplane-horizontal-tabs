@@ -1,6 +1,6 @@
-// Nocturne preview.37: early trace, independent Sine script order.
+// Nocturne preview.38: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="downloads.script",data={version:"0.3.0-preview.37"};
+  const event="downloads.script",data={version:"0.3.0-preview.38"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -738,7 +738,8 @@ try{if(typeof window!=="undefined"){
   function onFileDragMove(e){
     const q=fileBunny;if(!q||q.ending||e.isTrusted===false)return;
     if(e.type==="drag"&&e.target!==q.source&&!q.source.contains?.(e.target))return;
-    const p=fileDragPoint(e);if(!p)return;
+    const p=fileDragPoint(e);
+    if(!p){if(e.type==="drag"&&(e.screenX||e.screenY)&&!fileDragInside(e,p))fileBunnyMode(q,"outside",e);return;}
     if(q.leaveTimer){window.clearTimeout(q.leaveTimer);q.leaveTimer=0;}
     if(!fileDragInside(e,p)){fileBunnyMode(q,"outside",e);return;}
     const now=current(),dt=Math.max(8,now-q.lastMove)/1000;

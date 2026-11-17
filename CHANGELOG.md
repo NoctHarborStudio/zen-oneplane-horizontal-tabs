@@ -1,3 +1,8 @@
+## 0.3.0-preview.38 — Bunny lifecycle verification
+
+- Cover native/hosted toolbar holds during file drag and animated return in the existing wave fixtures.
+- Restore the compact OS image when source drag events have no client coordinates but report a position outside the window. Retain shared Library download-service integration.
+
 ## 0.3.0-preview.37 — Bunny file drag and system icons
 
 - Native file/application icons in Recent and All downloads, refreshed on completion.

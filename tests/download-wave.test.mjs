@@ -26,6 +26,7 @@ test("close exactly reverses opening keyframes",()=>{
 test("native hold survives closing, and releases only own attribute",()=>{
  const run=new Function(`${section("function syncSidebarHold()","function updateLive()")}
  let dead=false,cardOpen=false,dockOpen=false,closing=false,manualHold=false,sidebarOrigin=false;
+ let fileDragSource=null,fileBunny=null;
  const attrs=new Set(["data-zr-native","unrelated"]);
  const node={hasAttribute:k=>attrs.has(k),toggleAttribute:(k,on)=>on?attrs.add(k):attrs.delete(k)};
  const dock={hasAttribute:k=>k==="data-closing"&&closing};
@@ -60,6 +61,7 @@ test("first seed is a subpixel circle at the sidebar boundary and grows continuo
 test("pinning from a download row does not acquire the sidebar",()=>{
  const run=new Function(`${section("function syncSidebarHold()","function updateLive()")}${section("function pinPanel(","function openCard(")}
  let dead=false,cardOpen=true,dockOpen=false,manualHold=false,sidebarOrigin=false;
+ let fileDragSource=null,fileBunny=null;
  const attrs=new Set(["data-zr-native"]);
  const node={hasAttribute:k=>attrs.has(k),toggleAttribute:(k,on)=>on?attrs.add(k):attrs.delete(k)};
  const dock={hasAttribute:()=>false};function cancelHide(){}function follow(){}function syncHostedHold(){}
@@ -85,6 +87,7 @@ test("horizontal download host follows ready strip, not viewport width",()=>{
 test("hosted hold tracks actual panel lifetime and never removes other holds",()=>{
  const code=section("function syncHostedHold()","function updateLive()");
  const run=new Function(`let dead=false,heldWrapper=null,cardOpen=false,dockOpen=false,flight=null,closing=false,active=true,hosted=true;
+ let fileDragSource=null,fileBunny=null;
  const attrs=new Set(["oneplane-home-hold"]),wrapper={hasAttribute:k=>attrs.has(k),setAttribute:k=>attrs.add(k),removeAttribute:k=>attrs.delete(k)};
  const get=()=>wrapper,onePlane=()=>active,node={hasAttribute:k=>k==="data-zr-hosted"&&hosted},dock={hasAttribute:()=>closing};
  function syncSidebarHold(){}
@@ -92,8 +95,9 @@ test("hosted hold tracks actual panel lifetime and never removes other holds",()
  const states=[],sample=()=>{syncHostedHold();states.push(attrs.has("oneplane-download-hold"));};
  sample();cardOpen=true;sample();cardOpen=false;closing=true;sample();closing=false;flight={};sample();flight=null;sample();
  dockOpen=true;sample();active=false;sample();active=true;sample();dead=true;sample();
+ dead=false;dockOpen=false;sample();fileDragSource={};sample();fileDragSource=null;fileBunny={ending:true};sample();fileBunny=null;sample();
  return {states,other:attrs.has("oneplane-home-hold")};`);
- assert.deepEqual(run(),{states:[false,true,true,true,false,true,false,true,false],other:true});
+ assert.deepEqual(run(),{states:[false,true,true,true,false,true,false,true,false,false,true,true,false],other:true});
 });
 test("permanent horizontal host is constructed, measured and removed",()=>{
  const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
