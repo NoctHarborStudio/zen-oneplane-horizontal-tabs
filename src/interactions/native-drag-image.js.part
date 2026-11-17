@@ -33,6 +33,30 @@
       {transform:transform(0,0,sx,sy),offset:1}
     ];
   }
+  function bunnyInsertionProgress(p,threshold=BUNNY_RETURN_THRESHOLD){
+    return Math.max(0,Math.min(1,1-p/threshold));
+  }
+  function seekInsertion(p){
+    const animation=dragInsertAnimation;
+    if(!animation||dragInsertPending)return false;
+    const progress=bunnyInsertionProgress(p);
+    // Scrub the same keyframes in either direction. A stationary pointer
+    // never advances the animation; no requestAnimationFrame loop.
+    animation.currentTime=progress*BUNNY_INSERT_DURATION;
+    window.__nocturneTrace?.("drag.insert.seek",{p,progress,time:animation.currentTime},{throttle:85,sample:800});
+    if(progress===1)animation.finish();
+    return true;
+  }
+  function finishInsertionAfterDrop(){
+    const animation=dragInsertAnimation;
+    if(!animation)return false;
+    dragInsertPending=true;
+    holdToolbarForReturn();
+    window.__nocturneTrace?.("drag.insert.drop-tail",{remaining:Math.max(0,BUNNY_INSERT_DURATION-(Number(animation.currentTime)||0))},{sample:800});
+    // Only an actual accepted drop may run the remaining timeline.
+    animation.play();
+    return true;
+  }
   function cancelInsertion() {
     const animation = dragInsertAnimation,node=dragInsertNode;
     dragInsertAnimation=null;dragInsertNode=null;
@@ -59,7 +83,9 @@
     const frames=bunnyInsertionFrames(start,sx,sy);
     const animation=dragGhostBody.animate(frames,{duration:BUNNY_INSERT_DURATION,easing:"linear",fill:"both"});
     dragInsertAnimation=animation;
-    window.__nocturneTrace?.("drag.insert",{dx:start.x,dy:start.y,height:target.height,fromWidth:from.width,toWidth:target.width,duration:BUNNY_INSERT_DURATION,ghost:true},{sample:1800});
+    animation.pause();
+    animation.currentTime=0;
+    window.__nocturneTrace?.("drag.insert",{dx:start.x,dy:start.y,height:target.height,fromWidth:from.width,toWidth:target.width,duration:BUNNY_INSERT_DURATION,ghost:true,scrubbed:true},{sample:1800});
     animation.onfinish=animation.oncancel=()=>{
       if(dragInsertAnimation!==animation)return;
       dragInsertAnimation=null;dragInsertNode=null;

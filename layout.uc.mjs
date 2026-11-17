@@ -1,7 +1,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.21",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.23",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -5154,7 +5154,7 @@ function installTabStrip() {
   let draggedTab = null;
   let draggedGroup = null;
   let dragNode = null, dragImageMode = null, dragGrabRatio = .5, dragGrabY = .5;
-  const PULL_DISTANCE = 30, BUNNY_EDGE_PAD = 3, REORDER_BUFFER = 8;
+  const PULL_DISTANCE = 30, BUNNY_EDGE_PAD = 3, REORDER_BUFFER = 8, BUNNY_RETURN_THRESHOLD=.72;
   // Visual extraction belongs to the original card, not the native drop panel.
   function bunnyPullProgress(y,edge,distance=PULL_DISTANCE){
     return Math.max(0,Math.min(1,(y-edge)/distance));
@@ -5552,6 +5552,30 @@ function installTabStrip() {
       {transform:transform(0,0,sx,sy),offset:1}
     ];
   }
+  function bunnyInsertionProgress(p,threshold=BUNNY_RETURN_THRESHOLD){
+    return Math.max(0,Math.min(1,1-p/threshold));
+  }
+  function seekInsertion(p){
+    const animation=dragInsertAnimation;
+    if(!animation||dragInsertPending)return false;
+    const progress=bunnyInsertionProgress(p);
+    // Scrub the same keyframes in either direction. A stationary pointer
+    // never advances the animation; no requestAnimationFrame loop.
+    animation.currentTime=progress*BUNNY_INSERT_DURATION;
+    window.__nocturneTrace?.("drag.insert.seek",{p,progress,time:animation.currentTime},{throttle:85,sample:800});
+    if(progress===1)animation.finish();
+    return true;
+  }
+  function finishInsertionAfterDrop(){
+    const animation=dragInsertAnimation;
+    if(!animation)return false;
+    dragInsertPending=true;
+    holdToolbarForReturn();
+    window.__nocturneTrace?.("drag.insert.drop-tail",{remaining:Math.max(0,BUNNY_INSERT_DURATION-(Number(animation.currentTime)||0))},{sample:800});
+    // Only an actual accepted drop may run the remaining timeline.
+    animation.play();
+    return true;
+  }
   function cancelInsertion() {
     const animation = dragInsertAnimation,node=dragInsertNode;
     dragInsertAnimation=null;dragInsertNode=null;
@@ -5578,7 +5602,9 @@ function installTabStrip() {
     const frames=bunnyInsertionFrames(start,sx,sy);
     const animation=dragGhostBody.animate(frames,{duration:BUNNY_INSERT_DURATION,easing:"linear",fill:"both"});
     dragInsertAnimation=animation;
-    window.__nocturneTrace?.("drag.insert",{dx:start.x,dy:start.y,height:target.height,fromWidth:from.width,toWidth:target.width,duration:BUNNY_INSERT_DURATION,ghost:true},{sample:1800});
+    animation.pause();
+    animation.currentTime=0;
+    window.__nocturneTrace?.("drag.insert",{dx:start.x,dy:start.y,height:target.height,fromWidth:from.width,toWidth:target.width,duration:BUNNY_INSERT_DURATION,ghost:true,scrubbed:true},{sample:1800});
     animation.onfinish=animation.oncancel=()=>{
       if(dragInsertAnimation!==animation)return;
       dragInsertAnimation=null;dragInsertNode=null;
@@ -5861,7 +5887,7 @@ function installTabStrip() {
     stopLaneAutoscroll();
     // The window capture listener owns pull and image transitions.
     // Do not erase a group's visual position mid-extraction.
-    if (!(dragImageMode === "inline" && (groupPullLayout || dragPull > 0))) clearLiveDrag();
+    if (!(dragImageMode === "inline" && (groupPullLayout || dragPull > 0 || dragInsertAnimation))) clearLiveDrag();
     clearDropMarker();
   }
   function clearDropMarker() {
@@ -5918,10 +5944,11 @@ function installTabStrip() {
       const p = bunnyPullProgress(event.clientY,dragEdge);
       const lateralExit = event.clientX < toolbarWrapper.getBoundingClientRect().left ||
                           event.clientX > toolbarWrapper.getBoundingClientRect().right;
-      const threshold = dragImageMode === "content" || dragImageMode === "outside" ? .72 : .96;
+      const threshold = dragImageMode === "content" || dragImageMode === "outside" ? BUNNY_RETURN_THRESHOLD : .96;
       const detach = p >= threshold || lateralExit;
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.pull.decision",()=>({mode:dragImageMode,within,p,threshold,detach,lateralExit,edge:dragEdge,y:event.clientY,delta:event.clientY-dragEdge,measured:parseFloat(toolbarWrapper.style.getPropertyValue('--op-measured-toolbar-height'))||0,wrapperBottom:toolbarWrapper.getBoundingClientRect().bottom,rowBottom:row.getBoundingClientRect().bottom,navBottom:navbar?.getBoundingClientRect().bottom,detachedOnce:dragDetachedOnce,reentry:dragReentry,lane:useLaneDrop()}),{throttle:85,sample:1000});
       const previous=dragImageMode;
+      if(previous==="content"&&!detach)positionGhost(event.clientX,event.clientY);
       setDragImageMode(detach ? "content" : "inline",event);
       if(previous==="content"&&dragImageMode==="inline")dragReturnFloor=p;
       if (dragImageMode === "content") {
@@ -5937,6 +5964,13 @@ function installTabStrip() {
       if (dragImageMode === "outside") {
         if(within){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";previewStripDrag(event,tab);}
         else{clearLiveDrag();releaseDragReveal();}
+        return;
+      }
+      // While the button is held, the return timeline has exactly one
+      // owner: the pointer. Reversing within the band rewinds it.
+      if(dragInsertAnimation){
+        seekInsertion(p);
+        if(within){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";}
         return;
       }
       // Hysteresis suppresses a second pull only while continuing inward.
@@ -5999,7 +6033,11 @@ function installTabStrip() {
     if(!tab||!toolbarDragReturnZone(event))return;
     if(tabOwner(tab)===window&&dragDetachedOnce){
       event.preventDefault();event.stopImmediatePropagation();
-      if(dragImageMode==="content")setDragImageMode("inline",event);
+      if(dragImageMode==="content"){
+        positionGhost(event.clientX,event.clientY);
+        setDragImageMode("inline",event);
+        seekInsertion(bunnyPullProgress(event.clientY,dragEdge));
+      }
       sourceHandled(tab,true);schedule();return;
     }
     onStripDrop(event);
@@ -6281,8 +6319,14 @@ function installTabStrip() {
     const handled = dragHandled;
     const wasGroup = Boolean(draggedGroup);
     const start = dragStartPoint;
+    if(returned&&!dt?.mozUserCancelled&&dragImageMode==="content"){
+      positionGhost(event.clientX,event.clientY);
+      setDragImageMode("inline",event);
+      seekInsertion(bunnyPullProgress(event.clientY,dragEdge));
+    }
+    const keep=returned&&!dt?.mozUserCancelled&&dragImageMode==="inline"&&!!dragInsertAnimation;
     draggedTab = null; draggedGroup = null; dragHandled = false; dragStartPoint = null;
-    endDragVisual();
+    if(keep)finishInsertionAfterDrop();else endDragVisual();
     if (returned || wasGroup || !start || handled || dt?.mozUserCancelled || dt?.dropEffect !== "none" ||
         !validNativeTab(tab) || tabOwner(tab) !== window) return;
     // A cancelled drag or a drop within this window must never create
@@ -6313,7 +6357,7 @@ function installTabStrip() {
     outside: event => setDragImageMode("outside",event),
     preview: event => {if(draggedTab&&!draggedGroup)showPlacementPreview(event,"Tab");},
     clearIncoming: () => {
-      if(draggedTab||dead)return;
+      if(draggedTab||dragInsertPending||dead)return;
       clearLiveDrag();clearDropMarker();releaseDragReveal();refreshIndicator();
     },
     markHandled: (finishReturn=false) => {
@@ -6326,11 +6370,7 @@ function installTabStrip() {
       dragStartPoint=null;
       // Native drop is committed now. Only the isolated visual remains
       // until the return animation completes; no native session is held.
-      if(keep){
-        dragInsertPending=true;
-        holdToolbarForReturn();
-        window.__nocturneTrace?.("drag.insert.drop-tail",{remaining:Math.max(0,BUNNY_INSERT_DURATION-(Number(dragInsertAnimation.currentTime)||0))},{sample:800});
-      }
+      if(keep)finishInsertionAfterDrop();
     }
   };
   window[DRAG_CONTROLLER] = dragController;

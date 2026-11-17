@@ -8,8 +8,14 @@
     const handled = dragHandled;
     const wasGroup = Boolean(draggedGroup);
     const start = dragStartPoint;
+    if(returned&&!dt?.mozUserCancelled&&dragImageMode==="content"){
+      positionGhost(event.clientX,event.clientY);
+      setDragImageMode("inline",event);
+      seekInsertion(bunnyPullProgress(event.clientY,dragEdge));
+    }
+    const keep=returned&&!dt?.mozUserCancelled&&dragImageMode==="inline"&&!!dragInsertAnimation;
     draggedTab = null; draggedGroup = null; dragHandled = false; dragStartPoint = null;
-    endDragVisual();
+    if(keep)finishInsertionAfterDrop();else endDragVisual();
     if (returned || wasGroup || !start || handled || dt?.mozUserCancelled || dt?.dropEffect !== "none" ||
         !validNativeTab(tab) || tabOwner(tab) !== window) return;
     // A cancelled drag or a drop within this window must never create
@@ -40,7 +46,7 @@
     outside: event => setDragImageMode("outside",event),
     preview: event => {if(draggedTab&&!draggedGroup)showPlacementPreview(event,"Tab");},
     clearIncoming: () => {
-      if(draggedTab||dead)return;
+      if(draggedTab||dragInsertPending||dead)return;
       clearLiveDrag();clearDropMarker();releaseDragReveal();refreshIndicator();
     },
     markHandled: (finishReturn=false) => {
@@ -53,11 +59,7 @@
       dragStartPoint=null;
       // Native drop is committed now. Only the isolated visual remains
       // until the return animation completes; no native session is held.
-      if(keep){
-        dragInsertPending=true;
-        holdToolbarForReturn();
-        window.__nocturneTrace?.("drag.insert.drop-tail",{remaining:Math.max(0,BUNNY_INSERT_DURATION-(Number(dragInsertAnimation.currentTime)||0))},{sample:800});
-      }
+      if(keep)finishInsertionAfterDrop();
     }
   };
   window[DRAG_CONTROLLER] = dragController;

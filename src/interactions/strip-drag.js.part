@@ -201,7 +201,7 @@
     stopLaneAutoscroll();
     // The window capture listener owns pull and image transitions.
     // Do not erase a group's visual position mid-extraction.
-    if (!(dragImageMode === "inline" && (groupPullLayout || dragPull > 0))) clearLiveDrag();
+    if (!(dragImageMode === "inline" && (groupPullLayout || dragPull > 0 || dragInsertAnimation))) clearLiveDrag();
     clearDropMarker();
   }
   function clearDropMarker() {
@@ -258,10 +258,11 @@
       const p = bunnyPullProgress(event.clientY,dragEdge);
       const lateralExit = event.clientX < toolbarWrapper.getBoundingClientRect().left ||
                           event.clientX > toolbarWrapper.getBoundingClientRect().right;
-      const threshold = dragImageMode === "content" || dragImageMode === "outside" ? .72 : .96;
+      const threshold = dragImageMode === "content" || dragImageMode === "outside" ? BUNNY_RETURN_THRESHOLD : .96;
       const detach = p >= threshold || lateralExit;
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.pull.decision",()=>({mode:dragImageMode,within,p,threshold,detach,lateralExit,edge:dragEdge,y:event.clientY,delta:event.clientY-dragEdge,measured:parseFloat(toolbarWrapper.style.getPropertyValue('--op-measured-toolbar-height'))||0,wrapperBottom:toolbarWrapper.getBoundingClientRect().bottom,rowBottom:row.getBoundingClientRect().bottom,navBottom:navbar?.getBoundingClientRect().bottom,detachedOnce:dragDetachedOnce,reentry:dragReentry,lane:useLaneDrop()}),{throttle:85,sample:1000});
       const previous=dragImageMode;
+      if(previous==="content"&&!detach)positionGhost(event.clientX,event.clientY);
       setDragImageMode(detach ? "content" : "inline",event);
       if(previous==="content"&&dragImageMode==="inline")dragReturnFloor=p;
       if (dragImageMode === "content") {
@@ -277,6 +278,13 @@
       if (dragImageMode === "outside") {
         if(within){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";previewStripDrag(event,tab);}
         else{clearLiveDrag();releaseDragReveal();}
+        return;
+      }
+      // While the button is held, the return timeline has exactly one
+      // owner: the pointer. Reversing within the band rewinds it.
+      if(dragInsertAnimation){
+        seekInsertion(p);
+        if(within){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";}
         return;
       }
       // Hysteresis suppresses a second pull only while continuing inward.
@@ -339,7 +347,11 @@
     if(!tab||!toolbarDragReturnZone(event))return;
     if(tabOwner(tab)===window&&dragDetachedOnce){
       event.preventDefault();event.stopImmediatePropagation();
-      if(dragImageMode==="content")setDragImageMode("inline",event);
+      if(dragImageMode==="content"){
+        positionGhost(event.clientX,event.clientY);
+        setDragImageMode("inline",event);
+        seekInsertion(bunnyPullProgress(event.clientY,dragEdge));
+      }
       sourceHandled(tab,true);schedule();return;
     }
     onStripDrop(event);

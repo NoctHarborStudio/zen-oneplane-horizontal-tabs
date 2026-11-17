@@ -1,3 +1,9 @@
+## 0.3.0-preview.23 — Pointer-controlled Bunny insertion
+
+- Pause the insertion timeline while dragging; scrub its progress from the original row's return threshold to the row edge, including reverse motion and a stationary pointer.
+- Only an accepted native drop plays the remaining insertion frames. Preserve the existing extraction, row-local boundaries and native split/window handling.
+- Synchronize diagnostic versions and repair the diagnostic-version and shared-bookmarks provenance checks.
+
 ## 0.3.0-preview.22 — Symmetric native-position page progress
 
 - Replace the full-window loading line and visually suppress Zen's original indicator only while the new controller is installed. Keep native lifecycle and restore visibility when disabled.
