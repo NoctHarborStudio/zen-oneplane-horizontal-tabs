@@ -27,6 +27,7 @@
     dragWatchTimer=window.setTimeout(check,250);
   }
   function cancelNativeDrag(reason){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.lifecycle.cancel",()=>({reason,token:nativeDragToken,mode:dragImageMode}),{sample:1800});
     nativeDragToken=null;nativeDragIdentity=null;stopNativeDragWatch();
     dragHandled=true;dragStartPoint=null;draggedTab=null;draggedGroup=null;
     // Do not reopen the start-page search after an interrupted OS gesture.
@@ -46,6 +47,7 @@
   function startNativeDragLifecycle(event,tab){
     if(dragLifecycle.current())dragLifecycle.cancel("superseded");
     nativeDragToken=dragLifecycle.begin("tab",{onCancel:cancelNativeDrag});
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.lifecycle.begin",()=>({token:nativeDragToken}),{sample:1800});
     if(nativeDragToken!==null){nativeDragIdentity={target:event.target,tab};watchNativeDrag(nativeDragToken);}
     return nativeDragToken!==null;
   }

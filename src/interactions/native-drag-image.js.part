@@ -24,6 +24,7 @@
     node.setAttribute("data-op-reinsert","true");
     const rect = node.getBoundingClientRect();
     const dy = Math.max(-12,Math.min(34,event.clientY-(rect.top+rect.height/2)));
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.insert",()=>({dy,height:rect.height}),{sample:1800});
     // Animate the real card (not just its icon), using individual transforms
     // so horizontal tracking and native drop/slot positioning stay independent.
     const animation = node.animate([
@@ -45,6 +46,7 @@
     // Once OS owns the drag image, never draw a local duplicate on re-entry.
     if(dragImageMode==="outside")return;
     const previous = dragImageMode;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.mode.request",()=>({previous,requested:mode,pull:dragPull,edge:dragEdge,ghost:!!dragGhost&&!dragGhost.hidden}),{sample:1800});
     if (mode === "outside") {
       // Only the OS drag image is painted beyond this browser window.
       makeDragGhost();
@@ -56,6 +58,7 @@
       dragGhost.hidden = false;
       const box = dragGhostBody.getBoundingClientRect();
       const ok = updateNativeDragImage(dragGhostBody,Math.round(box.width/2),Math.round(box.height/2),event);
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.native-image",()=>({ok,width:box.width,height:box.height}),{sample:1800});
       hideGhost();
       if (!ok) { if (previous === "content") showGhost(event,false); return; }
     } else if (previous === "outside") {
@@ -87,6 +90,7 @@
     }
     if (draggedTab && !draggedGroup) measureSplitGroup(splitGroup(draggedTab));
     refreshIndicator();
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.mode.applied",()=>({mode:dragImageMode,previous,detached:dragNode?.hasAttribute('data-op-detached'),laneGhost:dragNode?.hasAttribute('data-op-lane-ghost'),ghost:!!dragGhost&&!dragGhost.hidden,reentry:dragReentry}),{sample:1800});
     refreshIslandTitle();
   }
   function followLocalSource(event, node) {

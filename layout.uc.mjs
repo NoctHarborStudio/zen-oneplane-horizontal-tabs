@@ -2547,6 +2547,7 @@ function installTabStrip() {
     dragWatchTimer=window.setTimeout(check,250);
   }
   function cancelNativeDrag(reason){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.lifecycle.cancel",()=>({reason,token:nativeDragToken,mode:dragImageMode}),{sample:1800});
     nativeDragToken=null;nativeDragIdentity=null;stopNativeDragWatch();
     dragHandled=true;dragStartPoint=null;draggedTab=null;draggedGroup=null;
     // Do not reopen the start-page search after an interrupted OS gesture.
@@ -2566,6 +2567,7 @@ function installTabStrip() {
   function startNativeDragLifecycle(event,tab){
     if(dragLifecycle.current())dragLifecycle.cancel("superseded");
     nativeDragToken=dragLifecycle.begin("tab",{onCancel:cancelNativeDrag});
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.lifecycle.begin",()=>({token:nativeDragToken}),{sample:1800});
     if(nativeDragToken!==null){nativeDragIdentity={target:event.target,tab};watchNativeDrag(nativeDragToken);}
     return nativeDragToken!==null;
   }
@@ -4933,6 +4935,7 @@ function installTabStrip() {
     }
     dragGhost.append(dragGhostBody);
     root.append(dragGhost);
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.ghost.create",()=>({group:!!draggedGroup,members:members.length}),{sample:1800});
   }
   function positionGhost(x, y) {
     if (!dragGhost) return;
@@ -4942,6 +4945,7 @@ function installTabStrip() {
   function hideGhost() {
     dragGhostAnimation?.cancel(); dragGhostAnimation = null;
     if (dragGhost) dragGhost.hidden = true;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.ghost.hide",()=>({exists:!!dragGhost,mode:dragImageMode}),{throttle:100,sample:1200});
     if (dragGhostBody) dragGhostBody.style.removeProperty("transform");
   }
   function showGhost(event, bounce) {
@@ -4949,6 +4953,7 @@ function installTabStrip() {
     if (!dragGhost) return;
     positionGhost(event.clientX, event.clientY);
     dragGhostBody.style.removeProperty("transform");
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.ghost.show",()=>({bounce,mode:dragImageMode}),{sample:1800});
     dragGhost.hidden = false;
     if (bounce && !reducedMotion.matches && prefs.getIntPref("zen.oneplane.animation-duration",160) !== 0) {
       dragGhostAnimation?.cancel();
@@ -5067,6 +5072,7 @@ function installTabStrip() {
   function setPull(progress) {
     if (!dragNode) return;
     dragPull = progress;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.pull.paint",()=>({progress,mode:dragImageMode,width:dragWidth,group:!!draggedGroup}),{throttle:100,sample:1200});
     dragNode.toggleAttribute("data-op-pulling", progress > 0);
     dragNode.style.setProperty("--op-pull-width", Math.max(0,dragWidth*(1-.95*progress)).toFixed(2)+"px");
     dragNode.style.setProperty("--op-pull-y", (17*progress).toFixed(2)+"px");
@@ -5102,6 +5108,7 @@ function installTabStrip() {
     node.setAttribute("data-op-reinsert","true");
     const rect = node.getBoundingClientRect();
     const dy = Math.max(-12,Math.min(34,event.clientY-(rect.top+rect.height/2)));
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.insert",()=>({dy,height:rect.height}),{sample:1800});
     // Animate the real card (not just its icon), using individual transforms
     // so horizontal tracking and native drop/slot positioning stay independent.
     const animation = node.animate([
@@ -5123,6 +5130,7 @@ function installTabStrip() {
     // Once OS owns the drag image, never draw a local duplicate on re-entry.
     if(dragImageMode==="outside")return;
     const previous = dragImageMode;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.mode.request",()=>({previous,requested:mode,pull:dragPull,edge:dragEdge,ghost:!!dragGhost&&!dragGhost.hidden}),{sample:1800});
     if (mode === "outside") {
       // Only the OS drag image is painted beyond this browser window.
       makeDragGhost();
@@ -5134,6 +5142,7 @@ function installTabStrip() {
       dragGhost.hidden = false;
       const box = dragGhostBody.getBoundingClientRect();
       const ok = updateNativeDragImage(dragGhostBody,Math.round(box.width/2),Math.round(box.height/2),event);
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.native-image",()=>({ok,width:box.width,height:box.height}),{sample:1800});
       hideGhost();
       if (!ok) { if (previous === "content") showGhost(event,false); return; }
     } else if (previous === "outside") {
@@ -5165,6 +5174,7 @@ function installTabStrip() {
     }
     if (draggedTab && !draggedGroup) measureSplitGroup(splitGroup(draggedTab));
     refreshIndicator();
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.mode.applied",()=>({mode:dragImageMode,previous,detached:dragNode?.hasAttribute('data-op-detached'),laneGhost:dragNode?.hasAttribute('data-op-lane-ghost'),ghost:!!dragGhost&&!dragGhost.hidden,reentry:dragReentry}),{sample:1800});
     refreshIslandTitle();
   }
   function followLocalSource(event, node) {
@@ -5249,6 +5259,7 @@ function installTabStrip() {
     dragGhost.hidden=false;
     positionGhost(event.clientX,event.clientY);
     dragGhostBody.style.transform=pull?"scale("+Math.max(.12,1-.8*pull)+")":"";
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.lane.ghost",()=>({pull,mode:dragImageMode,sourceHidden:dragNode.hasAttribute('data-op-lane-ghost'),detached:dragNode.hasAttribute('data-op-detached'),ghost:!dragGhost.hidden}),{throttle:100,sample:1200});
   }
   function previewLaneDrag(event,tab,entry){
     if(dragShifted.size||row.hasAttribute("data-op-live-drag"))clearLiveDrag();
@@ -5434,6 +5445,7 @@ function installTabStrip() {
                           event.clientX > toolbarWrapper.getBoundingClientRect().right;
       const threshold = dragImageMode === "content" || dragImageMode === "outside" ? .72 : .96;
       const detach = p >= threshold || lateralExit;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.pull.decision",()=>({mode:dragImageMode,within,p,threshold,detach,lateralExit,edge:dragEdge,y:event.clientY,delta:event.clientY-dragEdge,measured:parseFloat(toolbarWrapper.style.getPropertyValue('--op-measured-toolbar-height'))||0,wrapperBottom:toolbarWrapper.getBoundingClientRect().bottom,rowBottom:row.getBoundingClientRect().bottom,navBottom:navbar?.getBoundingClientRect().bottom,detachedOnce:dragDetachedOnce,reentry:dragReentry,lane:useLaneDrop()}),{throttle:85,sample:1000});
       setDragImageMode(detach ? "content" : "inline",event);
       if (dragImageMode === "content") {
         positionGhost(event.clientX,event.clientY);
@@ -5526,6 +5538,7 @@ function installTabStrip() {
     },80);
   }
   function endDragVisual() {
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.visual.end",()=>({mode:dragImageMode,pull:dragPull,detached:dragDetachedOnce,ghost:!!dragGhost&&!dragGhost.hidden,shifted:dragShifted.size}),{sample:1800});
     clearPlacementPreview();
     cancelInsertion();
     const search = dragSearch;
@@ -5576,6 +5589,7 @@ function installTabStrip() {
     const compactWidth = parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab")) || 36;
     dragWidth = group ? (22 + image.querySelectorAll(".oneplane-tab").length*(compactWidth+3)) : compactWidth;
     dragEdge = toolbarWrapper?.getBoundingClientRect().bottom || grabbed.bottom;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.start.geometry",()=>({group:!!group,edge:dragEdge,width:dragWidth,grabX:dragGrabRatio,grabY:dragGrabY,pullDistance:PULL_DISTANCE,overflow:row.hasAttribute('data-op-overflow-row'),panelHeight:toolbarWrapper?.getBoundingClientRect().height}),{sample:1800});
     dragLastPoint = {x:event.clientX,y:event.clientY};
     clearTabHover();
     if (group && (splitGroup(tab) !== group || groupMembers(group).length < 2)) {
@@ -5643,6 +5657,7 @@ function installTabStrip() {
     const group = source?.group();
     if (owner === window && dragNode) { setDragImageMode("inline",event); setPull(0); }
     const dest = previewStripDrag(event, tab) || dropTarget(event);
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.drop",()=>({local:owner===window,group:!!group,dest:!!dest?.native,before:dest?.before,mode:dragImageMode}),{sample:1800});
     if(!dest?.native){
       if(owner===window)source?.markHandled();
       clearLiveDrag();clearDropMarker();return;
@@ -5752,6 +5767,7 @@ function installTabStrip() {
     // Ignore late or duplicate dragend after cancel/handled drop.
     const placement=placementAt(event,true);
     const returned=!placement&&pointInSourceWindow(event)&&dragDetachedOnce&&toolbarDragReturnZone(event);
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.end",()=>({returned,placement:!!placement,detached:dragDetachedOnce,handled:dragHandled,drop:dt?.dropEffect,cancelled:!!dt?.mozUserCancelled}),{sample:1800});
     if(!finishNativeDragLifecycle(event,tab))return;
     const handled = dragHandled;
     const wasGroup = Boolean(draggedGroup);
