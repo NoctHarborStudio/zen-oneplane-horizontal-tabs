@@ -4768,7 +4768,7 @@ function installTabStrip() {
     const phase=root.getAttribute("data-zr-workspace-phase"),active=!!phase;
     toolbarWrapper?.toggleAttribute("oneplane-workspace-hold",active);
     if(active){cancelHoverTimer();cancelIndicatorReturn();}
-    if(phase==="swap"){clearTabHover();islandTextAnimation?.cancel();}
+    if(phase==="out"||phase==="swap"){clearTabHover();islandTextAnimation?.cancel();}
     reconcilePanel();
     if(!active){refreshIslandTitle();scheduleGeometry();scheduleContour();}
   }

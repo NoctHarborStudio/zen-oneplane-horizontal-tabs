@@ -410,3 +410,17 @@
 }
 :root[data-zr-closing] #zr-page-progress {opacity:0!important;visibility:hidden!important;transition:none!important;}
 :root[data-zr-closing] #oneplane-tabs#oneplane-tabs :is(.oneplane-tab-list,.oneplane-island-lane) {scrollbar-width:none!important;}
+/* The shared card alpha is the sole card fade. Keep the row opaque
+ * except during the native swap; only its independent Home/plus fade. */
+:root[data-zr-center-motion="workspace"][data-zr-workspace-phase]:not([data-zr-workspace-phase="swap"]) #oneplane-tabs#oneplane-tabs#oneplane-tabs#oneplane-tabs[data-zr-workspace-motion] {
+  opacity:1!important;
+  --zr-workspace-ui-progress:var(--zr-workspace-progress);
+}
+:root[data-zr-center-motion="workspace"][data-zr-workspace-phase]:not([data-zr-workspace-phase="swap"]) #oneplane-tabs#oneplane-tabs#oneplane-tabs :is(.oneplane-title-island,.oneplane-new-tab) {
+  opacity:var(--zr-workspace-ui-progress,1)!important;
+  transition:none!important;
+}
+/* Settle collapsed widths before the shared engine measures cards. */
+:root:is([data-zr-workspace-phase="out"],[data-zr-closing]) #oneplane-tabs#oneplane-tabs :is(.oneplane-tab,.oneplane-split-group,.oneplane-tab-list,.oneplane-title-island,.oneplane-new-tab) {
+  transition-property:none!important;
+}
