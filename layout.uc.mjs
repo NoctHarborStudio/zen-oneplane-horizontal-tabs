@@ -1,7 +1,7 @@
-/* Nocturne preview.11 diagnostic recorder — read-only chrome telemetry.
+/* Nocturne preview.12 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.11",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.12",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -196,7 +196,7 @@
   // Magnetic Fold, ported from Motion Lab B. p=0 docked, p=1 resting.
   const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
   const smooth=p=>{p=clamp(p);return p*p*(3-2*p);};
-  function magnetState(c,p){
+  function rawMagnetState(c,p){
     const q=1-p,d=Math.abs(c.x-c.cx),unit=c.unit,lower=c.lower;
     if(lower&&d<12*unit){
       const f=1-smooth(q/.12);
@@ -209,6 +209,31 @@
     const shrink=d<.001?f:Math.min(1,remaining/Math.max(.001,Math.min(d,(lower?26:48)*unit)));
     return {x:(c.cx-c.x)*(1-f),y:lower?(c.cy-c.y)*(1-dock):0,s:clamp(f*shrink,.02,1),a:alpha*c.opacity};
   }
+  // The portal has real dimensions, not just a mathematical center.
+  // Fade outside its edge; a transparent Home must never reveal a card
+  // traveling behind its title or icon.
+  function portalGap(c,f){
+    const h=c.hub;
+    if(!h)return Infinity;
+    const x=c.x+f.x,y=c.y+f.y,w=c.r.width*f.s/2,z=c.r.height*f.s/2;
+    return Math.max(h.left-x-w,x-w-h.right,h.top-y-z,y-z-h.bottom);
+  }
+  function magnetState(c,p){
+    const f=rawMagnetState(c,p);
+    if(!c.hub)return f;
+    const resting=portalGap(c,{x:0,y:0,s:1});
+    // A preexisting intersection belongs to native layout, not this effect.
+    if(resting<=0)return f;
+    const fade=Math.min(resting,24*c.unit);
+    return {...f,a:f.a*smooth(portalGap(c,f)/fade)};
+  }
+  function portalClip(h,rr,width,height){
+    // Even-odd hole: final safety net for between-keyframe interpolation
+    // and the translucent Home background. Do not clip the overflow lane.
+    const extent=Math.ceil(Math.max(width,height,rr.width,rr.height)+32);
+    const l=h.left-rr.left,t=h.top-rr.top,r=h.right-rr.left,b=h.bottom-rr.top;
+    return 'path(evenodd, "M '+(-extent)+' '+(-extent)+' H '+extent+' V '+extent+' H '+(-extent)+' Z M '+l+' '+t+' H '+r+' V '+b+' H '+l+' Z")';
+  }
   function keyframes(c,reverse=false){
     // Sample the shared continuous curve once, not during playback. Linear
     // interpolation between samples preserves the Lab timing and reversal.
@@ -220,7 +245,8 @@
   function collect(row){
     const list=row?.querySelector(".oneplane-tab-list");
     if(!list)return [];
-    const rr=row.getBoundingClientRect(),ir=row.querySelector(".oneplane-title-island")?.getBoundingClientRect();
+    const rr=row.getBoundingClientRect(),island=row.querySelector(".oneplane-title-island"),ir=island?.getBoundingClientRect();
+    const hub=ir?.width>1&&ir.height>1&&win.getComputedStyle(island).visibility!=="hidden"?{left:ir.left,right:ir.right,top:ir.top,bottom:ir.bottom}:null;
     const cx=ir?.width>1?ir.left+ir.width/2:rr.left+rr.width/2;
     const candidates=[];
     for(const n of list.querySelectorAll(".oneplane-tab,.oneplane-split-group")){
@@ -234,7 +260,7 @@
     }
     const cy=ir?.height>1?ir.top+ir.height/2:Math.min(...candidates.map(c=>c.r.top+c.r.height/2));
     const unit=Math.max(.7,Math.min(2, (Math.min(...candidates.map(c=>c.r.height))||30)/20));
-    return candidates.map(c=>({...c,x:c.r.left+c.r.width/2,y:c.r.top+c.r.height/2,cx,cy,unit,lower:c.r.top+c.r.height/2>cy+12*unit}));
+    return candidates.map(c=>({...c,x:c.r.left+c.r.width/2,y:c.r.top+c.r.height/2,cx,cy,unit,hub,lower:c.r.top+c.r.height/2>cy+12*unit}));
   }
   // Only chrome mirror cards are copied. A shadow tree isolates them from
   // projection queries and lane scroll clips. No page snapshots or native
@@ -275,6 +301,8 @@
     const rr=row.getBoundingClientRect(),host=document.createElementNS("http://www.w3.org/1999/xhtml","div");
     host.setAttribute("data-zr-magnetic-layer","true");host.setAttribute("aria-hidden","true");host.inert=true;
     Object.assign(host.style,{position:"absolute",inset:"0",zIndex:"14",pointerEvents:"none",overflow:"visible"});
+    const hub=cards[0].hub;
+    if(hub)host.style.clipPath=portalClip(hub,rr,win.innerWidth,win.innerHeight);
     let layer;try{layer=host.attachShadow({mode:"closed"});}catch{root.removeAttribute("data-zr-fold-measuring");return null;}const effects=[],saved=[];
     // Measure and build all proxies before hiding any real card.
     try{
@@ -301,7 +329,7 @@
         if(active===handle){active=null;root.removeAttribute(OWNER);if(!win.closed)win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd"));}
       }};
     active=handle;
-    win.__nocturneTrace?.("center.motion",()=>({owner,direction,count:cards.length,duration,mode:"magnetic-fold",center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length}),{sample:duration+250});
+    win.__nocturneTrace?.("center.motion",()=>({owner,direction,count:cards.length,duration,mode:"magnetic-fold",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length}),{sample:duration+250});
     return handle;
   }
   // Bookmarks use the Lab's center squeeze, not individual vertical slides.

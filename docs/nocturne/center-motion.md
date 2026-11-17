@@ -1,7 +1,9 @@
-# Magnetic Fold — Preview 11
+# Magnetic Fold — Preview 12
 
 The shared engine ports the Motion Lab B curve. Given a card center x, actual Home anchor cx, and progress p (0 docked, 1 resting), the remaining horizontal distance is |x-cx| times a smoothstep compression factor. Width scales with the same factor; nearby cards disappear first. The lower row lifts toward Home and has a 12% closing delay. Opening exactly reverses the closing curve. Threshold distances are normalized to actual card height.
 
 The engine snapshots visible mirror card geometry once and paints inert chrome-only copies in a closed shadow tree within the row. This prevents clipping by scroll lanes and keeps native tabs, scroll positions and projection queries unchanged. No page images, page DOM, or native tabs are cloned. Copies use computed visual styles and are removed on completion or cancellation. Real mirror cards stay in flow and hidden during playback. A two-frame handoff guard suppresses native transition restarts. The workspace controller keeps the Home anchor stable and the compact contour is the sole background. Bookmarks use horizontal compression; ordinary tab selection keeps the page opaque and stationary, as in Lab B.
 
 Timings: startup 760 ms with 55 ms delay (scaled by configured duration); close 620 ms, bookmarks 650 ms, final 110 ms sealed dwell; workspace 460 ms out / 560 ms in, plus native swap and bounded settle. Native lifecycle, reduced motion and hot-reload protections remain. Startup trace markers are retained separately. The actual Gecko/Zen visual behavior requires in-browser validation.
+
+Preview 12 adds a portal boundary: calculate the signed separating gap between the scaled card and the actual Home rectangle. Fade within a band of up to 24 normalized pixels outside it; the overlay has an even-odd rectangular clip hole as a safety net between keyframes. With no visible Home, retain the original fold. Opening uses the same curve in reverse.

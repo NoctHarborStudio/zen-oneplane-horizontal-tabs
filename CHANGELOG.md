@@ -1,3 +1,8 @@
+## 0.3.0-preview.12 — Magnetic Fold Home portal
+
+- Fade chrome card proxies according to their scaled bounds and the real Home rectangle, rather than distance to its center alone. Clip the isolated animation layer at the Home boundary as a safety net. Preserve the reversible fold, timings and native layout.
+- Record the portal dimensions and test both directions, wide cards and the lower row.
+
 ## 0.3.0-preview.11 — Magnetic Fold
 
 - Port the selected Motion Lab B formula to the shared center engine. Cards compress around the actual Home anchor; lower cards move vertically toward it. Opening reverses closing.
