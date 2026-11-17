@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 const source=readFileSync(new URL("../workspace-transition.uc.mjs",import.meta.url),"utf8");
+const css=readFileSync(new URL("../chrome.css",import.meta.url),"utf8");
 const i=source.indexOf("function eligible("),j=source.indexOf("function units()",i);
 const eligible=new Function(source.slice(i,j)+"return eligible;")();
 test("workspace animates stable surfaces without per-tab translation",()=>{
@@ -159,7 +160,15 @@ test("incoming shelf and page effects restore every owned style",()=>{
 
 test("two-row backing is gated during swap and animated separately from tabs",()=>{
  assert.ok(source.includes('saveEffect(tx,nav,BACKING'));
- assert.ok(source.includes('#nav-bar:has(#oneplane-tabs[data-op-overflow-row])'));
- assert.ok(source.includes('background:transparent!important'));
- assert.ok(source.includes('background:color-mix(in srgb,var(--op-surface-tint)'));
+ assert.ok(css.includes('#nav-bar#nav-bar#nav-bar#nav-bar:has(#oneplane-tabs[data-op-overflow-row])'));
+ assert.ok(css.includes('background:transparent!important'));
+ assert.ok(css.includes('background:color-mix(in srgb,var(--op-surface-tint)'));
+});
+
+test("workspace uses packaged style motion and locks geometry before outgoing effect",()=>{
+ assert.ok(css.includes("@property --zr-workspace-progress"));
+ assert.ok(css.includes("opacity: var(--zr-workspace-progress) !important"));
+ assert.ok(css.includes("height: var(--zr-workspace-height) !important"));
+ assert.ok(source.includes('if(value==="out"||value==="swap")lockGeometry();'));
+ assert.ok(!source.includes("loadSheet("));
 });

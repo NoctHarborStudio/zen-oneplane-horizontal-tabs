@@ -1,6 +1,6 @@
-// Nocturne preview.6: early trace, independent Sine script order.
+// Nocturne preview.7: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="disassembly.script",data={version:"0.3.0-preview.6"};
+  const event="disassembly.script",data={version:"0.3.0-preview.7"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -20,28 +20,43 @@ try{if(typeof window!=="undefined"){
   let dead=false,owner=null,original=null,wrapped=null,observer=null,style=null,sheet=null;
   const animations=new Set(),owned=new Map();
 
-  function makeCloseController({eligible,begin,clear,later,cancelLater,invoke}){
-    let pending=null,timer=null;
+  function makeCloseController({eligible,begin,clear,seal=()=>{},isClosed=()=>false,later,cancelLater,invoke}){
+    let pending=null,timer=null,committing=false;
     function finish(proceed){
-      if(!pending)return;
+      if(!pending||committing)return;
       const request=pending;pending=null;
       if(timer!==null)cancelLater(timer);timer=null;
-      try{clear();}catch{}
-      if(proceed)return invoke(request.receiver,request.args);
+      if(!proceed||!request.animated){
+        try{clear();}catch{}
+        if(proceed)return invoke(request.receiver,request.args);
+        return;
+      }
+      // Preserve completed effects throughout the synchronous native close.
+      // Restore only on cancellation or a native exception.
+      committing=true;
+      try{
+        try{seal();}catch{}
+        return invoke(request.receiver,request.args);
+      }finally{
+        committing=false;
+        if(!isClosed())try{clear();}catch{}
+      }
     }
     return {
       request(receiver,args){
+        if(committing)return;
         if(pending)return finish(true);
         if(!eligible(args))return invoke(receiver,args);
-        pending={receiver,args};
+        pending={receiver,args,animated:false};
         try{
-          if(begin()){timer=later(()=>finish(true),DURATION);return;}
+          if(begin()){pending.animated=true;timer=later(()=>finish(true),DURATION);return;}
         }catch{}
         return finish(true);
       },
       flush(){return finish(true);},
       dispose(){return finish(false);},
-      get pending(){return pending!==null;}
+      get pending(){return pending!==null;},
+      get committing(){return committing;}
     };
   }
   function visible(n){
@@ -166,7 +181,11 @@ try{if(typeof window!=="undefined"){
       !root.hasAttribute("data-zr-startup-phase");
   }
   const controller=makeCloseController({
-    eligible,begin,clear:restore,
+    eligible,begin,clear:restore,isClosed:()=>window.closed,
+    seal:()=>{
+      for(const a of animations)try{a.finish();}catch{}
+      window.__nocturneTrace?.("disassembly.sealed",()=>({effects:animations.size,closing:root.hasAttribute("data-zr-closing")}),{flush:true});
+    },
     later:(fn,ms)=>window.setTimeout(fn,ms),cancelLater:id=>window.clearTimeout(id),
     invoke:(receiver,args)=>{
       typeof window!=="undefined"&&window.__nocturneTrace?.("disassembly.native.before",()=>({closing:root.hasAttribute('data-zr-closing'),owned:owned.size}),{flush:true,sample:1200});
@@ -186,7 +205,8 @@ try{if(typeof window!=="undefined"){
     catch{wrapped=null;}
   }
   function dispose(){
-    if(dead)return;dead=true;controller.dispose();restore();
+    if(dead)return;dead=true;
+    if(!controller.committing&&!window.closed){controller.dispose();if(animations.size||owned.size||root.hasAttribute("data-zr-closing"))restore();}
     if(owner&&wrapped&&owner.tryToCloseWindow===wrapped)owner.tryToCloseWindow=original;
     if(observer)try{Services.obs.removeObserver(observer,"browser-delayed-startup-finished");}catch{}
     observer=null;

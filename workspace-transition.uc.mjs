@@ -1,6 +1,6 @@
-// Nocturne preview.6: early trace, independent Sine script order.
+// Nocturne preview.7: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="workspace.script",data={version:"0.3.0-preview.6"};
+  const event="workspace.script",data={version:"0.3.0-preview.7"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -13,7 +13,7 @@ try{if(typeof window!=="undefined"){
   const get=id=>document.getElementById(id);
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
-  let dead=false,active=null,request=null,uri=null,style=null,registered=false;
+  let dead=false,active=null,request=null,registered=false;
   // This gate survives replacement of the visual controller in the same
   // window. Native work already in flight cannot be cancelled by WAAPI.
   const GATE="__nocturneWorkspaceCommandGate";
@@ -67,7 +67,7 @@ try{if(typeof window!=="undefined"){
   }
   function phase(value){
     if((root.getAttribute(PHASE)||null)===(value||null))return;
-    if(value==="swap")lockGeometry();
+    if(value==="out"||value==="swap")lockGeometry();
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.phase",()=>({from:root.getAttribute(PHASE),to:value,locked:!!geometryLock}),{sample:1800});
     if(value)root.setAttribute(PHASE,value);else {releaseGeometry();root.removeAttribute(PHASE);}
     try{win.__zenMagneticBookmarksShared?.syncAddressState?.();}catch(error){console.warn("[Nocturne] Workspace bookmarks:",error);}
@@ -211,12 +211,17 @@ try{if(typeof window!=="undefined"){
       if(tx.cancelled||req.superseded)return result;
       await settled(tx);
       if(tx.cancelled||req.superseded)return result;
+      // Release and measure in one task under the hidden swap gate.
       const geometry=releaseGeometry();
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.reveal",()=>({skip:tx.skipMotion,oldHeight:geometry?.height,oldSurface:geometry?.surfaceHeight}),{sample:1800});
       try{win.__oneplaneLayoutController?.prepareWorkspaceGeometry?.();}catch(error){console.warn("[Nocturne] Workspace geometry:",error);}
       if(tx.skipMotion)return result;
       const incoming=units(),motion=animate(tx,incoming,false,geometry);
       phase("in");
+      win.__nocturneTrace?.("workspace.applied",()=>({
+        rows:incoming.map(n=>({opacity:win.getComputedStyle(n).opacity,scale:win.getComputedStyle(n).scale,progress:win.getComputedStyle(n).getPropertyValue?.(PROGRESS)})),
+        height:rect(get("zen-appcontent-navbar-wrapper"))?.height
+      }),{sample:1000});
       await motion;
       return result;
     }catch(error){
@@ -243,29 +248,13 @@ try{if(typeof window!=="undefined"){
     if(dead)return;dead=true;if(request)request.superseded=true;abort();phase(null);
     win.removeEventListener("unload",dispose);win.removeEventListener("keydown",onKey,true);win.removeEventListener("beforecustomization",abort);
     reduced.removeEventListener("change",abort);try{prefs.removeObserver(PREF,abort);}catch{}
-    if(uri)try{win.windowUtils.removeSheet(uri,win.windowUtils.USER_SHEET);}catch{}
-    style?.remove();if(win[KEY]===api)delete win[KEY];
+    if(win[KEY]===api)delete win[KEY];
   }
   const api={run,dispose};
   try{
     try{win.CSS.registerProperty({name:PROGRESS,syntax:"<number>",inherits:false,initialValue:"1"});registered=true;}catch(e){registered=e.name==="InvalidModificationError";}
-    // Scope important overrides to the animated chrome only; Magnetic
-    // Bookmarks uses important translate/transform in its normal state.
-    const spec=":is(#zr-workspace-specificity,["+MARK+"],["+GEOMETRY+"],["+SURFACE+"],["+PAGE+"],["+BACKING+"],#nav-bar,#oneplane-toolbar-surface,#zen-appcontent-navbar-wrapper)".repeat(8);
-    const motion=":root[data-zr-workspace-phase] ["+MARK+"]"+spec;
-    const sheet=motion+"{transition-property:none!important;opacity:var("+PROGRESS+")!important;scale:calc(.94 + .06 * var("+PROGRESS+"))!important;transform-origin:center top!important;pointer-events:none!important;}"+
-      motion+'['+MOVE+']{translate:0 calc(var(--zr-workspace-row-y)*(1 - var('+PROGRESS+')))!important;}'+
-      ':root[data-zr-workspace-phase="swap"] :is(#oneplane-tabs,#PlacesToolbarItems,#tabbrowser-tabs){opacity:0!important;pointer-events:none!important;}'+
-      ':root[data-zr-workspace-phase="swap"] :is(#oneplane-tabs *,#PlacesToolbarItems *){transition-property:none!important;pointer-events:none!important;}'+
-      ':root:is([data-zr-workspace-phase="swap"],[data-zr-workspace-phase="in"]) #zen-appcontent-navbar-wrapper'+spec+'{transition-property:none!important;}'+
-      ':root[data-zr-workspace-phase] #zen-appcontent-navbar-wrapper['+GEOMETRY+']'+spec+'{height:var('+HEIGHT+')!important;min-height:var('+HEIGHT+')!important;max-height:var('+HEIGHT+')!important;}'+
-      ':root[data-zr-workspace-phase] #zen-appcontent-navbar-wrapper['+GEOMETRY+'] > #oneplane-toolbar-surface'+spec+'{height:var('+SURFACE_HEIGHT+')!important;}'+
-      ':root[oneplane-active="true"][data-zr-workspace-phase="swap"] #nav-bar:has(#oneplane-tabs[data-op-overflow-row])'+spec+'{background:transparent!important;}'+
-      ':root[oneplane-active="true"][data-zr-workspace-phase] #nav-bar['+BACKING+']'+spec+'{background:color-mix(in srgb,var(--op-surface-tint) calc(var('+PROGRESS+') * 100%),transparent)!important;transition-property:none!important;}'+
-      ':root[data-zr-workspace-phase] ['+SURFACE+']'+spec+'{scale:1 calc(var(--zr-workspace-height-scale) + (1 - var(--zr-workspace-height-scale))*var('+PROGRESS+'))!important;transform-origin:top center!important;transition-property:none!important;}'+
-      ':root[data-zr-workspace-phase] ['+PAGE+']'+spec+'{translate:0 calc(var(--zr-workspace-page-y)*(1 - var('+PROGRESS+')))!important;transition-property:none!important;}';
-    try{uri=Services.io.newURI("data:text/css;charset=utf-8,"+encodeURIComponent(sheet));win.windowUtils.loadSheet(uri,win.windowUtils.USER_SHEET);}
-    catch{uri=null;style=document.createElementNS("http://www.w3.org/1999/xhtml","style");style.textContent=sheet;root.append(style);}
+    // Motion rules ship in chrome.css with the rest of OnePlane.
+    // No separately loaded temporary user sheet.
     win[KEY]=api;win.addUnloadListener(dispose);win.addEventListener("unload",dispose,{once:true});
     win.addEventListener("keydown",onKey,true);win.addEventListener("beforecustomization",abort);
     reduced.addEventListener("change",abort);prefs.addObserver(PREF,abort);

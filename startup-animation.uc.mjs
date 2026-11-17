@@ -1,6 +1,6 @@
-// Nocturne preview.6: early trace, independent Sine script order.
+// Nocturne preview.7: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.6"};
+  const event="assembly.script",data={version:"0.3.0-preview.7"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -24,19 +24,28 @@ try{if(typeof window!=="undefined"){
     try{if(utils?.paintingSuppressed===true)return true;}catch{}
     return readyState==="loading";
   }
-  // No replay on Sine hot update, private popup, or an established window.
-  // A late loader cannot conceal an already-displayed interface seamlessly.
-  if(typeof window.addUnloadListener!=="function"||window[SEEN]||root.hasAttribute("popup-window"))return;
-  window[SEEN]=true;
-    typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.eligible.check",()=>({paintCount:window.windowUtils?.paintCount,delayed:!!window.gBrowserInit?.delayedStartupFinished,ready:root.getAttribute(READY),cold:!!window.__nocturneLayoutStartup?.initial,age:now()}),{sample:1800});
+  // No replay on Sine hot update or an established window. Record the
+  // early eligibility decision even before layout installs diagnostics.
+  function decision(event,data){
+    try{
+      if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1800});
+      else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:now(),data});}
+    }catch{}
+  }
   function startupEligible(painted,delayed,oneState,age,cold=null){
     const recentCold=!!(cold?.initial&&Number.isFinite(cold.readyAt)&&age-cold.readyAt>=0&&age-cold.readyAt<=1800);
-    return age<8000&&(!painted||!delayed||oneState==="pending"||recentCold);
+    const beforeLayout=oneState===null&&!cold&&age<1800;
+    return age<8000&&cold?.initial!==false&&(!painted||!delayed||oneState==="pending"||recentCold||beforeLayout);
   }
   let lateStart=!canStartBeforePaint(window.windowUtils,document.readyState);
-  if(!prefs.getBoolPref(ENABLE,true)||reduced.matches||window.closed||
-      root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"||
-      !startupEligible(lateStart,window.gBrowserInit?.delayedStartupFinished,root.getAttribute(READY),now(),window.__nocturneLayoutStartup))return;
+  const check={paintCount:window.windowUtils?.paintCount,delayed:!!window.gBrowserInit?.delayedStartupFinished,ready:root.getAttribute(READY),cold:!!window.__nocturneLayoutStartup?.initial,age:now()};
+  const reason=typeof window.addUnloadListener!=="function"?"no-unload-hook":window[SEEN]?"already-seen":root.hasAttribute("popup-window")?"popup":
+    !prefs.getBoolPref(ENABLE,true)?"disabled":reduced.matches?"reduced-motion":window.closed?"closed":
+    root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"?"native-mode":
+    !startupEligible(lateStart,check.delayed,check.ready,check.age,window.__nocturneLayoutStartup)?"late-established-window":null;
+  decision("assembly.eligible.check",{...check,reason});
+  if(reason)return;
+  window[SEEN]=true;
   // Sine saves the previous default as a user value. Upgrade that exact
   // 760ms default once; preserve every other choice, and allow users to
   // select 760ms again after the migration.
@@ -51,7 +60,7 @@ try{if(typeof window!=="undefined"){
   const scale=duration/1050;
   const started=now(),deadline=started+8000;
   let dead=false,playing=false,settling=false,raf=0,timer=0,settled=false,nativeReady=false,readyAt=0,holdNode=null;
-  let nativeObserver=null,style=null,lateObserver=null,lateResize=null,lateFrame=0,playStart=0,finishAt=0,sheetURI=null;
+  let nativeObserver=null,style=null,lateObserver=null,lateResize=null,lateFrame=0,playStart=0,finishAt=0,sheetURI=null,nativeTimer=0;
   const animations=new Map(),owned=new Map(),seen=new Set(),baseline=new Set();
   const EXISTING="data-zr-startup-existing";
   const MANAGED="data-zr-startup-managed",EFFECT="data-zr-startup-effect",MOVE="data-zr-startup-move",CLIP="data-zr-startup-clip",PROGRESS="--zr-startup-progress";
@@ -73,6 +82,7 @@ try{if(typeof window!=="undefined"){
     if(dead)return;dead=true;
     if(raf)window.cancelAnimationFrame(raf);
     if(timer)window.clearTimeout(timer);
+    if(nativeTimer)window.clearTimeout(nativeTimer);
     if(lateFrame)window.cancelAnimationFrame(lateFrame);
     lateObserver?.disconnect();lateObserver=null;lateResize?.disconnect();lateResize=null;
     if(nativeObserver)try{Services.obs.removeObserver(nativeObserver,"browser-delayed-startup-finished");}catch{}
@@ -377,10 +387,16 @@ try{if(typeof window!=="undefined"){
     nativeReady=true;
     // These promises are native chrome/workspace initialization, not
     // network page loading. A hard deadline protects slow/broken mods.
-    Promise.allSettled([window.SessionStore?.promiseAllWindowsRestored,window.gZenWorkspaces?.promiseInitialized])
-      .then(()=>{if(dead)return;window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>{
+    let queued=false;
+    const markReady=()=>{
+      if(dead||queued)return;queued=true;
+      if(nativeTimer)window.clearTimeout(nativeTimer);nativeTimer=0;
+      window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>{
         if(dead)return;settled=true;readyAt=now();schedule();
-      }));});
+      }));
+    };
+    nativeTimer=window.setTimeout(()=>{decision("assembly.native.timeout",{});markReady();},900);
+    Promise.allSettled([window.SessionStore?.promiseAllWindowsRestored,window.gZenWorkspaces?.promiseInitialized]).then(markReady);
   }
   try{
     window[KEY]?.();window[KEY]=finish;

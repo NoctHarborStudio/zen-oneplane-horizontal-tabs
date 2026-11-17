@@ -325,3 +325,57 @@
 #urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-cell="5-2"] {grid-row:5;grid-column:2;}
 #urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-cell="6-1"] {grid-row:6;grid-column:1;}
 #urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-cell="6-2"] {grid-row:6;grid-column:2;}
+
+/* Nocturne workspace transaction: same stylesheet/origin as OnePlane.
+ * Repeat actual target IDs for specificity, not artificial :is() chains.
+ * Only transaction-owned elements are affected. */
+@property --zr-workspace-progress {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+:root[data-zr-workspace-phase] :is(#oneplane-tabs#oneplane-tabs#oneplane-tabs#oneplane-tabs, #PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems, #tabbrowser-tabs#tabbrowser-tabs#tabbrowser-tabs#tabbrowser-tabs)[data-zr-workspace-motion] {
+  transition-property: none !important;
+  opacity: var(--zr-workspace-progress) !important;
+  scale: calc(.94 + .06 * var(--zr-workspace-progress)) !important;
+  transform-origin: center top !important;
+  pointer-events: none !important;
+}
+:root[data-zr-workspace-phase] :is(#oneplane-tabs#oneplane-tabs#oneplane-tabs#oneplane-tabs, #PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems, #tabbrowser-tabs#tabbrowser-tabs#tabbrowser-tabs#tabbrowser-tabs)[data-zr-workspace-motion][data-zr-workspace-row-move] {
+  translate: 0 calc(var(--zr-workspace-row-y) * (1 - var(--zr-workspace-progress))) !important;
+}
+:root[data-zr-workspace-phase="swap"] :is(#oneplane-tabs#oneplane-tabs#oneplane-tabs#oneplane-tabs, #PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems, #tabbrowser-tabs#tabbrowser-tabs#tabbrowser-tabs#tabbrowser-tabs) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+:root[data-zr-workspace-phase="swap"] :is(#oneplane-tabs, #PlacesToolbarItems, #tabbrowser-tabs) * {
+  transition-property: none !important;
+  pointer-events: none !important;
+}
+:root[data-zr-workspace-phase] #zen-appcontent-navbar-wrapper#zen-appcontent-navbar-wrapper#zen-appcontent-navbar-wrapper#zen-appcontent-navbar-wrapper {
+  transition-property: none !important;
+}
+:root[data-zr-workspace-phase] #zen-appcontent-navbar-wrapper#zen-appcontent-navbar-wrapper#zen-appcontent-navbar-wrapper#zen-appcontent-navbar-wrapper[data-zr-workspace-geometry] {
+  height: var(--zr-workspace-height) !important;
+  min-height: var(--zr-workspace-height) !important;
+  max-height: var(--zr-workspace-height) !important;
+}
+:root[data-zr-workspace-phase] #zen-appcontent-navbar-wrapper[data-zr-workspace-geometry] > #oneplane-toolbar-surface#oneplane-toolbar-surface#oneplane-toolbar-surface#oneplane-toolbar-surface {
+  height: var(--zr-workspace-surface-height) !important;
+}
+:root[oneplane-active="true"][data-zr-workspace-phase="swap"] #nav-bar#nav-bar#nav-bar#nav-bar:has(#oneplane-tabs[data-op-overflow-row]) {
+  background:transparent!important;
+}
+:root[oneplane-active="true"][data-zr-workspace-phase] #nav-bar#nav-bar#nav-bar#nav-bar[data-zr-workspace-backing] {
+  background:color-mix(in srgb,var(--op-surface-tint) calc(var(--zr-workspace-progress) * 100%),transparent)!important;
+  transition-property: none !important;
+}
+:root[data-zr-workspace-phase] #oneplane-toolbar-surface#oneplane-toolbar-surface#oneplane-toolbar-surface#oneplane-toolbar-surface[data-zr-workspace-surface] {
+  scale: 1 calc(var(--zr-workspace-height-scale) + (1 - var(--zr-workspace-height-scale)) * var(--zr-workspace-progress)) !important;
+  transform-origin: top center !important;
+  transition-property: none !important;
+}
+:root[data-zr-workspace-phase] #tabbrowser-tabpanels#tabbrowser-tabpanels#tabbrowser-tabpanels#tabbrowser-tabpanels[data-zr-workspace-page] {
+  translate: 0 calc(var(--zr-workspace-page-y) * (1 - var(--zr-workspace-progress))) !important;
+  transition-property: none !important;
+}

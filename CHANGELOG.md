@@ -1,3 +1,10 @@
+## 0.3.0-preview.7 — Motion regression fixes
+
+- Keep Center Disassembly effects sealed through the synchronous native close; restore only when the window remains open or the native command fails.
+- Permit cold Sine startup before the layout handshake within a bounded initial interval. Record eligibility and bypass reasons before the diagnostics recorder exists; bound the native promise wait.
+- Move workspace motion and geometry lock rules into the packaged chrome stylesheet, with registered progress and explicit target selectors. Freeze geometry before outgoing motion and prepare the new contour under the hidden swap gate.
+- Include actual workspace progress in diagnostic samples. Native Zen/Windows visual validation is still required; ordinary tab selection, drag thresholds and standalone contour flicker are not claimed fixed.
+
 ## 0.3.0-preview.6 — Diagnostic build
 
 - Read-only diagnostic recorder: sequenced, timestamped chrome lifecycle, native events, active animation state, sampled geometry, contour hashes, frame gaps, tab and ghost counts, and local bounded JSON export.

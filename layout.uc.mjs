@@ -1,7 +1,7 @@
-/* Nocturne preview.6 diagnostic recorder — read-only chrome telemetry.
+/* Nocturne preview.7 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.6",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.7",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -88,7 +88,7 @@
     const hash=x=>{let h=0;for(let i=0;i<x.length;i++)h=(Math.imul(h,31)+x.charCodeAt(i))|0;return x.length?x.length+":"+h:null;};
     return {rect:[round(r.left),round(r.top),round(r.width),round(r.height)],opacity:s.opacity,visibility:s.visibility,display:s.display,translate:s.translate,scale:s.scale,transform:s.transform,transition:s.transitionProperty,height:s.height,
       measure:n.style?.getPropertyValue("--op-measured-toolbar-height")||null,contour:n.style?.getPropertyValue("--op-contour-height")||null,bmContour:n.style?.getPropertyValue("--zr-bm-contour-height")||null,
-      mask:hash(mask),bmMask:hash(bm),attrs:attrState(n),animations:anim};
+      mask:hash(mask),bmMask:hash(bm),progress:s.getPropertyValue("--zr-workspace-progress").trim()||null,attrs:attrState(n),animations:anim};
   }
   function snapshot(){
     observeTargets();

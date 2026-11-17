@@ -9,8 +9,8 @@
       "localOverride": {
         "repository": "NoctHarborStudio/zen-oneplane-horizontal-tabs",
         "commit": "5fe968dcc2d87830aeee6b682120405c678cc36e",
-        "gitBlob": "b232f7b78df749196ad61956aa85a8eb30633796",
-        "reason": "Nocturne workspace contour integration and diagnostic trace; upstream source provenance retained"
+        "gitBlob": "ad9531bd78d12edfba823cc0af556605ef3e3f07",
+        "reason": "Nocturne workspace contour integration and diagnostic trace; upstream source provenance retained; preview.7 diagnostic version synchronization"
       }
     },
     {

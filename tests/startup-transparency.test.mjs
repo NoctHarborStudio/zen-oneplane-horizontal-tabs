@@ -32,6 +32,9 @@ test("late startup allowed only during initial chrome setup; established windows
  assert.equal(eligible(true,false,null,900),true);
  assert.equal(eligible(true,true,"pending",4000),true);
  assert.equal(eligible(true,true,"true",1000),false);
+ assert.equal(eligible(true,true,null,824),true);
+ assert.equal(eligible(true,true,null,1800),false);
+ assert.equal(eligible(true,true,"pending",900,{initial:false}),false);
  assert.equal(eligible(true,false,null,8000),false);
  assert.equal(eligible(true,true,"true",1800,{initial:true,readyAt:1600}),true);
  assert.equal(eligible(true,true,"true",1800,{initial:false,readyAt:1600}),false);
