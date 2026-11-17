@@ -1,3 +1,10 @@
+## 0.3.0-preview.27 — Magnetic Bunny / Home compression
+
+- Port Motion Lab option 02: smooth anchored slot compression, same-side outer neighbors move toward Home, and the card follows the slot until it clears its own row.
+- Preserve original native flex widths throughout the gesture, including full extraction, so Home, the opposite lane and other rows do not recenter. Clip the floating card against visible chrome obstacles, including the lower row.
+- Use the same geometry on the accepted-drop visual tail, with no continuous animation loop during pointer movement. Keep native tab ownership, reorder and external window handling intact.
+- Add regression coverage for the actual Motion Lab curve, same-side displacement, mask union and reversible paint.
+
 ## 0.3.0-preview.26 — Reversible Bunny and cold-start preflight
 
 - Publication follow-up to preview.25; synchronized Sine metadata.

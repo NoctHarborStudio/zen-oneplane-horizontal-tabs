@@ -40,47 +40,60 @@ test("late native dragend from another origin cannot finish active drag",()=>{
   assert.equal(dragEndMatches(null,{target:node},tab),false);
 });
 
-test("Bunny uses one reversible curve for card and slot, including split groups",async()=>{
+test("Motion Lab magnet reverses exactly and anchors only the source side",async()=>{
   const {readFile}=await import("node:fs/promises");
   const read=p=>readFile(new URL("../src/interactions/"+p,import.meta.url),"utf8");
   const [img,state,strip,ctrl]=await Promise.all([read("native-drag-image.js.part"),read("drag-state.js.part"),read("strip-drag.js.part"),read("drag-controller.js.part")]);
-  const a=img.indexOf("function bunnyPose("),b=img.indexOf("function captureBunnyAnchor(",a);
-  const {pose,progress}=new Function("BUNNY_DETACH_THRESHOLD",img.slice(a,b)+"return {pose:bunnyPose,progress:bunnyProgress}")(.96);
-  for(const anchor of [{x:120,y:28,width:36,height:30},{x:400,y:73,width:115,height:34}]){
-    const full={width:anchor.width+6,height:anchor.height+9},edge=anchor.y+anchor.height/2+3;
-    const curve=Array.from({length:101},(_,i)=>{const p=i/100;return pose(p,anchor,{x:anchor.x+12,y:edge+30*.96*p},full)});
-    const reversed=Array.from({length:101},(_,i)=>{const p=(100-i)/100;return pose(p,anchor,{x:anchor.x+12,y:edge+30*.96*p},full)});
-    assert.deepEqual(curve,reversed.reverse());
-    assert.equal(curve[0].x,anchor.x);assert.equal(curve[0].y,anchor.y);assert.equal(curve[0].width,anchor.width);assert.equal(curve[0].slot,1);
-    assert.ok(Math.abs(curve.at(-1).width-full.width)<1e-8);assert.ok(Math.abs(curve.at(-1).slot-.05)<1e-8);
-    assert.ok(curve[70].width<full.width*.2);
-    assert.ok(curve[40].width>curve[70].width&&curve[90].width>curve[70].width);
-    for(let i=1;i<curve.length;i++)assert.ok(curve[i].slot<=curve[i-1].slot);
-    assert.equal(progress(.96),1);assert.equal(progress(.48),.5);assert.equal(progress(0),0);
+  const a=img.indexOf("const bunnyClamp"),b=img.indexOf("function bunnyRect(",a);
+  const {pose,slot,shift,progress}=new Function("BUNNY_EDGE_PAD","PULL_DISTANCE","BUNNY_DETACH_THRESHOLD",img.slice(a,b)+"return {pose:bunnyPose,slot:bunnySlot,shift:bunnyNeighborShift,progress:bunnyProgress}")(3,30,.96);
+  const intersect=(a,b)=>Math.min(a.right,b.right)-Math.max(a.left,b.left)>1e-7;
+  for(const side of ["L","R"])for(const y of [28,73])for(const width of [36,115])for(const sourceIndex of [0,1,2,3]){
+    const gap=3,sign=side==="L"?-1:1,home=side==="L"?250:390,items=[];let edge=home+sign*gap;
+    for(let i=0;i<4;i++){const w=i===sourceIndex?width:36;const x=edge+sign*w/2;items.push({x,width:w,left:x-w/2,right:x+w/2});edge+=sign*(w+gap);}
+    const anchor={...items[sourceIndex],y,height:30},full={width:width+6,height:39},frozenEdge=y+18;
+    const at=i=>{const p=i/100;return pose(p,anchor,{x:anchor.x+24,y:frozenEdge+30*.96*p},full,side,gap,frozenEdge)};
+    const curve=Array.from({length:101},(_,i)=>at(i)),reverse=Array.from({length:101},(_,i)=>at(100-i)).reverse();
+    assert.deepEqual(curve,reverse);
+    assert.equal(curve[0].x,anchor.x);assert.equal(curve[0].width,width);assert.equal(curve[0].slot,1);
+    assert.ok(Math.abs(curve.at(-1).width-full.width)<1e-8);assert.ok(Math.abs(curve.at(-1).slot-.04)<1e-8);
+    assert.ok(curve[62].width<full.width*.2);
+    for(let j=0;j<=100;j++){
+      const p=j/100,sl=slot(p,anchor,side,gap),g=curve[j];
+      const boxes=items.map((r,i)=>{if(i===sourceIndex)return {left:sl.x-sl.width/2,right:sl.x+sl.width/2};const dx=shift(p,anchor,side,gap,i>sourceIndex);if(i<sourceIndex)assert.equal(dx,0);return {left:r.left+dx,right:r.right+dx};});
+      for(let i=0;i<boxes.length;i++){assert.ok(side==="L"?boxes[i].right<=home:boxes[i].left>=home);for(let k=i+1;k<boxes.length;k++)assert.equal(intersect(boxes[i],boxes[k]),false);}
+      if(g.free===0){assert.ok(g.x-g.width/2>=boxes[sourceIndex].left-1e-7);assert.ok(g.x+g.width/2<=boxes[sourceIndex].right+1e-7);}
+      if(j)assert.ok(curve[j].slot<=curve[j-1].slot);
+    }
   }
+  assert.equal(progress(.96),1);assert.equal(progress(.48),.5);assert.equal(progress(0),0);
   assert.ok(state.includes("BUNNY_DETACH_THRESHOLD=.96"));
   assert.ok(ctrl.includes("dragEdge = grabbed.bottom + BUNNY_EDGE_PAD"));
   assert.ok(strip.includes("const p = bunnyPullProgress(event.clientY,dragEdge)"));
   assert.ok(strip.includes("const threshold=BUNNY_DETACH_THRESHOLD"));
   assert.ok(strip.includes("if(p>0&&paintBunnyPull(event,p))"));
-  assert.ok(img.includes("setPull(t,pose.slot);"));
-  assert.ok(img.includes("bunnyPose(t*(1-u),anchor,point,full)"));
+  assert.ok(img.includes("paintBunnyAt(p,{x:bunnyMix"));
   assert.ok(!img.includes("bunnyInsertionFrames"));assert.ok(!strip.includes("seekInsertion"));
-  assert.ok(!strip.includes("const p = within?0"));
 });
-test("single shared ghost, no timer while pointer holds or reverses",async()=>{
+test("magnetic paint freezes native slots, reverses neighbors and clips chrome without a timer",async()=>{
   const {readFile}=await import("node:fs/promises");
   const img=await readFile(new URL("../src/interactions/native-drag-image.js.part",import.meta.url),"utf8");
   const css=await readFile(new URL("../src/styles/drag.css.part",import.meta.url),"utf8");
-  const a=img.indexOf("function bunnyPose("),b=img.indexOf("function clearBunnyPull(",a);
-  let transforms=[],positions=[],pulls=[],attrs=new Set();
-  const node={setAttribute:(k)=>attrs.add(k)},ghost={hidden:true},body={style:{set transform(v){transforms.push(v)}}};
-  const f=new Function("BUNNY_DETACH_THRESHOLD","dragNode","dragGhost","dragGhostBody","setPull","positionGhost","window","let dragBunnyAnchor={x:100,y:25,width:36,height:30},dragBunnyFull={width:42,height:39},dragImageMode='inline';"+img.slice(a,b)+"return paintBunnyPull")(.96,node,ghost,body,p=>pulls.push(p),(x,y)=>positions.push([x,y]),{});
-  for(const p of [.24,.48,.72,.48,.24])assert.equal(f({clientX:110,clientY:70},p),true);
-  assert.equal(transforms[0],transforms[4]);assert.equal(transforms[1],transforms[3]);assert.deepEqual(positions[1],positions[3]);assert.deepEqual(pulls,[.25,.5,.75,.5,.25]);
+  const a=img.indexOf("const bunnyClamp"),b=img.indexOf("function clearBunnyPull(",a);
+  const transforms=[],positions=[],shifts=[],attrs=new Set(),clips=[];
+  const node={setAttribute:k=>attrs.add(k)},outer={style:{setProperty:(k,v)=>shifts.push(v)}};
+  const ghost={hidden:true,style:{setProperty:(k,v)=>clips.push(v),removeProperty:()=>clips.push("")}},body={style:{set transform(v){transforms.push(v)}}};
+  const f=new Function("BUNNY_EDGE_PAD","PULL_DISTANCE","BUNNY_DETACH_THRESHOLD","dragNode","dragGhost","dragGhostBody","positionGhost","refreshIndicator","window","outer","let dragBunnyAnchor={x:100,y:25,width:36,height:30},dragBunnyFull={width:42,height:39},dragBunnyLayout={side:'L',gap:3,obstacles:[{node:outer,box:{left:43,right:79,top:10,bottom:40},outer:true}]},dragImageMode='inline',dragEdge=43,dragPull=0;"+img.slice(a,b)+"return {paint:paintBunnyPull,clip:bunnyClip}") (3,30,.96,node,ghost,body,(x,y)=>positions.push([x,y]),()=>{},{},outer);
+  for(const p of [.24,.48,.72,.48,.24])assert.equal(f.paint({clientX:110,clientY:70},p),true);
+  assert.equal(transforms[0],transforms[4]);assert.equal(transforms[1],transforms[3]);assert.deepEqual(positions[1],positions[3]);assert.equal(shifts[0],shifts[4]);assert.equal(shifts[1],shifts[3]);
   assert.ok(attrs.has("data-op-lane-ghost"));assert.equal(ghost.hidden,false);
-  assert.ok(css.includes(':is([data-op-lane-ghost],[data-op-reinsert])'));
-  assert.ok(!img.slice(a,b).includes(".animate("));
+  assert.ok(css.includes('[data-op-detached]:not([data-op-magnetic-source])'));
+  assert.ok(css.includes("var(--op-bunny-x,0px)"));
+  assert.ok(!img.slice(a,b).includes("requestAnimationFrame"));
+  const pose={x:100,y:50,width:42,height:39},full={width:42,height:39};
+  const one={left:80,right:115,top:30,bottom:65},two={left:95,right:125,top:30,bottom:65};
+  const union=f.clip(pose,full,[one,two]);assert.ok(union.startsWith('path(evenodd,'));
+  assert.equal((union.match(/M /g)||[]).length,2,"overlapping holes must merge");
+  assert.equal(f.clip(pose,full,[{left:200,right:220,top:100,bottom:130}]),"");
 });
 test("early toolbar return drop finishes native ownership but retains the visual tail",async()=>{
   const {readFile}=await import("node:fs/promises");
@@ -91,7 +104,7 @@ test("early toolbar return drop finishes native ownership but retains the visual
   setup.mark(true);
   assert.deepEqual(setup.read(),{dragHandled:true,draggedTab:null,draggedGroup:null,dragStartPoint:null,dragInsertPending:true,ended:0,finished:1,held:1});
   setup.mark(true);assert.equal(setup.read().ended,0);
-  assert.ok(img.includes("if(dragInsertPending){endDragVisual();return;}"));
+  assert.ok(img.includes("if(dragInsertPending)endDragVisual();"));
   assert.ok(ctrl.includes("dragInsertPending=false;"));
   assert.ok(strip.includes("prepareBunnyDrop(event);"));
   assert.ok(strip.includes("sourceHandled(tab,true);"));
