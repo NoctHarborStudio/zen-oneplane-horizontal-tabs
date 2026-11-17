@@ -212,7 +212,7 @@
     finishHandoff();root.setAttribute("data-zr-center-handoff","true");
     handoffFrame=win.requestAnimationFrame(()=>{handoffFrame=0;handoffFrame2=win.requestAnimationFrame(()=>{handoffFrame2=0;root.removeAttribute("data-zr-center-handoff");});});
   }
-  function start(row,{owner,direction="in",duration=520,delay=0}={}){
+  function start(row,{owner,direction="in",duration=520,delay=0,paused=false}={}){
     stopSelection();active?.release();finishHandoff();releasePending();
     if(dead||!row){win.__nocturneTrace?.("center.motion.skip",{owner,reason:dead?"disposed":"no-row"});return null;}
     const measuring=root.getAttribute("data-zr-workspace-phase")==="swap";
@@ -264,11 +264,12 @@
     const running=[];
     for(const {n,frames} of effects){
       n.style.transform=frames[0].transform;n.style.opacity=String(frames[0].opacity);
-      try{running.push(n.animate(frames,{duration,delay,easing:"linear",fill:"both"}));}
+      try{const a=n.animate(frames,{duration,delay,easing:"linear",fill:"both"});if(paused){a.pause();a.currentTime=0;}running.push(a);}
       catch{n.style.transform=frames.at(-1).transform;n.style.opacity=String(frames.at(-1).opacity);}
     }
     let released=false;
     const handle={count:cards.length,finished:Promise.all(running.map(a=>a.finished.catch(()=>{}))),
+      resume(){for(const a of running)try{a.play();}catch{}},
       seal(){for(const a of running)try{a.finish();}catch{}},
       release(){
         if(released)return;released=true;holdHandoff();
@@ -284,7 +285,7 @@
     return handle;
   }
   // Bookmarks use the Lab's center squeeze, not individual vertical slides.
-  function bookmarks({direction="in",duration=520,delay=0}={}){
+  function bookmarks({direction="in",duration=520,delay=0,paused=false}={}){
     const n=document.getElementById("PlacesToolbarItems");
     if(!n||!n.getBoundingClientRect().width)return null;
     const frames=Array.from({length:21},(_,i)=>{const p=smooth(direction==="out"?1-i/20:i/20);return {offset:i/20,[B]:String(p)};});
@@ -294,7 +295,8 @@
     function release(){if(released)return;released=true;try{a?.cancel();}catch{}if(old)n.style.setProperty(B,old,priority);else n.style.removeProperty(B);if(mark===null)n.removeAttribute("data-zr-fold-bookmarks");else n.setAttribute("data-zr-fold-bookmarks",mark);}
     try{
       a=n.animate(frames,{duration,delay,easing:"linear",fill:"both"});
-      return {finished:a.finished.catch(()=>{}),seal(){try{a.finish();}catch{}},release};
+      if(paused){a.pause();a.currentTime=0;}
+      return {finished:a.finished.catch(()=>{}),resume(){try{a.play();}catch{}},seal(){try{a.finish();}catch{}},release};
     }catch{release();return null;}
   }
   function dispose(){

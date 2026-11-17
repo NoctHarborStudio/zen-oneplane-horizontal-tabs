@@ -1,7 +1,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.30",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.31",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -86,7 +86,7 @@
     };
     const job=store.tail.then(task,task);store.tail=job.catch(()=>{});return job;
   }
-  function startupPlaying(){return root.getAttribute("data-zr-startup-phase")==="playing";}
+  function startupPlaying(){return root.getAttribute("data-zr-startup-phase")==="playing"||root.hasAttribute("data-nocturne-boot");}
   function scheduleWrite(){if(!writeTimer&&!dead&&!privateWindow())writeTimer=win.setTimeout(()=>{
     writeTimer=0;if(startupPlaying()){scheduleWrite();return;}void flush();
   },2200);}
@@ -429,7 +429,7 @@
     finishHandoff();root.setAttribute("data-zr-center-handoff","true");
     handoffFrame=win.requestAnimationFrame(()=>{handoffFrame=0;handoffFrame2=win.requestAnimationFrame(()=>{handoffFrame2=0;root.removeAttribute("data-zr-center-handoff");});});
   }
-  function start(row,{owner,direction="in",duration=520,delay=0}={}){
+  function start(row,{owner,direction="in",duration=520,delay=0,paused=false}={}){
     stopSelection();active?.release();finishHandoff();releasePending();
     if(dead||!row){win.__nocturneTrace?.("center.motion.skip",{owner,reason:dead?"disposed":"no-row"});return null;}
     const measuring=root.getAttribute("data-zr-workspace-phase")==="swap";
@@ -481,11 +481,12 @@
     const running=[];
     for(const {n,frames} of effects){
       n.style.transform=frames[0].transform;n.style.opacity=String(frames[0].opacity);
-      try{running.push(n.animate(frames,{duration,delay,easing:"linear",fill:"both"}));}
+      try{const a=n.animate(frames,{duration,delay,easing:"linear",fill:"both"});if(paused){a.pause();a.currentTime=0;}running.push(a);}
       catch{n.style.transform=frames.at(-1).transform;n.style.opacity=String(frames.at(-1).opacity);}
     }
     let released=false;
     const handle={count:cards.length,finished:Promise.all(running.map(a=>a.finished.catch(()=>{}))),
+      resume(){for(const a of running)try{a.play();}catch{}},
       seal(){for(const a of running)try{a.finish();}catch{}},
       release(){
         if(released)return;released=true;holdHandoff();
@@ -501,7 +502,7 @@
     return handle;
   }
   // Bookmarks use the Lab's center squeeze, not individual vertical slides.
-  function bookmarks({direction="in",duration=520,delay=0}={}){
+  function bookmarks({direction="in",duration=520,delay=0,paused=false}={}){
     const n=document.getElementById("PlacesToolbarItems");
     if(!n||!n.getBoundingClientRect().width)return null;
     const frames=Array.from({length:21},(_,i)=>{const p=smooth(direction==="out"?1-i/20:i/20);return {offset:i/20,[B]:String(p)};});
@@ -511,7 +512,8 @@
     function release(){if(released)return;released=true;try{a?.cancel();}catch{}if(old)n.style.setProperty(B,old,priority);else n.style.removeProperty(B);if(mark===null)n.removeAttribute("data-zr-fold-bookmarks");else n.setAttribute("data-zr-fold-bookmarks",mark);}
     try{
       a=n.animate(frames,{duration,delay,easing:"linear",fill:"both"});
-      return {finished:a.finished.catch(()=>{}),seal(){try{a.finish();}catch{}},release};
+      if(paused){a.pause();a.currentTime=0;}
+      return {finished:a.finished.catch(()=>{}),resume(){try{a.play();}catch{}},seal(){try{a.finish();}catch{}},release};
     }catch{release();return null;}
   }
   function dispose(){
@@ -974,16 +976,17 @@ function acquireZenHome(win, services) {
   function playStartupHome(timeline){
     if(!open||!panel.hasAttribute("data-zh-startup")||startupEffects.length||searchToken)return;
     if(win.matchMedia("(prefers-reduced-motion: reduce)").matches){finishStartupHome();return;}
-    const nodes=[...content.children],elapsed=Math.max(0,(win.performance?.now?.()??timeline.start)-timeline.start);
+    const nodes=[...content.children],elapsed=timeline.paused?0:Math.max(0,(win.performance?.now?.()??timeline.start)-timeline.start);
     for(const [i,node] of nodes.entries()){
       const delay=Math.max(0,(timeline.home+Math.min(i*65,195))*timeline.scale-elapsed);
-      try{startupEffects.push(node.animate([{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}],{delay,duration:timeline.homeLength*timeline.scale,easing:"cubic-bezier(.2,.75,.25,1)",fill:"both"}));}catch{}
+      try{const a=node.animate([{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}],{delay,duration:timeline.homeLength*timeline.scale,easing:"cubic-bezier(.2,.75,.25,1)",fill:"both"});if(timeline.paused){a.pause();a.currentTime=0;}startupEffects.push(a);}catch{}
     }
     if(startupEffects.length){
       const owned=startupEffects;
       Promise.all(owned.map(a=>a.finished.catch(()=>{}))).then(()=>{if(startupEffects===owned)finishStartupHome();});
     }else finishStartupHome();
   }
+  function resumeStartupHome(){for(const a of startupEffects)try{a.play();}catch{}}
   function stopMotion(){motion?.cancel();motion=null;finishStartupHome();}
   function close(restoreFocus=false){
     typeof win!=="undefined"&&win.__nocturneTrace?.("home.close",()=>({restoreFocus,open}),{sample:1800});
@@ -1616,7 +1619,7 @@ function acquireZenHome(win, services) {
     if(dead)return;close();dead=true;for(const fn of cleanups.splice(0))try{fn();}catch{}
     panel.remove();style.remove();if(win[KEY]===registry)delete win[KEY];
   }
-  const registry={apiVersion:1,warmStartupIcons,playStartup:playStartupHome,finishStartup:finishStartupHome,acquire(){
+  const registry={apiVersion:1,warmStartupIcons,playStartup:playStartupHome,resumeStartup:resumeStartupHome,finishStartup:finishStartupHome,acquire(){
     if(dead)return null;const lease={listeners:new Set()};leases.add(lease);let released=false;
     return {get open(){return !released&&open;},show:()=>!released&&show(),close:(focus=false)=>{if(!released)leaveHome(focus);},
       showOnStartup(){

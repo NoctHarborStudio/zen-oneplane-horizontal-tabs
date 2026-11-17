@@ -13,7 +13,7 @@ test("Gecko first-paint gate fails open for already painted windows",()=>{
  assert.equal(before({},"complete"),false);
  assert.equal(before({},"loading"),true);
 });
-test("startup does not create an opaque full-window or page layer",()=>{
+test("startup uses only the explicit optional chrome boot layer, never a page layer",()=>{
  assert.ok(!/zr-startup-cover|zr-startup-page-veil|pageVeil|cover=veil/.test(source));
  assert.ok(!source.includes("light-dark(#eef0f4"));
  assert.ok(!css.includes(":root[data-zr-startup-phase] :is(#zr-download-indicator"));
@@ -47,7 +47,7 @@ test("late startup allowed only during initial chrome setup; established windows
 test("startup waits for horizontal readiness and ignores duplicate resize",()=>{
  assert.ok(source.includes("if(active&&!one){schedule();return;}"));
  assert.ok(source.includes("window.__nocturneLayoutStartup"));
- assert.ok(source.includes("if(playing&&changed)settle()"));
+ assert.ok(source.includes("if(playing&&changed){if(bootPreparing)finish();else settle();}"));
 });
 
 test("startup keeps the waiting gate until targets own their resting styles",()=>{
@@ -59,9 +59,9 @@ test("startup keeps the waiting gate until targets own their resting styles",()=
 
 test("typing or scrolling in Home does not abort startup, explicit toolbar interaction does",()=>{
  const a=source.indexOf("function interrupt("),b=source.indexOf("let viewport=",a);
- const run=new Function(source.slice(a,b)+'let playing=true,calls=0;function decision(){}function settle(){calls++}const target=toolbar=>({closest:()=>toolbar?{}:null});for(const type of ["keydown","wheel","pointerdown"])interrupt({type,isTrusted:true,target:target(false)});interrupt({type:"keydown",isTrusted:true,target:target(true)});interrupt({type:"pointerdown",isTrusted:false,target:target(true)});interrupt({type:"pointerdown",isTrusted:true,target:target(true)});return calls;');
+ const run=new Function(source.slice(a,b)+'let playing=true,calls=0,boot=null;function decision(){}function settle(){calls++}const target=toolbar=>({closest:()=>toolbar?{}:null});for(const type of ["keydown","wheel","pointerdown"])interrupt({type,isTrusted:true,target:target(false)});interrupt({type:"keydown",isTrusted:true,target:target(true)});interrupt({type:"pointerdown",isTrusted:false,target:target(true)});interrupt({type:"pointerdown",isTrusted:true,target:target(true)});return calls;');
  assert.equal(run(),1);
- assert.ok(source.includes("now()-iconWaitAt<600"));
+ assert.ok(source.includes("now()-iconWaitAt<(boot?1400:600)"));
  assert.ok(source.includes("assembly.center.result"));
  assert.ok(source.includes("assembly.icons.ready"));
 });
@@ -88,4 +88,32 @@ test("cold assembly stages panel, cards, bookmarks and Home on one bounded timel
  assert.ok(source.includes('warmStartupIcons?.()'));
  assert.ok(source.includes('playStartup?.(timeline)'));
  assert.ok(source.includes('finishStartup?.()'));
+});
+
+test("boot waits for minimum visibility and a quiet readiness window, with hard deadline",()=>{
+ const a=source.indexOf("function bootReady("),b=source.indexOf("function mountBoot(",a);
+ const ready=new Function(source.slice(a,b)+"return bootReady")();
+ assert.equal(ready(649,0,650,0,8000),false);
+ assert.equal(ready(650,0,650,530,8000),true);
+ assert.equal(ready(700,0,650,650,8000),false);
+ assert.equal(ready(8000,0,650,7999,8000),true);
+ assert.ok(source.includes('if(!prefs.getBoolPref(BOOT_PREF,true))return;'));
+ assert.ok(source.includes('root.append(boot)'));
+ assert.ok(source.includes('boot.inert=true'));
+ assert.ok(source.includes('pointerEvents:"none"'));
+ assert.ok(source.includes('bootPreparing=false;removeBoot();'));
+});
+test("all prepared effects remain paused until the boot handoff",()=>{
+ const launch=source.slice(source.indexOf("function launch("),source.indexOf("function schedule(){"));
+ assert.ok(launch.includes('timeline.paused=bootPreparing'));
+ assert.ok(launch.includes('paused:bootPreparing'));
+ assert.ok(launch.includes('exitBoot(resume)'));
+ assert.ok(launch.includes('timer=window.setTimeout(finish,Math.max(0,deadline-now()))'));
+ assert.ok(launch.includes('centerHandle?.resume?.();bookmarkHandle?.resume?.()'));
+ assert.ok(source.includes('if(bootPreparing){a.pause();a.currentTime=0;}'));
+ assert.ok(source.includes('if(dead||boot!==overlay)return;'));
+ const center=readFileSync(new URL("../src/core/center-motion.js.part",import.meta.url),"utf8");
+ assert.ok(center.includes('if(paused){a.pause();a.currentTime=0;}'));
+ const home=readFileSync(new URL("../src/home/shared-home.js.part",import.meta.url),"utf8");
+ assert.ok(home.includes('if(timeline.paused){a.pause();a.currentTime=0;}'));
 });

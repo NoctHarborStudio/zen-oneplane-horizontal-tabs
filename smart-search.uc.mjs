@@ -1,6 +1,6 @@
-// Nocturne preview.29: early trace, independent Sine script order.
+// Nocturne preview.31: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="search.script",data={version:"0.3.0-preview.29"};
+  const event="search.script",data={version:"0.3.0-preview.31"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -450,7 +450,7 @@ try{if(typeof window!=="undefined"){
         readyObserver=subject=>{if(subject!==window)return;Services.obs.removeObserver(readyObserver,"browser-delayed-startup-finished");readyObserver=null;onReady();};
         Services.obs.addObserver(readyObserver,"browser-delayed-startup-finished");
       }else onReady();
-      console.info("[Zen Refined] Smart Search provider ready (preview.29, manager="+(direct===manager?"address-bar":"singleton")+")");
+      console.info("[Zen Refined] Smart Search provider ready (preview.31, manager="+(direct===manager?"address-bar":"singleton")+")");
     }catch(e){
       diagnostic.stage="error";diagnostic.error=String(e);
       console.warn("[Nocturne] Smart Search unavailable:",e);

@@ -409,3 +409,9 @@ test("Home search close gate survives native floating attribute teardown",()=>{
  assert.ok(!observer.includes("},32)"));
  assert.ok(core.includes('win.__nocturneTrace?.("home.search."+event'));
 });
+
+test("Home startup animation is held until the boot controller resumes it",()=>{
+ assert.ok(core.includes('elapsed=timeline.paused?0:'));
+ assert.ok(core.includes('if(timeline.paused){a.pause();a.currentTime=0;}'));
+ assert.ok(core.includes('resumeStartup:resumeStartupHome'));
+});

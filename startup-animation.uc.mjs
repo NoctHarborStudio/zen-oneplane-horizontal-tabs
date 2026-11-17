@@ -1,6 +1,6 @@
-// Nocturne preview.29: early trace, independent Sine script order.
+// Nocturne preview.31: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.29"};
+  const event="assembly.script",data={version:"0.3.0-preview.31"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -73,9 +73,63 @@ try{if(typeof window!=="undefined"){
   let registered=false;
   try{window.CSS.registerProperty({name:PROGRESS,syntax:"<number>",inherits:false,initialValue:"1"});registered=true;}
   catch(e){registered=e.name==="InvalidModificationError";}
+  const BOOT_PREF="zen.nocturne.boot.enabled",BOOT_MIN=650,BOOT_EXIT=280;
+  let boot=null,bootMark=null,bootEffects=[],bootAt=0,bootTimer=0,bootFrame=0,bootPreparing=false;
   const inputs=["pointerdown","keydown","wheel","dragstart","beforecustomization"];
   const EASE="cubic-bezier(.25,.55,.25,1)";
   const FADE="cubic-bezier(.32,.12,.3,1)";
+  function bootReady(now,shown,min,quietSince,deadline){
+    return now>=deadline||now-shown>=min&&now-quietSince>=120;
+  }
+  function mountBoot(){
+    if(!prefs.getBoolPref(BOOT_PREF,true))return;
+    try{
+      // Chrome-only, no network assets, no blur, no page mutation.
+      boot=html("div");boot.id="nocturne-boot";boot.setAttribute("aria-hidden","true");boot.inert=true;
+      Object.assign(boot.style,{position:"fixed",inset:"0",zIndex:"2147483647",display:"grid",placeItems:"center",background:"#111219",color:"#e4e5ef",pointerEvents:"none",overflow:"hidden",willChange:"opacity"});
+      boot.style.setProperty("-moz-window-dragging","default","important");
+      bootMark=html("div");
+      Object.assign(bootMark.style,{display:"grid",justifyItems:"center",gap:"20px",willChange:"transform, opacity"});
+      const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+      svg.setAttribute("viewBox","0 0 72 72");svg.setAttribute("width","72");svg.setAttribute("height","72");
+      const moon=document.createElementNS(svg.namespaceURI,"path");
+      moon.setAttribute("d","M43 8 A29 29 0 1 0 62 53 A26 26 0 0 1 43 8Z");moon.setAttribute("fill","#c4c8e5");
+      const star=document.createElementNS(svg.namespaceURI,"path");
+      star.setAttribute("d","M55 12 L57 19 L64 21 L57 23 L55 30 L53 23 L46 21 L53 19Z");star.setAttribute("fill","#e4e5ef");svg.append(moon,star);
+      const label=html("div");label.textContent="NOCTURNE";
+      Object.assign(label.style,{font:"300 24px system-ui, sans-serif",letterSpacing:"7px",paddingInlineStart:"7px"});
+      bootMark.append(svg,label);boot.append(bootMark);root.append(boot);
+      root.setAttribute("data-nocturne-boot","waiting");bootAt=now();
+      bootEffects.push(bootMark.animate([{opacity:0,transform:"translateY(9px) scale(.94)"},{opacity:1,transform:"translateY(0) scale(1)"}],{duration:380,easing:"cubic-bezier(.2,.75,.25,1)",fill:"both"}));
+      decision("boot.show",{age:bootAt-started});
+    }catch(error){removeBoot();decision("boot.error",{name:error?.name});}
+  }
+  function removeBoot(){
+    if(bootTimer)window.clearTimeout(bootTimer);bootTimer=0;
+    if(bootFrame)window.cancelAnimationFrame(bootFrame);bootFrame=0;
+    for(const a of bootEffects)try{a.cancel();}catch{}
+    bootEffects=[];boot?.remove();boot=null;bootMark=null;
+    root.removeAttribute("data-nocturne-boot");
+  }
+  function exitBoot(resume){
+    if(!boot){resume();return;}
+    const overlay=boot;
+    root.setAttribute("data-nocturne-boot","exit");
+    const done=()=>{
+      if(dead||boot!==overlay)return;
+      removeBoot();decision("boot.handoff",{elapsed:now()-bootAt});resume();
+    };
+    // Allow the frozen proxy tree to receive a paint before the exit.
+    bootFrame=window.requestAnimationFrame(()=>{
+      bootFrame=0;if(dead||boot!==overlay)return;
+      try{
+        bootEffects.push(bootMark.animate([{opacity:1,transform:"scale(1)"},{opacity:0,transform:"scale(.94)"}],{duration:180,easing:"ease-in",fill:"both"}));
+        const fade=overlay.animate([{opacity:1},{opacity:0}],{delay:80,duration:BOOT_EXIT-80,easing:"ease-in-out",fill:"both"});
+        bootEffects.push(fade);fade.finished.then(done,done);
+        bootTimer=window.setTimeout(done,BOOT_EXIT+150);
+      }catch{done();}
+    });
+  }
   function hold(){
     const w=get("zen-appcontent-navbar-wrapper");
     if(w&&w!==holdNode){
@@ -108,6 +162,7 @@ try{if(typeof window!=="undefined"){
     root.removeAttribute(PHASE);holdNode?.removeAttribute(HOLD);
     delete window.__nocturneStartupTimeline;
     window.__zenSharedHomeV1?.finishStartup?.();
+    bootPreparing=false;removeBoot();
     for(const type of inputs)window.removeEventListener(type,interrupt,true);
     window.removeEventListener("resize",onResize);
     window.removeEventListener("unload",finish);
@@ -152,6 +207,9 @@ try{if(typeof window!=="undefined"){
     const toolbar=!!event?.target?.closest?.("#nav-bar,#PersonalToolbar,#oneplane-tabs");
     const accepted=event?.isTrusted!==false&&(event?.type==="beforecustomization"||event?.type==="dragstart"||event?.type==="pointerdown"&&toolbar);
     decision("assembly.interrupt",{type:event?.type,trusted:event?.isTrusted,playing,toolbar,accepted});
+    if(event?.isTrusted!==false&&boot&&["pointerdown","keydown","wheel","dragstart","beforecustomization"].includes(event?.type)){
+      decision("boot.skip",{type:event.type});finish();return;
+    }
     if(accepted)settle();
   }
   let viewport=[window.innerWidth,window.innerHeight];
@@ -159,7 +217,7 @@ try{if(typeof window!=="undefined"){
     const next=[window.innerWidth,window.innerHeight];
     const changed=Math.abs(next[0]-viewport[0])>1||Math.abs(next[1]-viewport[1])>1;
     typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.resize",()=>({changed,playing,size:next}),{throttle:100,sample:1500});
-    viewport=next;if(playing&&changed)settle();
+    viewport=next;if(playing&&changed){if(bootPreparing)finish();else settle();}
   }
   function preferenceChanged(){if(reduced.matches)finish();else if(!prefs.getBoolPref(ENABLE,true))settle();}
   function bounds(n,ignoreOpacity=false){
@@ -172,6 +230,7 @@ try{if(typeof window!=="undefined"){
     if(!n)return false;
     try{
       const a=n.animate(frames,{delay,duration:length,easing,fill:"both"});
+      if(bootPreparing){a.pause();a.currentTime=0;}
       animations.set(a,{n,frames,complete});
       a.finished?.then(()=>{
         if(dead||!animations.has(a)||retain)return;
@@ -297,7 +356,7 @@ try{if(typeof window!=="undefined"){
     }
   }
   function scheduleLate(){
-    if(dead||!playing||settling||lateFrame)return;
+    if(dead||!playing||settling||bootPreparing||lateFrame)return;
     lateFrame=window.requestAnimationFrame(()=>{
       lateFrame=0;if(dead||settling)return;
       const bar=floatingBar();
@@ -312,7 +371,7 @@ try{if(typeof window!=="undefined"){
   }
   function launch(one){
     typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.launch",()=>({one,paintCount:window.windowUtils?.paintCount,phase:root.getAttribute(PHASE),ready:root.getAttribute(READY),age:now()-started}),{sample:1800});
-    if(dead||playing||settling)return;playing=true;
+    if(dead||playing||settling)return;playing=true;bootPreparing=!!boot;
     try{
       // Prime the resting contour while the startup gate is still held.
       const preflightAt=now();
@@ -328,6 +387,7 @@ try{if(typeof window!=="undefined"){
       const center=ir?ir.left+ir.width/2:one&&rr?rr.left+rr.width/2:ur?ur.left+ur.width/2:window.innerWidth/2;
       playStart=now();
       const timeline=startupTimeline(playStart,scale);
+      timeline.paused=bootPreparing;
       finishAt=playStart+Math.max(duration+80,timeline.end*scale);
       window.__nocturneStartupTimeline=timeline;
       const surface=one?get("oneplane-toolbar-surface"):null;
@@ -345,7 +405,7 @@ try{if(typeof window!=="undefined"){
         const painted=!gated&&!cold&&cards.some(n=>baseline.has(n));
         // Remove per-card startup gates together, including split members.
         for(const n of cards){n.setAttribute(MANAGED,"true");seen.add(n);}
-        if(!painted)centerHandle=engine?.start(row,{owner:"startup",direction:"in",duration:Math.round(timeline.cardsLength*scale),delay:Math.round(timeline.cards*scale)});
+        if(!painted)centerHandle=engine?.start(row,{owner:"startup",direction:"in",duration:Math.round(timeline.cardsLength*scale),delay:Math.round(timeline.cards*scale),paused:bootPreparing});
         else engine?.releasePending();
         decision("assembly.center.result",{painted,gated,cold,engine:!!engine,count:centerHandle?.count||0});
         const plus=row.querySelector(".oneplane-new-tab");if(bounds(plus,true))slide(plus,-26,0,400,350);
@@ -363,7 +423,7 @@ try{if(typeof window!=="undefined"){
       controls(row,url,center);
       if(centerHandle&&items){
         for(const n of items.children){n.setAttribute(MANAGED,"true");seen.add(n);}
-        bookmarkHandle=window.__nocturneCenterMotion?.bookmarks({direction:"in",duration:Math.round(420*scale),delay:Math.round(timeline.bookmarks*scale)});
+        bookmarkHandle=window.__nocturneCenterMotion?.bookmarks({direction:"in",duration:Math.round(420*scale),delay:Math.round(timeline.bookmarks*scale),paused:bootPreparing});
       }
       if(!bookmarkHandle)revealBookmarks(center);
       if(floating)openFromCenter(floating,590,440);
@@ -387,19 +447,44 @@ try{if(typeof window!=="undefined"){
         for(const n of [get("urlbar"),items,bookmarks])if(n)lateResize.observe(n);
       }
     typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.targets",()=>({seen:seen.size,effects:animations.size,duration,finishAt}),{sample:1800});
-      scheduleLate();
-      // The page and native Zen background stay painted throughout.
-      timer=window.setTimeout(finish,Math.max(0,finishAt-now()));
+      const resume=()=>{
+        if(dead)return;
+        bootPreparing=false;
+        playStart=now();timeline.start=playStart;timeline.paused=false;
+        finishAt=playStart+Math.max(duration+80,timeline.end*scale);
+        for(const a of animations.keys())try{a.play();}catch{}
+        centerHandle?.resume?.();bookmarkHandle?.resume?.();
+        window.__zenSharedHomeV1?.resumeStartup?.();
+        decision("boot.assembly.start",{age:playStart-started,prepared:animations.size});
+        scheduleLate();
+        if(timer)window.clearTimeout(timer);
+        timer=window.setTimeout(finish,Math.max(0,finishAt-now()));
+      };
+      if(bootPreparing){
+        // Keep the hard fail-open deadline while waiting for the exit.
+        timer=window.setTimeout(finish,Math.max(0,deadline-now()));
+        exitBoot(resume);
+      }else{
+        scheduleLate();
+        timer=window.setTimeout(finish,Math.max(0,finishAt-now()));
+      }
     }catch(error){console.warn("[Zen Refined] Startup reveal failed:",error);finish();}
   }
   function schedule(){
     if(dead||playing||settling||raf)return;
     raf=window.requestAnimationFrame(tick);
   }
+  let readinessKey="",quietSince=started;
   function tick(){
     raf=0;if(dead||playing)return;
     if(now()>=deadline){decision("assembly.skip",{reason:"deadline",nativeReady,settled,state:root.getAttribute(READY)});finish();return;}
     hold();
+    // Warm icons while native restore is still running, not only after it.
+    const earlyRow=get("oneplane-tabs");
+    if(boot&&earlyRow&&now()-iconCheckAt>=75){
+      iconCheckAt=now();iconStatus=window.__nocturneCenterMotion?.warmIcons?.(earlyRow)||null;
+      homeIcons=window.__zenSharedHomeV1?.warmStartupIcons?.()||null;
+    }
     if(!nativeReady||!settled){schedule();return;}
     const state=root.getAttribute(READY);
     const controller=window.__oneplaneLayoutController;
@@ -421,13 +506,19 @@ try{if(typeof window!=="undefined"){
         homeIcons=window.__zenSharedHomeV1?.warmStartupIcons?.()||null;
       }
       const waiting=!!(iconStatus&&(iconStatus.pending+iconStatus.missing)>0||homeIcons?.pending>0);
-      if(waiting&&now()-iconWaitAt<600){schedule();return;}
+      if(waiting&&now()-iconWaitAt<(boot?1400:600)){schedule();return;}
       decision("assembly.icons.ready",{...iconStatus,homeIcons,wait:now()-iconWaitAt,timeout:!!waiting});
     }
     typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.ready",()=>({one,active,state,expected,nativeReady,settled}),{sample:2500});
     // A narrow/hidden legacy strip falls back to native UI, never forces
     // a layout preference. With pending integration, fail open on timeout.
     if(!get("nav-bar")&&!get("navigator-toolbox")){schedule();return;}
+    if(boot){
+      const key=JSON.stringify([state,one,iconStatus,homeIcons,row?.childElementCount,window.innerWidth,window.innerHeight]);
+      if(key!==readinessKey){readinessKey=key;quietSince=now();}
+      if(!bootReady(now(),bootAt,BOOT_MIN,quietSince,deadline-BOOT_EXIT-200)){schedule();return;}
+      decision("boot.ready",{elapsed:now()-bootAt,quiet:now()-quietSince});
+    }
     if(timer)window.clearTimeout(timer);
     console.info("[Zen Refined] Center Assembly launch: "+(one?"OnePlane":"native"));
     launch(one);
@@ -514,7 +605,7 @@ try{if(typeof window!=="undefined"){
     // inserted controls remain eligible for the full center reveal.
     lateStart=lateStart||!canStartBeforePaint(window.windowUtils,document.readyState);
     if(lateStart)for(const selector of earlyTargets)for(const n of document.querySelectorAll(selector))if(!baseline.has(n)){baseline.add(n);n.setAttribute(EXISTING,"true");}
-    root.setAttribute(PHASE,"waiting");hold();
+    root.setAttribute(PHASE,"waiting");hold();mountBoot();
     console.info("[Zen Refined] Center Assembly: "+(lateStart?"late chrome startup":"prepaint startup"));
     timer=window.setTimeout(finish,Math.max(0,deadline-now()));
     if(window.gBrowserInit?.delayedStartupFinished)onNativeReady();

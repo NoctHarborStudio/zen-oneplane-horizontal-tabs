@@ -1,3 +1,10 @@
+## 0.3.0-preview.31 — Nocturne Boot Sequence
+
+- Show a lightweight, optional browser-chrome splash with a local vector mark and Nocturne wordmark during cold restore. No network assets, blur or web-page changes.
+- Warm tab and Home icons during restore, wait for bounded readiness, prepare all assembly effects behind the splash, and resume them only after the splash fades.
+- Allow interaction to skip the splash; honor disabled animations/reduced motion and the existing eight-second fail-open deadline. Keep download file drag from preview.30.
+- Use light diagnostic samples throughout the boot and add startup lifecycle regression tests.
+
 ## 0.3.0-preview.30 — Native download file drag
 
 - Drag the latest completed download from the toolbar icon or an individual completed row in Recent downloads / All downloads using Gecko's native file drag flavors.

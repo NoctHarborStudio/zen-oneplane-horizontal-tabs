@@ -1,7 +1,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.30",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.31",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -86,7 +86,7 @@
     };
     const job=store.tail.then(task,task);store.tail=job.catch(()=>{});return job;
   }
-  function startupPlaying(){return root.getAttribute("data-zr-startup-phase")==="playing";}
+  function startupPlaying(){return root.getAttribute("data-zr-startup-phase")==="playing"||root.hasAttribute("data-nocturne-boot");}
   function scheduleWrite(){if(!writeTimer&&!dead&&!privateWindow())writeTimer=win.setTimeout(()=>{
     writeTimer=0;if(startupPlaying()){scheduleWrite();return;}void flush();
   },2200);}
