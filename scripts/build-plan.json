@@ -298,6 +298,10 @@
     {
       "path": "src/styles/hub.css.part",
       "kind": "section"
+    },
+    {
+      "path": "src/styles/refined-features.css.part",
+      "kind": "section"
     }
   ]
 }

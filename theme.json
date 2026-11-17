@@ -1,10 +1,10 @@
 {
   "id": "8b2e214c-e1ba-4b81-9fbf-e08161bf2da4",
-  "name": "OnePlane — Horizontal Tabs",
-  "description": "Horizontal top tabs and an expandable address bar in one auto-hide toolbar. Experimental.",
+  "name": "Nocturne",
+  "description": "A unified Zen Browser UI: OnePlane horizontal tabs, Home, Hub, Smart Search, Magnetic Bookmarks, Downloads Dock, Page Progress and coordinated motion.",
   "homepage": "https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/tree/preview",
   "author": "NoctHarborStudio",
-  "version": "0.2.0-preview.62",
+  "version": "0.3.0-preview.1",
   "style": {
     "chrome": "chrome.css"
   },
@@ -12,10 +12,14 @@
   "readme": "https://raw.githubusercontent.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/preview/README.md",
   "tags": [
     "tabs",
-    "toolbar"
+    "toolbar",
+    "bookmarks",
+    "animation",
+    "downloads",
+    "productivity"
   ],
   "createdAt": "2026-11-15",
-  "updatedAt": "2026-11-17T03:03:00.000Z",
+  "updatedAt": "2026-11-17T03:20:00.000Z",
   "fork": [
     "zen"
   ],
@@ -26,6 +30,41 @@
       ]
     },
     "bookmarks.uc.mjs": {
+      "include": [
+        "chrome://browser/content/browser.xhtml"
+      ]
+    },
+    "startup-animation.uc.mjs": {
+      "include": [
+        "chrome://browser/content/browser.xhtml"
+      ]
+    },
+    "startup.uc.mjs": {
+      "include": [
+        "chrome://browser/content/browser.xhtml"
+      ]
+    },
+    "downloads-indicator.uc.mjs": {
+      "include": [
+        "chrome://browser/content/browser.xhtml"
+      ]
+    },
+    "page-progress.uc.mjs": {
+      "include": [
+        "chrome://browser/content/browser.xhtml"
+      ]
+    },
+    "closing-animation.uc.mjs": {
+      "include": [
+        "chrome://browser/content/browser.xhtml"
+      ]
+    },
+    "smart-search.uc.mjs": {
+      "include": [
+        "chrome://browser/content/browser.xhtml"
+      ]
+    },
+    "workspace-transition.uc.mjs": {
       "include": [
         "chrome://browser/content/browser.xhtml"
       ]
