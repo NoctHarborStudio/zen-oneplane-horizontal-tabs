@@ -77,27 +77,54 @@
 }
 
 .zr-download-flight { position:fixed !important;z-index:2147483001 !important;display:grid;place-items:center;width:33px;height:33px;border-radius:9px;background:var(--zr-download-surface);border:1px solid color-mix(in srgb,currentColor 12%,transparent);box-shadow:0 4px 12px #0003;pointer-events:none !important; }
-#zr-page-progress {
-  position:fixed !important;
-  inset:0 0 auto 0 !important;
-  height:3px;
-  z-index:2147482999 !important;
-  pointer-events:none !important;
-  opacity:0;
-  visibility:hidden;
-  transition:opacity 220ms ease,visibility 220ms;
-  color:color-mix(in srgb,var(--toolbar-color,light-dark(#858a94,#969ba6)) 60%,transparent);
+/* Replace the native loader only while the new controller is active.
+   Leave its lifecycle intact; disabling the pref restores visibility. */
+:root[data-zr-page-progress-owner="center"] #zen-loading-progress-bar {
+  opacity:0!important;visibility:hidden!important;pointer-events:none!important;
 }
-#zr-page-progress[data-visible] { opacity:1;visibility:visible; }
-#zr-page-progress .zr-page-progress-fill {
-  width:100%;height:100%;border-radius:4px;
-  background:currentColor;
-  transform-origin:center center;
-  transform:scaleX(var(--zr-page-progress,0));
-  transition:transform 460ms cubic-bezier(.25,.72,.25,1);
+#zr-page-progress[data-zr-center-progress] {
+  position:fixed!important;inset:auto!important;
+  top:calc(var(--zen-element-separation,8px) / -2)!important;left:50%!important;
+  transform:translate(-50%,-50%);
+  width:min(calc(var(--zen-loading-progress-bar-width,5rem) + 1rem),calc(100% - 16px));
+  height:var(--zen-loading-progress-bar-height,.4rem);
+  z-index:9!important;pointer-events:none!important;
+  opacity:0;visibility:hidden;
+  color:color-mix(in srgb,var(--zen-primary-color,var(--toolbar-color,currentColor)),light-dark(rgba(0,0,0,.5),rgba(255,255,255,.5)) 70%);
+  contain:layout paint;
 }
-#zr-page-progress[data-indeterminate] .zr-page-progress-fill { animation:zr-page-unknown 1.8s ease-in-out infinite; }
-@keyframes zr-page-unknown { 0%,100%{opacity:.45} 50%{opacity:1} }
+:root:is([zen-no-padding="true"],[inDOMFullscreen="true"],:not([zen-single-toolbar="true"])) #zr-page-progress[data-zr-center-progress] {
+  top:var(--zen-space-4,4px)!important;
+}
+:root[inDOMFullscreen="true"] #zr-page-progress[data-zr-center-progress] {visibility:hidden!important}
+#zr-page-progress[data-zr-center-progress][data-visible] {opacity:1;visibility:visible}
+#zr-page-progress[data-zr-center-progress] .zr-page-progress-track {
+  width:100%;height:100%;border-radius:999px;overflow:hidden;
+  background:var(--zen-color-contrast-10,color-mix(in srgb,currentColor 20%,transparent));
+  transform:scaleX(0);transform-origin:center center;
+}
+#zr-page-progress[data-zr-center-progress][data-visible] .zr-page-progress-track {
+  transition:transform 260ms cubic-bezier(.4,0,.2,1);
+}
+#zr-page-progress[data-zr-center-progress][data-phase] .zr-page-progress-track {transform:scaleX(1)}
+#zr-page-progress[data-zr-center-progress][data-phase="closing"] .zr-page-progress-track {
+  transform:scaleX(0);transition-duration:340ms;transition-timing-function:cubic-bezier(.4,0,.2,1);
+}
+#zr-page-progress[data-zr-center-progress] .zr-page-progress-fill {
+  width:100%;height:100%;border-radius:inherit;background:currentColor;
+  transform-origin:center center;transform:scaleX(var(--zr-page-progress,0));
+  transition:transform 260ms cubic-bezier(.25,.72,.25,1);
+}
+#zr-page-progress[data-zr-center-progress][data-phase="opening"] .zr-page-progress-fill {transform:scaleX(0)}
+#zr-page-progress[data-zr-center-progress][data-phase="complete"] .zr-page-progress-fill {transition-duration:240ms}
+#zr-page-progress[data-zr-center-progress][data-indeterminate] .zr-page-progress-fill {
+  animation:zr-page-unknown 1.8s ease-in-out infinite;
+}
+@keyframes zr-page-unknown {0%,100%{opacity:.45}50%{opacity:1}}
+@media(prefers-reduced-motion:reduce) {
+  #zr-page-progress[data-zr-center-progress] .zr-page-progress-track,
+  #zr-page-progress[data-zr-center-progress] .zr-page-progress-fill {transition:none!important;animation:none!important}
+}
 /* Startup never forcibly hides live download/page indicators. */
 @media (prefers-reduced-motion:reduce) {
   #zr-download-indicator,#zr-download-dock,.zr-download-fill,#zr-page-progress,#zr-page-progress .zr-page-progress-fill { transition:none !important;animation:none !important; }

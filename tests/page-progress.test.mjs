@@ -1,0 +1,69 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+const source=readFileSync(new URL("../page-progress.uc.mjs",import.meta.url),"utf8");
+const css=readFileSync(new URL("../src/styles/refined-features.css.part",import.meta.url),"utf8");
+function harness(){
+ let time=0,seq=0,enabled=true,listener=null,select=null,prefObserver=null;
+ const timers=new Map(),F={STATE_IS_NETWORK:1,STATE_START:2,STATE_STOP:4};
+ const node=()=>{
+  const attrs=new Map(),style=new Map();
+  return {attrs,children:[],parentNode:null,style:{setProperty:(k,v)=>style.set(k,v)},values:style,
+   setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k),hasAttribute:k=>attrs.has(k),
+   getAttribute:k=>attrs.get(k),toggleAttribute(k,v){v?attrs.set(k,""):attrs.delete(k)},
+   append(n){n.remove();this.children.push(n);n.parentNode=this},insertBefore(n,b){n.remove();this.children.splice(this.children.indexOf(b),0,n);n.parentNode=this},
+   get firstChild(){return this.children[0]},remove(){if(this.parentNode){const a=this.parentNode.children;a.splice(a.indexOf(this),1);this.parentNode=null}}};
+ };
+ const root=node(),panels={a:node(),b:node()},a={},b={};
+ const tabs=[{linkedPanel:"a",hasAttribute:()=>false},{linkedPanel:"b",hasAttribute:()=>false}];
+ const browser={selectedBrowser:a,selectedTab:tabs[0],addTabsProgressListener:l=>listener=l,removeTabsProgressListener:()=>listener=null,
+ tabContainer:{addEventListener:(e,l)=>select=l,removeEventListener:()=>select=null}};
+ const window={gBrowser:browser,gBrowserInit:{delayedStartupFinished:true},performance:{now:()=>time},addUnloadListener(){},addEventListener(){},removeEventListener(){},
+ setTimeout(fn,delay){timers.set(++seq,{fn,at:time+delay});return seq},clearTimeout(id){timers.delete(id)}};
+ const Services={prefs:{getBoolPref:()=>enabled,addObserver:(p,fn)=>prefObserver=fn,removeObserver(){}},obs:{}};
+ const document={documentElement:root,createElementNS:()=>node(),getElementById:id=>panels[id]};
+ new Function("window","document","Services","Ci",source)(window,document,Services,{nsIWebProgressListener:F});
+ const advance=ms=>{const end=time+ms;while(true){const next=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];if(!next||next[1].at>end)break;time=next[1].at;timers.delete(next[0]);next[1].fn()}time=end};
+ const evt=(flags,status=0,which=browser.selectedBrowser)=>listener.onStateChange(which,{isTopLevel:true},null,1|flags,status);
+ return {root,panels,browser,a,b,advance,evt,progress:(n,d)=>listener.onProgressChange(browser.selectedBrowser,{isTopLevel:true},null,0,0,n,d),
+ switchTo(i){browser.selectedBrowser=i?b:a;browser.selectedTab=tabs[i];select()},
+ disable(){enabled=false;prefObserver()},enable(){enabled=true;prefObserver()},
+ dispose:()=>window.__zenRefinedPageProgress(),get bar(){return browser.selectedTab&&panels[browser.selectedTab.linkedPanel].children[0]},get timers(){return timers.size}};
+}
+test("single page loader unfolds, fills from the center, completes and collapses",()=>{
+ const h=harness(),phase=()=>h.bar.getAttribute("data-phase"),fill=()=>h.bar.children[0].children[0].values.get("--zr-page-progress");
+ assert.equal(h.root.getAttribute("data-zr-page-progress-owner"),"center");
+ h.evt(2);h.advance(89);assert.equal(phase(),undefined);
+ h.advance(1);assert.equal(phase(),"opening");assert.equal(fill(),"0");
+ h.progress(40,100);h.advance(260);assert.equal(phase(),"loading");assert.equal(fill(),"0.4");
+ h.progress(20,100);h.advance(120);assert.equal(fill(),"0.4");
+ h.evt(4);assert.equal(phase(),"complete");assert.equal(fill(),"1");
+ h.advance(280);assert.equal(phase(),"closing");assert.equal(fill(),"1");
+ h.advance(340);assert.equal(phase(),undefined);assert.equal(fill(),"0");
+ h.dispose();assert.equal(h.root.hasAttribute("data-zr-page-progress-owner"),false);
+});
+test("quick loads do not flash; visible quick completion waits for unfold",()=>{
+ const h=harness();h.evt(2);h.advance(50);h.evt(4);h.advance(1000);
+ assert.equal(h.bar.hasAttribute("data-visible"),false);
+ h.evt(2);h.advance(100);h.evt(4);assert.equal(h.bar.getAttribute("data-phase"),"opening");
+ h.advance(250);assert.equal(h.bar.getAttribute("data-phase"),"complete");
+ h.advance(620);assert.equal(h.bar.hasAttribute("data-visible"),false);
+});
+test("cancel, tab switch, restart and preference release never claim success",()=>{
+ const h=harness();h.evt(2);h.advance(350);assert.equal(h.bar.hasAttribute("data-indeterminate"),true);
+ h.evt(4,0x80004004);assert.equal(h.bar.getAttribute("data-phase"),"closing");assert.notEqual(h.bar.children[0].children[0].values.get("--zr-page-progress"),"1");
+ h.evt(2);h.advance(90);assert.equal(h.bar.getAttribute("data-phase"),"opening");
+ h.switchTo(1);assert.equal(h.panels.a.children.length,0);assert.equal(h.bar.hasAttribute("data-visible"),false);
+ h.switchTo(0);h.advance(90);assert.equal(h.bar.getAttribute("data-phase"),"opening");
+ h.disable();assert.equal(h.root.hasAttribute("data-zr-page-progress-owner"),false);assert.equal(h.panels.a.children.length,0);assert.equal(h.timers,0);
+ h.enable();assert.equal(h.root.getAttribute("data-zr-page-progress-owner"),"center");
+});
+test("native location and symmetrical CSS are scoped to the active owner",()=>{
+ assert.ok(css.includes(':root[data-zr-page-progress-owner="center"] #zen-loading-progress-bar'));
+ assert.ok(css.includes('var(--zen-loading-progress-bar-width,5rem) + 1rem'));
+ assert.ok(css.includes('transform-origin:center center'));
+ assert.ok(css.includes('[data-phase="closing"] .zr-page-progress-track'));
+ assert.ok(css.includes('transform:scaleX(var(--zr-page-progress,0))'));
+ assert.ok(css.includes('prefers-reduced-motion:reduce'));
+ assert.ok(source.includes('browser?.selectedTab?.linkedPanel'));
+});

@@ -1,3 +1,9 @@
+## 0.3.0-preview.22 — Symmetric native-position page progress
+
+- Replace the full-window loading line and visually suppress Zen's original indicator only while the new controller is installed. Keep native lifecycle and restore visibility when disabled.
+- Use the selected browser panel and native indicator position, width 1rem above Zen's initial width, and native height. Unfold a rounded track from its center, fill symmetrically using top-level network progress, then collapse the finished track to the center.
+- Avoid flashes for loads shorter than 90ms; cancellation collapses without claiming completion. Clear timers on selection, restart, preference changes and unload. Add lifecycle and geometry tests.
+
 ## 0.3.0-preview.21 — Visible Bunny insertion
 
 - Replace the globally eased return with a 400ms phased approach, visible compression at the slot, rebound and exact resting geometry. Preserve the row-local pull and existing outward animation.
