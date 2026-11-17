@@ -1,3 +1,9 @@
+// Nocturne preview.6: early trace, independent Sine script order.
+try{if(typeof window!=="undefined"){
+  const event="page-progress.script",data={version:"0.3.0-preview.6"};
+  if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
+  else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
+}}catch{}
 /* Zen Refined — Page Progress. Native top-level network events only.
  * Estimates are never presented as exact page completion percentages. */
 (() => {
@@ -85,6 +91,7 @@
     }
   };
   function install(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("page-progress.install",()=>(null),{sample:1800});
     if(installed||dead||!enabled()||!window.gBrowser?.addTabsProgressListener)return;
     browser=window.gBrowser;
     bar=make("div","zr-page-progress");bar.id="zr-page-progress";bar.setAttribute("aria-hidden","true");
@@ -106,6 +113,7 @@
   }
   function sync(){if(!initialized||dead)return;if(enabled())install();else uninstall();}
   function dispose(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("page-progress.dispose",()=>(null),{flush:true});
     if(dead)return;dead=true;uninstall();
     if(observer)try{Services.obs.removeObserver(observer,"browser-delayed-startup-finished");}catch{}
     observer=null;

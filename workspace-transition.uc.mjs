@@ -1,3 +1,9 @@
+// Nocturne preview.6: early trace, independent Sine script order.
+try{if(typeof window!=="undefined"){
+  const event="workspace.script",data={version:"0.3.0-preview.6"};
+  if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
+  else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
+}}catch{}
 /* Zen Refined — workspace transition; explicit Home/Hub integration.
  * Native workspace ownership, page surfaces and theme animation stay in Zen. */
 (()=>{
@@ -44,6 +50,7 @@
     const wrapper=get("zen-appcontent-navbar-wrapper"),surface=get("oneplane-toolbar-surface");
     const wr=rect(wrapper),sr=rect(surface);
     if(!wr||!sr||wr.height<2||sr.height<2)return;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.geometry.lock",()=>({height:wr.height,surfaceHeight:sr.height}),{sample:1800});
     geometryLock={wrapper,surface,height:wr.height,surfaceHeight:sr.height,
       bookmarkTop:rect(get("PlacesToolbarItems"))?.top??null,pageTop:rect(get("tabbrowser-tabpanels"))?.top??null};
     wrapper.style.setProperty(HEIGHT,wr.height+"px");
@@ -52,6 +59,7 @@
   }
   function releaseGeometry(){
     const old=geometryLock;geometryLock=null;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.geometry.release",()=>({locked:!!old,height:old?.height,surfaceHeight:old?.surfaceHeight}),{sample:1800});
     if(!old)return null;
     old.wrapper.removeAttribute(GEOMETRY);old.wrapper.style.removeProperty(HEIGHT);
     old.surface.style.removeProperty(SURFACE_HEIGHT);
@@ -60,6 +68,7 @@
   function phase(value){
     if((root.getAttribute(PHASE)||null)===(value||null))return;
     if(value==="swap")lockGeometry();
+    typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.phase",()=>({from:root.getAttribute(PHASE),to:value,locked:!!geometryLock}),{sample:1800});
     if(value)root.setAttribute(PHASE,value);else {releaseGeometry();root.removeAttribute(PHASE);}
     try{win.__zenMagneticBookmarksShared?.syncAddressState?.();}catch(error){console.warn("[Nocturne] Workspace bookmarks:",error);}
     win.dispatchEvent(new win.CustomEvent("ZenRefined:WorkspaceTransition",{detail:{phase:value||"idle"}}));
@@ -109,6 +118,7 @@
   }
   function animate(tx,items,outgoing,old=null){
     const length=outgoing?180:300,effects=[],ease="cubic-bezier(.22,.75,.25,1)";
+    typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.animate",()=>({outgoing,length,targets:items.length,locked:!!old}),{sample:1800});
     for(const n of items){
       const dy=!outgoing&&n===get("PlacesToolbarItems")&&old?.bookmarkTop!=null?old.bookmarkTop-n.getBoundingClientRect().top:0;
       const move=neutralTranslate(n),offset=Math.max(-180,Math.min(180,dy+(outgoing?-12:14)));
@@ -154,6 +164,7 @@
   }
   async function run(nativeSwitch){
     if(typeof nativeSwitch!=="function")throw TypeError("Native workspace callback required");
+    typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.run",()=>({active:!!active,pending:!!gate.pending,phase:root.getAttribute(PHASE)}),{sample:1800});
     if(dead||win.closed)return;
     if(request)request.superseded=true;
     const carrySwap=root.getAttribute(PHASE)==="swap";
@@ -181,6 +192,7 @@
     const interacting=!!(row?.hasAttribute("data-op-dragging")||row?.hasAttribute("data-op-cascade")||
       url?.hasAttribute("open")||url?.getAttribute("focused")==="true"||root.hasAttribute("data-op-bookmark-wave"));
     if(!registered||!eligible({dead,busy:!!active,reduced:reduced.matches,startup:root.hasAttribute("data-zr-startup-phase")||root.getAttribute("data-op-startup-ready")==="pending",enabled:prefs.getBoolPref(PREF,true),fullscreen:root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"||root.getAttribute("inFullscreen")==="true"||root.hasAttribute("data-zr-closing"),interacting})){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.bypass",()=>({registered,interacting,reduced:reduced.matches,startup:root.getAttribute('data-zr-startup-phase'),ready:root.getAttribute('data-op-startup-ready')}),{sample:1800});
       phase(null);return invoke();
     }
     const tx={animations:new Set(),styles:new Map(),timers:new Set(),waiters:new Set(),cancelled:false,superseded:false,skipMotion:false};active=tx;
@@ -195,10 +207,12 @@
       if(tx.superseded||req.superseded||dead||win.closed)return;
       if(!tx.cancelled){phase("swap");cancelEffects(tx);}
       called=true;result=await invoke();
+    typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.native.end",()=>({cancelled:tx.cancelled,superseded:req.superseded}),{sample:1800});
       if(tx.cancelled||req.superseded)return result;
       await settled(tx);
       if(tx.cancelled||req.superseded)return result;
       const geometry=releaseGeometry();
+    typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.reveal",()=>({skip:tx.skipMotion,oldHeight:geometry?.height,oldSurface:geometry?.surfaceHeight}),{sample:1800});
       try{win.__oneplaneLayoutController?.prepareWorkspaceGeometry?.();}catch(error){console.warn("[Nocturne] Workspace geometry:",error);}
       if(tx.skipMotion)return result;
       const incoming=units(),motion=animate(tx,incoming,false,geometry);
@@ -217,6 +231,7 @@
   function onKey(e){
     if(e.key!=="Escape"||!active)return;
     const tx=active;tx.skipMotion=true;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.escape",()=>({phase:root.getAttribute(PHASE)}),{sample:1800});
     // Escape skips decorative motion, not the native command or swap gate.
     if(root.getAttribute(PHASE)==="out"){
       phase("swap");cancelEffects(tx);

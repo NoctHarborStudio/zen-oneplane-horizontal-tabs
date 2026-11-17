@@ -1,3 +1,9 @@
+// Nocturne preview.6: early trace, independent Sine script order.
+try{if(typeof window!=="undefined"){
+  const event="assembly.script",data={version:"0.3.0-preview.6"};
+  if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
+  else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
+}}catch{}
 /* Zen Refined — Center Assembly. Browser-chrome only; optional OnePlane
  * handshake. Never navigates, captures, or injects into a web page. */
 (() => {
@@ -22,6 +28,7 @@
   // A late loader cannot conceal an already-displayed interface seamlessly.
   if(typeof window.addUnloadListener!=="function"||window[SEEN]||root.hasAttribute("popup-window"))return;
   window[SEEN]=true;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.eligible.check",()=>({paintCount:window.windowUtils?.paintCount,delayed:!!window.gBrowserInit?.delayedStartupFinished,ready:root.getAttribute(READY),cold:!!window.__nocturneLayoutStartup?.initial,age:now()}),{sample:1800});
   function startupEligible(painted,delayed,oneState,age,cold=null){
     const recentCold=!!(cold?.initial&&Number.isFinite(cold.readyAt)&&age-cold.readyAt>=0&&age-cold.readyAt<=1800);
     return age<8000&&(!painted||!delayed||oneState==="pending"||recentCold);
@@ -62,6 +69,7 @@
     }
   }
   function finish(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.finish",()=>({dead,playing,settling,seen:seen.size,effects:animations.size,age:now()-started}),{flush:true});
     if(dead)return;dead=true;
     if(raf)window.cancelAnimationFrame(raf);
     if(timer)window.clearTimeout(timer);
@@ -88,6 +96,7 @@
     if(window[KEY]===finish)delete window[KEY];
   }
   function settle(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.settle",()=>({playing,settling,effects:animations.size}),{sample:1800});
     if(dead||settling)return;
     if(!playing||reduced.matches||!animations.size){finish();return;}
     settling=true;
@@ -114,11 +123,12 @@
     }
     timer=window.setTimeout(finish,155);
   }
-  function interrupt(event){if(event?.isTrusted!==false)settle();}
+  function interrupt(event){typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.interrupt",()=>({type:event?.type,trusted:event?.isTrusted,playing}),{sample:1200});if(event?.isTrusted!==false)settle();}
   let viewport=[window.innerWidth,window.innerHeight];
   function onResize(){
     const next=[window.innerWidth,window.innerHeight];
     const changed=Math.abs(next[0]-viewport[0])>1||Math.abs(next[1]-viewport[1])>1;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.resize",()=>({changed,playing,size:next}),{throttle:100,sample:1500});
     viewport=next;if(playing&&changed)settle();
   }
   function preferenceChanged(){if(reduced.matches)finish();else if(!prefs.getBoolPref(ENABLE,true))settle();}
@@ -280,6 +290,7 @@
     return units;
   }
   function launch(one){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.launch",()=>({one,paintCount:window.windowUtils?.paintCount,phase:root.getAttribute(PHASE),ready:root.getAttribute(READY),age:now()-started}),{sample:1800});
     if(dead||playing||settling)return;playing=true;
     try{
       const row=get("oneplane-tabs"),url=get("urlbar-container");
@@ -326,6 +337,7 @@
         lateResize=new ResizeObserver(scheduleLate);
         for(const n of [get("urlbar"),items,bookmarks])if(n)lateResize.observe(n);
       }
+    typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.targets",()=>({seen:seen.size,effects:animations.size,duration,finishAt}),{sample:1800});
       scheduleLate();
       // The page and native Zen background stay painted throughout.
       timer=window.setTimeout(finish,Math.max(0,finishAt-now()));
@@ -352,6 +364,7 @@
     if(active&&state==="true"&&root.getAttribute("zen-compact-mode")==="true"&&!holdNode?.hasAttribute("data-op-panel-open")){schedule();return;}
     const one=Boolean(active&&bounds(row,true)&&(root.getAttribute("zen-compact-mode")!=="true"||holdNode?.hasAttribute("data-op-panel-open")));
     if(active&&!one){schedule();return;}
+    typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.ready",()=>({one,active,state,expected,nativeReady,settled}),{sample:2500});
     // A narrow/hidden legacy strip falls back to native UI, never forces
     // a layout preference. With pending integration, fail open on timeout.
     if(!get("nav-bar")&&!get("navigator-toolbox")){schedule();return;}

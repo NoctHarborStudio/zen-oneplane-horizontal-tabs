@@ -1,3 +1,9 @@
+// Nocturne preview.6: early trace, independent Sine script order.
+try{if(typeof window!=="undefined"){
+  const event="disassembly.script",data={version:"0.3.0-preview.6"};
+  if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
+  else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
+}}catch{}
 /* Zen Refined — Center Disassembly. Explicit native close-window command only.
  * No interception of OS shutdown, window.close(), tab close, quit, beforeunload
  * or session persistence. All native confirmation decisions stay native.
@@ -92,6 +98,7 @@
     return result;
   }
   function restore(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("disassembly.restore",()=>({effects:animations.size,owned:owned.size,closing:root.hasAttribute('data-zr-closing')}),{sample:1000,flush:true});
     for(const a of animations)try{a.cancel();}catch{}
     animations.clear();
     for(const [n,record] of owned){
@@ -116,6 +123,7 @@
   }
   function begin(){
     const targets=collect();if(!targets.length)return false;
+    typeof window!=="undefined"&&window.__nocturneTrace?.("disassembly.targets",()=>({count:targets.length,registered:typeof window.CSS?.registerProperty==='function'}),{sample:1800});
     let registered=false;
     try{window.CSS.registerProperty({name:PROGRESS,syntax:"<number>",inherits:false,initialValue:"1"});registered=true;}
     catch(e){registered=e.name==="InvalidModificationError";}
@@ -147,6 +155,7 @@
         animations.add(n.animate(frames,{delay,duration:length,easing:"cubic-bezier(.4,0,.35,1)",fill:"both"}));
       }catch(e){console.warn("[Zen Refined] Close effect:",e);}
     }
+    typeof window!=="undefined"&&window.__nocturneTrace?.("disassembly.effects",()=>({count:animations.size,owned:owned.size,duration:DURATION}),{sample:1000,flush:true});
     return animations.size>0;
   }
   function eligible(args){
@@ -159,7 +168,12 @@
   const controller=makeCloseController({
     eligible,begin,clear:restore,
     later:(fn,ms)=>window.setTimeout(fn,ms),cancelLater:id=>window.clearTimeout(id),
-    invoke:(receiver,args)=>Reflect.apply(original,receiver,args)
+    invoke:(receiver,args)=>{
+      typeof window!=="undefined"&&window.__nocturneTrace?.("disassembly.native.before",()=>({closing:root.hasAttribute('data-zr-closing'),owned:owned.size}),{flush:true,sample:1200});
+      const result=Reflect.apply(original,receiver,args);
+      typeof window!=="undefined"&&window.__nocturneTrace?.("disassembly.native.after",()=>({resultType:typeof result,closed:window.closed}),{flush:true});
+      return result;
+    }
   });
   function preferenceChanged(){if(reduced.matches||!prefs.getBoolPref(PREF,true))controller.flush();}
   function install(){
@@ -167,7 +181,7 @@
     owner=window.BrowserCommands;
     if(typeof owner?.tryToCloseWindow!=="function")return;
     original=owner.tryToCloseWindow;
-    wrapped=function(...args){return controller.request(this,args);};
+    wrapped=function(...args){typeof window!=="undefined"&&window.__nocturneTrace?.("disassembly.request",()=>({trusted:!!args[0]?.isTrusted,pending:controller.pending,allowed:eligible(args)}),{sample:1600,flush:true});return controller.request(this,args);};
     try{owner.tryToCloseWindow=wrapped;if(owner.tryToCloseWindow!==wrapped)wrapped=null;}
     catch{wrapped=null;}
   }

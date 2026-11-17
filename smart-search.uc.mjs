@@ -1,3 +1,9 @@
+// Nocturne preview.6: early trace, independent Sine script order.
+try{if(typeof window!=="undefined"){
+  const event="search.script",data={version:"0.3.0-preview.6"};
+  if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
+  else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
+}}catch{}
 /* Zen Refined — Smart Search.
  * Native URL-bar provider. Recent active tabs are computed on demand;
  * no history database, tab cloning, network requests, or custom input.
@@ -342,6 +348,7 @@
     ready=true;onActivation();scheduleRefresh(true);
   }
   function install(){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("search.install",()=>(null),{sample:1800});
     if(disposed||joined)return;
     try{
       const base="moz-src:///browser/components/urlbar/";
@@ -451,6 +458,7 @@
     }
   }
   function dispose(keepDiagnostic=false){
+    typeof window!=="undefined"&&window.__nocturneTrace?.("search.dispose",()=>({keepDiagnostic:keepDiagnostic===true}),{flush:true});
     const keep=keepDiagnostic===true;
     const finish=()=>{
       window.removeEventListener("unload",dispose);
