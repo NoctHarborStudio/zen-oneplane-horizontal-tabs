@@ -36,6 +36,15 @@ Sequence each import in a separate commit with tests. Do not clean up/reformat f
 
 See [audit register](audit.md), NC-001 through NC-007. Resolve confirmed Downloads and Startup ownership defects before refactoring the core. Legacy conflict warning is diagnostic only; full safe coexistence remains unvalidated. Record actual Windows Zen validation and computed-style parity; do not call the package stable based solely on CI. Keep the current developer preview usable with Refined disabled.
 
+## B.2. Full audit and second stabilization gate (after preview.2)
+
+[Full source/integration audit](full-audit-preview.2.md) and [register](audit.md) cover NC-008–NC-022. User smoke test reports functional parity with inherited jitter and no proper Downloads UI slot. Do not treat the lack of a slot as a missing imported script.
+
+- Stabilization A: NC-009/016 native workspace arbitration, NC-010/011 generation-safe feature mount, NC-012 reliable teardown, NC-008/021 Utility Dock host/hold/geometry prototype. Separate commits and tests; no blanket refactor.
+- Stabilization B: NC-013/014/015 controlled profile of animation/geometry/contour; one owner per surface, preserve accepted visuals.
+- Unified Core includes NC-017/018/019/020; Page Progress NC-022 test/host design. Native visual parity and migration gates remain NC-002/005/006/007.
+- All nine entrypoints reviewed. Audit docs are integration-branch only until next real runtime release. No preview version bump for docs-only changes.
+
 ## C. Separate the lifecycle
 
 1. Introduce WindowContext/disposable ownership and explicit readiness while preserving existing script entry compatibility.
