@@ -37,6 +37,7 @@ test("legacy late registration yields and reclaims without concurrent controller
 });
 
 test("workspace swap suspends magnetic bookmarks until incoming fade ends",()=>{
+ const source=readFileSync(new URL("../bookmarks.uc.mjs",import.meta.url),"utf8");
  const code=source.slice(source.indexOf("function syncAddressState(){"),source.indexOf("// Measure the native row"));
  const run=new Function(`let addressSuspended=false,addressPointer=null,lastPointer=null,phase=null,wave=false,clears=0,resumes=0;
  const root={hasAttribute:k=>k==="data-op-bookmark-wave"&&wave,getAttribute:()=>phase};
