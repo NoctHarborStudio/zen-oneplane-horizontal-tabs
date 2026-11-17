@@ -132,3 +132,8 @@ Prototype on feature/vertical-layout after shared core is stable. First mount na
 - No feature changes mixed with parity import. Native bugs fixed separately and merged into integration with recorded baseline change. Every phase has an exit gate; don't accumulate untested runtime changes.
 
 Package Fusion imports all seven non-bookmark Refined scripts unchanged with tests and a provenance ledger. Horizontal source remains unchanged. Full native parity and lifecycle refactor remain pending. No repo rename or legacy archive now.
+
+
+## 0.4.0 cross-feature stabilization
+
+See the [0.4.0 architecture audit and pipeline](pipeline-0.4.0.md) for the active cross-feature risk register, ownership inventory, sequencing and exit gates. This is planning, not a runtime release; preserve existing MB/Library/Downloads and native validation contracts. Recheck current preview HEAD before implementation.
