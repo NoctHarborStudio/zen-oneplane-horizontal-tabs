@@ -105,3 +105,10 @@ test("permanent horizontal host is constructed, measured and removed",()=>{
  assert.ok(css.includes('#oneplane-download-indicator-slot:has(> #zr-download-indicator)'));
  assert.ok(css.includes('#oneplane-download-indicator-slot > #zr-download-indicator[data-zr-hosted]'));
 });
+
+test("download content animation finishes at resting opacity",()=>{
+ const css=readFileSync(new URL("../src/styles/refined-features.css.part",import.meta.url),"utf8");
+ assert.ok(css.includes("88%,100% { opacity:var(--zr-dock-rest-opacity,1); }"));
+ assert.ok(css.includes(".zr-dock-empty { --zr-dock-rest-opacity:.65;"));
+ assert.ok(css.includes(".zr-dock-notice { --zr-dock-rest-opacity:.8;"));
+});

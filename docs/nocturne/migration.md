@@ -49,6 +49,10 @@ See [audit register](audit.md), NC-001 through NC-007. Resolve confirmed Downloa
 
 NC-008/009/010/011/012/016 addressed; NC-021 initial compact host/hold/anchor implemented. Full lower Utility Dock remains planned. Candidate source tests and actual Zen acceptance are separate gates. Continue Stabilization B only after checking the new host and interaction regressions.
 
+## B.4. Visual stabilization after preview.3 smoke test
+
+Preview.4 fixes NC-023 Downloads text opacity and NC-024 Workspace visual handoff; use two stable surface fades, keep the swap gate until native/mirror settling, and coordinate bookmark/hover state. Native page flicker and general geometry/contour optimization remain investigation items. See audit.md; no blanket motion rewrite.
+
 ## C. Separate the lifecycle
 
 1. Introduce WindowContext/disposable ownership and explicit readiness while preserving existing script entry compatibility.

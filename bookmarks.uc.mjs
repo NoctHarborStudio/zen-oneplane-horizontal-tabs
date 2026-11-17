@@ -43,7 +43,8 @@ function install() {
   let settings = {};
   let addressSuspended=false, addressPointer=null;
   function syncAddressState(){
-    const next=root.hasAttribute("data-op-bookmark-wave");
+    const workspacePhase=root.getAttribute("data-zr-workspace-phase");
+    const next=root.hasAttribute("data-op-bookmark-wave")||workspacePhase==="swap"||workspacePhase==="in";
     if(next===addressSuspended)return;
     addressSuspended=next;
     if(next){
@@ -649,7 +650,7 @@ function install() {
 
   function onPointerMove(event){
     if(event.pointerType==="touch")return;
-    if(addressSuspended||root.hasAttribute("data-op-bookmark-wave")){
+    if(addressSuspended||root.hasAttribute("data-op-bookmark-wave")||root.hasAttribute("data-zr-workspace-phase")){
       addressPointer={x:event.clientX,y:event.clientY};return;
     }
     if(addressPointer===null&&lastPointer&&!active&&event.clientX===lastPointer.x&&event.clientY===lastPointer.y)return;
@@ -809,7 +810,7 @@ function install() {
     for (const [target, type, listener, capture] of listeners) target.addEventListener(type, listener, capture);
     observer.observe(list,{childList:true,subtree:true,attributes:true,attributeFilter:["hidden","collapsed","label","overflowed"]});
     observer.observe(toolbar, { attributes: true, attributeFilter: ["hidden", "collapsed"] });
-    observer.observe(root,{attributes:true,attributeFilter:["customizing","inDOMFullscreen","oneplane-active","zen-compact-mode","data-op-bookmark-wave"]});
+    observer.observe(root,{attributes:true,attributeFilter:["customizing","inDOMFullscreen","oneplane-active","zen-compact-mode","data-op-bookmark-wave","data-zr-workspace-phase"]});
     syncAddressState();
     if(wrapper)panelObserver.observe(wrapper,{childList:true,subtree:false,attributes:true,attributeFilter:["data-op-panel-open"]});
     resize.observe(toolbar);

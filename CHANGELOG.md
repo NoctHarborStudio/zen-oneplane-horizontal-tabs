@@ -1,3 +1,11 @@
+## 0.3.0-preview.4 — Workspace and Downloads visual stabilization
+
+- End Downloads content animation at each child's actual resting opacity, eliminating the empty-message and notice brightness snap.
+- Replace independent tab/bookmark travel with short whole-surface opacity fades. Keep chrome hidden while native selection and mirror/Places updates settle; retain the swap gate when transferring to a newer request.
+- Escape skips outgoing/incoming decoration safely without prematurely revealing the rebuilding chrome or repeating native commands. Let an already-started incoming fade finish.
+- Suspend tab hover and Magnetic Bookmarks during the workspace handoff. Preserve native page/background switching and existing address, startup and closing animations.
+- Add tests for Escape, queued workspace gate, text opacity and bookmark suspension. Native visual validation still pending.
+
 ## 0.3.0-preview.3 — Stabilization A
 
 - Serialize explicit native workspace switches across Home and Hub, coalesce pending requests and preserve the in-flight gate across controller reload. Disposing cancels commands not yet started.

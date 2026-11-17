@@ -2,17 +2,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 const source=readFileSync(new URL("../workspace-transition.uc.mjs",import.meta.url),"utf8");
-const i=source.indexOf("function distance("),j=source.indexOf("function units()",i);
-const {distance,eligible}=new Function(source.slice(i,j)+"return {distance,eligible};")();
-test("center travel is bounded",()=>{
- assert.equal(distance(500,100),400);
- assert.equal(distance(500,900),-400);
- assert.equal(distance(1000,0),440);
+const i=source.indexOf("function eligible("),j=source.indexOf("function units()",i);
+const eligible=new Function(source.slice(i,j)+"return eligible;")();
+test("workspace animates stable surfaces without per-tab translation",()=>{
+ assert.ok(source.includes('const candidates=[one?row:get("tabbrowser-tabs"),get("PlacesToolbarItems")]'));
+ assert.ok(!source.includes("--zr-workspace-dx"));
+ assert.ok(!source.includes("--zr-workspace-dy"));
 });
 test("transition bypasses startup, disabled and reduced-motion states",()=>{
  const state={dead:false,busy:false,reduced:false,startup:false,enabled:true,fullscreen:false};
  assert.equal(eligible(state),true);
- for(const flag of ["dead","busy","reduced","startup","fullscreen"])assert.equal(eligible({...state,[flag]:true}),false);
+ for(const flag of ["dead","busy","reduced","startup","fullscreen","interacting"])assert.equal(eligible({...state,[flag]:true}),false);
  assert.equal(eligible({...state,enabled:false}),false);
 });
 test("native switch stays single-owned and chrome-only",()=>{
@@ -24,7 +24,7 @@ test("native switch stays single-owned and chrome-only",()=>{
 });
 
 function lifecycleFixture(){
- const attrs=()=>new Map(),events=[],timers=new Map(),prefs={getBoolPref:()=>true,addObserver(){},removeObserver(){}};
+ const attrs=()=>new Map(),events=[],timers=new Map(),listeners=new Map(),prefs={getBoolPref:()=>true,addObserver(){},removeObserver(){}};
  let clock=0,id=0;
  const node=()=>{const a=attrs(),styles=new Map();return {isConnected:true,children:[],hidden:false,collapsed:false,
    hasAttribute:k=>a.has(k),setAttribute:(k,v)=>a.set(k,v),removeAttribute:k=>a.delete(k),getAttribute:k=>a.get(k),
@@ -33,7 +33,7 @@ function lifecycleFixture(){
    animate(){return {finished:Promise.resolve(),cancel(){}};},append(){},remove(){}};};
  const root=node(),bookmarks=node(),old=node(),fresh=node();bookmarks.children=[old];
  const win={innerWidth:1200,innerHeight:800,performance:{now:()=>clock},matchMedia:()=>({matches:false,addEventListener(){},removeEventListener(){}}),
-   addUnloadListener(){},addEventListener(){},removeEventListener(){},CSS:{registerProperty(){}},
+   addUnloadListener(){},addEventListener(k,f){listeners.set(k,f);},removeEventListener(k,f){if(listeners.get(k)===f)listeners.delete(k);},CSS:{registerProperty(){}},
    windowUtils:{USER_SHEET:1,loadSheet(){},removeSheet(){}},getComputedStyle:()=>({display:"block",visibility:"visible",opacity:"1"}),
    CustomEvent:class{constructor(type,o){this.type=type;this.detail=o.detail;}},dispatchEvent:e=>events.push(e.detail.phase),
    MutationObserver:class{observe(){} disconnect(){}},setTimeout(fn,ms){const n=++id;timers.set(n,{fn,at:clock+ms});return n;},clearTimeout:n=>timers.delete(n)};
@@ -42,7 +42,7 @@ function lifecycleFixture(){
  reinstall();
  async function flush(){for(let j=0;j<12;j++)await Promise.resolve();}
  async function advance(){await flush();const next=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];if(next){timers.delete(next[0]);clock=next[1].at;next[1].fn();}await flush();}
- return {win,root,bookmarks,old,fresh,events,timers,advance,flush,reinstall};
+ return {win,root,bookmarks,old,fresh,events,timers,advance,flush,reinstall,escape:()=>listeners.get("keydown")?.({key:"Escape"})};
 }
 test("workspace transition keeps native callback single, phases ordered and styles restored",async()=>{
  const f=lifecycleFixture();let calls=0;
@@ -96,4 +96,23 @@ test("replacement waits for already started native command",async()=>{
  await f.flush();assert.deepEqual(calls,["old"]);
  resolveOld();await f.flush();await f.advance();await f.advance();await Promise.all([a,b]);
  assert.deepEqual(calls,["old","new"]);
+});
+
+test("Escape during swap retains the gate until native and mirror settle",async()=>{
+ const f=lifecycleFixture();let complete,calls=0;
+ const result=f.win.__zenRefinedWorkspaceTransition.run(()=>{calls++;return new Promise(r=>complete=r);});
+ await f.flush();assert.equal(f.root.getAttribute("data-zr-workspace-phase"),"swap");
+ f.escape();assert.equal(f.root.getAttribute("data-zr-workspace-phase"),"swap");
+ complete("native");await f.flush();assert.equal(f.root.getAttribute("data-zr-workspace-phase"),"swap");
+ await f.advance();await f.advance();assert.equal(await result,"native");
+ assert.equal(calls,1);assert.deepEqual(f.events,["out","swap","idle"]);
+});
+test("new request retains hidden toolbar while old native switch is in flight",async()=>{
+ const f=lifecycleFixture(),api=f.win.__zenRefinedWorkspaceTransition;let finish;
+ const a=api.run(()=>new Promise(r=>finish=r));await f.flush();
+ const b=api.run(()=>42);await f.flush();assert.equal(f.root.getAttribute("data-zr-workspace-phase"),"swap");
+ assert.deepEqual(f.events,["out","swap"]);
+ finish();await f.flush();await f.advance();await f.advance();await Promise.all([a,b]);
+ assert.deepEqual(f.events,["out","swap","in","idle"]);
+ assert.equal(f.root.hasAttribute("data-zr-workspace-phase"),false);
 });
