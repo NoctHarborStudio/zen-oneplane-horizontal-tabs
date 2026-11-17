@@ -4,7 +4,7 @@ Recording remains enabled by default for this preview. Set `zen.nocturne.diagnos
 
 ## Collect
 
-Restart Zen completely, reproduce the issue, and open about:support > Profile Folder > Open Folder > nocturne-diagnostics. Attach the single `nocturne-diagnostics.json` file. It contains up to four recent window sessions and is formatted with indentation; total serialized size is capped at approximately 450 KB. Old per-window Nocturne diagnostic JSON files are removed after the first successful replacement. Save them separately first if you need older traces.
+Restart Zen completely, reproduce the issue, and open about:support > Profile Folder > Open Folder > nocturne-diagnostics. Attach the single `nocturne-diagnostics.json` file. It contains up to three recent window sessions and is formatted with indentation; total serialized size is capped at approximately 500 KB. Old per-window Nocturne diagnostic JSON files are removed after the first successful replacement. Save them separately first if you need older traces.
 
 Fallback: `Services.wm.getMostRecentWindow("navigator:browser").__nocturneDiagnostics.dump()` in Browser Console. `await Services.wm.getMostRecentWindow("navigator:browser").__nocturneDiagnostics.flush()` explicitly persists. Private windows never write. Closing/unload persistence remains best effort.
 
@@ -21,3 +21,5 @@ Schema 2: sessions contain version, window, dropped, updated, events. Sample met
 Logs contain no page URL, title, search text, downloads filename or page contents. Frame measurements are diagnostic, not an absolute FPS benchmark.
 
 Preview 11 adds a bounded `startup` array (up to 100 lifecycle events) per session, separate from the rolling event ring. `center.motion` reports the Magnetic Fold anchor and lower-row count. Caption buttons and handoff state are included in samples.
+
+Preview 16 retains the newest three windows by creation time, trimming each independently (approximately 145k formatted characters per session). The startup archive retains `assembly.icons.ready`, `assembly.center.result`, `assembly.interrupt` with accepted flag, and startup `center.*` events. `center.group.geometry` records measured handle offsets; `center.motion.release` includes image readiness and proxy-load counts. Samples include split group/handle geometry and aggregate image readiness. No favicon addresses, keyboard values, or tab titles are logged.

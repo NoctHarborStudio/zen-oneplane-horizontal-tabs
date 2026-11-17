@@ -1,11 +1,11 @@
-/* Nocturne preview.13 diagnostic recorder — read-only chrome telemetry.
+/* Nocturne preview.16 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.13",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.16",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
-  const id=Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
+  const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
   const fileName="nocturne-diagnostics.json",entries=[],last=new Map(),nodes=new Map(),removers=[];
   // Cross-window queue: all currently open browser windows share the same
   // coordinator object. Persist operations never race read/modify/write.
@@ -32,7 +32,7 @@
     if(typeof v!=="object"||Object.getPrototypeOf(v)!==Object.prototype&&Object.getPrototypeOf(v)!==null)return null;
     return Object.fromEntries(Object.entries(v).slice(0,45).map(([k,x])=>[k,safe(x,d+1)]));
   }
-  function exportData(){return {schema:2,version:VERSION,window:id,dropped,startup:startupEvents.slice(),events:entries.slice()};}
+  function exportData(){return {schema:2,version:VERSION,window:id,started,dropped,startup:startupEvents.slice(),events:entries.slice()};}
   function dump(){return JSON.stringify(exportData(),null,2);}
   async function persist(){
     if(privateWindow())return false;
@@ -48,17 +48,19 @@
         }
         const sessions=store.sessions.filter(x=>x.window!==session.window);
         sessions.push(session);
-        sessions.sort((a,b)=>(a.updated||0)-(b.updated||0));
-        while(sessions.length>4)sessions.shift();
-        let data=JSON.stringify({schema:2,version:VERSION,sessions},null,2);
-        while(data.length>450000&&sessions.length>1){
-          sessions.shift();data=JSON.stringify({schema:2,version:VERSION,sessions},null,2);
+        const birth=s=>s.started||parseInt(String(s.window).split("-")[0],36)||s.updated||0;
+        sessions.sort((a,b)=>birth(a)-birth(b));
+        while(sessions.length>3)sessions.shift();
+        // Trim each session independently instead of sacrificing older
+        // sessions when one recent recording is long.
+        for(let i=0;i<sessions.length;i++){
+          const s=sessions[i]={...sessions[i],events:sessions[i].events.slice()};
+          while(JSON.stringify(s,null,2).length>145000&&s.events.length>1){
+            const count=Math.min(s.events.length-1,Math.max(1,Math.ceil(s.events.length*.15)));
+            s.events.splice(0,count);s.dropped=(s.dropped||0)+count;
+          }
         }
-        while(data.length>450000&&session.events.length>1){
-          const count=Math.min(session.events.length-1,Math.max(1,Math.ceil(session.events.length*.15)));
-          session.events.splice(0,count);session.dropped+=count;
-          data=JSON.stringify({schema:2,version:VERSION,sessions},null,2);
-        }
+        const data=JSON.stringify({schema:2,version:VERSION,sessions},null,2);
         await IOUtils.writeUTF8(path,data,{tmpPath:path+".tmp"});
         store.sessions=sessions;
         // Remove only our old per-window diagnostic files after a successful
@@ -85,7 +87,7 @@
       if(interval&&last.has(key)&&t-last.get(key)<interval)return;
       last.set(key,t);
       const item={n:++seq,t:round(t),event,data:safe(typeof detail==="function"?detail():detail)};
-      if(startupEvents.length<100&&(/^(assembly\.|layout\.)/.test(event)||event==="center.motion"&&item.data?.owner==="startup"))startupEvents.push(item);
+      if(startupEvents.length<100&&(/^(assembly\.|layout\.)/.test(event)||event.startsWith("center.")&&item.data?.owner==="startup"))startupEvents.push(item);
       entries.push(item);if(entries.length>1600){entries.shift();dropped++;}
       dirty=true;
       if(event!=="sample")win.console.info("[Nocturne diag "+id+"] "+JSON.stringify(item));
@@ -102,6 +104,8 @@
     const wanted=new Map(targets.map(k=>[k,get(k)]).filter(x=>x[1]));
     const row=get("oneplane-tabs"),drag=row?.querySelector("[data-op-drag-follow],[data-op-detached],[data-op-pulling]");
     const ghost=doc.querySelector(".oneplane-bunny-ghost"),card=row?.querySelector(".oneplane-tab[data-selected]")||row?.querySelector(".oneplane-tab");
+    const group=row?.querySelector(".oneplane-split-group"),handle=group?.querySelector(".oneplane-split-handle");
+    if(group)wanted.set("split-group",group);if(handle)wanted.set("split-handle",handle);
     if(drag)wanted.set("source",drag);if(ghost)wanted.set("ghost",ghost);if(card)wanted.set("card",card);
     if(wanted.size===nodes.size&&[...wanted].every(([k,n])=>nodes.get(k)===n))return;
     observer.disconnect();nodes.clear();observer.observe(root,{attributes:true,attributeFilter:rootAttrs});
@@ -128,6 +132,8 @@
     if(row){
       const marked=selector=>row.querySelectorAll(selector).length;
       counts.startup=marked("[data-zr-startup-effect]");counts.closing=marked("[data-zr-close-effect]");counts.center=marked("[data-zr-center-card]");
+      counts.splitGroups=marked(".oneplane-split-group");counts.splitHandles=marked(".oneplane-split-handle");
+      const images=[...row.querySelectorAll(".oneplane-tab-icon img")];counts.iconsReady=images.filter(n=>!n.hidden&&n.complete&&n.naturalWidth>0).length;counts.iconsTotal=images.length;
       counts.detached=marked("[data-op-detached]");counts.laneGhost=marked("[data-op-lane-ghost]");
     }
     const frame={count:gaps.length,max:gaps.length?round(Math.max(...gaps)):null,over25:gaps.filter(v=>v>25).length};gaps=[];
@@ -184,7 +190,7 @@
   }catch(error){record("diagnostics.setup-error",{name:error?.name});dispose();}
 })();
 /* Nocturne Center Motion — shared deterministic card choreography.
- * One geometry snapshot; no per-frame JavaScript, timers per card or clones. */
+ * One geometry snapshot, inert chrome copies, no per-frame trajectory JS. */
 (()=>{
   const win=window,root=document.documentElement,KEY="__nocturneCenterMotion";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
@@ -265,8 +271,21 @@
   // Only chrome mirror cards are copied. A shadow tree isolates them from
   // projection queries and lane scroll clips. No page snapshots or native
   // tabs are copied, and the proxies cannot receive focus or pointer input.
-  const paintProps=["display","position","inset","top","right","bottom","left","box-sizing","width","height","min-width","max-width","min-height","max-height","flex","flex-direction","flex-wrap","align-items","align-self","justify-content","place-items","gap","padding","margin","overflow","border","border-radius","box-shadow","background","color","font","font-family","font-size","font-weight","font-style","line-height","white-space","text-overflow","text-align","object-fit","fill","stroke","stroke-width","opacity","visibility","filter","transform","translate","scale","grid-template-columns","grid-template-rows"];
-  function proxy(c,layer,rr){
+  const paintProps=["display","position","inset","top","right","bottom","left","box-sizing","width","height","min-width","max-width","min-height","max-height","flex","flex-direction","flex-wrap","align-items","align-self","justify-content","place-items","gap","padding","margin","overflow","border","border-radius","box-shadow","background","color","font","font-family","font-size","font-weight","font-style","line-height","white-space","text-overflow","text-align","object-fit","fill","stroke","stroke-width","opacity","visibility","filter","transform","translate","scale","grid-template-columns","grid-template-rows","grid-auto-flow","grid-auto-columns","grid-auto-rows","align-content","justify-items","justify-self","place-content","row-gap","column-gap"];
+  function iconStats(row){
+    const images=[...row?.querySelectorAll(".oneplane-tab-icon img")||[]];
+    let ready=0,pending=0,missing=0;
+    for(const img of images){if(!img.getAttribute("src"))missing++;else if(!img.hidden&&img.complete&&img.naturalWidth>0)ready++;else pending++;}
+    return {total:images.length,ready,pending,missing};
+  }
+  // Fixed local geometry prevents native button/grid defaults in the
+  // shadow tree from reflowing a Split View handle or its member cards.
+  function freezeBox(n,r,parent){
+    Object.assign(n.style,{position:"absolute",inset:"auto",left:(r.left-parent.left)+"px",top:(r.top-parent.top)+"px",
+      width:r.width+"px",height:r.height+"px",boxSizing:"border-box",margin:"0",minWidth:"0",minHeight:"0",
+      maxWidth:"none",maxHeight:"none",transform:"none",translate:"none",scale:"none"});
+  }
+  function proxy(c,layer,rr,cleanups,stats){
     const clone=c.n.cloneNode(true);
     const originals=[c.n,...c.n.querySelectorAll("*")],copies=[clone,...clone.querySelectorAll("*")];
     for(let i=0;i<copies.length;i++){
@@ -274,6 +293,47 @@
       for(const attr of [...n.attributes])if(attr.name==="id"||attr.name==="tabindex"||attr.name.startsWith("on"))n.removeAttribute(attr.name);
       for(const k of paintProps){const v=style.getPropertyValue(k);if(v)n.style.setProperty(k,v);}
       n.style.setProperty("transition","none");n.style.setProperty("animation","none");n.style.setProperty("pointer-events","none");
+    }
+    if(c.n.classList.contains("oneplane-split-group")){
+      const handle=c.n.querySelector(".oneplane-split-handle");
+      for(const child of c.n.children){
+        const copy=copies[originals.indexOf(child)],r=child.getBoundingClientRect();
+        if(copy)freezeBox(copy,r,c.r);
+      }
+      if(handle){
+        const hr=handle.getBoundingClientRect();
+        for(const dot of handle.children){const copy=copies[originals.indexOf(dot)];if(copy)freezeBox(copy,dot.getBoundingClientRect(),hr);}
+        stats.groups++;stats.handles++;
+        stats.handleOffset=Math.max(stats.handleOffset,Math.abs(hr.top+hr.height/2-(c.r.top+c.r.height/2)));
+      }
+    }
+    // Keep favicons live without allowing the real tab projection to move.
+    // A local placeholder survives until an image actually decodes.
+    for(let i=0;i<originals.length;i++){
+      const src=originals[i],img=copies[i];
+      if(!src.matches?.(".oneplane-tab-icon img"))continue;
+      const fallback=document.createElementNS("http://www.w3.org/1999/xhtml","span");
+      fallback.textContent="•";Object.assign(fallback.style,{position:"absolute",inset:"0",display:"grid",placeItems:"center",fontSize:"17px",opacity:".6",pointerEvents:"none"});
+      img.parentNode.append(fallback);
+      Object.assign(img.style,{position:"absolute",inset:"0",width:"16px",height:"16px",objectFit:"contain"});
+      let current=null,wasReady=false;
+      function paint(){
+        const ready=!!current&&!src.hidden&&img.complete&&img.naturalWidth>0;
+        img.style.display=ready?"block":"none";fallback.style.visibility=ready?"hidden":"visible";
+        if(ready&&!wasReady){stats.iconLoads++;win.__nocturneTrace?.("center.icon.ready",()=>({owner:root.getAttribute(OWNER),ready:stats.iconLoads,total:stats.icons}),{throttle:100});}
+        wasReady=ready;
+      }
+      function update(){
+        const value=src.getAttribute("src");
+        if(value!==current){current=value;img.hidden=false;if(value)img.setAttribute("src",value);else img.removeAttribute("src");}
+        paint();
+      }
+      stats.icons++;
+      const observer=new win.MutationObserver(update);observer.observe(src,{attributes:true,attributeFilter:["src","hidden"]});
+      src.addEventListener("load",update);src.addEventListener("error",update);
+      img.addEventListener("load",paint);img.addEventListener("error",paint);
+      cleanups.push(()=>{observer.disconnect();src.removeEventListener("load",update);src.removeEventListener("error",update);img.removeEventListener("load",paint);img.removeEventListener("error",paint);});
+      update();
     }
     const outer=document.createElementNS("http://www.w3.org/1999/xhtml","div");
     Object.assign(outer.style,{position:"absolute",left:(c.r.left-rr.left)+"px",top:(c.r.top-rr.top)+"px",width:c.r.width+"px",height:c.r.height+"px",transformOrigin:"center",pointerEvents:"none"});
@@ -293,25 +353,36 @@
   }
   function start(row,{owner,direction="in",duration=520,delay=0}={}){
     stopSelection();active?.release();finishHandoff();releasePending();
-    if(dead||!row)return null;
+    if(dead||!row){win.__nocturneTrace?.("center.motion.skip",{owner,reason:dead?"disposed":"no-row"});return null;}
     const measuring=root.getAttribute("data-zr-workspace-phase")==="swap";
     if(measuring)root.setAttribute("data-zr-fold-measuring","true");
     let cards;try{cards=collect(row);}catch{root.removeAttribute("data-zr-fold-measuring");return null;}
-    if(!cards.length){root.removeAttribute("data-zr-fold-measuring");return null;}
+    if(!cards.length){root.removeAttribute("data-zr-fold-measuring");win.__nocturneTrace?.("center.motion.skip",{owner,reason:"no-visible-cards"});return null;}
     const rr=row.getBoundingClientRect(),host=document.createElementNS("http://www.w3.org/1999/xhtml","div");
     host.setAttribute("data-zr-magnetic-layer","true");host.setAttribute("aria-hidden","true");host.inert=true;
     Object.assign(host.style,{position:"absolute",inset:"0",zIndex:"14",pointerEvents:"none",overflow:"visible"});
     const hub=cards[0].hub;
     if(hub)host.style.clipPath=portalClip(hub,rr,win.innerWidth,win.innerHeight);
-    let layer;try{layer=host.attachShadow({mode:"closed"});}catch{root.removeAttribute("data-zr-fold-measuring");return null;}const effects=[],saved=[];
+    let layer;try{layer=host.attachShadow({mode:"closed"});}catch{root.removeAttribute("data-zr-fold-measuring");return null;}const effects=[],saved=[],cleanups=[],stats={groups:0,handles:0,handleOffset:0,icons:0,iconLoads:0};
     // Measure and build all proxies before hiding any real card.
     try{
-      for(const c of cards){const n=proxy(c,layer,rr),frames=keyframes(c,direction==="out");effects.push({n,frames});}
-    }catch(error){win.__nocturneTrace?.("center.motion.error",{stage:"proxy",name:error?.name});return null;}
+      for(const c of cards){const n=proxy(c,layer,rr,cleanups,stats),frames=keyframes(c,direction==="out");effects.push({n,frames,c});}
+    }catch(error){for(const off of cleanups)off();win.__nocturneTrace?.("center.motion.error",{owner,stage:"proxy",name:error?.name});return null;}
     finally{root.removeAttribute("data-zr-fold-measuring");}
     root.setAttribute(OWNER,owner);
     row.append(host);
     for(const c of cards){saved.push({n:c.n,mark:c.n.getAttribute(MARK)});c.n.setAttribute(MARK,"true");}
+    // Inspect the mounted proxy in its unanimated coordinate space once.
+    // No titles, image URLs, or DOM identifiers are logged.
+    let handleError=0,measuredHandles=0;
+    for(const {n,c} of effects){
+      const source=c.n.querySelector(".oneplane-split-handle"),copy=n.querySelector(".oneplane-split-handle");
+      if(!source||!copy)continue;
+      const a=source.getBoundingClientRect(),b=copy.getBoundingClientRect(),o=n.getBoundingClientRect();
+      handleError=Math.max(handleError,Math.abs((a.left-c.r.left)-(b.left-o.left)),Math.abs((a.top-c.r.top)-(b.top-o.top)));
+      measuredHandles++;
+    }
+    if(measuredHandles)win.__nocturneTrace?.("center.group.geometry",()=>({owner,count:measuredHandles,maxOffsetError:handleError}),{sample:800});
     const running=[];
     for(const {n,frames} of effects){
       n.style.transform=frames[0].transform;n.style.opacity=String(frames[0].opacity);
@@ -324,12 +395,14 @@
       release(){
         if(released)return;released=true;holdHandoff();
         for(const a of running)try{a.cancel();}catch{}
+        for(const off of cleanups)off();
+        win.__nocturneTrace?.("center.motion.release",()=>({owner,direction,count:cards.length,...stats,sourceIcons:iconStats(row)}),{sample:600});
         host.remove();
         for(const {n,mark} of saved){if(mark===null)n.removeAttribute(MARK);else n.setAttribute(MARK,mark);}
         if(active===handle){active=null;root.removeAttribute(OWNER);if(!win.closed)win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd"));}
       }};
     active=handle;
-    win.__nocturneTrace?.("center.motion",()=>({owner,direction,count:cards.length,duration,mode:"magnetic-fold",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length}),{sample:duration+250});
+    win.__nocturneTrace?.("center.motion",()=>({owner,direction,count:cards.length,duration,mode:"magnetic-fold",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length,groups:stats.groups,handles:stats.handles,handleOffset:stats.handleOffset,icons:iconStats(row),animated:running.length}),{sample:duration+250});
     return handle;
   }
   // Bookmarks use the Lab's center squeeze, not individual vertical slides.
@@ -376,12 +449,13 @@
   }
   win.addEventListener("OnePlane:StartupState",bindSelection);
   bindSelection();
-  const api={start,bookmarks,releasePending,dispose};win[KEY]=api;
+  const api={start,bookmarks,iconStats,releasePending,dispose};win[KEY]=api;
   // The layout entrypoint runs before its own projection. Gate only a
   // genuinely new window, never a Sine reload. Fail open on missing Assembly.
   try{
     if(!win.__nocturneLayoutStartup&&win.performance.now()<3500&&Services.prefs.getBoolPref("zen.refined.startup.animation",true)&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches){
-      root.setAttribute(PENDING,"true");pendingTimer=win.setTimeout(releasePending,6500);
+      win.__nocturneTrace?.("assembly.gate",{age:win.performance.now(),pending:true},{flush:true});
+      root.setAttribute(PENDING,"true");pendingTimer=win.setTimeout(()=>{win.__nocturneTrace?.("assembly.gate.timeout",{age:win.performance.now()},{flush:true});releasePending();},8500);
     }
   }catch{}
   win.addUnloadListener(dispose);
@@ -6668,9 +6742,22 @@ function installTabStrip() {
     box.append(handle);
     return {box, handle};
   }
+  function refreshEntryIcon(tab,entry){
+    const src= favicon(tab);
+    if(entry.src===src)return false;
+    entry.src=src;entry.img.hidden=!src;
+    if(src)entry.img.setAttribute("src",src);else entry.img.removeAttribute("src");
+    return true;
+  }
   function sync() {
     frame = 0;
-    if (dead||root.hasAttribute("data-zr-center-motion")) return;
+    if(dead)return;
+    if(root.hasAttribute("data-zr-center-motion")){
+      // Icon-only updates are safe while chrome geometry is frozen.
+      let changed=0;for(const [tab,entry] of entries)if(!tab.closing&&refreshEntryIcon(tab,entry))changed++;
+      if(changed)window.__nocturneTrace?.("center.icons.sync",{changed,owner:root.getAttribute("data-zr-center-motion")},{throttle:100});
+      return;
+    }
     const homeOpen=row.hasAttribute("data-op-home-open");
     // Respect the current workspace and native visibility.
     const tabs = Array.from(browser.visibleTabs || browser.tabs || []).filter(
@@ -6739,13 +6826,7 @@ function installTabStrip() {
       entry.button.title=label;
       entry.button.setAttribute("aria-label", label + (split ? ", Split View" : "") + (muted ? ", muted" : audible ? ", playing audio" : ""));
       if (entry.title.textContent !== label) entry.title.textContent = label;
-      const src = favicon(tab);
-      if (entry.src !== src) {
-        entry.src = src;
-        entry.img.hidden = !src;
-        if (src) entry.img.setAttribute("src", src);
-        else entry.img.removeAttribute("src");
-      }
+      refreshEntryIcon(tab,entry);
       if (group && splitEntries.has(group)) {
         const members = groupItems.get(group);
         if (!members.length) order.push(splitEntries.get(group).box);

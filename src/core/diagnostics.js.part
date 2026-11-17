@@ -1,11 +1,11 @@
-/* Nocturne preview.13 diagnostic recorder — read-only chrome telemetry.
+/* Nocturne preview.16 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.13",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.16",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
-  const id=Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
+  const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
   const fileName="nocturne-diagnostics.json",entries=[],last=new Map(),nodes=new Map(),removers=[];
   // Cross-window queue: all currently open browser windows share the same
   // coordinator object. Persist operations never race read/modify/write.
@@ -32,7 +32,7 @@
     if(typeof v!=="object"||Object.getPrototypeOf(v)!==Object.prototype&&Object.getPrototypeOf(v)!==null)return null;
     return Object.fromEntries(Object.entries(v).slice(0,45).map(([k,x])=>[k,safe(x,d+1)]));
   }
-  function exportData(){return {schema:2,version:VERSION,window:id,dropped,startup:startupEvents.slice(),events:entries.slice()};}
+  function exportData(){return {schema:2,version:VERSION,window:id,started,dropped,startup:startupEvents.slice(),events:entries.slice()};}
   function dump(){return JSON.stringify(exportData(),null,2);}
   async function persist(){
     if(privateWindow())return false;
@@ -48,17 +48,19 @@
         }
         const sessions=store.sessions.filter(x=>x.window!==session.window);
         sessions.push(session);
-        sessions.sort((a,b)=>(a.updated||0)-(b.updated||0));
-        while(sessions.length>4)sessions.shift();
-        let data=JSON.stringify({schema:2,version:VERSION,sessions},null,2);
-        while(data.length>450000&&sessions.length>1){
-          sessions.shift();data=JSON.stringify({schema:2,version:VERSION,sessions},null,2);
+        const birth=s=>s.started||parseInt(String(s.window).split("-")[0],36)||s.updated||0;
+        sessions.sort((a,b)=>birth(a)-birth(b));
+        while(sessions.length>3)sessions.shift();
+        // Trim each session independently instead of sacrificing older
+        // sessions when one recent recording is long.
+        for(let i=0;i<sessions.length;i++){
+          const s=sessions[i]={...sessions[i],events:sessions[i].events.slice()};
+          while(JSON.stringify(s,null,2).length>145000&&s.events.length>1){
+            const count=Math.min(s.events.length-1,Math.max(1,Math.ceil(s.events.length*.15)));
+            s.events.splice(0,count);s.dropped=(s.dropped||0)+count;
+          }
         }
-        while(data.length>450000&&session.events.length>1){
-          const count=Math.min(session.events.length-1,Math.max(1,Math.ceil(session.events.length*.15)));
-          session.events.splice(0,count);session.dropped+=count;
-          data=JSON.stringify({schema:2,version:VERSION,sessions},null,2);
-        }
+        const data=JSON.stringify({schema:2,version:VERSION,sessions},null,2);
         await IOUtils.writeUTF8(path,data,{tmpPath:path+".tmp"});
         store.sessions=sessions;
         // Remove only our old per-window diagnostic files after a successful
@@ -85,7 +87,7 @@
       if(interval&&last.has(key)&&t-last.get(key)<interval)return;
       last.set(key,t);
       const item={n:++seq,t:round(t),event,data:safe(typeof detail==="function"?detail():detail)};
-      if(startupEvents.length<100&&(/^(assembly\.|layout\.)/.test(event)||event==="center.motion"&&item.data?.owner==="startup"))startupEvents.push(item);
+      if(startupEvents.length<100&&(/^(assembly\.|layout\.)/.test(event)||event.startsWith("center.")&&item.data?.owner==="startup"))startupEvents.push(item);
       entries.push(item);if(entries.length>1600){entries.shift();dropped++;}
       dirty=true;
       if(event!=="sample")win.console.info("[Nocturne diag "+id+"] "+JSON.stringify(item));
@@ -102,6 +104,8 @@
     const wanted=new Map(targets.map(k=>[k,get(k)]).filter(x=>x[1]));
     const row=get("oneplane-tabs"),drag=row?.querySelector("[data-op-drag-follow],[data-op-detached],[data-op-pulling]");
     const ghost=doc.querySelector(".oneplane-bunny-ghost"),card=row?.querySelector(".oneplane-tab[data-selected]")||row?.querySelector(".oneplane-tab");
+    const group=row?.querySelector(".oneplane-split-group"),handle=group?.querySelector(".oneplane-split-handle");
+    if(group)wanted.set("split-group",group);if(handle)wanted.set("split-handle",handle);
     if(drag)wanted.set("source",drag);if(ghost)wanted.set("ghost",ghost);if(card)wanted.set("card",card);
     if(wanted.size===nodes.size&&[...wanted].every(([k,n])=>nodes.get(k)===n))return;
     observer.disconnect();nodes.clear();observer.observe(root,{attributes:true,attributeFilter:rootAttrs});
@@ -128,6 +132,8 @@
     if(row){
       const marked=selector=>row.querySelectorAll(selector).length;
       counts.startup=marked("[data-zr-startup-effect]");counts.closing=marked("[data-zr-close-effect]");counts.center=marked("[data-zr-center-card]");
+      counts.splitGroups=marked(".oneplane-split-group");counts.splitHandles=marked(".oneplane-split-handle");
+      const images=[...row.querySelectorAll(".oneplane-tab-icon img")];counts.iconsReady=images.filter(n=>!n.hidden&&n.complete&&n.naturalWidth>0).length;counts.iconsTotal=images.length;
       counts.detached=marked("[data-op-detached]");counts.laneGhost=marked("[data-op-lane-ghost]");
     }
     const frame={count:gaps.length,max:gaps.length?round(Math.max(...gaps)):null,over25:gaps.filter(v=>v>25).length};gaps=[];

@@ -1,6 +1,6 @@
-// Nocturne preview.13: early trace, independent Sine script order.
+// Nocturne preview.16: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.13"};
+  const event="assembly.script",data={version:"0.3.0-preview.16"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -62,7 +62,7 @@ try{if(typeof window!=="undefined"){
   let dead=false,playing=false,settling=false,raf=0,timer=0,settled=false,nativeReady=false,readyAt=0,holdNode=null;
   let nativeObserver=null,style=null,lateObserver=null,lateResize=null,lateFrame=0,playStart=0,finishAt=0,sheetURI=null,nativeTimer=0;
   const animations=new Map(),owned=new Map(),seen=new Set(),baseline=new Set();
-  let centerHandle=null,bookmarkHandle=null;
+  let centerHandle=null,bookmarkHandle=null,iconWaitAt=0,iconCheckAt=-Infinity,iconStatus=null;
   const EXISTING="data-zr-startup-existing";
   const MANAGED="data-zr-startup-managed",EFFECT="data-zr-startup-effect",MOVE="data-zr-startup-move",CLIP="data-zr-startup-clip",PROGRESS="--zr-startup-progress";
   let registered=false;
@@ -139,7 +139,14 @@ try{if(typeof window!=="undefined"){
     }
     timer=window.setTimeout(finish,155);
   }
-  function interrupt(event){typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.interrupt",()=>({type:event?.type,trusted:event?.isTrusted,playing}),{sample:1200});if(event?.isTrusted!==false)settle();}
+  function interrupt(event){
+    // Typing in Home or a web page must not terminate a chrome animation.
+    // Explicit toolbar actions and customization can still interrupt it.
+    const toolbar=!!event?.target?.closest?.("#nav-bar,#PersonalToolbar,#oneplane-tabs");
+    const accepted=event?.isTrusted!==false&&(event?.type==="beforecustomization"||event?.type==="dragstart"||event?.type==="pointerdown"&&toolbar);
+    decision("assembly.interrupt",{type:event?.type,trusted:event?.isTrusted,playing,toolbar,accepted});
+    if(accepted)settle();
+  }
   let viewport=[window.innerWidth,window.innerHeight];
   function onResize(){
     const next=[window.innerWidth,window.innerHeight];
@@ -322,6 +329,7 @@ try{if(typeof window!=="undefined"){
         for(const n of cards){n.setAttribute(MANAGED,"true");seen.add(n);}
         if(!painted)centerHandle=engine?.start(row,{owner:"startup",direction:"in",duration:Math.round(760*scale),delay:Math.round(55*scale)});
         else engine?.releasePending();
+        decision("assembly.center.result",{painted,gated,cold,engine:!!engine,count:centerHandle?.count||0});
         const plus=row.querySelector(".oneplane-new-tab");if(bounds(plus,true))slide(plus,-26,0,280,390);
         if(ir){island.setAttribute(MANAGED,"true");seen.add(island);}
       }else{
@@ -363,7 +371,7 @@ try{if(typeof window!=="undefined"){
   }
   function tick(){
     raf=0;if(dead||playing)return;
-    if(now()>=deadline){finish();return;}
+    if(now()>=deadline){decision("assembly.skip",{reason:"deadline",nativeReady,settled,state:root.getAttribute(READY)});finish();return;}
     hold();
     if(!nativeReady||!settled){schedule();return;}
     const state=root.getAttribute(READY);
@@ -378,6 +386,14 @@ try{if(typeof window!=="undefined"){
     if(active&&state==="true"&&root.getAttribute("zen-compact-mode")==="true"&&!holdNode?.hasAttribute("data-op-panel-open")){schedule();return;}
     const one=Boolean(active&&bounds(row,true)&&(root.getAttribute("zen-compact-mode")!=="true"||holdNode?.hasAttribute("data-op-panel-open")));
     if(active&&!one){schedule();return;}
+    if(one){
+      const engine=window.__nocturneCenterMotion;
+      if(!iconWaitAt)iconWaitAt=now();
+      if(now()-iconCheckAt>=75){iconCheckAt=now();iconStatus=engine?.iconStats?.(row)||null;}
+      const waiting=iconStatus&&(iconStatus.pending+iconStatus.missing)>0;
+      if(waiting&&now()-iconWaitAt<350){schedule();return;}
+      decision("assembly.icons.ready",{...iconStatus,wait:now()-iconWaitAt,timeout:!!waiting});
+    }
     typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.ready",()=>({one,active,state,expected,nativeReady,settled}),{sample:2500});
     // A narrow/hidden legacy strip falls back to native UI, never forces
     // a layout preference. With pending integration, fail open on timeout.

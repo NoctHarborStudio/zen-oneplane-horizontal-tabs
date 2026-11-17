@@ -1,5 +1,5 @@
 /* Nocturne Center Motion — shared deterministic card choreography.
- * One geometry snapshot; no per-frame JavaScript, timers per card or clones. */
+ * One geometry snapshot, inert chrome copies, no per-frame trajectory JS. */
 (()=>{
   const win=window,root=document.documentElement,KEY="__nocturneCenterMotion";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
@@ -80,8 +80,21 @@
   // Only chrome mirror cards are copied. A shadow tree isolates them from
   // projection queries and lane scroll clips. No page snapshots or native
   // tabs are copied, and the proxies cannot receive focus or pointer input.
-  const paintProps=["display","position","inset","top","right","bottom","left","box-sizing","width","height","min-width","max-width","min-height","max-height","flex","flex-direction","flex-wrap","align-items","align-self","justify-content","place-items","gap","padding","margin","overflow","border","border-radius","box-shadow","background","color","font","font-family","font-size","font-weight","font-style","line-height","white-space","text-overflow","text-align","object-fit","fill","stroke","stroke-width","opacity","visibility","filter","transform","translate","scale","grid-template-columns","grid-template-rows"];
-  function proxy(c,layer,rr){
+  const paintProps=["display","position","inset","top","right","bottom","left","box-sizing","width","height","min-width","max-width","min-height","max-height","flex","flex-direction","flex-wrap","align-items","align-self","justify-content","place-items","gap","padding","margin","overflow","border","border-radius","box-shadow","background","color","font","font-family","font-size","font-weight","font-style","line-height","white-space","text-overflow","text-align","object-fit","fill","stroke","stroke-width","opacity","visibility","filter","transform","translate","scale","grid-template-columns","grid-template-rows","grid-auto-flow","grid-auto-columns","grid-auto-rows","align-content","justify-items","justify-self","place-content","row-gap","column-gap"];
+  function iconStats(row){
+    const images=[...row?.querySelectorAll(".oneplane-tab-icon img")||[]];
+    let ready=0,pending=0,missing=0;
+    for(const img of images){if(!img.getAttribute("src"))missing++;else if(!img.hidden&&img.complete&&img.naturalWidth>0)ready++;else pending++;}
+    return {total:images.length,ready,pending,missing};
+  }
+  // Fixed local geometry prevents native button/grid defaults in the
+  // shadow tree from reflowing a Split View handle or its member cards.
+  function freezeBox(n,r,parent){
+    Object.assign(n.style,{position:"absolute",inset:"auto",left:(r.left-parent.left)+"px",top:(r.top-parent.top)+"px",
+      width:r.width+"px",height:r.height+"px",boxSizing:"border-box",margin:"0",minWidth:"0",minHeight:"0",
+      maxWidth:"none",maxHeight:"none",transform:"none",translate:"none",scale:"none"});
+  }
+  function proxy(c,layer,rr,cleanups,stats){
     const clone=c.n.cloneNode(true);
     const originals=[c.n,...c.n.querySelectorAll("*")],copies=[clone,...clone.querySelectorAll("*")];
     for(let i=0;i<copies.length;i++){
@@ -89,6 +102,47 @@
       for(const attr of [...n.attributes])if(attr.name==="id"||attr.name==="tabindex"||attr.name.startsWith("on"))n.removeAttribute(attr.name);
       for(const k of paintProps){const v=style.getPropertyValue(k);if(v)n.style.setProperty(k,v);}
       n.style.setProperty("transition","none");n.style.setProperty("animation","none");n.style.setProperty("pointer-events","none");
+    }
+    if(c.n.classList.contains("oneplane-split-group")){
+      const handle=c.n.querySelector(".oneplane-split-handle");
+      for(const child of c.n.children){
+        const copy=copies[originals.indexOf(child)],r=child.getBoundingClientRect();
+        if(copy)freezeBox(copy,r,c.r);
+      }
+      if(handle){
+        const hr=handle.getBoundingClientRect();
+        for(const dot of handle.children){const copy=copies[originals.indexOf(dot)];if(copy)freezeBox(copy,dot.getBoundingClientRect(),hr);}
+        stats.groups++;stats.handles++;
+        stats.handleOffset=Math.max(stats.handleOffset,Math.abs(hr.top+hr.height/2-(c.r.top+c.r.height/2)));
+      }
+    }
+    // Keep favicons live without allowing the real tab projection to move.
+    // A local placeholder survives until an image actually decodes.
+    for(let i=0;i<originals.length;i++){
+      const src=originals[i],img=copies[i];
+      if(!src.matches?.(".oneplane-tab-icon img"))continue;
+      const fallback=document.createElementNS("http://www.w3.org/1999/xhtml","span");
+      fallback.textContent="•";Object.assign(fallback.style,{position:"absolute",inset:"0",display:"grid",placeItems:"center",fontSize:"17px",opacity:".6",pointerEvents:"none"});
+      img.parentNode.append(fallback);
+      Object.assign(img.style,{position:"absolute",inset:"0",width:"16px",height:"16px",objectFit:"contain"});
+      let current=null,wasReady=false;
+      function paint(){
+        const ready=!!current&&!src.hidden&&img.complete&&img.naturalWidth>0;
+        img.style.display=ready?"block":"none";fallback.style.visibility=ready?"hidden":"visible";
+        if(ready&&!wasReady){stats.iconLoads++;win.__nocturneTrace?.("center.icon.ready",()=>({owner:root.getAttribute(OWNER),ready:stats.iconLoads,total:stats.icons}),{throttle:100});}
+        wasReady=ready;
+      }
+      function update(){
+        const value=src.getAttribute("src");
+        if(value!==current){current=value;img.hidden=false;if(value)img.setAttribute("src",value);else img.removeAttribute("src");}
+        paint();
+      }
+      stats.icons++;
+      const observer=new win.MutationObserver(update);observer.observe(src,{attributes:true,attributeFilter:["src","hidden"]});
+      src.addEventListener("load",update);src.addEventListener("error",update);
+      img.addEventListener("load",paint);img.addEventListener("error",paint);
+      cleanups.push(()=>{observer.disconnect();src.removeEventListener("load",update);src.removeEventListener("error",update);img.removeEventListener("load",paint);img.removeEventListener("error",paint);});
+      update();
     }
     const outer=document.createElementNS("http://www.w3.org/1999/xhtml","div");
     Object.assign(outer.style,{position:"absolute",left:(c.r.left-rr.left)+"px",top:(c.r.top-rr.top)+"px",width:c.r.width+"px",height:c.r.height+"px",transformOrigin:"center",pointerEvents:"none"});
@@ -108,25 +162,36 @@
   }
   function start(row,{owner,direction="in",duration=520,delay=0}={}){
     stopSelection();active?.release();finishHandoff();releasePending();
-    if(dead||!row)return null;
+    if(dead||!row){win.__nocturneTrace?.("center.motion.skip",{owner,reason:dead?"disposed":"no-row"});return null;}
     const measuring=root.getAttribute("data-zr-workspace-phase")==="swap";
     if(measuring)root.setAttribute("data-zr-fold-measuring","true");
     let cards;try{cards=collect(row);}catch{root.removeAttribute("data-zr-fold-measuring");return null;}
-    if(!cards.length){root.removeAttribute("data-zr-fold-measuring");return null;}
+    if(!cards.length){root.removeAttribute("data-zr-fold-measuring");win.__nocturneTrace?.("center.motion.skip",{owner,reason:"no-visible-cards"});return null;}
     const rr=row.getBoundingClientRect(),host=document.createElementNS("http://www.w3.org/1999/xhtml","div");
     host.setAttribute("data-zr-magnetic-layer","true");host.setAttribute("aria-hidden","true");host.inert=true;
     Object.assign(host.style,{position:"absolute",inset:"0",zIndex:"14",pointerEvents:"none",overflow:"visible"});
     const hub=cards[0].hub;
     if(hub)host.style.clipPath=portalClip(hub,rr,win.innerWidth,win.innerHeight);
-    let layer;try{layer=host.attachShadow({mode:"closed"});}catch{root.removeAttribute("data-zr-fold-measuring");return null;}const effects=[],saved=[];
+    let layer;try{layer=host.attachShadow({mode:"closed"});}catch{root.removeAttribute("data-zr-fold-measuring");return null;}const effects=[],saved=[],cleanups=[],stats={groups:0,handles:0,handleOffset:0,icons:0,iconLoads:0};
     // Measure and build all proxies before hiding any real card.
     try{
-      for(const c of cards){const n=proxy(c,layer,rr),frames=keyframes(c,direction==="out");effects.push({n,frames});}
-    }catch(error){win.__nocturneTrace?.("center.motion.error",{stage:"proxy",name:error?.name});return null;}
+      for(const c of cards){const n=proxy(c,layer,rr,cleanups,stats),frames=keyframes(c,direction==="out");effects.push({n,frames,c});}
+    }catch(error){for(const off of cleanups)off();win.__nocturneTrace?.("center.motion.error",{owner,stage:"proxy",name:error?.name});return null;}
     finally{root.removeAttribute("data-zr-fold-measuring");}
     root.setAttribute(OWNER,owner);
     row.append(host);
     for(const c of cards){saved.push({n:c.n,mark:c.n.getAttribute(MARK)});c.n.setAttribute(MARK,"true");}
+    // Inspect the mounted proxy in its unanimated coordinate space once.
+    // No titles, image URLs, or DOM identifiers are logged.
+    let handleError=0,measuredHandles=0;
+    for(const {n,c} of effects){
+      const source=c.n.querySelector(".oneplane-split-handle"),copy=n.querySelector(".oneplane-split-handle");
+      if(!source||!copy)continue;
+      const a=source.getBoundingClientRect(),b=copy.getBoundingClientRect(),o=n.getBoundingClientRect();
+      handleError=Math.max(handleError,Math.abs((a.left-c.r.left)-(b.left-o.left)),Math.abs((a.top-c.r.top)-(b.top-o.top)));
+      measuredHandles++;
+    }
+    if(measuredHandles)win.__nocturneTrace?.("center.group.geometry",()=>({owner,count:measuredHandles,maxOffsetError:handleError}),{sample:800});
     const running=[];
     for(const {n,frames} of effects){
       n.style.transform=frames[0].transform;n.style.opacity=String(frames[0].opacity);
@@ -139,12 +204,14 @@
       release(){
         if(released)return;released=true;holdHandoff();
         for(const a of running)try{a.cancel();}catch{}
+        for(const off of cleanups)off();
+        win.__nocturneTrace?.("center.motion.release",()=>({owner,direction,count:cards.length,...stats,sourceIcons:iconStats(row)}),{sample:600});
         host.remove();
         for(const {n,mark} of saved){if(mark===null)n.removeAttribute(MARK);else n.setAttribute(MARK,mark);}
         if(active===handle){active=null;root.removeAttribute(OWNER);if(!win.closed)win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd"));}
       }};
     active=handle;
-    win.__nocturneTrace?.("center.motion",()=>({owner,direction,count:cards.length,duration,mode:"magnetic-fold",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length}),{sample:duration+250});
+    win.__nocturneTrace?.("center.motion",()=>({owner,direction,count:cards.length,duration,mode:"magnetic-fold",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length,groups:stats.groups,handles:stats.handles,handleOffset:stats.handleOffset,icons:iconStats(row),animated:running.length}),{sample:duration+250});
     return handle;
   }
   // Bookmarks use the Lab's center squeeze, not individual vertical slides.
@@ -191,12 +258,13 @@
   }
   win.addEventListener("OnePlane:StartupState",bindSelection);
   bindSelection();
-  const api={start,bookmarks,releasePending,dispose};win[KEY]=api;
+  const api={start,bookmarks,iconStats,releasePending,dispose};win[KEY]=api;
   // The layout entrypoint runs before its own projection. Gate only a
   // genuinely new window, never a Sine reload. Fail open on missing Assembly.
   try{
     if(!win.__nocturneLayoutStartup&&win.performance.now()<3500&&Services.prefs.getBoolPref("zen.refined.startup.animation",true)&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches){
-      root.setAttribute(PENDING,"true");pendingTimer=win.setTimeout(releasePending,6500);
+      win.__nocturneTrace?.("assembly.gate",{age:win.performance.now(),pending:true},{flush:true});
+      root.setAttribute(PENDING,"true");pendingTimer=win.setTimeout(()=>{win.__nocturneTrace?.("assembly.gate.timeout",{age:win.performance.now()},{flush:true});releasePending();},8500);
     }
   }catch{}
   win.addUnloadListener(dispose);

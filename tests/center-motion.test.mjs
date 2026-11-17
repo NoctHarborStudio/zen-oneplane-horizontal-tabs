@@ -81,3 +81,24 @@ test("fallback without a visible Home preserves the original fold",()=>{
  const c=card(200,26);
  assert.deepEqual(magnetState({...c,hub:null},.4),magnetState(c,.4));
 });
+
+test("split handle and members use measured local boxes rather than shadow grid defaults",()=>{
+ const i=source.indexOf("function freezeBox("),j=source.indexOf("function proxy(",i);
+ const freeze=new Function(source.slice(i,j)+"return freezeBox")();
+ const n={style:{}};
+ freeze(n,{left:124,top:81,width:16,height:26},{left:120,top:77});
+ assert.equal(n.style.left,"4px");assert.equal(n.style.top,"4px");
+ assert.equal(n.style.width,"16px");assert.equal(n.style.height,"26px");
+ assert.equal(n.style.position,"absolute");assert.equal(n.style.transform,"none");
+ assert.ok(source.includes('freezeBox(copy,dot.getBoundingClientRect(),hr)'));
+ assert.ok(source.includes('center.group.geometry'));
+});
+test("icon updates remain live in the proxy without layout or private URL logging",()=>{
+ assert.ok(source.includes('attributeFilter:["src","hidden"]'));
+ assert.ok(source.includes("img.complete&&img.naturalWidth>0"));
+ assert.ok(source.includes('fallback.style.visibility=ready?"hidden":"visible"'));
+ assert.ok(source.includes('for(const off of cleanups)off()'));
+ const sync=read("src/toolbar/tab-sync.js.part");
+ const active=sync.slice(sync.indexOf('if(root.hasAttribute("data-zr-center-motion"))'),sync.indexOf("const homeOpen="));
+ assert.ok(active.includes("refreshEntryIcon(tab,entry)"));assert.ok(!active.includes("centerToolbar()"));
+});

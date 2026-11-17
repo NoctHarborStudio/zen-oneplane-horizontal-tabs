@@ -1,6 +1,19 @@
+  function refreshEntryIcon(tab,entry){
+    const src= favicon(tab);
+    if(entry.src===src)return false;
+    entry.src=src;entry.img.hidden=!src;
+    if(src)entry.img.setAttribute("src",src);else entry.img.removeAttribute("src");
+    return true;
+  }
   function sync() {
     frame = 0;
-    if (dead||root.hasAttribute("data-zr-center-motion")) return;
+    if(dead)return;
+    if(root.hasAttribute("data-zr-center-motion")){
+      // Icon-only updates are safe while chrome geometry is frozen.
+      let changed=0;for(const [tab,entry] of entries)if(!tab.closing&&refreshEntryIcon(tab,entry))changed++;
+      if(changed)window.__nocturneTrace?.("center.icons.sync",{changed,owner:root.getAttribute("data-zr-center-motion")},{throttle:100});
+      return;
+    }
     const homeOpen=row.hasAttribute("data-op-home-open");
     // Respect the current workspace and native visibility.
     const tabs = Array.from(browser.visibleTabs || browser.tabs || []).filter(
@@ -69,13 +82,7 @@
       entry.button.title=label;
       entry.button.setAttribute("aria-label", label + (split ? ", Split View" : "") + (muted ? ", muted" : audible ? ", playing audio" : ""));
       if (entry.title.textContent !== label) entry.title.textContent = label;
-      const src = favicon(tab);
-      if (entry.src !== src) {
-        entry.src = src;
-        entry.img.hidden = !src;
-        if (src) entry.img.setAttribute("src", src);
-        else entry.img.removeAttribute("src");
-      }
+      refreshEntryIcon(tab,entry);
       if (group && splitEntries.has(group)) {
         const members = groupItems.get(group);
         if (!members.length) order.push(splitEntries.get(group).box);

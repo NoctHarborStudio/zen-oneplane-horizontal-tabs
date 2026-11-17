@@ -1,3 +1,10 @@
+## 0.3.0-preview.16 — Stable split proxies and startup icons
+
+- Freeze measured Split View handle, dots and member geometry in the shared animation proxy. Record mounted handle offset errors.
+- Wait up to 350ms for startup favicons; keep chrome-only icon updates live during the fold with a placeholder for unavailable images. Ignore unrelated keyboard/scroll input during startup.
+- Retain the three latest window sessions by creation time, with independent event budgets and preserved startup summaries. Record readiness, gate, interruption and proxy metrics without URLs or titles.
+- Preserve the Preview 14 and 15 hosted downloads wave fixes.
+
 ## 0.3.0-preview.15 — Fixed horizontal download wave geometry
 
 - Keep hosted downloads in the resting border box for the entire opening and closing wave. No extra 32px top bridge, padding, translation or final geometry change. Seed stays inside the panel's top edge; the contour still grows down and then right.
