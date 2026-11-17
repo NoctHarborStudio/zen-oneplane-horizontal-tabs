@@ -1,3 +1,10 @@
+## 0.3.0-preview.1 — Nocturne: unified package
+
+- Combine OnePlane preview.62 and Zen Refined preview.26 into one Sine mod, preserving OnePlane's package ID, update URL and all existing preference keys.
+- Import seven Refined runtime scripts and the non-bookmark stylesheet verbatim; retain one shared Magnetic Bookmarks controller and CSS. All nine runtime scripts are syntax-checked by the package verification command.
+- Keep horizontal layout and Home unchanged; no vertical layout or lifecycle refactor yet.
+- Migration requires disabling legacy Zen Refined before updating; native Zen/Sine validation and coexistence remain pending. See docs/nocturne/validation.md.
+
 ## 0.2.0-preview.62 — Prevent Home flash during new tab navigation
 
 - Distinguish Zen's explicit empty tab and committed ordinary blank pages from a new browser's transient initial about:blank. Wait for the selected tab's committed WindowGlobal and load completion, not an arbitrary timeout.

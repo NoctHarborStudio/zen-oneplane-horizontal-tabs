@@ -540,5 +540,91 @@
     "property": "zen.oneplane.experimental-display-snap",
     "label": "Experimental Windows monitor placement",
     "defaultValue": true
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.refined.startup.disable-placeholders",
+    "label": "Disable Firefox startup placeholder windows (restart required)",
+    "defaultValue": true
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.refined.startup.animation",
+    "label": "Center Assembly startup animation (next window)",
+    "defaultValue": true
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.refined.startup.animation-duration",
+    "label": "Startup animation duration",
+    "value": "number",
+    "defaultValue": 1050,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "450 ms",
+        "value": 450
+      },
+      {
+        "label": "600 ms",
+        "value": 600
+      },
+      {
+        "label": "760 ms",
+        "value": 760
+      },
+      {
+        "label": "1000 ms",
+        "value": 1000
+      },
+      {
+        "label": "1050 ms",
+        "value": 1050
+      },
+      {
+        "label": "1250 ms",
+        "value": 1250
+      },
+      {
+        "label": "1500 ms",
+        "value": 1500
+      }
+    ]
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.refined.closing.animation",
+    "label": "Center Disassembly closing animation",
+    "defaultValue": true
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.refined.downloads.indicator",
+    "label": "Download indicator (speed and progress)",
+    "defaultValue": true
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.refined.downloads.statistics",
+    "label": "Show average download speed and elapsed time",
+    "defaultValue": true
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.refined.page-progress.enabled",
+    "label": "Page loading indicator",
+    "defaultValue": true
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.refined.smart-search.enabled",
+    "label": "Smart Search — recent active tabs",
+    "defaultValue": true
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.refined.workspace.transition",
+    "label": "Center workspace transition (Home and Hub)",
+    "defaultValue": true
   }
 ]

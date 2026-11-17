@@ -1,0 +1,314 @@
+/* Zen Refined — native dock indicator, transient details and page progress. */
+:root[data-zr-downloads-active] zen-download-animation,
+:root[data-zr-downloads-active] .zen-download-box-animation { display:none !important; }
+#zr-download-indicator,#zr-download-dock,.zr-download-flight {
+  --zr-download-fg: var(--zr-native-fg,var(--toolbar-color, var(--arrowpanel-color, currentColor)));
+  --zr-download-surface: var(--zr-native-surface,var(--zen-compact-mode-toolbar-background,var(--zen-main-browser-background,var(--toolbar-bgcolor,light-dark(#eef0f4,#171a21)))));
+  --zr-download-outline: var(--zr-native-outline,var(--zen-compact-mode-toolbar-outline-color,color-mix(in srgb,currentColor 10%,transparent)));
+  --zr-download-row: var(--zr-native-row,var(--zen-toolbar-element-bg,color-mix(in srgb,currentColor 4%,transparent)));
+  box-sizing:border-box !important;
+  color:var(--zr-download-fg);
+  font:11px/1.25 system-ui,sans-serif;
+  appearance:none;
+  -moz-window-dragging:no-drag;
+}
+#zr-download-indicator {
+  display:flex !important;
+  flex:0 0 auto !important;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  align-self:center;
+  gap:4px;
+  min-width:0;
+  width:58px;
+  max-width:100%;
+  min-height:33px;
+  padding:5px 6px;
+  margin:5px auto 7px;
+  background:transparent;
+  border:0;
+  border-radius:8px;
+  cursor:pointer;
+}
+#zr-download-indicator:hover { background:color-mix(in srgb,currentColor 9%,transparent); }
+#zr-download-indicator .zr-download-speed { font-size:9px;white-space:nowrap;opacity:.88;max-width:100%;overflow:hidden;text-overflow:ellipsis; }
+#zr-download-indicator .zr-download-speed:empty { display:none; }
+#zr-download-indicator .zr-download-track { width:34px; }
+#zr-download-indicator:not([data-transferring]) .zr-download-track { display:none !important; }
+/* Hide the redundant footer entry only while native dock is installed.
+ * Do not disable Library or change CustomizableUI/prefs. */
+:root[data-zr-downloads-native]:not([customizing]) :is(#zen-sidebar-foot-buttons,#zen-sidebar-bottom-buttons) #zen-library-button { display:none !important; }
+#zr-download-indicator[data-fallback] {
+  position:fixed !important;
+  inset:70px 18px auto auto !important;
+  z-index:2147482998 !important;
+  margin:0;
+  background:var(--zr-download-surface);
+  border:1px solid color-mix(in srgb,currentColor 10%,transparent);
+  box-shadow:0 4px 14px #0002;
+}
+#zr-download-indicator[data-fallback][data-side="left"] { inset:70px auto auto 18px !important; }
+#zr-download-indicator[data-zr-oneplane] { inset:63px auto auto 18px !important; }
+#zr-download-indicator[data-fallback]:not([data-live]) { visibility:hidden;pointer-events:none; }
+#zr-download-indicator[data-zr-hosted] { position:relative !important;inset:auto !important;margin:0; }
+#zr-download-indicator:focus-visible { outline:2px solid currentColor;outline-offset:2px; }
+
+.zr-download-track { position:relative;display:block;overflow:hidden;height:3px;border-radius:4px;background:color-mix(in srgb,currentColor 13%,transparent); }
+.zr-download-fill { display:block;width:100%;height:100%;border-radius:4px;background:currentColor;opacity:.82;transform-origin:left center;transform:scaleX(var(--zr-download-progress,0));transition:transform 420ms cubic-bezier(.22,.72,.2,1); }
+#zr-download-indicator[data-side="right"] .zr-download-fill { transform-origin:right center; }
+#zr-download-indicator[data-indeterminate] .zr-download-fill { width:42%;animation:zr-download-unknown 1.45s ease-in-out infinite; }
+@keyframes zr-download-unknown { 0%,100%{transform:translateX(-110%)} 50%{transform:translateX(240%)} }
+.zr-download-icon {
+  display:block;flex:0 0 19px;width:19px;height:19px;background:currentColor;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+
+.zr-download-flight { position:fixed !important;z-index:2147483001 !important;display:grid;place-items:center;width:33px;height:33px;border-radius:9px;background:var(--zr-download-surface);border:1px solid color-mix(in srgb,currentColor 12%,transparent);box-shadow:0 4px 12px #0003;pointer-events:none !important; }
+#zr-page-progress {
+  position:fixed !important;
+  inset:0 0 auto 0 !important;
+  height:3px;
+  z-index:2147482999 !important;
+  pointer-events:none !important;
+  opacity:0;
+  visibility:hidden;
+  transition:opacity 220ms ease,visibility 220ms;
+  color:color-mix(in srgb,var(--toolbar-color,light-dark(#858a94,#969ba6)) 60%,transparent);
+}
+#zr-page-progress[data-visible] { opacity:1;visibility:visible; }
+#zr-page-progress .zr-page-progress-fill {
+  width:100%;height:100%;border-radius:4px;
+  background:currentColor;
+  transform-origin:center center;
+  transform:scaleX(var(--zr-page-progress,0));
+  transition:transform 460ms cubic-bezier(.25,.72,.25,1);
+}
+#zr-page-progress[data-indeterminate] .zr-page-progress-fill { animation:zr-page-unknown 1.8s ease-in-out infinite; }
+@keyframes zr-page-unknown { 0%,100%{opacity:.45} 50%{opacity:1} }
+/* Startup never forcibly hides live download/page indicators. */
+@media (prefers-reduced-motion:reduce) {
+  #zr-download-indicator,#zr-download-dock,.zr-download-fill,#zr-page-progress,#zr-page-progress .zr-page-progress-fill { transition:none !important;animation:none !important; }
+  #zr-download-indicator[data-indeterminate] .zr-download-fill { transform:scaleX(1);opacity:.55; }
+  #zr-page-progress[data-indeterminate] .zr-page-progress-fill { opacity:.65; }
+}
+
+/* Content-side mask: fluid motion emerges from underneath native Zen. */
+#zr-download-layer {
+  position:fixed !important;inset:0 !important;
+  z-index:2147483002 !important;pointer-events:none !important;
+  clip-path:inset(0 var(--zr-mask-right,0px) 0 var(--zr-mask-left,0px));
+}
+/* Custom downloads dock: separate root overlay, native list is unchanged. */
+#zr-download-outside {
+  position:fixed !important;
+  inset:0 var(--zr-outside-right,0px) 0 var(--zr-outside-left,0px) !important;
+  z-index:2147482999 !important;
+  pointer-events:none !important;
+  visibility:hidden;
+  background:transparent;
+}
+#zr-download-outside[data-open] { visibility:visible;pointer-events:auto !important; }
+#zr-download-dock {
+  position:fixed !important;left:0 !important;top:0 !important;
+  translate:var(--zr-overlay-x,6px) var(--zr-overlay-y,8px);
+  z-index:2147483002 !important;
+  display:flex !important;flex-direction:column;
+  width:var(--zr-overlay-width,430px);
+  max-height:calc(100vh - var(--zr-overlay-y,8px) - 12px);
+  padding:12px;gap:10px;
+  border:1px solid var(--zr-download-outline);border-radius:12px;
+  box-shadow:0 8px 28px #0004;
+  opacity:0;visibility:hidden;pointer-events:none;
+}
+#zr-download-dock[data-full] { height:calc(100vh - var(--zr-overlay-y,8px) - 12px); }
+#zr-download-dock[data-open] { opacity:1;visibility:visible;pointer-events:auto; }
+#zr-download-dock[data-entering] { pointer-events:none; }
+#zr-download-dock[data-closing] { opacity:1;visibility:visible;pointer-events:none; }
+/* Real painted bridge, not an out-of-bounds clip of the resting box.
+   Extra padding preserves the content width; the left variant offsets
+   its border box so the resting content coordinates never move. */
+#zr-download-dock:is([data-entering],[data-closing]) {
+  width:calc(var(--zr-overlay-width,430px) + var(--zr-wave-extension,32px));
+  border-color:transparent;
+  box-shadow:none;
+  overflow:visible;
+}
+#zr-download-dock:is([data-entering],[data-closing])[data-side="right"] {
+  padding-right:calc(12px + var(--zr-wave-extension,32px));
+}
+#zr-download-dock:is([data-entering],[data-closing])[data-side="left"] {
+  padding-left:calc(12px + var(--zr-wave-extension,32px));
+  translate:calc(var(--zr-overlay-x,6px) - var(--zr-wave-extension,32px)) var(--zr-overlay-y,8px);
+}
+#zr-download-dock[data-entering] > * { animation:zr-panel-content-in 780ms linear both; }
+#zr-download-dock[data-closing] > * { animation:zr-panel-content-in 780ms linear reverse both; }
+@keyframes zr-panel-content-in { 0%,42% { opacity:0; } 88%,100% { opacity:1; } }
+#zr-download-dock:not([data-full]) :is(.zr-dock-row,.zr-dock-title) { cursor:pointer; }
+#zr-download-dock .zr-dock-header { display:flex;align-items:center;justify-content:space-between;padding:2px 2px 8px;border-bottom:1px solid color-mix(in srgb,currentColor 10%,transparent); }
+#zr-download-dock .zr-dock-title { font-size:14px;font-weight:600; }
+#zr-download-dock button { appearance:none;color:inherit;font:inherit;cursor:pointer;border:0;background:color-mix(in srgb,currentColor 7%,transparent);border-radius:6px;padding:7px; }
+#zr-download-dock button:hover:not(:disabled) { background:color-mix(in srgb,currentColor 15%,transparent); }
+#zr-download-dock button:focus-visible { outline:2px solid currentColor;outline-offset:2px; }
+#zr-download-dock button:disabled { opacity:.35;cursor:default; }
+#zr-download-dock .zr-dock-close { width:27px;height:27px;padding:0;font-size:20px;line-height:1; }
+#zr-download-dock .zr-dock-list { display:flex;flex-direction:column;gap:6px;overflow:auto;min-height:0;scrollbar-width:thin;scrollbar-gutter:stable;padding-inline-end:9px; }
+#zr-download-dock .zr-dock-row { display:flex;align-items:center;gap:9px;padding:10px 9px;border-radius:8px;background:color-mix(in srgb,var(--zr-download-row) 75%,transparent);flex-shrink:0; }
+#zr-download-dock .zr-dock-row-body { flex:1;min-width:0;display:flex;flex-direction:column;gap:5px; }
+#zr-download-dock .zr-dock-name { font-weight:600;white-space:nowrap;text-overflow:ellipsis;overflow:hidden; }
+#zr-download-dock .zr-dock-meta { font-size:10px;opacity:.7;white-space:nowrap;text-overflow:ellipsis;overflow:hidden; }
+#zr-download-dock .zr-dock-row-actions { display:flex;gap:5px;align-items:center;justify-content:flex-end;flex:0 0 auto; }
+#zr-download-dock :is(.zr-dock-folder,.zr-dock-open-file) { font-size:10px;white-space:nowrap;flex:0 0 auto; }
+#zr-download-dock .zr-dock-stats { font-size:9px;opacity:.62;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font-variant-numeric:tabular-nums; }
+#zr-download-dock .zr-dock-open-file { background:color-mix(in srgb,currentColor 13%,transparent); }
+@media(max-width:460px) { #zr-download-dock .zr-dock-row-actions { flex-direction:column;align-items:stretch; } }
+#zr-download-dock .zr-dock-row:not([data-state="active"]) .zr-download-track { display:none; }
+#zr-download-dock .zr-dock-row[data-indeterminate] .zr-download-fill { width:42%;animation:zr-download-unknown 1.45s ease-in-out infinite; }
+#zr-download-dock .zr-dock-empty { text-align:center;opacity:.65;padding:28px 8px; }
+#zr-download-dock .zr-dock-notice { font-size:10px;opacity:.8; }
+#zr-download-dock .zr-dock-notice:empty,#zr-download-dock [hidden] { display:none !important; }
+@media(prefers-reduced-motion:reduce) {
+  #zr-download-dock,#zr-download-dock .zr-download-fill { transition:none !important;animation:none !important; }
+}
+
+/* Header confirmation stays entirely inside the downloads dock. */
+#zr-download-dock .zr-dock-header { min-height:38px; }
+#zr-download-dock :is(.zr-dock-header-normal,.zr-dock-header-confirm) { width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px; }
+#zr-download-dock .zr-dock-header-confirm { animation:zr-dock-confirm-in 200ms ease both; }
+#zr-download-dock .zr-dock-header-actions { display:flex;align-items:center;gap:6px; }
+#zr-download-dock .zr-dock-question { flex:1;min-width:0;text-align:center;font-weight:600;font-size:12px; }
+#zr-download-dock :is(.zr-dock-yes,.zr-dock-no) { min-width:52px;padding:7px 11px; }
+#zr-download-dock .zr-dock-yes { background:color-mix(in srgb,currentColor 15%,transparent); }
+#zr-download-dock .zr-dock-sort { display:flex;gap:6px; }
+#zr-download-dock .zr-dock-sort button { flex:1;text-align:center; }
+#zr-download-dock .zr-dock-sort button[aria-pressed="true"] { background:color-mix(in srgb,currentColor 14%,transparent);font-weight:600; }
+@keyframes zr-dock-confirm-in { from {opacity:0;translate:0 -3px;} to {opacity:1;translate:none;} }
+@media(prefers-reduced-motion:reduce) {
+  #zr-download-dock .zr-dock-header-confirm { transition:none !important;animation:none !important; }
+}
+
+/* A translucent native-painted surface, without fading its text or controls. */
+#zr-download-dock { background:transparent;isolation:isolate; }
+#zr-download-dock::before { content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;background:var(--zr-download-surface);opacity:.88;pointer-events:none; }
+#zr-download-dock:is([data-entering],[data-closing])::before {
+  inset:-1px;border-radius:0;
+}
+#zr-download-dock:is([data-open],[data-closing]) { backdrop-filter:blur(12px); }
+@media(prefers-reduced-motion:reduce) { #zr-download-dock > * { transition:none !important; } }
+
+/* One panel, only its internal list scrolls. */
+#zr-download-dock .zr-dock-list { overflow-y:auto;overflow-x:hidden;flex:0 1 auto; }
+#zr-download-dock[data-full] .zr-dock-list { flex:1 1 auto; }
+#zr-download-dock > :not(.zr-dock-list) { flex-shrink:0; }
+#zr-download-dock .zr-dock-all { font-weight:600; }
+
+@media(prefers-reduced-motion:reduce) { #zr-download-dock:is([data-entering],[data-closing]) > * { animation:none !important; } }
+
+
+
+/* Smart Search — column-major native result grid. Native Zen caps the
+   result scrollport at 244px; override only while our zero-prefix grid is active. */
+#urlbar-results[data-zr-smart-grid] {
+  --zr-smart-row:48px;--zr-smart-gap:4px;--zr-smart-head:25px;
+  display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr));
+  grid-auto-rows:max-content;align-items:end;gap:var(--zr-smart-gap) 16px;
+  max-height:calc(100vh - 110px) !important;
+  overflow-y:auto !important;overflow-x:hidden !important;scrollbar-width:none !important;
+  padding-block:8px 10px !important;
+  background-image:linear-gradient(color-mix(in srgb,currentColor 13%,transparent),color-mix(in srgb,currentColor 13%,transparent));
+  background-size:1px calc(100% - 16px);background-position:center;background-repeat:no-repeat;
+}
+#urlbar[zen-floating-urlbar="true"] #urlbar-results[data-zr-smart-grid] {
+  max-height:min(68vh,calc(100vh - 112px)) !important;
+}
+#urlbar-results[data-zr-smart-grid][data-zr-narrow] {
+  grid-template-columns:minmax(0,1fr);background-image:none;
+}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-group] {
+  min-width:0 !important;width:auto !important;margin-block-start:0 !important;
+  box-sizing:border-box;position:relative;overflow:visible !important;
+  height:var(--zr-smart-row) !important;min-height:var(--zr-smart-row) !important;
+  align-self:end;
+}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-top] {
+  margin-block-start:var(--zr-smart-head) !important;
+}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-group]::before {content:none !important;}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-first]::before {
+  content:attr(data-zr-first) !important;display:block !important;position:absolute !important;
+  inset-block-start:-23px !important;inset-inline-start:8px !important;
+  margin:0 !important;line-height:18px;font-size:11px;font-weight:600;
+  color:inherit;opacity:.65;pointer-events:none;white-space:nowrap;
+}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-group="recommended"][data-zr-first]::before {
+  width:calc(200% + 8px);border-block-start:1px solid color-mix(in srgb,currentColor 20%,transparent);
+  padding-block-start:3px;inset-block-start:-26px !important;
+}
+#urlbar-results[data-zr-smart-grid][data-zr-narrow] > .urlbarView-row[data-zr-group="recommended"][data-zr-first]::before {width:calc(100% - 16px);}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-group] > .urlbarView-row-inner {
+  min-width:0 !important;min-height:0 !important;height:100% !important;box-sizing:border-box;
+  align-items:center !important;padding-block:4px !important;
+}
+#urlbar-results[data-zr-smart-grid] .urlbarView-row[data-zr-group="recent"] .urlbarView-row-inner {
+  display:flex !important;align-items:center !important;flex-wrap:nowrap !important;gap:8px;
+  padding-inline-start:16px !important;
+}
+#urlbar-results[data-zr-smart-grid] .zr-smart-time {
+  flex:0 0 47px;align-self:center !important;display:flex;align-items:center;
+  height:100%;line-height:1.2;font-size:11px;opacity:.65;white-space:nowrap;font-variant-numeric:tabular-nums;
+}
+#urlbar-results[data-zr-smart-grid] .zr-smart-body {
+  display:flex;flex-direction:column;justify-content:center;min-width:0;flex:1 1 0;gap:2px;
+}
+#urlbar-results[data-zr-smart-grid] .zr-smart-body :is(.urlbarView-title,.urlbarView-url) {
+  display:block !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;min-width:0;
+  margin:0 !important;padding:0 !important;
+}
+#urlbar-results[data-zr-smart-grid] .zr-smart-body .urlbarView-url {
+  color:inherit !important;opacity:.63;font-size:11px !important;
+}
+#urlbar-results[data-zr-smart-grid] .urlbarView-dynamic-zr-recent-tab-action {
+  font-size:10px;opacity:.68;margin-inline-start:auto;flex-shrink:0;align-self:center !important;
+}
+#urlbar-results[data-zr-smart-grid][data-zr-narrow] .urlbarView-dynamic-zr-recent-tab-action {max-width:60px;overflow:hidden;text-overflow:ellipsis;}
+/* The rail lives on the first real row of each chronological column.
+   The dot traverses it without adding nodes or selectable controls. */
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-rail="1"] {--zr-smart-rail:6px;}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-rail="2"] {--zr-smart-rail:calc(var(--zr-smart-row) + var(--zr-smart-gap) + 6px);}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-rail="3"] {--zr-smart-rail:calc(2 * (var(--zr-smart-row) + var(--zr-smart-gap)) + 6px);}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-rail]::after {
+  content:"" !important;display:block !important;position:absolute !important;
+  inset-inline-start:5px;inset-block-start:calc(50% - 3px);width:6px;height:var(--zr-smart-rail);
+  background-image:radial-gradient(circle,currentColor 2.3px,transparent 2.8px),linear-gradient(currentColor,currentColor);
+  background-size:6px 6px,1px calc(100% - 4px);background-repeat:no-repeat;
+  background-position:center bottom,center;opacity:.43;pointer-events:none;z-index:2;
+}
+#urlbar-results[data-zr-timeline] > .urlbarView-row[data-zr-rail]::after {
+  animation:zr-smart-dot-travel 850ms cubic-bezier(.3,.05,.3,1) both;
+}
+#urlbar-results[data-zr-timeline] > .urlbarView-row[data-zr-rail][data-zr-column="2"]::after {animation-delay:850ms;}
+@keyframes zr-smart-dot-travel {
+  0% {background-position:center top,center;opacity:0;}
+  12% {opacity:.65;}
+  100% {background-position:center bottom,center;opacity:.43;}
+}
+#urlbar-results[data-zr-smart-grid][data-zr-narrow] > .urlbarView-row[data-zr-group] {
+  grid-row:auto !important;grid-column:1 !important;
+}
+#urlbar-results[data-zr-smart-grid][data-zr-narrow] > .urlbarView-row[data-zr-top]:not([data-zr-first]) {margin-block-start:0 !important;}
+#urlbar-results[data-zr-smart-grid][data-zr-narrow] > .urlbarView-row[data-zr-rail]::after {content:none !important;}
+@media(prefers-reduced-motion:reduce) {
+  #urlbar-results[data-zr-timeline] > .urlbarView-row[data-zr-rail]::after {animation:none !important;}
+}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-cell="1-1"] {grid-row:1;grid-column:1;}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-cell="1-2"] {grid-row:1;grid-column:2;}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-cell="2-1"] {grid-row:2;grid-column:1;}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-cell="2-2"] {grid-row:2;grid-column:2;}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-cell="3-1"] {grid-row:3;grid-column:1;}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-cell="3-2"] {grid-row:3;grid-column:2;}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-cell="4-1"] {grid-row:4;grid-column:1;}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-cell="4-2"] {grid-row:4;grid-column:2;}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-cell="5-1"] {grid-row:5;grid-column:1;}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-cell="5-2"] {grid-row:5;grid-column:2;}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-cell="6-1"] {grid-row:6;grid-column:1;}
+#urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-cell="6-2"] {grid-row:6;grid-column:2;}
