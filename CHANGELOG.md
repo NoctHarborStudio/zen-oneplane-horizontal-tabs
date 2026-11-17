@@ -1,3 +1,10 @@
+## 0.3.0-preview.25 — Reversible Bunny and cold-start preflight
+
+- Use one pointer-driven geometry curve for pulling a tab or Split View group out and returning it to its row. The same progress determines card position, compression and occupied slot width in both directions. Only an accepted early drop plays the remaining curve.
+- Keep the frozen card-local activation edge and native drop/placement semantics; eliminate separate return threshold, insertion keyframes and autonomous bounce during the gesture.
+- Avoid expensive diagnostic layout snapshots and scheduled JSON writes during visible cold assembly; retain frame-gap telemetry. Keep center-motion geometry/contour stable and preflight first-workspace image readiness within the existing bounded swap gate.
+- Add regression coverage for reversible geometry and the diagnostic light-sampling path.
+
 ## 0.3.0-preview.24 — Dock-anchored page progress
 
 - Place horizontal page progress in a fixed chrome layer rather than the selected browser panel, following the actual dock bottom and fading contour with an 8px gap. Follow Compact Mode motion and additional toolbar rows while visible; stop frame tracking when hidden.

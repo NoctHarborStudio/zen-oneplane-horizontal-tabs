@@ -5,7 +5,7 @@ const version=JSON.parse(readFileSync(new URL("../theme.json",import.meta.url),"
 const source=readFileSync(new URL("../src/core/diagnostics.js.part",import.meta.url),"utf8");
 function fixture({isPrivate=false,on=true,prior=null}={}){
  let time=0,serial=0,enabled=on;const timers=new Map(),frames=new Map(),logs=[],writes=[],listeners=new Map();
- const root={hasAttribute:()=>false,getAttribute:()=>null};
+ const attrs=new Map(),root={hasAttribute:k=>attrs.has(k),getAttribute:k=>attrs.get(k)??null};
  const doc={documentElement:root,getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[]};
  const win={performance:{now:()=>time},innerWidth:1200,innerHeight:800,PrivateBrowsingUtils:{isWindowPrivate:()=>isPrivate},console:{info:s=>logs.push(s),warn:s=>logs.push(s)},addUnloadListener(){},
  MutationObserver:class{observe(){}disconnect(){}},addEventListener(k,f){listeners.set(k,f);},removeEventListener(k){listeners.delete(k);},
@@ -14,7 +14,7 @@ function fixture({isPrivate=false,on=true,prior=null}={}){
  const io={readUTF8:async()=>JSON.stringify(prior),makeDirectory:async()=>{},getChildren:async()=>[],writeUTF8:async(path,data)=>writes.push({path,data})};
  const paths={profileDir:"profile",join:(...p)=>p.join("/"),filename:p=>p.split("/").at(-1)};
  new Function("window","document","Services","IOUtils","PathUtils",source)(win,doc,{prefs:{getBoolPref:()=>enabled}},io,paths);
- return {win,timers,frames,logs,writes,listeners,setTime:t=>time=t,disable:()=>enabled=false,api:win.__nocturneDiagnostics};
+ return {win,timers,frames,logs,writes,listeners,attrs,setTime:t=>time=t,disable:()=>enabled=false,api:win.__nocturneDiagnostics};
 }
 test("recorder keeps ordered events, early markers, lazy detail and bounded ring",async()=>{
  const f=fixture();const trace=f.win.__nocturneTrace;
@@ -47,4 +47,12 @@ test("persist retains three most recent sessions by creation and trims each inde
  assert.deepEqual(sessions.slice(0,2).map(s=>s.started),[3,4]);
  assert.ok(sessions.every(s=>s.events.length>0&&s.dropped>0&&s.startup.length>0));
  assert.ok(new TextEncoder().encode(f.writes.at(-1).data).length<=2000000);
+});
+
+test("cold assembly keeps frame telemetry without expensive style snapshots",()=>{
+ const f=fixture();f.attrs.set("data-zr-startup-phase","playing");
+ const sample=[...f.timers.values()].find(x=>x.ms===50);assert.ok(sample);sample.f();
+ const data=JSON.parse(f.api.dump());const event=data.events.filter(e=>e.event==="sample").at(-1);
+ assert.equal(event.data.light,true);assert.deepEqual(event.data.metrics,{});assert.ok(event.data.frame);assert.equal(event.data.root["data-zr-startup-phase"],"playing");
+ f.api.dispose();
 });
