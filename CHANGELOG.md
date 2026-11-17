@@ -1,3 +1,9 @@
+## 0.3.0-preview.40 — Native live Bunny drag popup
+
+- Replace repeated local/native image swaps with a mouse-transparent XUL panel drag image on Windows. Gecko moves the popup across applications via native DragMoved.
+- Drive the spring with drag-only timers and popup screen geometry rather than blocked rAF; no dragleave image transitions. Rightward travel leans right around the top grip.
+- Add popup shown/hidden, timer, boundary, completion and return telemetry without file names or screen coordinates. Preserve the native file payload. Windows painting and DPI still require manual runtime validation.
+
 ## 0.3.0-preview.39 — Library L3 experimental shell
 
 - Add independent centered five-section Library preview, accessible tab navigation, responsive client geometry, reduced-motion-aware transitions and overlay arbitration.

@@ -56,26 +56,32 @@ test("native file icons refresh on completion and use the same URI for the drag 
 });
 test("Bunny reverses swing and locks the top grip after spring lift",()=>{
  const motion=new Function("const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),FILE_CARD_W=186,FILE_CARD_H=51,FILE_LIFT=320;"+section("  const fileMix=","  function fileOrigin(")+"return {fileSwingTarget,fileBunnyStep}")();
- assert.ok(motion.fileSwingTarget(500)>0);assert.ok(motion.fileSwingTarget(-500)<0);
- assert.equal(motion.fileSwingTarget(100000),23);
+ assert.ok(motion.fileSwingTarget(500)<0);assert.ok(motion.fileSwingTarget(-500)>0);
+ assert.equal(motion.fileSwingTarget(100000),-23);
  const origin={x:20,y:40,w:430,h:65},q={origin,point:{x:300,y:180},started:0,last:0,vx:900,s:Object.fromEntries(Object.entries({...origin,angle:0,scale:1}).map(([k,x])=>[k,{x,v:0}]))};
  let p;for(let i=8;i<=1000;i+=8){p=motion.fileBunnyStep(q,i);assert.ok(Math.abs(p.angle)<=28);assert.ok(Number.isFinite(p.w));}
  assert.equal(p.x,300);assert.equal(p.y,180);assert.ok(Math.abs(p.w-186)<.1);assert.ok(Math.abs(p.h-51)<.1);assert.ok(Math.abs(p.angle)<1);
 });
-test("file Bunny keeps the native payload and switches images without two previews",()=>{
+test("single live Windows drag popup uses a timer rather than native-image handoffs",()=>{
+ assert.ok(source.includes('e.dataTransfer.setDragImage(filePopup,FILE_GRIP_X,FILE_GRIP_Y)'));
  assert.ok(source.includes('e.dataTransfer.setDragImage(native.card,FILE_CARD_W/2,0)'));
- assert.ok(source.includes('if(reduced.matches||!updateFileDragImage(q,q.blank,0,0,e))return;'));
- assert.ok(source.includes('updateFileDragImage(q,q.native.card,FILE_CARD_W/2,0,e)'));
- assert.ok(source.includes('stopFileBunnyFrame(q);q.ghost.hidden=true'));
- assert.ok(source.includes('clearFileBunny();fileIconWarm=null;'));
- assert.ok(source.includes('window.removeEventListener(type,onFileDragMove,true)'));
+ assert.ok(!source.includes('updateFileDragImage'));assert.ok(!source.includes('onFileDragLeave'));
+ assert.ok(source.includes('q.timer=window.setTimeout(step,16)'));
+ assert.ok(source.includes('filePopup?.remove();filePopup=fileStage=null;'));
+ assert.ok(css.includes('pointer-events:none!important;-moz-window-shadow:none!important'));
  assert.ok(css.includes('transform-origin:50% 0%'));
- assert.ok(css.includes('.zr-file-bunny-ghost[hidden]'));
- const mode=new Function("reduced","updateFileDragImage","paintFileBunny","fileBunnyStep","current","startFileBunnyFrame","stopFileBunnyFrame","window","FILE_CARD_W","FILE_CARD_H",section("  function fileBunnyMode(","  function beginFileBunny(")+"return fileBunnyMode");
- let allow=false,updates=0;const q={mode:"native",ghost:{hidden:true},blank:{},native:{card:{}},ending:false};
- const set=mode({matches:false},()=>{updates++;return allow},()=>{},()=>({}),()=>0,()=>{},()=>{},{},186,51);
- set(q,"local",{});assert.equal(q.mode,"native");assert.equal(q.ghost.hidden,true);
- allow=true;set(q,"local",{});assert.equal(q.mode,"local");assert.equal(q.ghost.hidden,false);
- allow=false;set(q,"outside",{});assert.equal(q.mode,"local");assert.equal(q.ghost.hidden,false);
- allow=true;set(q,"outside",{});assert.equal(q.mode,"outside");assert.equal(q.ghost.hidden,true);assert.equal(updates,4);
+});
+test("popup screen movement drives swing inside and outside the source window",()=>{
+ const code=section("  function filePointInside(","  function tickFilePopup(");
+ const events=[],win={mozInnerScreenX:100,mozInnerScreenY:50,innerWidth:600,innerHeight:400};
+ const sample=new Function("window","fileMix","clamp","fileBunnyTrace",code+"return sampleFilePopup")(win,(a,b,t)=>a+(b-a)*t,(v,a,b)=>Math.max(a,Math.min(b,v)),(event,data)=>events.push([event,data.inside]));
+ const q={screenPoint:null,lastMove:0,vx:0,moves:0,crossings:0,inside:null,frames:0};
+ sample(q,{x:200,y:100},0);sample(q,{x:300,y:100},40);assert.ok(q.vx>0);
+ sample(q,{x:800,y:100},100);assert.equal(q.inside,false);assert.ok(q.vx>0);
+ sample(q,{x:600,y:100},140);assert.equal(q.inside,true);assert.ok(q.vx<0);
+ assert.equal(q.moves,3);assert.deepEqual(events,[["boundary",true],["boundary",false],["boundary",true]]);
+});
+test("drag telemetry includes popup readiness, motion and final summary",()=>{
+ for(const event of ["start","popup-shown","popup-not-shown","tick","end","popup-hidden","return-finish"])assert.ok(source.includes('fileBunnyTrace("'+event+'"'));
+ assert.ok(source.includes("maxAngle:q.maxAngle"));assert.ok(source.includes("maxGap:q.maxGap"));assert.ok(source.includes("q.missing>=3"));
 });

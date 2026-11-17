@@ -1,6 +1,6 @@
-// Nocturne preview.38: early trace, independent Sine script order.
+// Nocturne preview.40: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="downloads.script",data={version:"0.3.0-preview.39"};
+  const event="downloads.script",data={version:"0.3.0-preview.40"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -25,8 +25,8 @@ try{if(typeof window!=="undefined"){
   let lastDockRect=null,followFrame=0,followUntil=0,overlayUntil=0,heldWrapper=null;
   let dock=null,dockList=null,dockEmpty=null,dockMore=null,dockBackdrop=null,dockNotice=null,dockOpen=false,limit=30;
   const history=new Map(),rows=new Map();
-  let fileDragSource=null,dragClickSource=null,FileUtils=null,fileBunny=null,fileIconWarm=null;
-  const FILE_CARD_W=186,FILE_CARD_H=51,FILE_LIFT=320,FILE_RETURN=480;
+  let fileDragSource=null,dragClickSource=null,FileUtils=null,fileBunny=null,fileIconWarm=null,filePopup=null,fileStage=null;
+  const FILE_CARD_W=186,FILE_CARD_H=51,FILE_LIFT=320,FILE_RETURN=480,FILE_GRIP_X=172,FILE_GRIP_Y=48;
   let historyOrder=null,recentOrder=null,dockHeight=0,allButton=null,dockTitle=null,dockSort=null;
   const OVERLAY_WIDTH=430,RECENT_LIMIT=4;
   let sortKey="time",sortDir=-1,headerNormal=null,headerConfirm=null,clearButton=null,sortTime=null,sortSize=null,yesButton=null,noButton=null,confirming=false,clearing=false;
@@ -388,6 +388,7 @@ try{if(typeof window!=="undefined"){
       else openCard(true);
     });
     buildDock();
+    try{prepareFilePopup();}catch{}
     resizeObserver=typeof ResizeObserver==="function"?new ResizeObserver(scheduleMount):null;
     mount();
     layoutObserver=new MutationObserver(records=>{
@@ -409,8 +410,7 @@ try{if(typeof window!=="undefined"){
     for(const type of ["transitionrun","transitionstart","transitionend","transitioncancel"])window.addEventListener(type,trackLayout,true);
     window.addEventListener("pointerdown",trackClick,true);window.addEventListener("pointerdown",outsideDock,true);
     window.addEventListener("keydown",onKey,true);
-    for(const type of ["drag","dragover","dragenter"])window.addEventListener(type,onFileDragMove,true);
-    window.addEventListener("dragleave",onFileDragLeave,true);prefs.addObserver(SIDE,scheduleMount);prefs.addObserver(STATS_PREF,refreshStatistics);
+    prefs.addObserver(SIDE,scheduleMount);prefs.addObserver(STATS_PREF,refreshStatistics);
   }
   function action(label,cls,handler){
     const b=make("button",cls);b.type="button";b.textContent=label;b.addEventListener("click",handler);return b;
@@ -621,7 +621,7 @@ try{if(typeof window!=="undefined"){
   const fileEase=p=>{p=clamp(p,0,1);return p*p*(3-2*p);};
   function fileSpring(s,target,k,c,dt){s.v+=(k*(target-s.x)-c*s.v)*dt;s.x+=s.v*dt;}
   // Reverse the prototype's rotation sign; keep top-center grip fixed.
-  function fileSwingTarget(vx){return clamp(vx*.023,-23,23);}
+  function fileSwingTarget(vx){return clamp(-vx*.023,-23,23);}
   function fileBunnyStep(q,now){
     const elapsed=Math.max(0,now-q.started),dt=clamp((now-q.last)/1000,.001,.04);q.last=now;
     const morph=fileEase(elapsed/300),grip=fileEase(elapsed/FILE_LIFT);
@@ -643,142 +643,142 @@ try{if(typeof window!=="undefined"){
     const r=source.getBoundingClientRect();
     return {x:r.left+r.width/2,y:r.top,w:Math.max(1,r.width),h:Math.max(1,r.height)};
   }
-  function fileDragPoint(e){
-    if(!Number.isFinite(e.clientX)||!Number.isFinite(e.clientY))return null;
-    if(e.type==="drag"&&e.clientX===0&&e.clientY===0)return null;
-    return {x:e.clientX,y:e.clientY};
-  }
-  function fileDragInside(e,p){
-    if(e.type==="drag"&&Number.isFinite(e.screenX)&&Number.isFinite(e.screenY)&&
-       (e.screenX!==0||e.screenY!==0)&&Number.isFinite(window.mozInnerScreenX)&&Number.isFinite(window.mozInnerScreenY)){
-      return e.screenX>=window.mozInnerScreenX&&e.screenX<window.mozInnerScreenX+window.innerWidth&&
-        e.screenY>=window.mozInnerScreenY&&e.screenY<window.mozInnerScreenY+window.innerHeight;
-    }
-    return !!p&&p.x>=0&&p.y>=0&&p.x<window.innerWidth&&p.y<window.innerHeight;
-  }
   function fileDragSession(){
     try{return Cc["@mozilla.org/widget/dragservice;1"].getService(Ci.nsIDragService).getCurrentSession(window);}catch{return undefined;}
   }
-  function updateFileDragImage(q,image,x,y,e){
-    try{
-      const session=fileDragSession();
-      if(session?.updateDragImage)session.updateDragImage(image,x,y);
-      else if(e?.dataTransfer?.updateDragImage)e.dataTransfer.updateDragImage(image,x,y);
-      else return false;
-      return true;
-    }catch{return false;}
-  }
+  function fileBunnyTrace(event,data,opts={}){window.__nocturneTrace?.("downloads.drag."+event,data,opts);}
   function createFileCard(d){
     const card=make("div","zr-file-bunny-card"),grip=make("span","zr-file-bunny-grip"),icon=createFileIcon(),body=make("span","zr-file-bunny-info"),name=make("span","zr-file-bunny-name"),meta=make("span","zr-file-bunny-meta");
     const v=history.get(d)||sample(d);name.textContent=v.name;meta.textContent=sizeText(v.total||v.bytes);
     syncFileIcon(icon,d,32);body.append(name,meta);card.append(grip,icon.box,body);
     return {card,icon,body,grip};
   }
+  function prepareFilePopup(){
+    if(filePopup?.isConnected)return true;
+    const set=get("mainPopupSet");if(!set||typeof document.createXULElement!=="function")return false;
+    const popup=document.createXULElement("panel");if(typeof popup.getOuterScreenRect!=="function")return false;
+    popup.id="zr-file-bunny-popup";
+    for(const [k,v] of Object.entries({noautohide:"true",noautofocus:"true",level:"top",mousethrough:"always",consumeoutsideclicks:"false",animate:"false","aria-hidden":"true"}))popup.setAttribute(k,v);
+    const stage=make("div","zr-file-bunny-stage");popup.append(stage);set.append(popup);filePopup=popup;fileStage=stage;
+    popup.addEventListener("popupshown",()=>{
+      const q=fileBunny;if(!q||q.popup!==popup||q.ending||q.shown)return;
+      q.shown=true;q.started=q.last=current();fileBunnyTrace("popup-shown",{state:popup.state},{sample:1500});tickFilePopup(q);
+    });
+    popup.addEventListener("popuphidden",()=>{
+      const q=fileBunny;if(q?.popup===popup)fileBunnyTrace("popup-hidden",{ending:q.ending,frames:q.frames},{flush:true});
+    });
+    return true;
+  }
   function paintFileBunny(q,p,alpha=1){
-    q.pose=p;
-    q.ghost.style.transform="translate3d("+p.x+"px,"+p.y+"px,0)";
-    const s=q.visual.card.style;
+    q.pose=p;const s=q.visual.card.style;
     s.width=Math.max(8,p.w)+"px";s.height=Math.max(8,p.h)+"px";
-    s.transform="translateX(-50%) rotate("+p.angle+"deg) scale("+p.scale+")";
+    s.transform="translate3d("+p.x+"px,"+p.y+"px,0) translateX(-50%) rotate("+p.angle+"deg) scale("+p.scale+")";
     s.opacity=String(alpha);s.borderRadius=fileMix(q.fromIndicator?5:8,11,p.morph)+"px";
     q.visual.body.style.opacity=String(q.fromIndicator?clamp((p.morph-.18)/.62,0,1):1);
     q.visual.icon.box.style.opacity=String(q.fromIndicator?clamp((p.morph-.08)/.5,0,1):1);
     q.visual.grip.style.opacity=String(p.morph);
     if(q.glyph)q.glyph.style.opacity=String(1-clamp(p.morph*2.8,0,1));
-    q.ghost.style.setProperty("--zr-file-lift",String(p.morph));
   }
-  function startFileBunnyFrame(q){
-    if(q.frame||q.mode!=="local"||q.ending)return;
-    const tick=now=>{
-      q.frame=0;if(fileBunny!==q||q.mode!=="local"||q.ending)return;
-      paintFileBunny(q,fileBunnyStep(q,now));q.frame=window.requestAnimationFrame(tick);
-    };
-    q.frame=window.requestAnimationFrame(tick);
+  function popupPoint(q){
+    try{const r=q.popup.getOuterScreenRect();if(r.width<2||r.height<2||!Number.isFinite(r.x)||!Number.isFinite(r.y))return null;return {x:r.x+FILE_GRIP_X,y:r.y+FILE_GRIP_Y};}catch{return null;}
   }
-  function stopFileBunnyFrame(q){if(q.frame)window.cancelAnimationFrame(q.frame);q.frame=0;}
-  function fileBunnyMode(q,mode,e){
-    if(q.mode===mode||q.ending)return;
-    if(mode==="local"){
-      // No duplicate: switch only after Gecko accepts the blank image.
-      if(reduced.matches||!updateFileDragImage(q,q.blank,0,0,e))return;
-      const returning=q.mode==="outside";q.mode="local";q.ghost.hidden=false;
-      if(returning){
-        q.started=current()-450;q.last=current();
-        for(const [k,x] of Object.entries({x:q.point.x,y:q.point.y,w:FILE_CARD_W,h:FILE_CARD_H,angle:0,scale:1}))q.s[k]={x,v:0};
-      }
-      paintFileBunny(q,fileBunnyStep(q,current()));startFileBunnyFrame(q);
-    }else{
-      if(q.mode==="local"&&!updateFileDragImage(q,q.native.card,FILE_CARD_W/2,0,e))return;
-      q.mode="outside";stopFileBunnyFrame(q);q.ghost.hidden=true;
+  function filePointInside(p){
+    return !!p&&p.x>=window.mozInnerScreenX&&p.y>=window.mozInnerScreenY&&p.x<window.mozInnerScreenX+window.innerWidth&&p.y<window.mozInnerScreenY+window.innerHeight;
+  }
+  function sampleFilePopup(q,p,now){
+    if(!p)return;
+    if(q.screenPoint){
+      const dx=p.x-q.screenPoint.x,dy=p.y-q.screenPoint.y;
+      if(dx||dy){const dt=Math.max(8,now-q.lastMove)/1000;q.vx=fileMix(q.vx,clamp(dx/dt,-1600,1600),.68);q.lastMove=now;q.moves++;}
     }
-    window.__nocturneTrace?.("downloads.drag.mode",{mode:q.mode},{throttle:100});
+    q.screenPoint=p;const inside=filePointInside(p);
+    if(q.inside!==inside){q.inside=inside;q.crossings++;fileBunnyTrace("boundary",{inside,frames:q.frames,moves:q.moves},{sample:600});}
+  }
+  function tickFilePopup(q){
+    if(fileBunny!==q||q.ending||!q.shown||q.timer)return;
+    const step=()=>{
+      q.timer=0;if(fileBunny!==q||q.ending||!q.shown)return;
+      const now=current();q.maxGap=Math.max(q.maxGap,now-q.last);
+      sampleFilePopup(q,popupPoint(q),now);
+      const pose=fileBunnyStep(q,now);paintFileBunny(q,pose);q.frames++;q.maxAngle=Math.max(q.maxAngle,Math.abs(pose.angle));
+      // Native Windows OLE runs a nested loop: rAF stalls. Timer updates
+      // the popup widget's live artwork; flush its style for the widget.
+      q.visual.card.getBoundingClientRect();
+      if(now-q.lastReport>=300){q.lastReport=now;fileBunnyTrace("tick",{frames:q.frames,moves:q.moves,maxGap:q.maxGap,angle:pose.angle,morph:pose.morph,inside:q.inside,state:q.popup.state,paintCount:window.windowUtils?.paintCount??null});}
+      q.timer=window.setTimeout(step,16);
+    };
+    q.timer=window.setTimeout(step,0);
+  }
+  function stopFileBunnyFrame(q){
+    if(q.timer)window.clearTimeout(q.timer);q.timer=0;if(q.frame)window.cancelAnimationFrame(q.frame);q.frame=0;
   }
   function beginFileBunny(e,source,d){
     clearFileBunny();
-    const origin=fileOrigin(source),point=fileDragPoint(e)||{x:origin.x,y:origin.y};
-    const ghost=make("div","zr-file-bunny-ghost"),visual=createFileCard(d),native=createFileCard(d);
-    ghost.setAttribute("aria-hidden","true");ghost.setAttribute("inert","");ghost.hidden=true;ghost.append(visual.card);
-    native.card.setAttribute("data-native-preview","");native.card.setAttribute("aria-hidden","true");native.card.setAttribute("inert","");
-    const blank=make("canvas");blank.width=blank.height=1;
+    const origin=fileOrigin(source),visual=createFileCard(d),native=createFileCard(d);
+    native.card.setAttribute("data-native-preview","");native.card.setAttribute("aria-hidden","true");native.card.setAttribute("inert","");root.append(native.card);
     let glyph=null;if(source===node){glyph=make("span","zr-download-icon zr-file-bunny-seed");visual.card.append(glyph);}
-    root.append(native.card,ghost);
-    const s=Object.fromEntries(Object.entries({...origin,angle:0,scale:1}).map(([k,x])=>[k,{x,v:0}]));
-    s.scale.v=reduced.matches?0:2.4;
-    const q=fileBunny={source,fromIndicator:source===node,origin,point,s,started:current(),last:current(),lastMove:current(),vx:0,ghost,visual,native,blank,glyph,mode:"native",frame:0,leaveTimer:0,watch:0,ending:false};
-    // Native compact fallback; first in-window event upgrades to Bunny.
-    try{e.dataTransfer.setDragImage(native.card,FILE_CARD_W/2,0);}catch{}
+    const point={x:FILE_GRIP_X,y:FILE_GRIP_Y};
+    const dx=origin.x-(Number.isFinite(e.clientX)?e.clientX:origin.x),dy=origin.y-(Number.isFinite(e.clientY)?e.clientY:origin.y);
+    const seed={x:point.x+clamp(dx,-45,45),y:point.y+clamp(dy,-36,20),w:Math.min(250,origin.w),h:Math.min(76,origin.h)};
+    const s=Object.fromEntries(Object.entries({...seed,angle:0,scale:1}).map(([k,x])=>[k,{x,v:0}]));s.scale.v=2.4;
+    const now=current(),q=fileBunny={source,fromIndicator:source===node,origin:seed,point,s,started:now,last:now,lastMove:now,lastReport:now,vx:0,visual,native,glyph,popup:null,ghost:null,mode:"bitmap",frame:0,timer:0,watch:0,ending:false,shown:false,frames:0,moves:0,crossings:0,maxGap:0,maxAngle:0,screenPoint:null,inside:null,missing:0};
+    let popupReady=false;
+    // nsBaseDragSession DrawDrag recognizes a XUL panel as a live drag
+    // image. Windows QueryContinueDrag calls DragMoved even outside Zen.
+    if(!reduced.matches&&Services.appinfo.OS==="WINNT")try{
+      if(prepareFilePopup()){
+        q.popup=filePopup;fileStage.replaceChildren(visual.card);
+        paintFileBunny(q,{...seed,angle:0,scale:1,morph:0});
+        filePopup.getBoundingClientRect();
+        e.dataTransfer.setDragImage(filePopup,FILE_GRIP_X,FILE_GRIP_Y);q.mode="popup";popupReady=true;
+      }
+    }catch{q.popup=null;fileStage?.replaceChildren();}
+    if(!popupReady)try{e.dataTransfer.setDragImage(native.card,FILE_CARD_W/2,0);}catch{}
     source.setAttribute("data-file-lift","");
-    q.watch=window.setTimeout(function check(){
+    const watch=()=>{
       q.watch=0;if(fileBunny!==q||q.ending)return;
-      if(fileDragSession()===null){endFileDrag(source);return;}
-      q.watch=window.setTimeout(check,300);
-    },700);
-    window.__nocturneTrace?.("downloads.drag.start",{indicator:q.fromIndicator,reduced:reduced.matches});
-  }
-  function onFileDragMove(e){
-    const q=fileBunny;if(!q||q.ending||e.isTrusted===false)return;
-    if(e.type==="drag"&&e.target!==q.source&&!q.source.contains?.(e.target))return;
-    const p=fileDragPoint(e);
-    if(!p){if(e.type==="drag"&&(e.screenX||e.screenY)&&!fileDragInside(e,p))fileBunnyMode(q,"outside",e);return;}
-    if(q.leaveTimer){window.clearTimeout(q.leaveTimer);q.leaveTimer=0;}
-    if(!fileDragInside(e,p)){fileBunnyMode(q,"outside",e);return;}
-    const now=current(),dt=Math.max(8,now-q.lastMove)/1000;
-    if(p.x!==q.point.x||p.y!==q.point.y){
-      q.vx=fileMix(q.vx,clamp((p.x-q.point.x)/dt,-1600,1600),.48);q.point=p;q.lastMove=now;
-    }
-    fileBunnyMode(q,"local",e);
-  }
-  function onFileDragLeave(e){
-    const q=fileBunny;if(!q||q.ending||e.relatedTarget||e.isTrusted===false)return;
-    if(q.leaveTimer)window.clearTimeout(q.leaveTimer);
-    q.leaveTimer=window.setTimeout(()=>{q.leaveTimer=0;if(fileBunny===q)fileBunnyMode(q,"outside",e);},65);
+      const session=fileDragSession();if(session===null){if(++q.missing>=3){endFileDrag(source,undefined,"watchdog");return;}}else q.missing=0;
+      if(q.mode==="popup"&&!q.shown){
+        if(q.popup.state==="open"){q.shown=true;q.started=q.last=current();fileBunnyTrace("popup-shown",{state:"open",via:"watch"});tickFilePopup(q);}
+        else if(current()-now>700&&!q.reported){q.reported=true;fileBunnyTrace("popup-not-shown",{state:q.popup.state,session:!!session},{flush:true});}
+      }
+      q.watch=window.setTimeout(watch,200);
+    };
+    q.watch=window.setTimeout(watch,200);
+    fileBunnyTrace("start",{indicator:q.fromIndicator,reduced:reduced.matches,mode:q.mode,os:Services.appinfo.OS,seed:[seed.w,seed.h]},{sample:1500});
   }
   function clearFileBunny(){
-    const q=fileBunny;if(!q)return;fileBunny=null;
-    stopFileBunnyFrame(q);for(const id of [q.leaveTimer,q.watch])if(id)window.clearTimeout(id);
-    q.source.removeAttribute("data-file-lift");q.ghost.remove();q.native.card.remove();
+    const q=fileBunny;if(!q)return;fileBunny=null;stopFileBunnyFrame(q);if(q.watch)window.clearTimeout(q.watch);
+    q.source.removeAttribute("data-file-lift");
+    if(q.popup){try{if(q.popup.state!=="closed")q.popup.hidePopup();}catch{}fileStage?.replaceChildren();}
+    q.visual.card.remove();q.ghost?.remove();q.native.card.remove();
     if(q.ending&&!dead&&node){syncDownloadHolds();schedule(true);scheduleMount();}
   }
-  function finishFileBunny(e){
-    const q=fileBunny;if(!q)return;
-    if(q.leaveTimer)window.clearTimeout(q.leaveTimer);q.leaveTimer=0;
-    if(q.watch)window.clearTimeout(q.watch);q.watch=0;
-    stopFileBunnyFrame(q);
+  function finishFileBunny(e,reason="dragend"){
+    const q=fileBunny;if(!q)return;if(q.watch)window.clearTimeout(q.watch);q.watch=0;stopFileBunnyFrame(q);
     const cancelled=!e||e.dataTransfer?.mozUserCancelled||e.dataTransfer?.dropEffect==="none";
-    if(dead||reduced.matches||q.mode!=="local"||!q.source.isConnected||!q.pose){clearFileBunny();return;}
+    const point=q.mode==="popup"?(popupPoint(q)||q.screenPoint):null;
+    fileBunnyTrace("end",{reason,mode:q.mode,cancelled,shown:q.shown,frames:q.frames,moves:q.moves,crossings:q.crossings,maxGap:q.maxGap,maxAngle:q.maxAngle,inside:filePointInside(point),drop:e?.dataTransfer?.dropEffect??null},{flush:true});
+    if(dead||reduced.matches||!q.shown||!q.source.isConnected||!q.pose||!filePointInside(point)){clearFileBunny();return;}
     q.ending=true;
-    const from=q.pose,to=cancelled?{...fileOrigin(q.source),angle:0,scale:1,morph:0}:{...from,angle:0,scale:.74,morph:1};
-    const start=current(),duration=cancelled?FILE_RETURN:230;
-    const tick=now=>{
-      q.frame=0;if(fileBunny!==q)return;
-      const p=clamp((now-start)/duration,0,1),ease=1-Math.pow(1-p,3);
-      const pose=Object.fromEntries(Object.keys(to).map(k=>[k,fileMix(from[k],to[k],ease)]));
-      if(cancelled)pose.angle+=Math.sin(p*Math.PI*2.5)*5*(1-p);
-      if(cancelled&&p>.72)q.source.removeAttribute("data-file-lift");
-      paintFileBunny(q,pose,cancelled?1-clamp((p-.78)/.22,0,1):1-fileEase(p));
-      if(p<1)q.frame=window.requestAnimationFrame(tick);else clearFileBunny();
-    };
-    q.frame=window.requestAnimationFrame(tick);
+    const from={...q.pose,x:point.x-window.mozInnerScreenX-FILE_GRIP_X+q.pose.x,y:point.y-window.mozInnerScreenY-FILE_GRIP_Y+q.pose.y};
+    const to=cancelled?{...fileOrigin(q.source),angle:0,scale:1,morph:0}:{...from,angle:0,scale:.74,morph:1};
+    // Gecko closes its popup immediately after dragend. Only then create
+    // a local continuation; no duplicate image during the native drag.
+    q.timer=window.setTimeout(()=>{
+      q.timer=0;if(fileBunny!==q||dead)return;
+      q.ghost=make("div","zr-file-bunny-ghost");q.ghost.setAttribute("aria-hidden","true");q.ghost.append(q.visual.card);root.append(q.ghost);paintFileBunny(q,from);
+      const start=current(),duration=cancelled?FILE_RETURN:230;
+      const tick=now=>{
+        q.frame=0;if(fileBunny!==q)return;
+        const p=clamp((now-start)/duration,0,1),ease=1-Math.pow(1-p,3);
+        const pose=Object.fromEntries(Object.keys(to).map(k=>[k,fileMix(from[k],to[k],ease)]));
+        if(cancelled)pose.angle+=Math.sin(p*Math.PI*2.5)*5*(1-p);
+        if(cancelled&&p>.72)q.source.removeAttribute("data-file-lift");
+        paintFileBunny(q,pose,cancelled?1-clamp((p-.78)/.22,0,1):1-fileEase(p));
+        if(p<1)q.frame=window.requestAnimationFrame(tick);else{fileBunnyTrace("return-finish",{cancelled,duration:current()-start});clearFileBunny();}
+      };q.frame=window.requestAnimationFrame(tick);
+    },0);
   }
   function beginFileDrag(e,source,d){
     if(dead||e.isTrusted===false||!history.has(d)||
@@ -793,13 +793,13 @@ try{if(typeof window!=="undefined"){
     source.setAttribute("data-file-dragging","");
     cancelHide();cancelFlight();
     if(source!==node&&cardOpen)pinPanel();
-    try{beginFileBunny(e,source,d);}catch{clearFileBunny();}
+    try{beginFileBunny(e,source,d);}catch{fileBunnyTrace("start-error",{indicator:source===node},{flush:true});clearFileBunny();}
     syncDownloadHolds();return true;
   }
-  function endFileDrag(source,e){
+  function endFileDrag(source,e,reason){
     if(fileDragSource!==source)return;
     source.removeAttribute("data-file-dragging");fileDragSource=null;
-    finishFileBunny(e);syncDownloadHolds();
+    finishFileBunny(e,reason);syncDownloadHolds();
     // Reconcile queued rows only after the platform drag releases the source.
     if(!dead){schedule(true);scheduleMount();if(cardOpen)armHide();}
   }
@@ -1099,9 +1099,7 @@ try{if(typeof window!=="undefined"){
     window.removeEventListener("pointerdown",trackClick,true);window.removeEventListener("pointerdown",outsideDock,true);window.removeEventListener("keydown",onKey,true);
     try{prefs.removeObserver(SIDE,scheduleMount);}catch{}
     try{prefs.removeObserver(STATS_PREF,refreshStatistics);}catch{}
-    for(const type of ["drag","dragover","dragenter"])window.removeEventListener(type,onFileDragMove,true);
-    window.removeEventListener("dragleave",onFileDragLeave,true);
-    if(fileBunny)fileBunny.ending=false;clearFileBunny();fileIconWarm=null;
+    if(fileBunny)fileBunny.ending=false;clearFileBunny();filePopup?.remove();filePopup=fileStage=null;fileIconWarm=null;
     fileDragSource?.removeAttribute("data-file-dragging");fileDragSource=dragClickSource=null;FileUtils=null;syncDownloadHolds();
     node?.remove();node=fill=speed=icon=null;host=null;batch.clear();fresh=new WeakSet();latest=lastClick=null;
     dock?.remove();overlayLayer?.remove();dockBackdrop?.remove();dock=dockList=dockEmpty=dockMore=dockBackdrop=dockNotice=overlayLayer=null;history.clear();rows.clear();historyOrder=recentOrder=null;limit=30;dockHeight=0;allButton=dockTitle=dockSort=null;

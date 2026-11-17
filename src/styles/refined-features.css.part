@@ -227,6 +227,10 @@
 #zr-download-dock .zr-dock-row > * {transition:opacity 140ms}
 #zr-download-dock .zr-dock-row[data-file-lift] > * {opacity:.12}
 #zr-download-indicator[data-file-lift] .zr-download-icon {opacity:.38}
+/* Single Gecko native live file drag popup; no mouse interception. */
+#zr-file-bunny-popup {appearance:none!important;-moz-appearance:none!important;background:transparent!important;border:0!important;padding:0!important;margin:0!important;pointer-events:none!important;-moz-window-shadow:none!important;--panel-background:transparent!important;--panel-border-color:transparent!important;--panel-padding:0px!important;--panel-shadow:none!important;--panel-border-radius:0px!important}
+#zr-file-bunny-popup::part(content) {background:transparent!important;border:0!important;padding:0!important;margin:0!important;box-shadow:none!important;overflow:visible!important}
+.zr-file-bunny-stage {position:relative;display:block;flex:none;width:344px;height:154px;overflow:visible;pointer-events:none!important}
 .zr-file-bunny-ghost {position:fixed!important;left:0;top:0;z-index:2147483647!important;pointer-events:none!important;will-change:transform;--zr-file-lift:0}
 .zr-file-bunny-ghost[hidden] {display:none!important}
 .zr-file-bunny-card {position:absolute;left:0;top:0;display:flex;align-items:center;gap:10px;width:186px;height:51px;padding:8px 12px;box-sizing:border-box;overflow:hidden;pointer-events:none!important;transform-origin:50% 0%;
