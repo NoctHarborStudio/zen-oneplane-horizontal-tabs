@@ -96,6 +96,14 @@
 :root:is([zen-no-padding="true"],[inDOMFullscreen="true"],:not([zen-single-toolbar="true"])) #zr-page-progress[data-zr-center-progress] {
   top:var(--zen-space-4,4px)!important;
 }
+/* Fixed chrome layer, above the dock's stacking context. The anchor
+   follows the dock's real animated bottom; no negative viewport offset. */
+:root #zr-page-progress[data-zr-center-progress][data-dock-anchor] {
+  top:var(--zr-progress-y,8px)!important;
+  left:var(--zr-progress-x,50%)!important;
+  transform:translateX(-50%);
+  z-index:2147482999!important;
+}
 :root[inDOMFullscreen="true"] #zr-page-progress[data-zr-center-progress] {visibility:hidden!important}
 #zr-page-progress[data-zr-center-progress][data-visible] {opacity:1;visibility:visible}
 #zr-page-progress[data-zr-center-progress] .zr-page-progress-track {

@@ -1,6 +1,6 @@
-// Nocturne preview.23: early trace, independent Sine script order.
+// Nocturne preview.24: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="page-progress.script",data={version:"0.3.0-preview.23"};
+  const event="page-progress.script",data={version:"0.3.0-preview.24"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -13,7 +13,8 @@ try{if(typeof window!=="undefined"){
   if(root.hasAttribute("popup-window")||typeof window.addUnloadListener!=="function")return;
   window[KEY]?.();
   const OWNER="data-zr-page-progress-owner";
-  const SHOW_DELAY=90,OPEN_MS=260,COMPLETE_MS=280,CLOSE_MS=340;
+  const SHOW_DELAY=90,OPEN_MS=260,COMPLETE_MS=280,CLOSE_MS=340,DOCK_GAP=8;
+  let anchorFrame=0,anchorKey="";
   let dead=false,installed=false,initialized=false,observer=null,bar=null,fill=null;
   let browser=null,states=new WeakMap(),selected=null,shown=false,showTimer=0,phaseTimer=0,renderTimer=0,lastRender=0,phase="hidden",terminal=null;
   const now=()=>window.performance.now();
@@ -33,7 +34,7 @@ try{if(typeof window!=="undefined"){
     phaseTimer=window.setTimeout(()=>{phaseTimer=0;if(installed&&shown)fn();},ms);
   }
   function hide(){
-    clearTimers();shown=false;terminal=null;setPhase("hidden");bar?.removeAttribute("data-visible");
+    clearTimers();stopAnchor();shown=false;terminal=null;setPhase("hidden");bar?.removeAttribute("data-visible");
     bar?.removeAttribute("data-indeterminate");bar?.removeAttribute("data-terminal");
     fill?.style.setProperty("--zr-page-progress","0");
   }
@@ -78,7 +79,7 @@ try{if(typeof window!=="undefined"){
     showTimer=window.setTimeout(()=>{
       showTimer=0;if(!installed||selected!==b||!selectedState()?.active)return;
       shown=true;terminal=null;bar.removeAttribute("data-terminal");
-      setPhase("opening");bar.setAttribute("data-visible","true");
+      updateAnchor();setPhase("opening");bar.setAttribute("data-visible","true");startAnchor();
       later(OPEN_MS,()=>{
         setPhase("loading");
         if(terminal!==null){finish(terminal);return;}
@@ -86,14 +87,64 @@ try{if(typeof window!=="undefined"){
       });
     },SHOW_DELAY);
   }
-  function attachSelected(){
-    // Match ZenProgressBar's selected-panel coordinate system.
+  function dockAnchor(wrapper,surface,opacity,viewportWidth,viewportHeight){
+    // The wrapper's animated height includes all actual toolbar rows.
+    // The contour extends below it, but its contribution recedes with
+    // the very same painted opacity during compact reveal/conceal.
+    const alpha=Math.max(0,Math.min(1,Number.isFinite(opacity)?opacity:0));
+    const bottom=Math.max(0,wrapper.bottom);
+    const tail=surface?Math.max(0,surface.bottom-bottom)*alpha:0;
+    const round=v=>Math.round(v*4)/4;
+    return {x:round(Math.max(0,Math.min(viewportWidth,wrapper.left+wrapper.width/2))),
+      y:round(Math.min(Math.max(DOCK_GAP,viewportHeight-DOCK_GAP-8),bottom+tail+DOCK_GAP))};
+  }
+  function activeDock(){
+    if(root.getAttribute("oneplane-active")!=="true"||
+       ["customizing","inDOMFullscreen","inFullscreen","popup-window"].some(k=>root.hasAttribute(k)))return null;
+    const wrapper=document.getElementById("zen-appcontent-navbar-wrapper");
+    const row=document.getElementById("oneplane-tabs");
+    if(!wrapper||row?.getAttribute("data-ready")!=="true")return null;
+    return wrapper;
+  }
+  function attachSelected(dock=activeDock()){
+    // Keep the horizontal indicator in the chrome overlay, outside the
+    // clipped browser panel. Native/vertical mode retains its panel host.
     const panel=browser?.selectedTab?.linkedPanel&&document.getElementById(browser.selectedTab.linkedPanel);
-    const target=panel||root;
+    const target=dock?root:(panel||root);
     if(bar.parentNode!==target){
-      if(target.firstChild)target.insertBefore(bar,target.firstChild);
-      else target.append(bar);
+      if(dock||!target.firstChild)target.append(bar);
+      else target.insertBefore(bar,target.firstChild);
     }
+    bar.toggleAttribute("data-dock-anchor",Boolean(dock));
+  }
+  function updateAnchor(){
+    if(!bar)return;
+    const dock=activeDock();attachSelected(dock);
+    if(!dock){
+      if(anchorKey){bar.style.removeProperty("--zr-progress-x");bar.style.removeProperty("--zr-progress-y");anchorKey="";}
+      return;
+    }
+    const wrapper=dock.getBoundingClientRect();
+    if(wrapper.width<=0)return;
+    const surface=document.getElementById("oneplane-toolbar-surface");
+    const style=surface?window.getComputedStyle(surface):null;
+    const visible=style&&style.display!=="none"&&style.visibility!=="hidden";
+    const p=dockAnchor(wrapper,visible?surface.getBoundingClientRect():null,visible?Number(style.opacity):0,window.innerWidth,window.innerHeight);
+    const key=p.x+":"+p.y;if(key===anchorKey)return;anchorKey=key;
+    bar.style.setProperty("--zr-progress-x",p.x+"px");
+    bar.style.setProperty("--zr-progress-y",p.y+"px");
+  }
+  function startAnchor(){
+    if(anchorFrame||!window.requestAnimationFrame)return;
+    const tick=()=>{
+      anchorFrame=0;if(!shown||!installed)return;
+      updateAnchor();anchorFrame=window.requestAnimationFrame(tick);
+    };
+    anchorFrame=window.requestAnimationFrame(tick);
+  }
+  function stopAnchor(){
+    if(anchorFrame)window.cancelAnimationFrame(anchorFrame);
+    anchorFrame=0;
   }
   function resetFor(b){
     hide();selected=b;
@@ -152,7 +203,7 @@ try{if(typeof window!=="undefined"){
       try{browser.removeTabsProgressListener(listener);}catch{}
       browser?.tabContainer?.removeEventListener("TabSelect",onSelect);
     }
-    installed=false;root.removeAttribute(OWNER);bar?.remove();bar=fill=null;browser=selected=null;states=new WeakMap();
+    installed=false;root.removeAttribute(OWNER);bar?.remove();bar=fill=null;browser=selected=null;states=new WeakMap();anchorKey="";
   }
   function sync(){if(!initialized||dead)return;if(enabled())install();else uninstall();}
   function dispose(){

@@ -1,3 +1,8 @@
+## 0.3.0-preview.24 — Dock-anchored page progress
+
+- Place horizontal page progress in a fixed chrome layer rather than the selected browser panel, following the actual dock bottom and fading contour with an 8px gap. Follow Compact Mode motion and additional toolbar rows while visible; stop frame tracking when hidden.
+- Preserve native panel positioning outside OnePlane, center-out progress phases, and existing preference ownership. Add dock geometry and lifecycle tests.
+
 ## 0.3.0-preview.23 — Pointer-controlled Bunny insertion
 
 - Pause the insertion timeline while dragging; scrub its progress from the original row's return threshold to the row edge, including reverse motion and a stationary pointer.
