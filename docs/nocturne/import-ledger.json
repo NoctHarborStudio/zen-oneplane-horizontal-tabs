@@ -1,0 +1,134 @@
+{
+  "schema": 1,
+  "oneplane": {
+    "repository": "NoctHarborStudio/zen-oneplane-horizontal-tabs",
+    "commit": "4281c4778f3851f939ad3cfdb01406238ff2d2a0",
+    "version": "0.2.0-preview.62"
+  },
+  "refined": {
+    "repository": "NoctHarborStudio/zen-refined-ui-improvements",
+    "commit": "1926eacbe29782d80324ac277563aff514bf6943",
+    "version": "0.6.0-preview.26"
+  },
+  "imports": [
+    {
+      "source": "startup-animation.uc.mjs",
+      "destination": "startup-animation.uc.mjs",
+      "kind": "verbatim",
+      "sourceBlob": "0012e0787941da5f89094bd322f8edfff2a05fdc",
+      "destinationBlob": "0012e0787941da5f89094bd322f8edfff2a05fdc"
+    },
+    {
+      "source": "startup.uc.mjs",
+      "destination": "startup.uc.mjs",
+      "kind": "verbatim",
+      "sourceBlob": "8a343900c25a2fd84720661f795c899d2c80a0d0",
+      "destinationBlob": "8a343900c25a2fd84720661f795c899d2c80a0d0"
+    },
+    {
+      "source": "downloads-indicator.uc.mjs",
+      "destination": "downloads-indicator.uc.mjs",
+      "kind": "verbatim",
+      "sourceBlob": "b915616209d43e0bde3cd7d4c8a81eb9c3c9887d",
+      "destinationBlob": "b915616209d43e0bde3cd7d4c8a81eb9c3c9887d"
+    },
+    {
+      "source": "page-progress.uc.mjs",
+      "destination": "page-progress.uc.mjs",
+      "kind": "verbatim",
+      "sourceBlob": "0a0db86262c5318f8d1e234b276d4f693da0556b",
+      "destinationBlob": "0a0db86262c5318f8d1e234b276d4f693da0556b"
+    },
+    {
+      "source": "closing-animation.uc.mjs",
+      "destination": "closing-animation.uc.mjs",
+      "kind": "verbatim",
+      "sourceBlob": "85e5ce2147ba4dbcf7fb7e55159a8d4142e297ef",
+      "destinationBlob": "85e5ce2147ba4dbcf7fb7e55159a8d4142e297ef"
+    },
+    {
+      "source": "smart-search.uc.mjs",
+      "destination": "smart-search.uc.mjs",
+      "kind": "verbatim",
+      "sourceBlob": "cc5c99b60566085b5ade824f91cb883e9a9e9b00",
+      "destinationBlob": "cc5c99b60566085b5ade824f91cb883e9a9e9b00"
+    },
+    {
+      "source": "workspace-transition.uc.mjs",
+      "destination": "workspace-transition.uc.mjs",
+      "kind": "verbatim",
+      "sourceBlob": "afcecf58c5c0d7b3ac1d98d142263fae62623e79",
+      "destinationBlob": "afcecf58c5c0d7b3ac1d98d142263fae62623e79"
+    },
+    {
+      "source": "tests/closing-animation.test.mjs",
+      "destination": "tests/closing-animation.test.mjs",
+      "kind": "verbatim",
+      "sourceBlob": "c0e89c9d6657c52818801f5299f607d307317c1e",
+      "destinationBlob": "c0e89c9d6657c52818801f5299f607d307317c1e"
+    },
+    {
+      "source": "tests/download-wave.test.mjs",
+      "destination": "tests/download-wave.test.mjs",
+      "kind": "verbatim",
+      "sourceBlob": "fb7f3f4896aa539507feb75cdea7bb959a6682e5",
+      "destinationBlob": "fb7f3f4896aa539507feb75cdea7bb959a6682e5"
+    },
+    {
+      "source": "tests/smart-search.test.mjs",
+      "destination": "tests/smart-search.test.mjs",
+      "kind": "verbatim",
+      "sourceBlob": "c74ed734b877ca5c663db035faa31ea534248fc8",
+      "destinationBlob": "c74ed734b877ca5c663db035faa31ea534248fc8"
+    },
+    {
+      "source": "tests/startup-transparency.test.mjs",
+      "destination": "tests/startup-transparency.test.mjs",
+      "kind": "verbatim",
+      "sourceBlob": "97a6af7b28baa3b8478d39d8b1a5305132ce864d",
+      "destinationBlob": "97a6af7b28baa3b8478d39d8b1a5305132ce864d"
+    },
+    {
+      "source": "tests/workspace-transition.test.mjs",
+      "destination": "tests/workspace-transition.test.mjs",
+      "kind": "verbatim",
+      "sourceBlob": "063e34f200ad9a865e8ad8f6ff57e8b136f9585c",
+      "destinationBlob": "063e34f200ad9a865e8ad8f6ff57e8b136f9585c"
+    },
+    {
+      "source": "tests/shared-bookmarks.test.mjs",
+      "destination": "tests/shared-bookmarks.test.mjs",
+      "kind": "verbatim",
+      "sourceBlob": "088a91e10fc4011f6a2df1a26c27b1306cbb4fe0",
+      "destinationBlob": "088a91e10fc4011f6a2df1a26c27b1306cbb4fe0"
+    },
+    {
+      "source": "bookmarks.uc.mjs",
+      "destination": "bookmarks.uc.mjs",
+      "kind": "verbatim",
+      "sourceBlob": "927b9815c3132efa997a84ffb5c5ab38e4680489",
+      "destinationBlob": "927b9815c3132efa997a84ffb5c5ab38e4680489"
+    },
+    {
+      "source": "magnetic-bookmarks.css",
+      "destination": "src/styles/magnetic-bookmarks.css.part",
+      "kind": "verbatim",
+      "sourceBlob": "01a3c2aba069e3ba915f6e8bb06207d7fae9530c",
+      "destinationBlob": "01a3c2aba069e3ba915f6e8bb06207d7fae9530c"
+    },
+    {
+      "source": "chrome.css",
+      "destination": "src/styles/refined-features.css.part",
+      "kind": "exact suffix after magnetic-bookmarks.css",
+      "sourceBlob": "4b8d29b931e7162ebda748154858ef2b0b70f280",
+      "destinationBlob": "26b83370b08a258744cb9ea99cd00c3d63e22612"
+    },
+    {
+      "source": "preferences.json",
+      "destination": "preferences.json",
+      "kind": "union by property; six identical duplicates omitted",
+      "sourceBlob": "73f1e9aa26d30af0f4a902b95fe6384063dd7c7c",
+      "destinationBlob": "32072ec133b537c9df6147bb1caa0f7d4d3c3d63"
+    }
+  ]
+}

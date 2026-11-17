@@ -28,7 +28,7 @@ Import the existing Refined scripts as independent entries, not a rewrite.
 | theme.json | Existing OnePlane identity; display name Nocturne on release; union of script entries; no second bookmark entry |
 | docs and tests | Import Refined validation and roadmap/known issues under clear provenance; resolve duplicate test filenames deliberately |
 
-Expected eight distinct runtime entries (existing layout + shared bookmarks + six other Refined scripts). Keep layout.uc.mjs and existing chrome.css build structure first. Add deterministic CSS source extraction and parity tests. Replace the shared-bookmarks upstream synchronization lock only once one source is authoritative; preserve historical source hash and update tests/release check explicitly.
+Expected nine distinct runtime entries (existing layout + shared bookmarks + seven other Refined scripts). Keep layout.uc.mjs and existing chrome.css build structure first. Add deterministic CSS source extraction and parity tests. Replace the shared-bookmarks upstream synchronization lock only once one source is authoritative; preserve historical source hash and update tests/release check explicitly.
 
 Sequence each import in a separate commit with tests. Do not clean up/reformat files while proving equivalence. Test a single package with legacy Refined disabled; compare against the two-mod baseline. If cascade differs, inspect computed style/geometry and fix explicitly rather than assuming import order is equivalent.
 
@@ -63,4 +63,4 @@ Prototype on feature/vertical-layout after shared core is stable. First mount na
 - Release numbering proposed: 0.3.x unified core; 0.4.x vertical; 1.0.0 after stable validation. Exact preview numbers chosen on release, not in planning docs.
 - No feature changes mixed with parity import. Native bugs fixed separately and merged into integration with recorded baseline change. Every phase has an exit gate; don't accumulate untested runtime changes.
 
-First implementation commit after approval: baseline test inventory and import ledger, then independent Page Progress/Smart Search import with existing UI unchanged. No repo rename or legacy archive now.
+Package Fusion imports all seven non-bookmark Refined scripts unchanged with tests and a provenance ledger. Horizontal source remains unchanged. Full native parity and lifecycle refactor remain pending. No repo rename or legacy archive now.

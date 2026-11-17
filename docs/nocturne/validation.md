@@ -48,3 +48,7 @@ Planning checklist. All new integration/native verification items are pending.
 - [ ] Only then promote from integration; repository rename separate opt-in verification; archive old repo only after migration accepted.
 
 Existing regression sources: OnePlane tests and docs/known-issues.md; Refined docs/validation.md and six test files at pinned commit. This checklist extends them, not replaces them. Runtime Windows/Zen behavior cannot be confirmed by a source fixture alone.
+
+## Package Fusion implementation note
+
+0.3.0-preview.1 imports the runtime, CSS suffix and tests; copied scripts parse and the six Refined test files (including the existing shared bookmarks test) pass 39 callback fixtures in a V8 harness with Node/console stubs. This is not a full Node test invocation or native Zen validation. The public preview workflow runs the actual full Node suite and checks the served package. Legacy coexistence is not supported for this first preview; disable Refined and restart before updating.
