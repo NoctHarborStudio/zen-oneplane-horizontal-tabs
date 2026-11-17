@@ -52,6 +52,18 @@
 #zr-download-indicator[data-zr-oneplane] { inset:63px auto auto 18px !important; }
 #zr-download-indicator[data-fallback]:not([data-live]) { visibility:hidden;pointer-events:none; }
 #zr-download-indicator[data-zr-hosted] { position:relative !important;inset:auto !important;margin:0; }
+#oneplane-download-indicator-slot > #zr-download-indicator[data-zr-hosted] {
+  width:30px !important; min-width:30px !important; height:30px !important;
+  min-height:30px !important; padding:0 !important; gap:0;
+  border-radius:var(--op-url-radius,8px); color:var(--toolbarbutton-icon-fill,currentColor);
+}
+#oneplane-download-indicator-slot > #zr-download-indicator .zr-download-icon {
+  width:16px; height:16px; opacity:.78;
+}
+#oneplane-download-indicator-slot > #zr-download-indicator .zr-download-speed { display:none !important; }
+#oneplane-download-indicator-slot > #zr-download-indicator .zr-download-track {
+  position:absolute; width:20px; height:2px; bottom:2px; left:5px;
+}
 #zr-download-indicator:focus-visible { outline:2px solid currentColor;outline-offset:2px; }
 
 .zr-download-track { position:relative;display:block;overflow:hidden;height:3px;border-radius:4px;background:color-mix(in srgb,currentColor 13%,transparent); }

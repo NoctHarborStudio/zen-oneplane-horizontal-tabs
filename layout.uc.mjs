@@ -1114,6 +1114,22 @@ function installTabStrip() {
   };
   const row = html("div");
   row.id = "oneplane-tabs";
+  // A fixed-size feature slot, independent of tab mirror membership.
+  // Empty slots consume no space. The Downloads controller owns its button.
+  const downloadHost=html("div","oneplane-download-host");
+  downloadHost.id="oneplane-download-indicator-slot";
+  downloadHost.setAttribute("skipintoolbarset","true");
+  downloadHost.setAttribute("removable","false");
+  function ensureDownloadHost(){
+    if(downloadHost.parentElement===target)return;
+    target.append(downloadHost);
+    window.dispatchEvent(new window.CustomEvent("OnePlane:DownloadHostChanged"));
+  }
+  function releaseDownloadHost(){
+    downloadHost.remove();
+    window.__zenRefinedDownloadIndicator?.setHost?.(null);
+    window.dispatchEvent(new window.CustomEvent("OnePlane:DownloadHostChanged"));
+  }
   row.setAttribute("skipintoolbarset", "true");
   row.setAttribute("removable", "false");
   const compactSearch=html("button","oneplane-compact-search");
@@ -4203,7 +4219,7 @@ function installTabStrip() {
     const bias=right-left+(centered?0:trailingReserve);
     return {left:Math.max(0,Math.round(bias)),right:Math.max(0,Math.round(-bias))};
   }
-  const leftIds = new Set(["oneplane-hub-button", "sidebar-button", "sidebar-toggle-button", "back-button",
+  const leftIds = new Set(["oneplane-hub-button", "oneplane-download-indicator-slot", "sidebar-button", "sidebar-toggle-button", "back-button",
     "forward-button", "stop-reload-button", "reload-button", "home-button", "urlbar-container"]);
   const centerIds = new Set(["oneplane-tabs", "oneplane-center-start", "oneplane-center-end"]);
   let geometryFrame = 0;
@@ -4363,7 +4379,7 @@ function installTabStrip() {
   let panelTimer=0, panelSwitchTimer=0, panelSwitchUntil=0, panelCloseSince=null;
   let panelLastPointer=null;
   const PANEL_NATIVE_FLAGS=["zen-has-hover","has-popup-menu","zen-compact-mode-active"];
-  const PANEL_HOLD_FLAGS=["oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold","oneplane-home-hold","oneplane-workspace-hold"];
+  const PANEL_HOLD_FLAGS=["oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold","oneplane-home-hold","oneplane-workspace-hold","oneplane-download-hold"];
   const PANEL_SWITCH_GRACE=180, PANEL_CLOSE_GRACE=100;
   // One visual state for the wrapper, tint and controls. Native flags
   // can disappear/reappear during a native tab selection transaction.
@@ -4515,7 +4531,7 @@ function installTabStrip() {
   function onCompactChanged() {
     hub.onMode();
     if(!hoverSupported()){cancelActiveDrag("unsupported-layout");closeNativeTabMenu();}
-    if(hoverSupported())ensureWindowCaptions();
+    if(hoverSupported()){ensureWindowCaptions();ensureDownloadHost();}
     else restoreWindowCaptions();
     if (!hoverSupported()) { clearHover(); clearTabHover(); releaseAddressHold(); clearAddressAnimation(); addressWasOpen = false; }
     else if (nativeInlineOpen(addressBar()) && !addressTransition && !addressSettling) addressWidths();
@@ -6391,7 +6407,7 @@ function installTabStrip() {
     if (url.parentElement === target && row.parentElement !== target) url.after(row);
     if (leftSpacer.parentElement !== target) target.prepend(leftSpacer);
     if (rightSpacer.parentElement !== target) row.after(rightSpacer);
-    hub.ensure();
+    hub.ensure();ensureDownloadHost();
     movePageActions();
     centerToolbar();
     observeGeometry();
@@ -6400,130 +6416,132 @@ function installTabStrip() {
   function destroy() {
     if (dead) return;
     dead = true;
-    cleanupStep("release 3.0",()=>{destroyHome();});
-    cleanupStep("release 4.0",()=>{destroyOverflowSlider();});
-    cleanupStep("release 5.0",()=>{overflowRevealAnimation?.cancel();});
-    cleanupStep("release 5.1",()=>{overflowRevealAnimation=null;});
-    cleanupStep("release 6.0",()=>{resetTabCascade();});
-    cleanupStep("release 7.0",()=>{if (frame) window.cancelAnimationFrame(frame);});
-    cleanupStep("release 8.0",()=>{if (dragCommitFrame) window.cancelAnimationFrame(dragCommitFrame);});
+    cleanupStep("destroyHome()",()=>{destroyHome();});
+    cleanupStep("destroyOverflowSlider()",()=>{destroyOverflowSlider();});
+    cleanupStep("overflowRevealAnimation?.cancel()",()=>{overflowRevealAnimation?.cancel();});
+    cleanupStep("overflowRevealAnimation=null",()=>{overflowRevealAnimation=null;});
+    cleanupStep("resetTabCascade()",()=>{resetTabCascade();});
+    cleanupStep("if (frame) window.cancelAnimationFrame(frame)",()=>{if (frame) window.cancelAnimationFrame(frame);});
+    cleanupStep("if (dragCommitFrame) window.cancelAnimationFrame(dragCommitFrame)",()=>{if (dragCommitFrame) window.cancelAnimationFrame(dragCommitFrame);});
     dragCommitFrame = 0;
-    cleanupStep("release 10.0",()=>{tabObserver.disconnect();});
-    cleanupStep("release 11.0",()=>{splitMeasureObserver.disconnect();});
-    cleanupStep("release 12.0",()=>{workspaceObserver.disconnect();});
-    cleanupStep("release 13.0",()=>{toolbarObserver.disconnect();});
-    cleanupStep("release 14.0",()=>{actionObserver.disconnect();});
-    cleanupStep("release 15.0",()=>{geometryObserver?.disconnect();});
-    cleanupStep("release 16.0",()=>{contourResize?.disconnect();});
-    cleanupStep("release 17.0",()=>{contourObserver?.disconnect();});
-    cleanupStep("release 18.0",()=>{prefs.removeObserver(contourPrefPrefix,contourPreferenceObserver);});
-    cleanupStep("release 19.0",()=>{contourObserved.clear();});
-    cleanupStep("release 20.0",()=>{if(contourFrame)window.cancelAnimationFrame(contourFrame);});
+    cleanupStep("tabObserver.disconnect()",()=>{tabObserver.disconnect();});
+    cleanupStep("splitMeasureObserver.disconnect()",()=>{splitMeasureObserver.disconnect();});
+    cleanupStep("workspaceObserver.disconnect()",()=>{workspaceObserver.disconnect();});
+    cleanupStep("toolbarObserver.disconnect()",()=>{toolbarObserver.disconnect();});
+    cleanupStep("actionObserver.disconnect()",()=>{actionObserver.disconnect();});
+    cleanupStep("geometryObserver?.disconnect()",()=>{geometryObserver?.disconnect();});
+    cleanupStep("contourResize?.disconnect()",()=>{contourResize?.disconnect();});
+    cleanupStep("contourObserver?.disconnect()",()=>{contourObserver?.disconnect();});
+    cleanupStep("prefs.removeObserver(contourPrefPrefix,contourPreferenceObserver)",()=>{prefs.removeObserver(contourPrefPrefix,contourPreferenceObserver);});
+    cleanupStep("contourObserved.clear()",()=>{contourObserved.clear();});
+    cleanupStep("if(contourFrame)window.cancelAnimationFrame(contourFrame)",()=>{if(contourFrame)window.cancelAnimationFrame(contourFrame);});
     contourFrame=0;
     if(bookmarks)for(const event of ["transitionrun","transitionend","transitioncancel"])
       cleanupStep("bookmark "+event,()=>bookmarks.removeEventListener(event,onContourTransition,true));
-    cleanupStep("release 24.0",()=>{hoverObserver?.disconnect();});
-    cleanupStep("release 25.0",()=>{modeObserver?.disconnect();});
-    cleanupStep("release 26.0",()=>{if(panelTimer)window.clearTimeout(panelTimer);});
-    cleanupStep("release 27.0",()=>{if(panelSwitchTimer)window.clearTimeout(panelSwitchTimer);});
-    cleanupStep("release 28.0",()=>{panelTimer=panelSwitchTimer=0;});
-    cleanupStep("release 29.0",()=>{toolbarWrapper?.removeAttribute("data-op-panel-open");});
-    cleanupStep("release 30.0",()=>{if (geometryFrame) window.cancelAnimationFrame(geometryFrame);});
-    cleanupStep("release 31.0",()=>{clearHover();});
-    cleanupStep("release 32.0",()=>{releaseAddressHold();});
-    cleanupStep("release 33.0",()=>{clearTabHover();});
-    cleanupStep("release 34.0",()=>{releaseDragEngine();});
-    cleanupStep("release 35.0",()=>{endDragVisual();});
-    cleanupStep("release 36.0",()=>{cancelInsertion();});
+    cleanupStep("hoverObserver?.disconnect()",()=>{hoverObserver?.disconnect();});
+    cleanupStep("modeObserver?.disconnect()",()=>{modeObserver?.disconnect();});
+    cleanupStep("if(panelTimer)window.clearTimeout(panelTimer)",()=>{if(panelTimer)window.clearTimeout(panelTimer);});
+    cleanupStep("if(panelSwitchTimer)window.clearTimeout(panelSwitchTimer)",()=>{if(panelSwitchTimer)window.clearTimeout(panelSwitchTimer);});
+    cleanupStep("panelTimer=panelSwitchTimer=0",()=>{panelTimer=panelSwitchTimer=0;});
+    cleanupStep("toolbarWrapper?.removeAttribute(\"data-op-panel-open\")",()=>{toolbarWrapper?.removeAttribute("data-op-panel-open");});
+    cleanupStep("if (geometryFrame) window.cancelAnimationFrame(geometryFrame)",()=>{if (geometryFrame) window.cancelAnimationFrame(geometryFrame);});
+    cleanupStep("clearHover()",()=>{clearHover();});
+    cleanupStep("releaseAddressHold()",()=>{releaseAddressHold();});
+    cleanupStep("clearTabHover()",()=>{clearTabHover();});
+    cleanupStep("releaseDragEngine()",()=>{releaseDragEngine();});
+    cleanupStep("endDragVisual()",()=>{endDragVisual();});
+    cleanupStep("cancelInsertion()",()=>{cancelInsertion();});
     draggedTab = null;
     draggedGroup = null;
-    cleanupStep("release 39.0",()=>{if (window[DRAG_CONTROLLER] === dragController) delete window[DRAG_CONTROLLER];});
-    cleanupStep("release 40.0",()=>{window.removeEventListener("dragover", revealForDrag, true);});
-    cleanupStep("release 41.0",()=>{window.removeEventListener("drag",onSourceDrag,true);});
-    cleanupStep("release 41.1",()=>{clearPlacementPreview(true);});
-    cleanupStep("release 42.0",()=>{window.removeEventListener("drop", onToolbarDrop, true);});
-    cleanupStep("release 43.0",()=>{window.removeEventListener("dragleave", onWindowDragLeave, true);});
-    cleanupStep("release 44.0",()=>{window.removeEventListener("dragexit", onWindowDragLeave, true);});
-    cleanupStep("release 45.0",()=>{row.removeEventListener("pointerdown", rememberStartupSearch, true);});
-    cleanupStep("release 46.0",()=>{if (restoreSearchTimer) window.clearTimeout(restoreSearchTimer);});
+    cleanupStep("if (window[DRAG_CONTROLLER] === dragController) delete window[DRAG_CONTROLLER]",()=>{if (window[DRAG_CONTROLLER] === dragController) delete window[DRAG_CONTROLLER];});
+    cleanupStep("window.removeEventListener(\"dragover\", revealForDrag, true)",()=>{window.removeEventListener("dragover", revealForDrag, true);});
+    cleanupStep("window.removeEventListener(\"drag\",onSourceDrag,true)",()=>{window.removeEventListener("drag",onSourceDrag,true);});
+    cleanupStep("clearPlacementPreview(true)",()=>{clearPlacementPreview(true);});
+    cleanupStep("window.removeEventListener(\"drop\", onToolbarDrop, true)",()=>{window.removeEventListener("drop", onToolbarDrop, true);});
+    cleanupStep("window.removeEventListener(\"dragleave\", onWindowDragLeave, true)",()=>{window.removeEventListener("dragleave", onWindowDragLeave, true);});
+    cleanupStep("window.removeEventListener(\"dragexit\", onWindowDragLeave, true)",()=>{window.removeEventListener("dragexit", onWindowDragLeave, true);});
+    cleanupStep("row.removeEventListener(\"pointerdown\", rememberStartupSearch, true)",()=>{row.removeEventListener("pointerdown", rememberStartupSearch, true);});
+    cleanupStep("if (restoreSearchTimer) window.clearTimeout(restoreSearchTimer)",()=>{if (restoreSearchTimer) window.clearTimeout(restoreSearchTimer);});
     restoreSearchTimer=0;
-    cleanupStep("release 48.0",()=>{row.removeEventListener("dragover", onStripDragOver);});
-    cleanupStep("release 49.0",()=>{row.removeEventListener("drop", onStripDrop);});
-    cleanupStep("release 50.0",()=>{row.removeEventListener("dragleave", onStripDragLeave);});
-    cleanupStep("release 51.0",()=>{splitZone.removeEventListener("dragover", onSplitDragOver);});
-    cleanupStep("release 52.0",()=>{splitZone.removeEventListener("drop", onSplitDrop);});
-    cleanupStep("release 53.0",()=>{splitZone.remove();});
+    cleanupStep("row.removeEventListener(\"dragover\", onStripDragOver)",()=>{row.removeEventListener("dragover", onStripDragOver);});
+    cleanupStep("row.removeEventListener(\"drop\", onStripDrop)",()=>{row.removeEventListener("drop", onStripDrop);});
+    cleanupStep("row.removeEventListener(\"dragleave\", onStripDragLeave)",()=>{row.removeEventListener("dragleave", onStripDragLeave);});
+    cleanupStep("splitZone.removeEventListener(\"dragover\", onSplitDragOver)",()=>{splitZone.removeEventListener("dragover", onSplitDragOver);});
+    cleanupStep("splitZone.removeEventListener(\"drop\", onSplitDrop)",()=>{splitZone.removeEventListener("drop", onSplitDrop);});
+    cleanupStep("splitZone.remove()",()=>{splitZone.remove();});
     for(const lane of [list,leftLane,rightLane,bottomLane]){
-      cleanupStep("release 55",()=>{lane.removeEventListener("scroll",refreshIndicator);});
-      cleanupStep("release 56",()=>{lane.removeEventListener("wheel",onLaneWheel);});
+      cleanupStep("lane.removeEventListener(\"scroll\",refreshIndicator)",()=>{lane.removeEventListener("scroll",refreshIndicator);});
+      cleanupStep("lane.removeEventListener(\"wheel\",onLaneWheel)",()=>{lane.removeEventListener("wheel",onLaneWheel);});
     }
-    cleanupStep("release 58.0",()=>{islandTextAnimation?.cancel();});
-    cleanupStep("release 59.0",()=>{prefs.removeObserver("zen.oneplane.hover-mode",hoverModePreferenceObserver);});
-    for(const key of ["tab-width","expanded-tab-width","address-width"]) cleanupStep("release 60",()=>{prefs.removeObserver("zen.oneplane."+key,adaptiveGeometryPrefs);});
-    cleanupStep("release 61.0",()=>{prefs.removeObserver("zen.oneplane.show-center-island",hoverModePreferenceObserver);});
-    cleanupStep("release 62.0",()=>{prefs.removeObserver("zen.oneplane.tab-indicator", indicatorPreferenceObserver);});
-    cleanupStep("release 63.0",()=>{window.removeEventListener("pointermove", trackTabPointer, true);});
-    cleanupStep("release 64.0",()=>{window.removeEventListener("deactivate", clearTabHover);});
-    cleanupStep("release 65.0",()=>{row.removeEventListener("pointerleave", leaveTabPointer);});
-    cleanupStep("release 66.0",()=>{row.removeEventListener("focusin", focusTab);});
-    cleanupStep("release 67.0",()=>{row.removeEventListener("focusout", blurTab);});
-    cleanupStep("release 68.0",()=>{plus.removeEventListener("pointerleave", leaveTabPointer);});
-    cleanupStep("release 69.0",()=>{plus.removeEventListener("click", onNewTabClick);});
+    cleanupStep("islandTextAnimation?.cancel()",()=>{islandTextAnimation?.cancel();});
+    cleanupStep("prefs.removeObserver(\"zen.oneplane.hover-mode\",hoverModePreferenceObserver)",()=>{prefs.removeObserver("zen.oneplane.hover-mode",hoverModePreferenceObserver);});
+    for(const key of ["tab-width","expanded-tab-width","address-width"]) cleanupStep("prefs.removeObserver(\"zen.oneplane.\"+key,adaptiveGeometryPrefs)",()=>{prefs.removeObserver("zen.oneplane."+key,adaptiveGeometryPrefs);});
+    cleanupStep("prefs.removeObserver(\"zen.oneplane.show-center-island\",hoverModePreferenceObserver)",()=>{prefs.removeObserver("zen.oneplane.show-center-island",hoverModePreferenceObserver);});
+    cleanupStep("prefs.removeObserver(\"zen.oneplane.tab-indicator\", indicatorPreferenceObserver)",()=>{prefs.removeObserver("zen.oneplane.tab-indicator", indicatorPreferenceObserver);});
+    cleanupStep("window.removeEventListener(\"pointermove\", trackTabPointer, true)",()=>{window.removeEventListener("pointermove", trackTabPointer, true);});
+    cleanupStep("window.removeEventListener(\"deactivate\", clearTabHover)",()=>{window.removeEventListener("deactivate", clearTabHover);});
+    cleanupStep("row.removeEventListener(\"pointerleave\", leaveTabPointer)",()=>{row.removeEventListener("pointerleave", leaveTabPointer);});
+    cleanupStep("row.removeEventListener(\"focusin\", focusTab)",()=>{row.removeEventListener("focusin", focusTab);});
+    cleanupStep("row.removeEventListener(\"focusout\", blurTab)",()=>{row.removeEventListener("focusout", blurTab);});
+    cleanupStep("plus.removeEventListener(\"pointerleave\", leaveTabPointer)",()=>{plus.removeEventListener("pointerleave", leaveTabPointer);});
+    cleanupStep("plus.removeEventListener(\"click\", onNewTabClick)",()=>{plus.removeEventListener("click", onNewTabClick);});
     try { browser.removeProgressListener(progressListener); } catch {}
-    cleanupStep("release 71.0",()=>{url.removeAttribute("data-op-empty");});
-    cleanupStep("release 72.0",()=>{url.removeAttribute("data-op-url-ready");});
-    cleanupStep("release 73.0",()=>{url.removeAttribute("data-op-address-icon");});
-    cleanupStep("release 73.1",()=>{compactSearch.remove();});
-    cleanupStep("release 74.0",()=>{url.style.removeProperty("--op-url");});
-    for (const name of ["--op-url-expanded-width", "--op-url-compact-width", "--op-url-anchor-left", "--op-url-anchor-top", "--op-url-header-height"]) cleanupStep("release 75",()=>{url.style.removeProperty(name);});
-    cleanupStep("release 76.0",()=>{toolbarWrapper?.style.removeProperty("--op-measured-toolbar-height");});
-    cleanupStep("release 77.0",()=>{surface.remove();});
-    cleanupStep("release 78.0",()=>{leftSpacer.remove();});
-    cleanupStep("release 79.0",()=>{rightSpacer.remove();});
-    cleanupStep("release 80.0",()=>{releaseWorkspaceLinkScope();});
-    cleanupStep("release 81.0",()=>{hub.destroy();});
-    cleanupStep("release 82.0",()=>{closeNativeTabMenu();});
-    cleanupStep("release 83.0",()=>{window.removeEventListener("pointermove", trackPointer, true);});
-    cleanupStep("release 84.0",()=>{toolbarWrapper?.removeEventListener("pointerover", trackPointer);});
-    cleanupStep("release 85.0",()=>{document.documentElement.removeEventListener("mouseleave", leaveWindow);});
-    cleanupStep("release 86.0",()=>{window.removeEventListener("deactivate", onWindowDeactivate);});
-    cleanupStep("release 87.0",()=>{window.removeEventListener("ZenCompactMode:Toggled", onCompactChanged);});
-    cleanupStep("release 88.0",()=>{window.removeEventListener("ZenCompactMode:LayoutUpdate", onCompactChanged);});
-    cleanupStep("release 89.0",()=>{window.removeEventListener("resize", onWindowGeometryChanged);});
-    cleanupStep("release 90.0",()=>{window.removeEventListener("sizemodechange", onWindowGeometryChanged);});
-    cleanupStep("release 91.0",()=>{addressObserver?.disconnect();});
-    cleanupStep("release 92.0",()=>{clearAddressAnimation();});
-    cleanupStep("release 93.0",()=>{addressBar()?.removeEventListener("pointerdown", onAddressInput, true);});
-    cleanupStep("release 94.0",()=>{addressBar()?.removeEventListener("input", onAddressInput, true);});
-    cleanupStep("release 95.0",()=>{addressBar()?.removeEventListener("toggle", onAddressMutation);});
-    cleanupStep("release 96.0",()=>{if (addressFrame) window.cancelAnimationFrame(addressFrame);});
-    cleanupStep("release 97.0",()=>{if(restoringAddressTimer)window.clearTimeout(restoringAddressTimer);});
-    cleanupStep("release 98.0",()=>{restoringAddressTimer=0;});
-    cleanupStep("release 98.1",()=>{restoringAddressTab=null;});
-    cleanupStep("release 99.0",()=>{releaseShield();});
-    cleanupStep("release 100.0",()=>{shield.remove();});
-    cleanupStep("release 101.0",()=>{url.removeEventListener("focusout", onAddressMutation);});
-    cleanupStep("release 102.0",()=>{restorePageActions();});
-    cleanupStep("release 103.0",()=>{restoreWindowCaptions();});
-    for (const event of events) cleanupStep("release 104",()=>{browser.tabContainer.removeEventListener(event, schedule);});
-    cleanupStep("release 105.0",()=>{browser.tabContainer.removeEventListener("TabSelect", onSelect);});
-    for(const event of ["TabOpen","TabClose"]) cleanupStep("release 106",()=>{browser.tabContainer.removeEventListener(event,onTabOpenOrClose,true);});
-    cleanupStep("release 107.0",()=>{window.removeEventListener("ZenWorkspaceDataChanged", schedule);});
-    cleanupStep("release 108.0",()=>{window.removeEventListener("ZenRefined:WorkspaceTransition",onWorkspaceMotion);});
-    cleanupStep("release 109.0",()=>{toolbarWrapper?.removeAttribute("oneplane-workspace-hold");});
-    cleanupStep("release 110.0",()=>{window.removeEventListener("ZenTabIconChanged",onNativeIconChanged,true);});
-    cleanupStep("release 111.0",()=>{window.removeEventListener("OnePlane:SyncedIconChanged",schedule);});
-    cleanupStep("release 112.0",()=>{window.removeEventListener("ZenViewSplitter:SplitViewActivated", schedule);});
-    cleanupStep("release 113.0",()=>{window.removeEventListener("ZenViewSplitter:SplitViewDeactivated", schedule);});
-    cleanupStep("release 114.0",()=>{window.removeEventListener("aftercustomization", schedule);});
-    cleanupStep("release 115.0",()=>{row.remove();});
-    cleanupStep("release 116.0",()=>{entries.clear();});
-    cleanupStep("release 117.0",()=>{splitEntries.clear();});
+    cleanupStep("url.removeAttribute(\"data-op-empty\")",()=>{url.removeAttribute("data-op-empty");});
+    cleanupStep("url.removeAttribute(\"data-op-url-ready\")",()=>{url.removeAttribute("data-op-url-ready");});
+    cleanupStep("url.removeAttribute(\"data-op-address-icon\")",()=>{url.removeAttribute("data-op-address-icon");});
+    cleanupStep("compactSearch.remove()",()=>{compactSearch.remove();});
+    cleanupStep("url.style.removeProperty(\"--op-url\")",()=>{url.style.removeProperty("--op-url");});
+    for (const name of ["--op-url-expanded-width", "--op-url-compact-width", "--op-url-anchor-left", "--op-url-anchor-top", "--op-url-header-height"]) cleanupStep("url.style.removeProperty(name)",()=>{url.style.removeProperty(name);});
+    cleanupStep("toolbarWrapper?.style.removeProperty(\"--op-measured-toolbar-height\")",()=>{toolbarWrapper?.style.removeProperty("--op-measured-toolbar-height");});
+    cleanupStep("surface.remove()",()=>{surface.remove();});
+    cleanupStep("leftSpacer.remove()",()=>{leftSpacer.remove();});
+    cleanupStep("rightSpacer.remove()",()=>{rightSpacer.remove();});
+    cleanupStep("releaseWorkspaceLinkScope()",()=>{releaseWorkspaceLinkScope();});
+    cleanupStep("hub.destroy()",()=>{hub.destroy();});
+    cleanupStep("closeNativeTabMenu()",()=>{closeNativeTabMenu();});
+    cleanupStep("window.removeEventListener(\"pointermove\", trackPointer, true)",()=>{window.removeEventListener("pointermove", trackPointer, true);});
+    cleanupStep("toolbarWrapper?.removeEventListener(\"pointerover\", trackPointer)",()=>{toolbarWrapper?.removeEventListener("pointerover", trackPointer);});
+    cleanupStep("document.documentElement.removeEventListener(\"mouseleave\", leaveWindow)",()=>{document.documentElement.removeEventListener("mouseleave", leaveWindow);});
+    cleanupStep("window.removeEventListener(\"deactivate\", onWindowDeactivate)",()=>{window.removeEventListener("deactivate", onWindowDeactivate);});
+    cleanupStep("window.removeEventListener(\"ZenCompactMode:Toggled\", onCompactChanged)",()=>{window.removeEventListener("ZenCompactMode:Toggled", onCompactChanged);});
+    cleanupStep("window.removeEventListener(\"ZenCompactMode:LayoutUpdate\", onCompactChanged)",()=>{window.removeEventListener("ZenCompactMode:LayoutUpdate", onCompactChanged);});
+    cleanupStep("window.removeEventListener(\"resize\", onWindowGeometryChanged)",()=>{window.removeEventListener("resize", onWindowGeometryChanged);});
+    cleanupStep("window.removeEventListener(\"sizemodechange\", onWindowGeometryChanged)",()=>{window.removeEventListener("sizemodechange", onWindowGeometryChanged);});
+    cleanupStep("addressObserver?.disconnect()",()=>{addressObserver?.disconnect();});
+    cleanupStep("clearAddressAnimation()",()=>{clearAddressAnimation();});
+    cleanupStep("addressBar()?.removeEventListener(\"pointerdown\", onAddressInput, true)",()=>{addressBar()?.removeEventListener("pointerdown", onAddressInput, true);});
+    cleanupStep("addressBar()?.removeEventListener(\"input\", onAddressInput, true)",()=>{addressBar()?.removeEventListener("input", onAddressInput, true);});
+    cleanupStep("addressBar()?.removeEventListener(\"toggle\", onAddressMutation)",()=>{addressBar()?.removeEventListener("toggle", onAddressMutation);});
+    cleanupStep("if (addressFrame) window.cancelAnimationFrame(addressFrame)",()=>{if (addressFrame) window.cancelAnimationFrame(addressFrame);});
+    cleanupStep("if(restoringAddressTimer)window.clearTimeout(restoringAddressTimer)",()=>{if(restoringAddressTimer)window.clearTimeout(restoringAddressTimer);});
+    cleanupStep("restoringAddressTimer=0",()=>{restoringAddressTimer=0;});
+    cleanupStep("restoringAddressTab=null",()=>{restoringAddressTab=null;});
+    cleanupStep("releaseShield()",()=>{releaseShield();});
+    cleanupStep("shield.remove()",()=>{shield.remove();});
+    cleanupStep("url.removeEventListener(\"focusout\", onAddressMutation)",()=>{url.removeEventListener("focusout", onAddressMutation);});
+    cleanupStep("restorePageActions()",()=>{restorePageActions();});
+    cleanupStep("restoreWindowCaptions()",()=>{restoreWindowCaptions();});
+    for (const event of events) cleanupStep("browser.tabContainer.removeEventListener(event, schedule)",()=>{browser.tabContainer.removeEventListener(event, schedule);});
+    cleanupStep("browser.tabContainer.removeEventListener(\"TabSelect\", onSelect)",()=>{browser.tabContainer.removeEventListener("TabSelect", onSelect);});
+    for(const event of ["TabOpen","TabClose"]) cleanupStep("browser.tabContainer.removeEventListener(event,onTabOpenOrClose,true)",()=>{browser.tabContainer.removeEventListener(event,onTabOpenOrClose,true);});
+    cleanupStep("window.removeEventListener(\"ZenWorkspaceDataChanged\", schedule)",()=>{window.removeEventListener("ZenWorkspaceDataChanged", schedule);});
+    cleanupStep("window.removeEventListener(\"ZenRefined:WorkspaceTransition\",onWorkspaceMotion)",()=>{window.removeEventListener("ZenRefined:WorkspaceTransition",onWorkspaceMotion);});
+    cleanupStep("toolbarWrapper?.removeAttribute(\"oneplane-workspace-hold\")",()=>{toolbarWrapper?.removeAttribute("oneplane-workspace-hold");});
+    cleanupStep("window.removeEventListener(\"ZenTabIconChanged\",onNativeIconChanged,true)",()=>{window.removeEventListener("ZenTabIconChanged",onNativeIconChanged,true);});
+    cleanupStep("window.removeEventListener(\"OnePlane:SyncedIconChanged\",schedule)",()=>{window.removeEventListener("OnePlane:SyncedIconChanged",schedule);});
+    cleanupStep("window.removeEventListener(\"ZenViewSplitter:SplitViewActivated\", schedule)",()=>{window.removeEventListener("ZenViewSplitter:SplitViewActivated", schedule);});
+    cleanupStep("window.removeEventListener(\"ZenViewSplitter:SplitViewDeactivated\", schedule)",()=>{window.removeEventListener("ZenViewSplitter:SplitViewDeactivated", schedule);});
+    cleanupStep("window.removeEventListener(\"aftercustomization\", schedule)",()=>{window.removeEventListener("aftercustomization", schedule);});
+    cleanupStep("download host",releaseDownloadHost);
+    cleanupStep("download hold",()=>toolbarWrapper?.removeAttribute("oneplane-download-hold"));
+    cleanupStep("row.remove()",()=>{row.remove();});
+    cleanupStep("entries.clear()",()=>{entries.clear();});
+    cleanupStep("splitEntries.clear()",()=>{splitEntries.clear();});
   }
 
   try {
     url.after(row);url.append(compactSearch);
-    hub.ensure();
+    hub.ensure();ensureDownloadHost();
     releaseDragEngine=installDragEngine();
     try{releaseWorkspaceLinkScope=installWorkspaceLinkScope();}catch(error){console.warn("[OnePlane] Workspace link isolation:",error);}
     target.prepend(leftSpacer);

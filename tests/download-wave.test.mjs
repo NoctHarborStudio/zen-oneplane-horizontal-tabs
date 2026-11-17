@@ -62,7 +62,7 @@ test("pinning from a download row does not acquire the sidebar",()=>{
  let dead=false,cardOpen=true,dockOpen=false,manualHold=false,sidebarOrigin=false;
  const attrs=new Set(["data-zr-native"]);
  const node={hasAttribute:k=>attrs.has(k),toggleAttribute:(k,on)=>on?attrs.add(k):attrs.delete(k)};
- const dock={hasAttribute:()=>false};function cancelHide(){}function follow(){}
+ const dock={hasAttribute:()=>false};function cancelHide(){}function follow(){}function syncHostedHold(){}
  pinPanel();const fromRow={pinned:manualHold,sidebar:attrs.has("panelopen")};
  pinPanel(true);const fromIndicator={pinned:manualHold,sidebar:attrs.has("panelopen")};
  pinPanel();const preserved=attrs.has("panelopen");
@@ -80,4 +80,28 @@ test("horizontal download host follows ready strip, not viewport width",()=>{
  ready=false;assert.equal(active(),false);ready=true;
  for(const name of ["customizing","popup-window","inFullscreen","inDOMFullscreen"]){attrs.set(name,"true");assert.equal(active(),false);attrs.delete(name);}
  attrs.delete("oneplane-active");assert.equal(active(),false);
+});
+
+test("hosted hold tracks actual panel lifetime and never removes other holds",()=>{
+ const code=section("function syncHostedHold()","function updateLive()");
+ const run=new Function(`let dead=false,heldWrapper=null,cardOpen=false,dockOpen=false,flight=null,closing=false,active=true,hosted=true;
+ const attrs=new Set(["oneplane-home-hold"]),wrapper={hasAttribute:k=>attrs.has(k),setAttribute:k=>attrs.add(k),removeAttribute:k=>attrs.delete(k)};
+ const get=()=>wrapper,onePlane=()=>active,node={hasAttribute:k=>k==="data-zr-hosted"&&hosted},dock={hasAttribute:()=>closing};
+ function syncSidebarHold(){}
+ ${code}
+ const states=[],sample=()=>{syncHostedHold();states.push(attrs.has("oneplane-download-hold"));};
+ sample();cardOpen=true;sample();cardOpen=false;closing=true;sample();closing=false;flight={};sample();flight=null;sample();
+ dockOpen=true;sample();active=false;sample();active=true;sample();dead=true;sample();
+ return {states,other:attrs.has("oneplane-home-hold")};`);
+ assert.deepEqual(run(),{states:[false,true,true,true,false,true,false,true,false],other:true});
+});
+test("permanent horizontal host is constructed, measured and removed",()=>{
+ const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
+ const layout=read("layout.uc.mjs"),css=read("chrome.css");
+ assert.ok(layout.includes('downloadHost.id="oneplane-download-indicator-slot"'));
+ assert.ok(layout.includes('new Set(["oneplane-hub-button", "oneplane-download-indicator-slot"'));
+ assert.ok(layout.includes('cleanupStep("download host",releaseDownloadHost)'));
+ assert.ok(layout.includes('"oneplane-download-hold"'));
+ assert.ok(css.includes('#oneplane-download-indicator-slot:has(> #zr-download-indicator)'));
+ assert.ok(css.includes('#oneplane-download-indicator-slot > #zr-download-indicator[data-zr-hosted]'));
 });

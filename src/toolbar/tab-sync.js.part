@@ -164,7 +164,7 @@
     if (url.parentElement === target && row.parentElement !== target) url.after(row);
     if (leftSpacer.parentElement !== target) target.prepend(leftSpacer);
     if (rightSpacer.parentElement !== target) row.after(rightSpacer);
-    hub.ensure();
+    hub.ensure();ensureDownloadHost();
     movePageActions();
     centerToolbar();
     observeGeometry();
