@@ -7,7 +7,22 @@
   const get=id=>document.getElementById(id);
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
-  let dead=false,active=null,uri=null,style=null,registered=false;
+  let dead=false,active=null,request=null,uri=null,style=null,registered=false;
+  // This gate survives replacement of the visual controller in the same
+  // window. Native work already in flight cannot be cancelled by WAAPI.
+  const GATE="__nocturneWorkspaceCommandGate";
+  const gate=win[GATE]??(win[GATE]={pending:null});
+  function invokeNative(req,nativeSwitch){
+    if(dead||win.closed||req.superseded)return;
+    const pending=Promise.resolve().then(()=>{
+      if(dead||win.closed||req.superseded)return;
+      return nativeSwitch();
+    });
+    gate.pending=pending;
+    const release=()=>{if(gate.pending===pending)gate.pending=null;};
+    pending.then(release,release);
+    return pending;
+  }
   const reduced=win.matchMedia("(prefers-reduced-motion: reduce)");
   function distance(center,mid){return Math.max(-440,Math.min(440,center-mid));}
   function eligible(state){return !state.dead&&!state.busy&&!state.reduced&&!state.startup&&state.enabled&&!state.fullscreen;}
@@ -92,10 +107,24 @@
   }
   async function run(nativeSwitch){
     if(typeof nativeSwitch!=="function")throw TypeError("Native workspace callback required");
-    // A newer explicit request supersedes an unfinished outgoing effect.
-    // Never let the older delayed callback select a workspace afterward.
+    if(dead||win.closed)return;
+    if(request)request.superseded=true;
     if(active){active.superseded=true;cleanup(active);}
-    if(!registered||!eligible({dead,busy:!!active,reduced:reduced.matches,startup:root.hasAttribute("data-zr-startup-phase")||root.getAttribute("data-op-startup-ready")==="pending",enabled:prefs.getBoolPref(PREF,true),fullscreen:root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"||root.getAttribute("inFullscreen")==="true"}))return nativeSwitch();
+    const req={superseded:false};request=req;
+    try{
+      // Coalesce waiting requests to the latest intent; never start a
+      // second native operation while an earlier one is unresolved.
+      while(gate.pending){
+        try{await gate.pending;}catch{}
+        if(dead||win.closed||req.superseded)return;
+      }
+      if(dead||win.closed||req.superseded)return;
+      return await perform(req,nativeSwitch);
+    }finally{if(request===req)request=null;}
+  }
+  async function perform(req,nativeSwitch){
+    const invoke=()=>invokeNative(req,nativeSwitch);
+    if(!registered||!eligible({dead,busy:!!active,reduced:reduced.matches,startup:root.hasAttribute("data-zr-startup-phase")||root.getAttribute("data-op-startup-ready")==="pending",enabled:prefs.getBoolPref(PREF,true),fullscreen:root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"||root.getAttribute("inFullscreen")==="true"||root.hasAttribute("data-zr-closing")||root.hasAttribute("data-op-bookmark-wave")}))return invoke();
     const tx={animations:new Set(),styles:new Map(),timers:new Set(),waiters:new Set(),cancelled:false,superseded:false};active=tx;
     // Native switching owns its own promise; visual gating must never
     // remain stuck if that promise is slow or fails to settle.
@@ -103,12 +132,12 @@
     let called=false,result;
     try{
       const old=units();
-      if(!old.length){cleanup(tx);called=true;return await nativeSwitch();}
+      if(!old.length){cleanup(tx);called=true;return await invoke();}
       phase("out");
       await animate(tx,old,true);
-      if(tx.superseded||dead&&win.closed)return;
+      if(tx.superseded||req.superseded||dead||win.closed)return;
       if(!tx.cancelled){phase("swap");cancelEffects(tx);}
-      called=true;result=await nativeSwitch();
+      called=true;result=await invoke();
       if(tx.cancelled)return result;
       await settled(tx);
       if(tx.cancelled)return result;
@@ -118,14 +147,14 @@
       await motion;
       return result;
     }catch(error){
-      if(!called){called=true;cleanup(tx);return tx.superseded?undefined:nativeSwitch();}
+      if(!called){called=true;cleanup(tx);return tx.superseded||req.superseded||dead||win.closed?undefined:invoke();}
       throw error;
     }finally{cleanup(tx);}
   }
   function abort(){if(active)cleanup(active);}
   function onKey(e){if(e.key==="Escape")abort();}
   function dispose(){
-    if(dead)return;dead=true;abort();
+    if(dead)return;dead=true;if(request)request.superseded=true;abort();
     win.removeEventListener("unload",dispose);win.removeEventListener("keydown",onKey,true);win.removeEventListener("beforecustomization",abort);
     reduced.removeEventListener("change",abort);try{prefs.removeObserver(PREF,abort);}catch{}
     if(uri)try{win.windowUtils.removeSheet(uri,win.windowUtils.USER_SHEET);}catch{}

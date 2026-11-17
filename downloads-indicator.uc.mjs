@@ -750,7 +750,7 @@
     if(updateTimer)window.clearTimeout(updateTimer);updateTimer=0;cancelHide();cancelFlight();cancelPanel();cardOpen=dockOpen=false;manualHold=false;sidebarOrigin=false;dock?.removeAttribute("data-closing");syncSidebarHold();stopFollow();overlayUntil=0;
     if(layoutFrame)window.cancelAnimationFrame(layoutFrame);layoutFrame=0;
     resizeObserver?.disconnect();resizeObserver=null;observedSidebar=anchor=null;
-    if(list&&view)try{list.removeView(view);}catch{}
+    if(list&&view)try{Promise.resolve(list.removeView(view)).catch(()=>{});}catch{}
     list=view=null;hydrating=false;
     layoutObserver?.disconnect();layoutObserver=null;
     window.removeEventListener("resize",scheduleMount);window.removeEventListener("OnePlane:DownloadHostChanged",scheduleMount);
@@ -768,21 +768,31 @@
   async function install(){
     if(dead||node||!enabled())return;
     const token=++epoch;
+    let source=null,ownedView=null;
+    const currentGeneration=()=>!dead&&token===epoch&&enabled()&&!window.closed;
+    const detach=async()=>{if(source&&ownedView)try{await source.removeView(ownedView);}catch{}};
     try{
       const Downloads=window.Downloads||ChromeUtils.importESModule("resource://gre/modules/Downloads.sys.mjs").Downloads;
       const PB=ChromeUtils.importESModule("resource://gre/modules/PrivateBrowsingUtils.sys.mjs").PrivateBrowsingUtils;
-      const source=await Downloads.getList(PB.isWindowPrivate(window)?Downloads.PRIVATE:Downloads.PUBLIC);
-      if(dead||token!==epoch||!enabled()||window.closed)return;
+      source=await Downloads.getList(PB.isWindowPrivate(window)?Downloads.PRIVATE:Downloads.PUBLIC);
+      if(!currentGeneration())return;
       build();list=source;hydrating=true;
-      view={onDownloadAdded:added,onDownloadChanged:changed,onDownloadRemoved:removed};
-      await list.addView(view);
-      if(dead||token!==epoch||list!==source)return;
+      // Late addView replay must not mutate a replacement instance.
+      const guard=fn=>download=>{if(currentGeneration()&&view===ownedView)fn(download);};
+      ownedView={onDownloadAdded:guard(added),onDownloadChanged:guard(changed),onDownloadRemoved:guard(removed)};
+      view=ownedView;
+      await source.addView(ownedView);
+      if(!currentGeneration()||list!==source||view!==ownedView){await detach();return;}
       hydrating=false;
       // Hide only this window's confusing native flight. Do not write the
       // global zen.downloads.download-animation preference or patch Zen.
       root.setAttribute(ACTIVE,"true");
       schedule(true);
-    }catch(error){console.warn("[Zen Refined] Download indicator:",error);teardown();}
+    }catch(error){
+      const owned=token===epoch&&!dead;
+      if(owned){console.warn("[Nocturne] Download indicator:",error);teardown();}
+      await detach();
+    }
   }
   function sync(){if(!initialized||dead)return;if(enabled())void install();else teardown();}
   function start(){initialized=true;sync();}

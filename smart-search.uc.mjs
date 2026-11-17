@@ -444,23 +444,34 @@
         Services.obs.addObserver(readyObserver,"browser-delayed-startup-finished");
       }else onReady();
       console.info("[Zen Refined] Smart Search provider ready (preview.22, manager="+(direct===manager?"address-bar":"singleton")+")");
-    }catch(e){diagnostic.stage="error";diagnostic.error=String(e);console.warn("[Zen Refined] Smart Search unavailable:",e);}
+    }catch(e){
+      diagnostic.stage="error";diagnostic.error=String(e);
+      console.warn("[Nocturne] Smart Search unavailable:",e);
+      dispose(true);
+    }
   }
-  function dispose(){
-    if(disposed)return;disposed=true;
+  function dispose(keepDiagnostic=false){
+    const keep=keepDiagnostic===true;
+    const finish=()=>{
+      window.removeEventListener("unload",dispose);
+      if(window[KEY]===dispose)delete window[KEY];
+      if(window[STATUS]===status)delete window[STATUS];
+    };
+    if(disposed){if(!keep)finish();return;}disposed=true;
+    const safe=fn=>{try{fn();}catch(e){console.warn("[Nocturne] Smart Search cleanup:",e);}};
     if(observer)try{Services.obs.removeObserver(observer,"browser-delayed-startup-finished");}catch{}
     observer=null;
-    cancelRefresh();clearLayout();resizeObserver?.disconnect();openObserver?.disconnect();
+    safe(cancelRefresh);safe(clearLayout);safe(()=>resizeObserver?.disconnect());safe(()=>openObserver?.disconnect());
     if(readyObserver)try{Services.obs.removeObserver(readyObserver,"browser-delayed-startup-finished");}catch{}
     if(prefObserver)try{prefs.removeObserver?.(PREF,prefObserver);}catch{}
-    tabContainer?.removeEventListener?.("TabSelect",onActivation);
-    bar?.removeEventListener?.("focusin",onFocus);
-    bar?.removeEventListener?.("keydown",onEscape,true);
-    bar?.removeEventListener?.("pointerdown",onResultPointer,true);
+    safe(()=>{tabContainer?.removeEventListener?.("TabSelect",onActivation);});
+    safe(()=>{bar?.removeEventListener?.("focusin",onFocus);});
+    safe(()=>{bar?.removeEventListener?.("keydown",onEscape,true);});
+    safe(()=>{bar?.removeEventListener?.("pointerdown",onResultPointer,true);});
     if(topSitesObserver)for(const topic of TOPICS)try{Services.obs.removeObserver(topSitesObserver,topic);}catch{}
     topSitesObserver=null;
-    window.removeEventListener("keydown",onGridTab,true);
-    if(child&&wrappedQuery&&child.startQuery===wrappedQuery)child.startQuery=originalQuery;
+    safe(()=>{window.removeEventListener("keydown",onGridTab,true);});
+    safe(()=>{if(child&&wrappedQuery&&child.startQuery===wrappedQuery)child.startQuery=originalQuery;});
     try{bar?.view?.clearTopSitesCache?.();}catch{}
     try{if(listener)child?.removeListener?.(listener);}catch{}
     listener=null;
@@ -468,14 +479,14 @@
       registry.windows.get(window)?.targets.clear();registry.windows.delete(window);
       if(windowId!==null)registry.byId?.delete(windowId);if(parent)registry.controllers?.delete(parent);
       registry.count--;joined=false;
-      if(registry.count===0&&manager?.[REGISTRY]===registry){
-        try{if(manager.getProvider(NAME)===registry.provider)manager.unregisterProvider(registry.provider);}catch{}
-        delete manager[REGISTRY];
-      }
     }
-    window.removeEventListener("unload",dispose);
-    if(window[KEY]===dispose)delete window[KEY];
-    if(window[STATUS]===status)delete window[STATUS];
+    // Also roll back a newly-created registry if registration threw
+    // after registering but before the window joined it.
+    if(registry&&registry.count===0&&manager){
+      safe(()=>{if(manager.getProvider(NAME)===registry.provider)manager.unregisterProvider(registry.provider);});
+      if(manager[REGISTRY]===registry)delete manager[REGISTRY];
+    }
+    if(!keep)finish();
   }
   window[KEY]=dispose;window.addUnloadListener(dispose);window.addEventListener("unload",dispose,{once:true});
   if(window.gBrowserInit?.delayedStartupFinished||(window.gBrowser&&window.gURLBar))install();
