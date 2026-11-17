@@ -69,3 +69,15 @@ test("pinning from a download row does not acquire the sidebar",()=>{
  return {fromRow,fromIndicator,preserved};`);
  assert.deepEqual(run(),{fromRow:{pinned:true,sidebar:false},fromIndicator:{pinned:true,sidebar:true},preserved:true});
 });
+
+test("horizontal download host follows ready strip, not viewport width",()=>{
+ const code=section("function onePlane()","function nativeAnchor()");
+ const attrs=new Map([["oneplane-active","true"]]);let ready=true;
+ const root={getAttribute:k=>attrs.get(k)??null,hasAttribute:k=>attrs.has(k),querySelector:s=>s==='#nav-bar-customization-target > #oneplane-tabs[data-ready="true"]'&&ready?{}:null};
+ const window={innerWidth:1400};
+ const active=new Function("root","window",code+"return onePlane;")(root,window);
+ for(const width of [1440,900,899,760,480,320]){window.innerWidth=width;assert.equal(active(),true);}
+ ready=false;assert.equal(active(),false);ready=true;
+ for(const name of ["customizing","popup-window","inFullscreen","inDOMFullscreen"]){attrs.set(name,"true");assert.equal(active(),false);attrs.delete(name);}
+ attrs.delete("oneplane-active");assert.equal(active(),false);
+});

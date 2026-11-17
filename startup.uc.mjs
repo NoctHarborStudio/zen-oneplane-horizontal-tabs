@@ -45,8 +45,26 @@ function restore(){
     persist();
   }
 }
-function sync(){if(prefs.getBoolPref(OPTION,true))apply();else restore();}
-let closing=false,disposed=false,closeTimer=0;
+function sync(){if(disposed)return;if(prefs.getBoolPref(OPTION,true))apply();else restore();}
+let closing=false,disposed=false,closeTimer=0,observing=false;
+// Native preferences are process-wide; browser windows are leases, not
+// independent owners. Only one live lease observes the option.
+function otherOwner(){
+  const windows=Services.wm.getEnumerator("navigator:browser");
+  while(windows.hasMoreElements()){
+    const other=windows.getNext(),lease=other[KEY];
+    if(other!==window&&!other.closed&&lease?.active&&typeof lease.observe==="function")return lease;
+  }
+  return null;
+}
+function observe(){
+  if(disposed||observing)return;
+  prefs.addObserver(OPTION,sync);observing=true;
+}
+function stopObserving(){
+  if(!observing)return;observing=false;
+  try{prefs.removeObserver(OPTION,sync);}catch{}
+}
 function beforeClose(event){
   if(event.target!==window&&event.target!==document)return;
   closing=true;
@@ -54,20 +72,29 @@ function beforeClose(event){
   closeTimer=window.setTimeout(()=>{closing=false;closeTimer=0;},1000);
 }
 function cleanup(modUnload=false){
-  if(disposed)return;disposed=true;
+  if(disposed)return;disposed=true;cleanup.active=false;
   if(closeTimer)window.clearTimeout(closeTimer);
-  try{prefs.removeObserver(OPTION,sync);}catch{}
+  const wasObserving=observing;stopObserving();
   window.removeEventListener("beforeunload",beforeClose,true);
   window.removeEventListener("unload",nativeUnload);
-  if(modUnload&&!closing&&!window.closed&&!Services.startup.shuttingDown)restore();
   if(window[KEY]===cleanup)delete window[KEY];
+  try{
+    const successor=otherOwner();
+    if(successor){
+      if(wasObserving&&!Services.startup.shuttingDown)successor.observe();
+      return;
+    }
+    // Normal window exit must preserve the pre-startup settings.
+    if(modUnload&&!closing&&!window.closed&&!Services.startup.shuttingDown)restore();
+  }catch(error){console.warn("[Nocturne] Startup ownership cleanup",error);}
 }
 function nativeUnload(){cleanup(false);}
+cleanup.active=false;cleanup.observe=observe;
 if(typeof window.addUnloadListener==="function"&&!document.documentElement.hasAttribute("popup-window")){
-  window[KEY]?.(true);window[KEY]=cleanup;
+  // A replacement in the same window transfers the existing backup.
+  window[KEY]?.(false);window[KEY]=cleanup;cleanup.active=true;
   window.addEventListener("beforeunload",beforeClose,true);
   window.addEventListener("unload",nativeUnload,{once:true});
   window.addUnloadListener(()=>cleanup(true));
-  prefs.addObserver(OPTION,sync);
-  sync();
+  if(!otherOwner()){observe();sync();}
 }

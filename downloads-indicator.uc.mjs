@@ -90,8 +90,12 @@
       st.display!=="none"&&st.visibility!=="hidden"&&Number(st.opacity)!==0;
   }
   function onePlane(){
-    return root.getAttribute("oneplane-active")==="true"&&window.innerWidth>=900&&
-      !root.hasAttribute("customizing")&&root.getAttribute("inDOMFullscreen")!=="true"&&root.getAttribute("inFullscreen")!=="true";
+    // Match the horizontal stylesheet's real activation contract. A
+    // narrow adaptive strip is still OnePlane; a not-ready strip is not.
+    return root.getAttribute("oneplane-active")==="true"&&
+      !root.hasAttribute("customizing")&&!root.hasAttribute("popup-window")&&
+      root.getAttribute("inDOMFullscreen")!=="true"&&root.getAttribute("inFullscreen")!=="true"&&
+      !!root.querySelector('#nav-bar-customization-target > #oneplane-tabs[data-ready="true"]');
   }
   function nativeAnchor(){
     const toolbox=get("navigator-toolbox");
@@ -350,13 +354,15 @@
     layoutObserver=new MutationObserver(records=>{
       if(records.some(r=>{
         if(r.target===node||r.target===dock||r.target===dockBackdrop||r.target===overlayLayer||node.contains(r.target)||dock?.contains(r.target))return false;
-        const selector="#navigator-toolbox,#zen-sidebar-top-buttons,#zen-tabs-wrapper,#tabbrowser-tabs,#oneplane-download-indicator-slot";
+        const selector="#navigator-toolbox,#zen-sidebar-top-buttons,#zen-tabs-wrapper,#tabbrowser-tabs,#oneplane-tabs,#oneplane-download-indicator-slot";
         const relevant=n=>n?.nodeType===1&&(n.matches?.(selector)||n.querySelector?.(selector));
         if(r.type==="attributes")return r.target===root||r.target===observedSidebar||r.target===anchor||r.target.matches?.(selector);
         return [...r.addedNodes,...r.removedNodes].some(n=>n!==node&&n!==dock&&relevant(n));
       }))scheduleMount();
     });
-    layoutObserver.observe(root,{attributes:true,attributeFilter:["oneplane-active","customizing","zen-right-side","zen-compact-mode","zen-compact-animating","zen-sidebar-expanded","zen-has-hover","hidden","collapsed"],childList:true});
+    layoutObserver.observe(root,{attributes:true,attributeFilter:["oneplane-active","customizing","popup-window","inDOMFullscreen","inFullscreen","zen-right-side","zen-compact-mode","zen-compact-animating","zen-sidebar-expanded","zen-has-hover","hidden","collapsed"],childList:true});
+    const toolbar=get("nav-bar-customization-target");
+    if(toolbar)layoutObserver.observe(toolbar,{subtree:true,childList:true,attributes:true,attributeFilter:["data-ready"]});
     const toolbox=get("navigator-toolbox");
     if(toolbox)layoutObserver.observe(toolbox,{subtree:true,childList:true,attributes:true,attributeFilter:["hidden","collapsed","zen-has-hover","zen-user-show","zen-has-empty-tab","flash-popup","has-popup-menu","movingtab","zen-compact-mode-active","zen-sidebar-expanded","animate"]});
     window.addEventListener("resize",scheduleMount);window.addEventListener("OnePlane:DownloadHostChanged",scheduleMount);
