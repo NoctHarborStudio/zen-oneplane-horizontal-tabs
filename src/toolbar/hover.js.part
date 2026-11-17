@@ -14,7 +14,7 @@
     const hadTitle=Boolean(islandTitle.textContent);
     islandTitle.textContent=title;
     island.title=title;
-    if(cascadeState==="idle" && hadTitle && title && !reducedMotion.matches &&
+    if(!root.hasAttribute("data-zr-workspace-phase") && cascadeState==="idle" && hadTitle && title && !reducedMotion.matches &&
         prefs.getIntPref("zen.oneplane.animation-duration",160)!==0)
       islandTextAnimation=islandTitle.animate([{opacity:.35,translate:"0 2px"},{opacity:1,translate:"0 0"}],
         {duration:150,easing:"ease-out"});
@@ -37,7 +37,7 @@
   }
   const hoverModePreferenceObserver={observe(){applyHoverMode();}};
   function selectHover(item, x = null) {
-    if (cascadeState!=="idle" || !item || !list.contains(item)) return;
+    if (root.hasAttribute("data-zr-workspace-phase") || cascadeState!=="idle" || !item || !list.contains(item)) return;
     cancelHoverTimer();
     cancelIndicatorReturn();
     hoverX = x;
@@ -91,7 +91,7 @@
     cancelIndicatorReturn();indicatorHover=null;hoverX=null;refreshIndicator();refreshIslandTitle();
   }
   function trackTabPointer(event) {
-    if(event.pointerType==="touch")return;
+    if(event.pointerType==="touch"||root.hasAttribute("data-zr-workspace-phase"))return;
     const pointNow={x:event.clientX,y:event.clientY};
     if(cascadeState!=="idle"){cascadePointer=pointNow;return;}
     if(cascadePointer){

@@ -25,10 +25,12 @@
     if(state.wait>0)panelTimer=window.setTimeout(reconcilePanel,Math.ceil(state.wait)+1);
   }
   function onWorkspaceMotion(){
-    const active=root.hasAttribute("data-zr-workspace-phase");
+    const phase=root.getAttribute("data-zr-workspace-phase"),active=!!phase;
     toolbarWrapper?.toggleAttribute("oneplane-workspace-hold",active);
+    if(active){cancelHoverTimer();cancelIndicatorReturn();}
+    if(phase==="swap"){clearTabHover();islandTextAnimation?.cancel();}
     reconcilePanel();
-    if(!active){scheduleGeometry();scheduleContour();}
+    if(!active){refreshIslandTitle();scheduleGeometry();scheduleContour();}
   }
   function guardPanelSwitch(){
     if(!hoverSupported())return;

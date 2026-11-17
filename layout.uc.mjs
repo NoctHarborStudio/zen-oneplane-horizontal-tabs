@@ -4421,10 +4421,12 @@ function installTabStrip() {
     if(state.wait>0)panelTimer=window.setTimeout(reconcilePanel,Math.ceil(state.wait)+1);
   }
   function onWorkspaceMotion(){
-    const active=root.hasAttribute("data-zr-workspace-phase");
+    const phase=root.getAttribute("data-zr-workspace-phase"),active=!!phase;
     toolbarWrapper?.toggleAttribute("oneplane-workspace-hold",active);
+    if(active){cancelHoverTimer();cancelIndicatorReturn();}
+    if(phase==="swap"){clearTabHover();islandTextAnimation?.cancel();}
     reconcilePanel();
-    if(!active){scheduleGeometry();scheduleContour();}
+    if(!active){refreshIslandTitle();scheduleGeometry();scheduleContour();}
   }
   function guardPanelSwitch(){
     if(!hoverSupported())return;
@@ -5861,7 +5863,7 @@ function installTabStrip() {
     const hadTitle=Boolean(islandTitle.textContent);
     islandTitle.textContent=title;
     island.title=title;
-    if(cascadeState==="idle" && hadTitle && title && !reducedMotion.matches &&
+    if(!root.hasAttribute("data-zr-workspace-phase") && cascadeState==="idle" && hadTitle && title && !reducedMotion.matches &&
         prefs.getIntPref("zen.oneplane.animation-duration",160)!==0)
       islandTextAnimation=islandTitle.animate([{opacity:.35,translate:"0 2px"},{opacity:1,translate:"0 0"}],
         {duration:150,easing:"ease-out"});
@@ -5884,7 +5886,7 @@ function installTabStrip() {
   }
   const hoverModePreferenceObserver={observe(){applyHoverMode();}};
   function selectHover(item, x = null) {
-    if (cascadeState!=="idle" || !item || !list.contains(item)) return;
+    if (root.hasAttribute("data-zr-workspace-phase") || cascadeState!=="idle" || !item || !list.contains(item)) return;
     cancelHoverTimer();
     cancelIndicatorReturn();
     hoverX = x;
@@ -5938,7 +5940,7 @@ function installTabStrip() {
     cancelIndicatorReturn();indicatorHover=null;hoverX=null;refreshIndicator();refreshIslandTitle();
   }
   function trackTabPointer(event) {
-    if(event.pointerType==="touch")return;
+    if(event.pointerType==="touch"||root.hasAttribute("data-zr-workspace-phase"))return;
     const pointNow={x:event.clientX,y:event.clientY};
     if(cascadeState!=="idle"){cascadePointer=pointNow;return;}
     if(cascadePointer){
