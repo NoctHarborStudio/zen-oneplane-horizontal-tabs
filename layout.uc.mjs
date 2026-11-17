@@ -1,7 +1,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.26",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.27",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -114,7 +114,7 @@
     }catch{}
   }
   const rootAttrs=["data-zr-center-handoff","data-zr-center-motion","data-zr-center-pending","oneplane-active","data-op-startup-ready","data-zr-startup-phase","data-zr-closing","data-zr-workspace-phase","data-op-bookmark-wave","zen-compact-mode","customizing","inDOMFullscreen","inFullscreen"];
-  const attrs=[...rootAttrs,"data-op-panel-open","oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold","oneplane-home-hold","oneplane-workspace-hold","oneplane-download-hold","zen-has-hover","has-popup-menu","zen-compact-mode-active","data-ready","data-op-overflow-row","data-op-adaptive-compact","data-op-dragging","data-op-inline-drag","data-op-lane-drag","data-op-group-pull","data-op-live-drag","data-op-drag-commit","data-op-url-phase","data-op-home-open","data-op-lane-ghost","data-op-detached","data-op-pulling","data-op-drag-follow","data-op-reinsert","data-zr-bm-stable-contour","data-zr-workspace-geometry","data-zr-workspace-motion","data-zr-center-card","data-zr-workspace-height-motion","data-zr-workspace-surface","data-zr-workspace-page","data-zr-home-covered","data-zr-startup-effect","data-zr-close-effect","hidden","collapsed","open","focused"];
+  const attrs=[...rootAttrs,"data-op-panel-open","oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold","oneplane-home-hold","oneplane-workspace-hold","oneplane-download-hold","zen-has-hover","has-popup-menu","zen-compact-mode-active","data-ready","data-op-overflow-row","data-op-adaptive-compact","data-op-dragging","data-op-inline-drag","data-op-lane-drag","data-op-group-pull","data-op-live-drag","data-op-drag-commit","data-op-url-phase","data-op-home-open","data-op-lane-ghost","data-op-magnetic-pull","data-op-magnetic-source","data-op-detached","data-op-pulling","data-op-drag-follow","data-op-reinsert","data-zr-bm-stable-contour","data-zr-workspace-geometry","data-zr-workspace-motion","data-zr-center-card","data-zr-workspace-height-motion","data-zr-workspace-surface","data-zr-workspace-page","data-zr-home-covered","data-zr-startup-effect","data-zr-close-effect","hidden","collapsed","open","focused"];
   const targets=["titlebar-buttonbox","titlebar-max","titlebar-restore","titlebar-close","zr-page-progress","oneplane-tab-indicator","oneplane-overflow-slider","zen-appcontent-navbar-wrapper","zen-appcontent-navbar-container","oneplane-toolbar-surface","nav-bar","oneplane-tabs","oneplane-overflow-tabs","PersonalToolbar","PlacesToolbarItems","urlbar-container","urlbar","tabbrowser-tabpanels","zen-shared-home","zr-download-indicator"];
   function attrState(n,keys=attrs){const out={};for(const k of keys)if(n.hasAttribute(k))out[k]=n.getAttribute(k)||true;return out;}
   function observeTargets(){
@@ -4808,7 +4808,7 @@ function installTabStrip() {
     return 3+widths.reduce((sum,w)=>sum+Math.max(0,w)+3,0)+Math.max(0,expansion);
   }
   function centerToolbar(){
-    if(centering||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-center-motion"))return;
+    if(centering||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-center-motion")||row.hasAttribute("data-op-magnetic-pull"))return;
     centering=true;
     try {
       const targetRect = target.getBoundingClientRect();
@@ -5573,10 +5573,11 @@ function installTabStrip() {
     for(const node of cards){
       const box=bunnyRect(node);
       if(box.width<1||box.height<1)continue;
+      const parent=node.parentElement,viewport=parent&&[leftLane,rightLane,bottomLane].includes(parent)?bunnyRect(parent):null;
       const sameRow=Math.abs((box.top+box.bottom)/2-anchor.y)<Math.max(5,anchor.height/2);
       const outer=topLevel&&sameRow&&(node.parentElement===lane||node===plus)&&
         (side==="L"?box.right<=r.left+.5:box.left>=r.right-.5);
-      obstacles.push({node,box,outer});
+      obstacles.push({node,box,outer,viewport});
     }
     makeDragGhost();
     if(!dragGhost||!dragGhostBody){row.removeAttribute("data-op-magnetic-pull");return false;}
@@ -5614,10 +5615,12 @@ function installTabStrip() {
     const pose=bunnyPose(t,anchor,point,full,state.side,state.gap,dragEdge);
     if(lateral&&t===1){pose.x=point.x;pose.y=point.y;pose.width=full.width;pose.height=full.height;}
     const boxes=[];
-    for(const {node,box,outer} of state.obstacles){
+    for(const {node,box,outer,viewport} of state.obstacles){
       const dx=bunnyNeighborShift(t,anchor,state.side,state.gap,outer);
       if(outer)node.style.setProperty("--op-bunny-x",dx.toFixed(3)+"px");
-      boxes.push({...box,left:box.left+dx,right:box.right+dx});
+      const left=viewport?Math.max(viewport.left,box.left+dx):box.left+dx;
+      const right=viewport?Math.min(viewport.right,box.right+dx):box.right+dx;
+      if(right>left)boxes.push({...box,left,right});
     }
     state.progress=t;state.point={...point};state.pose=pose;dragPull=t;
     dragNode.setAttribute("data-op-lane-ghost","true");
@@ -5704,7 +5707,7 @@ function installTabStrip() {
       const ok = updateNativeDragImage(dragGhostBody,Math.round(box.width/2),Math.round(box.height/2),event);
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.native-image",()=>({ok,width:box.width,height:box.height}),{sample:1800});
       hideGhost();
-      if (!ok) { if (previous === "content") showGhost(event); return; }
+      if (!ok) { if (dragBunnyLayout)paintBunnyAt(dragBunnyLayout.progress,dragBunnyLayout.point);else if (previous === "content") showGhost(event); return; }
     } else if (previous === "outside") {
       // Clear the OS image BEFORE displaying our local animated card.
       if (!updateNativeDragImage(blankDragImage,0,0,event)) return;
@@ -6417,7 +6420,7 @@ function installTabStrip() {
       indicatorHover:homeOpen?null:entries.get(browser.selectedTab)?.item;
     if(!item||!list.contains(item)||item.hasAttribute("data-op-detached")||
         item.closest(".oneplane-split-group[data-op-detached]"))return null;
-    if(dragging && (dragImageMode!=="inline" || dragPull>=.62 || dragNode.hasAttribute("data-op-reinsert")))return null;
+    if(dragging && (dragImageMode!=="inline" || dragPull>=.62 || dragNode.hasAttribute("data-op-reinsert") || row.hasAttribute("data-op-magnetic-pull")))return null;
     // For a shrinking group use the visible ghost rather than its
     // invisible layout placeholder when determining vertical clearance.
     const visual=dragging && dragPull>0 && draggedGroup && dragGhost &&

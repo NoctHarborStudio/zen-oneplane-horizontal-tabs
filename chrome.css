@@ -1145,7 +1145,7 @@
       width: var(--op-tab) !important;
       flex-basis: var(--op-tab) !important;
     }
-    #oneplane-tabs[data-op-dragging] :is(.oneplane-tab, .oneplane-split-group)[data-op-detached] {
+    #oneplane-tabs[data-op-dragging] :is(.oneplane-tab, .oneplane-split-group)[data-op-detached]:not([data-op-magnetic-source]) {
       opacity: 0 !important;
       width: 0 !important;
       flex-basis: 0px !important;
@@ -1249,6 +1249,22 @@
   #oneplane-tabs[data-op-live-drag] :is(.oneplane-tab-list,.oneplane-island-lane) > :is(.oneplane-tab,.oneplane-split-group),
   #oneplane-tabs[data-op-live-drag] .oneplane-new-tab {transition:none !important;}
   #oneplane-tabs[data-op-dragging] [data-op-detached] {opacity:0 !important;visibility:hidden !important;transition:none !important;}
+}
+
+/* Magnetic Bunny: native slots stay frozen; only the outer chain on the
+   source side translates toward Home. Source occupies its original
+   layout width even when detached, preventing flex recentering. */
+#oneplane-tabs[data-op-magnetic-pull] :is(.oneplane-tab-list,.oneplane-island-lane) > :is(.oneplane-tab,.oneplane-split-group),
+#oneplane-tabs[data-op-magnetic-pull] .oneplane-new-tab {
+  transform:translateX(var(--op-bunny-x,0px))!important;
+  transition:none!important;
+}
+#oneplane-tabs[data-op-magnetic-pull] [data-op-magnetic-source] {
+  visibility:hidden!important;opacity:0!important;pointer-events:none!important;
+  transition:none!important;
+}
+#oneplane-tabs[data-op-magnetic-pull] #oneplane-tab-indicator {
+  opacity:0!important;visibility:hidden!important;transition:none!important;
 }
     /* Keep layout slots. On opening only opacity animates; the return
        is bounded scale/opacity. The whole strip stays noninteractive. */

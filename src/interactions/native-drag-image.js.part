@@ -62,10 +62,11 @@
     for(const node of cards){
       const box=bunnyRect(node);
       if(box.width<1||box.height<1)continue;
+      const parent=node.parentElement,viewport=parent&&[leftLane,rightLane,bottomLane].includes(parent)?bunnyRect(parent):null;
       const sameRow=Math.abs((box.top+box.bottom)/2-anchor.y)<Math.max(5,anchor.height/2);
       const outer=topLevel&&sameRow&&(node.parentElement===lane||node===plus)&&
         (side==="L"?box.right<=r.left+.5:box.left>=r.right-.5);
-      obstacles.push({node,box,outer});
+      obstacles.push({node,box,outer,viewport});
     }
     makeDragGhost();
     if(!dragGhost||!dragGhostBody){row.removeAttribute("data-op-magnetic-pull");return false;}
@@ -103,10 +104,12 @@
     const pose=bunnyPose(t,anchor,point,full,state.side,state.gap,dragEdge);
     if(lateral&&t===1){pose.x=point.x;pose.y=point.y;pose.width=full.width;pose.height=full.height;}
     const boxes=[];
-    for(const {node,box,outer} of state.obstacles){
+    for(const {node,box,outer,viewport} of state.obstacles){
       const dx=bunnyNeighborShift(t,anchor,state.side,state.gap,outer);
       if(outer)node.style.setProperty("--op-bunny-x",dx.toFixed(3)+"px");
-      boxes.push({...box,left:box.left+dx,right:box.right+dx});
+      const left=viewport?Math.max(viewport.left,box.left+dx):box.left+dx;
+      const right=viewport?Math.min(viewport.right,box.right+dx):box.right+dx;
+      if(right>left)boxes.push({...box,left,right});
     }
     state.progress=t;state.point={...point};state.pose=pose;dragPull=t;
     dragNode.setAttribute("data-op-lane-ghost","true");
@@ -193,7 +196,7 @@
       const ok = updateNativeDragImage(dragGhostBody,Math.round(box.width/2),Math.round(box.height/2),event);
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.native-image",()=>({ok,width:box.width,height:box.height}),{sample:1800});
       hideGhost();
-      if (!ok) { if (previous === "content") showGhost(event); return; }
+      if (!ok) { if (dragBunnyLayout)paintBunnyAt(dragBunnyLayout.progress,dragBunnyLayout.point);else if (previous === "content") showGhost(event); return; }
     } else if (previous === "outside") {
       // Clear the OS image BEFORE displaying our local animated card.
       if (!updateNativeDragImage(blankDragImage,0,0,event)) return;

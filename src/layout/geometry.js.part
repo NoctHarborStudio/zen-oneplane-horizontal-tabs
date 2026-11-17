@@ -11,7 +11,7 @@
     return 3+widths.reduce((sum,w)=>sum+Math.max(0,w)+3,0)+Math.max(0,expansion);
   }
   function centerToolbar(){
-    if(centering||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-center-motion"))return;
+    if(centering||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-center-motion")||row.hasAttribute("data-op-magnetic-pull"))return;
     centering=true;
     try {
       const targetRect = target.getBoundingClientRect();
