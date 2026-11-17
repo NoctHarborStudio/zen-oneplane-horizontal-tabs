@@ -29,3 +29,5 @@ Preview 17 caps the complete formatted file at 2,000,000 UTF-8 bytes, with up to
 Preview 18 adds `center.icon.paint` with mounted proxy paintability, zero-alpha/zero-geometry counts and the number of hidden source tab buttons. `island.title.motion` records phase and duration only; `home-island` and `home-label` are sampled for geometry and opacity, not text. The three-session / 2,000,000-byte limit remains unchanged.
 
 Preview 19 adds `drag.detach.handoff`, `drag.return.rearm` and `drag.insert.finish`, extends `drag.insert` with measured start offset, source/target widths and duration, and samples the actual `ghost-body` geometry. No tab identifiers or URLs are recorded.
+
+Preview.47 adds `flip` to Bunny popup surface/tick diagnostics and rounded screen grip coordinates to the existing sampled `downloads.drag.tick` event. No file names or payloads are recorded. Use this to verify edge crossing and mixed-monitor motion.

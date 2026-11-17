@@ -116,3 +116,13 @@ test("native drag popup requests transparent window before widget creation",()=>
  assert.ok(css.includes('--panel-background-color:transparent!important'));
  assert.ok(css.includes('#zr-file-bunny-popup .zr-file-bunny-stage {background:transparent!important'));
 });
+
+test("live drag popup disables Gecko screen-edge constraints before attachment",()=>{
+ const code=section("  function prepareFilePopup(","  function paintFileBunny(");
+ assert.match(code,/flip:"none"/);
+ const attrs=new Map(),events={};let attached=false;
+ const popup={style:{setProperty(){}},getOuterScreenRect(){},setAttribute(k,v){assert.equal(attached,false);attrs.set(k,v);},append(){},addEventListener(k,v){events[k]=v;}};
+ const set={append(){assert.equal(attrs.get("flip"),"none");attached=true;}};
+ const prepare=new Function("document","get","make",`let filePopup=null,fileStage=null,fileBunny=null;\n${code}\nreturn prepareFilePopup;`)({createXULElement:()=>popup},()=>set,()=>({}));
+ assert.equal(prepare(),true);assert.equal(attrs.get("flip"),"none");assert.equal(attrs.get("mousethrough"),"always");assert.equal(attached,true);
+});

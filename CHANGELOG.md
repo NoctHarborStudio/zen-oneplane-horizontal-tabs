@@ -1,3 +1,9 @@
+## 0.3.0-preview.47 — Unconstrained Bunny drag popup
+
+- Set XUL panel `flip="none"` before attachment so Gecko does not constrain the live drag image to the monitor work area.
+- Keep native drag session, transparency, grip geometry and motion unchanged. Add bounded grip coordinates and flip state to existing drag diagnostics.
+- Cover pre-attachment configuration in regression tests. Live Windows multi-monitor verification pending.
+
 ## 0.3.0-preview.46 — Library shortcut recovery
 
 - Route exact Ctrl+H/Ctrl+J (Cmd on macOS) at window keydown, retaining native command handling for menus and remapped keys. Consume only accepted actions; preserve native fallback on refusal.

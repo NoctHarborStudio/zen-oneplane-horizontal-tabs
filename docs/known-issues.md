@@ -221,3 +221,6 @@ Shared Bunny bridge, moving active-section indicator, explicit extra-folder pick
 
 ### Library shortcut recovery — 0.3.0-preview.46
 - Report: Ctrl+H opened nothing in preview.44. Exact cause not captured by old diagnostics. Added keydown route, fixed surface fallback, guarded open and Library-specific telemetry. Verify both opt-ins and native fallback; live test pending.
+
+### Bunny live drag popup — screen-edge snapping (0.3.0-preview.47)
+User reports the invisible native frame is magnetically constrained to screen edges. Gecko `nsMenuPopupFrame` applies screen constraints unless a chrome panel declares `flip="none"`; `nsBaseDragSession::DragMoved` calls the same popup positioning path. Set the attribute before attachment, preserving the existing single native drag widget and motion. Source and regression checks do not establish Windows runtime acceptance; verify edges, taskbar, adjacent monitors and cancellation. No new controller or cursor polling.

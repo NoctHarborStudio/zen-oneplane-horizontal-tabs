@@ -1,6 +1,6 @@
 // Nocturne preview.45: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="downloads.script",data={version:"0.3.0-preview.46"};
+  const event="downloads.script",data={version:"0.3.0-preview.47"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -658,7 +658,7 @@ try{if(typeof window!=="undefined"){
       const s=window.getComputedStyle(popup),stage=window.getComputedStyle(fileStage);
       const inner=popup.shadowRoot?.querySelector('[part~="content"], .panel-arrowcontent, .panel-content');
       const part=inner?window.getComputedStyle(inner):null;
-      return {background:s.backgroundColor,appearance:s.appearance,opacity:s.opacity,radius:s.borderTopLeftRadius,stage:stage.backgroundColor,part:part?.backgroundColor??null,panelBackground:s.getPropertyValue("--panel-background-color").trim()};
+      return {background:s.backgroundColor,appearance:s.appearance,opacity:s.opacity,radius:s.borderTopLeftRadius,stage:stage.backgroundColor,part:part?.backgroundColor??null,panelBackground:s.getPropertyValue("--panel-background-color").trim(),flip:popup.getAttribute("flip")};
     }catch{return null;}
   }
   function prepareFilePopup(){
@@ -670,7 +670,10 @@ try{if(typeof window!=="undefined"){
     // before inspecting theme/background. Select a transparent native
     // widget before it is created; a transparent child alone is not enough.
     for(const [k,v] of Object.entries({"appearance":"none","background":"transparent","border":"0","border-radius":"1px","opacity":".999","pointer-events":"none","--panel-background-color":"transparent","--panel-background":"transparent","--panel-padding":"0px","--panel-border-color":"transparent","--panel-border-radius":"0px","--panel-shadow":"none","--panel-box-shadow-margin":"0px"}))popup.style.setProperty(k,v,"important");
-    for(const [k,v] of Object.entries({noautohide:"true",noautofocus:"true",level:"top",mousethrough:"always",consumeoutsideclicks:"false",animate:"false","aria-hidden":"true"}))popup.setAttribute(k,v);
+    for(const [k,v] of Object.entries({noautohide:"true",noautofocus:"true",level:"top",flip:"none",mousethrough:"always",consumeoutsideclicks:"false",animate:"false","aria-hidden":"true"}))popup.setAttribute(k,v);
+    // Gecko nsMenuPopupFrame skips screen constraints for chrome panels
+    // with flip="none". Set before widget creation: native DragMoved must
+    // keep the grip under the pointer even when the stage crosses a screen edge.
     const stage=make("div","zr-file-bunny-stage");popup.append(stage);set.append(popup);filePopup=popup;fileStage=stage;
     popup.addEventListener("popupshown",()=>{
       const q=fileBunny;if(!q||q.popup!==popup||q.ending||q.shown)return;
@@ -716,7 +719,7 @@ try{if(typeof window!=="undefined"){
       // Native Windows OLE runs a nested loop: rAF stalls. Timer updates
       // the popup widget's live artwork; flush its style for the widget.
       q.visual.card.getBoundingClientRect();
-      if(now-q.lastReport>=300){q.lastReport=now;fileBunnyTrace("tick",{frames:q.frames,moves:q.moves,maxGap:q.maxGap,angle:pose.angle,morph:pose.morph,inside:q.inside,state:q.popup.state,paintCount:window.windowUtils?.paintCount??null});}
+      if(now-q.lastReport>=300){q.lastReport=now;fileBunnyTrace("tick",{frames:q.frames,moves:q.moves,maxGap:q.maxGap,angle:pose.angle,morph:pose.morph,inside:q.inside,state:q.popup.state,paintCount:window.windowUtils?.paintCount??null,grip:q.screenPoint?[Math.round(q.screenPoint.x),Math.round(q.screenPoint.y)]:null,flip:q.popup.getAttribute("flip")});}
       q.timer=window.setTimeout(step,16);
     };
     q.timer=window.setTimeout(step,0);
