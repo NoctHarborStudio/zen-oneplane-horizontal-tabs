@@ -174,3 +174,7 @@ User accepted Home, startup and workspace transitions. Fix repeat Home click exp
 ## 0.2.0-preview.45 — window drag and New Tab alignment
 
 User reports Home is now primary, but window cannot be dragged from Home and the plus can separate from tabs after moving the window. Use native non-client CSS drag regions on blank Home and toolbar spacers (16px minimum); exclude interactive content, preserve native Snap and tab drag. Clamp plus to occupied right lane and available width; reconcile after native size-mode and resize changes. User console confirms successful startup, 6+6 Smart Search and Center Assembly; generic Object { message } exceptions have no trace and remain unattributed. Validate physical Windows monitor drag, restore/maximize, Snap, mixed DPI, crowded lanes and both hover modes. No speculative global exception interception.
+
+## 0.3.0-preview.30 — Downloads native file drag
+
+Implemented native Gecko drag payload for the latest completed download on the toolbar indicator and individual completed files in Recent downloads and All downloads (shared row cache). Uses the actual nsIFile and file URI; copy/move negotiated by the OS or drop target. No file access outside the user-initiated drag, no partial/blocked/canceled files. Keep Open/Show in folder clicks independent and defer row reconciliation until dragend. Verify Windows Explorer/Desktop, web upload drop zones, cancellation, recent/full modes, deleted file, private list isolation and normal clicks in Zen. Native platform verification pending.

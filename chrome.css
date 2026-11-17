@@ -2195,6 +2195,12 @@
 #zr-download-dock .zr-dock-close { width:27px;height:27px;padding:0;font-size:20px;line-height:1; }
 #zr-download-dock .zr-dock-list { display:flex;flex-direction:column;gap:6px;overflow:auto;min-height:0;scrollbar-width:thin;scrollbar-gutter:stable;padding-inline-end:9px; }
 #zr-download-dock .zr-dock-row { display:flex;align-items:center;gap:9px;padding:10px 9px;border-radius:8px;background:color-mix(in srgb,var(--zr-download-row) 75%,transparent);flex-shrink:0; }
+/* Native OS file drag, not a synthetic tab drag or an HTML URL. */
+#zr-download-indicator[draggable="true"],#zr-download-dock .zr-dock-row[draggable="true"] {
+  cursor:grab;user-select:none;-moz-window-dragging:no-drag!important;
+}
+#zr-download-indicator[data-file-dragging],#zr-download-dock .zr-dock-row[data-file-dragging] {cursor:grabbing;}
+#zr-download-dock .zr-dock-row[draggable="true"] button {cursor:pointer;}
 #zr-download-dock .zr-dock-row-body { flex:1;min-width:0;display:flex;flex-direction:column;gap:5px; }
 #zr-download-dock .zr-dock-name { font-weight:600;white-space:nowrap;text-overflow:ellipsis;overflow:hidden; }
 #zr-download-dock .zr-dock-meta { font-size:10px;opacity:.7;white-space:nowrap;text-overflow:ellipsis;overflow:hidden; }

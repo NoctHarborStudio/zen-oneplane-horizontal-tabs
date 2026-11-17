@@ -1,11 +1,11 @@
-// Nocturne preview.29: early trace, independent Sine script order.
+// Nocturne preview.30: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="downloads.script",data={version:"0.3.0-preview.29"};
+  const event="downloads.script",data={version:"0.3.0-preview.30"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
 /* Zen Refined — Download Indicator. Native download events, no polling,
- * no interception of downloads, no file/network access. One view per window.
+ * no interception of downloads or file content reads. Native file drag on explicit user gesture. One view per window.
  * Horizontal layout hosts the same view; native sidebar remains the fallback. */
 (() => {
   const root=document.documentElement,prefs=Services.prefs;
@@ -25,6 +25,7 @@ try{if(typeof window!=="undefined"){
   let lastDockRect=null,followFrame=0,followUntil=0,overlayUntil=0,heldWrapper=null;
   let dock=null,dockList=null,dockEmpty=null,dockMore=null,dockBackdrop=null,dockNotice=null,dockOpen=false,limit=30;
   const history=new Map(),rows=new Map();
+  let fileDragSource=null,dragClickSource=null,FileUtils=null;
   let historyOrder=null,recentOrder=null,dockHeight=0,allButton=null,dockTitle=null,dockSort=null;
   const OVERLAY_WIDTH=430,RECENT_LIMIT=4;
   let sortKey="time",sortDir=-1,headerNormal=null,headerConfirm=null,clearButton=null,sortTime=null,sortSize=null,yesButton=null,noButton=null,confirming=false,clearing=false;
@@ -358,6 +359,7 @@ try{if(typeof window!=="undefined"){
   }
   function trackClick(event){
     if(event.isTrusted===false||event.button!==0)return;
+    dragClickSource=null;
     lastClick={x:event.clientX,y:event.clientY,at:current()};
   }
   function trackLayout(event){
@@ -376,7 +378,9 @@ try{if(typeof window!=="undefined"){
     speed=make("span","zr-download-speed");
     icon=make("span","zr-download-icon");icon.setAttribute("aria-hidden","true");
     const [track,f]=makeTrack();fill=f;node.append(speed,icon,track);
-    node.addEventListener("click",()=>{
+    bindFileDrag(node,()=>latestCompleted(history));
+    node.addEventListener("click",e=>{
+      if(ignoreFileDragClick(e))return;
       cancelFlight();
       if(dockOpen||cardOpen&&manualHold)closeDock();
       else if(cardOpen)pinPanel(true);
@@ -435,7 +439,7 @@ try{if(typeof window!=="undefined"){
     dockMore=action("Show more","zr-dock-more",()=>{limit+=30;renderDock();positionOverlays();});
     dockMore.hidden=true;
     dock.append(header,dockSort,dockList,dockEmpty,dockMore,dockNotice);
-    dock.addEventListener("click",e=>{if(cardOpen&&!e.target.closest?.("button")&&e.target.closest?.(".zr-dock-row,.zr-dock-title"))openDock(true);});
+    dock.addEventListener("click",e=>{if(!ignoreFileDragClick(e)&&cardOpen&&!e.target.closest?.("button")&&e.target.closest?.(".zr-dock-row,.zr-dock-title"))openDock(true);});
     dock.addEventListener("pointerdown",e=>{if(cardOpen&&e.button===0&&!e.target.closest?.(".zr-dock-close"))pinPanel();});
     dock.addEventListener("pointerenter",cancelHide);
     dock.addEventListener("pointerleave",()=>armHide(true));
@@ -560,8 +564,73 @@ try{if(typeof window!=="undefined"){
     const notice=dockOpen||cardOpen?dockNotice:null;
     if(notice)notice.textContent=message;
   }
+  // The native DownloadsView uses the same file and URI flavors.
+  // Only a completed download from this window's public/private list
+  // is eligible. No source URL, partial path, or file contents are read.
+  function canDragFile(d){
+    return !!(d?.succeeded&&!d.error&&!d.canceled&&!d.hasPartialData&&!d.hasBlockedData&&
+      d.target?.exists!==false&&typeof d.target?.path==="string"&&d.target.path.length);
+  }
+  function latestCompleted(entries){
+    let result=null,when=-Infinity;
+    for(const [d,v] of entries){
+      if(!canDragFile(d))continue;
+      const time=v.completedAt??v.time??0;
+      if(time>=when){when=time;result=d;}
+    }
+    return result;
+  }
+  function populateFileTransfer(dt,d,source,createFile,fileURI){
+    if(!canDragFile(d)||!dt||typeof dt.mozSetDataAt!=="function")return false;
+    try{
+      // Must be synchronous: dragstart's data store becomes read-only
+      // after dispatch. Check existence only on the explicit gesture.
+      const file=createFile(d.target.path);
+      if(!file.exists()||!file.isFile())return false;
+      const uri=fileURI(file);
+      dt.mozSetDataAt("application/x-moz-file",file,0);
+      dt.setData("text/uri-list",uri);
+      dt.effectAllowed="copyMove";
+      dt.addElement?.(source);
+      return true;
+    }catch{return false;}
+  }
+  function beginFileDrag(e,source,d){
+    if(dead||e.isTrusted===false||!history.has(d)||
+       !populateFileTransfer(e.dataTransfer,d,source,path=>{
+         FileUtils??=ChromeUtils.importESModule("resource://gre/modules/FileUtils.sys.mjs").FileUtils;
+         return new FileUtils.File(path);
+       },file=>Services.io.newFileURI(file).spec)){
+      e.preventDefault();return false;
+    }
+    e.stopPropagation();
+    fileDragSource=dragClickSource=source;
+    source.setAttribute("data-file-dragging","");
+    cancelHide();
+    if(source!==node&&cardOpen)pinPanel();
+    return true;
+  }
+  function endFileDrag(source){
+    if(fileDragSource!==source)return;
+    source.removeAttribute("data-file-dragging");fileDragSource=null;
+    // Reconcile queued rows only after the platform drag releases the source.
+    if(!dead){schedule(true);if(cardOpen)armHide();}
+  }
+  function ignoreFileDragClick(e){
+    return e.detail>0&&!!dragClickSource&&(e.target===dragClickSource||dragClickSource.contains?.(e.target));
+  }
+  function bindFileDrag(source,resolve,{row=false}={}){
+    let actionPress=false;
+    source.addEventListener("pointerdown",e=>{actionPress=row&&!!e.target.closest?.("button");});
+    source.addEventListener("dragstart",e=>{
+      if(actionPress||row&&e.target.closest?.("button")){e.preventDefault();return;}
+      beginFileDrag(e,source,resolve());
+    });
+    source.addEventListener("dragend",()=>endFileDrag(source));
+  }
   function makeRow(download){
     const el=make("div","zr-dock-row");el.setAttribute("role","listitem");
+    bindFileDrag(el,()=>download,{row:true});
     const glyph=make("span","zr-download-icon"),body=make("div","zr-dock-row-body"),name=make("div","zr-dock-name"),meta=make("div","zr-dock-meta");
     glyph.setAttribute("aria-hidden","true");
     const [track,fill]=makeTrack();
@@ -616,6 +685,7 @@ try{if(typeof window!=="undefined"){
     dockEmpty.hidden=recentOrder.length>0;
   }
   function renderRows(container,rowCache,wanted){
+    if(fileDragSource&&fileDragSource!==node)return;
     const keep=new Set(wanted);
     for(const [d,row] of rowCache)if(!keep.has(d)){row.el.remove();rowCache.delete(d);}
     const showStats=prefs.getBoolPref(STATS_PREF,true);
@@ -634,6 +704,7 @@ try{if(typeof window!=="undefined"){
       }
       if(row.meta.textContent!==text)row.meta.textContent=text;
       row.el.setAttribute("data-state",v.active?"active":v.success?"complete":v.failed?"failed":"stopped");
+      row.el.draggable=canDragFile(d);
       row.el.toggleAttribute("data-indeterminate",v.active&&!v.known);
       setVar(row.fill,"--zr-download-progress",String(v.known?Math.min(1,v.bytes/v.total):0));
       row.folder.disabled=!v.success||typeof d.showContainingDirectory!=="function";
@@ -745,6 +816,7 @@ try{if(typeof window!=="undefined"){
     updateTimer=0;if(dead||!node)return;
     lastRender=current();snapshot=summarize(batch.values());const s=snapshot;
     node.setAttribute("data-state",s.state);
+    node.draggable=!!latestCompleted(history);
     updateLive();
     node.toggleAttribute("data-transferring",s.active>0);
     node.toggleAttribute("data-indeterminate",s.state==="active"&&s.progress===null);
@@ -752,7 +824,7 @@ try{if(typeof window!=="undefined"){
     else fill.style.removeProperty("--zr-download-progress");
     const text=s.active?speedText(s.speed):"";
     if(speed.textContent!==text)speed.textContent=text;
-    const label=text?"Downloads — "+text:"Downloads";
+    const label=(text?"Downloads — "+text:"Downloads")+(node.draggable?" · Drag latest file":"");
     if(node.getAttribute("title")!==label)node.setAttribute("title",label);
     if(node.getAttribute("aria-label")!==label)node.setAttribute("aria-label",label);
     if(cardOpen)renderRecent();
@@ -770,6 +842,7 @@ try{if(typeof window!=="undefined"){
     const old=history.get(d);
     // Completion time is observed only for new session downloads; do not
     // invent a duration for restored completed history.
+    if(next.success)next.completedAt=old?.completedAt??(!hydrating&&fresh.has(d)?Date.now():next.time);
     if(old?.duration>0&&next.success)next.duration=old.duration;
     else if(!hydrating&&fresh.has(d)&&next.success&&next.time>0&&(!old||!old.success)){
       const elapsed=Date.now()-next.time;
@@ -792,10 +865,10 @@ try{if(typeof window!=="undefined"){
     else if(!hydrating&&!previous&&(next.success||next.failed)&&fresh.has(d)){
       if(![...batch.values()].some(x=>x.active))batch.clear();
       batch.set(d,next);latest=d;schedule(true);launchFlight();
-    }else if(dockOpen||cardOpen)schedule();
+    }else if(dockOpen||cardOpen||next.success||old?.success)schedule();
   }
   function added(d){if(!hydrating)fresh.add(d);changed(d);}
-  function removed(d){if(history.delete(d)){historyOrder=null;recentOrder=null;}if(batch.delete(d)){if(latest===d)latest=null;schedule(true);}else if(dockOpen||cardOpen)schedule();}
+  function removed(d){if(history.delete(d)){historyOrder=null;recentOrder=null;}if(batch.delete(d)){if(latest===d)latest=null;schedule(true);}else schedule();}
   function teardown(){
     typeof window!=="undefined"&&window.__nocturneTrace?.("downloads.teardown",()=>(null),{flush:true});
     ++epoch;
@@ -811,6 +884,7 @@ try{if(typeof window!=="undefined"){
     window.removeEventListener("pointerdown",trackClick,true);window.removeEventListener("pointerdown",outsideDock,true);window.removeEventListener("keydown",onKey,true);
     try{prefs.removeObserver(SIDE,scheduleMount);}catch{}
     try{prefs.removeObserver(STATS_PREF,refreshStatistics);}catch{}
+    fileDragSource?.removeAttribute("data-file-dragging");fileDragSource=dragClickSource=null;FileUtils=null;
     node?.remove();node=fill=speed=icon=null;host=null;batch.clear();fresh=new WeakSet();latest=lastClick=null;
     dock?.remove();overlayLayer?.remove();dockBackdrop?.remove();dock=dockList=dockEmpty=dockMore=dockBackdrop=dockNotice=overlayLayer=null;history.clear();rows.clear();historyOrder=recentOrder=null;limit=30;dockHeight=0;allButton=dockTitle=dockSort=null;
     sortKey="time";sortDir=-1;headerNormal=headerConfirm=clearButton=sortTime=sortSize=yesButton=noButton=null;confirming=clearing=false;

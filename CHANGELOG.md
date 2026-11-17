@@ -1,3 +1,9 @@
+## 0.3.0-preview.30 — Native download file drag
+
+- Drag the latest completed download from the toolbar icon or an individual completed row in Recent downloads / All downloads using Gecko's native file drag flavors.
+- Validate the target on explicit dragstart; reject unfinished, blocked, partial, canceled or missing files. Preserve native click actions, source row during drag and public/private list separation.
+- Add native payload and interaction tests, update diagnostic version metadata.
+
 ## 0.3.0-preview.29 — Staged startup and continuous Home search return
 
 - Sequence the decorative toolbar surface, Magnetic Fold cards, bookmarks, and Home search, pinned and workspace sections on one startup clock. Preserve the native page and geometry.
