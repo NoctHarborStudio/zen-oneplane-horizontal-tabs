@@ -182,3 +182,7 @@ Implemented native Gecko drag payload for the latest completed download on the t
 ## 0.3.0-preview.37 — Bunny downloads
 
 Native moz-icon artwork refreshes on completion. Shared toolbar/latest and recent/full file drag controller begins with a compact native preview and uses a live chrome ghost only after Gecko accepts the blank image. Restore the compact native preview outside the window; OS drops remain native. Spring lift, top-center grip, reversed swing, cancellation return, reduced-motion fallback. Live Windows icon rendering and image handoff need verification.
+
+## Nocturne — approved Magnetic Bloom startup workstream
+
+Current baseline: 0.3.0-preview.40. User chose Startup Motion Lab option 01. Startup lifecycle and readiness stabilization must precede visual implementation: MB0 baseline -> MB1 ownership -> MB2 readiness -> MB3 shared timing -> MB4 visual engine -> MB5 Home choreography -> MB6 atomic handoff -> MB7 native validation. MB8 (pre-Sine/native flash) is a separate investigation. See [authoritative migration pipeline B.7](nocturne/migration.md#b7-magnetic-bloom-startup-stabilization-approved), [known issues](known-issues.md#nocturne--magnetic-bloom-startup-audit-2026-11-17) and [validation gates](nocturne/validation.md#magnetic-bloom-startup-gates). Do not duplicate the detailed task plan here. No implementation or new release in this planning update; preserve existing Library, Downloads and horizontal feature workstreams.

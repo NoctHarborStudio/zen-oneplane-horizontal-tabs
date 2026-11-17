@@ -105,3 +105,12 @@ The [full preview.2 audit](full-audit-preview.2.md) documents actual cross-contr
 ## Stabilization A implementation
 
 Preview.3 adds the per-window persistent workspace command gate (explicit Home/Hub calls), Downloads generation fencing, Smart Search rollback, best-effort layout teardown and a 30px Horizontal Downloads slot with a dedicated hold. These are incremental runtime contracts, not a completed Unified Core. The bottom Utility Dock, process-level native command service and shared motion/contour ownership remain planned.
+
+## Magnetic Bloom startup architecture checkpoint
+
+Approved design, not implemented (preview.40 planning baseline). The previous broad RFC is refined by [migration B.7](migration.md#b7-magnetic-bloom-startup-stabilization-approved); risk register: [MB-001–015](../known-issues.md#nocturne--magnetic-bloom-startup-audit-2026-11-17).
+
+- One per-window transaction owns phase, generation, readiness, absolute deadline, immutable timeline, effects, geometry lease and cancellation. Boot Prelude supplies an adoptable cover with orphan cleanup, not a second phase owner. DOM markers are derived from the transaction; compatibility readers remain supported.
+- Shared Home supplies readiness/eligibility and a stable structural lease; it keeps native selection and normal interaction semantics. Center Motion supplies effects; keep existing workspace/close Fold behavior. Layout supplies geometry/dirty-state reconciliation. No participant independently starts or ends the global startup.
+- One pure timing source is built into both the HTML Lab and existing startup runtime entry. Prefer fixed real slots and safely composed visual properties for Bloom; use proxy fallback only if measured necessary. Existing Sine script names remain unchanged.
+- Prepare before revealing, bind to a single document timeline epoch, then atomically seal/reconcile/release. Cancellation and timeout use the same idempotent cleanup. No input starvation or unbounded startup wait. Native pre-injection flash is separate.

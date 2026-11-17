@@ -36,6 +36,7 @@ Node 20+; no npm dependencies. Edit source fragments in src/ for the horizontal 
 - [Library architecture](docs/nocturne/library-architecture.md)
 - [Nocturne architecture](docs/nocturne/architecture.md)
 - [Migration pipeline](docs/nocturne/migration.md)
+- [Known issues / Magnetic Bloom startup audit](docs/known-issues.md#nocturne--magnetic-bloom-startup-audit-2026-11-17)
 - [Stabilization audit](docs/nocturne/audit.md)
 - [Full preview.2 audit](docs/nocturne/full-audit-preview.2.md)
 - [Validation gates](docs/nocturne/validation.md)

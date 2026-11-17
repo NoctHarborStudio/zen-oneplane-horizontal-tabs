@@ -61,6 +61,33 @@ Preview.4 user test confirms text and flicker fixes. Preview.5 addresses NC-025�
 
 Preview.6 is instrumentation only, default enabled. See diagnostics.md and audit.md (NC-025–030). Capture actual launch/close, native tab and workspace events, panel contour and drag thresholds. Prioritize confirmed regressions from user traces before new visual changes. Remove or default-disable detailed diagnostics after stabilization.
 
+
+## B.7. Magnetic Bloom startup stabilization (approved)
+
+Current checkpoint: Nocturne 0.3.0-preview.40; startup audit originally reviewed at preview.38. User selected **Startup Motion Lab option 01 — Magnetic Bloom**, and requested architecture review before implementation. This is the next startup workstream, not a shipped feature. The existing Library and Downloads workstreams remain independent; do not roll back their changes or declare their native validation complete. See [MB-001–015](../known-issues.md#nocturne--magnetic-bloom-startup-audit-2026-11-17) and [startup validation](validation.md#magnetic-bloom-startup-gates).
+
+**Hard sequencing rule:** fix ownership and readiness before visual work. No new startup script entry, no second source of truth, no speculative global scheduler or simultaneous native startup preference rewrite. Preserve the existing Sine entry name and public compatibility APIs during extraction.
+
+| Gate | Scope | Exit requirement |
+| --- | --- | --- |
+| MB0 — baseline | Freeze the current accepted behavior, record source hashes and capture cold/warm Zen traces (Boot, Home, layout, first workspace, close). | Distinguish user-reported symptoms from source hypotheses; retain comparable diagnostics-off baseline and accepted Lab option. |
+| MB1 — lifecycle (MB-001/002/011) | Per-window StartupTransaction, generation, one absolute watchdog, explicit state machine and cleanup stack. Prelude transfers a cover lease only. | Both load orders, repeated finish, disable/reload, timeout, close and failures leave no cover, hold, timer or stale callbacks. No visual redesign yet. |
+| MB2 — readiness (MB-003/004/005/011) | Explicit layout, native/session, Home and icon readiness; Home eligibility and single claim; bounded preflight; freeze geometry/structure with lease. | Ready/skipped/fallback states resolved before reveal; late async Home cannot replay; placeholders and deferred updates remain valid; user input stays native. |
+| MB3 — shared timing (MB-007/008/012) | Extract pure `src/algorithms/startup-timeline.mjs`; compile it into runtime and generated HTML Lab via existing deterministic build pipeline. | Same pure plan in both outputs, bounded stagger for arbitrary counts, one document timeline epoch, no independent elapsed clock or competing completion timer. |
+| MB4 — visual engine (MB-006/010/013) | Real-slot Magnetic Bloom candidate; measure style ownership and compare with proxy fallback. Preserve Fold for workspace/close. | No collisions, stable Home center/slot dimensions, finite keyframes, no per-frame JS layout; Gecko computed-style and performance evidence. |
+| MB5 — Home choreography (MB-004/012) | Home Island shape/label, panel, tab wave, bookmarks, search, Pinned and Workspaces, footer. | Matches approved Lab; existing node identity retained during reveal; no abrupt focus/outline, icon or structural flash; regular Home/search unchanged. |
+| MB6 — atomic handoff (MB-009/010/011) | Seal final effects, reconcile pending data, verify geometry, release leases and CSS gates without exposing intermediate states. | Last animated frame equals first resting frame; resize, interaction, workspace, close and native fallback cleanly interrupt. |
+| MB7 — validation (MB-001–013) | Full CI, candidate Sine package, native Windows Zen matrix and comparative profiling. | All blocking gates in validation.md pass; no new runtime regressions; actual native acceptance before declaring fixed. |
+| MB8 — native early flash (MB-014) | Independent research on earliest Sine injection and Zen/Gecko/OS first paint, including current startup placeholder preferences and Windhawk as an unconfirmed factor. | Evidence identifies controllable boundary; separate scoped proposal and tests. Do not gate all Bloom work on OS-level behavior outside Nocturne. |
+
+Target state flow: BOOT -> PRELOADING -> PREPARED -> REVEALING -> HANDOFF -> READY; any active state may transition through ABORT to a single cleanup/READY path. A generation token guards every async continuation. Keep native session/workspace data authoritative. DOM attributes are projections, not a second state machine. One owner coordinates startup effects; layout, Shared Home and Center Motion supply capabilities/leases only. Existing Overlay coordination remains responsible for user overlay ownership.
+
+Timing reference: the approved Lab's nominal sequence is ~2.86s, including splash. The readiness hold can extend it; it is not a startup-time guarantee. Panel begins near 940ms, splash exit 1010–1330ms, Home Island 1080–1640ms, tabs 1330–1940ms, bookmarks 1600–2060ms, search 1710–2230ms, Pinned 1930–2500ms, Workspaces 2220–2690ms, Customize 2480–2790ms. Use these as design inputs, not hardcoded parallel schedules; source module owns resolved delays. Preserve current preferences and reduced-motion behavior, define scale and no-splash mapping explicitly. At large counts, shrink stagger rather than item duration below the minimum. Total timeout covers all owned effects; deadline fallback never replays startup later.
+
+Proposed source extraction: `src/startup/{coordinator,boot-surface,readiness,effects,handoff}.js.part`, `src/algorithms/startup-timeline.mjs`. Extend build plan to generate the existing `startup-animation.uc.mjs` and a reproducible lab; do not register individual source fragments in Sine. Maintain exact public filenames/manifest identity. Implement in reviewed small commits, each with regression fixtures; release only actual runtime candidates with monotonically higher version and updatedAt.
+
+Planning-only policy: no manifest bump for this audit. The existing preview CI currently requires an increment even on docs-only commits (MB-015); fix that separately without weakening runtime release checks. Do not describe a documentation commit as a new Sine package.
+
 ## Independent feature backlog — Quick Download Drag (planned)
 
 Status: planned, not a runtime change. Keep the preview.6 diagnostic gate and confirmed regression fixes ahead of this feature; do not combine it with tab dragging, contour or animation refactors.
