@@ -61,7 +61,7 @@
   function pause(tx,ms){
     if(tx.cancelled)return Promise.resolve();
     return new Promise(resolve=>{
-      const done=()=>{tx.waiters.delete(done);tx.timers.delete(t);resolve();};
+      const done=()=>{win.clearTimeout(t);tx.waiters.delete(done);tx.timers.delete(t);resolve();};
       const t=win.setTimeout(done,ms);tx.timers.add(t);tx.waiters.add(done);
     });
   }
@@ -148,9 +148,12 @@
     }catch(error){
       if(!called){called=true;cleanup(tx);return tx.superseded||req.superseded||dead||win.closed?undefined:invoke();}
       throw error;
-    }finally{cleanup(tx);}
+    }finally{
+      const successor=!dead&&request&&request!==req&&!request.superseded&&request.carrySwap;
+      cleanup(tx,!!successor&&root.getAttribute(PHASE)==="swap");
+    }
   }
-  function abort(){if(active)cleanup(active);}
+  function abort(){if(active)cleanup(active);else phase(null);}
   function onKey(e){
     if(e.key!=="Escape"||!active)return;
     const tx=active;tx.skipMotion=true;

@@ -113,5 +113,6 @@ test("new request retains hidden toolbar while old native switch is in flight",a
  const b=api.run(()=>42);await f.flush();assert.equal(f.root.getAttribute("data-zr-workspace-phase"),"swap");
  assert.deepEqual(f.events,["out","swap"]);
  finish();await f.flush();await f.advance();await f.advance();await Promise.all([a,b]);
+ assert.deepEqual(f.events,["out","swap","in","idle"]);
  assert.equal(f.root.hasAttribute("data-zr-workspace-phase"),false);
 });

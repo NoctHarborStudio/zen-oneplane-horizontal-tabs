@@ -71,3 +71,10 @@ Existing regression sources: OnePlane tests and docs/known-issues.md; Refined do
 ## Package Fusion implementation note
 
 0.3.0-preview.1 imports the runtime, CSS suffix and tests; copied scripts parse and the six Refined test files (including the existing shared bookmarks test) pass 39 callback fixtures in a V8 harness with Node/console stubs. This is not a full Node test invocation or native Zen validation. The public preview workflow runs the actual full Node suite and checks the served package. Legacy coexistence is not supported for this first preview; disable Refined and restart before updating.
+
+### Preview.4 focused native acceptance
+
+- [x] Preview.3 user smoke test: Downloads host, idle/active access, progress/hold, search, narrow geometry, window drag and workspace selection functional.
+- [x] Source fixes and fixtures for Downloads opacity, workspace stable surface, Escape and handoff (NC-023/024).
+- [ ] Verify empty text does not brighten at end of animation; compare workspace transition in wide/narrow/Compact and Escape before/during/after native swap. Distinguish web-page flash from toolbar flash.
+- [ ] Profile remaining visual stutter and contour ownership (NC-013/014/015); no assertion of improvement without real browser evidence.
