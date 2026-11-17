@@ -1,0 +1,26 @@
+/* Independent Sine entrypoint: do not depend on layout script order. */
+(()=>{
+  const win=window,doc=win.document,KEY="__nocturneOverlay";
+  if(typeof win.addUnloadListener!=="function"||doc.documentElement.hasAttribute("popup-window"))return;
+  win[KEY]?.dispose?.();
+  function nativeEscape(event){
+    // XUL popups belong to Gecko, not the overlay. Inspect only on Escape.
+    if(event?.composedPath?.().some(n=>n?.localName==="menupopup"||n?.localName==="panel"))return true;
+    for(const popup of doc.querySelectorAll("menupopup,panel")){
+      if(popup.state==="open"||popup.state==="showing")return true;
+    }
+    return !!win.gURLBar?.hasAttribute?.("has-popup-open");
+  }
+  const core=createOverlayCoordinator({nativeEscape,onError:()=>win.console.warn("[Nocturne] overlay handoff failed")});
+  let dead=false;
+  const key=e=>core.dispatchEscape(e);
+  function dispose(){
+    if(dead)return;dead=true;
+    win.removeEventListener("keydown",key,true);win.removeEventListener("unload",dispose);
+    core.dispose();if(win[KEY]===api)delete win[KEY];
+  }
+  const api={...core,dispose};
+  win[KEY]=api;win.addEventListener("keydown",key,true);win.addEventListener("unload",dispose,{once:true});win.addUnloadListener(dispose);
+  // Late mounting and hot reload both rebind existing controllers.
+  win.dispatchEvent(new win.CustomEvent("Nocturne:OverlayReady"));
+})();

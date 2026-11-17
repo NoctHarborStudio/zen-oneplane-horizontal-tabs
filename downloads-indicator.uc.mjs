@@ -1,6 +1,6 @@
-// Nocturne preview.31: early trace, independent Sine script order.
+// Nocturne preview.32: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="downloads.script",data={version:"0.3.0-preview.31"};
+  const event="downloads.script",data={version:"0.3.0-preview.32"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -532,6 +532,7 @@ try{if(typeof window!=="undefined"){
   }
   function openDock(){
     if(!dock||dead||dockOpen)return;
+    if(window.__nocturneOverlay&&!window.__nocturneOverlay.request("downloads"))return;
     cancelHide();cancelFlight();
     // Full mode pins the downloads surface but must not acquire a native
     // sidebar hold. Preserve its original opening source.
@@ -729,7 +730,33 @@ try{if(typeof window!=="undefined"){
     if(!cardOpen||manualHold||entering||(!pointerLeft&&dock?.matches(":hover")))return;
     hideTimer=window.setTimeout(()=>{hideTimer=0;if(cardOpen&&!manualHold&&!dock.matches(":hover"))closeDock();},HOLD);
   }
-  function onKey(e){if(e.key==="Escape"){if(dockOpen&&confirming&&!clearing)setConfirm(false,true);else if(dockOpen||cardOpen)closeDock(true);}}
+  function handleOverlayEscape(){
+    if(fileDragSource||clearing)return false;
+    if(dockOpen&&confirming)setConfirm(false,true);else if(dockOpen||cardOpen)closeDock(true);
+    else if(flight)cancelFlight();
+    return true;
+  }
+  function onKey(e){
+    if(e.key!=="Escape"||e.defaultPrevented||window.__nocturneOverlay)return;
+    handleOverlayEscape();
+  }
+  function yieldDownloads(){
+    if(fileDragSource||clearing)return false;
+    cancelHide();cancelFlight();cancelPanel();stopFollow();overlayUntil=0;
+    cardOpen=dockOpen=false;manualHold=sidebarOrigin=false;setConfirm(false);
+    dock?.removeAttribute("data-open");dock?.removeAttribute("data-closing");dockBackdrop?.removeAttribute("data-open");
+    if(dock){dock.inert=true;dock.setAttribute("aria-hidden","true");}
+    node?.setAttribute("aria-expanded","false");updateLive();return true;
+  }
+  let unregisterOverlay=()=>{};
+  function bindOverlay(){
+    unregisterOverlay();
+    unregisterOverlay=window.__nocturneOverlay?.register("downloads",{
+      priority:10,isActive:()=>!dead&&!!(cardOpen||dockOpen||flight||dock?.hasAttribute("data-closing")||fileDragSource),
+      canYield:()=>!fileDragSource&&!clearing,
+      yield:yieldDownloads,onEscape:handleOverlayEscape
+    })||(()=>{});
+  }
   function closeCard(){if(cardOpen)closeDock();}
   function syncSidebarHold(){
     // Zen watches native sidebar descendants with [panelopen] and
@@ -764,6 +791,7 @@ try{if(typeof window!=="undefined"){
   }
   function openCard(manual=false){
     if(!dock||!node||dead||dockOpen)return;
+    if(window.__nocturneOverlay&&!window.__nocturneOverlay.request("downloads",{passive:!manual}))return;
     if(cardOpen){if(manual)pinPanel(true);renderRecent();armHide();return;}
     if(!manual&&dock.hasAttribute("data-closing"))return;
     cancelHide();cancelPanel();dock.removeAttribute("data-closing");manualHold=manual;sidebarOrigin=manual;
@@ -781,6 +809,7 @@ try{if(typeof window!=="undefined"){
   }
   function launchFlight(){
     if(dead||!node)return;
+    if(window.__nocturneOverlay&&!window.__nocturneOverlay.request("downloads",{passive:true}))return;
     cancelFlight();if(dockOpen||dock?.hasAttribute("data-closing"))return;if(cardOpen){renderRecent();armHide();return;}mount();
     const activeWindow=!document.hasFocus||document.hasFocus();
     if(!activeWindow)return;
@@ -923,7 +952,7 @@ try{if(typeof window!=="undefined"){
   function sync(){if(!initialized||dead)return;if(enabled())void install();else teardown();}
   function start(){initialized=true;sync();}
   function dispose(){
-    if(dead)return;dead=true;teardown();
+    if(dead)return;dead=true;unregisterOverlay();window.removeEventListener("Nocturne:OverlayReady",bindOverlay);teardown();
     if(readyObserver)try{Services.obs.removeObserver(readyObserver,"browser-delayed-startup-finished");}catch{}
     readyObserver=null;try{prefs.removeObserver(PREF,sync);}catch{}
     window.removeEventListener("unload",dispose);
@@ -931,6 +960,7 @@ try{if(typeof window!=="undefined"){
   }
   const api={getSnapshot:()=>snapshot,setHost,dispose};
   window[KEY]=api;window.addUnloadListener(dispose);window.addEventListener("unload",dispose,{once:true});
+  window.addEventListener("Nocturne:OverlayReady",bindOverlay);bindOverlay();
   prefs.addObserver(PREF,sync);
   if(window.gBrowserInit?.delayedStartupFinished)start();
   else{readyObserver=subject=>{if(subject!==window)return;Services.obs.removeObserver(readyObserver,"browser-delayed-startup-finished");readyObserver=null;start();};Services.obs.addObserver(readyObserver,"browser-delayed-startup-finished");}

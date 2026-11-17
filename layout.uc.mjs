@@ -1,7 +1,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.31",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.32",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -1126,6 +1126,7 @@ function acquireZenHome(win, services) {
   }
   function search(){
     if(!open||searchToken||nativeSearchOpen(win.gURLBar))return;
+    if(win.__nocturneOverlay&&!win.__nocturneOverlay.request("home-search"))return;
     if(panel.hasAttribute("data-zh-startup"))stopMotion();
     const bar=win.gURLBar;if(!bar)return;
     const source=content.querySelector(".zh-search");
@@ -1633,6 +1634,17 @@ function acquireZenHome(win, services) {
   }};
   try{
     root.append(style);host.append(panel);
+    // Idle Home is a destination, not an exclusive overlay. Only its
+    // native search handoff owns this registration.
+    let unregisterOverlay=()=>{};
+    const bindOverlay=()=>{
+      unregisterOverlay();
+      unregisterOverlay=win.__nocturneOverlay?.register("home-search",{
+        priority:30,isActive:()=>!dead&&!!(searchToken||searchReturn),
+        canYield:()=>false
+      })||(()=>{});
+    };
+    listen(win,"Nocturne:OverlayReady",bindOverlay);cleanups.push(()=>unregisterOverlay());bindOverlay();
     const observer={observe(){if(open)render();}};prefs.addObserver(PREF,observer);cleanups.push(()=>prefs.removeObserver(PREF,observer));
     listen(browser.tabContainer,"TabSelect",onSelectedTab);
     // A selected, intentionally blank ordinary tab may finish loading
@@ -1671,6 +1683,7 @@ function acquireZenHome(win, services) {
       if(e.target?.closest?.("#PlacesToolbarItems .bookmark-item:not([container]),#OtherBookmarks .bookmark-item:not([container]),#back-button,#forward-button,#reload-button,#stop-reload-button"))leaveHome();
     },true);
     listen(win,"keydown",e=>{
+      if(e.key==="Escape"&&(e.defaultPrevented||win.__nocturneOverlay?.allowsEscape("home-search",e)===false))return;
       if(open&&e.key==="Escape"&&searchReturn){e.preventDefault();e.stopImmediatePropagation();return;}
       if(open&&e.key==="Escape"&&searchToken&&!searchReturn){
         // Do not swallow Escape belonging to an autocomplete sub-popup or
@@ -4507,6 +4520,7 @@ function installTabStrip() {
       if(!supported()||destroyed)return;
       if(open){close();return;}
       ensure();if(!panel.isConnected)return;
+      if(window.__nocturneOverlay&&!window.__nocturneOverlay.request("hub"))return;
       status.textContent="";contextId=null;confirmation=null;open=true;hubSession++;trashOpen=false;
       // A fast reopen can interrupt the closing animation while the old drawer is visible.
       const resetVisibleTrash=!panel.hidden&&trashPanel.hasAttribute("data-op-trash-open");
@@ -4521,7 +4535,7 @@ function installTabStrip() {
       }catch(error){close();console.warn("[OnePlane] Hub open:",error);}
     }
     function key(event){
-      if(!open||event.key!=="Escape")return;
+      if(!open||event.key!=="Escape"||event.defaultPrevented||window.__nocturneOverlay?.allowsEscape("hub",event)===false)return;
       event.preventDefault();event.stopPropagation();
       if(!ageMenu.hidden){setTrashAgeOpen(false);ageSelect.focus({preventScroll:true});return;}
       if(trashDrag){cancelTrashDrag();return;}if(drag){cancelDrag();return;}if(confirmation){confirmation=null;render();return;}if(contextId){contextId=null;render();return;}close(true);
@@ -4544,10 +4558,21 @@ function installTabStrip() {
     function stopDouble(event){event.preventDefault();event.stopImmediatePropagation();}
     const listeners=[[button,"click",toggle],[button,"pointerdown",stopDrag],[button,"mousedown",stopDrag],[button,"dblclick",stopDouble],
       [panel,"keydown",key],[form,"submit",create],[mode,"click",toggleMode],[returnButton,"click",()=>void returnProjection()],[window,"deactivate",deactivate],[name,"input",onInput],[window,"resize",scheduleHubGeometry]];
+    let unregisterOverlay=()=>{};
+    function bindOverlay(){
+      unregisterOverlay();
+      unregisterOverlay=window.__nocturneOverlay?.register("hub",{
+        priority:20,isActive:()=>!destroyed&&(open||!panel.hidden),
+        canYield:()=>!busy&&!projectionBusy&&!drag&&!trashDrag,
+        yield:()=>{close(false,true);return panel.hidden;},
+        onEscape:event=>{if(open)key(event);return true;}
+      })||(()=>{});
+    }
+    listeners.push([window,"Nocturne:OverlayReady",bindOverlay]);bindOverlay();
     window.addEventListener("pointerdown",onOutside,true);
     for(const event of ["ZenWorkspaceDataChanged","ZenWorkspacesUIUpdate","ZenCompactMode:Toggled","ZenCompactMode:LayoutUpdate"])listeners.push([window,event,changed]);
     for(const [node,event,fn] of listeners)node.addEventListener(event,fn);
-    function destroy(){if(destroyed)return;destroyed=true;close(false,true);hideDragBadge(true);clearPlacementPreview(true);window.removeEventListener("pointerdown",onOutside,true);for(const [node,event,fn] of listeners)node.removeEventListener(event,fn);panel.remove();button.remove();}
+    function destroy(){if(destroyed)return;destroyed=true;close(false,true);unregisterOverlay();hideDragBadge(true);clearPlacementPreview(true);window.removeEventListener("pointerdown",onOutside,true);for(const [node,event,fn] of listeners)node.removeEventListener(event,fn);panel.remove();button.remove();}
     return {ensure,close,onMode,destroy};
   }
   const hub=createHubController({target,root,toolbarWrapper,supported:hoverSupported,hold:reconcilePanel,switchGuard:guardPanelSwitch});

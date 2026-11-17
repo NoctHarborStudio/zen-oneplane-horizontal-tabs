@@ -311,5 +311,15 @@
       "path": "src/styles/refined-features.css.part",
       "kind": "section"
     }
+  ],
+  "overlay": [
+    {
+      "path": "src/core/overlay-coordinator.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/core/overlay-runtime.js.part",
+      "kind": "section"
+    }
   ]
 }

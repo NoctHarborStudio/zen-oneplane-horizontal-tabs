@@ -988,6 +988,7 @@
       if(!supported()||destroyed)return;
       if(open){close();return;}
       ensure();if(!panel.isConnected)return;
+      if(window.__nocturneOverlay&&!window.__nocturneOverlay.request("hub"))return;
       status.textContent="";contextId=null;confirmation=null;open=true;hubSession++;trashOpen=false;
       // A fast reopen can interrupt the closing animation while the old drawer is visible.
       const resetVisibleTrash=!panel.hidden&&trashPanel.hasAttribute("data-op-trash-open");
@@ -1002,7 +1003,7 @@
       }catch(error){close();console.warn("[OnePlane] Hub open:",error);}
     }
     function key(event){
-      if(!open||event.key!=="Escape")return;
+      if(!open||event.key!=="Escape"||event.defaultPrevented||window.__nocturneOverlay?.allowsEscape("hub",event)===false)return;
       event.preventDefault();event.stopPropagation();
       if(!ageMenu.hidden){setTrashAgeOpen(false);ageSelect.focus({preventScroll:true});return;}
       if(trashDrag){cancelTrashDrag();return;}if(drag){cancelDrag();return;}if(confirmation){confirmation=null;render();return;}if(contextId){contextId=null;render();return;}close(true);
@@ -1025,10 +1026,21 @@
     function stopDouble(event){event.preventDefault();event.stopImmediatePropagation();}
     const listeners=[[button,"click",toggle],[button,"pointerdown",stopDrag],[button,"mousedown",stopDrag],[button,"dblclick",stopDouble],
       [panel,"keydown",key],[form,"submit",create],[mode,"click",toggleMode],[returnButton,"click",()=>void returnProjection()],[window,"deactivate",deactivate],[name,"input",onInput],[window,"resize",scheduleHubGeometry]];
+    let unregisterOverlay=()=>{};
+    function bindOverlay(){
+      unregisterOverlay();
+      unregisterOverlay=window.__nocturneOverlay?.register("hub",{
+        priority:20,isActive:()=>!destroyed&&(open||!panel.hidden),
+        canYield:()=>!busy&&!projectionBusy&&!drag&&!trashDrag,
+        yield:()=>{close(false,true);return panel.hidden;},
+        onEscape:event=>{if(open)key(event);return true;}
+      })||(()=>{});
+    }
+    listeners.push([window,"Nocturne:OverlayReady",bindOverlay]);bindOverlay();
     window.addEventListener("pointerdown",onOutside,true);
     for(const event of ["ZenWorkspaceDataChanged","ZenWorkspacesUIUpdate","ZenCompactMode:Toggled","ZenCompactMode:LayoutUpdate"])listeners.push([window,event,changed]);
     for(const [node,event,fn] of listeners)node.addEventListener(event,fn);
-    function destroy(){if(destroyed)return;destroyed=true;close(false,true);hideDragBadge(true);clearPlacementPreview(true);window.removeEventListener("pointerdown",onOutside,true);for(const [node,event,fn] of listeners)node.removeEventListener(event,fn);panel.remove();button.remove();}
+    function destroy(){if(destroyed)return;destroyed=true;close(false,true);unregisterOverlay();hideDragBadge(true);clearPlacementPreview(true);window.removeEventListener("pointerdown",onOutside,true);for(const [node,event,fn] of listeners)node.removeEventListener(event,fn);panel.remove();button.remove();}
     return {ensure,close,onMode,destroy};
   }
   const hub=createHubController({target,root,toolbarWrapper,supported:hoverSupported,hold:reconcilePanel,switchGuard:guardPanelSwitch});
