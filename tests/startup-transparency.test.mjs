@@ -72,3 +72,20 @@ test("startup gate excludes nested OnePlane buttons from the generic toolbar gat
  assert.ok(targets.includes('#nav-bar :is(toolbarbutton,button,.titlebar-button,[role=button]):not(#oneplane-tabs *)'));
  assert.ok(!targets.includes('"#nav-bar :is(toolbarbutton,button,.titlebar-button,[role=button])",'));
 });
+
+test("cold assembly stages panel, cards, bookmarks and Home on one bounded timeline",()=>{
+ const a=source.indexOf("function startupTimeline("),b=source.indexOf("const started=",a);
+ const plan=new Function(source.slice(a,b)+"return startupTimeline")();
+ for(const scale of [.4,1,1.4]){
+   const t=plan(123,scale);
+   assert.ok(t.panel+t.panelLength<t.cards);
+   assert.ok(t.cards<t.bookmarks&&t.bookmarks<t.home);
+   assert.ok(t.home+195+t.homeLength<t.end);
+   assert.equal(t.start,123);assert.equal(t.scale,scale);
+ }
+ assert.ok(source.includes('reveal(surface,{y:-18,delay:timeline.panel,length:timeline.panelLength})'));
+ assert.ok(source.includes('delay:Math.round(timeline.cards*scale)'));
+ assert.ok(source.includes('warmStartupIcons?.()'));
+ assert.ok(source.includes('playStartup?.(timeline)'));
+ assert.ok(source.includes('finishStartup?.()'));
+});

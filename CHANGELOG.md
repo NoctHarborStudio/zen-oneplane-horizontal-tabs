@@ -1,3 +1,9 @@
+## 0.3.0-preview.29 — Staged startup and continuous Home search return
+
+- Sequence the decorative toolbar surface, Magnetic Fold cards, bookmarks, and Home search, pinned and workspace sections on one startup clock. Preserve the native page and geometry.
+- Decode pinned shortcut icons during the bounded startup icon preflight; suppress startup-only focus flash and avoid unrelated late-target rescans.
+- Preserve a dedicated native search close gate through floating attribute teardown and remove the delayed observer fallback. Record Home search handoff timing in the diagnostic stream.
+
 ## 0.3.0-preview.28 — Bunny highlight handoff
 
 - Restore the real card's drag-follow highlight when Magnetic Bunny returns to zero progress, including repeated dragovers.

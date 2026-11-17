@@ -71,6 +71,8 @@ function acquireZenHome(win, services) {
 #zen-shared-home,#zen-shared-home *{-moz-window-dragging:default!important}
 #zen-shared-home :is(button,input,textarea,select,summary,a,[draggable=true],.zh-recommendations){-moz-window-dragging:no-drag!important}
 #zen-shared-home .zh-content{width:min(100%,720px);margin:auto;transition:opacity 180ms ease,translate 220ms cubic-bezier(.2,.75,.25,1)}
+:root[data-zr-startup-phase="waiting"] #zen-shared-home[data-zh-startup] .zh-content{opacity:0!important;pointer-events:none}
+#zen-shared-home[data-zh-startup] .zh-search:focus-visible{outline:none}
 /* The collapsed button, native editor and cancellation fallback share
    these exact tokens. No separate hover/focus frame at the handoff. */
 :root{
@@ -238,7 +240,8 @@ function acquireZenHome(win, services) {
 #urlbar[data-zr-home-search-motion="prepare"][zen-floating-urlbar="true"]{opacity:0!important}
 #urlbar[data-zr-home-search-motion="prepare"][zen-floating-urlbar="true"] .urlbarView{opacity:0!important}
 #urlbar[data-zr-home-search-motion="run"][zen-floating-urlbar="true"] .urlbarView{opacity:var(--zh-results-alpha,1)!important}
-#urlbar[data-zr-home-search-motion="closed"][zen-floating-urlbar="true"]{opacity:0!important}
+#urlbar[data-zr-home-search-motion="closed"][zen-floating-urlbar="true"],
+#urlbar[data-zr-home-search][data-zh-closing]{opacity:0!important;visibility:hidden!important;transition:none!important;animation:none!important}
 #urlbar[data-zr-home-search][data-zh-closing] .urlbarView{pointer-events:none!important}
 #zen-home-search-return{
   position:fixed;z-index:2147483000;box-sizing:border-box;overflow:hidden;pointer-events:none;
@@ -317,7 +320,38 @@ function acquireZenHome(win, services) {
     }else if(browser.selectedTab)close();
   }
   function restore(){if(!covered)return;covered=false;panels.removeAttribute("data-zr-home-covered");if(!oldInert)panels.removeAttribute("inert");host.removeAttribute("data-zr-home-host");}
-  function stopMotion(){motion?.cancel();motion=null;}
+  let startupEffects=[],startupIconSources=new WeakMap();
+  function finishStartupHome(){
+    for(const a of startupEffects)try{a.cancel();}catch{}
+    startupEffects=[];panel.removeAttribute("data-zh-startup");
+  }
+  function warmStartupIcons(){
+    let total=0,pending=0;
+    if(!open||!panel.hasAttribute("data-zh-startup"))return {total,pending};
+    for(const img of content.querySelectorAll(".zh-tile img")){
+      total++;
+      const src=img.getAttribute("src");
+      if(src&&startupIconSources.get(img)!==src){
+        startupIconSources.set(img,src);try{img.decode?.()?.catch(()=>{});}catch{}
+      }
+      if(!img.complete||!img.naturalWidth)pending++;
+    }
+    return {total,pending};
+  }
+  function playStartupHome(timeline){
+    if(!open||!panel.hasAttribute("data-zh-startup")||startupEffects.length||searchToken)return;
+    if(win.matchMedia("(prefers-reduced-motion: reduce)").matches){finishStartupHome();return;}
+    const nodes=[...content.children],elapsed=Math.max(0,(win.performance?.now?.()??timeline.start)-timeline.start);
+    for(const [i,node] of nodes.entries()){
+      const delay=Math.max(0,(timeline.home+Math.min(i*65,195))*timeline.scale-elapsed);
+      try{startupEffects.push(node.animate([{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}],{delay,duration:timeline.homeLength*timeline.scale,easing:"cubic-bezier(.2,.75,.25,1)",fill:"both"}));}catch{}
+    }
+    if(startupEffects.length){
+      const owned=startupEffects;
+      Promise.all(owned.map(a=>a.finished.catch(()=>{}))).then(()=>{if(startupEffects===owned)finishStartupHome();});
+    }else finishStartupHome();
+  }
+  function stopMotion(){motion?.cancel();motion=null;finishStartupHome();}
   function close(restoreFocus=false){
     typeof win!=="undefined"&&win.__nocturneTrace?.("home.close",()=>({restoreFocus,open}),{sample:1800});
     if(!open)return;open=false;editing=false;adding=false;pinScrollTop=0;pinCustom=false;pinViewMode="home";panel.removeAttribute("data-zh-adding");dragId=null;startupHome=false;homeOnPlaceholder=false;finishSearchVisual();stopMotion();panel.hidden=true;restore();notify();
@@ -456,6 +490,7 @@ function acquireZenHome(win, services) {
   }
   function search(){
     if(!open||searchToken||nativeSearchOpen(win.gURLBar))return;
+    if(panel.hasAttribute("data-zh-startup"))stopMotion();
     const bar=win.gURLBar;if(!bar)return;
     const source=content.querySelector(".zh-search");
     const from=source?.getBoundingClientRect();
@@ -501,6 +536,7 @@ function acquireZenHome(win, services) {
 
   function searchLog(event,fields={}){
     win.console.info?.("[Zen Home] search "+event,fields);
+    win.__nocturneTrace?.("home.search."+event,fields,{sample:800});
   }
   // A card starts appearing when any of its height is uncovered, rather
   // than waiting for the top of the entire Pinned section to clear.
@@ -650,9 +686,12 @@ function acquireZenHome(win, services) {
     const resultAlpha=live?Number.parseFloat(win.getComputedStyle(bar.querySelector(".urlbarView")||bar).opacity):1;
     const initialAlpha=Math.max(0,Math.min(1,Number.isFinite(resultAlpha)?resultAlpha:1));
     searchClosing=true;
+    // Keep a dedicated close gate even when Zen removes its floating
+    // attribute. Never expose the resting native geometry mid-handoff.
+    bar?.setAttribute("data-zh-closing","");
     finishSearchMotion();
     if(searchTimer)win.clearTimeout(searchTimer);searchTimer=0;
-    if(bar){bar.setAttribute("data-zr-home-search-motion","closed");bar.setAttribute("data-zh-closing","");}
+    if(bar)bar.setAttribute("data-zr-home-search-motion","closed");
     const shell=html("div");shell.id="zen-home-search-return";shell.setAttribute("aria-hidden","true");shell.setAttribute("inert","");
     const source=content.querySelector(".zh-search"),header=html("div","zh-return-header");
     const icon=source?.querySelector("svg")?.cloneNode(true);
@@ -722,10 +761,9 @@ function acquireZenHome(win, services) {
     if(nativeSearchOpen(searchBar)){
       if(searchTimer)win.clearTimeout(searchTimer);searchTimer=0;return;
     }
-    // Native close can omit its event. Recover without leaving Home hidden.
-    if(!searchTimer)searchTimer=win.setTimeout(()=>{
-      searchTimer=0;if(searchToken&&!nativeSearchOpen(searchBar))animateSearchReturn("native-observer");
-    },32);
+    // MutationObserver already runs after the native synchronous close
+    // event. Do not leave an extra two-frame gap before the return shell.
+    if(searchToken&&!nativeSearchOpen(searchBar))animateSearchReturn("native-observer");
   }
   function move(id,targetId){
     const items=load(),from=items.findIndex(x=>x.id===id),to=items.findIndex(x=>x.id===targetId);
@@ -927,19 +965,25 @@ function acquireZenHome(win, services) {
       if(startup&&bar?.hasAttribute("zen-newtab"))bar._zenHandleUrlbarClose?.();
       bar?.view?.close();bar?.blur();
       oldInert=panels.hasAttribute("inert");covered=true;host.setAttribute("data-zr-home-host","");panels.setAttribute("data-zr-home-covered","");panels.setAttribute("inert","");
+      const staged=(startup||win.__nocturneLayoutStartup?.initial===true)&&!!root.getAttribute("data-zr-startup-phase")&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if(staged)panel.setAttribute("data-zh-startup","");
       panel.hidden=false;open=true;render();notify();
-      if(!win.matchMedia("(prefers-reduced-motion: reduce)").matches&&typeof content.animate==="function"){
+      if(staged){
+        if(win.__nocturneStartupTimeline)playStartupHome(win.__nocturneStartupTimeline);
+      }else if(!win.matchMedia("(prefers-reduced-motion: reduce)").matches&&typeof content.animate==="function"){
         motion=content.animate([{opacity:0,transform:"translateY(9px)"},{opacity:1,transform:"translateY(0)"}],{duration:300,easing:"cubic-bezier(.2,.75,.25,1)"});
         const a=motion;a.finished.then(()=>{if(motion===a)motion=null;},()=>{});
       }
-      content.querySelector(".zh-search")?.focus({preventScroll:true});return true;
+      // Startup is not a keyboard navigation action. Avoid a native
+      // focus outline flashing before the search field enters.
+      if(!startup&&!staged)content.querySelector(".zh-search")?.focus({preventScroll:true});return true;
     }catch(error){close();restore();win.console.warn("[Zen Home] open",error);return false;}
   }
   function destroy(){
     if(dead)return;close();dead=true;for(const fn of cleanups.splice(0))try{fn();}catch{}
     panel.remove();style.remove();if(win[KEY]===registry)delete win[KEY];
   }
-  const registry={apiVersion:1,acquire(){
+  const registry={apiVersion:1,warmStartupIcons,playStartup:playStartupHome,finishStartup:finishStartupHome,acquire(){
     if(dead)return null;const lease={listeners:new Set()};leases.add(lease);let released=false;
     return {get open(){return !released&&open;},show:()=>!released&&show(),close:(focus=false)=>{if(!released)leaveHome(focus);},
       showOnStartup(){

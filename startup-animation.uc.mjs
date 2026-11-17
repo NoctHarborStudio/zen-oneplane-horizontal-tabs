@@ -1,6 +1,6 @@
-// Nocturne preview.28: early trace, independent Sine script order.
+// Nocturne preview.29: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.28"};
+  const event="assembly.script",data={version:"0.3.0-preview.29"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -58,11 +58,16 @@ try{if(typeof window!=="undefined"){
   }catch{}
   const duration=Math.max(400,Math.min(1500,prefs.getIntPref(DURATION,1050)));
   const scale=duration/1050;
+  // Absolute offsets on one clock. The surface settles before card motion,
+  // then Home reveals its three sections after the initial card burst.
+  function startupTimeline(start,scale){
+    return {start,scale,panel:0,panelLength:220,cards:245,cardsLength:650,bookmarks:470,home:650,homeLength:330,end:1190};
+  }
   const started=now(),deadline=started+8000;
   let dead=false,playing=false,settling=false,raf=0,timer=0,settled=false,nativeReady=false,readyAt=0,holdNode=null;
   let nativeObserver=null,style=null,lateObserver=null,lateResize=null,lateFrame=0,playStart=0,finishAt=0,sheetURI=null,nativeTimer=0;
   const animations=new Map(),owned=new Map(),seen=new Set(),baseline=new Set();
-  let centerHandle=null,bookmarkHandle=null,iconWaitAt=0,iconCheckAt=-Infinity,iconStatus=null;
+  let centerHandle=null,bookmarkHandle=null,iconWaitAt=0,iconCheckAt=-Infinity,iconStatus=null,homeIcons=null;
   const EXISTING="data-zr-startup-existing";
   const MANAGED="data-zr-startup-managed",EFFECT="data-zr-startup-effect",MOVE="data-zr-startup-move",CLIP="data-zr-startup-clip",PROGRESS="--zr-startup-progress";
   let registered=false;
@@ -101,6 +106,8 @@ try{if(typeof window!=="undefined"){
     sheetURI=null;
     style?.remove();
     root.removeAttribute(PHASE);holdNode?.removeAttribute(HOLD);
+    delete window.__nocturneStartupTimeline;
+    window.__zenSharedHomeV1?.finishStartup?.();
     for(const type of inputs)window.removeEventListener(type,interrupt,true);
     window.removeEventListener("resize",onResize);
     window.removeEventListener("unload",finish);
@@ -319,7 +326,14 @@ try{if(typeof window!=="undefined"){
       const ur=bounds(url,true),rr=one?bounds(row,true):null;
       const island=one?row?.querySelector(".oneplane-title-island"):null,ir=bounds(island,true);
       const center=ir?ir.left+ir.width/2:one&&rr?rr.left+rr.width/2:ur?ur.left+ur.width/2:window.innerWidth/2;
-      playStart=now();finishAt=playStart+duration+80;
+      playStart=now();
+      const timeline=startupTimeline(playStart,scale);
+      finishAt=playStart+Math.max(duration+80,timeline.end*scale);
+      window.__nocturneStartupTimeline=timeline;
+      const surface=one?get("oneplane-toolbar-surface"):null;
+      // Animate the actual decorative surface, not a full-window cover.
+      if(surface)reveal(surface,{y:-18,delay:timeline.panel,length:timeline.panelLength});
+      decision("assembly.timeline",{panel:!!surface,cardsAt:timeline.cards*scale,homeAt:timeline.home*scale});
       // The native floating field may be a top-layer popover; never clip
       // its parent during its independent entrance.
       if(ur&&!floating)openFromCenter(url,45,410);
@@ -331,11 +345,11 @@ try{if(typeof window!=="undefined"){
         const painted=!gated&&!cold&&cards.some(n=>baseline.has(n));
         // Remove per-card startup gates together, including split members.
         for(const n of cards){n.setAttribute(MANAGED,"true");seen.add(n);}
-        if(!painted)centerHandle=engine?.start(row,{owner:"startup",direction:"in",duration:Math.round(760*scale),delay:Math.round(55*scale)});
+        if(!painted)centerHandle=engine?.start(row,{owner:"startup",direction:"in",duration:Math.round(timeline.cardsLength*scale),delay:Math.round(timeline.cards*scale)});
         else engine?.releasePending();
         decision("assembly.center.result",{painted,gated,cold,engine:!!engine,count:centerHandle?.count||0});
-        const plus=row.querySelector(".oneplane-new-tab");if(bounds(plus,true))slide(plus,-26,0,280,390);
-        if(ir){island.setAttribute(MANAGED,"true");seen.add(island);}
+        const plus=row.querySelector(".oneplane-new-tab");if(bounds(plus,true))slide(plus,-26,0,400,350);
+        if(ir)reveal(island,{delay:150,length:190});
       }else{
         // Move actual native tabs instead of fading the acrylic sidebar.
         const sidebar=get("zen-tabs-wrapper")||get("TabsToolbar"),sr=bounds(sidebar,true);
@@ -349,14 +363,23 @@ try{if(typeof window!=="undefined"){
       controls(row,url,center);
       if(centerHandle&&items){
         for(const n of items.children){n.setAttribute(MANAGED,"true");seen.add(n);}
-        bookmarkHandle=window.__nocturneCenterMotion?.bookmarks({direction:"in",duration:Math.round(500*scale),delay:Math.round(120*scale)});
+        bookmarkHandle=window.__nocturneCenterMotion?.bookmarks({direction:"in",duration:Math.round(420*scale),delay:Math.round(timeline.bookmarks*scale)});
       }
       if(!bookmarkHandle)revealBookmarks(center);
       if(floating)openFromCenter(floating,590,440);
+      window.__zenSharedHomeV1?.playStartup?.(timeline);
       root.setAttribute(PHASE,"playing");
       // Places and Zen's floating input can initialize after chrome-ready.
       // Keep only these late nodes gated until they receive their effect.
-      lateObserver=new MutationObserver(scheduleLate);
+      lateObserver=new MutationObserver(records=>{
+        // Ignore page/Home churn, frozen proxy insertion and unrelated
+        // chrome mutations. Only late native targets need a rescan.
+        if(records.some(r=>{
+          const t=r.target;
+          return t?.closest?.("#nav-bar,#PersonalToolbar,#zen-sidebar-top-buttons,#titlebar-buttonbox,#urlbar")&&
+            !t.closest("#oneplane-tabs");
+        }))scheduleLate();
+      });
       lateObserver.observe(root,{subtree:true,childList:true,attributes:true,
         attributeFilter:["zen-floating-urlbar","zen-newtab","hidden","collapsed","open","popover-open"]});
       if(typeof ResizeObserver==="function"){
@@ -393,10 +416,13 @@ try{if(typeof window!=="undefined"){
     if(one){
       const engine=window.__nocturneCenterMotion;
       if(!iconWaitAt)iconWaitAt=now();
-      if(now()-iconCheckAt>=75){iconCheckAt=now();iconStatus=engine?.warmIcons?.(row)||engine?.iconStats?.(row)||null;}
-      const waiting=iconStatus&&(iconStatus.pending+iconStatus.missing)>0;
+      if(now()-iconCheckAt>=75){
+        iconCheckAt=now();iconStatus=engine?.warmIcons?.(row)||engine?.iconStats?.(row)||null;
+        homeIcons=window.__zenSharedHomeV1?.warmStartupIcons?.()||null;
+      }
+      const waiting=!!(iconStatus&&(iconStatus.pending+iconStatus.missing)>0||homeIcons?.pending>0);
       if(waiting&&now()-iconWaitAt<600){schedule();return;}
-      decision("assembly.icons.ready",{...iconStatus,wait:now()-iconWaitAt,timeout:!!waiting});
+      decision("assembly.icons.ready",{...iconStatus,homeIcons,wait:now()-iconWaitAt,timeout:!!waiting});
     }
     typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.ready",()=>({one,active,state,expected,nativeReady,settled}),{sample:2500});
     // A narrow/hidden legacy strip falls back to native UI, never forces
@@ -442,6 +468,7 @@ try{if(typeof window!=="undefined"){
     const waiting=':root[data-zr-startup-phase="waiting"]';
     const active=':root[data-zr-startup-phase="playing"]';
     const earlyTargets=[
+      "#oneplane-toolbar-surface",
       "#urlbar-container",
       '#urlbar:is([zen-floating-urlbar="true"],[zen-newtab])',
       "#oneplane-tabs :is(.oneplane-tab,.oneplane-split-group,.oneplane-title-island,.oneplane-new-tab)",

@@ -392,3 +392,20 @@ test("Home snapshot excludes native teardown and logs pre-animation delay",()=>{
  assert.ok(core.includes("handoffMs:Math.round(snapshotNow()-handoffStarted)"));
  assert.ok(core.includes("firstFrameDelay:Math.round(firstFrameDelay)"));
 });
+
+test("Home startup groups are gated, decoded, staggered and cleaned up",()=>{
+ assert.ok(core.includes(':root[data-zr-startup-phase="waiting"] #zen-shared-home[data-zh-startup]'));
+ assert.ok(core.includes('if(src&&startupIconSources.get(img)!==src)'));
+ assert.ok(core.includes('Math.min(i*65,195)'));
+ assert.ok(core.includes('if(startupEffects===owned)finishStartupHome()'));
+ assert.ok(core.includes('if(!startup&&!staged)content.querySelector'));
+});
+test("Home search close gate survives native floating attribute teardown",()=>{
+ const code=extract("  function animateSearchReturn(","  function onSearchClosed(");
+ assert.ok(code.indexOf('bar?.setAttribute("data-zh-closing","")')<code.indexOf("finishSearchMotion();"));
+ assert.ok(core.includes('#urlbar[data-zr-home-search][data-zh-closing]{opacity:0!important;visibility:hidden!important'));
+ const observer=extract("  function observeSearch(","  function move(");
+ assert.ok(observer.includes('if(searchToken&&!nativeSearchOpen(searchBar))animateSearchReturn("native-observer");'));
+ assert.ok(!observer.includes("},32)"));
+ assert.ok(core.includes('win.__nocturneTrace?.("home.search."+event'));
+});
