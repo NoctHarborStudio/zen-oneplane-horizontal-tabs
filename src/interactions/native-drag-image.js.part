@@ -14,54 +14,127 @@
     const r=n.getBoundingClientRect();
     return {x:r.left+r.width/2,y:r.top+r.height/2,width:r.width,height:r.height};
   }
-  // Single spatial trajectory, sampled in either direction. No separate
-  // insertion keyframes or time-based animation during an active gesture.
-  function bunnyPose(progress,anchor,point,full){
-    const t=Math.max(0,Math.min(1,progress)),neck=.70;
-    const smooth=v=>v*v*(3-2*v),mix=(a,b,k)=>a+(b-a)*k;
-    const narrow=t<=neck?smooth(t/neck):smooth((1-t)/(1-neck));
-    return {x:mix(anchor.x,point.x,t),y:mix(anchor.y,point.y,t),
-      width:mix(anchor.width,full.width,t)*(1-.82*narrow),
-      height:mix(anchor.height,full.height,t)*(1-.82*narrow),slot:1-.95*t};
+  // Motion Lab / magnet: one anchored lane, no layout reflow while the
+  // pointer owns the card. The slot and ghost share the same spatial curve.
+  const bunnyClamp=v=>Math.max(0,Math.min(1,v));
+  const bunnySmooth=v=>{v=bunnyClamp(v);return v*v*(3-2*v);};
+  const bunnyMix=(a,b,t)=>a+(b-a)*t;
+  function bunnySlot(progress,anchor,side,gap){
+    const ratio=1-.96*bunnySmooth(progress),loss=(anchor.width+gap)*(1-ratio);
+    return {ratio,loss,width:anchor.width*ratio,x:anchor.x+(side==="L"?1:-1)*anchor.width*(1-ratio)/2};
   }
-  function bunnyProgress(p){return Math.max(0,Math.min(1,p/BUNNY_DETACH_THRESHOLD));}
+  function bunnyNeighborShift(progress,anchor,side,gap,outer){
+    return outer?(side==="L"?1:-1)*bunnySlot(progress,anchor,side,gap).loss:0;
+  }
+  function bunnyPose(progress,anchor,point,full,side="R",gap=3,edge=anchor.y+anchor.height/2+BUNNY_EDGE_PAD){
+    const p=bunnyClamp(progress),neck=.62,slot=bunnySlot(p,anchor,side,gap);
+    const compression=p<=neck?bunnySmooth(p/neck):bunnySmooth((1-p)/(1-neck)),scale=1-.82*compression;
+    const h=bunnyMix(anchor.height,full.height,p)*scale;
+    const y=bunnyMix(anchor.y,Math.max(edge+PULL_DISTANCE*BUNNY_DETACH_THRESHOLD,point.y),bunnySmooth(p));
+    const free=bunnySmooth((y-h/2-(anchor.y+anchor.height/2))/7);
+    const nominal=bunnyMix(anchor.width,full.width,p)*scale;
+    const width=Math.max(1,Math.min(nominal,bunnyMix(slot.width,nominal,free)));
+    return {x:bunnyMix(slot.x,point.x,free),y,width,height:h,slot:slot.ratio,free};
+  }
+  function bunnyProgress(p){return bunnyClamp(p/BUNNY_DETACH_THRESHOLD);}
+  function bunnyRect(n){
+    const r=n.getBoundingClientRect();
+    return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};
+  }
   function captureBunnyAnchor(){
-    if(dragBunnyAnchor)return true;
+    if(dragBunnyLayout)return true;
     if(!dragNode)return false;
     clearGroupPull();clearLiveDrag();setPull(0);
-    const r=dragNode.getBoundingClientRect();
-    if(r.width<1||r.height<1)return false;
-    dragBunnyAnchor={x:r.left+r.width/2,y:r.top+r.height/2,width:r.width,height:r.height};
+    row.setAttribute("data-op-magnetic-pull","true");
+    const r=bunnyRect(dragNode);
+    if(r.width<1||r.height<1){row.removeAttribute("data-op-magnetic-pull");return false;}
+    const anchor={x:r.left+r.width/2,y:r.top+r.height/2,width:r.width,height:r.height};
+    const lane=dragNode.parentElement,topLevel=isStripNode(dragNode);
+    const home=row.querySelector(".oneplane-title-island"),hr=home?bunnyRect(home):null;
+    const center=hr?.width>1?(hr.left+hr.right)/2:row.getBoundingClientRect().left+row.getBoundingClientRect().width/2;
+    const side=lane===leftLane?"L":lane===rightLane?"R":anchor.x<center?"L":"R";
+    const gap=parseFloat(window.getComputedStyle(lane).columnGap)||3;
+    const cards=stripNodes().filter(node=>node!==dragNode&&!node.contains(dragNode));
+    if(!topLevel&&lane)cards.push(...Array.from(lane.children).filter(node=>node!==dragNode&&node.matches(".oneplane-tab")));
+    if(home&&hr?.width>1&&hr.height>1)cards.push(home);
+    if(plus&&!cards.includes(plus))cards.push(plus);
+    const obstacles=[];
+    for(const node of cards){
+      const box=bunnyRect(node);
+      if(box.width<1||box.height<1)continue;
+      const sameRow=Math.abs((box.top+box.bottom)/2-anchor.y)<Math.max(5,anchor.height/2);
+      const outer=topLevel&&sameRow&&(node.parentElement===lane||node===plus)&&
+        (side==="L"?box.right<=r.left+.5:box.left>=r.right-.5);
+      obstacles.push({node,box,outer});
+    }
     makeDragGhost();
-    if(!dragGhost||!dragGhostBody){dragBunnyAnchor=null;return false;}
+    if(!dragGhost||!dragGhostBody){row.removeAttribute("data-op-magnetic-pull");return false;}
     dragGhost.hidden=false;dragGhostBody.style.removeProperty("transform");
-    const full=dragGhostBody.getBoundingClientRect();
-    dragBunnyFull={width:full.width,height:full.height};
-    hideGhost();
-    if(!dragBunnyFull.width||!dragBunnyFull.height){dragBunnyAnchor=null;dragBunnyFull=null;return false;}
+    const full=dragGhostBody.getBoundingClientRect();hideGhost();
+    if(!full.width||!full.height){row.removeAttribute("data-op-magnetic-pull");return false;}
+    dragBunnyAnchor=anchor;dragBunnyFull={width:full.width,height:full.height};
+    dragBunnyLayout={side,gap,obstacles,point:null,progress:0};
+    dragNode.setAttribute("data-op-magnetic-source","true");
+    dragNode.setAttribute("data-op-lane-ghost","true");
     return true;
   }
-  function paintBunnyPull(event,p){
-    if(!captureBunnyAnchor())return false;
-    const t=bunnyProgress(p),pose=bunnyPose(t,dragBunnyAnchor,{x:event.clientX,y:event.clientY},dragBunnyFull);
+  // Disjoint rectangular holes in the ghost's local coordinates. Merge
+  // overlapping obstacles per horizontal band so evenodd cannot reopen
+  // a hole where two chrome surfaces happen to intersect.
+  function bunnyClip(pose,full,boxes){
+    const pad=20,left=pose.x-full.width/2,top=pose.y-full.height/2;
+    const bounds={left:pose.x-pose.width/2-pad,right:pose.x+pose.width/2+pad,top:pose.y-pose.height/2-pad,bottom:pose.y+pose.height/2+pad};
+    const hits=boxes.map(b=>({left:Math.max(b.left,bounds.left),right:Math.min(b.right,bounds.right),top:Math.max(b.top,bounds.top),bottom:Math.min(b.bottom,bounds.bottom)})).filter(b=>b.right>b.left&&b.bottom>b.top);
+    if(!hits.length)return "";
+    const ys=[...new Set(hits.flatMap(b=>[b.top,b.bottom]))].sort((a,b)=>a-b);
+    const rect=(l,t,r,b)=>"M "+(l-left)+" "+(t-top)+" H "+(r-left)+" V "+(b-top)+" H "+(l-left)+" Z";
+    const holes=[];
+    for(let i=0;i<ys.length-1;i++){
+      const t=ys[i],b=ys[i+1],intervals=hits.filter(h=>h.top<b&&h.bottom>t).map(h=>[h.left,h.right]).sort((a,b)=>a[0]-b[0]);
+      let cur=null;
+      for(const x of intervals){if(cur&&x[0]<=cur[1])cur[1]=Math.max(cur[1],x[1]);else{if(cur)holes.push(rect(cur[0],t,cur[1],b));cur=x.slice();}}
+      if(cur)holes.push(rect(cur[0],t,cur[1],b));
+    }
+    return 'path(evenodd, "'+rect(bounds.left-1,bounds.top-1,bounds.right+1,bounds.bottom+1)+" "+holes.join(" ")+'")';
+  }
+  function paintBunnyAt(t,point,lateral=false){
+    const state=dragBunnyLayout,anchor=dragBunnyAnchor,full=dragBunnyFull;
+    if(!state||!dragNode||!dragGhost||!dragGhostBody)return false;
+    const pose=bunnyPose(t,anchor,point,full,state.side,state.gap,dragEdge);
+    if(lateral&&t===1){pose.x=point.x;pose.y=point.y;pose.width=full.width;pose.height=full.height;}
+    const boxes=[];
+    for(const {node,box,outer} of state.obstacles){
+      const dx=bunnyNeighborShift(t,anchor,state.side,state.gap,outer);
+      if(outer)node.style.setProperty("--op-bunny-x",dx.toFixed(3)+"px");
+      boxes.push({...box,left:box.left+dx,right:box.right+dx});
+    }
+    state.progress=t;state.point={...point};state.pose=pose;dragPull=t;
     dragNode.setAttribute("data-op-lane-ghost","true");
-    setPull(t,pose.slot);
-    dragGhost.hidden=false;
-    positionGhost(pose.x,pose.y);
-    dragGhostBody.style.transform="scale("+pose.width/dragBunnyFull.width+","+pose.height/dragBunnyFull.height+")";
-    window.__nocturneTrace?.("drag.bunny.pose",{p:t,slot:pose.slot,width:pose.width,height:pose.height,mode:dragImageMode},{throttle:85,sample:800});
+    dragGhost.hidden=false;positionGhost(pose.x,pose.y);
+    dragGhostBody.style.transform="scale("+pose.width/full.width+","+pose.height/full.height+")";
+    const clip=bunnyClip(pose,full,boxes);
+    if(clip)dragGhost.style.setProperty("clip-path",clip);else dragGhost.style.removeProperty("clip-path");
+    refreshIndicator();
+    window.__nocturneTrace?.("drag.bunny.pose",{p:t,slot:pose.slot,width:pose.width,height:pose.height,side:state.side,masked:!!clip,mode:dragImageMode},{throttle:85,sample:800});
     return true;
+  }
+  function paintBunnyPull(event,p,lateral=false){
+    if(!captureBunnyAnchor())return false;
+    return paintBunnyAt(lateral?1:bunnyProgress(p),{x:event.clientX,y:event.clientY},lateral);
   }
   function clearBunnyPull(){
-    setPull(0);dragNode?.removeAttribute("data-op-lane-ghost");hideGhost();
-    dragBunnyAnchor=null;dragBunnyFull=null;
+    for(const o of dragBunnyLayout?.obstacles||[])if(o.outer)o.node.style.removeProperty("--op-bunny-x");
+    row.removeAttribute("data-op-magnetic-pull");
+    dragNode?.removeAttribute("data-op-magnetic-source");
+    dragNode?.removeAttribute("data-op-lane-ghost");
+    dragGhost?.style.removeProperty("clip-path");setPull(0);hideGhost();
+    dragBunnyAnchor=null;dragBunnyFull=null;dragBunnyLayout=null;
   }
   function cancelInsertion(){
     const animation=dragInsertAnimation,node=dragInsertNode;
     dragInsertAnimation=null;dragInsertNode=null;
     if(animation)animation.cancel();
     node?.removeAttribute("data-op-reinsert");
-    if(node)hideGhost();
   }
   function finishInsertionAfterDrop(){
     if(!dragInsertAnimation)return false;
@@ -69,33 +142,29 @@
     dragInsertAnimation.play();return true;
   }
   function prepareBunnyDrop(event){
-    if(!dragNode||dragImageMode==="outside")return false;
-    const from=dragPaintedBox(),t=dragImageMode==="content"?1:dragPull;
-    if(!from||!dragGhost||!dragGhostBody||!dragBunnyFull||t<=0||reducedMotion.matches||
+    const state=dragBunnyLayout;
+    if(!dragNode||!state||dragImageMode==="outside"||state.progress<=0||reducedMotion.matches||
         prefs.getIntPref("zen.oneplane.animation-duration",160)===0)return false;
-    const node=dragNode,full=dragBunnyFull,point={x:event.clientX,y:event.clientY};
-    node.setAttribute("data-op-reinsert","true");
     if(dragImageMode==="content")setDragImageMode("inline",event);
-    node.setAttribute("data-op-reinsert","true");node.removeAttribute("data-op-lane-ghost");setPull(0);
-    const r=node.getBoundingClientRect(),anchor={x:r.left+r.width/2,y:r.top+r.height/2,width:r.width,height:r.height};
-    positionGhost(anchor.x,anchor.y);dragGhost.hidden=false;
-    const initial=bunnyPose(t,anchor,point,full);
-    const frames=Array.from({length:21},(_,i)=>{
-      const u=i/20,v=bunnyPose(t*(1-u),anchor,point,full),k=1-u;
-      const x=v.x+(from.x-initial.x)*k,y=v.y+(from.y-initial.y)*k;
-      const w=v.width+(from.width-initial.width)*k,h=v.height+(from.height-initial.height)*k;
-      return {offset:u,transform:"translate("+(x-anchor.x)+"px,"+(y-anchor.y)+"px) scale("+Math.max(.03,w/full.width)+","+Math.max(.03,h/full.height)+")"};
-    });
-    dragGhostBody.style.removeProperty("transform");
-    const animation=dragGhostBody.animate(frames,{duration:Math.max(90,Math.round(360*t)),easing:"linear",fill:"both"});
-    dragInsertAnimation=animation;dragInsertNode=node;animation.pause();animation.currentTime=0;
-    animation.onfinish=animation.oncancel=()=>{
-      if(dragInsertAnimation!==animation)return;
-      dragInsertAnimation=null;dragInsertNode=null;
-      node.removeAttribute("data-op-reinsert");hideGhost();animation.cancel();
-      if(dragInsertPending){endDragVisual();return;}
-      refreshIndicator();
-    };
+    const from=state.progress,old=state.point,anchor=dragBunnyAnchor,node=dragNode;
+    let frame=0,started=null;
+    const duration=240+180*from;
+    // The prototype's release uses the same curve for both the slot and
+    // card. The only frame loop is a bounded accepted-drop visual tail.
+    const animation={cancel(){if(frame)window.cancelAnimationFrame(frame);frame=0;},play(){
+      const tick=now=>{
+        frame=0;if(dragInsertAnimation!==animation)return;
+        if(started===null)started=now;
+        const u=bunnyClamp((now-started)/duration),k=bunnySmooth(u),p=from*(1-k);
+        const dest={x:anchor.x,y:dragEdge+PULL_DISTANCE*BUNNY_DETACH_THRESHOLD*p};
+        paintBunnyAt(p,{x:bunnyMix(old.x,dest.x,k),y:bunnyMix(old.y,dest.y,k)});
+        if(u<1){frame=window.requestAnimationFrame(tick);return;}
+        dragInsertAnimation=null;dragInsertNode=null;node.removeAttribute("data-op-reinsert");
+        if(dragInsertPending)endDragVisual();
+      };
+      frame=window.requestAnimationFrame(tick);
+    }};
+    dragInsertAnimation=animation;dragInsertNode=node;
     return true;
   }
   function setDragImageMode(mode, event) {
@@ -103,12 +172,19 @@
     // Once OS owns the drag image, never draw a local duplicate on re-entry.
     if(dragImageMode==="outside")return;
     const previous = dragImageMode;
+    if(dragBunnyLayout&&mode!=="outside"){
+      dragImageMode=mode;
+      dragNode.toggleAttribute("data-op-detached",mode==="content");
+      row.toggleAttribute("data-op-inline-drag",mode==="inline");
+      if(mode==="content")dragDetachedOnce=true;
+      refreshIndicator();return;
+    }
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.mode.request",()=>({previous,requested:mode,pull:dragPull,edge:dragEdge,ghost:!!dragGhost&&!dragGhost.hidden}),{sample:1800});
     if (mode === "outside") {
       // Only the OS drag image is painted beyond this browser window.
       makeDragGhost();
       if (!dragGhost) return;
-      hideGhost();
+      hideGhost();dragGhost.style.removeProperty("clip-path");
       const p = dragLastPoint || {x:window.innerWidth/2,y:dragEdge+PULL_DISTANCE};
       positionGhost(Math.max(20,Math.min(window.innerWidth-20,p.x)),
                     Math.max(20,Math.min(window.innerHeight-20,p.y)));
@@ -132,8 +208,7 @@
       dragDetachedOnce=true;
       clearGroupPull();
       cancelInsertion();
-      setPull(0);
-      clearLiveDrag();
+      if(!dragBunnyLayout){setPull(0);clearLiveDrag();}
       if (mode === "content") showGhost(event);
     } else {
       hideGhost();

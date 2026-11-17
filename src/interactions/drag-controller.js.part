@@ -6,6 +6,7 @@
     const search = dragSearch;
     dragSearch = null; pointerSearch = null;
     clearGroupPull();
+    if(dragBunnyLayout)clearBunnyPull();
     dragNode?.removeAttribute("data-op-lane-ghost");
     dragNode?.removeAttribute("data-op-detached");
     dragNode?.removeAttribute("data-op-drag-follow");

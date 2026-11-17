@@ -201,7 +201,7 @@
     stopLaneAutoscroll();
     // The window capture listener owns pull and image transitions.
     // Do not erase a group's visual position mid-extraction.
-    if (!(dragImageMode === "inline" && (groupPullLayout || dragPull > 0 || dragInsertAnimation))) clearLiveDrag();
+    if (!(dragImageMode === "inline" && (groupPullLayout || dragBunnyLayout || dragPull > 0 || dragInsertAnimation))) clearLiveDrag();
     clearDropMarker();
   }
   function clearDropMarker() {
@@ -264,7 +264,7 @@
       if(dragImageMode==="inline"&&(p>0||detach)&&!dragBunnyAnchor)captureBunnyAnchor();
       setDragImageMode(detach ? "content" : "inline",event);
       if(dragImageMode==="content"){
-        positionGhost(event.clientX,event.clientY);
+        if(!paintBunnyPull(event,p,lateralExit))positionGhost(event.clientX,event.clientY);
         clearDropMarker();
         if(within){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";}
         else releaseDragReveal();
@@ -303,7 +303,7 @@
   function onToolbarDrop(event) {
     const tab=readDraggedTab(event);
     if(!tab||!toolbarDragReturnZone(event))return;
-    if(tabOwner(tab)===window&&dragDetachedOnce){
+    if(tabOwner(tab)===window&&(dragDetachedOnce||dragBunnyLayout)){
       event.preventDefault();event.stopImmediatePropagation();
       prepareBunnyDrop(event);
       sourceHandled(tab,true);schedule();return;

@@ -12,7 +12,7 @@
   }
   let dragGhost = null, dragGhostBody = null, dragPull = 0, dragEdge = 0, dragWidth = 0;
   let dragLastPoint = null;
-  let dragBunnyAnchor=null, dragBunnyFull=null, dragInsertAnimation=null, dragInsertNode=null;
+  let dragBunnyAnchor=null, dragBunnyFull=null, dragBunnyLayout=null, dragInsertAnimation=null, dragInsertNode=null;
   let dragInsertPending=false; // visual tail only; native session is already finished
   let groupPullLayout = null;
   let pointerSearch = null, dragSearch = null, restoreSearchTimer = 0;
