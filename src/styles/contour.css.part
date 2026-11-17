@@ -68,7 +68,7 @@
        override the important transparent default. The contour still
        owns the fade below the shelf and bookmarks. */
     #zen-appcontent-navbar-wrapper #nav-bar:has(#oneplane-tabs[data-op-overflow-row]) {
-      background:var(--op-surface-tint)!important;
+      background:transparent!important;
       background-image:none!important;
     }
     /* Persistent mode: normal flow, same UI, no fade over the page. */

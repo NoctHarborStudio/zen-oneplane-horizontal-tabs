@@ -1,6 +1,6 @@
-// Nocturne preview.10: early trace, independent Sine script order.
+// Nocturne preview.11: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="disassembly.script",data={version:"0.3.0-preview.10"};
+  const event="disassembly.script",data={version:"0.3.0-preview.11"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -9,7 +9,7 @@ try{if(typeof window!=="undefined"){
  * or session persistence. All native confirmation decisions stay native.
  */
 (() => {
-  const KEY="__zenRefinedClosingAnimation",PREF="zen.refined.closing.animation",DURATION=520;
+  const KEY="__zenRefinedClosingAnimation",PREF="zen.refined.closing.animation",DURATION=760;
   const root=document.documentElement,prefs=Services.prefs;
   const MARK="data-zr-close-effect",MOVE="data-zr-close-move",CLIP="data-zr-close-clip",PROGRESS="--zr-close-progress";
   const reduced=window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -18,7 +18,7 @@ try{if(typeof window!=="undefined"){
   if(typeof window.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   window[KEY]?.();
   let dead=false,owner=null,original=null,wrapped=null,observer=null,style=null,sheet=null;
-  const animations=new Set(),owned=new Map();let centerHandle=null;
+  const animations=new Set(),owned=new Map();let centerHandle=null,bookmarkHandle=null;
 
   function makeCloseController({eligible,begin,clear,seal=()=>{},isClosed=()=>false,later,cancelLater,invoke}){
     let pending=null,timer=null,committing=false;
@@ -35,7 +35,7 @@ try{if(typeof window!=="undefined"){
       // Restore only on cancellation or a native exception.
       committing=true;
       try{
-        try{seal();}catch{}
+        if(!request.sealed)try{seal();}catch{}
         return invoke(request.receiver,request.args);
       }finally{
         committing=false;
@@ -49,7 +49,13 @@ try{if(typeof window!=="undefined"){
         if(!eligible(args))return invoke(receiver,args);
         pending={receiver,args,animated:false};
         try{
-          if(begin()){pending.animated=true;timer=later(()=>finish(true),DURATION);return;}
+          if(begin()){
+            pending.animated=true;
+            // Seal the real terminal frame before the 110 ms dwell. The
+            // native close cannot occur in the same paint as the final move.
+            timer=later(()=>{if(!pending)return;try{seal();}catch{}pending.sealed=true;timer=later(()=>finish(true),110);},DURATION-110);
+            return;
+          }
         }catch{}
         return finish(true);
       },
@@ -80,12 +86,12 @@ try{if(typeof window!=="undefined"){
     const floating=get("urlbar");
     const floatVisible=floating&&(floating.getAttribute("zen-floating-urlbar")==="true"||floating.hasAttribute("zen-newtab"));
     if(floatVisible)add(floating,0,0,true,0,280);
-    for(const n of Array.from(get("PlacesToolbarItems")?.children||[])){
+    if(!window.__nocturneCenterMotion?.bookmarks)for(const n of Array.from(get("PlacesToolbarItems")?.children||[])){
       const t=visible(n);if(t)add(n,0,-14,false,Math.max(0,55-Math.abs(t.r.left+t.r.width/2-center)*.09),280);
     }
     if(rr){
       add(row.querySelector(".oneplane-new-tab"),-26,0,false,80,300);
-      add(island,0,0,true,150,320);
+      add(island,0,0,true,570,80);
     }else{
       const sidebar=get("zen-tabs-wrapper")||get("TabsToolbar");
       const t=visible(sidebar);if(t)add(sidebar,t.r.left<window.innerWidth/2?-18:18,0,false,95,330);
@@ -107,7 +113,7 @@ try{if(typeof window!=="undefined"){
   function restore(){
     typeof window!=="undefined"&&window.__nocturneTrace?.("disassembly.restore",()=>({effects:animations.size,owned:owned.size,closing:root.hasAttribute('data-zr-closing')}),{sample:1000,flush:true});
     for(const a of animations)try{a.cancel();}catch{}
-    animations.clear();centerHandle?.release();centerHandle=null;
+    animations.clear();centerHandle?.release();centerHandle=null;bookmarkHandle?.release();bookmarkHandle=null;
     for(const [n,record] of owned){
       for(const [k,v] of record.styles){
         if(v.value)n.style.setProperty(k,v.value,v.priority);else n.style.removeProperty(k);
@@ -144,7 +150,8 @@ try{if(typeof window!=="undefined"){
       catch{sheet=null;style=document.createElementNS("http://www.w3.org/1999/xhtml","style");style.textContent=css;root.append(style);}
     }
     root.setAttribute("data-zr-closing","true");
-    centerHandle=window.__nocturneCenterMotion?.start(get("oneplane-tabs"),{owner:"close",direction:"out",duration:480});
+    centerHandle=window.__nocturneCenterMotion?.start(get("oneplane-tabs"),{owner:"close",direction:"out",duration:620});
+    bookmarkHandle=window.__nocturneCenterMotion?.bookmarks({direction:"out",duration:650});
     for(const {n,x,y,clip,delay,length,opacity} of targets){
       try{
         let frames;
@@ -164,7 +171,7 @@ try{if(typeof window!=="undefined"){
       }catch(e){console.warn("[Zen Refined] Close effect:",e);}
     }
     typeof window!=="undefined"&&window.__nocturneTrace?.("disassembly.effects",()=>({count:animations.size,owned:owned.size,duration:DURATION}),{sample:1000,flush:true});
-    return animations.size>0||!!centerHandle?.count;
+    return animations.size>0||!!centerHandle?.count||!!bookmarkHandle;
   }
   function eligible(args){
     const event=args[0];
@@ -176,7 +183,7 @@ try{if(typeof window!=="undefined"){
   const controller=makeCloseController({
     eligible,begin,clear:restore,isClosed:()=>window.closed,
     seal:()=>{
-      centerHandle?.seal();for(const a of animations)try{a.finish();}catch{}
+      centerHandle?.seal();bookmarkHandle?.seal();for(const a of animations)try{a.finish();}catch{}
       window.__nocturneTrace?.("disassembly.sealed",()=>({effects:animations.size,closing:root.hasAttribute("data-zr-closing")}),{flush:true});
     },
     later:(fn,ms)=>window.setTimeout(fn,ms),cancelLater:id=>window.clearTimeout(id),

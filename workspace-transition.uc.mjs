@@ -1,6 +1,6 @@
-// Nocturne preview.10: early trace, independent Sine script order.
+// Nocturne preview.11: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="workspace.script",data={version:"0.3.0-preview.10"};
+  const event="workspace.script",data={version:"0.3.0-preview.11"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -118,7 +118,7 @@ try{if(typeof window!=="undefined"){
     return !t||t==="none"||/^0(?:px|%)?(?: 0(?:px|%)?){0,2}$/.test(t);
   }
   function animate(tx,items,outgoing,old=null){
-    const length=outgoing?300:480,effects=[],ease="cubic-bezier(.25,.55,.25,1)";
+    const length=outgoing?460:560,effects=[],ease="cubic-bezier(.25,.55,.25,1)";
     const row=get("oneplane-tabs");
     // Read all final geometry before any effect changes its painted rect.
     const surface=get("oneplane-toolbar-surface"),sr=rect(surface),wrapper=get("zen-appcontent-navbar-wrapper"),wr=rect(wrapper);
@@ -136,13 +136,7 @@ try{if(typeof window!=="undefined"){
       if(move)n.setAttribute(MOVE,"true");
       effects.push(playEffect(tx,n,outgoing?1:0,outgoing?0:1,length,ease));
     }
-    // The adaptive two-row nav has an independent opaque backing.
-    // Fade that paint along with the rows so it cannot jump in height
-    // while the main decorative surface is morphing.
-    const nav=get("nav-bar");
-    if(root.getAttribute("oneplane-active")==="true"&&row?.hasAttribute("data-op-overflow-row")&&
-      saveEffect(tx,nav,BACKING,{[PROGRESS]:outgoing?1:0}))
-      effects.push(playEffect(tx,nav,outgoing?1:0,outgoing?0:1,length,ease));
+    // The shared contour is the sole compact shelf background.
     if(!outgoing){
       if(old&&sr&&saveEffect(tx,surface,SURFACE,{[PROGRESS]:0,"--zr-workspace-height-scale":heightScale(old.surfaceHeight,finalSurfaceHeight),"--zr-workspace-final-surface-height":finalSurfaceHeight+"px"}))
         effects.push(playEffect(tx,surface,0,1,length,ease));
@@ -151,12 +145,7 @@ try{if(typeof window!=="undefined"){
       if(old&&wr&&root.getAttribute("zen-compact-mode")==="true"&&Math.abs(old.height-wr.height)>1&&
         saveEffect(tx,wrapper,"data-zr-workspace-height-motion",{[PROGRESS]:0,"--zr-workspace-start-height":old.height+"px","--zr-workspace-final-height":wr.height+"px"}))
         effects.push(playEffect(tx,wrapper,0,1,length,ease));
-      // Keep the page opaque. Animate chrome deck only, no web DOM or captures.
-      if(root.getAttribute("oneplane-active")==="true"&&pr&&pr.width>1&&pr.height>1&&!page.hasAttribute("data-zr-home-covered")&&neutralTranslate(page)){
-        const dy=old?.pageTop!=null?old.pageTop-pr.top:0;
-        if(saveEffect(tx,page,PAGE,{[PROGRESS]:0,"--zr-workspace-page-y":Math.max(-180,Math.min(180,dy))+"px"}))
-          effects.push(playEffect(tx,page,0,1,length,ease));
-      }
+      // Keep the page opaque and stationary (Magnetic Fold Lab B).
     }
     return Promise.race([Promise.all(effects),pause(tx,length+60)]);
   }
@@ -211,7 +200,7 @@ try{if(typeof window!=="undefined"){
     const tx={animations:new Set(),styles:new Map(),timers:new Set(),waiters:new Set(),cancelled:false,superseded:false,skipMotion:false};active=tx;
     // Native switching owns its own promise; visual gating must never
     // remain stuck if that promise is slow or fails to settle.
-    tx.timers.add(win.setTimeout(()=>cleanup(tx),2500));
+    tx.timers.add(win.setTimeout(()=>cleanup(tx),3500));
     let called=false,result;
     try{
       const old=units();
@@ -237,6 +226,8 @@ try{if(typeof window!=="undefined"){
       }),{sample:1000});
       await motion;
       tx.center?.seal();
+      // Commit terminal styles while native CSS transitions are still disabled.
+      for(const a of tx.animations)try{a.finish();}catch{}
       return result;
     }catch(error){
       if(!called){called=true;cleanup(tx);return tx.superseded||req.superseded||dead||win.closed?undefined:invoke();}

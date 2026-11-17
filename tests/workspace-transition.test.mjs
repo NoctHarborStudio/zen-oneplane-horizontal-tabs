@@ -10,7 +10,7 @@ test("workspace animates stable surfaces and card offsets with shared progress",
  assert.ok(!source.includes("--zr-workspace-dx"));
  assert.ok(!source.includes("--zr-workspace-dy"));
  assert.ok(source.includes("win.__nocturneCenterMotion?.start(row"));
- assert.ok(css.includes("--zr-center-x"));
+ assert.ok(css.includes("data-zr-magnetic-layer"));
 });
 test("transition bypasses startup, disabled and reduced-motion states",()=>{
  const state={dead:false,busy:false,reduced:false,startup:false,enabled:true,fullscreen:false};
@@ -157,14 +157,14 @@ test("incoming shelf and page effects restore every owned style",()=>{
  const count=effects.length,ratio=surface.style.getPropertyValue("--zr-workspace-height-scale"),pageOffset=page.style.getPropertyValue("--zr-workspace-page-y");
  cancelEffects(tx);row.removeAttribute("data-op-overflow-row");return {count,ratio,pageOffset,clean:[surface,page,bm,row,nav].every(n=>!n.styles.size&&!n.attrs.size)};
  `);
- assert.deepEqual(run(),{count:5,ratio:"0.625",pageOffset:"-40px",clean:true});
+ assert.deepEqual(run(),{count:3,ratio:"0.625",pageOffset:"",clean:true});
 });
 
 test("two-row backing is gated during swap and animated separately from tabs",()=>{
- assert.ok(source.includes('saveEffect(tx,nav,BACKING'));
+ assert.ok(!source.includes('saveEffect(tx,nav,BACKING'));
  assert.ok(css.includes('#nav-bar#nav-bar#nav-bar#nav-bar:has(#oneplane-tabs[data-op-overflow-row])'));
  assert.ok(css.includes('background:transparent!important'));
- assert.ok(css.includes('background:color-mix(in srgb,var(--op-surface-tint)'));
+ assert.ok(css.includes("One compact contour owns the background"));
 });
 
 test("workspace uses packaged style motion and locks geometry before outgoing effect",()=>{
@@ -177,8 +177,8 @@ test("workspace uses packaged style motion and locks geometry before outgoing ef
 
 test("compact geometry and card displacement share the incoming timeline",()=>{
  assert.ok(css.includes("--zr-workspace-painted-height"));
- assert.ok(css.includes("var(--zr-center-x,0px)"));
- assert.ok(source.includes('const length=outgoing?300:480'));
+ assert.ok(css.includes("data-zr-magnetic-layer"));
+ assert.ok(source.includes('const length=outgoing?460:560'));
  assert.ok(source.includes('old.bookmarkTop-n.getBoundingClientRect().top'));
 });
 test("workspace delegates card trajectories to the shared engine and fixes the unscaled surface height",()=>{

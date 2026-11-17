@@ -1,6 +1,6 @@
-// Nocturne preview.10: early trace, independent Sine script order.
+// Nocturne preview.11: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.10"};
+  const event="assembly.script",data={version:"0.3.0-preview.11"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -62,7 +62,7 @@ try{if(typeof window!=="undefined"){
   let dead=false,playing=false,settling=false,raf=0,timer=0,settled=false,nativeReady=false,readyAt=0,holdNode=null;
   let nativeObserver=null,style=null,lateObserver=null,lateResize=null,lateFrame=0,playStart=0,finishAt=0,sheetURI=null,nativeTimer=0;
   const animations=new Map(),owned=new Map(),seen=new Set(),baseline=new Set();
-  let centerHandle=null;
+  let centerHandle=null,bookmarkHandle=null;
   const EXISTING="data-zr-startup-existing";
   const MANAGED="data-zr-startup-managed",EFFECT="data-zr-startup-effect",MOVE="data-zr-startup-move",CLIP="data-zr-startup-clip",PROGRESS="--zr-startup-progress";
   let registered=false;
@@ -91,6 +91,7 @@ try{if(typeof window!=="undefined"){
     for(const a of animations.keys())try{a.cancel();}catch{}
     animations.clear();
     centerHandle?.seal();centerHandle?.release();centerHandle=null;
+    bookmarkHandle?.seal();bookmarkHandle?.release();bookmarkHandle=null;
     window.__nocturneCenterMotion?.releasePending();
     for(const n of [...owned.keys()])restore(n);
     for(const n of seen)n.removeAttribute(MANAGED);
@@ -117,6 +118,7 @@ try{if(typeof window!=="undefined"){
     // Finish active effects from current values, not a different frame.
     root.setAttribute(PHASE,"settling");
     if(typeof centerHandle!=="undefined"){centerHandle?.seal();centerHandle?.release();centerHandle=null;}
+    if(typeof bookmarkHandle!=="undefined"){bookmarkHandle?.seal();bookmarkHandle?.release();bookmarkHandle=null;}
     lateObserver?.disconnect();lateObserver=null;lateResize?.disconnect();lateResize=null;
     if(lateFrame)window.cancelAnimationFrame(lateFrame);lateFrame=0;
     if(timer)window.clearTimeout(timer);
@@ -286,7 +288,8 @@ try{if(typeof window!=="undefined"){
       lateFrame=0;if(dead||settling)return;
       const bar=floatingBar();
       if(bar&&!seen.has(bar))openFromCenter(bar,590,440,true);
-      revealBookmarks(window.innerWidth/2,true);
+      if(!bookmarkHandle)revealBookmarks(window.innerWidth/2,true);
+      else for(const n of get("PlacesToolbarItems")?.children||[]){n.setAttribute(MANAGED,"true");seen.add(n);}
       const row=get("oneplane-tabs"),url=get("urlbar-container"),center=window.innerWidth/2;
       controls(row,url,center,true);
       // Cards inserted after the snapshot appear in their real slots.
@@ -313,13 +316,14 @@ try{if(typeof window!=="undefined"){
         const engine=window.__nocturneCenterMotion;
         const cards=[...row.querySelectorAll(".oneplane-tab,.oneplane-split-group")];
         const gated=root.hasAttribute("data-zr-center-pending");
-        const painted=!gated&&cards.some(n=>baseline.has(n));
+        const cold=window.__nocturneLayoutStartup?.initial===true;
+        const painted=!gated&&!cold&&cards.some(n=>baseline.has(n));
         // Remove per-card startup gates together, including split members.
         for(const n of cards){n.setAttribute(MANAGED,"true");seen.add(n);}
-        if(!painted)centerHandle=engine?.start(row,{owner:"startup",direction:"in",duration:Math.round(650*scale),delay:Math.round(55*scale)});
+        if(!painted)centerHandle=engine?.start(row,{owner:"startup",direction:"in",duration:Math.round(760*scale),delay:Math.round(55*scale)});
         else engine?.releasePending();
         const plus=row.querySelector(".oneplane-new-tab");if(bounds(plus,true))slide(plus,-26,0,280,390);
-        if(ir)openFromCenter(island,45,410);
+        if(ir){island.setAttribute(MANAGED,"true");seen.add(island);}
       }else{
         // Move actual native tabs instead of fading the acrylic sidebar.
         const sidebar=get("zen-tabs-wrapper")||get("TabsToolbar"),sr=bounds(sidebar,true);
@@ -331,7 +335,11 @@ try{if(typeof window!=="undefined"){
         }
       }
       controls(row,url,center);
-      revealBookmarks(center);
+      if(centerHandle&&items){
+        for(const n of items.children){n.setAttribute(MANAGED,"true");seen.add(n);}
+        bookmarkHandle=window.__nocturneCenterMotion?.bookmarks({direction:"in",duration:Math.round(500*scale),delay:Math.round(120*scale)});
+      }
+      if(!bookmarkHandle)revealBookmarks(center);
       if(floating)openFromCenter(floating,590,440);
       root.setAttribute(PHASE,"playing");
       // Places and Zen's floating input can initialize after chrome-ready.

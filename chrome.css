@@ -1494,7 +1494,7 @@
        override the important transparent default. The contour still
        owns the fade below the shelf and bookmarks. */
     #zen-appcontent-navbar-wrapper #nav-bar:has(#oneplane-tabs[data-op-overflow-row]) {
-      background:var(--op-surface-tint)!important;
+      background:transparent!important;
       background-image:none!important;
     }
     /* Persistent mode: normal flow, same UI, no fade over the page. */
@@ -2355,8 +2355,7 @@
 
 /* One shared card effect, independent of lifecycle controller. */
 :root[data-zr-center-motion] #oneplane-tabs#oneplane-tabs#oneplane-tabs#oneplane-tabs [data-zr-center-card] {
-  translate: var(--zr-center-x,0px) 0 !important;
-  opacity: var(--zr-center-alpha,1) !important;
+  opacity: 0 !important;
   transition: none !important;
   pointer-events: none !important;
 }
@@ -2377,7 +2376,7 @@
   opacity:1!important;
   --zr-workspace-ui-progress:var(--zr-workspace-progress);
 }
-:root[data-zr-center-motion="workspace"][data-zr-workspace-phase]:not([data-zr-workspace-phase="swap"]) #oneplane-tabs#oneplane-tabs#oneplane-tabs :is(.oneplane-title-island,.oneplane-new-tab) {
+:root[data-zr-center-motion="workspace"][data-zr-workspace-phase]:not([data-zr-workspace-phase="swap"]) #oneplane-tabs#oneplane-tabs#oneplane-tabs .oneplane-new-tab {
   opacity:var(--zr-workspace-ui-progress,1)!important;
   transition:none!important;
 }
@@ -2385,3 +2384,54 @@
 :root:is([data-zr-workspace-phase="out"],[data-zr-closing]) #oneplane-tabs#oneplane-tabs :is(.oneplane-tab,.oneplane-split-group,.oneplane-tab-list,.oneplane-title-island,.oneplane-new-tab) {
   transition-property:none!important;
 }
+
+/* Magnetic Fold: the isolated shadow layer is painted outside scroll clips.
+ * Keep unowned/late real cards hidden until atomic handoff. */
+:root[data-zr-center-motion] #oneplane-tabs#oneplane-tabs#oneplane-tabs#oneplane-tabs .oneplane-tab-list :is(.oneplane-tab,.oneplane-split-group) {
+  opacity:0!important;transition:none!important;pointer-events:none!important;
+}
+:root[data-zr-center-motion] #oneplane-tabs [data-zr-magnetic-layer] {
+  pointer-events:none!important;
+}
+:root[data-zr-center-handoff] :is(#zen-appcontent-navbar-wrapper#zen-appcontent-navbar-wrapper#zen-appcontent-navbar-wrapper#zen-appcontent-navbar-wrapper,#oneplane-toolbar-surface#oneplane-toolbar-surface#oneplane-toolbar-surface,#zen-appcontent-navbar-container#zen-appcontent-navbar-container#zen-appcontent-navbar-container,#nav-bar#nav-bar#nav-bar,#PersonalToolbar#PersonalToolbar#PersonalToolbar,#PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems,#oneplane-tabs#oneplane-tabs#oneplane-tabs,#tabbrowser-tabpanels#tabbrowser-tabpanels#tabbrowser-tabpanels),
+:root[data-zr-center-handoff] #oneplane-tabs#oneplane-tabs#oneplane-tabs :is(.oneplane-tab,.oneplane-split-group,.oneplane-title-island,.oneplane-tab-list,.oneplane-overflow-lane,.oneplane-new-tab,#oneplane-tab-indicator,.oneplane-overflow-slider) {
+  transition:none!important;
+}
+:root[data-zr-center-handoff] #oneplane-tabs#oneplane-tabs :is(#oneplane-tab-indicator,.oneplane-overflow-slider) {opacity:0!important;visibility:hidden!important;}
+@property --zr-fold-bookmark-progress {syntax:"<number>";inherits:false;initial-value:1;}
+:root:is([data-zr-startup-phase],[data-zr-closing]) #PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems[data-zr-fold-bookmarks] {
+  scale:calc(.08 + .92 * var(--zr-fold-bookmark-progress)) 1!important;
+  opacity:var(--zr-fold-bookmark-progress)!important;
+  transform-origin:center center!important;transition:none!important;
+}
+:root[data-zr-workspace-phase] #PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems[data-zr-workspace-motion] {
+  scale:calc(.08 + .92 * var(--zr-workspace-progress)) 1!important;
+  transform-origin:center center!important;
+}
+/* One compact contour owns the background in every phase. No independent
+ * gray nav fill or backdrop animation during the native workspace swap. */
+:root[oneplane-active="true"][zen-compact-mode="true"] #zen-appcontent-navbar-wrapper#zen-appcontent-navbar-wrapper #nav-bar#nav-bar#nav-bar {
+  background:transparent!important;background-image:none!important;backdrop-filter:none!important;
+}
+/* Native Windows captions occupy the first row, independent of the strip. */
+:root[oneplane-active="true"]:not([customizing],[inDOMFullscreen="true"],[inFullscreen="true"]) #nav-bar#nav-bar > [data-zr-native-captions] {
+  align-self:flex-start!important;align-items:center!important;
+  height:var(--op-top-row-height,52px)!important;min-height:0!important;max-height:var(--op-top-row-height,52px)!important;
+  margin-block:0!important;flex-shrink:0!important;
+}
+:root[oneplane-active="true"]:not([customizing],[inDOMFullscreen="true"],[inFullscreen="true"]) #nav-bar#nav-bar > [data-zr-native-captions] :is(.titlebar-buttonbox,.titlebar-buttonbox-container) {
+  align-self:center!important;align-items:center!important;height:var(--op-top-row-height,52px)!important;max-height:var(--op-top-row-height,52px)!important;
+}
+:root[oneplane-active="true"]:not([customizing],[inDOMFullscreen="true"],[inFullscreen="true"]) #nav-bar#nav-bar > [data-zr-native-captions] .titlebar-button {
+  align-self:center!important;max-height:var(--op-top-row-height,52px)!important;height:var(--op-top-row-height,52px)!important;
+}
+
+/* The hub stays anchored during a workspace swap, including the native
+ * asynchronous interval. Only the tab cards, plus, and bookmarks are gated. */
+:root[oneplane-active="true"][data-zr-workspace-phase="swap"] #oneplane-tabs#oneplane-tabs#oneplane-tabs#oneplane-tabs[data-ready] {
+  opacity:1!important;transition:none!important;
+}
+:root[oneplane-active="true"][data-zr-workspace-phase="swap"]:not([data-zr-fold-measuring]) #oneplane-tabs#oneplane-tabs#oneplane-tabs#oneplane-tabs :is(.oneplane-tab,.oneplane-split-group,.oneplane-new-tab,[data-zr-magnetic-layer]) {
+  opacity:0!important;transition:none!important;
+}
+:root[data-zr-center-handoff] #PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems {transition:none!important;}

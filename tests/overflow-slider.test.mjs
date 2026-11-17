@@ -26,12 +26,12 @@ test("range controls the real bottom viewport and reflects scroll",()=>{
  lane.scrollLeft=100;api.refreshOverflowSlider();assert.equal(slider.value,"250");
  lane.scrollWidth=400;api.refreshOverflowSlider();assert.equal(slider.hidden,true);
 });
-test("opaque compact backing is scoped before the root closes",()=>{
+test("compact backing uses the single contour before the root closes",()=>{
  const css=readFileSync(new URL("../src/styles/contour.css.part",import.meta.url),"utf8");
  const opaque=css.indexOf("#nav-bar:has(#oneplane-tabs[data-op-overflow-row])");
  assert.ok(opaque>css.indexOf("background: transparent !important;"));
  assert.ok(opaque<css.indexOf("/* Persistent mode:"));
- assert.ok(css.includes("background:var(--op-surface-tint)!important;"));
+ assert.match(css.slice(opaque,css.indexOf("/* Persistent mode:")),/background:\s*transparent\s*!important/);
  assert.ok(css.trimEnd().endsWith("}\n}"));
  assert.ok(css.includes("mask-image: var(--op-contour-mask"));
 });

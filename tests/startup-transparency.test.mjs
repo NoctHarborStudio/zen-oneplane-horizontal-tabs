@@ -54,5 +54,5 @@ test("startup keeps the waiting gate until targets own their resting styles",()=
  const launch=source.slice(source.indexOf("function launch("),source.indexOf("function schedule(){"));
  assert.ok(launch.indexOf('engine?.start(row')<launch.indexOf('root.setAttribute(PHASE,"playing")'));
  assert.ok(source.includes(':is(#zr-startup-specificity,[data-zr-startup-managed])'));
- assert.ok(source.includes('const painted=!gated&&cards.some(n=>baseline.has(n))'));
+ assert.ok(source.includes('const painted=!gated&&!cold&&cards.some(n=>baseline.has(n))'));
 });

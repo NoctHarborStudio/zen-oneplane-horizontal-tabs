@@ -1,17 +1,7 @@
-# Center Motion Engine — Preview 10
+# Magnetic Fold — Preview 11
 
-## Ownership and lifecycle
+The shared engine ports the Motion Lab B curve. Given a card center x, actual Home anchor cx, and progress p (0 docked, 1 resting), the remaining horizontal distance is |x-cx| times a smoothstep compression factor. Width scales with the same factor; nearby cards disappear first. The lower row lifts toward Home and has a 12% closing delay. Opening exactly reverses the closing curve. Threshold distances are normalized to actual card height.
 
-Layout installs one window-local engine before projecting cards. Startup, explicit native close, and workspace transactions call the same `start(row,{owner,direction,duration,delay})`. The handle owns only its two custom properties and marker per card; `seal()` preserves the terminal frame, `release()` restores styles exactly once. Startup gates before the first projection, releases when effects own cards, and fails open after 1800 ms. A late already-painted strip is not sent backward to the center. Close retains the hidden endpoint through the native close; cancelled close restores. Workspace swaps only under its existing hidden gate. Native navigation/selection remains Zen-owned.
+The engine snapshots visible mirror card geometry once and paints inert chrome-only copies in a closed shadow tree within the row. This prevents clipping by scroll lanes and keeps native tabs, scroll positions and projection queries unchanged. No page images, page DOM, or native tabs are cloned. Copies use computed visual styles and are removed on completion or cancellation. Real mirror cards stay in flow and hidden during playback. A two-frame handoff guard suppresses native transition restarts. The workspace controller keeps the Home anchor stable and the compact contour is the sole background. Bookmarks use horizontal compression; ordinary tab selection keeps the page opaque and stationary, as in Lab B.
 
-## Geometry and choreography
-
-Snapshot visible real cards and split groups, group by lane and side of Home, sort outermost first. For each side use the nearest card's inner edge as anchor. A card's outward travel starts after the preceding card has cleared its width plus the resting gap. A single global travel coordinate and easing generates monotonic keyframes for distance and opacity; closing reverses those keyframes. No animation-frame layout queries, clones, or per-card timers. Offscreen cards stay in their native scroll lanes. CSS disables competing transitions during the transaction and hides transient indicators/scrollbars. Freeze centering during owned motion; update after release.
-
-Workspace geometry is captured under the hidden swap gate before starting any surface transforms. Height, bookmark offset and surface scale use the same incoming duration; measure the untransformed CSS height, never a previously scaled rectangle.
-
-## Selection and diagnostics
-
-Ordinary TabSelect remains immediate. Animate the selected browser chrome deck only (short directional glide/fade, no screenshots, no content DOM). Skip during startup/workspace/close, reduced motion, split, and native customization. Rapid selections replace the prior effect.
-
-Diagnostics retains a single bounded profile file with per-window sessions; serialized writes share a process lock. Per-session dump remains readable. Store changed metrics rather than complete duplicate snapshots; skip private windows. No URL, title, content, downloads name or search text. Visual confirmation in real Zen remains required.
+Timings: startup 760 ms with 55 ms delay (scaled by configured duration); close 620 ms, bookmarks 650 ms, final 110 ms sealed dwell; workspace 460 ms out / 560 ms in, plus native swap and bounded settle. Native lifecycle, reduced motion and hot-reload protections remain. Startup trace markers are retained separately. The actual Gecko/Zen visual behavior requires in-browser validation.

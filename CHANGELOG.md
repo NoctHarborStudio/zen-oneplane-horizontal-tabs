@@ -1,3 +1,11 @@
+## 0.3.0-preview.11 — Magnetic Fold
+
+- Port the selected Motion Lab B formula to the shared center engine. Cards compress around the actual Home anchor; lower cards move vertically toward it. Opening reverses closing.
+- Isolated, inert chrome-card proxies avoid lane clipping without modifying native scroll positions or tab order. Hold native transitions off during handoff.
+- Squeeze bookmarks toward the center. Keep the compact contour as the only shelf backing, and keep Home anchored during workspace swap.
+- Restore page-deck opacity and position to native values (Lab B). Close seals the endpoint before a 110 ms final dwell.
+- Constrain Windows caption controls to the first row. Retain startup events separately from the bounded diagnostic ring.
+
 ## 0.3.0-preview.10 — Publication metadata
 
 - Publish the complete shared Center Motion implementation from preview.9 with a strictly newer Sine version and timestamp. No additional runtime behavior changes.

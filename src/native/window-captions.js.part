@@ -7,7 +7,7 @@
     captionHome?.remove();
     captionHome=document.createComment("OnePlane native captions");
     node.before(captionHome);
-    captionNode=node;
+    captionNode=node;node.setAttribute("data-zr-native-captions","true");
     if(typeof navbar.moveBefore==="function")navbar.moveBefore(node,null);
     else navbar.append(node);
   }
@@ -17,6 +17,7 @@
       if(typeof parent.moveBefore==="function")parent.moveBefore(captionNode,captionHome);
       else parent.insertBefore(captionNode,captionHome);
     }
+    captionNode?.removeAttribute("data-zr-native-captions");
     captionHome?.remove();
     captionHome=captionNode=null;
   }

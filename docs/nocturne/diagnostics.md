@@ -1,4 +1,4 @@
-# Nocturne preview.10 diagnostics
+# Nocturne preview.11 diagnostics
 
 Recording remains enabled by default for this preview. Set `zen.nocturne.diagnostics.enabled` to false in about:config to disable. No network upload.
 
@@ -19,3 +19,5 @@ Schema 2: sessions contain version, window, dropped, updated, events. Sample met
 - drag.*: native drag lifecycle.
 
 Logs contain no page URL, title, search text, downloads filename or page contents. Frame measurements are diagnostic, not an absolute FPS benchmark.
+
+Preview 11 adds a bounded `startup` array (up to 100 lifecycle events) per session, separate from the rolling event ring. `center.motion` reports the Magnetic Fold anchor and lower-row count. Caption buttons and handoff state are included in samples.

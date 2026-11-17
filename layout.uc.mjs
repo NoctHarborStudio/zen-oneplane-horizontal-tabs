@@ -1,7 +1,7 @@
-/* Nocturne preview.10 diagnostic recorder — read-only chrome telemetry.
+/* Nocturne preview.11 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.10",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.11",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -15,6 +15,7 @@
   if(!store)store={tail:Promise.resolve(),sessions:null};
   win[STORE]=store;
   let previousMetrics={},sampleIndex=0;
+  const startupEvents=[];
   const changedAttrs=new WeakMap();
   let seq=0,dropped=0,dead=false,timer=0,writeTimer=0,writing=null,dirty=false,until=0,raf=0,frameLast=0,gaps=[],dir=null,ioError=false,observer=null,nativeContainer=null;
   const now=()=>win.performance.now(),get=id=>doc.getElementById(id);
@@ -31,7 +32,7 @@
     if(typeof v!=="object"||Object.getPrototypeOf(v)!==Object.prototype&&Object.getPrototypeOf(v)!==null)return null;
     return Object.fromEntries(Object.entries(v).slice(0,45).map(([k,x])=>[k,safe(x,d+1)]));
   }
-  function exportData(){return {schema:2,version:VERSION,window:id,dropped,events:entries.slice()};}
+  function exportData(){return {schema:2,version:VERSION,window:id,dropped,startup:startupEvents.slice(),events:entries.slice()};}
   function dump(){return JSON.stringify(exportData(),null,2);}
   async function persist(){
     if(privateWindow())return false;
@@ -84,6 +85,7 @@
       if(interval&&last.has(key)&&t-last.get(key)<interval)return;
       last.set(key,t);
       const item={n:++seq,t:round(t),event,data:safe(typeof detail==="function"?detail():detail)};
+      if(startupEvents.length<100&&(/^(assembly\.|layout\.)/.test(event)||event==="center.motion"&&item.data?.owner==="startup"))startupEvents.push(item);
       entries.push(item);if(entries.length>1600){entries.shift();dropped++;}
       dirty=true;
       if(event!=="sample")win.console.info("[Nocturne diag "+id+"] "+JSON.stringify(item));
@@ -91,9 +93,9 @@
       if(options.sample)arm(options.sample===true?1600:options.sample);
     }catch{}
   }
-  const rootAttrs=["data-zr-center-motion","data-zr-center-pending","oneplane-active","data-op-startup-ready","data-zr-startup-phase","data-zr-closing","data-zr-workspace-phase","data-op-bookmark-wave","zen-compact-mode","customizing","inDOMFullscreen","inFullscreen"];
+  const rootAttrs=["data-zr-center-handoff","data-zr-center-motion","data-zr-center-pending","oneplane-active","data-op-startup-ready","data-zr-startup-phase","data-zr-closing","data-zr-workspace-phase","data-op-bookmark-wave","zen-compact-mode","customizing","inDOMFullscreen","inFullscreen"];
   const attrs=[...rootAttrs,"data-op-panel-open","oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold","oneplane-home-hold","oneplane-workspace-hold","oneplane-download-hold","zen-has-hover","has-popup-menu","zen-compact-mode-active","data-ready","data-op-overflow-row","data-op-adaptive-compact","data-op-dragging","data-op-inline-drag","data-op-lane-drag","data-op-group-pull","data-op-live-drag","data-op-drag-commit","data-op-url-phase","data-op-home-open","data-op-lane-ghost","data-op-detached","data-op-pulling","data-op-drag-follow","data-op-reinsert","data-zr-bm-stable-contour","data-zr-workspace-geometry","data-zr-workspace-motion","data-zr-center-card","data-zr-workspace-height-motion","data-zr-workspace-surface","data-zr-workspace-page","data-zr-home-covered","data-zr-startup-effect","data-zr-close-effect","hidden","collapsed","open","focused"];
-  const targets=["zr-page-progress","oneplane-tab-indicator","oneplane-overflow-slider","zen-appcontent-navbar-wrapper","zen-appcontent-navbar-container","oneplane-toolbar-surface","nav-bar","oneplane-tabs","oneplane-overflow-tabs","PersonalToolbar","PlacesToolbarItems","urlbar-container","urlbar","tabbrowser-tabpanels","zen-shared-home","zr-download-indicator"];
+  const targets=["titlebar-buttonbox","titlebar-max","titlebar-restore","titlebar-close","zr-page-progress","oneplane-tab-indicator","oneplane-overflow-slider","zen-appcontent-navbar-wrapper","zen-appcontent-navbar-container","oneplane-toolbar-surface","nav-bar","oneplane-tabs","oneplane-overflow-tabs","PersonalToolbar","PlacesToolbarItems","urlbar-container","urlbar","tabbrowser-tabpanels","zen-shared-home","zr-download-indicator"];
   function attrState(n,keys=attrs){const out={};for(const k of keys)if(n.hasAttribute(k))out[k]=n.getAttribute(k)||true;return out;}
   function observeTargets(){
     if(!observer)return;
@@ -188,101 +190,137 @@
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const MARK="data-zr-center-card",OWNER="data-zr-center-motion",PENDING="data-zr-center-pending";
-  const X="--zr-center-x",A="--zr-center-alpha";
-  const ease="cubic-bezier(.25,.55,.25,1)";
+  const B="--zr-fold-bookmark-progress";
+  try{win.CSS.registerProperty({name:B,syntax:"<number>",inherits:false,initialValue:"1"});}catch{}
   let active=null,pendingTimer=0,dead=false;
-  let registered=true;
-  for(const name of [X,A])try{win.CSS.registerProperty({name,syntax:name===X?"<length>":"<number>",inherits:false,initialValue:name===X?"0px":"1"});}
-  catch(e){if(e.name!=="InvalidModificationError")registered=false;}
-  // Pure planner: near edges measured outward from a common anchor.
-  // Outer cards leave first. Later cards wait until the preceding card
-  // has cleared their entire width plus the actual resting gap.
-  function planLane(cards,center){
-    const result=[];
-    for(const side of [-1,1]){
-      const group=cards.filter(c=>(c.left+c.right)/2<center?side===-1:side===1)
-        .sort((a,b)=>side===1?b.left-a.left:a.right-b.right);
-      if(!group.length)continue;
-      const inner=group.at(-1),anchor=side===1?inner.left:inner.right;
-      let start=0,previous=null;
-      for(const c of group){
-        const width=c.right-c.left,near=Math.max(0,side*(side===1?c.left-anchor:c.right-anchor));
-        if(previous){
-          const gap=Math.max(0,Math.min(3,previous.near-near-width));
-          start+=width+gap;
-        }
-        const item={...c,side,near,start,dx:-side*near};
-        result.push(item);previous=item;
-      }
+  // Magnetic Fold, ported from Motion Lab B. p=0 docked, p=1 resting.
+  const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+  const smooth=p=>{p=clamp(p);return p*p*(3-2*p);};
+  function magnetState(c,p){
+    const q=1-p,d=Math.abs(c.x-c.cx),unit=c.unit,lower=c.lower;
+    if(lower&&d<12*unit){
+      const f=1-smooth(q/.12);
+      return {x:(c.cx-c.x)*(1-f),y:(c.cy-c.y)*(1-f),s:Math.max(.02,f),a:f*c.opacity};
     }
-    return result;
+    const f=1-smooth((q-(lower?.12:0))/(lower?.88:1));
+    const remaining=d*f,threshold=Math.min(d,(lower?26:65)*unit);
+    const dock=smooth(remaining/Math.max(.001,threshold));
+    const alpha=d<.001?f:smooth(remaining/Math.max(.001,Math.min(d,20*unit)));
+    const shrink=d<.001?f:Math.min(1,remaining/Math.max(.001,Math.min(d,(lower?26:48)*unit)));
+    return {x:(c.cx-c.x)*(1-f),y:lower?(c.cy-c.y)*(1-dock):0,s:clamp(f*shrink,.02,1),a:alpha*c.opacity};
   }
-  function keyframes(item,total,reverse=false){
-    const start=item.start/total,end=(item.start+item.near)/total;
-    const fade=Math.min(1,(item.start+Math.min(24,Math.max(8,item.near)))/total);
-    const points=[...new Set([0,start,end,fade,1])].sort((a,b)=>a-b);
-    const frames=points.map(offset=>{
-      const travel=Math.max(0,Math.min(item.near,offset*total-item.start));
-      const alpha=Math.max(0,Math.min(1,(offset-start)/Math.max(.00001,fade-start)));
-      return {offset,[X]:(item.dx+item.side*travel)+"px",[A]:String(alpha*item.opacity)};
+  function keyframes(c,reverse=false){
+    // Sample the shared continuous curve once, not during playback. Linear
+    // interpolation between samples preserves the Lab timing and reversal.
+    return Array.from({length:41},(_,i)=>{
+      const offset=i/40,p=(reverse?40-i:i)/40,f=magnetState(c,p);
+      return {offset,transform:"translate("+f.x+"px,"+f.y+"px) scale("+f.s+")",opacity:f.a};
     });
-    return reverse?frames.reverse().map(f=>({...f,offset:1-f.offset})):frames;
   }
   function collect(row){
     const list=row?.querySelector(".oneplane-tab-list");
     if(!list)return [];
     const rr=row.getBoundingClientRect(),ir=row.querySelector(".oneplane-title-island")?.getBoundingClientRect();
-    const center=ir?.width>1?ir.left+ir.width/2:rr.left+rr.width/2;
-    const groups=new Map();
+    const cx=ir?.width>1?ir.left+ir.width/2:rr.left+rr.width/2;
+    const candidates=[];
     for(const n of list.querySelectorAll(".oneplane-tab,.oneplane-split-group")){
       if(n.classList.contains("oneplane-tab")&&n.closest(".oneplane-split-group"))continue;
       const r=n.getBoundingClientRect(),s=win.getComputedStyle(n);
       if(r.width<2||r.height<2||s.visibility==="hidden"||s.display==="none"||!Number(s.opacity))continue;
-      const lane=n.closest(".oneplane-island-lane")||list,lr=lane.getBoundingClientRect();
+      const lane=n.closest(".oneplane-island-lane")||n.closest("#oneplane-overflow-tabs")||list,lr=lane.getBoundingClientRect();
       const clip=lr.width>1?lr:list.getBoundingClientRect();
-      if(r.right<=clip.left||r.left>=clip.right)continue;
-      // Native nonzero translation belongs to a different interaction.
-      if(s.translate!=="none"&&!/^0(?:px|%)?(?: 0(?:px|%)?){0,2}$/.test(s.translate||"0px"))continue;
-      if(!groups.has(lane))groups.set(lane,[]);
-      groups.get(lane).push({n,left:r.left,right:r.right,opacity:Number(s.opacity)});
+      if(r.right<=clip.left||r.left>=clip.right||r.bottom<=clip.top||r.top>=clip.bottom)continue;
+      candidates.push({n,r,opacity:Number(s.opacity)});
     }
-    return [...groups.values()].flatMap(cards=>planLane(cards,center));
+    const cy=ir?.height>1?ir.top+ir.height/2:Math.min(...candidates.map(c=>c.r.top+c.r.height/2));
+    const unit=Math.max(.7,Math.min(2, (Math.min(...candidates.map(c=>c.r.height))||30)/20));
+    return candidates.map(c=>({...c,x:c.r.left+c.r.width/2,y:c.r.top+c.r.height/2,cx,cy,unit,lower:c.r.top+c.r.height/2>cy+12*unit}));
+  }
+  // Only chrome mirror cards are copied. A shadow tree isolates them from
+  // projection queries and lane scroll clips. No page snapshots or native
+  // tabs are copied, and the proxies cannot receive focus or pointer input.
+  const paintProps=["display","position","inset","top","right","bottom","left","box-sizing","width","height","min-width","max-width","min-height","max-height","flex","flex-direction","flex-wrap","align-items","align-self","justify-content","place-items","gap","padding","margin","overflow","border","border-radius","box-shadow","background","color","font","font-family","font-size","font-weight","font-style","line-height","white-space","text-overflow","text-align","object-fit","fill","stroke","stroke-width","opacity","visibility","filter","transform","translate","scale","grid-template-columns","grid-template-rows"];
+  function proxy(c,layer,rr){
+    const clone=c.n.cloneNode(true);
+    const originals=[c.n,...c.n.querySelectorAll("*")],copies=[clone,...clone.querySelectorAll("*")];
+    for(let i=0;i<copies.length;i++){
+      const n=copies[i],style=win.getComputedStyle(originals[i]);
+      for(const attr of [...n.attributes])if(attr.name==="id"||attr.name==="tabindex"||attr.name.startsWith("on"))n.removeAttribute(attr.name);
+      for(const k of paintProps){const v=style.getPropertyValue(k);if(v)n.style.setProperty(k,v);}
+      n.style.setProperty("transition","none");n.style.setProperty("animation","none");n.style.setProperty("pointer-events","none");
+    }
+    const outer=document.createElementNS("http://www.w3.org/1999/xhtml","div");
+    Object.assign(outer.style,{position:"absolute",left:(c.r.left-rr.left)+"px",top:(c.r.top-rr.top)+"px",width:c.r.width+"px",height:c.r.height+"px",transformOrigin:"center",pointerEvents:"none"});
+    Object.assign(clone.style,{position:"relative",inset:"auto",margin:"0",width:"100%",height:"100%",minWidth:"0",maxWidth:"none",minHeight:"0",maxHeight:"none",transform:"none",translate:"none",scale:"none",opacity:"1"});
+    outer.append(clone);layer.append(outer);return outer;
   }
   function releasePending(){if(pendingTimer)win.clearTimeout(pendingTimer);pendingTimer=0;root.removeAttribute(PENDING);}
+  let handoffFrame=0,handoffFrame2=0;
+  function finishHandoff(){
+    if(handoffFrame)win.cancelAnimationFrame(handoffFrame);
+    if(handoffFrame2)win.cancelAnimationFrame(handoffFrame2);
+    handoffFrame=handoffFrame2=0;root.removeAttribute("data-zr-center-handoff");
+  }
+  function holdHandoff(){
+    finishHandoff();root.setAttribute("data-zr-center-handoff","true");
+    handoffFrame=win.requestAnimationFrame(()=>{handoffFrame=0;handoffFrame2=win.requestAnimationFrame(()=>{handoffFrame2=0;root.removeAttribute("data-zr-center-handoff");});});
+  }
   function start(row,{owner,direction="in",duration=520,delay=0}={}){
-    stopSelection();active?.release();releasePending();
-    if(dead||!registered||!row)return null;
-    const cards=collect(row);
-    if(!cards.length)return null;
-    const total=Math.max(24,...cards.map(c=>c.start+Math.max(c.near,24))),effects=[],saved=[];
+    stopSelection();active?.release();finishHandoff();releasePending();
+    if(dead||!row)return null;
+    const measuring=root.getAttribute("data-zr-workspace-phase")==="swap";
+    if(measuring)root.setAttribute("data-zr-fold-measuring","true");
+    let cards;try{cards=collect(row);}catch{root.removeAttribute("data-zr-fold-measuring");return null;}
+    if(!cards.length){root.removeAttribute("data-zr-fold-measuring");return null;}
+    const rr=row.getBoundingClientRect(),host=document.createElementNS("http://www.w3.org/1999/xhtml","div");
+    host.setAttribute("data-zr-magnetic-layer","true");host.setAttribute("aria-hidden","true");host.inert=true;
+    Object.assign(host.style,{position:"absolute",inset:"0",zIndex:"14",pointerEvents:"none",overflow:"visible"});
+    let layer;try{layer=host.attachShadow({mode:"closed"});}catch{root.removeAttribute("data-zr-fold-measuring");return null;}const effects=[],saved=[];
+    // Measure and build all proxies before hiding any real card.
+    try{
+      for(const c of cards){const n=proxy(c,layer,rr),frames=keyframes(c,direction==="out");effects.push({n,frames});}
+    }catch(error){win.__nocturneTrace?.("center.motion.error",{stage:"proxy",name:error?.name});return null;}
+    finally{root.removeAttribute("data-zr-fold-measuring");}
     root.setAttribute(OWNER,owner);
-    for(const c of cards){
-      const n=c.n,old=[X,A].map(k=>[k,n.style.getPropertyValue(k),n.style.getPropertyPriority(k)]);
-      saved.push({n,old,mark:n.getAttribute(MARK)});
-      const frames=keyframes(c,total,direction==="out");
-      n.style.setProperty(X,frames[0][X]);n.style.setProperty(A,frames[0][A]);n.setAttribute(MARK,"true");
-      try{const a=n.animate(frames,{duration,delay,easing:ease,fill:"both"});effects.push({a,n,frames});}
-      catch{n.style.setProperty(X,frames.at(-1)[X]);n.style.setProperty(A,frames.at(-1)[A]);}
+    row.append(host);
+    for(const c of cards){saved.push({n:c.n,mark:c.n.getAttribute(MARK)});c.n.setAttribute(MARK,"true");}
+    const running=[];
+    for(const {n,frames} of effects){
+      n.style.transform=frames[0].transform;n.style.opacity=String(frames[0].opacity);
+      try{running.push(n.animate(frames,{duration,delay,easing:"linear",fill:"both"}));}
+      catch{n.style.transform=frames.at(-1).transform;n.style.opacity=String(frames.at(-1).opacity);}
     }
     let released=false;
-    const handle={count:cards.length,finished:Promise.all(effects.map(({a})=>a.finished.catch(()=>{}))),
-      seal(){for(const {a} of effects)try{a.finish();}catch{}},
+    const handle={count:cards.length,finished:Promise.all(running.map(a=>a.finished.catch(()=>{}))),
+      seal(){for(const a of running)try{a.finish();}catch{}},
       release(){
-        if(released)return;released=true;
-        for(const {a} of effects)try{a.cancel();}catch{}
-        for(const {n,old,mark} of saved){
-          for(const [k,v,p] of old){if(v)n.style.setProperty(k,v,p);else n.style.removeProperty(k);}
-          if(mark===null)n.removeAttribute(MARK);else n.setAttribute(MARK,mark);
-        }
+        if(released)return;released=true;holdHandoff();
+        for(const a of running)try{a.cancel();}catch{}
+        host.remove();
+        for(const {n,mark} of saved){if(mark===null)n.removeAttribute(MARK);else n.setAttribute(MARK,mark);}
         if(active===handle){active=null;root.removeAttribute(OWNER);if(!win.closed)win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd"));}
       }};
     active=handle;
-    win.__nocturneTrace?.("center.motion",()=>({owner,direction,count:cards.length,duration,travel:total}),{sample:duration+250});
+    win.__nocturneTrace?.("center.motion",()=>({owner,direction,count:cards.length,duration,mode:"magnetic-fold",center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length}),{sample:duration+250});
     return handle;
+  }
+  // Bookmarks use the Lab's center squeeze, not individual vertical slides.
+  function bookmarks({direction="in",duration=520,delay=0}={}){
+    const n=document.getElementById("PlacesToolbarItems");
+    if(!n||!n.getBoundingClientRect().width)return null;
+    const frames=Array.from({length:21},(_,i)=>{const p=smooth(direction==="out"?1-i/20:i/20);return {offset:i/20,[B]:String(p)};});
+    const old=n.style.getPropertyValue(B),priority=n.style.getPropertyPriority(B),mark=n.getAttribute("data-zr-fold-bookmarks");
+    n.style.setProperty(B,frames[0][B]);n.setAttribute("data-zr-fold-bookmarks","true");
+    let a=null,released=false;
+    function release(){if(released)return;released=true;try{a?.cancel();}catch{}if(old)n.style.setProperty(B,old,priority);else n.style.removeProperty(B);if(mark===null)n.removeAttribute("data-zr-fold-bookmarks");else n.setAttribute("data-zr-fold-bookmarks",mark);}
+    try{
+      a=n.animate(frames,{duration,delay,easing:"linear",fill:"both"});
+      return {finished:a.finished.catch(()=>{}),seal(){try{a.finish();}catch{}},release};
+    }catch{release();return null;}
   }
   function dispose(){
     if(dead)return;dead=true;releasePending();stopSelection();selectionContainer?.removeEventListener("TabSelect",onSelect);win.removeEventListener("OnePlane:StartupState",bindSelection);
-    if(!root.hasAttribute("data-zr-closing"))active?.release();
+    if(!root.hasAttribute("data-zr-closing"))active?.release();finishHandoff();
     if(win[KEY]===api)delete win[KEY];
   }
   // Ordinary selection uses the same ownership boundary but never delays
@@ -300,12 +338,8 @@
     if(!deck||deck.hasAttribute("data-zr-home-covered")||deck.querySelector(".browserSidebarContainer[zen-split='true']"))return;
     const tabs=Array.from(browser.visibleTabs||browser.tabs||[]),from=tabs.indexOf(previous),to=tabs.indexOf(next);
     if(from<0||to<0||from===to)return;
-    const dx=to>from?10:-10;
-    try{
-      const a=deck.animate([{opacity:.72,translate:dx+"px 0"},{opacity:1,translate:"0px 0px"}],{duration:180,easing:ease});
-      selection=a;a.finished.then(()=>{if(selection===a)selection=null;},()=>{});
-      win.__nocturneTrace?.("selection.motion",{direction:Math.sign(dx),duration:180},{sample:400});
-    }catch{}
+    // Lab B: preserve opaque, stationary content. Native card indicator owns selection.
+    win.__nocturneTrace?.("selection.native",{direction:to>from?1:-1});
   }
   function bindSelection(){
     const tc=win.gBrowser?.tabContainer;if(!tc||tc===selectionContainer)return;
@@ -314,12 +348,12 @@
   }
   win.addEventListener("OnePlane:StartupState",bindSelection);
   bindSelection();
-  const api={start,releasePending,dispose};win[KEY]=api;
+  const api={start,bookmarks,releasePending,dispose};win[KEY]=api;
   // The layout entrypoint runs before its own projection. Gate only a
   // genuinely new window, never a Sine reload. Fail open on missing Assembly.
   try{
-    if(!win.__nocturneLayoutStartup&&win.performance.now()<1800&&Services.prefs.getBoolPref("zen.refined.startup.animation",true)&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches){
-      root.setAttribute(PENDING,"true");pendingTimer=win.setTimeout(releasePending,1800);
+    if(!win.__nocturneLayoutStartup&&win.performance.now()<3500&&Services.prefs.getBoolPref("zen.refined.startup.animation",true)&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches){
+      root.setAttribute(PENDING,"true");pendingTimer=win.setTimeout(releasePending,6500);
     }
   }catch{}
   win.addUnloadListener(dispose);
@@ -2589,7 +2623,7 @@ function installTabStrip() {
     captionHome?.remove();
     captionHome=document.createComment("OnePlane native captions");
     node.before(captionHome);
-    captionNode=node;
+    captionNode=node;node.setAttribute("data-zr-native-captions","true");
     if(typeof navbar.moveBefore==="function")navbar.moveBefore(node,null);
     else navbar.append(node);
   }
@@ -2599,6 +2633,7 @@ function installTabStrip() {
       if(typeof parent.moveBefore==="function")parent.moveBefore(captionNode,captionHome);
       else parent.insertBefore(captionNode,captionHome);
     }
+    captionNode?.removeAttribute("data-zr-native-captions");
     captionHome?.remove();
     captionHome=captionNode=null;
   }
