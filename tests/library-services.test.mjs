@@ -137,3 +137,21 @@ test("legacy pending barrier survives a replacement generation that never starte
  finish();await pending;await Promise.resolve();
  assert.equal(b.lease.barrier,null);
 });
+
+test("disposed pre-attach loadList cannot block or attach after replacement",async()=>{
+ const lease={release:null},views=new Set();let entered,resolve;
+ const entry=new Promise(r=>entered=r),waiting=new Promise(r=>resolve=r);
+ const list={addView(v){views.add(v);},removeView(v){views.delete(v);}};
+ const a=createDownloadsService({lease,loadList:()=>{entered();return waiting;}});
+ const old=a.start();const rejected=assert.rejects(old,/disposed/);await entry;
+ assert.equal(await a.dispose(),true);assert.equal(lease.release,null);
+ const b=createDownloadsService({lease,loadList:async()=>list});await b.start();
+ assert.equal(views.size,1);resolve(list);await rejected;
+ assert.equal(views.size,1);assert.equal(lease.release,b.dispose);await b.dispose();
+});
+test("disposal waiting on an inherited barrier does not require the barrier to settle",async()=>{
+ let finish;const barrier=new Promise(r=>finish=r),lease={release:null};let loads=0;
+ const a=createDownloadsService({lease,barrier,loadList:()=>{loads++;}});
+ const p=a.start(),rejected=assert.rejects(p,/disposed/);
+ assert.equal(await a.dispose(),true);finish();await rejected;assert.equal(loads,0);
+});

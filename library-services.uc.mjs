@@ -226,8 +226,12 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
     function dispose(){
       if(detaching)return detaching;
       dead=true;ready=false;accepting=false;listeners.clear();nativeListeners.clear();records.clear();byId.clear();
-      // Finish a pending acquisition before removing the exact native view.
-      // Failed removal retains its handle and lease for a later explicit retry.
+      // A generation awaiting only a barrier or loadList owns no native
+      // view. Its late continuation checks dead before addView. Do not make
+      // a replacement wait for a read that can no longer attach anything.
+      if(!source){releaseLease();return Promise.resolve(true);}
+      // Once addView has begun, finish it before removing the exact view.
+      // Failed removal retains its handle and lease for explicit retry.
       detaching=(async()=>{try{await pending;}catch{}return detach();})().finally(()=>{detaching=null;});
       return detaching;
     }
@@ -304,7 +308,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   const trace=(event,data)=>{try{if(win.__nocturneTrace)win.__nocturneTrace(event,data,{flush:true});else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,data,t:win.performance?.now?.()??0});}}catch{}};
-  trace("library.services.script",{version:"0.3.0-preview.56"});
+  trace("library.services.script",{version:"0.3.0-preview.57"});
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
   const BARRIER="__nocturneDownloadsDisposal",MEDIA_BARRIER="__nocturneMediaDisposal";
   const previous=win[KEY],previousClosing=previous?.dispose?.(),existing=win[BARRIER];

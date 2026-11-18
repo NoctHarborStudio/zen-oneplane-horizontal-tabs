@@ -41,7 +41,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.56",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.57",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -4818,13 +4818,29 @@ function installTabStrip() {
     if(typeof nativeSwitch!=="function")return ()=>{};
     const helper=ChromeUtils.importESModule("resource:///modules/URILoadingHelper.sys.mjs").URILoadingHelper;
     const scopeKey=Symbol.for("oneplane.workspace-uri-getter");
+    const transactionKey=Symbol.for("oneplane.workspace-uri-transaction");
+    const busy=()=>helper[transactionKey]?.live===true;
     const blocked=Symbol("reentrant-uri-lookup");
     let released=false;
     const trace=(event,data)=>{try{window.__nocturneTrace?.(event,data,{flush:true});}catch{}};
     const active=()=>!released&&root.hasAttribute("oneplane-active")&&
       window.gZenWorkspaces?.workspaceEnabled&&!!window.gZenWorkspaces.activeWorkspace;
     function withScope(run,split=null){
-      if(!active())return run();
+      if(busy())return blocked;
+      if(!active())return blocked;
+      const transaction={live:true};
+      // The native helper is shared across windows. Lock before touching
+      // the first manager, including descriptor acquisition and rollback.
+      try{Object.defineProperty(helper,transactionKey,{configurable:true,value:transaction});}
+      catch{return undefined;}
+      try{return scopedLookup(run,split);}
+      finally{
+        transaction.live=false;
+        try{if(helper[transactionKey]===transaction&&!Reflect.deleteProperty(helper,transactionKey))throw Error("URI transaction release failed");}
+        catch{trace("hub.uri.transaction.release",{failed:true});}
+      }
+    }
+    function scopedLookup(run,split=null){
       const restores=[];
       let phase="acquire";
       function restoreAll(){
@@ -4880,6 +4896,7 @@ function installTabStrip() {
           restores.push(entry);
           Object.defineProperty(manager,"allUsedBrowsers",{configurable:true,enumerable:descriptor?.enumerable??false,get:getter});
         }
+        if(!active()){phase="cancelled";return blocked;}
         phase="run";
       }catch(error){
         console.warn("[OnePlane] Could not scope workspace URI lookup:",error);
@@ -4900,9 +4917,10 @@ function installTabStrip() {
       helper.openTrustedLinkIn(window,spec,"tab",options);return false;
     }
     function scopedSwitch(uri,openNew,params={},context=null,split=null){
+      if(busy())return false;
       if(!active())return nativeSwitch.apply(this,arguments);
       const result=withScope(()=>nativeSwitch.call(this,uri,openNew,{...params},context,split),split);
-      if(result===blocked)return false;
+      if(result===blocked||result===undefined&&!active())return false;
       return result===undefined?fallback(uri,openNew,params,context):result;
     }
     window.switchToTabHavingURI=scopedSwitch;
@@ -4917,6 +4935,7 @@ function installTabStrip() {
         if(typeof original!=="function")throw Error("URL bar switch API unavailable");
         const clients=new Map();
         const wrapper=function(data){
+          if(busy())return;
           const client=clients.get(this.browserWindow);
           return client?client(this,data,original):original.call(this,data);
         };
@@ -4929,23 +4948,24 @@ function installTabStrip() {
         }
       }
       const client=(controller,data,original)=>{
+        if(busy())return;
         if(!active()||!data?.url)return original.call(controller,data);
         const context=data.userContextId??0;
-        const userContext=context===-1?null:context;
-        const matches=b=>{
-          try{return b.currentURI.spec===data.url&&(userContext===null||String(b.getAttribute("usercontextid")||0)===String(userContext));}catch{return false;}
-        };
-        const manager=window.gZenWorkspaces;
-        // The outer scope's list may be filtered for a different window.
-        // Suppress recursive reuse instead of dispatching another load.
-        if(Object.getOwnPropertyDescriptor(manager,"allUsedBrowsers")?.get?.[scopeKey]?.live)return;
-        const local=manager.allUsedBrowsers.some(b=>matches(b)&&hubWorkspaceBrowserEligible(browser.getTabForBrowser(b),manager.activeWorkspace));
-        if(local){
-          const result=withScope(()=>{original.call(controller,data);return true;},browser.selectedTab?.splitview);
-          if(result===blocked||result===true)return;
+        // Firefox 160 UrlbarShared.isNonPrivateUserContextId uses != -1.
+        const userContext=context==-1?null:context;
+        const previous=browser.selectedTab,split=previous?.splitview;
+        // Use the same native URI matcher exactly once, without its
+        // open-new or stale-provider-unregister branch. A local miss is not
+        // evidence that a real tab in another workspace ceased to exist.
+        const result=withScope(()=>typeof helper.switchToTabHavingURI==="function"?
+          helper.switchToTabHavingURI(window,data.url,false,{},userContext,split):undefined,split);
+        if(result===blocked||!active())return;
+        if(result===true){
+          if(!split&&previous?.isEmpty&&previous.isConnected!==false&&browser.selectedTab!==previous)browser.removeTab(previous);
+        }else{
+          const params=userContext===null?{}:{userContextId:userContext};
+          helper.openTrustedLinkIn(window,data.url,"tab",params);
         }
-        const params=userContext===null?{}:{userContextId:userContext};
-        helper.openTrustedLinkIn(window,data.url,"tab",params);
         if(!data.heuristic)controller.addToInputHistory?.(data.url,data.searchString);
       };
       registry.clients.set(window,client);

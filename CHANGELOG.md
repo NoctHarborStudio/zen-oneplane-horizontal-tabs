@@ -1,3 +1,10 @@
+## 0.3.0-preview.57 — Native resource cleanup self-review
+
+- Release an unacquired Downloads lease immediately when disposal wins before addView. Late list resolution cannot attach to a dead generation; pending native addView still serializes removal.
+- Guard Hub URI transactions across windows before acquiring the first temporary getter, including rollback, cancellation and nested unregistered URL bar clients.
+- Use one native URI lookup with open-new disabled for the scoped URL bar path. Avoid a false-result provider unregister and duplicate opens; retain successful native empty-tab cleanup and adaptive history. A scoped miss uses the existing local-open fallback.
+- Eight new fault-injection fixtures. No new prefs; native validation pending.
+
 ## 0.3.0-preview.56 — Native resource cleanup
 
 - Preserve a single Downloads lease through failed native view removal, retry the exact view on the next acquisition, and block replacements until removal succeeds. Preserve pending legacy barriers across reloads. Add aggregate detach diagnostics.
