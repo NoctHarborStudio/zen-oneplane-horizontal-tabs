@@ -35,3 +35,5 @@ Preview.47 adds `flip` to Bunny popup surface/tick diagnostics and rounded scree
 Preview.48 adds `layout.prefs.restore` (restored/skipped/failed counts and backupRetained) and `layout.free.stale` (create/before-select stage only). No preference values, workspace IDs, names or URLs are emitted. All entrypoint version labels synchronized.
 
 Preview.49 extends `layout.prefs.restore` with alreadyReleased and checkpointFailed. `layout.free.stale` adds designation, before-reorder and after-select stages; no native IDs or user values are recorded. Partial backup write failures are reported, not silently treated as successful restoration.
+
+Preview.50 adds `layout.scope.error` / `layout.scope.dispose` for Layout and Hub, and `library.scope.error` / `library.scope.dispose` for Closed Tabs. Resource/owner labels, error class and release/failure counts only; native error messages and browsing data are not recorded. Failed native release remains a reported failure, not proof of successful detachment.

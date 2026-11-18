@@ -14,4 +14,4 @@ The .js.part and .css.part files are **transitional source sections**, not indep
 
 Run npm run build, then npm run verify. There are no external npm dependencies.
 
-Next stage: isolate stateful controller boundaries through explicit dependencies and lifecycle ownership, then separate layout activation from Compact Mode. Only then add Hub and native Zen Spaces. See docs/architecture.md.
+Active development: Nocturne 0.4.0 stabilization, see [architecture](../docs/nocturne/architecture.md) and [pipeline](../docs/nocturne/pipeline-0.4.0.md). Hub and native workspace integration already exist. Shared synchronous DisposableScope is in core/disposable-scope.mjs and inlined into Layout and Library Services; use per-owner instances, not a global registry. Other lifecycle owners remain in migration.

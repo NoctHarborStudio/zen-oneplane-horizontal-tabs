@@ -58,5 +58,4 @@
       if(keep)finishInsertionAfterDrop();
     }
   };
-  window[DRAG_CONTROLLER] = dragController;
 

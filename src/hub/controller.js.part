@@ -1026,22 +1026,41 @@
     function stopDouble(event){event.preventDefault();event.stopImmediatePropagation();}
     const listeners=[[button,"click",toggle],[button,"pointerdown",stopDrag],[button,"mousedown",stopDrag],[button,"dblclick",stopDouble],
       [panel,"keydown",key],[form,"submit",create],[mode,"click",toggleMode],[returnButton,"click",()=>void returnProjection()],[window,"deactivate",deactivate],[name,"input",onInput],[window,"resize",scheduleHubGeometry]];
-    let unregisterOverlay=()=>{};
+    const hubScope=createDisposableScope({onError:(resource,error)=>{
+      try{window.__nocturneTrace?.("layout.scope.error",{owner:"hub",resource,error:error?.name||"Error"},{flush:true});}catch{}
+    }});
+    let unregisterOverlay=()=>true,mounted=false;
     function bindOverlay(){
+      if(destroyed||hubScope.closed)return;
       unregisterOverlay();
-      unregisterOverlay=window.__nocturneOverlay?.register("hub",{
+      const off=window.__nocturneOverlay?.register("hub",{
         priority:20,isActive:()=>!destroyed&&(open||!panel.hidden),
         canYield:()=>!busy&&!projectionBusy&&!drag&&!trashDrag,
         yield:()=>{close(false,true);return panel.hidden;},
         onEscape:event=>{if(open)key(event);return true;}
-      })||(()=>{});
+      });
+      unregisterOverlay=typeof off==="function"?hubScope.defer("overlay",off):()=>true;
     }
-    listeners.push([window,"Nocturne:OverlayReady",bindOverlay]);bindOverlay();
-    window.addEventListener("pointerdown",onOutside,true);
+    listeners.push([window,"Nocturne:OverlayReady",bindOverlay]);
     for(const event of ["ZenWorkspaceDataChanged","ZenWorkspacesUIUpdate","ZenCompactMode:Toggled","ZenCompactMode:LayoutUpdate"])listeners.push([window,event,changed]);
-    for(const [node,event,fn] of listeners)node.addEventListener(event,fn);
-    function destroy(){if(destroyed)return;destroyed=true;close(false,true);unregisterOverlay();hideDragBadge(true);clearPlacementPreview(true);window.removeEventListener("pointerdown",onOutside,true);for(const [node,event,fn] of listeners)node.removeEventListener(event,fn);panel.remove();button.remove();}
-    return {ensure,close,onMode,destroy};
+    function mount(){
+      if(destroyed||mounted)return;
+      mounted=true;
+      bindOverlay();
+      hubScope.listen(window,"pointerdown",onOutside,true);
+      for(const [node,event,fn] of listeners)hubScope.listen(node,event,fn);
+    }
+    function destroy(){
+      if(destroyed)return;destroyed=true;
+      cleanupStep("hub close",()=>close(false,true));
+      const result=hubScope.dispose();
+      try{window.__nocturneTrace?.("layout.scope.dispose",{owner:"hub",...result},{flush:true});}catch{}
+      cleanupStep("hub badge",()=>hideDragBadge(true));
+      cleanupStep("hub placement",()=>clearPlacementPreview(true));
+      cleanupStep("hub panel",()=>panel.remove());
+      cleanupStep("hub button",()=>button.remove());
+    }
+    return {mount,ensure,close,onMode,destroy};
   }
   const hub=createHubController({target,root,toolbarWrapper,supported:hoverSupported,hold:reconcilePanel,switchGuard:guardPanelSwitch});
 

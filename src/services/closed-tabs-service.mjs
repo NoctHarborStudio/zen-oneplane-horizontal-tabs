@@ -1,6 +1,7 @@
+import { createDisposableScope } from "../core/disposable-scope.mjs";
 // Closed tab identity is SessionStore's closedId, never a URL substitute.
-  export function createClosedTabsService({getClosed,restoreNative,forgetNative,allowed=()=>true,observe=()=>()=>{},now=Date.now}){
-    let dead=false;const subscriptions=new Set();
+  export function createClosedTabsService({getClosed,restoreNative,forgetNative,allowed=()=>true,observe=()=>()=>{},now=Date.now,onError=()=>{}}){
+    let dead=false;const subscriptions=createDisposableScope({onError});
     function query({text="",days=120,limit=100}={}){
       if(dead||!allowed())throw Error("Closed tabs unavailable in this window");
       const term=String(text).trim().toLowerCase().slice(0,1024),range=Math.min(36500,Math.max(1,Math.trunc(Number(days)||120)));
@@ -23,10 +24,10 @@
     function forget(id){if(dead||!allowed()||typeof forgetNative!=="function"||!getClosed().some(tab=>tab.closedId===id))return false;return forgetNative(id)!==false;}
     function subscribe(fn){
       if(dead||!allowed())throw Error("Closed tabs unavailable in this window");
-      const off=observe(()=>{if(!dead&&allowed())fn();});
-      let active=true;const release=()=>{if(!active)return;active=false;subscriptions.delete(release);off();};
-      subscriptions.add(release);return release;
+      let active=true;
+      const off=observe(()=>{if(active&&!dead&&allowed())fn();});
+      return subscriptions.defer("closed-tabs-observer",()=>{active=false;off();});
     }
-    function dispose(){if(dead)return;dead=true;for(const off of [...subscriptions])off();}
+    function dispose(){dead=true;return subscriptions.dispose();}
     return {query,subscribe,restore,forget,dispose};
   }

@@ -39,7 +39,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.49",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.50",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -1786,6 +1786,42 @@ function acquireZenHome(win, services) {
   }catch(error){destroy();win.console.warn("[Zen Home] init",error);return null;}
 }
 
+// Synchronous acquisition scope. Each release is attempted at most once;
+// native failures are reported, never retried implicitly or treated as success.
+function createDisposableScope({onError=()=>{}}={}){
+  let closed=false;
+  const releases=new Set();
+  function defer(label,cleanup){
+    if(typeof cleanup!=="function")throw new TypeError("Expected cleanup function");
+    let active=true;
+    const release=()=>{
+      if(!active)return true;
+      active=false;releases.delete(release);
+      try{cleanup();return true;}
+      catch(error){try{onError(label,error);}catch{}return false;}
+    };
+    if(closed)release();else releases.add(release);
+    return release;
+  }
+  function listen(node,type,fn,options){
+    if(closed)throw Error("Disposable scope closed");
+    // Keep the exact acquisition target and capture flag.
+    const capture=typeof options==="boolean"?options:!!options?.capture;
+    node.addEventListener(type,fn,options);
+    return defer("listener",()=>node.removeEventListener(type,fn,capture));
+  }
+  function dispose(){
+    if(closed)return {released:0,failed:0};
+    closed=true;
+    let released=0,failed=0;
+    for(const release of [...releases].reverse()){
+      if(!releases.has(release))continue;
+      if(release())released++;else failed++;
+    }
+    return {released,failed};
+  }
+  return {defer,listen,dispose,get closed(){return closed;},get size(){return releases.size;}};
+}
 // The horizontal strip is a view of native tabs, not a second tab session.
 function installTabStrip() {
   const browser = window.gBrowser;
@@ -1795,6 +1831,10 @@ function installTabStrip() {
     throw new Error("OnePlane: native toolbar or tabs not available");
   }
 
+  const mountScope=createDisposableScope({onError:(resource,error)=>{
+    try{window.__nocturneTrace?.("layout.scope.error",{owner:"layout",resource,error:error?.name||"Error"},{flush:true});}catch{}
+  }});
+  let releaseDragController=()=>true;
   const html = (tag, cls) => {
     const node = document.createElementNS("http://www.w3.org/1999/xhtml", tag);
     if (cls) node.className = cls;
@@ -4623,22 +4663,41 @@ function installTabStrip() {
     function stopDouble(event){event.preventDefault();event.stopImmediatePropagation();}
     const listeners=[[button,"click",toggle],[button,"pointerdown",stopDrag],[button,"mousedown",stopDrag],[button,"dblclick",stopDouble],
       [panel,"keydown",key],[form,"submit",create],[mode,"click",toggleMode],[returnButton,"click",()=>void returnProjection()],[window,"deactivate",deactivate],[name,"input",onInput],[window,"resize",scheduleHubGeometry]];
-    let unregisterOverlay=()=>{};
+    const hubScope=createDisposableScope({onError:(resource,error)=>{
+      try{window.__nocturneTrace?.("layout.scope.error",{owner:"hub",resource,error:error?.name||"Error"},{flush:true});}catch{}
+    }});
+    let unregisterOverlay=()=>true,mounted=false;
     function bindOverlay(){
+      if(destroyed||hubScope.closed)return;
       unregisterOverlay();
-      unregisterOverlay=window.__nocturneOverlay?.register("hub",{
+      const off=window.__nocturneOverlay?.register("hub",{
         priority:20,isActive:()=>!destroyed&&(open||!panel.hidden),
         canYield:()=>!busy&&!projectionBusy&&!drag&&!trashDrag,
         yield:()=>{close(false,true);return panel.hidden;},
         onEscape:event=>{if(open)key(event);return true;}
-      })||(()=>{});
+      });
+      unregisterOverlay=typeof off==="function"?hubScope.defer("overlay",off):()=>true;
     }
-    listeners.push([window,"Nocturne:OverlayReady",bindOverlay]);bindOverlay();
-    window.addEventListener("pointerdown",onOutside,true);
+    listeners.push([window,"Nocturne:OverlayReady",bindOverlay]);
     for(const event of ["ZenWorkspaceDataChanged","ZenWorkspacesUIUpdate","ZenCompactMode:Toggled","ZenCompactMode:LayoutUpdate"])listeners.push([window,event,changed]);
-    for(const [node,event,fn] of listeners)node.addEventListener(event,fn);
-    function destroy(){if(destroyed)return;destroyed=true;close(false,true);unregisterOverlay();hideDragBadge(true);clearPlacementPreview(true);window.removeEventListener("pointerdown",onOutside,true);for(const [node,event,fn] of listeners)node.removeEventListener(event,fn);panel.remove();button.remove();}
-    return {ensure,close,onMode,destroy};
+    function mount(){
+      if(destroyed||mounted)return;
+      mounted=true;
+      bindOverlay();
+      hubScope.listen(window,"pointerdown",onOutside,true);
+      for(const [node,event,fn] of listeners)hubScope.listen(node,event,fn);
+    }
+    function destroy(){
+      if(destroyed)return;destroyed=true;
+      cleanupStep("hub close",()=>close(false,true));
+      const result=hubScope.dispose();
+      try{window.__nocturneTrace?.("layout.scope.dispose",{owner:"hub",...result},{flush:true});}catch{}
+      cleanupStep("hub badge",()=>hideDragBadge(true));
+      cleanupStep("hub placement",()=>clearPlacementPreview(true));
+      cleanupStep("hub panel",()=>panel.remove());
+      cleanupStep("hub button",()=>button.remove());
+    }
+    return {mount,ensure,close,onMode,destroy};
   }
   const hub=createHubController({target,root,toolbarWrapper,supported:hoverSupported,hold:reconcilePanel,switchGuard:guardPanelSwitch});
 
@@ -6553,7 +6612,6 @@ function installTabStrip() {
       if(keep)finishInsertionAfterDrop();
     }
   };
-  window[DRAG_CONTROLLER] = dragController;
 
   // Single hover target; preserve momentum across tabs and short gaps.
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -7425,7 +7483,7 @@ function installTabStrip() {
     cleanupStep("cancelInsertion()",()=>{cancelInsertion();});
     draggedTab = null;
     draggedGroup = null;
-    cleanupStep("if (window[DRAG_CONTROLLER] === dragController) delete window[DRAG_CONTROLLER]",()=>{if (window[DRAG_CONTROLLER] === dragController) delete window[DRAG_CONTROLLER];});
+    cleanupStep("drag controller publication",releaseDragController);
     cleanupStep("window.removeEventListener(\"dragover\", revealForDrag, true)",()=>{window.removeEventListener("dragover", revealForDrag, true);});
     cleanupStep("window.removeEventListener(\"drag\",onSourceDrag,true)",()=>{window.removeEventListener("drag",onSourceDrag,true);});
     cleanupStep("clearPlacementPreview(true)",()=>{clearPlacementPreview(true);});
@@ -7469,7 +7527,10 @@ function installTabStrip() {
     cleanupStep("leftSpacer.remove()",()=>{leftSpacer.remove();});
     cleanupStep("rightSpacer.remove()",()=>{rightSpacer.remove();});
     cleanupStep("releaseWorkspaceLinkScope()",()=>{releaseWorkspaceLinkScope();});
-    cleanupStep("hub.destroy()",()=>{hub.destroy();});
+    cleanupStep("mount scope",()=>{
+      const result=mountScope.dispose();
+      try{window.__nocturneTrace?.("layout.scope.dispose",{owner:"layout",...result},{flush:true});}catch{}
+    });
     cleanupStep("closeNativeTabMenu()",()=>{closeNativeTabMenu();});
     cleanupStep("window.removeEventListener(\"pointermove\", trackPointer, true)",()=>{window.removeEventListener("pointermove", trackPointer, true);});
     cleanupStep("toolbarWrapper?.removeEventListener(\"pointerover\", trackPointer)",()=>{toolbarWrapper?.removeEventListener("pointerover", trackPointer);});
@@ -7513,6 +7574,14 @@ function installTabStrip() {
   }
 
   try {
+    // No globally visible Hub/drag owner before all strip declarations
+    // are initialized and the existing rollback guard is active.
+    mountScope.defer("hub",()=>hub.destroy());
+    releaseDragController=mountScope.defer("drag-controller",()=>{
+      if(window[DRAG_CONTROLLER]===dragController)delete window[DRAG_CONTROLLER];
+    });
+    window[DRAG_CONTROLLER]=dragController;
+    hub.mount();
     url.after(row);url.append(compactSearch);
     hub.ensure();ensureDownloadHost();
     releaseDragEngine=installDragEngine();

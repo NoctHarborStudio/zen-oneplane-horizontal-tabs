@@ -104,3 +104,10 @@ test("failed backup removal checkpoints release progress before retry",()=>{
  assert.equal(restore(),false);assert.equal(JSON.parse(raw).a.released,true);
  value=true;fail=false;assert.equal(restore(),true);assert.equal(value,true);assert.equal(sets,1);assert.equal(raw,"");
 });
+
+test("Hub and drag publication occur only in guarded strip mount",()=>{
+ const hub=read("src/hub/controller.js.part"),drag=read("src/interactions/drag-end.js.part"),life=read("src/core/window-lifecycle.js.part");
+ assert.doesNotMatch(drag,/window\[DRAG_CONTROLLER\]\s*=\s*dragController/);
+ assert.match(life,/try \{\s*\/\/ No globally visible[\s\S]*?mountScope\.defer\("hub"[\s\S]*?window\[DRAG_CONTROLLER\]=dragController;\s*hub\.mount\(\)/);
+ assert.match(hub,/function mount\(\)\{[\s\S]*?bindOverlay\(\);[\s\S]*?hubScope\.listen/);
+});

@@ -58,3 +58,22 @@ test("closed tabs use source-window entries and native identity, clean up observ
  const r=s.query({text:"Current"});assert.equal(r.rows.length,1);assert.equal(r.rows[0].closedId,9);assert.equal(r.rows[0].url,"https://example.com");
  s.subscribe(()=>{});s.dispose();assert.equal(off,1);assert.throws(()=>s.query(),/unavailable/);
 });
+
+test("closed tab disposal attempts every observer even when removal fails",()=>{
+ const removed=[],errors=[],callbacks=[];let serial=0,notified=0;
+ const s=createClosedTabsService({getClosed:()=>[],observe(fn){const id=++serial;callbacks.push(fn);return()=>{removed.push(id);if(id===2)throw Error("remove");};},onError:(label,error)=>errors.push([label,error.message])});
+ const first=s.subscribe(()=>notified++);s.subscribe(()=>notified++);
+ assert.deepEqual(s.dispose(),{released:1,failed:1});assert.deepEqual(removed,[2,1]);
+ assert.deepEqual(errors,[["closed-tabs-observer","remove"]]);
+ callbacks.forEach(fn=>fn());assert.equal(notified,0);first();s.dispose();assert.deepEqual(removed,[2,1]);
+});
+test("failed manual unsubscribe disables its callback and does not prevent another release",()=>{
+ let cb,notified=0,released=0,errors=0;
+ const s=createClosedTabsService({getClosed:()=>[],observe(fn){cb=fn;return()=>{released++;throw Error("remove");};},onError:()=>errors++});
+ const off=s.subscribe(()=>notified++);assert.equal(off(),false);cb();
+ assert.equal(notified,0);assert.equal(errors,1);assert.equal(released,1);s.dispose();assert.equal(released,1);
+});
+test("subscription acquired during synchronous disposal is immediately released",()=>{
+ let s,removed=0; s=createClosedTabsService({getClosed:()=>[],observe(fn){fn();return()=>removed++;}});
+ s.subscribe(()=>s.dispose());assert.equal(removed,1);
+});

@@ -1,3 +1,9 @@
+## 0.3.0-preview.50 — Scoped resource acquisition
+
+- Add a shared synchronous DisposableScope used by Layout, Hub and Closed Tabs Service. Isolate release failures, retain exact listener targets and release late acquisitions immediately.
+- Publish Hub listeners/overlay ownership and drag controller only inside the guarded strip mount; rollback releases acquired resources without replacing the rest of the existing layout teardown.
+- Isolate closed-tab observer removal and suppress callbacks even if native removal fails. Record bounded cleanup diagnostics; add eight regression tests. Native validation pending; no intended visual changes.
+
 ## 0.3.0-preview.49 — Lifecycle self-review follow-up
 
 - Keep per-key release progress when native preference restoration is partial; retry only unresolved keys, reacquire released keys from their current user/default values on a new activation, and log checkpoint failure.

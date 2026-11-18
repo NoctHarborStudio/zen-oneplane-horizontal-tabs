@@ -39,7 +39,7 @@
     cleanupStep("cancelInsertion()",()=>{cancelInsertion();});
     draggedTab = null;
     draggedGroup = null;
-    cleanupStep("if (window[DRAG_CONTROLLER] === dragController) delete window[DRAG_CONTROLLER]",()=>{if (window[DRAG_CONTROLLER] === dragController) delete window[DRAG_CONTROLLER];});
+    cleanupStep("drag controller publication",releaseDragController);
     cleanupStep("window.removeEventListener(\"dragover\", revealForDrag, true)",()=>{window.removeEventListener("dragover", revealForDrag, true);});
     cleanupStep("window.removeEventListener(\"drag\",onSourceDrag,true)",()=>{window.removeEventListener("drag",onSourceDrag,true);});
     cleanupStep("clearPlacementPreview(true)",()=>{clearPlacementPreview(true);});
@@ -83,7 +83,10 @@
     cleanupStep("leftSpacer.remove()",()=>{leftSpacer.remove();});
     cleanupStep("rightSpacer.remove()",()=>{rightSpacer.remove();});
     cleanupStep("releaseWorkspaceLinkScope()",()=>{releaseWorkspaceLinkScope();});
-    cleanupStep("hub.destroy()",()=>{hub.destroy();});
+    cleanupStep("mount scope",()=>{
+      const result=mountScope.dispose();
+      try{window.__nocturneTrace?.("layout.scope.dispose",{owner:"layout",...result},{flush:true});}catch{}
+    });
     cleanupStep("closeNativeTabMenu()",()=>{closeNativeTabMenu();});
     cleanupStep("window.removeEventListener(\"pointermove\", trackPointer, true)",()=>{window.removeEventListener("pointermove", trackPointer, true);});
     cleanupStep("toolbarWrapper?.removeEventListener(\"pointerover\", trackPointer)",()=>{toolbarWrapper?.removeEventListener("pointerover", trackPointer);});
@@ -127,6 +130,14 @@
   }
 
   try {
+    // No globally visible Hub/drag owner before all strip declarations
+    // are initialized and the existing rollback guard is active.
+    mountScope.defer("hub",()=>hub.destroy());
+    releaseDragController=mountScope.defer("drag-controller",()=>{
+      if(window[DRAG_CONTROLLER]===dragController)delete window[DRAG_CONTROLLER];
+    });
+    window[DRAG_CONTROLLER]=dragController;
+    hub.mount();
     url.after(row);url.append(compactSearch);
     hub.ensure();ensureDownloadHost();
     releaseDragEngine=installDragEngine();

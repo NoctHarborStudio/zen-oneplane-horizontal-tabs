@@ -7,6 +7,10 @@ function installTabStrip() {
     throw new Error("OnePlane: native toolbar or tabs not available");
   }
 
+  const mountScope=createDisposableScope({onError:(resource,error)=>{
+    try{window.__nocturneTrace?.("layout.scope.error",{owner:"layout",resource,error:error?.name||"Error"},{flush:true});}catch{}
+  }});
+  let releaseDragController=()=>true;
   const html = (tag, cls) => {
     const node = document.createElementNS("http://www.w3.org/1999/xhtml", tag);
     if (cls) node.className = cls;

@@ -1,3 +1,39 @@
+// Synchronous acquisition scope. Each release is attempted at most once;
+// native failures are reported, never retried implicitly or treated as success.
+function createDisposableScope({onError=()=>{}}={}){
+  let closed=false;
+  const releases=new Set();
+  function defer(label,cleanup){
+    if(typeof cleanup!=="function")throw new TypeError("Expected cleanup function");
+    let active=true;
+    const release=()=>{
+      if(!active)return true;
+      active=false;releases.delete(release);
+      try{cleanup();return true;}
+      catch(error){try{onError(label,error);}catch{}return false;}
+    };
+    if(closed)release();else releases.add(release);
+    return release;
+  }
+  function listen(node,type,fn,options){
+    if(closed)throw Error("Disposable scope closed");
+    // Keep the exact acquisition target and capture flag.
+    const capture=typeof options==="boolean"?options:!!options?.capture;
+    node.addEventListener(type,fn,options);
+    return defer("listener",()=>node.removeEventListener(type,fn,capture));
+  }
+  function dispose(){
+    if(closed)return {released:0,failed:0};
+    closed=true;
+    let released=0,failed=0;
+    for(const release of [...releases].reverse()){
+      if(!releases.has(release))continue;
+      if(release())released++;else failed++;
+    }
+    return {released,failed};
+  }
+  return {defer,listen,dispose,get closed(){return closed;},get size(){return releases.size;}};
+}
 // Local file classification and explicitly enabled scan sessions.
 const MEDIA_EXTENSIONS=Object.freeze({
  documents:Object.freeze(["pdf","txt","md","rtf","doc","docx","odt","xls","xlsx","ods","ppt","pptx","odp","csv","epub"]),
@@ -181,8 +217,8 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
     return {query,close};
   }
 // Closed tab identity is SessionStore's closedId, never a URL substitute.
-  function createClosedTabsService({getClosed,restoreNative,forgetNative,allowed=()=>true,observe=()=>()=>{},now=Date.now}){
-    let dead=false;const subscriptions=new Set();
+  function createClosedTabsService({getClosed,restoreNative,forgetNative,allowed=()=>true,observe=()=>()=>{},now=Date.now,onError=()=>{}}){
+    let dead=false;const subscriptions=createDisposableScope({onError});
     function query({text="",days=120,limit=100}={}){
       if(dead||!allowed())throw Error("Closed tabs unavailable in this window");
       const term=String(text).trim().toLowerCase().slice(0,1024),range=Math.min(36500,Math.max(1,Math.trunc(Number(days)||120)));
@@ -205,18 +241,18 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
     function forget(id){if(dead||!allowed()||typeof forgetNative!=="function"||!getClosed().some(tab=>tab.closedId===id))return false;return forgetNative(id)!==false;}
     function subscribe(fn){
       if(dead||!allowed())throw Error("Closed tabs unavailable in this window");
-      const off=observe(()=>{if(!dead&&allowed())fn();});
-      let active=true;const release=()=>{if(!active)return;active=false;subscriptions.delete(release);off();};
-      subscriptions.add(release);return release;
+      let active=true;
+      const off=observe(()=>{if(active&&!dead&&allowed())fn();});
+      return subscriptions.defer("closed-tabs-observer",()=>{active=false;off();});
     }
-    function dispose(){if(dead)return;dead=true;for(const off of [...subscriptions])off();}
+    function dispose(){dead=true;return subscriptions.dispose();}
     return {query,subscribe,restore,forget,dispose};
   }
 /* Independent native data owner. No UI, startup scans or disk cache. */
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   const trace=(event,data)=>{try{if(win.__nocturneTrace)win.__nocturneTrace(event,data,{flush:true});else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,data,t:win.performance?.now?.()??0});}}catch{}};
-  trace("library.services.script",{version:"0.3.0-preview.49"});
+  trace("library.services.script",{version:"0.3.0-preview.50"});
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
   const BARRIER="__nocturneDownloadsDisposal",MEDIA_BARRIER="__nocturneMediaDisposal";
   const previous=win[KEY],barrier=previous?.dispose?.()||win[BARRIER]||Promise.resolve();
@@ -273,7 +309,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
     const D=win.Downloads||load("resource://gre/modules/Downloads.sys.mjs","Downloads");
     return D.getList(privateWindow()?D.PRIVATE:D.PUBLIC);
   },onError:()=>win.console.warn("[Nocturne] Downloads service listener failed")});
-  const closedTabs=createClosedTabsService({allowed,getClosed:()=>load("moz-src:///browser/components/sessionstore/SessionStore.sys.mjs","SessionStore").getClosedTabData({sourceWindow:win}),
+  const closedTabs=createClosedTabsService({allowed,onError:(resource,error)=>trace("library.scope.error",{owner:"closed-tabs",resource,error:error?.name||"Error"}),getClosed:()=>load("moz-src:///browser/components/sessionstore/SessionStore.sys.mjs","SessionStore").getClosedTabData({sourceWindow:win}),
     restoreNative(id,background){
       const store=load("moz-src:///browser/components/sessionstore/SessionStore.sys.mjs","SessionStore");
       if(typeof store.undoCloseById!=="function"||!win.gBrowser)return false;
@@ -324,7 +360,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
     dead=true;
     win.removeEventListener("unload",dispose);
     for(const s of [...historySessions])try{s.close();}catch{}
-    try{closedTabs.dispose();}catch{}
+    try{trace("library.scope.dispose",{owner:"closed-tabs",...closedTabs.dispose()});}catch{}
     const mediaClosing=media.dispose();win[MEDIA_BARRIER]=mediaClosing;
     mediaClosing.finally(()=>{if(win[MEDIA_BARRIER]===mediaClosing)delete win[MEDIA_BARRIER];});
     closing=downloads.dispose();win[BARRIER]=closing;

@@ -22,6 +22,10 @@
       "kind": "section"
     },
     {
+      "path": "src/core/disposable-scope.mjs",
+      "kind": "esm-inline"
+    },
+    {
       "path": "src/core/window-scope.js.part",
       "kind": "section"
     },
@@ -331,6 +335,10 @@
     }
   ],
   "libraryServices": [
+    {
+      "path": "src/core/disposable-scope.mjs",
+      "kind": "esm-inline"
+    },
     {
       "path": "src/services/media-service.mjs",
       "kind": "esm-inline"
