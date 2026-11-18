@@ -67,3 +67,7 @@ Same-window recorder reload reuses the existing write coordinator; all coalesced
 ### Preview.58 cross-owner startup cleanup
 
 `assembly.cleanup` records aggregate failed cleanup count and ownership flag; `boot.cleanup` reports failed removal count; `startup-prefs.cleanup` reports interrupted/successor/modUnload booleans. No preference values, content or paths. Layout invokes active Assembly before Center Motion disposal so terminal effects are released while their hosts exist. Terminal writes remain best effort.
+
+### Preview.59 startup preference review
+
+`startup-prefs.restore.result` records restored/skipped/failed counts and checkpointFailed; `startup-prefs.sync.error` and `startup-prefs.cleanup.error` record error class only. Existing invalid backup is not overwritten. Pending replacements are cancellable before acquiring preferences; old lease retained until restoration returns. No preference values or profile content recorded.
