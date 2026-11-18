@@ -39,7 +39,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.52",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.53",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -615,6 +615,7 @@ const prefs = Services.prefs;
 let disposed = false;
 let applied = false;
 let ownsPreferences = false;
+let preferenceMutation=false,pendingCleanup=null;
 let closing = false,closeTimer=0;
 let startupObserver = null;
 let removeTabStrip = null;
@@ -7778,8 +7779,18 @@ function cleanup(nativeExit=false) {
   cleanupStep("beforeunload",()=>window.removeEventListener("beforeunload", markClosing, true));
   cleanupStep("unload",()=>window.removeEventListener("unload", nativeUnload));
   cleanupStep("close timer",()=>{if(closeTimer)window.clearTimeout(closeTimer);closeTimer=0;});
-  const wasApplied=applied,wasOwner=ownsPreferences,pendingClose=closing;
-  applied=false;ownsPreferences=false;closing=false;
+  pendingCleanup={wasApplied:applied,pendingClose:closing,nativeExit:nativeExit===true};
+  applied=false;closing=false;
+  finishCleanup();
+}
+function finishCleanup(){
+  // Native preference writes notify observers synchronously. Keep the lease
+  // until that call returns, even when cleanup is invoked by an observer.
+  if(preferenceMutation||!pendingCleanup)return;
+  const {wasApplied,pendingClose,nativeExit}=pendingCleanup;
+  pendingCleanup=null;
+  const wasOwner=ownsPreferences;
+  ownsPreferences=false;
   const registered=window[CONTROLLER]===controller;
   if(registered)delete window[CONTROLLER];
   if(wasOwner)cleanupStep("layout preferences",()=>{
@@ -7849,27 +7860,41 @@ async function activate() {
       throw new Error("Unsupported Zen Compact Mode API.");
     }
     const shared=otherActiveWindow();
-    const saved=shared?null:snapshot();
     if(!current())return;
-    ownsPreferences=true;applied=true;
-    try{window.__nocturneTrace?.("layout.prefs.lease",{action:"acquire",shared},{flush:true});}catch{}
-    // Only the first live window applies global native preferences. Joining
-    // windows must not reassert values the user changed during the lease.
-    if(!shared)for (const [name, value] of Object.entries(TARGET)) {
-      if(!current())return;
-      const actual=prefs.getBoolPref(name);
-      if(actual===value)continue;
-      if(saved[name].owned!==undefined){
-        saved[name]={value:actual,user:prefs.prefHasUserValue(name),owned:true};
-        // Record the original before writing a native preference.
-        prefs.setStringPref(KEY,JSON.stringify(saved));
-        if(!current())return;
+    preferenceMutation=true;
+    ownsPreferences=true;
+    try{
+      let saved;
+      try{saved=shared?null:snapshot();}
+      catch(error){
+        // No native target has been written by this acquisition yet.
+        // Do not restore an unvalidated backup.
+        ownsPreferences=false;throw error;
       }
-      prefs.setBoolPref(name,value);
+      if(!current())return;
+      applied=true;
+      try{window.__nocturneTrace?.("layout.prefs.lease",{action:"acquire",shared},{flush:true});}catch{}
+      // Only the first live window applies global native preferences.
+      if(!shared)for (const [name, value] of Object.entries(TARGET)) {
+        if(!current())return;
+        const actual=prefs.getBoolPref(name);
+        if(actual===value)continue;
+        if(saved[name].owned!==undefined){
+          saved[name]={value:actual,user:prefs.prefHasUserValue(name),owned:true};
+          prefs.setStringPref(KEY,JSON.stringify(saved));
+          if(!current())return;
+        }
+        prefs.setBoolPref(name,value);
+      }
+    }finally{
+      preferenceMutation=false;
+      finishCleanup();
     }
     if(!current())return;
-    // Configure the hide target without forcing Compact Mode on.
-    manager.hideToolbar();
+    // Zen 1.24.2b hideToolbar() unconditionally writes both hide prefs,
+    // including on joining windows. TARGET already owns these writes;
+    // emit only its native layout notification, without duplicate mutation.
+    window.dispatchEvent(new window.CustomEvent("ZenCompactMode:LayoutUpdate"));
     if(!current())return;
     const strip=installTabStrip();
     // Mount dispatches synchronous native/UI events. Cleanup may have run

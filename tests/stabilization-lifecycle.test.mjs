@@ -54,7 +54,7 @@ test("Dock disable and re-enable share the same in-flight native subscription",a
 });
 test("layout cleanup continues after feature disposal throws",()=>{
  const src=read("src/core/bootstrap.js.part"),cleanup=src.slice(0,src.indexOf("const controller ="));
- const result=new Function(`let disposed=false,applied=true,ownsPreferences=true,closing=false,closeTimer=0,startupObserver=null;
+ const result=new Function(`let disposed=false,applied=true,ownsPreferences=true,closing=false,closeTimer=0,startupObserver=null,preferenceMutation=false,pendingCleanup=null;
  const root={removeAttribute(){}};const window={dispatchEvent(){},CustomEvent:class{},removeEventListener(){},layout:{}};
  const CONTROLLER="layout",controller=window.layout;function markClosing(){}function nativeUnload(){}function updateNativeAfterCleanup(){}let restored=false;
  function otherActiveWindow(){return false}function restorePrefs(){restored=true}
@@ -115,12 +115,12 @@ test("Hub and drag publication occur only in guarded strip mount",()=>{
 test("layout activation releases strip returned after synchronous cleanup and never publishes readiness",async()=>{
  const src=read("src/core/bootstrap.js.part");
  const code=src.slice(src.indexOf("async function activate()"),src.indexOf("const reloadingLayout="));
- const run=new Function(`let disposed=false,applied=false,ownsPreferences=false,removeTabStrip=null;
+ const run=new Function(`let disposed=false,applied=false,ownsPreferences=false,removeTabStrip=null,preferenceMutation=false;
  const reloadingLayout=true,startupRecord={},CONTROLLER="controller",controller={};const marks=[],calls=[];
  const root={hasAttribute:()=>false,setAttribute:k=>marks.push(k)};
  const prefs={getBoolPref:()=>true};const TARGET={};
  const window={controller,gZenCompactModeManager:{hideToolbar(){}},dispatchEvent(){},CustomEvent:class{},requestAnimationFrame(){calls.push("raf")}};
- function otherActiveWindow(){return false;}function snapshot(){return {};}function cleanup(){disposed=true;}function cleanupStep(label,fn){fn();}
+ function otherActiveWindow(){return false;}function snapshot(){return {};}function cleanup(){disposed=true;}function finishCleanup(){}function cleanupStep(label,fn){fn();}
  function installTabStrip(){cleanup();return ()=>calls.push("strip cleanup");}const console={error(){}};
  ${code}return async()=>{await activate();return {marks,calls,disposed,installed:!!removeTabStrip};};`)();
  assert.deepEqual(await run(),{marks:[],calls:["strip cleanup"],disposed:true,installed:false});

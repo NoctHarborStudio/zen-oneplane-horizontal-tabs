@@ -18,6 +18,7 @@ const prefs = Services.prefs;
 let disposed = false;
 let applied = false;
 let ownsPreferences = false;
+let preferenceMutation=false,pendingCleanup=null;
 let closing = false,closeTimer=0;
 let startupObserver = null;
 let removeTabStrip = null;

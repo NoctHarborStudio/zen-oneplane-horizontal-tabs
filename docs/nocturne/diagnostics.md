@@ -41,3 +41,5 @@ Preview.50 adds `layout.scope.error` / `layout.scope.dispose` for Layout and Hub
 Preview.51 adds `layout.mount.stale` (stage: return) and refines scope disposal counters to include nested/late releases attempted during that disposal. Earlier manual failures are reported by scope error events. Closed Tabs callback exceptions use resource closed-tabs-callback. Native error class only, no message, payload or browsing data.
 
 Preview.52 adds `layout.prefs.lease` (acquire/shared, release/last), `layout.close.pending-expired` (active flag). No pref values or window data. Close hint timeout is not proof of native cancellation; Sine beforeunload behavior is an integration limitation.
+
+Preview.53 retains `layout.prefs.lease` and existing cleanup events; final release may follow synchronous native preference observer cancellation, after mutation returns. `ZenCompactMode:LayoutUpdate` replaces duplicate hideToolbar writes. No additional user data logged.

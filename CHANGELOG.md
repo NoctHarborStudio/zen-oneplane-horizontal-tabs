@@ -1,3 +1,9 @@
+## 0.3.0-preview.53 — Preference ownership self-review
+
+- Remove duplicate native hideToolbar preference writes after verifying Zen 1.24.2b; emit its layout notification without reapplying hide preferences.
+- Retain the Layout lease through synchronous preference mutation, defer final cleanup until observer callbacks return, and avoid restoring an unvalidated backup.
+- Add five regression tests (12 ownership fixtures total). Native multi-window/Sine validation pending; no intended visual/default changes.
+
 ## 0.3.0-preview.52 — Layout preference leases and close fallback
 
 - Separate window preference ownership from UI active state. The first live layout applies native overrides; joining windows share the lease, and the last owner restores after local teardown.

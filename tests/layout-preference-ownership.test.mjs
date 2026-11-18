@@ -51,3 +51,30 @@ test("actual native unload never schedules layout fallback",async()=>{
  const f=fixture(),a=f.mount();await a.activate();a.events.length=0;a.markClosing({target:a.document});a.nativeUnload();
  assert.equal(a.timers.size,0);assert.equal(a.events.includes("ZenCompactMode:LayoutUpdate"),false);
 });
+
+test("native hideToolbar setter is never called on initial or joining acquisition",async()=>{
+ const f=fixture(),a=f.mount(),b=f.mount(),hide="zen.view.compact.hide-toolbar",tab="zen.view.compact.hide-tabbar";let calls=0;
+ for(const h of [a,b])h.window.gZenCompactModeManager.hideToolbar=()=>{calls++;f.prefs.setBoolPref(hide,true);f.prefs.setBoolPref(tab,false);};
+ await a.activate();f.prefs.setBoolPref(hide,false);f.prefs.setBoolPref(tab,true);await b.activate();
+ assert.equal(calls,0);assert.equal(f.prefs.getBoolPref(hide),false);assert.equal(f.prefs.getBoolPref(tab),true);
+ a.cleanup();b.cleanup();assert.equal(f.prefs.getBoolPref(hide),false);assert.equal(f.prefs.getBoolPref(tab),true);
+});
+test("cleanup during initial snapshot retains lease until write returns and removes unused backup",async()=>{
+ const f=fixture(),a=f.mount(),set=f.prefs.setStringPref;
+ f.prefs.setStringPref=(k,v)=>{set(k,v);if(k===KEY){a.cleanup();assert.equal(a.controller.ownsPreferences,true);assert.equal(a.window[CTRL],a.controller);}};
+ await a.activate();assert.equal(f.values.has(KEY),false);assert.equal(a.controller.ownsPreferences,false);assert.equal(a.window[CTRL],undefined);assert.deepEqual(f.writes,[]);
+});
+test("cleanup during native target write restores after observer returns",async()=>{
+ const f=fixture(),a=f.mount(),set=f.prefs.setBoolPref;
+ f.prefs.setBoolPref=(k,v)=>{set(k,v);if(k===A&&v===false){a.cleanup();assert.equal(a.controller.ownsPreferences,true);assert.equal(f.prefs.getBoolPref(A),false);}};
+ await a.activate();assert.equal(f.prefs.getBoolPref(A),true);assert.equal(f.values.has(KEY),false);assert.equal(a.controller.ownsPreferences,false);
+});
+test("backup write failure does not mutate native preferences or restore invalid backup",async()=>{
+ const f=fixture(),a=f.mount();f.values.set(KEY,"invalid json");
+ await a.activate();assert.equal(f.values.get(KEY),"invalid json");assert.deepEqual(f.writes,[]);assert.equal(a.controller.ownsPreferences,false);
+});
+test("partial target application failure releases previously acquired preferences",async()=>{
+ const f=fixture(),a=f.mount(),set=f.prefs.setBoolPref;f.values.set(B,true);
+ f.prefs.setBoolPref=(k,v)=>{if(k===B&&v===false)throw Error("locked");set(k,v);};
+ await a.activate();assert.equal(f.prefs.getBoolPref(A),true);assert.equal(f.prefs.getBoolPref(B),true);assert.equal(f.values.has(KEY),false);assert.equal(a.controller.ownsPreferences,false);
+});
