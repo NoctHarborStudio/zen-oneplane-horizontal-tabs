@@ -170,3 +170,7 @@ Center Motion owns one exact bookmark-fold handle per window and restores the pr
 ### Independent A2 follow-up — preview.79
 
 Preview.79 independent review extends the existing Workspace command contract: selected item must be in exactly the expected native container (outermost group role if grouped), and the peer reservation must belong to the actual current peer gate after the final native busy check. Zen remains sole native data owner.
+
+### A3.2-R preflight contract
+
+Closing sets its existing phase and synchronizes Magnetic Bookmarks before collecting target rectangles; acquisition failure uses the existing native-only bypass. Workspace phase already suspends before geometry lock. Startup rechecks suspension before resting contour preflight; the existing Magnetic Bookmarks controller coalesces preference changes until its last suspension phase clears. No new owner. Older shared Refined registry first-owner compatibility remains a native/mixed-install gate. Startup structural readiness, common timeline and topology reconciliation remain in A3.3–A3.6.

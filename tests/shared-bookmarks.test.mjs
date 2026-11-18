@@ -39,7 +39,7 @@ test("legacy late registration yields and reclaims without concurrent controller
 test("workspace outgoing phase suspends magnetic bookmarks before geometry lock",()=>{
  const source=readFileSync(new URL("../bookmarks.uc.mjs",import.meta.url),"utf8");
  const code=source.slice(source.indexOf("function syncAddressState(){"),source.indexOf("// Measure the native row"));
- const run=new Function(`let addressSuspended=false,addressPointer=null,lastPointer=null,phase=null,wave=false,clears=0,resumes=0;
+ const run=new Function(`let addressSuspended=false,addressPointer=null,lastPointer=null,settingsPending=false,phase=null,wave=false,clears=0,resumes=0;
  const root={hasAttribute:k=>k==="data-op-bookmark-wave"&&wave,getAttribute:()=>phase},list={hasAttribute:()=>false};
  function clear(){clears++;}function updateReserve(){resumes++;}function scheduleContour(){}
  ${code}
@@ -50,7 +50,7 @@ test("workspace outgoing phase suspends magnetic bookmarks before geometry lock"
 
 test("bookmark suspension is shared across startup, closing, center and bookmark fold",()=>{
  const code=script.slice(script.indexOf("function syncAddressState(){"),script.indexOf("// Measure the native row"));
- const run=new Function(`let addressSuspended=false,addressPointer=null,lastPointer=null,clears=0,resumes=0;
+ const run=new Function(`let addressSuspended=false,addressPointer=null,lastPointer=null,settingsPending=false,clears=0,resumes=0;
  const markers=new Set(),root={hasAttribute:k=>markers.has(k),getAttribute:()=>null},list={hasAttribute:k=>markers.has(k)};
  function clear(){clears++;}function updateReserve(){resumes++;}function scheduleContour(){}
  ${code}
@@ -58,4 +58,17 @@ test("bookmark suspension is shared across startup, closing, center and bookmark
  for(const k of [...markers]){markers.delete(k);syncAddressState();states.push(addressSuspended);}
  return {states,clears,resumes};`);
  assert.deepEqual(run(),{states:[true,true,true,true,true,true,true,false],clears:1,resumes:1});
+});
+
+test("preference updates are coalesced until the last exclusive bookmark phase ends",()=>{
+ const code=script.slice(script.indexOf("function syncAddressState(){"),script.indexOf("// Measure the native row"));
+ const run=new Function(`let addressSuspended=false,addressPointer=null,lastPointer=null,settingsPending=false,clears=0,reads=0,reserves=0;
+ const markers=new Set(),root={hasAttribute:k=>markers.has(k),getAttribute:()=>null},list={hasAttribute:k=>markers.has(k)};
+ function clear(){clears++;}function updateReserve(){reserves++;}function scheduleContour(){}function readSettings(){reads++;updateReserve();}
+ ${code}
+ markers.add("data-zr-startup-phase");refreshSettings();refreshSettings();
+ const during={reads,reserves};markers.add("data-zr-fold-bookmarks");markers.delete("data-zr-startup-phase");syncAddressState();refreshSettings();
+ const overlap={reads,reserves};markers.clear();syncAddressState();syncAddressState();
+ const after={reads,reserves};refreshSettings();return {during,overlap,after,idle:{reads,reserves},clears};`);
+ assert.deepEqual(run(),{during:{reads:0,reserves:0},overlap:{reads:0,reserves:0},after:{reads:1,reserves:1},idle:{reads:2,reserves:2},clears:1});
 });

@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="bookmarks.script",data={version:"0.3.0-preview.80"};
+  const event="bookmarks.script",data={version:"0.3.0-preview.81"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -47,7 +47,7 @@ function install() {
   const contourPrefix = "zen.oneplane.fade-";
   const GAP_GRACE_MS = 180;
   let settings = {};
-  let addressSuspended=false, addressPointer=null;
+  let addressSuspended=false, addressPointer=null, settingsPending=false;
   function syncAddressState(){
     const workspacePhase=root.getAttribute("data-zr-workspace-phase");
     const next=root.hasAttribute("data-op-bookmark-wave")||root.hasAttribute("data-zr-startup-phase")||root.hasAttribute("data-zr-closing")||
@@ -62,9 +62,19 @@ function install() {
       // Do not retarget from layout-generated pointer events.
       lastPointer=addressPointer;
       addressPointer=null;
-      updateReserve();
-      scheduleContour();
+      if(settingsPending)flushSettings();
+      else{updateReserve();scheduleContour();}
     }
+  }
+  // A preference callback during exclusive motion must not resize the
+  // bookmark shelf or replace its contour. Apply the latest prefs once
+  // the last phase ends; initial install still establishes base reserve.
+  function flushSettings(){
+    if(!settingsPending||addressSuspended)return;
+    settingsPending=false;readSettings();
+  }
+  function refreshSettings(){
+    settingsPending=true;syncAddressState();flushSettings();
   }
 
   // Measure the native row before enabling our fixed bottom reserve.
@@ -777,7 +787,7 @@ function install() {
   const prefsObserver = () => {
     if (!refreshFrame) refreshFrame = window.requestAnimationFrame(() => {
       refreshFrame = 0;
-      if (!dead) readSettings();
+      if (!dead) refreshSettings();
     });
   };
   const listeners = [
@@ -835,7 +845,7 @@ function install() {
     destroy();
     throw error;
   }
-  return {destroy,syncAddressState,prepareWorkspaceContour(){updateContour(true);}};
+  return {destroy,syncAddressState,prepareWorkspaceContour(){syncAddressState();updateContour(true);}};
 }
 
 // One shared native controller per browser window, regardless of which

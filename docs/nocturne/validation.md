@@ -301,3 +301,7 @@ Preview.79 independent A2 follow-up: 28/28 focused actual core fixture bodies PA
 ### Independent close acquisition review — preview.80
 
 Preview.80 independent close acquisition review: 28/28 prior Workspace core fixtures rerun PASS; 19/19 close fixtures PASS in isolated JS using actual controller and begin/restore bodies. Four new tests cover absent/failed proxy, failed bookmark fold after tab acquisition, partial direct control effect and engine replacement, successful native dwell and native-sidebar bookmark fallback. 11 versioned runtime bodies parse; canonical CI and native acceptance pending.
+
+### Preview.81 preflight review verification
+
+Three new permanent regressions; 26/26 focused Closing and shared-bookmarks test bodies pass in isolated V8 with actual source and mock DOM. Both new close regressions fail on preview.80 and pass on candidate. Generated Layout/Library bundles version-synchronized from previous verified output with exact changed source checks; full candidate focused regression suite and canonical Node CI tracked separately. No real Gecko or Windows run; native acceptance deferred. Mixed Refined-first owner and startup late readiness remain explicit gates.

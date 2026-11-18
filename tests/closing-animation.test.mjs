@@ -64,14 +64,15 @@ test("close reentry during seal does not seal twice or schedule another dwell",(
  gate.request({},[]);timer();assert.equal(calls,1);assert.equal(seals,1);assert.equal(scheduled,1);
 });
 
-function closeAcquisitionFixture({tabs=true,bookmarks=true,missingEngine=false,missingBookmarks=false,failTab=false,failBookmark=false,failControl=false,replaceEngine=false}={}){
- const effects=[],events=[],timers=[],reasons=[];
+function closeAcquisitionFixture({tabs=true,bookmarks=true,missingEngine=false,missingBookmarks=false,failTab=false,failBookmark=false,failControl=false,replaceEngine=false,preflight=false,failPreflight=false}={}){
+ const effects=[],events=[],timers=[],reasons=[],measurements=[];
+ let suspended=false;
  function node(name,children=[]){
   const attrs=new Map(),props=new Map();
   return {name,children,isConnected:true,hidden:false,collapsed:false,
    style:{getPropertyValue:k=>props.get(k)?.value||"",getPropertyPriority:k=>props.get(k)?.priority||"",setProperty(k,v,p=""){props.set(k,{value:v,priority:p});},removeProperty:k=>props.delete(k)},
    hasAttribute:k=>attrs.has(k),getAttribute:k=>attrs.get(k)??null,setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k),
-   getBoundingClientRect:()=>({left:20,top:10,right:220,bottom:50,width:200,height:40}),
+   getBoundingClientRect:()=>{if(preflight)measurements.push({name,suspended});return {left:20,top:10,right:220,bottom:50,width:200,height:40};},
    contains(n){return this===n||children.some(c=>c.contains(n));},querySelector(){return null;},querySelectorAll(){return [];},
    animate(){if(failControl&&name==="island")throw Error("control");const a={name,cancelled:0,finished:Promise.resolve(),cancel(){this.cancelled++;},finish(){}};effects.push(a);return a;}
   };
@@ -86,6 +87,7 @@ function closeAcquisitionFixture({tabs=true,bookmarks=true,missingEngine=false,m
   getComputedStyle:()=>({display:"block",visibility:"visible",opacity:"1",translate:"none"}),
   __nocturneTrace(event,data){if(event==="disassembly.bypass")reasons.push(data.reason);}
  };
+ if(preflight||failPreflight)win.__zenMagneticBookmarksShared={syncAddressState(){suspended=root.hasAttribute("data-zr-closing");if(failPreflight&&suspended)throw Error("preflight");}};
  const handle=name=>({count:1,release(){events.push("release-"+name);},seal(){events.push("seal-"+name);}});
  if(!missingEngine){
   const engine={start(){events.push("tabs");return failTab?null:handle("tabs");}};
@@ -102,7 +104,7 @@ function closeAcquisitionFixture({tabs=true,bookmarks=true,missingEngine=false,m
   return controller;
  `);
  const state={value:closed},gate=setup(win,root,get,factory,events,timers,state);
- return {gate,root,effects,events,timers,reasons};
+ return {gate,root,effects,events,timers,reasons,measurements};
 }
 test("visible horizontal tabs with missing or failed proxy acquisition bypass close motion",()=>{
  for(const options of [{missingEngine:true},{failTab:true}]){
@@ -133,4 +135,15 @@ test("successful acquisition keeps existing close dwell and native sidebar bookm
  assert.ok(fallback.effects.some(a=>a.name==="bookmark"));assert.equal(fallback.timers.length,1);
  fallback.timers[0]();fallback.timers[1]();assert.deepEqual(fallback.events,["native"]);
  const empty=closeAcquisitionFixture({bookmarks:false,failBookmark:true});empty.gate.request({},[]);assert.equal(empty.timers.length,1);
+});
+
+test("close settles bookmark hover and phase before every initial geometry read",()=>{
+ const h=closeAcquisitionFixture({tabs:false,missingEngine:true,preflight:true});h.gate.request({},[]);
+ assert.ok(h.measurements.length>0);assert.ok(h.measurements.every(x=>x.suspended));
+ assert.ok(h.effects.some(a=>a.name==="bookmark"));assert.equal(h.timers.length,1);
+});
+test("failed bookmark preflight restores phase and bypasses native close exactly once",()=>{
+ const h=closeAcquisitionFixture({failPreflight:true});assert.equal(h.gate.request({},[]),"closed");
+ assert.deepEqual(h.events,["native"]);assert.deepEqual(h.reasons,["bookmark-preflight-failed"]);
+ assert.equal(h.root.hasAttribute("data-zr-closing"),false);assert.equal(h.effects.length,0);assert.equal(h.timers.length,0);
 });

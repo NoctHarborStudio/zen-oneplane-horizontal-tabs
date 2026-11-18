@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="disassembly.script",data={version:"0.3.0-preview.80"};
+  const event="disassembly.script",data={version:"0.3.0-preview.81"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -155,11 +155,17 @@ try{if(typeof window!=="undefined"){
     const rec=owned.get(n);if(!rec.attrs.has(k))rec.attrs.set(k,n.getAttribute(k));n.setAttribute(k,"true");
   }
   function begin(){
-    const engine=window.__nocturneCenterMotion,row=get("oneplane-tabs"),items=get("PlacesToolbarItems");
+    const engine=window.__nocturneCenterMotion;
+    const bypass=reason=>{try{window.__nocturneTrace?.("disassembly.bypass",{reason},{flush:true});}catch{}return false;};
+    // Settle CSS tab hover and magnetic bookmarks before any geometry read.
+    // The existing close gate owns cleanup even if collection fails.
+    root.setAttribute("data-zr-closing","true");
+    try{window.__zenMagneticBookmarksShared?.syncAddressState?.();}catch{return bypass("bookmark-preflight-failed");}
+    if(window.__nocturneCenterMotion!==engine)return bypass("engine-replaced");
+    const row=get("oneplane-tabs"),items=get("PlacesToolbarItems");
     const needsTabs=!!visible(row)&&Array.from(row.querySelectorAll(".oneplane-tab-list :is(.oneplane-tab,.oneplane-split-group)")).some(n=>!!visible(n));
     const needsBookmarks=!!visible(items)&&Array.from(items.children).some(n=>!!visible(n));
     const targets=collect(engine);if(!targets.length)return false;
-    const bypass=reason=>{try{window.__nocturneTrace?.("disassembly.bypass",{reason},{flush:true});}catch{}return false;};
     // Missing horizontal proxy support must not leave the visible strip
     // behind while other controls disappear. Native-only sidebar and the
     // existing no-bookmark-API fallback remain supported.
@@ -177,8 +183,6 @@ try{if(typeof window!=="undefined"){
       try{sheet=Services.io.newURI("data:text/css;charset=utf-8,"+encodeURIComponent(css));window.windowUtils.loadSheet(sheet,window.windowUtils.USER_SHEET);}
       catch{sheet=null;style=document.createElementNS("http://www.w3.org/1999/xhtml","style");style.textContent=css;root.append(style);}
     }
-    root.setAttribute("data-zr-closing","true");
-    try{window.__zenMagneticBookmarksShared?.syncAddressState?.();}catch{}
     centerHandle=engine?.start?.(row,{owner:"close",direction:"out",duration:620,retainOnDispose:()=>controller.committing});
     if(needsTabs&&!centerHandle?.count)return bypass("tab-acquisition-failed");
     bookmarkHandle=engine?.bookmarks?.({owner:"close",direction:"out",duration:650,retainOnDispose:()=>controller.committing});

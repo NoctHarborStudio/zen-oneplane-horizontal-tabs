@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.80"};
+  const event="assembly.script",data={version:"0.3.0-preview.81"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -386,6 +386,7 @@ try{if(typeof window!=="undefined"){
     try{
       // Prime the resting contour while the startup gate is still held.
       const preflightAt=now();
+      try{window.__zenMagneticBookmarksShared?.syncAddressState?.();}catch{}
       if(one)try{window.__oneplaneLayoutController?.prepareWorkspaceGeometry?.();}catch{}
       window.__nocturneTrace?.("assembly.preflight",{elapsed:now()-preflightAt},{sample:1000});
       const row=get("oneplane-tabs"),url=get("urlbar-container");

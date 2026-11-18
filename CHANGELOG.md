@@ -1,3 +1,9 @@
+## 0.3.0-preview.81 — Motion preflight and bookmark geometry audit
+
+- Settle close phase and Magnetic Bookmarks before the first target/visibility measurement; native close bypass on failed preflight or replaced engine.
+- Coalesce bookmark preference changes during exclusive motion and apply them after the last phase; synchronize suspension before forced contour and Assembly preflight.
+- Three new regression tests; preserve native close/Workspace command semantics, timings and trajectories. Native verification pending.
+
 ## 0.3.0-preview.80 — Independent close motion acquisition review
 
 - Bypass decorative close motion if visible horizontal tabs or the required bookmark fold cannot acquire their effects, if the captured engine is replaced, or if a control effect fails.

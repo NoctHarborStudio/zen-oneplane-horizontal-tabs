@@ -190,3 +190,7 @@ A2 source implementation and independent integrated audit complete at R2, subjec
 ### Independent close acquisition review — preview.80
 
 Preview.80 emits bounded disassembly.bypass with static reasons tab-engine-unavailable, tab-acquisition-failed, bookmark-acquisition-failed, engine-replaced or control-acquisition-failed. Existing disassembly.cleanup and native.before/after traces remain authoritative for request/cleanup evidence, not persistence proof. No raw payloads or separate recorder.
+
+### Preview.81 preflight outcome
+
+Existing `disassembly.bypass` now also records `bookmark-preflight-failed` and `engine-replaced` before first measurement. Existing cleanup and native-before/after diagnostics track rollback and invocation; no new logger, per-frame recording, or private payload. Preference changes use the existing observer/RAF and apply only after motion suspension ends.
