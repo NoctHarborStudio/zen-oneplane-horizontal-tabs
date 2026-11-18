@@ -1,3 +1,10 @@
+## 0.3.0-preview.77 — Bookmark fold lifecycle ownership
+
+- Track exact bookmark fold handles, cancel superseded effects, restore original inline priority and marker, and roll back partial WAAPI acquisition.
+- Keep exact close-owned sealed handles through the existing close phase; reclaim them on replacement; fence Center Motion handoff callbacks.
+- Suspend Magnetic Bookmarks across lifecycle motion phases. Preserve existing trajectories and native command ownership.
+- Eight focused regression tests added; tab proxy acquisition audit and native verification pending.
+
 ## 0.3.0-preview.76 — Native Workspace topology and transfer preflight
 
 - Verify Glance parent and physical Essentials section for Workspace selection; verify nested group ancestry and active native browser compatibility for Return.

@@ -41,7 +41,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.76",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.77",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -404,14 +404,18 @@
 (()=>{
   const win=window,root=document.documentElement,KEY="__nocturneCenterMotion";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
-  win[KEY]?.dispose?.();
+  if(win[KEY]?.dispose?.({replacement:true})===false)return;
   const MARK="data-zr-center-card",OWNER="data-zr-center-motion",PENDING="data-zr-center-pending";
   const B="--zr-fold-bookmark-progress";
   try{win.CSS.registerProperty({name:B,syntax:"<number>",inherits:false,initialValue:"1"});}catch{}
   // Gecko user sheets may not register @property. The JS registration
   // guarantees smooth interpolation of the shared hover slot.
   try{win.CSS.registerProperty({name:"--op-hover-progress",syntax:"<number>",inherits:false,initialValue:"0"});}catch{}
-  let active=null,pendingTimer=0,dead=false;
+  let active=null,activeBookmark=null,pendingTimer=0,dead=false,bookmarkBusy=false,disposing=false,disposed=false,pendingDispose=null,bookmarkSequence=0;
+  const current=()=>win[KEY]===api;
+  function trace(event,data,options){try{win.__nocturneTrace?.(event,data,options);}catch{}}
+  function retire(){if(disposed&&!disposing&&!active&&!activeBookmark&&current())delete win[KEY];}
+  function drainDispose(){if(!bookmarkBusy&&!disposing&&pendingDispose){const options=pendingDispose;pendingDispose=null;dispose(options);}}
   // Magnetic Fold, ported from Motion Lab B. p=0 docked, p=1 resting.
   const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
   const smooth=p=>{p=clamp(p);return p*p*(3-2*p);};
@@ -604,15 +608,25 @@
     return {visible:!hidden&&geometry&&alpha>0,alpha,geometry};
   }
   function releasePending(){if(pendingTimer)win.clearTimeout(pendingTimer);pendingTimer=0;if(!win[KEY]||win[KEY]===api)root.removeAttribute(PENDING);}
-  let handoffFrame=0,handoffFrame2=0;
+  let handoffFrame=0,handoffFrame2=0,handoffGeneration=0,handoffOwned=false;
   function finishHandoff(){
-    if(handoffFrame)win.cancelAnimationFrame(handoffFrame);
-    if(handoffFrame2)win.cancelAnimationFrame(handoffFrame2);
-    handoffFrame=handoffFrame2=0;root.removeAttribute("data-zr-center-handoff");
+    handoffGeneration++;
+    const a=handoffFrame,b=handoffFrame2;handoffFrame=handoffFrame2=0;
+    try{if(a)win.cancelAnimationFrame(a);}catch{}
+    try{if(b)win.cancelAnimationFrame(b);}catch{}
+    if(handoffOwned){handoffOwned=false;if(current())root.removeAttribute("data-zr-center-handoff");}
   }
   function holdHandoff(){
-    finishHandoff();root.setAttribute("data-zr-center-handoff","true");
-    handoffFrame=win.requestAnimationFrame(()=>{handoffFrame=0;handoffFrame2=win.requestAnimationFrame(()=>{handoffFrame2=0;root.removeAttribute("data-zr-center-handoff");});});
+    finishHandoff();if(dead||!current())return;
+    const generation=handoffGeneration;
+    handoffOwned=true;root.setAttribute("data-zr-center-handoff","true");
+    const valid=()=>!dead&&current()&&generation===handoffGeneration;
+    try{
+      handoffFrame=win.requestAnimationFrame(()=>{
+        if(!valid())return;handoffFrame=0;
+        try{handoffFrame2=win.requestAnimationFrame(()=>{if(valid())finishHandoff();});}catch{finishHandoff();}
+      });
+    }catch{finishHandoff();}
   }
   function start(row,{owner,direction="in",duration=520,delay=0,paused=false}={}){
     if(dead)return null;
@@ -671,7 +685,7 @@
       catch{n.style.transform=frames.at(-1).transform;n.style.opacity=String(frames.at(-1).opacity);}
     }
     let released=false;
-    const handle={count:cards.length,finished:Promise.all(running.map(a=>a.finished.catch(()=>{}))),
+    const handle={owner,count:cards.length,finished:Promise.all(running.map(a=>a.finished.catch(()=>{}))),
       resume(){for(const a of running)try{a.play();}catch{}},
       seal(){for(const a of running)try{a.finish();}catch{}},
       release(){
@@ -690,6 +704,7 @@
             if(!dead&&!win.closed)step(()=>win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd")));
           }
         }
+        retire();
         win.__nocturneTrace?.("center.motion.release",()=>({owner,direction,count:cards.length,...stats,sourceIcons:iconStats(row),failed}),{sample:600});
       }};
     active=handle;
@@ -697,35 +712,76 @@
     return handle;
   }
   // Bookmarks use the Lab's center squeeze, not individual vertical slides.
-  function bookmarks({direction="in",duration=520,delay=0,paused=false}={}){
-    if(dead)return null;
-    const n=document.getElementById("PlacesToolbarItems");
+  function bookmarks(options={}){
+    if(dead||bookmarkBusy||disposing||!current())return null;
+    bookmarkBusy=true;
+    try{return acquireBookmark(options);}finally{bookmarkBusy=false;drainDispose();}
+  }
+  function acquireBookmark({owner="unknown",direction="in",duration=520,delay=0,paused=false}={}){
+    activeBookmark?.release("superseded");
+    if(dead||!current())return null;
+    const n=document.getElementById("PlacesToolbarItems"),markKey="data-zr-fold-bookmarks";
     if(!n||!n.getBoundingClientRect().width)return null;
-    const frames=Array.from({length:21},(_,i)=>{const p=smooth(direction==="out"?1-i/20:i/20);return {offset:i/20,[B]:String(p)};});
-    const old=n.style.getPropertyValue(B),priority=n.style.getPropertyPriority(B),mark=n.getAttribute("data-zr-fold-bookmarks");
-    n.style.setProperty(B,frames[0][B]);n.setAttribute("data-zr-fold-bookmarks","true");
+    const id=++bookmarkSequence,frames=Array.from({length:21},(_,i)=>{const p=smooth(direction==="out"?1-i/20:i/20);return {offset:i/20,[B]:String(p)};});
+    const old=n.style.getPropertyValue(B),priority=n.style.getPropertyPriority(B),mark=n.getAttribute(markKey);
     let a=null,released=false;
-    function release(){if(released)return;released=true;try{a?.cancel();}catch{}if(old)n.style.setProperty(B,old,priority);else n.style.removeProperty(B);if(mark===null)n.removeAttribute("data-zr-fold-bookmarks");else n.setAttribute("data-zr-fold-bookmarks",mark);}
+    const handle={owner,finished:Promise.resolve(),
+      resume(){if(!released)try{a?.play();}catch{}},
+      seal(){if(!released)try{a?.finish();}catch{}},
+      release(reason="release"){
+        if(released)return;released=true;
+        const wasBusy=bookmarkBusy;bookmarkBusy=true;
+        let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
+        try{
+          step(()=>a?.cancel());
+          if(activeBookmark===handle){
+            activeBookmark=null;
+            if(current()){
+              step(()=>{if(old)n.style.setProperty(B,old,priority);else n.style.removeProperty(B);});
+              step(()=>{if(mark===null)n.removeAttribute(markKey);else n.setAttribute(markKey,mark);});
+              step(()=>win.__zenMagneticBookmarksShared?.syncAddressState?.());
+            }
+          }
+          retire();trace("center.bookmarks.release",{id,owner,reason,failed},{flush:failed>0});
+        }finally{bookmarkBusy=wasBusy;drainDispose();}
+      }};
+    activeBookmark=handle;
     try{
+      n.style.setProperty(B,frames[0][B]);n.setAttribute(markKey,"true");
+      win.__zenMagneticBookmarksShared?.syncAddressState?.();
+      if(dead||!current()){handle.release("disposed");return null;}
       a=n.animate(frames,{duration,delay,easing:"linear",fill:"both"});
       if(paused){a.pause();a.currentTime=0;}
-      return {finished:a.finished.catch(()=>{}),resume(){try{a.play();}catch{}},seal(){try{a.finish();}catch{}},release};
-    }catch{release();return null;}
+      handle.finished=a.finished.catch(()=>{});
+      trace("center.bookmarks.acquire",{id,owner,direction,duration},{sample:duration+250});
+      if(dead||released||!current()){handle.release("disposed");return null;}
+      return handle;
+    }catch(error){handle.release("setup-failed");trace("center.bookmarks.error",{id,owner,name:error?.name},{flush:true});return null;}
   }
-  function dispose(){
-    if(dead)return;dead=true;
+  function dispose({replacement=false}={}){
+    if(disposing)return false;
+    if(bookmarkBusy){
+      dead=true;pendingDispose={replacement:replacement||pendingDispose?.replacement===true};
+      return false;
+    }
+    if(!current()||disposed&&!replacement)return true;
+    dead=true;disposed=true;disposing=true;
     let failed=0;
     const step=fn=>{try{fn();}catch{failed++;}};
-    step(releasePending);step(stopSelection);
-    step(()=>selectionContainer?.removeEventListener("TabSelect",onSelect));selectionContainer=null;
-    step(()=>win.removeEventListener("OnePlane:StartupState",bindSelection));
-    // The existing close transaction retains its sealed frame until native
-    // close returns. A later release must not start a dead handoff.
-    const delegated=!!active&&root.hasAttribute("data-zr-closing");
-    if(!delegated)step(()=>active?.release());
-    step(finishHandoff);
-    if(win[KEY]===api)delete win[KEY];
-    win.__nocturneTrace?.("center.dispose",{failed,delegated},{flush:true});
+    try{
+      step(releasePending);step(stopSelection);
+      step(()=>selectionContainer?.removeEventListener("TabSelect",onSelect));selectionContainer=null;
+      step(()=>win.removeEventListener("OnePlane:StartupState",bindSelection));
+      // Preserve the existing close-seal contract, but only for exact
+      // close-owned handles. Replacement always reclaims retained handles.
+      const closing=!replacement&&root.hasAttribute("data-zr-closing");
+      const delegated=!!(closing&&active?.owner==="close"),bookmarkDelegated=!!(closing&&activeBookmark?.owner==="close");
+      if(!delegated)step(()=>active?.release());
+      if(!bookmarkDelegated)step(()=>activeBookmark?.release("dispose"));
+      step(finishHandoff);
+      trace("center.dispose",{failed,delegated,bookmarkDelegated,replacement},{flush:true});
+    }finally{disposing=false;retire();drainDispose();}
+    return true;
   }
   // Ordinary selection uses the same ownership boundary but never delays
   // native TabSelect. Animate the chrome deck, not remote page DOM.

@@ -40,10 +40,22 @@ test("workspace outgoing phase suspends magnetic bookmarks before geometry lock"
  const source=readFileSync(new URL("../bookmarks.uc.mjs",import.meta.url),"utf8");
  const code=source.slice(source.indexOf("function syncAddressState(){"),source.indexOf("// Measure the native row"));
  const run=new Function(`let addressSuspended=false,addressPointer=null,lastPointer=null,phase=null,wave=false,clears=0,resumes=0;
- const root={hasAttribute:k=>k==="data-op-bookmark-wave"&&wave,getAttribute:()=>phase};
+ const root={hasAttribute:k=>k==="data-op-bookmark-wave"&&wave,getAttribute:()=>phase},list={hasAttribute:()=>false};
  function clear(){clears++;}function updateReserve(){resumes++;}function scheduleContour(){}
  ${code}
  const states=[];for(const p of ["out","swap","in",null]){phase=p;syncAddressState();states.push(addressSuspended);}
  return {states,clears,resumes};`);
  assert.deepEqual(run(),{states:[true,true,true,false],clears:1,resumes:1});
+});
+
+test("bookmark suspension is shared across startup, closing, center and bookmark fold",()=>{
+ const code=script.slice(script.indexOf("function syncAddressState(){"),script.indexOf("// Measure the native row"));
+ const run=new Function(`let addressSuspended=false,addressPointer=null,lastPointer=null,clears=0,resumes=0;
+ const markers=new Set(),root={hasAttribute:k=>markers.has(k),getAttribute:()=>null},list={hasAttribute:k=>markers.has(k)};
+ function clear(){clears++;}function updateReserve(){resumes++;}function scheduleContour(){}
+ ${code}
+ const states=[];for(const k of ["data-zr-startup-phase","data-zr-closing","data-zr-center-motion","data-zr-fold-bookmarks"]){markers.add(k);syncAddressState();states.push(addressSuspended);}
+ for(const k of [...markers]){markers.delete(k);syncAddressState();states.push(addressSuspended);}
+ return {states,clears,resumes};`);
+ assert.deepEqual(run(),{states:[true,true,true,true,true,true,true,false],clears:1,resumes:1});
 });

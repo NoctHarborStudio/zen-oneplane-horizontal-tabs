@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="disassembly.script",data={version:"0.3.0-preview.76"};
+  const event="disassembly.script",data={version:"0.3.0-preview.77"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -143,6 +143,7 @@ try{if(typeof window!=="undefined"){
     step(()=>{if(sheet)window.windowUtils.removeSheet(sheet,window.windowUtils.USER_SHEET);});
     sheet=null;step(()=>style?.remove());style=null;
     step(()=>root.removeAttribute("data-zr-closing"));
+    step(()=>window.__zenMagneticBookmarksShared?.syncAddressState?.());
     step(()=>window.__nocturneTrace?.("disassembly.cleanup",{failed},{flush:true}));
   }
   function set(n,k,v){
@@ -169,8 +170,9 @@ try{if(typeof window!=="undefined"){
       catch{sheet=null;style=document.createElementNS("http://www.w3.org/1999/xhtml","style");style.textContent=css;root.append(style);}
     }
     root.setAttribute("data-zr-closing","true");
+    try{window.__zenMagneticBookmarksShared?.syncAddressState?.();}catch{}
     centerHandle=window.__nocturneCenterMotion?.start(get("oneplane-tabs"),{owner:"close",direction:"out",duration:620});
-    bookmarkHandle=window.__nocturneCenterMotion?.bookmarks({direction:"out",duration:650});
+    bookmarkHandle=window.__nocturneCenterMotion?.bookmarks({owner:"close",direction:"out",duration:650});
     for(const {n,x,y,clip,delay,length,opacity} of targets){
       try{
         let frames;

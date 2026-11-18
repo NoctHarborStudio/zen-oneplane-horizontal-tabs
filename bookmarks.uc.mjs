@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="bookmarks.script",data={version:"0.3.0-preview.76"};
+  const event="bookmarks.script",data={version:"0.3.0-preview.77"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -50,7 +50,9 @@ function install() {
   let addressSuspended=false, addressPointer=null;
   function syncAddressState(){
     const workspacePhase=root.getAttribute("data-zr-workspace-phase");
-    const next=root.hasAttribute("data-op-bookmark-wave")||workspacePhase==="out"||workspacePhase==="swap"||workspacePhase==="in";
+    const next=root.hasAttribute("data-op-bookmark-wave")||root.hasAttribute("data-zr-startup-phase")||root.hasAttribute("data-zr-closing")||
+      root.hasAttribute("data-zr-center-motion")||list.hasAttribute("data-zr-fold-bookmarks")||
+      workspacePhase==="out"||workspacePhase==="swap"||workspacePhase==="in";
     if(next===addressSuspended)return;
     addressSuspended=next;
     if(next){
@@ -76,7 +78,7 @@ function install() {
   function desiredY(){return Math.min(1.36,Math.max(1.08,1+(settings.scale-1)*.86));}
   function verticalReserve(height,scale){return Math.ceil(height*Math.max(0,scale-1)+8);}
   function updateReserve(){
-    if(!settings.enabled)return;
+    if(!settings.enabled||addressSuspended)return;
     let height=0;
     for(const item of candidates()){
       const h=state.get(item)?.height||item.getBoundingClientRect().height;
@@ -224,6 +226,7 @@ function install() {
   }
 
   function toolbarVisible() {
+    syncAddressState();
     if (addressSuspended || root.hasAttribute("data-op-bookmark-wave") ||
       !settings.enabled || toolbar.collapsed || toolbar.hidden ||
       root.hasAttribute("customizing") || root.hasAttribute("inDOMFullscreen") ||
@@ -658,7 +661,8 @@ function install() {
 
   function onPointerMove(event){
     if(event.pointerType==="touch")return;
-    if(addressSuspended||root.hasAttribute("data-op-bookmark-wave")||root.hasAttribute("data-zr-workspace-phase")){
+    syncAddressState();
+    if(addressSuspended){
       addressPointer={x:event.clientX,y:event.clientY};return;
     }
     if(addressPointer===null&&lastPointer&&!active&&event.clientX===lastPointer.x&&event.clientY===lastPointer.y)return;
@@ -728,7 +732,7 @@ function install() {
     else clear(true);
   }
   function onFocus(event) {
-    if(addressSuspended||root.hasAttribute("data-op-bookmark-wave")||root.hasAttribute("data-zr-startup-phase"))return;
+    syncAddressState();if(addressSuspended)return;
     const item = event.target?.closest?.("toolbarbutton.bookmark-item");
     if (eligible(item) && item.matches(":focus-visible")) select(item, null);
   }
@@ -763,7 +767,7 @@ function install() {
     if(!busy()){updateReserve();scheduleContour();}
   });
   const resize = new ResizeObserver(() => {
-    if(addressSuspended)return;
+    if(dead)return;syncAddressState();if(addressSuspended)return;
     const next = toolbar.getBoundingClientRect().width;
     if(Math.abs(next-toolbarWidth)>2){toolbarWidth=next;clear(true);}
     if(!busy()){updateReserve();scheduleContour();}
@@ -817,9 +821,9 @@ function install() {
     toolbarWidth = toolbar.getBoundingClientRect().width;
     readSettings();
     for (const [target, type, listener, capture] of listeners) target.addEventListener(type, listener, capture);
-    observer.observe(list,{childList:true,subtree:true,attributes:true,attributeFilter:["hidden","collapsed","label","overflowed"]});
+    observer.observe(list,{childList:true,subtree:true,attributes:true,attributeFilter:["hidden","collapsed","label","overflowed","data-zr-fold-bookmarks"]});
     observer.observe(toolbar, { attributes: true, attributeFilter: ["hidden", "collapsed"] });
-    observer.observe(root,{attributes:true,attributeFilter:["customizing","inDOMFullscreen","oneplane-active","zen-compact-mode","data-op-bookmark-wave","data-zr-workspace-phase"]});
+    observer.observe(root,{attributes:true,attributeFilter:["customizing","inDOMFullscreen","oneplane-active","zen-compact-mode","data-op-bookmark-wave","data-zr-workspace-phase","data-zr-startup-phase","data-zr-closing","data-zr-center-motion"]});
     syncAddressState();
     if(wrapper)panelObserver.observe(wrapper,{childList:true,subtree:false,attributes:true,attributeFilter:["data-op-panel-open"]});
     resize.observe(toolbar);

@@ -148,3 +148,57 @@ test("boot prelude cleans the old Layout before replacement fragments mount",()=
  new Function("window","document","Services",prelude)(window,{documentElement:{hasAttribute:()=>false}},{prefs:{}});
  assert.equal(cleaned,1);
 });
+
+function bookmarkFixture({width=200}={}){
+ const attrs=new Map(),props=new Map(),priorities=new Map(),effects=[];
+ const attributes=m=>({hasAttribute:k=>m.has(k),getAttribute:k=>m.get(k)??null,setAttribute:(k,v)=>m.set(k,v),removeAttribute:k=>m.delete(k)});
+ const root=attributes(new Map()),node={...attributes(attrs),getBoundingClientRect:()=>({width}),
+   style:{getPropertyValue:k=>props.get(k)??"",getPropertyPriority:k=>priorities.get(k)??"",setProperty(k,v,p=""){props.set(k,v);priorities.set(k,p);},removeProperty(k){props.delete(k);priorities.delete(k);}},
+   animate(){const a={finished:Promise.resolve(),cancelled:0,played:0,sealed:0,cancel(){this.cancelled++;},play(){this.played++;},finish(){this.sealed++;},pause(){}};effects.push(a);return a;}};
+ const document={documentElement:root,getElementById:()=>node};
+ const window={__nocturneLayoutStartup:{},CSS:{registerProperty(){}},addUnloadListener(){},addEventListener(){},removeEventListener(){}};
+ const mount=()=>{new Function("window","document","Services",source)(window,document,{});return window.__nocturneCenterMotion;};
+ return {root,node,window,document,mount,effects};
+}
+const foldProp="--zr-fold-bookmark-progress",foldMark="data-zr-fold-bookmarks";
+test("bookmark fold replacement restores exact baseline in either release order",()=>{
+ for(const reverse of [false,true]){
+  const f=bookmarkFixture(),engine=f.mount();f.node.style.setProperty(foldProp,".8","important");f.node.setAttribute(foldMark,"original");
+  const old=engine.bookmarks({direction:"out"}),next=engine.bookmarks({direction:"in"});
+  assert.equal(f.effects[0].cancelled,1);
+  if(reverse)next.release();old.release();
+  if(!reverse){assert.equal(f.node.getAttribute(foldMark),"true");assert.equal(f.node.style.getPropertyValue(foldProp),"0");next.release();}
+  old.resume();old.seal();assert.equal(f.effects[0].played,0);assert.equal(f.effects[0].sealed,0);
+  assert.equal(f.node.getAttribute(foldMark),"original");assert.equal(f.node.style.getPropertyValue(foldProp),".8");assert.equal(f.node.style.getPropertyPriority(foldProp),"important");
+  assert.equal(f.effects[1].cancelled,1);
+ }
+});
+test("bookmark fold disposal and hot reload cancel the acquired old handle",()=>{
+ const f=bookmarkFixture(),old=f.mount(),a=old.bookmarks({owner:"startup"}),next=f.mount(),b=next.bookmarks({owner:"startup"});
+ assert.equal(f.effects[0].cancelled,1);a.release();a.seal();assert.equal(f.node.getAttribute(foldMark),"true");
+ b.release();assert.equal(f.node.getAttribute(foldMark),null);assert.equal(f.node.style.getPropertyValue(foldProp),"");
+ const c=next.bookmarks();next.dispose();assert.equal(f.effects[2].cancelled,1);c.release();assert.equal(f.effects[2].cancelled,1);
+});
+test("only exact close handles may outlive disposal; replacement reclaims them",()=>{
+ const f=bookmarkFixture(),old=f.mount();f.root.setAttribute("data-zr-closing","true");
+ const a=old.bookmarks({owner:"close"});old.dispose();assert.equal(f.effects[0].cancelled,0);a.seal();assert.equal(f.effects[0].sealed,1);
+ const next=f.mount();assert.equal(f.effects[0].cancelled,1);const b=next.bookmarks({owner:"startup"});a.release();assert.equal(f.node.getAttribute(foldMark),"true");
+ next.dispose();assert.equal(f.effects[1].cancelled,1);assert.equal(f.node.getAttribute(foldMark),null);b.release();
+});
+test("delegated close release retires the disposed engine without replacement",()=>{
+ const f=bookmarkFixture(),engine=f.mount();f.root.setAttribute("data-zr-closing","true");const a=engine.bookmarks({owner:"close"});
+ engine.dispose();a.release();assert.equal(f.window.__nocturneCenterMotion,undefined);assert.equal(f.node.getAttribute(foldMark),null);
+});
+test("bookmark pause failure rolls back WAAPI, inline properties and marker",()=>{
+ const f=bookmarkFixture(),engine=f.mount(),animate=f.node.animate.bind(f.node);f.node.animate=()=>{const a=animate();a.pause=()=>{throw Error("pause");};return a;};
+ assert.equal(engine.bookmarks({paused:true}),null);assert.equal(f.effects[0].cancelled,1);assert.equal(f.node.getAttribute(foldMark),null);assert.equal(f.node.style.getPropertyValue(foldProp),"");
+});
+test("bookmark admission rejects reentry and cleans deferred disposal",()=>{
+ const f=bookmarkFixture(),engine=f.mount(),animate=f.node.animate.bind(f.node);let nested;
+ f.node.animate=()=>{nested=engine.bookmarks();engine.dispose();return animate();};
+ assert.equal(engine.bookmarks(),null);assert.equal(nested,null);assert.equal(f.effects[0].cancelled,1);assert.equal(f.node.getAttribute(foldMark),null);assert.equal(f.window.__nocturneCenterMotion,undefined);
+});
+test("missing or zero-width surfaces do not acquire effects",()=>{
+ const f=bookmarkFixture({width:0}),engine=f.mount();
+ assert.equal(engine.bookmarks(),null);assert.equal(engine.start(null,{owner:"startup"}),null);assert.equal(f.effects.length,0);
+});

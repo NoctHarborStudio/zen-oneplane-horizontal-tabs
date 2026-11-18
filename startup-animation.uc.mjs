@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.76"};
+  const event="assembly.script",data={version:"0.3.0-preview.77"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -167,6 +167,7 @@ try{if(typeof window!=="undefined"){
     step(()=>style?.remove());style=null;
     if(owns){
       step(()=>root.removeAttribute(PHASE));
+      step(()=>window.__zenMagneticBookmarksShared?.syncAddressState?.());
       step(()=>holdNode?.removeAttribute(HOLD));
       step(()=>{delete window.__nocturneStartupTimeline;});
       step(()=>window.__zenSharedHomeV1?.finishStartup?.());
@@ -433,7 +434,7 @@ try{if(typeof window!=="undefined"){
       controls(row,url,center);
       if(centerHandle&&items){
         for(const n of items.children){n.setAttribute(MANAGED,"true");seen.add(n);}
-        bookmarkHandle=window.__nocturneCenterMotion?.bookmarks({direction:"in",duration:Math.round(420*scale),delay:Math.round(timeline.bookmarks*scale),paused:bootPreparing});
+        bookmarkHandle=window.__nocturneCenterMotion?.bookmarks({owner:"startup",direction:"in",duration:Math.round(420*scale),delay:Math.round(timeline.bookmarks*scale),paused:bootPreparing});
       }
       if(!bookmarkHandle)revealBookmarks(center);
       if(floating)openFromCenter(floating,590,440);
@@ -619,7 +620,7 @@ try{if(typeof window!=="undefined"){
     // inserted controls remain eligible for the full center reveal.
     lateStart=lateStart||!canStartBeforePaint(window.windowUtils,document.readyState);
     if(lateStart)for(const selector of earlyTargets)for(const n of document.querySelectorAll(selector))if(!baseline.has(n)){baseline.add(n);n.setAttribute(EXISTING,"true");}
-    root.setAttribute(PHASE,"waiting");hold();mountBoot();
+    root.setAttribute(PHASE,"waiting");try{window.__zenMagneticBookmarksShared?.syncAddressState?.();}catch{}hold();mountBoot();
     console.info("[Zen Refined] Center Assembly: "+(lateStart?"late chrome startup":"prepaint startup"));
     timer=window.setTimeout(finish,Math.max(0,deadline-now()));
     if(window.gBrowserInit?.delayedStartupFinished)onNativeReady();
