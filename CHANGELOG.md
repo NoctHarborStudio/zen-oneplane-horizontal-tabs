@@ -1,3 +1,9 @@
+## 0.3.0-preview.64 — Explicit Layout terminal handoff
+
+- Register the current Layout cleanup owner with Diagnostics; a real chrome-window unload delegates directly, and disposal waits for explicit Layout completion rather than assuming the next microtask ends all listeners.
+- Ignore descendant lifecycle events, including retargeted events where the original target is not the chrome window/document. Keep the idempotent native Layout fallback for unavailable or forced-disposed Diagnostics.
+- Nine regression fixtures for separated microtasks, native/Sine paths, replacement, disabled recording and descendant events. No new prefs, writer, shutdown delay or intended visual changes. Native evidence pending.
+
 ## 0.3.0-preview.63 — Diagnostic writer self-review
 
 - Check all available window aliases and the process anchor before choosing a diagnostic queue; block new recorder writes on legacy or distinct active queue conflicts until restart.

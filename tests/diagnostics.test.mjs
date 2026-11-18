@@ -18,7 +18,7 @@ function fixture({isPrivate=false,on=true,prior=null,failWrite=false,writeHook=(
  if(shared?.store)win.__nocturneDiagnosticStore=shared.store;
  const reload=()=>{new Function("window","document","Services","IOUtils","PathUtils","Components","ChromeUtils","TextEncoder",source)(win,doc,{scriptSecurityManager:{getSystemPrincipal:()=>({})},prefs:{getBoolPref:()=>enabled},wm:{getEnumerator(){let i=0;const windows=[win,...peers];return {hasMoreElements:()=>i<windows.length,getNext:()=>windows[i++]};}}},io,paths,components,chrome,TextEncoder);return win.__nocturneDiagnostics;};
  reload();
- return {reload,win,timers,frames,logs,writes,io,listeners,attrs,unload:()=>unload(),setTime:t=>time=t,disable:()=>enabled=false,api:win.__nocturneDiagnostics};
+ return {reload,win,doc,timers,frames,logs,writes,io,listeners,attrs,unload:()=>unload(),setTime:t=>time=t,disable:()=>enabled=false,api:win.__nocturneDiagnostics};
 }
 test("recorder keeps ordered events, early markers, lazy detail and bounded ring",async()=>{
  const f=fixture();const trace=f.win.__nocturneTrace;
@@ -198,4 +198,50 @@ test("lazy detail cannot append after synchronous dispose or disable",async()=>{
  const b=fixture();b.win.__nocturneTrace("disabled.during.detail",()=>{b.disable();return {};});
  assert.ok(!JSON.parse(b.api.dump()).events.some(e=>e.event==="disabled.during.detail"));
  b.api.dispose();
+});
+
+test("native unload delegates to claimed Layout before closing trace across microtask checkpoints",async()=>{
+ const f=fixture({standalone:true}),events=()=>JSON.parse(f.api.dump()).events;
+ let calls=0,complete=f.api.claimLayout(nativeExit=>{calls++;assert.equal(nativeExit,true);});
+ assert.equal(typeof complete,"function");assert.equal(f.api.claimLayout(()=>{}),null);
+ const unload=f.listeners.get("unload");
+ unload({target:f.doc});await Promise.resolve();
+ assert.equal(calls,1);assert.equal(f.frames.size,0);assert.equal(f.timers.size,0);
+ assert.equal(typeof f.win.__nocturneTrace,"function");
+ f.win.__nocturneTrace("layout.cleanup.end",{failedSteps:0});
+ complete();complete();await Promise.resolve();await f.api.flush();
+ assert.equal(f.win.__nocturneTrace,undefined);
+ assert.ok(events().some(e=>e.event==="layout.cleanup.end"));assert.equal(events().at(-1).event,"diagnostics.dispose");
+});
+test("descendant lifecycle events cannot quiesce recorder or consume window unload",async()=>{
+ const f=fixture(),unload=f.listeners.get("unload"),before=f.listeners.get("beforeunload");
+ let calls=0,complete=f.api.claimLayout(()=>{calls++;complete();});
+ before({target:{}});unload({target:f.win,originalTarget:{}});await Promise.resolve();
+ assert.equal(calls,0);assert.equal(f.listeners.get("unload"),unload);assert.ok(f.frames.size>0);
+ assert.ok(!JSON.parse(f.api.dump()).events.some(e=>e.event==="window.unload"||e.event==="window.beforeunload"));
+ unload({target:f.doc,originalTarget:f.doc});await Promise.resolve();assert.equal(calls,1);
+});
+test("Sine fallback delegates only to captured Layout and completion is generation-safe",async()=>{
+ const f=fixture(),old=f.api;let calls=0,complete=old.claimLayout(nativeExit=>{assert.equal(nativeExit,false);calls++;});
+ f.unload();await Promise.resolve();assert.equal(calls,1);assert.equal(f.win.__nocturneDiagnostics,old);
+ const next=f.reload();complete();await Promise.resolve();assert.equal(f.win.__nocturneDiagnostics,next);next.dispose();
+});
+test("explicit Layout completion without native unload retains terminal trace and disposes once",async()=>{
+ const f=fixture();let calls=0,complete=f.api.claimLayout(()=>calls++);
+ f.win.__nocturneTrace("layout.cleanup.end",{failedSteps:0});complete();complete();await Promise.resolve();
+ const events=JSON.parse(f.api.dump()).events;assert.equal(calls,0);
+ assert.equal(events.filter(e=>e.event==="diagnostics.dispose").length,1);
+ assert.ok(events.some(e=>e.event==="layout.cleanup.end"));
+});
+test("failed owner handoff is recorded and partial init fallback still disposes",async()=>{
+ const f=fixture(),complete=f.api.claimLayout(()=>{throw Error("injected owner failure");});
+ f.listeners.get("unload")({target:f.win});await Promise.resolve();complete();
+ const events=JSON.parse(f.api.dump()).events;
+ assert.ok(events.some(e=>e.event==="diagnostics.layout.handoff-error"));assert.equal(events.at(-1).event,"diagnostics.dispose");
+ const p=fixture();p.listeners.get("unload")({target:p.doc});await Promise.resolve();assert.equal(p.win.__nocturneTrace,undefined);
+});
+test("reentrant completion during native handoff and disabled recorder do not strand owner",async()=>{
+ const f=fixture({on:false});let calls=0,complete=f.api.claimLayout(()=>{calls++;f.api.requestDispose(true);complete();});
+ f.listeners.get("unload")({target:f.doc});await Promise.resolve();assert.equal(calls,1);
+ assert.equal(f.win.__nocturneTrace,undefined);assert.equal(f.timers.size,0);assert.equal(f.writes.length,0);
 });

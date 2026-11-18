@@ -7,15 +7,16 @@ const KEY="zen.oneplane.original-layout",CTRL="__oneplaneLayoutController",A="ze
 function fixture(){
  const values=new Map(),defaults=new Map([[A,true],[B,false],["zen.view.sidebar-expanded",true],["zen.view.compact.hide-tabbar",false],["zen.view.compact.hide-toolbar",true],["zen.view.compact.enable-at-startup",false]]);
  const windows=[],writes=[],prefs={PREF_BOOL:128,getPrefType:()=>128,getStringPref:(k,d)=>values.get(k)??d,setStringPref:(k,v)=>values.set(k,v),getBoolPref:k=>values.get(k)??defaults.get(k),prefHasUserValue:k=>values.has(k),setBoolPref(k,v){writes.push([k,v]);values.set(k,v);},clearUserPref:k=>values.delete(k)};
- const Services={prefs,startup:{shuttingDown:false},wm:{getEnumerator(){const items=[...windows];return {hasMoreElements:()=>items.length>0,getNext:()=>items.shift()};}}};
- function mount(resources={}){
+ const Services={prefs,startup:{shuttingDown:false},obs:{addObserver(){},removeObserver(){}},wm:{getEnumerator(){const items=[...windows];return {hasMoreElements:()=>items.length>0,getNext:()=>items.shift()};}}};
+ function mount(resources={},register=false){
   const root={hasAttribute:()=>false,setAttribute(){},removeAttribute(){}},document={documentElement:root},timers=new Map(),events=[],unload=new Map();
-  let n=0,release=()=>{};const window={...resources,closed:false,CustomEvent:class{constructor(type){this.type=type;}},gZenCompactModeManager:{hideToolbar(){}},dispatchEvent:e=>events.push(e.type),requestAnimationFrame(){},addEventListener:(k,f)=>unload.set(k,f),removeEventListener:k=>unload.delete(k),setTimeout(fn){timers.set(++n,fn);return n;},clearTimeout:id=>timers.delete(id)};
+  let n=0,release=()=>{},sine;const window={...resources,closed:false,CustomEvent:class{constructor(type){this.type=type;}},gZenCompactModeManager:{hideToolbar(){}},dispatchEvent:e=>events.push(e.type),requestAnimationFrame(){},addEventListener:(k,f)=>unload.set(k,f),removeEventListener:k=>unload.delete(k),setTimeout(fn){timers.set(++n,fn);return n;},clearTimeout:id=>timers.delete(id)};
+  if(register)window.addUnloadListener=fn=>{sine=fn;};
   windows.push(window);
-  const run=new Function("Services","window","document","console","getRelease",source+"\n"+boot.slice(0,boot.indexOf("const reloadingLayout="))+
-    "\nconst reloadingLayout=true,startupRecord={};function installTabStrip(){return getRelease();}window[CONTROLLER]=controller;return {activate,cleanup,markClosing,nativeUnload,controller};");
+  const run=new Function("Services","window","document","console","getRelease",source+"\n"+(register?boot:boot.slice(0,boot.indexOf("const reloadingLayout=")))+
+    "\n"+(register?"":"const reloadingLayout=true,startupRecord={};window[CONTROLLER]=controller;")+"function installTabStrip(){return getRelease();}return {activate,cleanup,markClosing,nativeUnload,controller};");
   const h=run(Services,window,document,{warn(){},error(){},info(){}},()=>release);
-  return {...h,window,document,events,timers,onRelease(fn){release=fn;},tick(){const q=[...timers.values()];timers.clear();q.forEach(fn=>fn());}};
+  return {...h,window,document,events,timers,sine:()=>sine?.(),fireUnload:event=>unload.get("unload")?.(event),onRelease(fn){release=fn;},tick(){const q=[...timers.values()];timers.clear();q.forEach(fn=>fn());}};
  }
  return {mount,values,writes,prefs,Services};
 }
@@ -48,7 +49,7 @@ test("Sine unload during close hint schedules fallback only without replacement"
  assert.equal(b.events.includes("ZenCompactMode:LayoutUpdate"),false);
 });
 test("actual native unload never schedules layout fallback",async()=>{
- const f=fixture(),a=f.mount();await a.activate();a.events.length=0;a.markClosing({target:a.document});a.nativeUnload();
+ const f=fixture(),a=f.mount();await a.activate();a.events.length=0;a.markClosing({target:a.document});a.nativeUnload({target:a.document});
  assert.equal(a.timers.size,0);assert.equal(a.events.includes("ZenCompactMode:LayoutUpdate"),false);
 });
 
@@ -94,4 +95,30 @@ test("Layout stops Assembly before disposing Center Motion or detaching strip",a
  const f=fixture(),order=[];
  const a=f.mount({__zenRefinedStartupAnimation:()=>order.push("assembly"),__nocturneCenterMotion:{dispose(){order.push("center");}}});
  a.onRelease(()=>order.push("strip"));await a.activate();a.cleanup();assert.deepEqual(order,["assembly","center","strip"]);
+});
+
+test("descendant unload does not release Layout lease or consume native fallback",async()=>{
+ const f=fixture(),a=f.mount();await a.activate();
+ a.nativeUnload({target:{}});a.nativeUnload({target:a.window,originalTarget:{}});
+ assert.equal(a.controller.ownsPreferences,true);assert.ok(f.values.has(KEY));
+ a.nativeUnload({target:a.document,originalTarget:a.document});
+ assert.equal(a.controller.ownsPreferences,false);assert.equal(f.values.has(KEY),false);
+});
+test("actual bootstrap claims owner before listeners and completes after lease release on Sine or native path",async()=>{
+ for(const nativeExit of [false,true]){
+  const f=fixture(),order=[];let owner,a;
+  a=f.mount({__nocturneDiagnostics:{claimLayout(fn){owner=fn;return ()=>{order.push("complete");assert.equal(f.values.has(KEY),false);};}},__nocturneTrace(event,data){if(event==="layout.cleanup.end"){order.push("end");assert.equal(data.nativeExit,nativeExit);}}},true);
+  assert.equal(typeof owner,"function");await a.activate();
+  a.fireUnload({target:{}});assert.equal(a.controller.ownsPreferences,true);
+  if(nativeExit)owner(true);else a.sine();
+  a.fireUnload({target:a.document});a.sine();assert.deepEqual(order,["end","complete"]);
+  assert.equal(a.controller.ownsPreferences,false);
+ }
+});
+test("actual bootstrap defers terminal completion until a reentrant preference write unwinds",async()=>{
+ const f=fixture(),order=[];let owner;
+ const a=f.mount({__nocturneDiagnostics:{claimLayout(fn){owner=fn;return ()=>{order.push("complete");assert.equal(f.values.has(KEY),false);};}}},true);
+ const set=f.prefs.setBoolPref;
+ f.prefs.setBoolPref=(k,v)=>{set(k,v);if(k===A&&v===false){owner(true);assert.equal(a.controller.ownsPreferences,true);assert.deepEqual(order,[]);}};
+ await a.activate();assert.deepEqual(order,["complete"]);assert.equal(a.controller.ownsPreferences,false);
 });

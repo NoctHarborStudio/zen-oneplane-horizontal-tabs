@@ -2,7 +2,7 @@
 // The final Layout callback owns normal teardown; early fragment callbacks
 // are partial-initialization fallbacks only.
 const layoutResources={boot:window.__nocturneEarlyBoot,center:window.__nocturneCenterMotion,diagnostics:window.__nocturneDiagnostics};
-let cleanupErrors=0,cleanupErrorStart=0;
+let cleanupErrors=0,cleanupErrorStart=0,completeDiagnostics=null;
 // Each release is isolated: one feature failure must not prevent native
 // preference restoration or the remaining controller cleanup.
 function cleanupStep(label,fn){
@@ -50,7 +50,10 @@ function finishCleanup(){
   });
   if(wasApplied&&registered)cleanupStep("native layout update",()=>updateNativeAfterCleanup(pendingClose,nativeExit===true));
   try{window.__nocturneTrace?.("layout.cleanup.end",{wasApplied,wasOwner,registered,pendingClose,nativeExit,failedSteps:cleanupErrors-cleanupErrorStart},{flush:true});}catch{}
-  cleanupStep("diagnostics",()=>layoutResources.diagnostics?.requestDispose?.());
+  cleanupStep("diagnostics",()=>{
+    if(completeDiagnostics){const complete=completeDiagnostics;completeDiagnostics=null;complete();}
+    else layoutResources.diagnostics?.requestDispose?.();
+  });
 }
 
 const controller = { get active() { return applied && !disposed; },
@@ -183,11 +186,15 @@ const startupRecord={initial:!reloadingLayout&&!window.__nocturneLayoutStartup,r
 if (!root.hasAttribute("popup-window") && typeof window.addUnloadListener === "function") {
   window[CONTROLLER]?.cleanup();
   window[CONTROLLER] = controller;
+  // Capture this generation's completion before publishing native listeners.
+  completeDiagnostics=layoutResources.diagnostics?.claimLayout?.(cleanup)||null;
   window.__nocturneLayoutStartup=startupRecord;
   root.setAttribute("data-op-startup-ready","pending");
   window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
   window.addEventListener("beforeunload", markClosing, true);
-  window.addEventListener("unload", nativeUnload, { once: true });
+  // Idempotent fallback for unavailable/forced-disposed Diagnostics.
+  // A descendant unload must not consume a one-shot window listener.
+  window.addEventListener("unload", nativeUnload);
   window.addUnloadListener(cleanup);
   if (window.gBrowserInit?.delayedStartupFinished) {
     void activate();

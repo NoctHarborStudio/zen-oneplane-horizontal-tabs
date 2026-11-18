@@ -106,8 +106,12 @@ function restorePrefs() {
   return failed===0;
 }
 
+function isLayoutWindowEvent(event){
+  const own=target=>target===document||target===window;
+  return own(event?.target)&&(!event.originalTarget||own(event.originalTarget));
+}
 function markClosing(event) {
-  if(event.target!==document&&event.target!==window)return;
+  if(!isLayoutWindowEvent(event))return;
   closing=true;
   if(closeTimer)window.clearTimeout(closeTimer);
   closeTimer=window.setTimeout(()=>{
@@ -116,7 +120,7 @@ function markClosing(event) {
   },1000);
   try{window.__nocturneTrace?.("layout.markClosing",{closing},{flush:true});}catch{}
 }
-function nativeUnload(){cleanup(true);}
+function nativeUnload(event){if(isLayoutWindowEvent(event))cleanup(true);}
 function updateNativeAfterCleanup(pendingClose,nativeExit){
   if(nativeExit||window.closed||Services.startup?.shuttingDown)return;
   const update=()=>{

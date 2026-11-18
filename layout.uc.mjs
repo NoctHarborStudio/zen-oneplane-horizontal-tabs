@@ -41,7 +41,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.63",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.64",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -325,21 +325,55 @@
     timer=writeTimer=raf=0;nodes.clear();
     record("diagnostics.quiesce",{failed},{flush:true});
   }
+  // The registered Layout generation, not a microtask checkpoint, owns
+  // the terminal cleanup boundary. No window is kept alive for disk IO.
+  let layoutOwner=null,handoff=false,disposeQueued=false,disposing=false;
+  function claimLayout(owner){
+    if(dead||quiescing||layoutOwner||typeof owner!=="function")return null;
+    layoutOwner=owner;
+    return ()=>{
+      if(dead||layoutOwner!==owner)return;
+      layoutOwner=null;
+      requestDispose();
+    };
+  }
   function dispose(){
-    if(dead)return;
+    if(dead||disposing)return;
+    disposing=true;layoutOwner=null;
     stopSampling();
     record("diagnostics.dispose",()=>({closed:win.closed,phase:attrState(root,rootAttrs)}),{flush:true});
     dead=true;void flush();
     if(win.__nocturneTrace===record)delete win.__nocturneTrace;if(win.__nocturneDiagnostics===api)delete win.__nocturneDiagnostics;
   }
-  function requestDispose(){
-    if(dead||quiescing)return;
-    // Stop active resources now; retain the existing trace for synchronous
-    // unload producers until the next microtask. Never delay native shutdown.
-    stopSampling();
-    void Promise.resolve().then(dispose);
+  function requestDispose(nativeExit=false){
+    if(dead||disposing||handoff)return;
+    const owner=layoutOwner;
+    if(owner){
+      handoff=true;
+      try{
+        stopSampling();
+        // Delegate directly from the real chrome-window unload callback.
+        // A deferred preference release calls its completion when ready.
+        if(layoutOwner===owner){
+          record("diagnostics.layout.handoff",{nativeExit:nativeExit===true},{flush:true});
+          owner(nativeExit===true);
+        }
+      }catch(error){
+        record("diagnostics.layout.handoff-error",{name:error?.name||"Error"},{flush:true});
+        if(layoutOwner===owner)layoutOwner=null;
+      }finally{handoff=false;}
+      if(layoutOwner)return;
+    }else stopSampling();
+    // Only after explicit owner completion (or partial init without one).
+    // A microtask retains same-stack independent producers; their later
+    // listener checkpoints are not part of the Layout completion contract.
+    if(!disposeQueued){disposeQueued=true;void Promise.resolve().then(dispose);}
   }
-  const api={version:VERSION,fileName,dump,flush,dispose,requestDispose,mark:label=>record("user.mark",{label:String(label).slice(0,80)},{sample:2500,flush:true})};
+  function windowEvent(event){
+    const own=target=>target===win||target===doc;
+    return own(event?.target)&&(!event.originalTarget||own(event.originalTarget));
+  }
+  const api={version:VERSION,fileName,dump,flush,dispose,requestDispose,claimLayout,mark:label=>record("user.mark",{label:String(label).slice(0,80)},{sample:2500,flush:true})};
   win.__nocturneDiagnostics=api;win.__nocturneTrace=record;
   const earlyBoot=win.__nocturneEarlyBoot;
   try{
@@ -354,12 +388,15 @@
     for(const type of ["OnePlane:StartupState","ZenRefined:WorkspaceTransition","ZenWorkspaceDataChanged","ZenCompactMode:Toggled","ZenCompactMode:LayoutUpdate","OnePlane:DownloadHostChanged","ZenViewSplitter:SplitViewActivated","ZenViewSplitter:SplitViewDeactivated","sizemodechange","resize","activate","deactivate","beforecustomization","aftercustomization"]){
       listen(win,type,()=>{if(!enabled())return;bindNative();observeTargets();record("event."+type,()=>({phase:attrState(root,rootAttrs),size:[win.innerWidth,win.innerHeight]}),{sample:2000,throttle:70});});
     }
-    for(const type of ["beforeunload","pagehide","unload"])listen(win,type,()=>record("window."+type,()=>({phase:attrState(root,rootAttrs),closed:win.closed}),{flush:true}));
+    for(const type of ["beforeunload","pagehide","unload"])listen(win,type,event=>{
+      if(!windowEvent(event))return;
+      record("window."+type,()=>({phase:attrState(root,rootAttrs),closed:win.closed}),{flush:true});
+      if(type==="unload")requestDispose(true);
+    });
     bindNative();observeTargets();
     record("diagnostics.ready",()=>({version:VERSION,writer:writerMode,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished,size:[win.innerWidth,win.innerHeight],private:privateWindow()}),{sample:6000,flush:true});
     const early=win.__nocturneEarlyTrace||[];delete win.__nocturneEarlyTrace;
     for(const item of early)record(item.event,()=>({earlyAt:item.t,...item.data}),{sample:2000});
-    listen(win,"unload",requestDispose);
   }catch(error){record("diagnostics.setup-error",{name:error?.name});dispose();}
 })();
 /* Nocturne Center Motion — shared deterministic card choreography.
@@ -840,8 +877,12 @@ function restorePrefs() {
   return failed===0;
 }
 
+function isLayoutWindowEvent(event){
+  const own=target=>target===document||target===window;
+  return own(event?.target)&&(!event.originalTarget||own(event.originalTarget));
+}
 function markClosing(event) {
-  if(event.target!==document&&event.target!==window)return;
+  if(!isLayoutWindowEvent(event))return;
   closing=true;
   if(closeTimer)window.clearTimeout(closeTimer);
   closeTimer=window.setTimeout(()=>{
@@ -850,7 +891,7 @@ function markClosing(event) {
   },1000);
   try{window.__nocturneTrace?.("layout.markClosing",{closing},{flush:true});}catch{}
 }
-function nativeUnload(){cleanup(true);}
+function nativeUnload(event){if(isLayoutWindowEvent(event))cleanup(true);}
 function updateNativeAfterCleanup(pendingClose,nativeExit){
   if(nativeExit||window.closed||Services.startup?.shuttingDown)return;
   const update=()=>{
@@ -7971,7 +8012,7 @@ function installTabStrip() {
 // The final Layout callback owns normal teardown; early fragment callbacks
 // are partial-initialization fallbacks only.
 const layoutResources={boot:window.__nocturneEarlyBoot,center:window.__nocturneCenterMotion,diagnostics:window.__nocturneDiagnostics};
-let cleanupErrors=0,cleanupErrorStart=0;
+let cleanupErrors=0,cleanupErrorStart=0,completeDiagnostics=null;
 // Each release is isolated: one feature failure must not prevent native
 // preference restoration or the remaining controller cleanup.
 function cleanupStep(label,fn){
@@ -8019,7 +8060,10 @@ function finishCleanup(){
   });
   if(wasApplied&&registered)cleanupStep("native layout update",()=>updateNativeAfterCleanup(pendingClose,nativeExit===true));
   try{window.__nocturneTrace?.("layout.cleanup.end",{wasApplied,wasOwner,registered,pendingClose,nativeExit,failedSteps:cleanupErrors-cleanupErrorStart},{flush:true});}catch{}
-  cleanupStep("diagnostics",()=>layoutResources.diagnostics?.requestDispose?.());
+  cleanupStep("diagnostics",()=>{
+    if(completeDiagnostics){const complete=completeDiagnostics;completeDiagnostics=null;complete();}
+    else layoutResources.diagnostics?.requestDispose?.();
+  });
 }
 
 const controller = { get active() { return applied && !disposed; },
@@ -8152,11 +8196,15 @@ const startupRecord={initial:!reloadingLayout&&!window.__nocturneLayoutStartup,r
 if (!root.hasAttribute("popup-window") && typeof window.addUnloadListener === "function") {
   window[CONTROLLER]?.cleanup();
   window[CONTROLLER] = controller;
+  // Capture this generation's completion before publishing native listeners.
+  completeDiagnostics=layoutResources.diagnostics?.claimLayout?.(cleanup)||null;
   window.__nocturneLayoutStartup=startupRecord;
   root.setAttribute("data-op-startup-ready","pending");
   window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
   window.addEventListener("beforeunload", markClosing, true);
-  window.addEventListener("unload", nativeUnload, { once: true });
+  // Idempotent fallback for unavailable/forced-disposed Diagnostics.
+  // A descendant unload must not consume a one-shot window listener.
+  window.addEventListener("unload", nativeUnload);
   window.addUnloadListener(cleanup);
   if (window.gBrowserInit?.delayedStartupFinished) {
     void activate();
