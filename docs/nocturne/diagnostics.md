@@ -85,3 +85,7 @@ Preview.61 native file retains all three sessions with zero dropped, yet both cl
 ### Preview.62 independent writer
 
 `diagnostics.ready.writer`: process = independent sandbox and module anchor; independent = standalone sandbox without process anchor; local = window-local fallback; legacy-blocked = incompatible old queue, restart required; unavailable = no writer. Snapshot submission happens synchronously, disk writes remain asynchronous. One active write, at most three pending latest session snapshots, retained file cap unchanged. Private windows never submit. Terminal events still depend on actual producer execution and process survival; no shutdown delay or guarantee. Static packaged writer code only; no user content evaluation.
+
+### Preview.63 writer self-review
+
+`diagnostics.ready.writer` additionally reports conflict-blocked for distinct discovered modern queues; any discovered legacy queue takes precedence. No new disk submission or replacement writer on these conflicts. Restart the entire browser. Local dump remains available. Event sequence/time allocated after sanitized lazy detail returns; events discarded if the callback disposed or disabled the recorder. Unretained snapshots may result from queue policy or IO failure, not only missing file access. Existing bounds, private exclusion and immediate terminal handoff unchanged. Native Gecko identity/persistence remains unverified.
