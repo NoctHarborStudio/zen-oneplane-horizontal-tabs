@@ -6,19 +6,19 @@ const source=read("src/core/preferences.js.part"),boot=read("src/core/bootstrap.
 const KEY="zen.oneplane.original-layout",CTRL="__oneplaneLayoutController",A="zen.view.use-single-toolbar",B="zen.tabs.vertical.right-side";
 function fixture(){
  const values=new Map(),defaults=new Map([[A,true],[B,false],["zen.view.sidebar-expanded",true],["zen.view.compact.hide-tabbar",false],["zen.view.compact.hide-toolbar",true],["zen.view.compact.enable-at-startup",false]]);
- const windows=[],writes=[],prefs={PREF_BOOL:128,getPrefType:()=>128,getStringPref:(k,d)=>values.get(k)??d,setStringPref:(k,v)=>values.set(k,v),getBoolPref:k=>values.get(k)??defaults.get(k),prefHasUserValue:k=>values.has(k),setBoolPref(k,v){writes.push([k,v]);values.set(k,v);},clearUserPref:k=>values.delete(k)};
- const Services={prefs,startup:{shuttingDown:false},obs:{addObserver(){},removeObserver(){}},wm:{getEnumerator(){const items=[...windows];return {hasMoreElements:()=>items.length>0,getNext:()=>items.shift()};}}};
- function mount(resources={},register=false){
+ const windows=[],writes=[],observers=new Set(),prefs={PREF_BOOL:128,getPrefType:()=>128,getStringPref:(k,d)=>values.get(k)??d,setStringPref:(k,v)=>values.set(k,v),getBoolPref:k=>values.get(k)??defaults.get(k),prefHasUserValue:k=>values.has(k),setBoolPref(k,v){writes.push([k,v]);values.set(k,v);},clearUserPref:k=>values.delete(k)};
+ const Services={prefs,startup:{shuttingDown:false},obs:{addObserver(fn){observers.add(fn);},removeObserver(fn){observers.delete(fn);}},wm:{getEnumerator(){const items=[...windows];return {hasMoreElements:()=>items.length>0,getNext:()=>items.shift()};}}};
+ function mount(resources={},register=false,onEvent=()=>{}){
   const root={hasAttribute:()=>false,setAttribute(){},removeAttribute(){}},document={documentElement:root},timers=new Map(),events=[],unload=new Map();
-  let n=0,release=()=>{},sine;const window={...resources,closed:false,CustomEvent:class{constructor(type){this.type=type;}},gZenCompactModeManager:{hideToolbar(){}},dispatchEvent:e=>events.push(e.type),requestAnimationFrame(){},addEventListener:(k,f)=>unload.set(k,f),removeEventListener:k=>unload.delete(k),setTimeout(fn){timers.set(++n,fn);return n;},clearTimeout:id=>timers.delete(id)};
+  let n=0,release=()=>{},sine;const window={...resources,closed:false,CustomEvent:class{constructor(type){this.type=type;}},gZenCompactModeManager:{hideToolbar(){}},dispatchEvent:e=>{events.push(e.type);onEvent(window,e);},requestAnimationFrame(){},addEventListener:(k,f)=>unload.set(k,f),removeEventListener:k=>unload.delete(k),setTimeout(fn){timers.set(++n,fn);return n;},clearTimeout:id=>timers.delete(id)};
   if(register)window.addUnloadListener=fn=>{sine=fn;};
   windows.push(window);
   const run=new Function("Services","window","document","console","getRelease",source+"\n"+(register?boot:boot.slice(0,boot.indexOf("const reloadingLayout=")))+
     "\n"+(register?"":"const reloadingLayout=true,startupRecord={};window[CONTROLLER]=controller;")+"function installTabStrip(){return getRelease();}return {activate,cleanup,markClosing,nativeUnload,controller};");
   const h=run(Services,window,document,{warn(){},error(){},info(){}},()=>release);
-  return {...h,window,document,events,timers,sine:()=>sine?.(),fireUnload:event=>unload.get("unload")?.(event),onRelease(fn){release=fn;},tick(){const q=[...timers.values()];timers.clear();q.forEach(fn=>fn());}};
+  return {...h,window,document,events,timers,sine:()=>sine?.(),listeners:unload,fireUnload:event=>unload.get("unload")?.(event),onRelease(fn){release=fn;},tick(){const q=[...timers.values()];timers.clear();q.forEach(fn=>fn());}};
  }
- return {mount,values,writes,prefs,Services};
+ return {mount,values,writes,prefs,Services,observers};
 }
 test("joining window shares native preferences without overwriting user edits",async()=>{
  const f=fixture(),a=f.mount();await a.activate();assert.equal(f.prefs.getBoolPref(A),false);
@@ -121,4 +121,21 @@ test("actual bootstrap defers terminal completion until a reentrant preference w
  const set=f.prefs.setBoolPref;
  f.prefs.setBoolPref=(k,v)=>{set(k,v);if(k===A&&v===false){owner(true);assert.equal(a.controller.ownsPreferences,true);assert.deepEqual(order,[]);}};
  await a.activate();assert.deepEqual(order,["complete"]);assert.equal(a.controller.ownsPreferences,false);
+});
+
+test("bootstrap does not register stale resources after synchronous StartupState disposal",()=>{
+ const f=fixture();let first=true,completed=0;
+ const a=f.mount({__nocturneDiagnostics:{claimLayout(){return ()=>completed++;}}},true,(w,e)=>{
+  if(first&&e.type==="OnePlane:StartupState"){first=false;w[CTRL].cleanup();}
+ });
+ assert.equal(a.window[CTRL],undefined);assert.equal(f.observers.size,0);
+ assert.equal(a.listeners.size,0);assert.equal(completed,1);a.sine();assert.equal(completed,1);
+});
+test("bootstrap registration rolls back claim and listeners when StartupState dispatch throws",()=>{
+ const f=fixture();let completed=0,first=true;
+ const a=f.mount({__nocturneDiagnostics:{claimLayout(){return ()=>completed++;}}},true,()=>{
+  if(first){first=false;throw Error("injected startup publication failure");}
+ });
+ assert.equal(a.window[CTRL],undefined);assert.equal(a.listeners.size,0);
+ assert.equal(f.observers.size,0);assert.equal(completed,1);a.sine();assert.equal(completed,1);
 });

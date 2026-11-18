@@ -1,3 +1,8 @@
+## 0.3.0-preview.65 — Layout registration self-review
+
+- Register the captured Diagnostics owner, native listeners and Sine cleanup before publishing synchronous StartupState. Guard subsequent startup activation/observer registration against reentrant disposal or stale generation.
+- Roll back registration on setup failure; two regression fixtures for synchronous cleanup and injected dispatch failure. No change to animation timing, preferences or diagnostic writer. Native verification pending.
+
 ## 0.3.0-preview.64 — Explicit Layout terminal handoff
 
 - Register the current Layout cleanup owner with Diagnostics; a real chrome-window unload delegates directly, and disposal waits for explicit Layout completion rather than assuming the next microtask ends all listeners.

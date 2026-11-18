@@ -41,7 +41,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.64",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.65",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -8196,25 +8196,35 @@ const startupRecord={initial:!reloadingLayout&&!window.__nocturneLayoutStartup,r
 if (!root.hasAttribute("popup-window") && typeof window.addUnloadListener === "function") {
   window[CONTROLLER]?.cleanup();
   window[CONTROLLER] = controller;
-  // Capture this generation's completion before publishing native listeners.
-  completeDiagnostics=layoutResources.diagnostics?.claimLayout?.(cleanup)||null;
-  window.__nocturneLayoutStartup=startupRecord;
-  root.setAttribute("data-op-startup-ready","pending");
-  window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
-  window.addEventListener("beforeunload", markClosing, true);
-  // Idempotent fallback for unavailable/forced-disposed Diagnostics.
-  // A descendant unload must not consume a one-shot window listener.
-  window.addEventListener("unload", nativeUnload);
-  window.addUnloadListener(cleanup);
-  if (window.gBrowserInit?.delayedStartupFinished) {
-    void activate();
-  } else {
-    startupObserver = subject => {
-      if (subject !== window) return;
-      Services.obs.removeObserver(startupObserver, "browser-delayed-startup-finished");
-      startupObserver = null;
-      void activate();
-    };
-    Services.obs.addObserver(startupObserver, "browser-delayed-startup-finished");
+  const current=()=>!disposed&&!window.closed&&window[CONTROLLER]===controller;
+  try{
+    // Claim this generation and register teardown before publishing
+    // StartupState: synchronous consumers may dispose this controller.
+    completeDiagnostics=layoutResources.diagnostics?.claimLayout?.(cleanup)||null;
+    window.addEventListener("beforeunload", markClosing, true);
+    // Idempotent fallback for unavailable/forced-disposed Diagnostics.
+    // A descendant unload must not consume a one-shot window listener.
+    window.addEventListener("unload", nativeUnload);
+    window.addUnloadListener(cleanup);
+    window.__nocturneLayoutStartup=startupRecord;
+    root.setAttribute("data-op-startup-ready","pending");
+    if(!current())cleanup();
+    else{
+      window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
+      if(!current())cleanup();
+      else if(window.gBrowserInit?.delayedStartupFinished)void activate();
+      else{
+        startupObserver=subject=>{
+          if(subject!==window||!current())return;
+          Services.obs.removeObserver(startupObserver,"browser-delayed-startup-finished");
+          startupObserver=null;
+          void activate();
+        };
+        Services.obs.addObserver(startupObserver,"browser-delayed-startup-finished");
+      }
+    }
+  }catch(error){
+    console.error("[OnePlane] Layout registration failed:",error);
+    cleanup();
   }
 }
