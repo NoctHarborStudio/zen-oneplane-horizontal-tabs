@@ -89,3 +89,7 @@ Preview.61 native file retains all three sessions with zero dropped, yet both cl
 ### Preview.63 writer self-review
 
 `diagnostics.ready.writer` additionally reports conflict-blocked for distinct discovered modern queues; any discovered legacy queue takes precedence. No new disk submission or replacement writer on these conflicts. Restart the entire browser. Local dump remains available. Event sequence/time allocated after sanitized lazy detail returns; events discarded if the callback disposed or disabled the recorder. Unretained snapshots may result from queue policy or IO failure, not only missing file access. Existing bounds, private exclusion and immediate terminal handoff unchanged. Native Gecko identity/persistence remains unverified.
+
+### Preview.63 native evidence and A1.10
+
+Both new recorders report process writer and persist native unload/quiesce/dispose; the closing window also records native.after closed=true. Layout cleanup and lease release records remain absent. An isolated fixture with a microtask checkpoint between unload listeners reproduces premature trace removal before a later producer. Do not equate diagnostic disposal with Layout cleanup or missing event with failed resource release. A1.10 will review explicit terminal handoff and native/mod-disable ordering without delaying shutdown. Background RAF gaps are not presented FPS.
