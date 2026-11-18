@@ -1,3 +1,4 @@
+import {createDisposableScope} from "../src/core/disposable-scope.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
@@ -13,9 +14,9 @@ function fixture(){
   let n=0,release=()=>{},sine;const window={...resources,closed:false,CustomEvent:class{constructor(type){this.type=type;}},gZenCompactModeManager:{hideToolbar(){}},dispatchEvent:e=>{events.push(e.type);onEvent(window,e);},requestAnimationFrame(){},addEventListener:(k,f)=>unload.set(k,f),removeEventListener:k=>unload.delete(k),setTimeout(fn){timers.set(++n,fn);return n;},clearTimeout:id=>timers.delete(id)};
   if(register)window.addUnloadListener=fn=>{sine=fn;};
   windows.push(window);
-  const run=new Function("Services","window","document","console","getRelease",source+"\n"+(register?boot:boot.slice(0,boot.indexOf("const reloadingLayout=")))+
+  const run=new Function("Services","window","document","console","getRelease","createDisposableScope",source+"\n"+(register?boot:boot.slice(0,boot.indexOf("const reloadingLayout=")))+
     "\n"+(register?"":"const reloadingLayout=true,startupRecord={};window[CONTROLLER]=controller;")+"function installTabStrip(){return getRelease();}return {activate,cleanup,markClosing,nativeUnload,controller};");
-  const h=run(Services,window,document,{warn(){},error(){},info(){}},()=>release);
+  const h=run(Services,window,document,{warn(){},error(){},info(){}},()=>release,createDisposableScope);
   return {...h,window,document,events,timers,sine:()=>sine?.(),listeners:unload,fireUnload:event=>unload.get("unload")?.(event),onRelease(fn){release=fn;},tick(){const q=[...timers.values()];timers.clear();q.forEach(fn=>fn());}};
  }
  return {mount,values,writes,prefs,Services,observers};
@@ -116,11 +117,11 @@ test("actual bootstrap claims owner before listeners and completes after lease r
  }
 });
 test("actual bootstrap defers terminal completion until a reentrant preference write unwinds",async()=>{
- const f=fixture(),order=[];let owner;
+ const f=fixture(),order=[];let owner,entered=false;
  const a=f.mount({__nocturneDiagnostics:{claimLayout(fn){owner=fn;return ()=>{order.push("complete");assert.equal(f.values.has(KEY),false);};}}},true);
  const set=f.prefs.setBoolPref;
- f.prefs.setBoolPref=(k,v)=>{set(k,v);if(k===A&&v===false){owner(true);assert.equal(a.controller.ownsPreferences,true);assert.deepEqual(order,[]);}};
- await a.activate();assert.deepEqual(order,["complete"]);assert.equal(a.controller.ownsPreferences,false);
+ f.prefs.setBoolPref=(k,v)=>{set(k,v);if(k===A&&v===false){entered=true;owner(true);assert.equal(a.controller.ownsPreferences,true);assert.deepEqual(order,[]);}};
+ await a.activate();assert.equal(entered,true);assert.deepEqual(order,["complete"]);assert.equal(a.controller.ownsPreferences,false);
 });
 
 test("bootstrap does not register stale resources after synchronous StartupState disposal",()=>{
