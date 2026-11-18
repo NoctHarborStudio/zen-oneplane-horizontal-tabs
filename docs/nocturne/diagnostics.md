@@ -75,3 +75,7 @@ Same-window recorder reload reuses the existing write coordinator; all coalesced
 ### Preview.60 workspace/closing cleanup
 
 `workspace.geometry.cleanup`, `workspace.effects.cleanup`, `workspace.settle.cleanup`, `workspace.cleanup`, `workspace.dispose`, `disassembly.cleanup`, `disassembly.dispose` report bounded aggregate failure counts, sequence/keepGate or delegated flags where applicable. `workspace.visual.error` records error class only when native operation already succeeded. No URLs, profile values or raw error messages in new diagnostic payloads. Failed cleanup is not native-release proof.
+
+### Preview.61 reentrant motion lifecycle
+
+Existing preview.60 cleanup/phase/native events retained. Workspace intent is registered before synchronous teardown; close reentrant requests serialized through acquisition/seal/completion. No additional content fields, no artificial shutdown delay.
