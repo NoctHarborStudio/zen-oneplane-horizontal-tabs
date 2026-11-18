@@ -1020,3 +1020,7 @@ Eleven permanent regression tests added: partial setup at seven stages, synchron
 ### Independent A2 follow-up — preview.79
 
 Independent A2 follow-up (NC4-033/041, AUD-006/007): preview.78 could confirm inconsistent Workspace list/container membership and a stale peer gate after synchronous reentry; reproduced in source fixtures, corrected in preview.79. Native acceptance deferred. AUD-008 under A3.2-R: close fallback omits bookmarks if API is present but returns null and does not provide tab proxy fallback; verify actual acquisition result or safely bypass close motion. No native visual failure observed. Existing NC4-054 geometry ordering remains open.
+
+### Independent close acquisition review — preview.80
+
+AUD-008 (A3.2-R/NC4-054 related): close API-presence fallback omitted visible horizontal tabs/bookmarks when shared acquisition failed. Preview.80 uses conservative native close bypass and exact cleanup on acquisition failure; source fixture PASS, native visual acceptance pending. Geometry collection before phase and cross-surface integration remain open in A3.2-R/A3.6.

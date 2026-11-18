@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="disassembly.script",data={version:"0.3.0-preview.79"};
+  const event="disassembly.script",data={version:"0.3.0-preview.80"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -90,7 +90,7 @@ try{if(typeof window!=="undefined"){
       r.right<=0||r.bottom<=0||r.left>=window.innerWidth||r.top>=window.innerHeight)return null;
     return {n,r,s};
   }
-  function collect(){
+  function collect(engine){
     const row=get("oneplane-tabs"),island=row?.querySelector(".oneplane-title-island");
     const ir=visible(island),rr=visible(row),url=get("urlbar-container"),ur=visible(url);
     const center=ir?ir.r.left+ir.r.width/2:rr?rr.r.left+rr.r.width/2:ur?ur.r.left+ur.r.width/2:window.innerWidth/2;
@@ -104,7 +104,7 @@ try{if(typeof window!=="undefined"){
     const floating=get("urlbar");
     const floatVisible=floating&&(floating.getAttribute("zen-floating-urlbar")==="true"||floating.hasAttribute("zen-newtab"));
     if(floatVisible)add(floating,0,0,true,0,280);
-    if(!window.__nocturneCenterMotion?.bookmarks)for(const n of Array.from(get("PlacesToolbarItems")?.children||[])){
+    if(typeof engine?.bookmarks!=="function")for(const n of Array.from(get("PlacesToolbarItems")?.children||[])){
       const t=visible(n);if(t)add(n,0,-14,false,Math.max(0,55-Math.abs(t.r.left+t.r.width/2-center)*.09),280);
     }
     if(rr){
@@ -155,7 +155,15 @@ try{if(typeof window!=="undefined"){
     const rec=owned.get(n);if(!rec.attrs.has(k))rec.attrs.set(k,n.getAttribute(k));n.setAttribute(k,"true");
   }
   function begin(){
-    const targets=collect();if(!targets.length)return false;
+    const engine=window.__nocturneCenterMotion,row=get("oneplane-tabs"),items=get("PlacesToolbarItems");
+    const needsTabs=!!visible(row)&&Array.from(row.querySelectorAll(".oneplane-tab-list :is(.oneplane-tab,.oneplane-split-group)")).some(n=>!!visible(n));
+    const needsBookmarks=!!visible(items)&&Array.from(items.children).some(n=>!!visible(n));
+    const targets=collect(engine);if(!targets.length)return false;
+    const bypass=reason=>{try{window.__nocturneTrace?.("disassembly.bypass",{reason},{flush:true});}catch{}return false;};
+    // Missing horizontal proxy support must not leave the visible strip
+    // behind while other controls disappear. Native-only sidebar and the
+    // existing no-bookmark-API fallback remain supported.
+    if(needsTabs&&typeof engine?.start!=="function")return bypass("tab-engine-unavailable");
     typeof window!=="undefined"&&window.__nocturneTrace?.("disassembly.targets",()=>({count:targets.length,registered:typeof window.CSS?.registerProperty==='function'}),{sample:1800});
     let registered=false;
     try{window.CSS.registerProperty({name:PROGRESS,syntax:"<number>",inherits:false,initialValue:"1"});registered=true;}
@@ -171,8 +179,11 @@ try{if(typeof window!=="undefined"){
     }
     root.setAttribute("data-zr-closing","true");
     try{window.__zenMagneticBookmarksShared?.syncAddressState?.();}catch{}
-    centerHandle=window.__nocturneCenterMotion?.start(get("oneplane-tabs"),{owner:"close",direction:"out",duration:620,retainOnDispose:()=>controller.committing});
-    bookmarkHandle=window.__nocturneCenterMotion?.bookmarks({owner:"close",direction:"out",duration:650,retainOnDispose:()=>controller.committing});
+    centerHandle=engine?.start?.(row,{owner:"close",direction:"out",duration:620,retainOnDispose:()=>controller.committing});
+    if(needsTabs&&!centerHandle?.count)return bypass("tab-acquisition-failed");
+    bookmarkHandle=engine?.bookmarks?.({owner:"close",direction:"out",duration:650,retainOnDispose:()=>controller.committing});
+    if(needsBookmarks&&typeof engine?.bookmarks==="function"&&!bookmarkHandle)return bypass("bookmark-acquisition-failed");
+    if((centerHandle||bookmarkHandle)&&window.__nocturneCenterMotion!==engine)return bypass("engine-replaced");
     for(const {n,x,y,clip,delay,length,opacity} of targets){
       try{
         let frames;
@@ -188,8 +199,9 @@ try{if(typeof window!=="undefined"){
           if(clip){from.clipPath="inset(-8px round 8px)";to.clipPath="inset(-8px 49% -8px 49% round 8px)";}
           frames=[from,to];
         }
-        animations.add(n.animate(frames,{delay,duration:length,easing:"cubic-bezier(.4,0,.35,1)",fill:"both"}));
-      }catch(e){console.warn("[Zen Refined] Close effect:",e);}
+        const effect=n.animate(frames,{delay,duration:length,easing:"cubic-bezier(.4,0,.35,1)",fill:"both"});
+        animations.add(effect);effect.finished.catch(()=>{});
+      }catch{return bypass("control-acquisition-failed");}
     }
     typeof window!=="undefined"&&window.__nocturneTrace?.("disassembly.effects",()=>({count:animations.size,owned:owned.size,duration:DURATION}),{sample:1000,flush:true});
     return animations.size>0||!!centerHandle?.count||!!bookmarkHandle;

@@ -297,3 +297,7 @@ Eleven permanent regression tests added: partial setup at seven stages, synchron
 ### Independent A2 follow-up — preview.79
 
 Preview.79 independent A2 follow-up: 28/28 focused actual core fixture bodies PASS in isolated JS harness, four new regressions for absent authoritative Workspace, distinct/exclusive containers and pin role, valid nested group / invalid ancestry, and peer gate or manager replacement during final native busy check. Eleven versioned runtime bodies parse. Generated Layout and Library bundles reconstructed by exact source-fragment replacements in prior CI-verified bundles. Canonical CI pending; no native Zen run. A3.2-R fallback finding AUD-008 is not closed by this release.
+
+### Independent close acquisition review — preview.80
+
+Preview.80 independent close acquisition review: 28/28 prior Workspace core fixtures rerun PASS; 19/19 close fixtures PASS in isolated JS using actual controller and begin/restore bodies. Four new tests cover absent/failed proxy, failed bookmark fold after tab acquisition, partial direct control effect and engine replacement, successful native dwell and native-sidebar bookmark fallback. 11 versioned runtime bodies parse; canonical CI and native acceptance pending.

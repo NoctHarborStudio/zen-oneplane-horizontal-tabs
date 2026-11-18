@@ -63,3 +63,74 @@ test("close reentry during seal does not seal twice or schedule another dwell",(
  gate=factory({eligible:()=>true,begin:()=>true,clear(){},seal(){seals++;gate.request({},[]);},later(fn){scheduled++;timer=fn;return scheduled;},cancelLater(){},invoke(){calls++;}});
  gate.request({},[]);timer();assert.equal(calls,1);assert.equal(seals,1);assert.equal(scheduled,1);
 });
+
+function closeAcquisitionFixture({tabs=true,bookmarks=true,missingEngine=false,missingBookmarks=false,failTab=false,failBookmark=false,failControl=false,replaceEngine=false}={}){
+ const effects=[],events=[],timers=[],reasons=[];
+ function node(name,children=[]){
+  const attrs=new Map(),props=new Map();
+  return {name,children,isConnected:true,hidden:false,collapsed:false,
+   style:{getPropertyValue:k=>props.get(k)?.value||"",getPropertyPriority:k=>props.get(k)?.priority||"",setProperty(k,v,p=""){props.set(k,{value:v,priority:p});},removeProperty:k=>props.delete(k)},
+   hasAttribute:k=>attrs.has(k),getAttribute:k=>attrs.get(k)??null,setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k),
+   getBoundingClientRect:()=>({left:20,top:10,right:220,bottom:50,width:200,height:40}),
+   contains(n){return this===n||children.some(c=>c.contains(n));},querySelector(){return null;},querySelectorAll(){return [];},
+   animate(){if(failControl&&name==="island")throw Error("control");const a={name,cancelled:0,finished:Promise.resolve(),cancel(){this.cancelled++;},finish(){}};effects.push(a);return a;}
+  };
+ }
+ const card=node("card"),plus=node("plus"),island=node("island"),row=node("row",[card,plus,island]);
+ row.querySelector=k=>({".oneplane-title-island":island,".oneplane-new-tab":plus}[k]||null);
+ row.querySelectorAll=()=>tabs?[card]:[];
+ const bm=node("bookmark"),items=node("items",bookmarks?[bm]:[]),root=node("root"),url=node("url"),sidebar=node("sidebar");
+ const get=id=>({"oneplane-tabs":tabs?row:null,"PlacesToolbarItems":items,"urlbar-container":url,"zen-tabs-wrapper":sidebar}[id]||null);
+ let closed=false;
+ const win={innerWidth:1000,innerHeight:700,CSS:{registerProperty(){throw Error("unsupported");}},
+  getComputedStyle:()=>({display:"block",visibility:"visible",opacity:"1",translate:"none"}),
+  __nocturneTrace(event,data){if(event==="disassembly.bypass")reasons.push(data.reason);}
+ };
+ const handle=name=>({count:1,release(){events.push("release-"+name);},seal(){events.push("seal-"+name);}});
+ if(!missingEngine){
+  const engine={start(){events.push("tabs");return failTab?null:handle("tabs");}};
+  if(!missingBookmarks)engine.bookmarks=()=>{events.push("bookmarks");if(replaceEngine)win.__nocturneCenterMotion={};return failBookmark?null:handle("bookmarks");};
+  win.__nocturneCenterMotion=engine;
+ }
+ const code=source.slice(source.indexOf("  function visible("),source.indexOf("  function eligible("));
+ const setup=new Function("window","root","get","factory","events","timers","closedState",`
+  const MARK="data-zr-close-effect",MOVE="data-zr-close-move",CLIP="data-zr-close-clip",PROGRESS="--zr-close-progress",DURATION=760;
+  let centerHandle=null,bookmarkHandle=null,sheet=null,style=null;
+  const animations=new Set(),owned=new Map();
+  ${code}
+  const controller=factory({eligible:()=>true,begin,clear:restore,seal(){centerHandle?.seal();bookmarkHandle?.seal();for(const a of animations)a.finish();},isClosed:()=>closedState.value,later(fn){timers.push(fn);return timers.length;},cancelLater(){},invoke(){events.push("native");closedState.value=true;return "closed";}});
+  return controller;
+ `);
+ const state={value:closed},gate=setup(win,root,get,factory,events,timers,state);
+ return {gate,root,effects,events,timers,reasons};
+}
+test("visible horizontal tabs with missing or failed proxy acquisition bypass close motion",()=>{
+ for(const options of [{missingEngine:true},{failTab:true}]){
+  const h=closeAcquisitionFixture(options);assert.equal(h.gate.request({},[]),"closed");
+  assert.equal(h.events.filter(x=>x==="native").length,1);assert.equal(h.timers.length,0);
+  assert.equal(h.effects.length,0);assert.equal(h.root.hasAttribute("data-zr-closing"),false);
+  assert.equal(h.reasons.length,1);
+ }
+});
+test("failed bookmark fold releases acquired tab proxy before native close",()=>{
+ const h=closeAcquisitionFixture({failBookmark:true});h.gate.request({},[]);
+ assert.deepEqual(h.events,["tabs","bookmarks","release-tabs","native"]);
+ assert.equal(h.effects.length,0);assert.equal(h.timers.length,0);assert.equal(h.root.hasAttribute("data-zr-closing"),false);
+ assert.deepEqual(h.reasons,["bookmark-acquisition-failed"]);
+});
+test("partial control effect or replaced engine rolls back before native close",()=>{
+ for(const options of [{failControl:true},{replaceEngine:true}]){
+  const h=closeAcquisitionFixture(options);h.gate.request({},[]);
+  assert.deepEqual(h.events,["tabs","bookmarks","release-tabs","release-bookmarks","native"]);
+  assert.ok(h.effects.every(a=>a.cancelled===1));assert.equal(h.root.hasAttribute("data-zr-closing"),false);assert.equal(h.timers.length,0);
+ }
+});
+test("successful acquisition keeps existing close dwell and native sidebar bookmark fallback",()=>{
+ const h=closeAcquisitionFixture();h.gate.request({},[]);
+ assert.deepEqual(h.events,["tabs","bookmarks"]);assert.equal(h.timers.length,1);h.timers[0]();h.timers[1]();
+ assert.deepEqual(h.events,["tabs","bookmarks","seal-tabs","seal-bookmarks","native"]);
+ const fallback=closeAcquisitionFixture({tabs:false,missingEngine:true});fallback.gate.request({},[]);
+ assert.ok(fallback.effects.some(a=>a.name==="bookmark"));assert.equal(fallback.timers.length,1);
+ fallback.timers[0]();fallback.timers[1]();assert.deepEqual(fallback.events,["native"]);
+ const empty=closeAcquisitionFixture({bookmarks:false,failBookmark:true});empty.gate.request({},[]);assert.equal(empty.timers.length,1);
+});

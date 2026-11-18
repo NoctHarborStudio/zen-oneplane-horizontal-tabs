@@ -15,3 +15,7 @@ Preview 16 preserves the measured relative bounds of split group children and ha
 Preview 17: warm native mirror icon decoding before the startup fold (600ms maximum). Ready favicons are drawn from the existing chrome image into a small transient canvas, without pixel readback; URL clones and placeholders remain the fallback. The Island hover reserves the scaled slot through symmetric margins rather than moving the card down. Startup primes the resting contour and both contour owners skip measuring the squeezed bookmarks.
 
 Preview 18: generic toolbar startup gates exclude descendants of `#oneplane-tabs`; outer cards own the gate. A ready image could previously be hidden by the captured zero-alpha tab-select ancestor. The Home label is held through `out`/`swap` and transitions only to the settled `in` title (280ms, fade out/in). The hub's bounds and shared Magnetic Fold trajectories are unchanged.
+
+### Independent close acquisition review — preview.80
+
+Preview 80: close controller treats failure to acquire required visible tab proxies or bookmark Fold as a transaction failure, rolls back acquired effects and uses the original native close command. Missing horizontal engine and partial direct control acquisition likewise bypass. Normal Fold geometry, close dwell and existing native-sidebar bookmark fallback retained. Native validation pending.

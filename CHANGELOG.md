@@ -1,3 +1,9 @@
+## 0.3.0-preview.80 — Independent close motion acquisition review
+
+- Bypass decorative close motion if visible horizontal tabs or the required bookmark fold cannot acquire their effects, if the captured engine is replaced, or if a control effect fails.
+- Release acquired effects before invoking the original native close once; retain normal Fold timing and native-sidebar bookmark fallback.
+- Four permanent regression tests. Native acceptance remains pending.
+
 ## 0.3.0-preview.79 — Independent Workspace admission and selection review
 
 - Require the selected Workspace in the authoritative list, distinct physical containers and exact exclusive pin-role membership, including nested group ancestry.

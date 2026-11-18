@@ -186,3 +186,7 @@ A2 source implementation and independent integrated audit complete at R2, subjec
 ### Preview.78 tab proxy transactional ownership
 
 `center.motion` and `center.motion.release` include numeric handle ID; release includes static reason (superseded, setup-failed, disposed, release, no-visible-cards) and cleanup failure count. `center.motion.error` reports prepare/setup stage and error class. `center.dispose` retains existing delegation fields; exact close commit predicate determines retention. No new recorder, private fields or per-frame events. Native verification pending.
+
+### Independent close acquisition review — preview.80
+
+Preview.80 emits bounded disassembly.bypass with static reasons tab-engine-unavailable, tab-acquisition-failed, bookmark-acquisition-failed, engine-replaced or control-acquisition-failed. Existing disassembly.cleanup and native.before/after traces remain authoritative for request/cleanup evidence, not persistence proof. No raw payloads or separate recorder.
