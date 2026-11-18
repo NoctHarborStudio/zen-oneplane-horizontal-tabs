@@ -236,3 +236,6 @@ Runtime `140711300677d2fb02d09fa0f431a697e0a144a8`: 59/59 focused extracted-sour
 ### Preview.68 CI fixture correction
 
 Initial [CI 44245610763](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/44245610763) passed release policy, build reproducibility and all runtime syntax checks, but 444/445 Node tests passed: the static real-card fixture still required the pre-review two-argument restoreTrashTab signature. Updated it to require the captured approval and current-role guard. Extracted static fixture PASS; no runtime change or version increase. Canonical CI rerun required.
+
+### A2.6a — Projection startup ownership (preview.69)
+Two focused extracted-runtime fixtures PASS: old manager readiness cannot certify replacement; stale empty guard wrapper delegates to its exact original and does not record or select. Permanent Node regression tests added. Eleven versioned runtime bodies parse; exact generated fragment substitutions used. Full build/test CI pending; native acceptance deferred. Destructive startup-tab cleanup, Return peer verification, placement in-flight takeover and A2.7 pending recovery remain open. No claim of complete A2.6 or native PASS.

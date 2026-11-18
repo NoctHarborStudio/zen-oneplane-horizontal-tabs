@@ -1,3 +1,9 @@
+## 0.3.0-preview.69 — Projection startup ownership
+
+- Reject stale Workspace readiness and guard ownership after manager replacement; fence automatic selection/search by the current projection identity.
+- Roll back partial readiness observer registration and release child listeners independently. Route bounded Projection diagnostics through the existing recorder.
+- Two regression fixtures; destructive startup-tab cleanup and Return verification remain open. Native validation pending.
+
 ## 0.3.0-preview.68 — Independent Workspace data review
 
 - Require an authoritative native workspace list to confirm deletion; a failed native lookup returning null is not proof of absence.

@@ -77,6 +77,7 @@
     const FREE_PREF="zen.oneplane.free-space-id",TRASH_PREF="zen.oneplane.trash-space-id",COLOR_PREF="zen.oneplane.workspace-colors",TRASH_TIME="oneplane-trashed-at";
     let geometryFrame=0,motion=null,confirmation=null,drag=null,suppressClickUntil=0,projectionBusy=false;
     const PROJECTION="__oneplaneWorkspaceProjection";
+    let projectionSequence=0;
     let dragBadge=null,dragBadgeFrame=0,dragBadgePoint=null;
     function hideDragBadge(remove=false){
       if(dragBadgeFrame)window.cancelAnimationFrame(dragBadgeFrame);dragBadgeFrame=0;dragBadgePoint=null;
@@ -812,13 +813,18 @@
       return null;
     }
     function projectionLog(child,stage,extra={}){
-      console.info("[OnePlane] Projection "+stage,JSON.stringify({
-        ready:!!child?.gBrowserInit?.delayedStartupFinished,
-        zenReady:!!child?.gZenStartup?.isReady,
-        emptySelected:!!child?.gBrowser?.selectedTab?.hasAttribute("zen-empty-tab"),
-        emptyAvailable:!!child?.gZenWorkspaces?._emptyTab,
-        ...extra
-      }));
+      try{
+        const data={
+          sequence:child?.[PROJECTION]?.sequence??projectionSequence,
+          ready:!!child?.gBrowserInit?.delayedStartupFinished,
+          zenReady:!!child?.gZenStartup?.isReady,
+          emptySelected:!!child?.gBrowser?.selectedTab?.hasAttribute("zen-empty-tab"),
+          emptyAvailable:!!child?.gZenWorkspaces?._emptyTab,
+          ...extra
+        };
+        window.__nocturneTrace?.("hub.projection."+stage,data,{flush:true});
+        console.info("[OnePlane] Projection "+stage,JSON.stringify(data));
+      }catch{} // Diagnostic failure must not interrupt a native operation.
     }
     // Zen's native selectEmptyTab can fall back to creating an ordinary
     // homepage tab. During this specific projection's startup, use its
@@ -826,45 +832,52 @@
     // method before normal user interaction; no profile preference changes.
     function installProjectionEmptyGuard(child,record,interacted){
       let owner=null,original=null,wrapped=null,own=false,stopped=false;
+      function release(){
+        const spaces=owner,previous=original,wrapper=wrapped,hadOwn=own;
+        owner=original=wrapped=null;own=false;
+        if(spaces&&spaces.selectEmptyTab===wrapper){
+          if(hadOwn)spaces.selectEmptyTab=previous;else delete spaces.selectEmptyTab;
+        }
+      }
       function install(){
         if(stopped||interacted())return;
         const spaces=child.gZenWorkspaces;
-        if(owner||!spaces||typeof spaces.selectEmptyTab!=="function")return;
-        owner=spaces;original=spaces.selectEmptyTab;own=Object.hasOwn(spaces,"selectEmptyTab");
-        wrapped=function(...args){
-          if(this===owner&&!stopped&&!interacted()&&!args[0]){
+        if(owner===spaces)return;
+        if(owner)release();
+        if(!spaces||typeof spaces.selectEmptyTab!=="function")return;
+        const previous=spaces.selectEmptyTab;
+        const wrapper=function(...args){
+          if(this===spaces&&owner===spaces&&wrapped===wrapper&&child.gZenWorkspaces===spaces&&!stopped&&!interacted()&&!args[0]){
             const empty=this._emptyTab;
             if(empty?.isConnected&&!empty.closing&&empty.hasAttribute("zen-empty-tab")&&child.gBrowser?.isTab(empty)){
               child.gBrowser.selectedTab=empty;
               projectionLog(child,"native-empty-selected");
               return empty;
             }
-            // Capture only a tab actually created by this exact native call.
             const before=new Set(child.gBrowser?.tabs||[]);
-            const result=original.apply(this,args);
-            if(result&&!before.has(result)&&child.gBrowser?.isTab(result))record(result);
+            const result=previous.apply(this,args);
+            if(!stopped&&!interacted()&&child.gZenWorkspaces===spaces&&result&&!before.has(result)&&child.gBrowser?.isTab(result))record(result);
             return result;
           }
-          return original.apply(this,args);
+          return previous.apply(this,args);
         };
-        spaces.selectEmptyTab=wrapped;
+        owner=spaces;original=previous;own=Object.hasOwn(spaces,"selectEmptyTab");wrapped=wrapper;
+        spaces.selectEmptyTab=wrapper;
         projectionLog(child,"startup-guard-installed");
       }
       function stop(){
         if(stopped)return;stopped=true;
-        child.removeEventListener("DOMContentLoaded",install,true);
-        child.removeEventListener("load",install,true);
-        child.removeEventListener("AfterWorkspacesSessionRestore",stop,true);
-        // Document unload does not mean the native window has closed.
-        if(owner?.selectEmptyTab===wrapped){
-          if(own)owner.selectEmptyTab=original;else delete owner.selectEmptyTab;
+        for(const [event,fn] of [["DOMContentLoaded",install],["load",install],["AfterWorkspacesSessionRestore",stop]]){
+          try{child.removeEventListener(event,fn,true);}catch{}
         }
+        release();
       }
-      child.addEventListener("DOMContentLoaded",install,true);
-      child.addEventListener("load",install,true);
-      child.addEventListener("AfterWorkspacesSessionRestore",stop,true);
-      // The caller owns lifetime via domwindowclosed and bounded readiness.
-      install();
+      try{
+        child.addEventListener("DOMContentLoaded",install,true);
+        child.addEventListener("load",install,true);
+        child.addEventListener("AfterWorkspacesSessionRestore",stop,true);
+        install();
+      }catch(error){stop();throw error;}
       stop.probe=install;
       return stop;
     }
@@ -947,7 +960,7 @@
             child.document.getElementById("Browser:OpenLocation")?.doCommand();
           }else child.gZenUIManager?.handleNewTab(false,false,"tab",true);
           projectionLog(child,"search-attempt",{attempt,resumed:session,viewOpen:isVisible(bar),focused});
-        }catch(error){projectionLog(child,"search-error",{attempt,error:String(error)});}
+        }catch(error){projectionLog(child,"search-error",{attempt,reason:"native-error"});}
       }
       await wait();
       const visible=eligible()&&isVisible(child.gURLBar)&&(child.document?.hasFocus?.()??true);
@@ -960,7 +973,7 @@
     // the Gecko startup notification arrives before our listener.
     function waitForProjectionReady(child,onProbe){
       return new Promise((resolve,reject)=>{
-        let finished=false,waiting=false,nativeReady=false,poll=0,timer=0;
+        let finished=false,waiting=null,nativeReady=false,poll=0,timer=0;
         const cleanup=()=>{
           if(finished)return false;finished=true;
           if(poll)window.clearTimeout(poll);if(timer)window.clearTimeout(timer);
@@ -979,21 +992,28 @@
             onProbe?.();
             nativeReady||=!!child.gBrowserInit?.delayedStartupFinished||!!child.gZenStartup?.isReady;
             const spaces=child.gZenWorkspaces;
-            if(nativeReady&&spaces?.promiseInitialized&&!waiting){
-              waiting=true;
+            if(nativeReady&&spaces?.promiseInitialized&&waiting!==spaces){
+              waiting=spaces;
               Promise.resolve(spaces.promiseInitialized).then(()=>{
-                if(finished)return;
+                if(finished||waiting!==spaces)return;
                 if(child.closed||window.closed||destroyed){fail(Error("Native window closed"));return;}
-                if(cleanup())resolve();
-              },fail);
+                if(child.gZenWorkspaces!==spaces){waiting=null;check();return;}
+                if(cleanup())resolve(spaces);
+              },error=>{
+                if(finished||waiting!==spaces)return;
+                if(child.gZenWorkspaces!==spaces){waiting=null;check();return;}
+                fail(error);
+              });
             }
           }catch(error){fail(error);return;}
           if(!finished)poll=window.setTimeout(check,100);
         };
-        Services.obs.addObserver(startup,"browser-delayed-startup-finished");
-        Services.obs.addObserver(closed,"domwindowclosed");
-        timer=window.setTimeout(()=>fail(Error("Workspace startup timeout")),20000);
-        check();
+        try{
+          Services.obs.addObserver(startup,"browser-delayed-startup-finished");
+          Services.obs.addObserver(closed,"domwindowclosed");
+          timer=window.setTimeout(()=>fail(Error("Workspace startup timeout")),20000);
+          check();
+        }catch(error){fail(error);}
       });
     }
     async function project(id,display){
@@ -1008,7 +1028,15 @@
         for(const tab of tabs){if(tab.hasAttribute("zen-empty-tab"))continue;if(!tab.id)identifiable=false;else preexistingIds.add(tab.id);}
       }}catch{identifiable=false;}
       projectionBusy=true;status.textContent="Opening workspace…";render();
-      let child=null,interacted=false,stopEmptyGuard=()=>{},captureStartup=null;
+      let child=null,interacted=false,stopEmptyGuard=()=>{},captureStartup=null,projection=null;
+      const current=()=>{
+        try{return !interacted&&!destroyed&&!window.closed&&manager()===native&&canProject()&&
+          !!native.getWorkspaceFromId(id)&&!!child&&!child.closed&&child[PROJECTION]===projection;}
+        catch{return false;}
+      };
+      const childCurrent=childNative=>current()&&child.gZenWorkspaces===childNative&&
+        !!childNative?.currentWindowIsSyncing&&child.gZenWindowSync===window.gZenWindowSync&&
+        !!childNative.getWorkspaceFromId(id);
       const onInput=event=>{if(event.isTrusted){interacted=true;stopEmptyGuard();}};
       try{
         const {BrowserWindowTracker}=ChromeUtils.importESModule("resource:///modules/BrowserWindowTracker.sys.mjs");
@@ -1023,28 +1051,27 @@
         const options={openerWindow:window,private:false,zenSyncedWindow:!prefs.getBoolPref("zen.window-sync.prefer-unsynced-windows",false),args,features};
         child=BrowserWindowTracker.openWindow(options);
         if(!child)throw Error("Native window did not open");
-        child[PROJECTION]={source:window,id};
+        projection={source:window,id,sequence:++projectionSequence};child[PROJECTION]=projection;
         const placementTask=display?placeAfterStartup(child,display):Promise.resolve(true);
         child.addEventListener("pointerdown",onInput,true);child.addEventListener("keydown",onInput,true);
         const startupTabs=new Set();
         const record=tab=>{if(tab)startupTabs.add(tab);};
         captureStartup=()=>record(projectionStartupCandidate(child));
         captureStartup();child.addEventListener("DOMContentLoaded",captureStartup,true);child.addEventListener("load",captureStartup,true);
-        stopEmptyGuard=installProjectionEmptyGuard(child,record,()=>interacted);
+        stopEmptyGuard=installProjectionEmptyGuard(child,record,()=>!current());
         projectionLog(child,"opened");
-        await waitForProjectionReady(child,()=>{
+        const childNative=await waitForProjectionReady(child,()=>{
           captureStartup();stopEmptyGuard.probe?.();
         });
         captureStartup();child.removeEventListener("DOMContentLoaded",captureStartup,true);child.removeEventListener("load",captureStartup,true);
         stopEmptyGuard();
         projectionLog(child,"spaces-ready",{candidates:startupTabs.size});
-        if(child.closed||destroyed||!child.gZenWorkspaces?.currentWindowIsSyncing||
-          child.gZenWindowSync!==window.gZenWindowSync||!child.gZenWorkspaces.getWorkspaceFromId(id))throw Error("Native sync unavailable");
-        const childNative=child.gZenWorkspaces,alreadyActive=childNative.activeWorkspace===id;
         if(interacted){projectionLog(child,"takeover");await placementTask;return;}
-        await requestWorkspaceSwitch(child,childNative,id,"projection",()=>!interacted&&!destroyed&&!window.closed&&!child.closed&&
-          child.gZenWorkspaces===childNative&&childNative.currentWindowIsSyncing&&child.gZenWindowSync===window.gZenWindowSync,{motion:false});
+        if(!childCurrent(childNative))throw Error("Native sync unavailable");
+        const alreadyActive=childNative.activeWorkspace===id;
+        await requestWorkspaceSwitch(child,childNative,id,"projection",()=>childCurrent(childNative),{motion:false});
         if(interacted){projectionLog(child,"takeover");await placementTask;return;}
+        if(!childCurrent(childNative))throw Error("Projection owner changed");
         projectionLog(child,"workspace-active",{alreadyActive,sourceActive:native.activeWorkspace===id});
         // Select Zen's transparent placeholder first, including when the
         // synthetic startup tab was the selected tab in this window.
@@ -1053,16 +1080,23 @@
         // floating search AFTER window placement settles, because native
         // activation/maximize may otherwise dismiss it on the same space.
         const placed=await placementTask;
-        const searchVisible=showStart&&await openProjectionSearch(child,id,()=>interacted);
+        const searchVisible=showStart&&await openProjectionSearch(child,id,()=>!childCurrent(childNative));
+        if(!childCurrent(childNative)){projectionLog(child,"takeover");return;}
         projectionLog(child,"projection-complete",{placed,searchVisible:!!searchVisible,alreadyActive});
         status.textContent=placed?"":"Window opened; placement could not be verified.";
       }catch(error){
         if(interacted&&child&&!child.closed){projectionLog(child,"takeover");return;}
-        if(child&&!child.closed)delete child[PROJECTION];
+        if(child&&!child.closed&&child[PROJECTION]===projection)delete child[PROJECTION];
         if(!destroyed)status.textContent="Could not open synced workspace. Check window sync settings.";
-        projectionLog(child,"failed",{error:String(error)});
+        projectionLog(child,"failed",{reason:"native-error"});
         console.warn("[OnePlane] Workspace projection:",error);
-      }finally{stopEmptyGuard();if(child&&!child.closed){if(captureStartup){child.removeEventListener("DOMContentLoaded",captureStartup,true);child.removeEventListener("load",captureStartup,true);}child.removeEventListener("pointerdown",onInput,true);child.removeEventListener("keydown",onInput,true);}projectionBusy=false;if(!destroyed&&open)render();}
+      }finally{
+        try{stopEmptyGuard();}catch{}
+        if(child&&!child.closed)for(const [event,fn] of [["DOMContentLoaded",captureStartup],["load",captureStartup],["pointerdown",onInput],["keydown",onInput]]){
+          if(fn)try{child.removeEventListener(event,fn,true);}catch{}
+        }
+        projectionBusy=false;if(!destroyed&&open)render();
+      }
     }
     async function returnProjection(){
       const projection=window[PROJECTION],source=projection?.source;

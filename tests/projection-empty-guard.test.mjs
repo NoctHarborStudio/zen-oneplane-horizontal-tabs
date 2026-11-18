@@ -32,3 +32,16 @@ test("initial document unload does not remove the startup guard",()=>{
   assert.equal(h.spaces.selectEmptyTab(),h.empty);
   h.stop();assert.equal(h.spaces.selectEmptyTab,h.original);
 });
+
+test("replacement manager releases the exact old wrapper and fences stale calls",()=>{
+  const h=harness(),stale=h.spaces.selectEmptyTab;
+  const nextOriginal=function(){return null;};
+  const replacement={selectEmptyTab:nextOriginal,_emptyTab:h.empty};
+  h.child.gZenWorkspaces=replacement;h.stop.probe();
+  assert.equal(h.spaces.selectEmptyTab,h.original);
+  assert.notEqual(replacement.selectEmptyTab,nextOriginal);
+  h.browser.selectedTab=null;stale.call(h.spaces);
+  assert.equal(h.browser.selectedTab,null);assert.equal(h.recorded.length,0);
+  assert.equal(replacement.selectEmptyTab(),h.empty);
+  h.stop();assert.equal(replacement.selectEmptyTab,nextOriginal);
+});

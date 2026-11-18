@@ -88,3 +88,6 @@ Replace native select with in-document age choices (no separate popup/deactivati
 ## Preview.35 — single actual card drag
 
 Replace Trash native HTML drag with shared pointer lifecycle (trash owner). The original row leaves list flow, empty spacer preserves its virtual slot; reparent same row into Hub, translate once per frame, squash/stretch lift and absorb/return on release. Native move commits once before absorption, rendering frozen until completion. Escape, capture loss, focus loss, new gesture and unload release visual state. No clone, drag image or cross-monitor ghost. Free startup uses a default-branch in-process claim because Windows hiddenDOMWindow throws NS_ERROR_FAILURE. Existing projection, tab drag and safe transfer unchanged. Actual Zen test pending.
+
+### A2.6a — Projection startup ownership (preview.69)
+Startup readiness and temporary empty-selection wrapper now follow the exact child manager; opener and child identities fence automatic switching/search. Existing placement, search retry timing and accepted visual behavior are unchanged. Destructive startup-tab cleanup, Return peer verification, placement in-flight takeover and A2.7 pending recovery remain open. No claim of complete A2.6 or native PASS.

@@ -40,3 +40,13 @@ test("already-ready window does not require a later startup notification",async(
   h.child.gZenWorkspaces={promiseInitialized:Promise.resolve()};
   await h.wait(h.child);assert.equal(h.observers.size,0);
 });
+
+test("obsolete workspace readiness cannot certify a replacement manager",async()=>{
+  const h=harness();h.child.gBrowserInit={delayedStartupFinished:true};
+  h.child.gZenWorkspaces={promiseInitialized:h.spaces};
+  const p=h.wait(h.child);let done=false;p.then(()=>done=true);
+  let finish;const replacement={promiseInitialized:new Promise(r=>finish=r)};
+  h.child.gZenWorkspaces=replacement;h.resolveSpaces();
+  await Promise.resolve();await Promise.resolve();assert.equal(done,false);
+  finish();assert.equal(await p,replacement);assert.equal(h.observers.size,0);
+});
