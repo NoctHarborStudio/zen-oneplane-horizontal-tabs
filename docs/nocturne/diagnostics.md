@@ -59,3 +59,7 @@ Same-window recorder reload reuses the existing write coordinator; all coalesced
 ### Preview.56 native resource cleanup
 
 `library.downloads.detach` reports released/retained booleans for attempted native removal; failed release retains the exact view and blocks replacement. `hub.uri.scope.restore` reports phase (acquire, run, reentrant, split-index), count, failed and foreign descriptor counts only on exceptional restoration/acquisition. `hub.uri.dispose` reports failed cleanup count. No URL, path, tab/workspace IDs or error messages are recorded. Async shutdown persistence remains best effort.
+
+### Preview.57 native resource self-review
+
+`hub.uri.transaction.release` records failed transaction-token release; `hub.uri.scope.restore` includes the new cancelled phase. No content fields. Downloads pre-acquisition disposal releases the lease without claiming native removal: `library.downloads.detach` remains an actual removal-attempt event only.
