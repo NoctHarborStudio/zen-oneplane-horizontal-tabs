@@ -41,7 +41,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.71",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.72",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -4993,11 +4993,11 @@ function installTabStrip() {
       requireWorkspaceCommand(child,native,lease);
       const empty=native._emptyTab;
       if(child.gBrowser!==browser||native.activeWorkspace!==id||!empty?.isConnected||empty.closing||
-        !empty.hasAttribute("zen-empty-tab")||!browser?.isTab(empty)){projectionLog(child,"empty-unavailable");return false;}
+        !empty.hasAttribute("zen-empty-tab")||!browser?.isTab(empty)){projectionLog(child,"empty-unavailable");return null;}
       browser.selectedTab=empty;
       requireWorkspaceCommand(child,native,lease);
       if(child.gBrowser!==browser||native._emptyTab!==empty||native.activeWorkspace!==id||
-        browser.selectedTab!==empty){projectionLog(child,"empty-selection-rejected");return false;}
+        browser.selectedTab!==empty){projectionLog(child,"empty-selection-rejected");return null;}
       // Zen owns startup-tab cleanup. Its TabClose event is queued and
       // may later remove a synced peer whose state changed in the meantime.
       // No public native atomic/local-only close contract: keep residual
@@ -5005,27 +5005,36 @@ function installTabStrip() {
       let retained=0;
       for(const tab of startupTabs)if(tab!==empty&&tab.isConnected&&browser.isTab(tab))retained++;
       projectionLog(child,"start-prepared",{candidates:startupTabs.size,retained,removed:0});
-      return true;
+      return empty;
     }
     // A synced child can inherit an empty-page search session whose
     // zen-newtab attribute remains set even after native focus/rollup hides
     // its result view. Check the actual floating view, not just its flag.
-    async function openProjectionSearch(child,id,interacted){
-      const native=child.gZenWorkspaces,browser=child.gBrowser,empty=native?._emptyTab;
-      const eligible=()=>!child.closed&&!window.closed&&!destroyed&&!interacted()&&
+    async function openProjectionSearch(child,id,native,browser,empty,scope,interacted){
+      const eligible=()=>!scope.closed&&!child.closed&&!window.closed&&!destroyed&&!interacted()&&
         child.gZenWorkspaces===native&&child.gBrowser===browser&&native?.activeWorkspace===id&&
         !!empty?.isConnected&&!empty.closing&&native._emptyTab===empty&&browser.selectedTab===empty&&
-        empty.hasAttribute("zen-empty-tab");
+        browser.isTab(empty)&&empty.hasAttribute("zen-empty-tab");
       const isVisible=bar=>!!bar?.hasAttribute("zen-newtab")&&
         !!(bar.view?.isOpen||bar.hasAttribute("open"));
-      const wait=()=>new Promise(resolve=>window.setTimeout(resolve,100));
-      if(!eligible())return false;
+      // A disposal must settle the wait even if the opener realm loses its timers.
+      const wait=()=>new Promise(resolve=>{
+        let timer=0,elapsed=false;
+        const release=scope.defer("projection-search-delay",()=>{
+          try{if(timer)window.clearTimeout(timer);}finally{resolve(elapsed);}
+        });
+        if(scope.closed)return;
+        try{
+          timer=window.setTimeout(()=>{elapsed=true;release();},100);
+          if(scope.closed)window.clearTimeout(timer);
+        }catch{release();}
+      });
+      if(!eligible()){projectionLog(child,"search-cancelled",{reason:"stale-preparation"});return false;}
       child.focus();
       // Let the real window activation/size-mode change and native URL-bar
       // rollup settle. Never steal focus again or toggle an existing search.
       for(let attempt=0;attempt<4;attempt++){
-        await wait();
-        if(!eligible()){projectionLog(child,"search-cancelled",{attempt});return false;}
+        if(!eligible()||!await wait()||!eligible()){projectionLog(child,"search-cancelled",{attempt});return false;}
         const bar=child.gURLBar;
         const focused=child.document?.hasFocus?.()??true;
         if(isVisible(bar)&&focused){projectionLog(child,"search-visible",{attempt});return true;}
@@ -5042,8 +5051,8 @@ function installTabStrip() {
           projectionLog(child,"search-attempt",{attempt,resumed:session,viewOpen:isVisible(bar),focused});
         }catch(error){projectionLog(child,"search-error",{attempt,reason:"native-error"});}
       }
-      await wait();
-      const visible=eligible()&&isVisible(child.gURLBar)&&(child.document?.hasFocus?.()??true);
+      if(!eligible()||!await wait()||!eligible()){projectionLog(child,"search-cancelled",{attempt:4});return false;}
+      const visible=isVisible(child.gURLBar)&&(child.document?.hasFocus?.()??true);
       projectionLog(child,"search-result",{visible:!!visible});
       return !!visible;
     }
@@ -5161,7 +5170,7 @@ function installTabStrip() {
         const alreadyActive=childNative.activeWorkspace===id;
         // Keep the same selection lease through switch and placeholder
         // preparation; no second independent native command boundary.
-        const showStart=await runWorkspaceCommand(child,childNative,"projection",eligible,async lease=>{
+        const preparedEmpty=await runWorkspaceCommand(child,childNative,"projection",eligible,async lease=>{
           await switchWorkspaceWithin(child,childNative,id,lease,{motion:false});
           requireWorkspaceCommand(child,childNative,lease);
           projectionLog(child,"workspace-active",{alreadyActive,sourceActive:native.activeWorkspace===id});
@@ -5173,7 +5182,7 @@ function installTabStrip() {
         // floating search AFTER window placement settles, because native
         // activation/maximize may otherwise dismiss it on the same space.
         const placed=await placementTask;
-        const searchVisible=showStart&&await openProjectionSearch(child,id,()=>!eligible());
+        const searchVisible=!!preparedEmpty&&await openProjectionSearch(child,id,childNative,browser,preparedEmpty,projectionScope,()=>!eligible());
         if(!eligible()){projectionLog(child,"takeover");return;}
         projectionLog(child,"projection-complete",{placed,searchVisible:!!searchVisible,alreadyActive});
         status.textContent=placed?"":"Window opened; placement could not be verified.";

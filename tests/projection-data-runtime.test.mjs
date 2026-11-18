@@ -13,7 +13,7 @@ test("projection startup selects native placeholder but never removes residual s
   const run=runInNewContext(cut("    function prepareProjectionStart(","    // A synced child can inherit")+"\nprepareProjectionStart",{
     requireWorkspaceCommand(){},projectionLog(win,stage,data){records.push(data);}
   });
-  assert.equal(run(child,"work",new Set([residual]),native,browser,{}),true);
+  assert.equal(run(child,"work",new Set([residual]),native,browser,{}),empty);
   assert.equal(browser.selectedTab,empty);assert.equal(records[0].retained,1);assert.equal(records[0].removed,0);
 });
 test("reentrant placeholder selection invalidates the projection lease",()=>{

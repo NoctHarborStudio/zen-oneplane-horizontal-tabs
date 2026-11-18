@@ -1,3 +1,9 @@
+## 0.3.0-preview.72 — Independent Projection search review
+
+- Preserve the exact prepared native placeholder across placement and search; reject replacement before focus or any native search command.
+- Own search retry delays by the existing Projection scope; settle on disposal and stop on timer acquisition failure.
+- Four regression tests; no native placement, Return lease or UX timing changes. Native validation pending.
+
 ## 0.3.0-preview.71 — Projection and detach placement lifecycle
 
 - Scope startup observers, input and native placement delays to Layout; cancel and settle on teardown, close or trusted input.
