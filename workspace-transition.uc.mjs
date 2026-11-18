@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="workspace.script",data={version:"0.3.0-preview.60"};
+  const event="workspace.script",data={version:"0.3.0-preview.61"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -18,10 +18,13 @@ try{if(typeof window!=="undefined"){
   // window. Native work already in flight cannot be cancelled by WAAPI.
   const GATE="__nocturneWorkspaceCommandGate";
   const gate=win[GATE]??(win[GATE]={pending:null});
+  let syncDepth=0;
+  function visualStep(fn){syncDepth++;try{return fn();}finally{syncDepth--;}}
   function invokeNative(req,nativeSwitch){
-    if(dead||win.closed||req.superseded)return;
+    if(dead||win.closed||req.superseded||request!==req)return;
+    if(gate.pending)throw Error("Workspace command already pending");
     const pending=Promise.resolve().then(()=>{
-      if(dead||win.closed||req.superseded)return;
+      if(dead||win.closed||req.superseded||request!==req)return;
       return nativeSwitch();
     });
     gate.pending=pending;
@@ -69,7 +72,8 @@ try{if(typeof window!=="undefined"){
     if(failed)try{window.__nocturneTrace?.("workspace.geometry.cleanup",{failed},{flush:true});}catch{}
     return old;
   }
-  function phase(value){
+  function phase(value){return visualStep(()=>setPhase(value));}
+  function setPhase(value){
     if(value&&dead)return;
     if(!value)releaseGeometry();
     if((root.getAttribute(PHASE)||null)===(value||null))return;
@@ -102,7 +106,8 @@ try{if(typeof window!=="undefined"){
     if(failed)try{window.__nocturneTrace?.("workspace.effects.cleanup",{failed},{flush:true});}catch{}
     return failed;
   }
-  function cleanup(tx,keepGate=false){
+  function cleanup(tx,keepGate=false){return visualStep(()=>cleanupNow(tx,keepGate));}
+  function cleanupNow(tx,keepGate=false){
     if(active!==tx||tx.cleaning)return;
     tx.cancelled=true;tx.cleaning=true;
     let failed=0;
@@ -206,25 +211,26 @@ try{if(typeof window!=="undefined"){
     if(typeof nativeSwitch!=="function")throw TypeError("Native workspace callback required");
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.run",()=>({active:!!active,pending:!!gate.pending,phase:root.getAttribute(PHASE)}),{sample:1800});
     if(dead||win.closed)return;
-    // Synchronous cleanup may dispatch a native event that requests another switch.
-    if(active?.cleaning){await Promise.resolve();if(dead||win.closed)return;}
+    // Register intent before any synchronous native/visual callbacks.
     if(request)request.superseded=true;
-    const carrySwap=root.getAttribute(PHASE)==="swap";
-    if(active){
-      active.superseded=true;
-      if(carrySwap&&gate.pending)active.skipMotion=true;
-      else cleanup(active,carrySwap);
-    }
-    const req={superseded:false,carrySwap};request=req;
+    const req={superseded:false,carrySwap:root.getAttribute(PHASE)==="swap"};request=req;
+    const current=()=>!dead&&!win.closed&&!req.superseded&&request===req;
     try{
-      // Coalesce waiting requests to the latest intent; never start a
-      // second native operation while an earlier one is unresolved.
+      if(syncDepth){await Promise.resolve();if(!current())return;}
+      if(active){
+        active.superseded=true;
+        if(req.carrySwap&&gate.pending)active.skipMotion=true;
+        else cleanup(active,req.carrySwap);
+      }
+      if(!current())return;
+      // A native command gate survives generation replacement.
       while(gate.pending){
         try{await gate.pending;}catch{}
-        if(dead||win.closed||req.superseded)return;
+        if(!current())return;
       }
-      if(dead||win.closed||req.superseded)return;
+      if(!current())return;
       if(active)cleanup(active,req.carrySwap);
+      if(!current())return;
       return await perform(req,nativeSwitch);
     }finally{if(request===req)request=null;}
   }
@@ -245,9 +251,10 @@ try{if(typeof window!=="undefined"){
       tx.timers.add(win.setTimeout(()=>cleanup(tx),3500));
       const old=units();
       if(!old.length&&!req.carrySwap){cleanup(tx);called=true;return await invoke();}
-      if(!req.carrySwap){phase("out");if(!tx.cancelled&&!dead)await animate(tx,old,true);}
+      if(!req.carrySwap){phase("out");if(!tx.cancelled&&!dead&&!req.superseded)await visualStep(()=>animate(tx,old,true));}
       if(tx.superseded||req.superseded||dead||win.closed)return;
-      if(!tx.cancelled){phase("swap");cancelEffects(tx);}
+      if(!tx.cancelled){phase("swap");if(!tx.cancelled&&!dead&&!req.superseded)visualStep(()=>cancelEffects(tx));}
+      if(req.superseded||dead||win.closed)return;
       called=true;result=await invoke();nativeResolved=true;
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.native.end",()=>({cancelled:tx.cancelled,superseded:req.superseded}),{sample:1800});
       if(tx.cancelled||req.superseded)return result;
@@ -258,7 +265,8 @@ try{if(typeof window!=="undefined"){
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.reveal",()=>({skip:tx.skipMotion,oldHeight:geometry?.height,oldSurface:geometry?.surfaceHeight}),{sample:1800});
       try{win.__oneplaneLayoutController?.prepareWorkspaceGeometry?.();}catch(error){console.warn("[Nocturne] Workspace geometry:",error);}
       if(tx.skipMotion||tx.cancelled||dead||req.superseded)return result;
-      const incoming=units(),motion=animate(tx,incoming,false,geometry);
+      const incoming=units(),motion=visualStep(()=>animate(tx,incoming,false,geometry));
+      if(tx.cancelled||dead||req.superseded)return result;
       phase("in");
       win.__nocturneTrace?.("workspace.applied",()=>({
         rows:incoming.map(n=>({opacity:win.getComputedStyle(n).opacity,scale:win.getComputedStyle(n).scale,progress:win.getComputedStyle(n).getPropertyValue?.(PROGRESS)})),
@@ -286,7 +294,7 @@ try{if(typeof window!=="undefined"){
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.escape",()=>({phase:root.getAttribute(PHASE)}),{sample:1800});
     // Escape skips decorative motion, not the native command or swap gate.
     if(root.getAttribute(PHASE)==="out"){
-      phase("swap");if(tx.cancelled||dead)return;cancelEffects(tx);
+      phase("swap");if(tx.cancelled||dead)return;visualStep(()=>cancelEffects(tx));
       for(const resolve of [...tx.waiters])resolve();
     }
     // During swap wait for settled; during incoming let its short fade end.

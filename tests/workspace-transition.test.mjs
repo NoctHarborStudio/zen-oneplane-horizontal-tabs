@@ -23,7 +23,7 @@ test("native switch stays single-owned and chrome-only",()=>{
  assert.ok(source.includes('get("tabbrowser-tabpanels")'));
  assert.ok(!source.includes("contentDocument"));assert.ok(!source.includes("contentWindow"));assert.ok(source.includes("Keep the page opaque"));
  assert.ok(!source.includes("zen-main-browser-background"));
- assert.ok(source.includes('phase("swap");cancelEffects(tx);'));
+ assert.ok(source.includes('phase("swap");if(!tx.cancelled&&!dead&&!req.superseded)visualStep(()=>cancelEffects(tx));'));
  assert.ok(source.includes('phase("in");'));
 });
 
@@ -227,4 +227,24 @@ test("workspace watchdog acquisition failure falls back to native command once",
  f.win.setTimeout=()=>{throw Error("watchdog");};
  const result=await f.win.__zenRefinedWorkspaceTransition.run(()=>{calls++;return "native";});
  assert.equal(result,"native");assert.equal(calls,1);assert.equal(f.root.hasAttribute("data-zr-workspace-phase"),false);
+});
+
+test("idle cleanup dispatch reentry preserves latest workspace intent",async()=>{
+ const f=lifecycleFixture(),calls=[];let nested;
+ const dispatch=f.win.dispatchEvent;
+ f.win.dispatchEvent=e=>{dispatch(e);if(e.detail.phase==="idle"&&!nested)nested=f.win.__zenRefinedWorkspaceTransition.run(()=>calls.push("nested"));};
+ const api=f.win.__zenRefinedWorkspaceTransition;
+ const first=api.run(()=>calls.push("first")),second=api.run(()=>calls.push("second"));
+ await f.flush();for(let i=0;i<10&&f.timers.size;i++)await f.advance();
+ await Promise.all([first,second,nested]);assert.deepEqual(calls,["nested"]);
+ assert.equal(f.root.hasAttribute("data-zr-workspace-phase"),false);
+});
+test("out phase nested request supersedes before old animation or native mutation",async()=>{
+ const f=lifecycleFixture(),calls=[];let nested;
+ const dispatch=f.win.dispatchEvent;
+ f.win.dispatchEvent=e=>{dispatch(e);if(e.detail.phase==="out"&&!nested)nested=f.win.__zenRefinedWorkspaceTransition.run(()=>calls.push("nested"));};
+ const first=f.win.__zenRefinedWorkspaceTransition.run(()=>calls.push("first"));
+ await f.flush();for(let i=0;i<10&&f.timers.size;i++)await f.advance();
+ await Promise.all([first,nested]);assert.deepEqual(calls,["nested"]);
+ assert.equal(f.root.hasAttribute("data-zr-workspace-phase"),false);
 });

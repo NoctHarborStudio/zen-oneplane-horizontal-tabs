@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="disassembly.script",data={version:"0.3.0-preview.60"};
+  const event="disassembly.script",data={version:"0.3.0-preview.61"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -21,58 +21,66 @@ try{if(typeof window!=="undefined"){
   const animations=new Set(),owned=new Map();let centerHandle=null,bookmarkHandle=null;
 
   function makeCloseController({eligible,begin,clear,seal=()=>{},isClosed=()=>false,later,cancelLater,invoke}){
-    let pending=null,timer=null,committing=false;
+    let pending=null,timer=null,committing=false,starting=false,finishing=false,queued=null;
     function finish(proceed){
-      if(!pending||committing)return;
-      const request=pending;pending=null;
-      const oldTimer=timer;timer=null;
-      if(oldTimer!==null)try{cancelLater(oldTimer);}catch{}
-      if(!proceed||!request.animated){
-        try{clear();}catch{}
-        if(proceed)return invoke(request.receiver,request.args);
-        return;
-      }
-      // Preserve completed effects throughout the synchronous native close.
-      // Restore only on cancellation or a native exception.
-      committing=true;
+      if(finishing||committing||!pending)return;
+      if(starting){queued=queued===false?false:proceed;return;}
+      const request=pending;pending=null;finishing=true;
       try{
-        if(!request.sealed)try{seal();}catch{}
-        return invoke(request.receiver,request.args);
-      }finally{
-        committing=false;
-        if(!isClosed())try{clear();}catch{}
-      }
+        const oldTimer=timer;timer=null;
+        if(oldTimer!==null)try{cancelLater(oldTimer);}catch{}
+        if(!proceed||!request.animated){
+          try{clear();}catch{}
+          if(proceed)return invoke(request.receiver,request.args);
+          return;
+        }
+        // Preserve sealed effects through the synchronous native close.
+        committing=true;
+        try{
+          if(!request.sealed)try{seal();}catch{}
+          return invoke(request.receiver,request.args);
+        }finally{
+          committing=false;
+          if(!isClosed())try{clear();}catch{}
+        }
+      }finally{finishing=false;}
+    }
+    function sealRequest(request){
+      if(pending!==request||finishing)return;
+      // Reentrant close/flush during seal must not execute twice.
+      starting=true;
+      try{seal();}catch{}
+      finally{starting=false;}
+      if(pending!==request)return;
+      request.sealed=true;
+      const action=queued;queued=null;
+      if(action!==null)return finish(action);
+      try{timer=later(()=>{if(pending===request)finish(true);},110);}
+      catch{if(pending===request)return finish(true);}
     }
     return {
       request(receiver,args){
-        if(committing)return;
+        if(finishing||committing)return;
         if(pending)return finish(true);
-        if(!eligible(args))return invoke(receiver,args);
-        const request={receiver,args,animated:false};pending=request;
-        try{
-          const animated=begin();
-          if(pending!==request){if(!committing)try{clear();}catch{}return;}
-          if(animated){
-            request.animated=true;
-            // Bind timers to this request even if native cancellation fails.
-            // Preserve the terminal frame for the existing 110 ms dwell.
-            timer=later(()=>{
-              if(pending!==request)return;
-              try{seal();}catch{}
-              if(pending!==request)return;
-              request.sealed=true;
-              try{timer=later(()=>{if(pending===request)finish(true);},110);}
-              catch{if(pending===request)finish(true);}
-            },DURATION-110);
-            return;
-          }
-        }catch{}
-        if(pending===request)return finish(true);
+        if(!eligible(args)){
+          finishing=true;try{return invoke(receiver,args);}finally{finishing=false;}
+        }
+        const request={receiver,args,animated:false};pending=request;starting=true;
+        try{request.animated=!!begin();}catch{}
+        finally{starting=false;}
+        const action=queued;queued=null;
+        if(action!==null)return finish(action);
+        if(request.animated){
+          try{timer=later(()=>sealRequest(request),DURATION-110);return;}
+          catch{}
+        }
+        return finish(true);
       },
       flush(){return finish(true);},
       dispose(){return finish(false);},
       get pending(){return pending!==null;},
-      get committing(){return committing;}
+      get committing(){return committing;},
+      get busy(){return starting||finishing;}
     };
   }
   function visible(n){
@@ -205,7 +213,7 @@ try{if(typeof window!=="undefined"){
       return result;
     }
   });
-  function preferenceChanged(){if(reduced.matches||!prefs.getBoolPref(PREF,true))controller.flush();}
+  function preferenceChanged(){if(!dead&&(reduced.matches||!prefs.getBoolPref(PREF,true)))controller.flush();}
   function install(){
     if(dead||wrapped)return;
     owner=window.BrowserCommands;
@@ -220,7 +228,7 @@ try{if(typeof window!=="undefined"){
     let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
     if(!controller.committing&&!window.closed){
       step(()=>controller.dispose());
-      step(()=>{if(animations.size||owned.size||root.hasAttribute("data-zr-closing"))restore();});
+      if(!controller.busy)step(()=>{if(animations.size||owned.size||root.hasAttribute("data-zr-closing"))restore();});
     }
     step(()=>{if(owner&&wrapped&&owner.tryToCloseWindow===wrapped)owner.tryToCloseWindow=original;});
     step(()=>{if(observer)Services.obs.removeObserver(observer,"browser-delayed-startup-finished");});observer=null;

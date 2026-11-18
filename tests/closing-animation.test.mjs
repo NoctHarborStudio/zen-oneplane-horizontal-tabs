@@ -42,3 +42,24 @@ test("close restore releases remaining properties and markers after center failu
  ${code}restore();return {log,size:owned.size,animations:animations.size};`);
  assert.deepEqual(run(),{log:["bookmark","good","mark","sheet","style","root",3],size:0,animations:0});
 });
+
+test("native close reentry during clear does not invoke native twice",()=>{
+ let calls=0,gate,once=false;
+ gate=factory({eligible:()=>true,begin:()=>false,clear(){if(!once){once=true;gate.request({},[]);}},later(){return 1;},cancelLater(){},invoke(){calls++;}});
+ gate.request({},[]);assert.equal(calls,1);
+});
+test("close reentry during begin waits until acquisition finishes",()=>{
+ let gate,calls=0,clears=0;const events=[];
+ gate=factory({eligible:()=>true,begin(){events.push("begin");gate.request({},[]);events.push("acquired");return true;},clear(){clears++;},seal(){events.push("seal");},later(){throw Error("unexpected timer");},cancelLater(){},invoke(){calls++;events.push("native");}});
+ gate.request({},[]);assert.equal(calls,1);assert.equal(clears,1);assert.deepEqual(events,["begin","acquired","seal","native"]);
+});
+test("disposal during begin takes precedence over nested close intent",()=>{
+ let gate,calls=0,clears=0;
+ gate=factory({eligible:()=>true,begin(){gate.request({},[]);gate.dispose();gate.flush();return true;},clear(){clears++;},later(){throw Error("unexpected timer");},cancelLater(){},invoke(){calls++;}});
+ gate.request({},[]);assert.equal(calls,0);assert.equal(clears,1);
+});
+test("close reentry during seal does not seal twice or schedule another dwell",()=>{
+ let gate,timer,calls=0,seals=0,scheduled=0;
+ gate=factory({eligible:()=>true,begin:()=>true,clear(){},seal(){seals++;gate.request({},[]);},later(fn){scheduled++;timer=fn;return scheduled;},cancelLater(){},invoke(){calls++;}});
+ gate.request({},[]);timer();assert.equal(calls,1);assert.equal(seals,1);assert.equal(scheduled,1);
+});

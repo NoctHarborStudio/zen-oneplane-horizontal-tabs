@@ -1,3 +1,9 @@
+## 0.3.0-preview.61 — Workspace and closing lifecycle self-review
+
+- Register the latest Workspace intent before synchronous cleanup/phase callbacks; defer nested visual work until the current synchronous step completes. Prevent a pending native command from being overwritten.
+- Serialize reentrant close acquisition, seal and completion; cancellation during acquisition wins over nested proceed requests. Preserve normal timings and native close decisions.
+- Six new regression fixtures; native validation pending. No new preferences or intended visual changes.
+
 ## 0.3.0-preview.60 — Workspace and closing lifecycle cleanup
 
 - Isolate Workspace Transition cleanup failures across geometry, effect styles, handles, timers, waiters and listeners. Preserve the native command gate and successful native result even if subsequent decorative motion fails.
