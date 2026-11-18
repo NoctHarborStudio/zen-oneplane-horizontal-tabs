@@ -118,3 +118,7 @@ Approved design, not implemented (preview.40 planning baseline). The previous br
 ### Diagnostic terminal ownership (A1.10)
 
 Layout owns its cleanup and native preference lease. Diagnostics claims that specific generation's cleanup callback, quiesces sampling on a real chrome-window unload and delegates to the same owner; completion is explicit after the terminal Layout event and lease release. A filtered, idempotent native Layout listener covers absent/forced-disposed Diagnostics. Partial-init Sine fallback has no required Layout owner. The final microtask is not a guarantee for independent late listeners. See [Diagnostics](diagnostics.md) and [Pipeline](pipeline-0.4.0.md).
+
+### A2 — Native Workspace command ownership
+
+The Layout-inlined workspace-commands module owns Nocturne-origin command admission, not native workspace data. Its window lease reuses the existing transition gate; data mutations additionally acquire a primitive process token on BrowserWindowTracker. WorkspaceTransition is a presentation consumer of the same lease, not another managed native queue. Home, Hub, Free and projection use the shared command boundary; native structural outcome must be verified before incoming success motion. Pending native operations never release due only to a visual watchdog; competing managed commands fail busy. Native external mutations and asynchronous peer propagation remain authoritative and are not wrapped. See [Pipeline](pipeline-0.4.0.md) for partial-result and pending-state gates.
