@@ -131,3 +131,32 @@ test("early boot is installed before layout and adopted without duplicate cover"
  assert.ok(source.includes('BOOT_MIN=1010,BOOT_EXIT=320,BOOT_LEAD=150,BOOT_ENTER=460'));
  assert.ok(source.indexOf('decision("boot.ready"')<source.indexOf('decision("assembly.icons.ready"'));
 });
+
+test("startup animation preserves explicit 760 ms and does not migrate saved choices",()=>{
+ const block=source.slice(source.indexOf("  window[SEEN]=true;"),source.indexOf("  const scale=duration/1050;"));
+ const prefs={getIntPref:()=>760,setIntPref(){throw Error("unexpected write");},getBoolPref:()=>false,setBoolPref(){throw Error("unexpected write");}};
+ assert.equal(new Function("window","SEEN","prefs","DURATION",block+"return duration;")({},"seen",prefs,"duration"),760);
+ assert.ok(!block.includes("setIntPref"));assert.ok(!block.includes("setBoolPref"));
+});
+test("Assembly cleanup continues after Center Motion and Home failures",()=>{
+ const code=source.slice(source.indexOf("  function finish(){"),source.indexOf("  function settle(){"));
+ const run=new Function(`
+ let dead=false,playing=true,settling=false,raf=1,timer=2,nativeTimer=3,lateFrame=4,lateObserver={disconnect(){throw Error("observer");}},lateResize=null,nativeObserver=null,centerHandle={seal(){throw Error("seal");},release(){log.push("center");}},bookmarkHandle={seal(){},release(){log.push("bookmarks");}},sheetURI=null,style=null,holdNode=null,bootPreparing=true;
+ const log=[],KEY="assembly",PHASE="phase",HOLD="hold",MANAGED="managed",EXISTING="existing",ENABLE="enable",started=0,now=()=>1;
+ const window={cancelAnimationFrame(){},clearTimeout(){},removeEventListener(){},__nocturneCenterMotion:{releasePending(){log.push("pending");}},__zenSharedHomeV1:{finishStartup(){throw Error("home");}},__nocturneTrace(e,d){if(e==="assembly.cleanup")log.push(d.failed);}};
+ const root={removeAttribute(){log.push("phase");}},reduced={removeEventListener(){}},prefs={removeObserver(){}},Services={};
+ const animations=new Map(),owned=new Map(),seen=new Set(),baseline=new Set(),inputs=[];
+ function restore(){}function removeBoot(){log.push("boot");}function interrupt(){}function onResize(){}function schedule(){}function preferenceChanged(){}
+ ${code}window[KEY]=finish;finish();finish();return {log,registered:!!window[KEY]};`);
+ assert.deepEqual(run(),{log:["center","bookmarks","pending","phase","boot",3],registered:false});
+});
+
+test("Boot teardown continues after timer failure and preserves replacement marker",()=>{
+ const code=source.slice(source.indexOf("  function removeBoot(){"),source.indexOf("  function exitBoot("));
+ const run=new Function(`
+ let bootTimer=1,bootFrame=2,bootEffects=[{cancel(){log.push("effect");}}],boot={remove(){log.push("node");}},bootMark={};
+ const log=[],KEY="assembly",window={assembly:()=>{},clearTimeout(){throw Error("timer");},cancelAnimationFrame(){log.push("frame");}};
+ const root={removeAttribute(){log.push("marker");}};function finish(){}function decision(e,d){log.push(d.failed);}
+ ${code}removeBoot();return log;`);
+ assert.deepEqual(run(),["frame","effect","node",1]);
+});

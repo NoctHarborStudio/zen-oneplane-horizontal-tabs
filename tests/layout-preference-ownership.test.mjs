@@ -89,3 +89,9 @@ test("final Layout callback releases captured resources and recorder after prefe
  a.cleanup();a.cleanup();
  assert.deepEqual(order,["boot","center","strip","end","diagnostics"]);
 });
+
+test("Layout stops Assembly before disposing Center Motion or detaching strip",async()=>{
+ const f=fixture(),order=[];
+ const a=f.mount({__zenRefinedStartupAnimation:()=>order.push("assembly"),__nocturneCenterMotion:{dispose(){order.push("center");}}});
+ a.onRelease(()=>order.push("strip"));await a.activate();a.cleanup();assert.deepEqual(order,["assembly","center","strip"]);
+});

@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="startup-prefs.script",data={version:"0.3.0-preview.57"};
+  const event="startup-prefs.script",data={version:"0.3.0-preview.58"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -35,6 +35,7 @@ function apply(){
     typeof window!=="undefined"&&window.__nocturneTrace?.("startup-prefs.apply",()=>(null),{sample:1800});
   const backup=readBackup();let changed=false;
   for(const name of TARGETS){
+    if(disposed)break;
     try{
       if(prefs.prefIsLocked(name)||prefs.getPrefType(name)!==prefs.PREF_BOOL)continue;
       if(prefs.getBoolPref(name)===false)continue;
@@ -42,6 +43,7 @@ function apply(){
         backup[name]={user:prefs.prefHasUserValue(name),value:prefs.getBoolPref(name)};
         prefs.setStringPref(BACKUP,JSON.stringify(backup));
       }
+      if(disposed)break;
       prefs.setBoolPref(name,false);changed=true;
     }catch(error){console.warn("[Zen Refined] Startup preference",name,error);}
   }
@@ -66,8 +68,21 @@ function restore(){
     persist();
   }
 }
-function sync(){if(disposed)return;if(prefs.getBoolPref(OPTION,true))apply();else restore();}
-let closing=false,disposed=false,closeTimer=0,observing=false;
+function sync(){
+  if(disposed)return;
+  if(mutating){pendingSync=true;return;}
+  mutating=true;
+  try{
+    do{
+      pendingSync=false;
+      if(prefs.getBoolPref(OPTION,true))apply();else restore();
+    }while(pendingSync&&!disposed);
+  }finally{
+    mutating=false;
+    finishCleanup();
+  }
+}
+let closing=false,disposed=false,closeTimer=0,observing=false,mutating=false,pendingSync=false,pendingCleanup=null;
 // Native preferences are process-wide; browser windows are leases, not
 // independent owners. Only one live lease observes the option.
 function otherOwner(){
@@ -82,9 +97,10 @@ function otherOwner(){
   }
   return null;
 }
-function observe(){
-  if(disposed||observing)return;
-  prefs.addObserver(OPTION,sync);observing=true;
+function observe(reconcile=false){
+  if(disposed)return;
+  if(!observing){prefs.addObserver(OPTION,sync);observing=true;}
+  if(reconcile)sync();
 }
 function stopObserving(){
   if(!observing)return;observing=false;
@@ -97,20 +113,31 @@ function beforeClose(event){
   closeTimer=window.setTimeout(()=>{closing=false;closeTimer=0;},1000);
 }
 function cleanup(modUnload=false){
-  if(disposed)return;disposed=true;cleanup.active=false;
+  if(disposed)return;disposed=true;
+  const wasObserving=observing,interrupted=mutating;
+  pendingCleanup={modUnload,wasObserving,interrupted};
+  // Invalidate callbacks now, but keep the preference lease visible until
+  // synchronous preference notifications have returned.
   if(closeTimer)window.clearTimeout(closeTimer);
-  const wasObserving=observing;stopObserving();
+  stopObserving();
   window.removeEventListener("beforeunload",beforeClose,true);
   window.removeEventListener("unload",nativeUnload);
+  finishCleanup();
+}
+function finishCleanup(){
+  if(mutating||!pendingCleanup)return;
+  const {modUnload,wasObserving,interrupted}=pendingCleanup;pendingCleanup=null;
+  cleanup.active=false;
   if(window[KEY]===cleanup)delete window[KEY];
   try{
     const successor=otherOwner();
     if(successor){
-      if(wasObserving&&!Services.startup.shuttingDown)successor.observe();
-      return;
+      if(wasObserving&&!Services.startup.shuttingDown)successor.observe(interrupted);
+    }else if(modUnload&&!closing&&!window.closed&&!Services.startup.shuttingDown){
+      // Normal window exit must preserve the pre-startup settings.
+      restore();
     }
-    // Normal window exit must preserve the pre-startup settings.
-    if(modUnload&&!closing&&!window.closed&&!Services.startup.shuttingDown)restore();
+    try{window.__nocturneTrace?.("startup-prefs.cleanup",{interrupted,successor:!!successor,modUnload},{flush:true});}catch{}
   }catch(error){console.warn("[Nocturne] Startup ownership cleanup",error);}
 }
 function nativeUnload(){cleanup(false);}

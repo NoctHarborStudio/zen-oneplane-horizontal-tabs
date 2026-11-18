@@ -20,7 +20,7 @@ function fixture(initial={}){
   run(Services,window,document,{warn(){}});
   return {window,unload:()=>unload(),close(){events.get("beforeunload")?.({target:window});events.get("unload")?.();window.closed=true;},nativeUnload(){events.get("unload")?.();window.closed=true;}};
  }
- return {mount,values,observers,Services,states:()=>TARGETS.map(k=>prefs.getBoolPref(k)),option(v){values.set(OPTION,v);for(const f of [...observers])f();}};
+ return {mount,values,observers,Services,prefs,states:()=>TARGETS.map(k=>prefs.getBoolPref(k)),option(v){values.set(OPTION,v);for(const f of [...observers])f();}};
 }
 test("two windows share one startup observer and last mod unload restores defaults",()=>{
  const f=fixture(),a=f.mount(),b=f.mount();assert.deepEqual(f.states(),[false,false]);assert.equal(f.observers.size,1);
@@ -56,4 +56,19 @@ test("legacy conflict diagnostic only warns for an enabled Refined entry",async(
  }
  assert.equal(await warn(async()=>{throw Error("unavailable");},logger),false);
  assert.equal(messages.length,1);assert.ok(messages[0].includes("Disable it in Sine"));
+});
+
+test("startup placeholder lease survives synchronous mod unload during backup write",()=>{
+ const f=fixture(),set=f.prefs.setStringPref;let triggered=false;
+ f.prefs.setStringPref=(k,v)=>{set(k,v);if(k===BACKUP&&!triggered){triggered=true;f.windowCleanup();}};
+ // Mount captures the actual current callback before initial sync.
+ const runMount=f.mount;
+ f.windowCleanup=()=>{const lease=win.__zenRefinedStartupPlaceholders;assert.ok(lease.active);lease(true);assert.ok(lease.active);};
+ const win={closed:false};runMount(win);
+ assert.equal(triggered,true);assert.deepEqual(f.states(),[true,true]);assert.equal(f.values.has(BACKUP),false);assert.equal(f.observers.size,0);
+});
+test("startup option changes during target write reconcile after current mutation",()=>{
+ const f=fixture(),set=f.prefs.setBoolPref;let triggered=false;
+ f.prefs.setBoolPref=(k,v)=>{set(k,v);if(k===TARGETS[0]&&v===false&&!triggered){triggered=true;f.option(false);}};
+ const a=f.mount();assert.equal(triggered,true);assert.deepEqual(f.states(),[true,true]);assert.equal(f.values.has(BACKUP),false);a.unload();
 });

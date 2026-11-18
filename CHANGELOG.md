@@ -1,3 +1,10 @@
+## 0.3.0-preview.58 — Cross-owner startup lifecycle review
+
+- Preserve supported saved startup duration choices, including 760 ms. New installs retain the existing 1050 ms default; no attempt to reverse ambiguous legacy migrations.
+- Stop active Assembly before Layout tears down its Center Motion and strip hosts. Isolate Assembly and Boot cleanup failures; retain terminal diagnostics.
+- Defer Startup Placeholder preference lease release until synchronous mutation returns, reconcile reentrant option changes, and stop applying after disposal.
+- Six new regression fixtures. Native validation pending; no intended normal-path visual changes.
+
 ## 0.3.0-preview.57 — Native resource cleanup self-review
 
 - Release an unacquired Downloads lease immediately when disposal wins before addView. Late list resolution cannot attach to a dead generation; pending native addView still serializes removal.

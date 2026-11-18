@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.57"};
+  const event="assembly.script",data={version:"0.3.0-preview.58"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -46,16 +46,9 @@ try{if(typeof window!=="undefined"){
   decision("assembly.eligible.check",{...check,reason});
   if(reason){window.__nocturneEarlyBoot?.cleanup?.();return;}
   window[SEEN]=true;
-  // Sine saves the previous default as a user value. Upgrade that exact
-  // 760ms default once; preserve every other choice, and allow users to
-  // select 760ms again after the migration.
-  const MIGRATED="zen.refined.startup.duration-v2-migrated";
-  try{
-    if(!prefs.getBoolPref(MIGRATED,false)){
-      if(prefs.getIntPref(DURATION,1050)===760)prefs.setIntPref(DURATION,1050);
-      prefs.setBoolPref(MIGRATED,true);
-    }
-  }catch{}
+  // 760 ms is still a supported user choice. Legacy saved defaults and
+  // explicit selections cannot be distinguished: never rewrite either.
+  // New installs retain the manifest default (1050 ms).
   const duration=Math.max(400,Math.min(1500,prefs.getIntPref(DURATION,1050)));
   const scale=duration/1050;
   // Absolute offsets on one clock. The surface settles before card motion,
@@ -110,11 +103,15 @@ try{if(typeof window!=="undefined"){
     }catch(error){removeBoot();decision("boot.error",{name:error?.name});}
   }
   function removeBoot(){
-    if(bootTimer)window.clearTimeout(bootTimer);bootTimer=0;
-    if(bootFrame)window.cancelAnimationFrame(bootFrame);bootFrame=0;
-    for(const a of bootEffects)try{a.cancel();}catch{}
-    bootEffects=[];boot?.remove();boot=null;bootMark=null;
-    root.removeAttribute("data-nocturne-boot");
+    let failed=0;
+    const step=fn=>{try{fn();}catch{failed++;}};
+    step(()=>{if(bootTimer)window.clearTimeout(bootTimer);});bootTimer=0;
+    step(()=>{if(bootFrame)window.cancelAnimationFrame(bootFrame);});bootFrame=0;
+    for(const a of bootEffects)step(()=>a.cancel());
+    bootEffects=[];
+    step(()=>boot?.remove());boot=null;bootMark=null;
+    if(window[KEY]===finish)step(()=>root.removeAttribute("data-nocturne-boot"));
+    if(failed)decision("boot.cleanup",{failed});
   }
   function exitBoot(resume){
     if(!boot){resume();return;}
@@ -143,38 +140,46 @@ try{if(typeof window!=="undefined"){
     }
   }
   function finish(){
-    typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.finish",()=>({dead,playing,settling,seen:seen.size,effects:animations.size,age:now()-started}),{flush:true});
     if(dead)return;dead=true;
-    if(raf)window.cancelAnimationFrame(raf);
-    if(timer)window.clearTimeout(timer);
-    if(nativeTimer)window.clearTimeout(nativeTimer);
-    if(lateFrame)window.cancelAnimationFrame(lateFrame);
-    lateObserver?.disconnect();lateObserver=null;lateResize?.disconnect();lateResize=null;
-    if(nativeObserver)try{Services.obs.removeObserver(nativeObserver,"browser-delayed-startup-finished");}catch{}
+    let failed=0;
+    const step=fn=>{try{fn();}catch{failed++;}};
+    const owns=window[KEY]===finish;
+    step(()=>window.__nocturneTrace?.("assembly.finish",()=>({playing,settling,seen:seen.size,effects:animations.size,age:now()-started}),{flush:true}));
+    step(()=>{if(raf)window.cancelAnimationFrame(raf);});
+    step(()=>{if(timer)window.clearTimeout(timer);});
+    step(()=>{if(nativeTimer)window.clearTimeout(nativeTimer);});
+    step(()=>{if(lateFrame)window.cancelAnimationFrame(lateFrame);});
+    step(()=>lateObserver?.disconnect());lateObserver=null;
+    step(()=>lateResize?.disconnect());lateResize=null;
+    step(()=>{if(nativeObserver)Services.obs.removeObserver(nativeObserver,"browser-delayed-startup-finished");});
     nativeObserver=null;
-    for(const a of animations.keys())try{a.cancel();}catch{}
+    for(const a of animations.keys())step(()=>a.cancel());
     animations.clear();
-    centerHandle?.seal();centerHandle?.release();centerHandle=null;
-    bookmarkHandle?.seal();bookmarkHandle?.release();bookmarkHandle=null;
-    window.__nocturneCenterMotion?.releasePending();
-    for(const n of [...owned.keys()])restore(n);
-    for(const n of seen)n.removeAttribute(MANAGED);
+    step(()=>centerHandle?.seal());step(()=>centerHandle?.release());centerHandle=null;
+    step(()=>bookmarkHandle?.seal());step(()=>bookmarkHandle?.release());bookmarkHandle=null;
+    if(owns)step(()=>window.__nocturneCenterMotion?.releasePending());
+    for(const n of [...owned.keys()])step(()=>restore(n));
+    for(const n of seen)step(()=>n.removeAttribute(MANAGED));
     seen.clear();
-    for(const n of baseline)n.removeAttribute(EXISTING);baseline.clear();
-    if(sheetURI)try{window.windowUtils.removeSheet(sheetURI,window.windowUtils.USER_SHEET);}catch{}
+    for(const n of baseline)step(()=>n.removeAttribute(EXISTING));baseline.clear();
+    step(()=>{if(sheetURI)window.windowUtils.removeSheet(sheetURI,window.windowUtils.USER_SHEET);});
     sheetURI=null;
-    style?.remove();
-    root.removeAttribute(PHASE);holdNode?.removeAttribute(HOLD);
-    delete window.__nocturneStartupTimeline;
-    window.__zenSharedHomeV1?.finishStartup?.();
-    bootPreparing=false;removeBoot();
-    for(const type of inputs)window.removeEventListener(type,interrupt,true);
-    window.removeEventListener("resize",onResize);
-    window.removeEventListener("unload",finish);
-    window.removeEventListener("OnePlane:StartupState",schedule);
-    reduced.removeEventListener("change",preferenceChanged);
-    try{prefs.removeObserver(ENABLE,preferenceChanged);}catch{}
+    step(()=>style?.remove());style=null;
+    if(owns){
+      step(()=>root.removeAttribute(PHASE));
+      step(()=>holdNode?.removeAttribute(HOLD));
+      step(()=>{delete window.__nocturneStartupTimeline;});
+      step(()=>window.__zenSharedHomeV1?.finishStartup?.());
+    }
+    bootPreparing=false;step(removeBoot);
+    for(const type of inputs)step(()=>window.removeEventListener(type,interrupt,true));
+    step(()=>window.removeEventListener("resize",onResize));
+    step(()=>window.removeEventListener("unload",finish));
+    step(()=>window.removeEventListener("OnePlane:StartupState",schedule));
+    step(()=>reduced.removeEventListener("change",preferenceChanged));
+    step(()=>prefs.removeObserver(ENABLE,preferenceChanged));
     if(window[KEY]===finish)delete window[KEY];
+    step(()=>window.__nocturneTrace?.("assembly.cleanup",{failed,owns},{flush:true}));
   }
   function settle(){
     typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.settle",()=>({playing,settling,effects:animations.size}),{sample:1800});

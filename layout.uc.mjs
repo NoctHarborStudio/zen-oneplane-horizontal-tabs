@@ -41,7 +41,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.57",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.58",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -7901,6 +7901,8 @@ function cleanup(nativeExit=false) {
   disposed = true;
   cleanupErrorStart=cleanupErrors;
   try{window.__nocturneTrace?.("layout.cleanup.begin",{applied,closing,nativeExit:nativeExit===true},{flush:true});}catch{}
+  // Stop the active Assembly consumer before releasing its Layout hosts.
+  cleanupStep("startup animation",()=>{if(window[CONTROLLER]===controller)window.__zenRefinedStartupAnimation?.();});
   cleanupStep("early boot",()=>layoutResources.boot?.cleanup?.());
   cleanupStep("center motion",()=>layoutResources.center?.dispose?.());
   cleanupStep("active flag",()=>root.removeAttribute("oneplane-active"));
