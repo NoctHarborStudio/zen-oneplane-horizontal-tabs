@@ -15,19 +15,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Check release policy regressions
+        run: python -m unittest discover -s tests -p 'test_release.py'
       - name: Check Sine publication metadata before build
+        env:
+          PUSH_BEFORE: ${{ github.event.before }}
         run: |
-          python scripts/verify-release.py --offline --history
-          python - <<'PY'
-          import json, subprocess, re
-          current = json.load(open("theme.json"))
-          previous = json.loads(subprocess.check_output(["git", "show", "HEAD^:theme.json"]))
-          assert current["id"] == previous["id"]
-          assert current["homepage"] == previous["homepage"]
-          version = lambda s: tuple(map(int, re.fullmatch(r"(\d+)\.(\d+)\.(\d+)-preview\.(\d+)", s).groups()))
-          assert version(current["version"]) > version(previous["version"])
-          assert current["version"] == json.load(open("package.json"))["version"]
-          PY
+          python scripts/verify-release.py --offline --history --before "$PUSH_BEFORE"
       - name: Check reproducible build and algorithm regressions
         run: npm run verify
       - name: Check Raw GitHub and Sine download archive
