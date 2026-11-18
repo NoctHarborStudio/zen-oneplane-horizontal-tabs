@@ -55,3 +55,7 @@ Layout owns its final Sine callback and explicitly releases captured early boot/
 ### Preview.55 lifecycle self-review
 
 Same-window recorder reload reuses the existing write coordinator; all coalesced callers join the follow-up write. Quiesced callbacks cannot re-arm sampling even if native removal throws. `center.dispose` records failed release-step count and delegated-close flag; `center.motion.release` now includes failure count. No new private fields. Partial initialization fallbacks release captured earlier resources. Closing persistence remains best effort, and later async Sine producers are not guaranteed to reach the recorder.
+
+### Preview.56 native resource cleanup
+
+`library.downloads.detach` reports released/retained booleans for attempted native removal; failed release retains the exact view and blocks replacement. `hub.uri.scope.restore` reports phase (acquire, run, reentrant, split-index), count, failed and foreign descriptor counts only on exceptional restoration/acquisition. `hub.uri.dispose` reports failed cleanup count. No URL, path, tab/workspace IDs or error messages are recorded. Async shutdown persistence remains best effort.
