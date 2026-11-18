@@ -41,7 +41,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.55",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.56",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -4816,11 +4816,33 @@ function installTabStrip() {
   function installWorkspaceLinkScope(){
     const nativeSwitch=window.switchToTabHavingURI;
     if(typeof nativeSwitch!=="function")return ()=>{};
-    const active=()=>root.hasAttribute("oneplane-active")&&
+    const helper=ChromeUtils.importESModule("resource:///modules/URILoadingHelper.sys.mjs").URILoadingHelper;
+    const scopeKey=Symbol.for("oneplane.workspace-uri-getter");
+    const blocked=Symbol("reentrant-uri-lookup");
+    let released=false;
+    const trace=(event,data)=>{try{window.__nocturneTrace?.(event,data,{flush:true});}catch{}};
+    const active=()=>!released&&root.hasAttribute("oneplane-active")&&
       window.gZenWorkspaces?.workspaceEnabled&&!!window.gZenWorkspaces.activeWorkspace;
-    function withScope(run){
+    function withScope(run,split=null){
       if(!active())return run();
       const restores=[];
+      let phase="acquire";
+      function restoreAll(){
+        let failed=0,foreign=0;
+        // Invalidate every temporary getter before attempting any restore.
+        // If a native descriptor becomes non-configurable, its remaining
+        // getter delegates to the original native state, never a stale list.
+        for(const entry of restores){entry.live=false;entry.list=null;}
+        for(const entry of restores.reverse()){
+          try{
+            const {manager,descriptor,getter}=entry;
+            if(Object.getOwnPropertyDescriptor(manager,"allUsedBrowsers")?.get!==getter){foreign++;continue;}
+            if(descriptor)Object.defineProperty(manager,"allUsedBrowsers",descriptor);
+            else if(!Reflect.deleteProperty(manager,"allUsedBrowsers"))throw Error("Native getter removal failed");
+          }catch{failed++;}
+        }
+        if(failed||foreign||phase!=="run")trace("hub.uri.scope.restore",{phase,count:restores.length,failed,foreign});
+      }
       try{
         const enumerator=Services.wm.getEnumerator("navigator:browser"),windows=new Set([window]);
         while(enumerator.hasMoreElements())windows.add(enumerator.getNext());
@@ -4829,6 +4851,11 @@ function installTabStrip() {
           const manager=win.gZenWorkspaces;
           if(!manager)throw Error("Native workspace lookup unavailable");
           const descriptor=Object.getOwnPropertyDescriptor(manager,"allUsedBrowsers");
+          if(descriptor?.get?.[scopeKey]){
+            if(descriptor.get[scopeKey].live){phase="reentrant";return blocked;}
+            // A failed restore must not accumulate layers of inert getters.
+            throw Error("Previous native getter restore unresolved");
+          }
           if(descriptor&&!descriptor.configurable)throw Error("Native workspace lookup cannot be scoped");
           const original=manager.allUsedBrowsers;
           if(!Array.isArray(original))throw Error("Native browser list unavailable");
@@ -4836,18 +4863,34 @@ function installTabStrip() {
             const t=win.gBrowser.getTabForBrowser(b);
             return hubWorkspaceBrowserEligible(t,manager.activeWorkspace);
           }):[];
-          Object.defineProperty(manager,"allUsedBrowsers",{configurable:true,get:()=>list});
-          restores.push(()=>descriptor?Object.defineProperty(manager,"allUsedBrowsers",descriptor):delete manager.allUsedBrowsers);
+          // Firefox 160 split-view selection indexes gBrowser.tabs, while
+          // Zen's lookup enumerates allUsedBrowsers. Never move the wrong tab.
+          if(win===window&&split&&list.some((b,i)=>win.gBrowser.getTabForBrowser(b)!==win.gBrowser.tabs[i])){
+            phase="split-index";return undefined;
+          }
+          const entry={manager,descriptor,list,live:true,getter:null};
+          const getter=function(){
+            if(entry.live)return entry.list;
+            if(descriptor)return "value" in descriptor?descriptor.value:descriptor.get?.call(this);
+            return Reflect.get(Object.getPrototypeOf(manager),"allUsedBrowsers",this);
+          };
+          Object.defineProperty(getter,scopeKey,{value:entry});entry.getter=getter;
+          // Track before defineProperty so a throwing proxy cannot strand
+          // a successful partial acquisition.
+          restores.push(entry);
+          Object.defineProperty(manager,"allUsedBrowsers",{configurable:true,enumerable:descriptor?.enumerable??false,get:getter});
         }
+        phase="run";
       }catch(error){
-        for(const restore of restores.reverse())restore();
         console.warn("[OnePlane] Could not scope workspace URI lookup:",error);
-        // Do not accidentally switch spaces if the native contract changes.
         return undefined;
+      }finally{
+        if(phase!=="run")restoreAll();
       }
-      try{return run();}finally{for(const restore of restores.reverse())restore();}
+      // Preserve the native outcome even when a subsequent restore fails;
+      // never issue a duplicate open after a successful native switch.
+      try{return run();}finally{restoreAll();}
     }
-    const helper=ChromeUtils.importESModule("resource:///modules/URILoadingHelper.sys.mjs").URILoadingHelper;
     function fallback(uri,openNew,params={},context=null){
       if(!openNew)return false;
       const spec=typeof uri==="string"?uri:uri.spec;
@@ -4858,46 +4901,49 @@ function installTabStrip() {
     }
     function scopedSwitch(uri,openNew,params={},context=null,split=null){
       if(!active())return nativeSwitch.apply(this,arguments);
-      const result=withScope(()=>nativeSwitch.call(this,uri,openNew,{...params},context,split));
+      const result=withScope(()=>nativeSwitch.call(this,uri,openNew,{...params},context,split),split);
+      if(result===blocked)return false;
       return result===undefined?fallback(uri,openNew,params,context):result;
     }
     window.switchToTabHavingURI=scopedSwitch;
-    // The native address-bar result path calls the shared URI helper
-    // directly. Avoid its stale-result unregister path when an existing
-    // matching tab merely belongs to a different workspace.
     let unregister=()=>{};
     try{
       const {UrlbarParentController}=ChromeUtils.importESModule("moz-src:///browser/components/urlbar/UrlbarParentController.sys.mjs");
       const proto=UrlbarParentController.prototype,key=Symbol.for("oneplane.workspace-urlbar-scope");
       let registry=proto[key];
+      if(registry&&proto.switchToTab!==registry.wrapper)throw Error("Foreign URL bar wrapper");
       if(!registry){
-        const original=proto.switchToTab;
+        const descriptor=Object.getOwnPropertyDescriptor(proto,"switchToTab"),original=descriptor?.value;
         if(typeof original!=="function")throw Error("URL bar switch API unavailable");
         const clients=new Map();
         const wrapper=function(data){
           const client=clients.get(this.browserWindow);
           return client?client(this,data,original):original.call(this,data);
         };
-        registry={clients,original,wrapper};
+        registry={clients,original,wrapper,descriptor};
         Object.defineProperty(proto,key,{configurable:true,value:registry});
-        proto.switchToTab=wrapper;
+        try{Object.defineProperty(proto,"switchToTab",{...descriptor,value:wrapper});}
+        catch(error){
+          try{if(proto[key]===registry&&proto.switchToTab!==wrapper)Reflect.deleteProperty(proto,key);}catch{}
+          throw error;
+        }
       }
       const client=(controller,data,original)=>{
         if(!active()||!data?.url)return original.call(controller,data);
         const context=data.userContextId??0;
-        // Native private context sentinel is not a public container ID.
         const userContext=context===-1?null:context;
         const matches=b=>{
           try{return b.currentURI.spec===data.url&&(userContext===null||String(b.getAttribute("usercontextid")||0)===String(userContext));}catch{return false;}
         };
         const manager=window.gZenWorkspaces;
+        // The outer scope's list may be filtered for a different window.
+        // Suppress recursive reuse instead of dispatching another load.
+        if(Object.getOwnPropertyDescriptor(manager,"allUsedBrowsers")?.get?.[scopeKey]?.live)return;
         const local=manager.allUsedBrowsers.some(b=>matches(b)&&hubWorkspaceBrowserEligible(browser.getTabForBrowser(b),manager.activeWorkspace));
         if(local){
-          const result=withScope(()=>{original.call(controller,data);return true;});
-          if(result)return;
+          const result=withScope(()=>{original.call(controller,data);return true;},browser.selectedTab?.splitview);
+          if(result===blocked||result===true)return;
         }
-        // No reusable tab in this workspace: load locally rather than
-        // unregistering a real tab belonging to another workspace.
         const params=userContext===null?{}:{userContextId:userContext};
         helper.openTrustedLinkIn(window,data.url,"tab",params);
         if(!data.heuristic)controller.addToInputHistory?.(data.url,data.searchString);
@@ -4906,14 +4952,20 @@ function installTabStrip() {
       unregister=()=>{
         if(registry.clients.get(window)===client)registry.clients.delete(window);
         if(!registry.clients.size&&proto[key]===registry){
-          if(proto.switchToTab===registry.wrapper)proto.switchToTab=registry.original;
-          delete proto[key];
+          if(proto.switchToTab===registry.wrapper){
+            if(registry.descriptor)Object.defineProperty(proto,"switchToTab",registry.descriptor);
+            else proto.switchToTab=registry.original;
+          }
+          if(!Reflect.deleteProperty(proto,key))throw Error("URL bar registry removal failed");
         }
       };
     }catch(error){console.warn("[OnePlane] URL bar workspace isolation unavailable:",error);}
     return ()=>{
-      unregister();
-      if(window.switchToTabHavingURI===scopedSwitch)window.switchToTabHavingURI=nativeSwitch;
+      if(released)return;released=true;
+      let failed=0;
+      try{unregister();}catch{failed++;}
+      try{if(window.switchToTabHavingURI===scopedSwitch)window.switchToTabHavingURI=nativeSwitch;}catch{failed++;}
+      trace("hub.uri.dispose",{failed});
     };
   }
   let releaseWorkspaceLinkScope=()=>{};

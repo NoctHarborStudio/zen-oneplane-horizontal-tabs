@@ -1,3 +1,10 @@
+## 0.3.0-preview.56 — Native resource cleanup
+
+- Preserve a single Downloads lease through failed native view removal, retry the exact view on the next acquisition, and block replacements until removal succeeds. Preserve pending legacy barriers across reloads. Add aggregate detach diagnostics.
+- Restore Hub URI lookup getters independently, invalidate temporary getters before restoration, respect foreign replacements, suppress recursive reuse, and isolate URL-bar and window-hook teardown.
+- Guard split-view lookup against mismatched native tab indices. In that exceptional case use the existing local-open fallback rather than moving an unrelated tab.
+- Add eleven regression fixtures. No new preferences or intended normal-path visual changes; native validation pending.
+
 ## 0.3.0-preview.55 — Lifecycle and diagnostic ownership self-review
 
 - Tear down the previous Layout before replacement fragments initialize, retain the same window's diagnostic write coordinator, and join the actual follow-up write across concurrent flush callers.

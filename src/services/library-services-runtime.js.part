@@ -2,10 +2,18 @@
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   const trace=(event,data)=>{try{if(win.__nocturneTrace)win.__nocturneTrace(event,data,{flush:true});else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,data,t:win.performance?.now?.()??0});}}catch{}};
-  trace("library.services.script",{version:"0.3.0-preview.55"});
+  trace("library.services.script",{version:"0.3.0-preview.56"});
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
   const BARRIER="__nocturneDownloadsDisposal",MEDIA_BARRIER="__nocturneMediaDisposal";
-  const previous=win[KEY],barrier=previous?.dispose?.()||win[BARRIER]||Promise.resolve();
+  const previous=win[KEY],previousClosing=previous?.dispose?.(),existing=win[BARRIER];
+  // Migrate the legacy Promise barrier once. New generations retain a single
+  // lease object (not a chain of rejected promises or obsolete services).
+  const lease=existing&&typeof existing==="object"&&"release" in existing?existing:{release:null,barrier:previousClosing||existing||Promise.resolve()};
+  const barrier=lease.barrier||Promise.resolve();
+  win[BARRIER]=lease;
+  // Keep a pending legacy barrier across multiple reloads, including an
+  // intervening generation that never started Downloads.
+  void Promise.resolve(barrier).then(result=>{if(result!==false&&lease.barrier===barrier)lease.barrier=null;},()=>{});
   const mediaBarrier=win[MEDIA_BARRIER]||Promise.resolve();
   let dead=false,closing=null,historySessions=new Set();
   const load=(path,key)=>ChromeUtils.importESModule(path)[key];
@@ -55,7 +63,7 @@
       dt.mozSetDataAt("application/x-moz-file",f,0);dt.setData("text/uri-list",Services.io.newFileURI(f).spec);dt.effectAllowed="copyMove";dt.addElement?.(node);return true;
     }catch{return false;}
   }
-  const downloads=createDownloadsService({describeFile:d=>({icon:iconFor(d.target?.path)}),dragFile,barrier,idPrefix:"download-"+(win.crypto?.randomUUID?.()||String(win.performance.now())),loadList:()=>{
+  const downloads=createDownloadsService({describeFile:d=>({icon:iconFor(d.target?.path)}),dragFile,barrier,lease,onDetach:result=>trace("library.downloads.detach",result),idPrefix:"download-"+(win.crypto?.randomUUID?.()||String(win.performance.now())),loadList:()=>{
     const D=win.Downloads||load("resource://gre/modules/Downloads.sys.mjs","Downloads");
     return D.getList(privateWindow()?D.PRIVATE:D.PUBLIC);
   },onError:()=>win.console.warn("[Nocturne] Downloads service listener failed")});
@@ -113,8 +121,7 @@
     try{trace("library.scope.dispose",{owner:"closed-tabs",...closedTabs.dispose()});}catch{}
     const mediaClosing=media.dispose();win[MEDIA_BARRIER]=mediaClosing;
     mediaClosing.finally(()=>{if(win[MEDIA_BARRIER]===mediaClosing)delete win[MEDIA_BARRIER];});
-    closing=downloads.dispose();win[BARRIER]=closing;
-    closing.finally(()=>{if(win[BARRIER]===closing)delete win[BARRIER];});
+    closing=downloads.dispose();
     if(win[KEY]===api){delete win[KEY];win.dispatchEvent(new win.CustomEvent("Nocturne:ServicesGone"));}
     return closing;
   }

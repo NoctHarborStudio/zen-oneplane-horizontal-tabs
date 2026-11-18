@@ -1,3 +1,4 @@
+import {readFileSync} from "node:fs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {hubWorkspaceSnapshot,hubPanelWidth,hubWorkspaceBrowserEligible,hubOtherDisplay,hubSnapRect,hubTrashAgeMatches,hubWorkspaceOrder,hubTrashTabEligible,hubTrashRange,hubTrashRelativeAge,hubTrashAgeOptions,hubTrashFlightGeometry} from "../src/algorithms/hub-workspaces.mjs";
@@ -131,4 +132,85 @@ test("Hub Trash resets on a fresh opening and stale workspace deletion cannot ex
   const pending=state.deleteSpace();state.close();state.toggle();release();await pending;
   assert.equal(state.expanded(),false);
   await state.deleteSpace();assert.equal(state.expanded(),true);
+});
+
+function uriScopeFixture({splitMismatch=false,restoreFailure=false,foreign=false}={}){
+ const code=readFileSync(new URL("../src/hub/controller.js.part",import.meta.url),"utf8");
+ const segment=code.slice(code.indexOf("  function installWorkspaceLinkScope(){"),code.indexOf("  let releaseWorkspaceLinkScope="));
+ const logs=[],opens=[],calls=[],nativeLists=[];
+ function manager(name){
+  const b={currentURI:{spec:"https://example.org"},getAttribute:()=>""},tab={workspace:"local",linkedBrowser:b};
+  let browsers=[b];const proto={get allUsedBrowsers(){return browsers;}};
+  const m=Object.create(proto);m.workspaceEnabled=true;m.activeWorkspace="local";
+  const browser={getTabForBrowser:x=>x===b?tab:null,tabs:splitMismatch?[{}]:[tab],selectedTab:{splitview:splitMismatch?{}:null}};
+  nativeLists.push({m,b,tab,replace:next=>{browsers=next;}});
+  return {name,gZenWorkspaces:m,gBrowser:browser,__nocturneTrace:(e,d)=>logs.push({e,d})};
+ }
+ const window=manager("local"),other=manager("other");let native=()=>true;
+ window.switchToTabHavingURI=function(...args){calls.push(args);return native(...args);};
+ const original=window.switchToTabHavingURI;
+ class Controller{switchToTab(data){calls.push(data);return native(data);}}
+ const originalProto=Controller.prototype.switchToTab;
+ const Services={wm:{getEnumerator(){const q=[window,other];return {hasMoreElements:()=>q.length>0,getNext:()=>q.shift()};}}};
+ const ChromeUtils={importESModule:p=>p.includes("URILoadingHelper")?{URILoadingHelper:{openTrustedLinkIn(...args){opens.push(args);}}}:{UrlbarParentController:Controller}};
+ const install=new Function("window","root","browser","Services","ChromeUtils","hubWorkspaceBrowserEligible","console",segment+"return installWorkspaceLinkScope;")(window,{hasAttribute:()=>true},window.gBrowser,Services,ChromeUtils,(t,w)=>t?.workspace===w,{warn(){}});
+ const release=install(),controller=new Controller();controller.browserWindow=window;
+ return {window,other,original,originalProto,Controller,controller,release,logs,opens,calls,nativeLists,setNative:fn=>native=fn,lookup:(...args)=>window.switchToTabHavingURI(...args)};
+}
+test("Hub restores all temporary getters after native success and native exception",()=>{
+ const f=uriScopeFixture();
+ f.setNative(()=>{assert.equal(f.window.gZenWorkspaces.allUsedBrowsers.length,1);assert.equal(f.other.gZenWorkspaces.allUsedBrowsers.length,0);return true;});
+ assert.equal(f.lookup("https://example.org",true),true);
+ assert.equal(f.other.gZenWorkspaces.allUsedBrowsers.length,1);
+ assert.equal(Object.hasOwn(f.window.gZenWorkspaces,"allUsedBrowsers"),false);
+ f.setNative(()=>{throw Error("native failure");});
+ assert.throws(()=>f.lookup("https://example.org",true),/native failure/);
+ assert.equal(Object.hasOwn(f.other.gZenWorkspaces,"allUsedBrowsers"),false);
+ f.release();assert.equal(f.window.switchToTabHavingURI,f.original);assert.equal(f.Controller.prototype.switchToTab,f.originalProto);
+});
+test("Hub failed getter restoration remains live native data and does not prevent other restores",()=>{
+ const f=uriScopeFixture();
+ f.setNative(()=>{
+  const m=f.other.gZenWorkspaces,d=Object.getOwnPropertyDescriptor(m,"allUsedBrowsers");
+  Object.defineProperty(m,"allUsedBrowsers",{...d,configurable:false});return true;
+ });
+ assert.equal(f.lookup("https://example.org",true),true);
+ assert.equal(Object.hasOwn(f.window.gZenWorkspaces,"allUsedBrowsers"),false);
+ assert.equal(f.other.gZenWorkspaces.allUsedBrowsers.length,1);
+ f.nativeLists[1].replace([{},{}]);assert.equal(f.other.gZenWorkspaces.allUsedBrowsers.length,2);
+ assert.equal(f.opens.length,0);assert.ok(f.logs.some(x=>x.e==="hub.uri.scope.restore"&&x.d.failed===1));
+ f.release();
+});
+test("Hub preserves foreign getters and foreign prototype/window wrappers",()=>{
+ const f=uriScopeFixture(),foreign=()=>["foreign"],wrapper=()=>false;
+ f.setNative(()=>{Object.defineProperty(f.other.gZenWorkspaces,"allUsedBrowsers",{configurable:true,get:foreign});return true;});
+ assert.equal(f.lookup("https://example.org",true),true);
+ assert.equal(Object.getOwnPropertyDescriptor(f.other.gZenWorkspaces,"allUsedBrowsers").get,foreign);
+ f.Controller.prototype.switchToTab=wrapper;f.window.switchToTabHavingURI=wrapper;f.release();
+ assert.equal(f.Controller.prototype.switchToTab,wrapper);assert.equal(f.window.switchToTabHavingURI,wrapper);
+});
+test("Hub nested URI reuse is suppressed and native scope remains intact",()=>{
+ const f=uriScopeFixture();f.setNative(()=>{
+  assert.equal(f.lookup("https://example.org",true),false);
+  f.controller.switchToTab({url:"https://example.org"});
+  assert.equal(f.other.gZenWorkspaces.allUsedBrowsers.length,0);return true;
+ });
+ assert.equal(f.lookup("https://example.org",true),true);assert.equal(f.calls.length,1);assert.equal(f.opens.length,0);
+ assert.equal(f.other.gZenWorkspaces.allUsedBrowsers.length,1);f.release();
+});
+test("Hub split lookup with mismatched native tab index fails to local open, never native move",()=>{
+ const f=uriScopeFixture({splitMismatch:true});
+ assert.equal(f.lookup("https://example.org",true,{},null,{}),false);
+ f.controller.switchToTab({url:"https://example.org"});
+ assert.equal(f.calls.length,0);assert.equal(f.opens.length,2);
+ assert.ok(f.logs.some(x=>x.e==="hub.uri.scope.restore"&&x.d.phase==="split-index"));
+ f.release();
+});
+test("Hub prototype restore failure does not prevent window wrapper restoration",()=>{
+ const f=uriScopeFixture();
+ const proto=f.Controller.prototype,d=Object.getOwnPropertyDescriptor(proto,"switchToTab");
+ Object.defineProperty(proto,"switchToTab",{...d,writable:false,configurable:false});
+ f.release();assert.equal(f.window.switchToTabHavingURI,f.original);
+ f.controller.switchToTab({url:"https://example.org"});assert.equal(f.calls.length,1);
+ assert.ok(f.logs.some(x=>x.e==="hub.uri.dispose"&&x.d.failed===1));
 });

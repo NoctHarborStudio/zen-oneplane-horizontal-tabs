@@ -1,3 +1,4 @@
+import {readFileSync} from "node:fs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {createDownloadsService} from "../src/services/downloads-service.mjs";
@@ -83,4 +84,56 @@ test("closed tabs subscriber failure during acquisition does not lose native uns
  const s=createClosedTabsService({getClosed:()=>[],observe(fn){fn();return()=>removed++;},onError:label=>errors.push(label)});
  s.subscribe(()=>{throw Error("consumer");});assert.deepEqual(errors,["closed-tabs-callback"]);
  assert.deepEqual(s.dispose(),{released:1,failed:0});assert.equal(removed,1);
+});
+
+test("failed native detach retains lease, blocks replacement and retries the exact view",async()=>{
+ const lease={release:null},views=new Set(),events=[];let fail=true,adds=0,oldView;
+ const list={addView(v){adds++;views.add(v);oldView??=v;},removeView(v){if(fail)throw Error("remove failure");views.delete(v);}};
+ const a=createDownloadsService({lease,loadList:async()=>list,onDetach:r=>events.push(r)});
+ await a.start();let callbacks=0;a.subscribe(()=>callbacks++);
+ assert.equal(await a.dispose(),false);assert.equal(lease.release,a.dispose);assert.equal(views.size,1);
+ oldView.onDownloadAdded({});assert.equal(callbacks,0);
+ const b=createDownloadsService({lease,loadList:async()=>list});
+ await assert.rejects(b.start(),/detach unresolved/);assert.equal(adds,1);
+ assert.equal(await b.dispose(),true);assert.equal(lease.release,a.dispose);
+ fail=false;const c=createDownloadsService({lease,loadList:async()=>list});
+ await c.start();assert.equal(views.size,1);assert.equal(adds,2);assert.equal(lease.release,c.dispose);
+ assert.equal(await c.dispose(),true);assert.equal(lease.release,null);assert.equal(views.size,0);
+ assert.deepEqual(events,[{released:false,retained:true},{released:false,retained:true},{released:true,retained:false}]);
+});
+test("partial addView failure retains its inert view until retry can remove it",async()=>{
+ const lease={release:null},views=new Set();let failAdd=true,failRemove=true,adds=0;
+ const list={addView(v){views.add(v);adds++;v.onDownloadAdded({});if(failAdd)throw Error("add failure");},removeView(v){if(failRemove)throw Error("remove failure");views.delete(v);}};
+ const s=createDownloadsService({lease,loadList:async()=>list});
+ await assert.rejects(s.start(),/add failure/);assert.equal(s.isReady(),false);assert.equal(views.size,1);
+ await assert.rejects(s.start(),/detach unresolved/);assert.equal(adds,1);
+ failAdd=false;failRemove=false;await s.start();assert.equal(views.size,1);assert.equal(s.getSnapshot().length,1);
+ assert.equal(await s.dispose(),true);assert.equal(views.size,0);
+});
+test("failed legacy detach barrier prevents replacement addView",async()=>{
+ let loads=0;const s=createDownloadsService({barrier:Promise.resolve(false),loadList:async()=>{loads++;}});
+ await assert.rejects(s.start(),/detach unresolved/);assert.equal(loads,0);await s.dispose();
+});
+test("lease serializes concurrent replacements and a pending addView",async()=>{
+ const lease={release:null},views=new Set();let entered,resolve;
+ const entry=new Promise(r=>entered=r),wait=new Promise(r=>resolve=r);
+ const list={async addView(v){views.add(v);assert.equal(views.size,1);entered();await wait;},removeView(v){views.delete(v);}};
+ const a=createDownloadsService({lease,loadList:async()=>list}),first=a.start();await entry;
+ const b=createDownloadsService({lease,loadList:async()=>list}),second=b.start();
+ resolve();await assert.rejects(first,/disposed/);await second;assert.equal(views.size,1);
+ assert.equal(await b.dispose(),true);assert.equal(views.size,0);
+});
+
+test("legacy pending barrier survives a replacement generation that never started",async()=>{
+ const src=readFileSync(new URL("../src/services/library-services-runtime.js.part",import.meta.url),"utf8");
+ const code=src.slice(src.indexOf("  const BARRIER="),src.indexOf("  const mediaBarrier="));
+ let finish;const pending=new Promise(r=>finish=r);
+ const win={__nocturneLibraryServices:{dispose:()=>pending}};
+ const mount=new Function("win","KEY",code+"return {lease,barrier};");
+ const a=mount(win,"__nocturneLibraryServices");
+ delete win.__nocturneLibraryServices;
+ const b=mount(win,"__nocturneLibraryServices");
+ assert.equal(a.lease,b.lease);assert.equal(b.barrier,pending);
+ finish();await pending;await Promise.resolve();
+ assert.equal(b.lease.barrier,null);
 });

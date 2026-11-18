@@ -104,8 +104,8 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
  return {open,action,dispose};
 }
 // One native list subscription per window, independent of any view.
-  function createDownloadsService({loadList,barrier=Promise.resolve(),onError=()=>{},idPrefix="download",describeFile=()=>({}),dragFile=()=>false}){
-    let dead=false,source=null,pending=null,detaching=null,ready=false,serial=0;
+  function createDownloadsService({loadList,barrier=Promise.resolve(),lease=null,onError=()=>{},onDetach=()=>{},idPrefix="download",describeFile=()=>({}),dragFile=()=>false}){
+    let dead=false,source=null,pending=null,detaching=null,ready=false,accepting=false,serial=0;
     const records=new Map(),byId=new Map(),listeners=new Set(),nativeListeners=new Set();
     const report=()=>{try{onError();}catch{}};
     const safe=(fn,...args)=>{try{fn(...args);}catch{report();}};
@@ -120,7 +120,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
         exists:d.target?.exists!==false,clearable:clearable(d),kind:"download",...describeFile(d)});
     }
     function emit(kind,d){
-      if(dead)return;
+      if(dead||!accepting)return;
       let rec=records.get(d);
       if(kind==="onDownloadRemoved"){
         if(!rec)return;
@@ -134,23 +134,55 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
       for(const fn of [...listeners])if(listeners.has(fn))safe(fn,{type:kind,id:rec.id});
     }
     const view={onDownloadAdded:d=>emit("onDownloadAdded",d),onDownloadChanged:d=>emit("onDownloadChanged",d),onDownloadRemoved:d=>emit("onDownloadRemoved",d)};
+    function releaseLease(){if(lease?.release===dispose)lease.release=null;}
     async function detach(){
-      const list=source;source=null;
-      if(list)try{await list.removeView(view);}catch{report();}
+      accepting=false;
+      const list=source;
+      if(!list){releaseLease();return true;}
+      let released=false;
+      // Gecko DownloadList.removeView deletes the exact view from a Set;
+      // retrying this identity is safe even if an earlier attempt removed it.
+      try{await list.removeView(view);released=true;source=null;releaseLease();}
+      catch{report();}
+      try{onDetach({released,retained:!released});}catch{}
+      return released;
     }
     function start(){
       if(dead)return Promise.reject(Error("Downloads service disposed"));
       if(ready)return Promise.resolve();
       if(pending)return pending;
       pending=(async()=>{
-        await barrier;
+        if(await barrier===false)throw Error("Previous Downloads detach unresolved");
         if(dead)throw Error("Downloads service disposed");
-        source=await loadList();
-        if(dead){source=null;throw Error("Downloads service disposed");}
-        try{await source.addView(view);}
-        catch(error){await detach();records.clear();byId.clear();throw error;}
+        // One stable per-window lease survives a failed detach and any number
+        // of reloads. No second native view may attach until release succeeds.
+        while(lease?.release&&lease.release!==dispose){
+          if(!await lease.release())throw Error("Previous Downloads detach unresolved");
+          if(dead)throw Error("Downloads service disposed");
+        }
+        if(source&&!await detach())throw Error("Downloads detach unresolved");
         if(dead)throw Error("Downloads service disposed");
-        ready=true;
+        // Retrying our own failed acquisition releases the lease; another
+        // generation may have claimed it during that await.
+        while(lease?.release&&lease.release!==dispose){
+          if(!await lease.release())throw Error("Previous Downloads detach unresolved");
+          if(dead)throw Error("Downloads service disposed");
+        }
+        if(lease)lease.release=dispose;
+        try{
+          const list=await loadList();
+          if(dead)throw Error("Downloads service disposed");
+          if(typeof list?.addView!=="function"||typeof list?.removeView!=="function")throw Error("Native Downloads list unavailable");
+          source=list;accepting=true;
+          await list.addView(view);
+          if(dead)throw Error("Downloads service disposed");
+          ready=true;
+        }catch(error){
+          accepting=false;
+          // Disposal owns the pending addView rollback when cancellation won.
+          if(!dead)await detach();
+          records.clear();byId.clear();throw error;
+        }
       })().finally(()=>{pending=null;});
       return pending;
     }
@@ -193,10 +225,10 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
     function isReady(){return !dead&&ready;}
     function dispose(){
       if(detaching)return detaching;
-      dead=true;ready=false;listeners.clear();nativeListeners.clear();records.clear();byId.clear();
-      // Finish an in-flight native addView before removing it. A replacement
-      // instance waits for this barrier, so two views cannot overlap.
-      detaching=(async()=>{try{await pending;}catch{}await detach();})();
+      dead=true;ready=false;accepting=false;listeners.clear();nativeListeners.clear();records.clear();byId.clear();
+      // Finish a pending acquisition before removing the exact native view.
+      // Failed removal retains its handle and lease for a later explicit retry.
+      detaching=(async()=>{try{await pending;}catch{}return detach();})().finally(()=>{detaching=null;});
       return detaching;
     }
     return {start,subscribeNative,subscribe,getSnapshot,action,actionNative,pathKeys,withNative,drag,clearCompleted,isReady,remove:d=>actionNative(d,"remove"),dispose};
@@ -272,10 +304,18 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   const trace=(event,data)=>{try{if(win.__nocturneTrace)win.__nocturneTrace(event,data,{flush:true});else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,data,t:win.performance?.now?.()??0});}}catch{}};
-  trace("library.services.script",{version:"0.3.0-preview.55"});
+  trace("library.services.script",{version:"0.3.0-preview.56"});
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
   const BARRIER="__nocturneDownloadsDisposal",MEDIA_BARRIER="__nocturneMediaDisposal";
-  const previous=win[KEY],barrier=previous?.dispose?.()||win[BARRIER]||Promise.resolve();
+  const previous=win[KEY],previousClosing=previous?.dispose?.(),existing=win[BARRIER];
+  // Migrate the legacy Promise barrier once. New generations retain a single
+  // lease object (not a chain of rejected promises or obsolete services).
+  const lease=existing&&typeof existing==="object"&&"release" in existing?existing:{release:null,barrier:previousClosing||existing||Promise.resolve()};
+  const barrier=lease.barrier||Promise.resolve();
+  win[BARRIER]=lease;
+  // Keep a pending legacy barrier across multiple reloads, including an
+  // intervening generation that never started Downloads.
+  void Promise.resolve(barrier).then(result=>{if(result!==false&&lease.barrier===barrier)lease.barrier=null;},()=>{});
   const mediaBarrier=win[MEDIA_BARRIER]||Promise.resolve();
   let dead=false,closing=null,historySessions=new Set();
   const load=(path,key)=>ChromeUtils.importESModule(path)[key];
@@ -325,7 +365,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
       dt.mozSetDataAt("application/x-moz-file",f,0);dt.setData("text/uri-list",Services.io.newFileURI(f).spec);dt.effectAllowed="copyMove";dt.addElement?.(node);return true;
     }catch{return false;}
   }
-  const downloads=createDownloadsService({describeFile:d=>({icon:iconFor(d.target?.path)}),dragFile,barrier,idPrefix:"download-"+(win.crypto?.randomUUID?.()||String(win.performance.now())),loadList:()=>{
+  const downloads=createDownloadsService({describeFile:d=>({icon:iconFor(d.target?.path)}),dragFile,barrier,lease,onDetach:result=>trace("library.downloads.detach",result),idPrefix:"download-"+(win.crypto?.randomUUID?.()||String(win.performance.now())),loadList:()=>{
     const D=win.Downloads||load("resource://gre/modules/Downloads.sys.mjs","Downloads");
     return D.getList(privateWindow()?D.PRIVATE:D.PUBLIC);
   },onError:()=>win.console.warn("[Nocturne] Downloads service listener failed")});
@@ -383,8 +423,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
     try{trace("library.scope.dispose",{owner:"closed-tabs",...closedTabs.dispose()});}catch{}
     const mediaClosing=media.dispose();win[MEDIA_BARRIER]=mediaClosing;
     mediaClosing.finally(()=>{if(win[MEDIA_BARRIER]===mediaClosing)delete win[MEDIA_BARRIER];});
-    closing=downloads.dispose();win[BARRIER]=closing;
-    closing.finally(()=>{if(win[BARRIER]===closing)delete win[BARRIER];});
+    closing=downloads.dispose();
     if(win[KEY]===api){delete win[KEY];win.dispatchEvent(new win.CustomEvent("Nocturne:ServicesGone"));}
     return closing;
   }
