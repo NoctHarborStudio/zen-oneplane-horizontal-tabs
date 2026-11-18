@@ -51,3 +51,7 @@ All three sessions in the supplied native smoke trace end at `disassembly.native
 ### Preview.54 terminal lifecycle contract
 
 Layout owns its final Sine callback and explicitly releases captured early boot/Center Motion resources before strip and preference cleanup. `layout.cleanup.error` records static resource label and error class; `layout.cleanup.end` records flags and thrown-step count (preference restoration has its own aggregate). `diagnostics.quiesce` reports sampling teardown failures; synchronous late producers can still trace until `diagnostics.dispose` at the microtask boundary. Asynchronous writes and cross-entrypoint cleanup remain best effort on shutdown. Archive bytes capped at 120,000 per session; `startupDropped` counts discarded archive entries independently from ring drops. A coalesced flush returns the actual write outcome. No added private data or uploads. Native verification pending.
+
+### Preview.55 lifecycle self-review
+
+Same-window recorder reload reuses the existing write coordinator; all coalesced callers join the follow-up write. Quiesced callbacks cannot re-arm sampling even if native removal throws. `center.dispose` records failed release-step count and delegated-close flag; `center.motion.release` now includes failure count. No new private fields. Partial initialization fallbacks release captured earlier resources. Closing persistence remains best effort, and later async Sine producers are not guaranteed to reach the recorder.
