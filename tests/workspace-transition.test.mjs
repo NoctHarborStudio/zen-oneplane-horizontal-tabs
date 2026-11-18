@@ -248,3 +248,19 @@ test("out phase nested request supersedes before old animation or native mutatio
  await Promise.all([first,nested]);assert.deepEqual(calls,["nested"]);
  assert.equal(f.root.hasAttribute("data-zr-workspace-phase"),false);
 });
+
+test("managed Workspace command uses existing gate without acquiring a second native promise",async()=>{
+ const f=lifecycleFixture(),gate=f.win.__nocturneWorkspaceCommandGate,lease={};let resolve,calls=0;
+ gate.owner=lease;gate.pending=new Promise(r=>resolve=r);
+ const api=f.win.__zenRefinedWorkspaceTransition;
+ const result=api.run(()=>{calls++;return "managed";},{lease});
+ await f.flush();assert.equal(calls,1);
+ assert.equal(await api.run(()=>{calls++;}),undefined);assert.equal(calls,1);
+ await f.advance();await f.advance();assert.equal(await result,"managed");
+ assert.equal(gate.owner,lease);resolve();gate.pending=null;gate.owner=null;api.dispose();
+});
+test("managed native verification rejection cleans swap gate without incoming motion",async()=>{
+ const f=lifecycleFixture(),gate=f.win.__nocturneWorkspaceCommandGate,lease={};gate.owner=lease;gate.pending=new Promise(()=>{});
+ const result=f.win.__zenRefinedWorkspaceTransition.run(()=>{throw Error("unconfirmed");},{lease});
+ await assert.rejects(result,/unconfirmed/);assert.equal(f.root.hasAttribute("data-zr-workspace-phase"),false);assert.ok(!f.events.includes("in"));assert.equal(f.timers.size,0);
+});

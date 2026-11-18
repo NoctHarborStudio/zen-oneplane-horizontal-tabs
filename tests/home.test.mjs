@@ -85,14 +85,13 @@ test("Home visual selection does not mutate native selected tab",()=>{
  assert.ok(core.includes("Click Customize Home to add your first pinned site."));
 });
 
-test("Home workspace switch uses optional Refined controller once and native fallback",async()=>{
+test("Home workspace switch delegates to shared native boundary with current view guard",async()=>{
  const code=extract("  function switchHomeWorkspace(","  function render(");
- let calls=0,wrapped=0;
- const win={},manager={changeWorkspaceWithID(id){calls++;return id;}};
- const change=new Function("win",code+"return switchHomeWorkspace;")(win);
- assert.equal(await change(manager,"a"),"a");assert.equal(calls,1);
- win.__zenRefinedWorkspaceTransition={run(fn){wrapped++;return fn();}};
- assert.equal(await change(manager,"b"),"b");assert.equal(wrapped,1);assert.equal(calls,2);
+ const manager={},win={gZenWorkspaces:manager};let calls=0,current;
+ const request=(w,m,id,kind,guard)=>{assert.equal(w,win);assert.equal(m,manager);assert.equal(kind,"home");calls++;current=guard;return id;};
+ const change=new Function("win","requestWorkspaceSwitch",code+"let dead=false;return switchHomeWorkspace;")(win,request);
+ assert.equal(await change(manager,"a"),"a");assert.equal(calls,1);assert.equal(current(),true);
+ win.gZenWorkspaces={};assert.equal(current(),false);
 });
 test("Home workspace state updates without replacing search and shortcuts",()=>{
  const code=extract("  function refreshWorkspaceSelection(","  function switchHomeWorkspace(");

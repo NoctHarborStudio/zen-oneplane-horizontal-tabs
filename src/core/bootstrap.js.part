@@ -67,36 +67,32 @@ async function initializeFreeAtStartup(){
     const native=window.gZenWorkspaces;
     const current=()=>!disposed&&!window.closed&&!window.__oneplaneWorkspaceProjection&&
       window.gZenWorkspaces===native&&native?.workspaceEnabled&&!native.privateWindowOrDisabled&&native.currentWindowIsSyncing;
-    const stale=stage=>{try{window.__nocturneTrace?.("layout.free.stale",{stage},{flush:true});}catch{}};
     if(!current())return;
-    // Default-branch prefs are process-local and not saved in prefs.js.
-    // Unlike hiddenDOMWindow, this works in Windows browser chrome.
     const runtime=Services.prefs.getDefaultBranch("");
     const key="zen.oneplane.runtime.free-startup-claimed";
     if(runtime.getBoolPref(key,false))return;
-    runtime.setBoolPref(key,true);
-    const snapshot=native.getWorkspaces().map(s=>({id:s.uuid,name:typeof s.name==="string"?s.name:""}));
-    const freeKey="zen.oneplane.free-space-id",trashKey="zen.oneplane.trash-space-id";
-    const stored=prefs.getStringPref(freeKey,"");
-    const trash=prefs.getStringPref(trashKey,"");
-    const valid=id=>current()&&!!id&&prefs.getStringPref(freeKey,"")===id&&
-      prefs.getStringPref(trashKey,"")!==id&&!!native.getWorkspaceFromId(id);
-    let id=stored&&stored!==trash&&snapshot.some(s=>s.id===stored)?stored:"";
-    if(!id){
-      if(snapshot.some(s=>s.name.trim().toLowerCase()==="free"))return;
-      const ws=await native.createAndSaveWorkspace("Free","⌂",true);
-      if(!current()){stale("create");return;}
-      if(!ws?.uuid||!native.getWorkspaceFromId(ws.uuid))return;
-      // Another owner may have designated Free/Trash while creation was pending.
-      if(prefs.getStringPref(freeKey,"")!==stored||prefs.getStringPref(trashKey,"")===ws.uuid){stale("designation");return;}
-      id=ws.uuid;prefs.setStringPref(freeKey,id);
-      if(!valid(id)){stale("before-reorder");return;}
-      if(typeof native.reorderWorkspace==="function")await native.reorderWorkspace(id,0);
-    }
-    if(!valid(id)){stale("before-select");return;}
-    if(native.activeWorkspace!==id)await native.changeWorkspaceWithID(id);
-    if(!current()){stale("after-select");return;}
-    console.info("[OnePlane] Free startup",JSON.stringify({selected:native.activeWorkspace===id}));
+    await runWorkspaceCommand(window,native,"free-startup",current,async lease=>{
+      if(runtime.getBoolPref(key,false))return;
+      const stored=prefs.getStringPref("zen.oneplane.free-space-id","");
+      const trash=prefs.getStringPref("zen.oneplane.trash-space-id","");
+      let id=stored&&stored!==trash&&native.getWorkspaceFromId(stored)?stored:"";
+      if(!id){
+        if(stored&&stored===trash)throw workspaceCommandError("free-role-conflict");
+        if(native.getWorkspaces().some(s=>String(s.name||"").trim().toLowerCase()==="free")){
+          runtime.setBoolPref(key,true);return; // explicit manual designation
+        }
+        id=await designateWorkspaceFree(window,native,prefs,lease);
+      }
+      requireWorkspaceCommand(window,native,lease);
+      if(prefs.getStringPref("zen.oneplane.free-space-id","")!==id||prefs.getStringPref("zen.oneplane.trash-space-id","")===id)throw workspaceCommandError("free-changed");
+      await switchWorkspaceWithin(window,native,id,lease);
+      requireWorkspaceCommand(window,native,lease);
+      // Only a confirmed selection (or deliberate ambiguity) consumes the
+      // process startup claim. Native partial creation is never rolled back.
+      if(prefs.getStringPref("zen.oneplane.free-space-id","")!==id||prefs.getStringPref("zen.oneplane.trash-space-id","")===id)throw workspaceCommandError("free-changed");
+      runtime.setBoolPref(key,true);
+      console.info("[OnePlane] Free startup",JSON.stringify({selected:true}));
+    },{data:true});
   }catch(error){console.warn("[OnePlane] Free startup:",error);}
 }
 

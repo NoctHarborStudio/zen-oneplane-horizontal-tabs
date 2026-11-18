@@ -892,9 +892,7 @@ function acquireZenHome(win, services) {
   }
   function switchHomeWorkspace(manager,id){
     typeof win!=="undefined"&&win.__nocturneTrace?.("home.workspace.request",()=>({hasTransition:!!win.__zenRefinedWorkspaceTransition}),{sample:1800});
-    const transition=win.__zenRefinedWorkspaceTransition;
-    const native=()=>manager.changeWorkspaceWithID(id);
-    return typeof transition?.run==="function"?transition.run(native):native();
+    return requestWorkspaceSwitch(win,manager,id,"home",()=>!dead&&win.gZenWorkspaces===manager);
   }
   function render(){
     if(!open||dead||searchToken)return;

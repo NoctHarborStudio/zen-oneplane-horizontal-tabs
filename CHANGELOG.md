@@ -1,3 +1,10 @@
+## 0.3.0-preview.66 — Native Workspace command ownership
+
+- Share the existing window command gate across Home, Hub, Free startup, projection and the switch before workspace deletion. A process-local data token serializes Nocturne-originated data mutations across synced windows; no native method wrapping or replacement.
+- Confirm native active container, browser container bindings and selected tab ownership rather than treating a fulfilled switch promise or active ID as success. Motion consumes the same lease and reveals incoming content only on verified native outcome.
+- Share Free designation between startup and Hub, revalidate roles after asynchronous/synchronous mutations, keep the startup claim retryable after failure and avoid duplicate ambiguous Free creation. Preserve native partial results without destructive rollback.
+- Guard projection takeover and Trash creation/transfer entry points. Full destructive move/purge journal, pending UI recovery and native validation remain open. Sixteen added regression tests; no intended visual timing or preference-ID changes.
+
 ## 0.3.0-preview.65 — Layout registration self-review
 
 - Register the captured Diagnostics owner, native listeners and Sine cleanup before publishing synchronous StartupState. Guard subsequent startup activation/observer registration against reentrant disposal or stale generation.

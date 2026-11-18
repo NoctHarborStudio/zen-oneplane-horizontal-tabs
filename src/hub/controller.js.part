@@ -250,7 +250,8 @@
     async function operation(fn){
       if(busy||projectionBusy||destroyed||!canManage())return;
       busy=true;status.textContent="";
-      try{await fn();}catch(error){status.textContent=String(error.message||error);console.warn("[OnePlane] Workspace Engine:",error);}
+      const native=manager(),current=()=>!destroyed&&manager()===native&&canManage();
+      try{await runWorkspaceCommand(window,native,"hub-data",current,fn,{data:true});}catch(error){if(!destroyed)status.textContent=String(error.message||error);console.warn("[OnePlane] Workspace Engine:",error);}
       finally{busy=false;if(!destroyed&&open)render();}
     }
     function renderFreeSetup(snapshot){
@@ -261,14 +262,9 @@
       freeSetup.append(msg,btn);
     }
     async function designateFree(id){
-      await operation(async()=>{
-        if(freeId())throw Error("Free is already designated.");
-        const native=manager(),ws=id?native.getWorkspaceFromId(id):await native.createAndSaveWorkspace("Free","⌂",true);
-        if(!ws?.uuid||ws.uuid===trashId()||!native.getWorkspaceFromId(ws.uuid))throw Error("Could not designate Free.");
-        if(id){if(typeof native.saveWorkspace!=="function")throw Error("Native rename unavailable.");native.saveWorkspace({...ws,name:"Free"});}
-        prefs.setStringPref(FREE_PREF,ws.uuid);
-        if(typeof native.reorderWorkspace==="function")await native.reorderWorkspace(ws.uuid,0);
-        contextId=null;editId=null;
+      await operation(async lease=>{
+        await designateWorkspaceFree(window,lease.native,prefs,lease,id);
+        if(!destroyed){contextId=null;editId=null;}
       });
     }
     function workspaceEditor(space){
@@ -303,17 +299,22 @@
       catch{return ChromeUtils.importESModule("resource:///modules/sessionstore/SessionStore.sys.mjs").SessionStore;}
     }
     function trashStamp(tab){try{return Number(trashSessionStore().getCustomTabValue(tab,TRASH_TIME))||0;}catch{return 0;}}
-    async function ensureTrash(){
-      const native=manager();
+    async function ensureTrash(lease){
+      const native=lease.native;
+      requireWorkspaceCommand(window,native,lease);
       if(!singleWindow()||!freeId())throw Error("Set up Free and close other browser windows first.");
       let id=trashId();
       if(!id){
+        const previous=prefs.getStringPref(TRASH_PREF,"");
+        if(native.getWorkspaces().some(s=>String(s.name||"").trim().toLowerCase()==="trash"))throw Error("An existing Trash workspace needs review.");
         const result=await native.createAndSaveWorkspace("Trash","🗑",true);
-        if(!result?.uuid||!native.getWorkspaceFromId(result.uuid))throw Error("Could not create Trash.");
+        requireWorkspaceCommand(window,native,lease);
+        if(!singleWindow()||!freeId()||prefs.getStringPref(TRASH_PREF,"")!==previous||!result?.uuid||!native.getWorkspaceFromId(result.uuid)||result.uuid===freeId())throw Error("Could not designate Trash.");
         id=result.uuid;prefs.setStringPref(TRASH_PREF,id);
       }
       for(let i=0;i<20&&!native.workspaceElement(id);i++)await new Promise(r=>window.setTimeout(r,50));
-      if(destroyed||!singleWindow()||!native.workspaceElement(id))throw Error("Trash is not ready.");
+      requireWorkspaceCommand(window,native,lease);
+      if(destroyed||!singleWindow()||!freeId()||freeId()===id||trashId()!==id||!native.workspaceElement(id))throw Error("Trash is not ready.");
       return id;
     }
     function moveNativeTab(tab,destination){
@@ -347,19 +348,28 @@
       }
       confirmation=null;contextId=null;
       const session=hubSession;
-      await operation(async()=>{
-        const native=now.native,destination=now.plan.length?await ensureTrash():null;
-        if(native.activeWorkspace===id){switchGuard();await native.changeWorkspaceWithID(freeId());}
+      await operation(async lease=>{
+        const native=now.native;
+        requireWorkspaceCommand(window,native,lease);
+        const destination=now.plan.length?await ensureTrash(lease):null;
+        requireWorkspaceCommand(window,native,lease);
+        if(native.activeWorkspace===id){switchGuard();await switchWorkspaceWithin(window,native,freeId(),lease);}
+        requireWorkspaceCommand(window,native,lease);
         if(destroyed||!singleWindow()||native.activeWorkspace===id)throw Error("Workspace is still active.");
         const fresh=deletionDetails(id);
         if(!fresh||fresh.plan.length!==now.plan.length||fresh.plan.some(t=>!now.plan.includes(t)))throw Error("Workspace changed. Nothing deleted.");
         const store=destination?trashSessionStore():null;
         for(const tab of fresh.plan){
+          requireWorkspaceCommand(window,native,lease);
+          if(!singleWindow()||trashId()!==destination||native.activeWorkspace===id||!ownedTabs(native,id)?.includes(tab))throw Error("Workspace changed. Workspace kept.");
           store.setCustomTabValue(tab,TRASH_TIME,String(Date.now()));
+          requireWorkspaceCommand(window,native,lease);
+          if(!singleWindow()||trashId()!==destination||native.activeWorkspace===id||!ownedTabs(native,id)?.includes(tab))throw Error("Workspace changed. Workspace kept.");
           moveNativeTab(tab,destination);
         }
-        if(!singleWindow()||ownedTabs(native,id)?.length!==0)throw Error("Not all tabs moved. Workspace kept.");
-        switchGuard();await native.removeWorkspace(id);
+        requireWorkspaceCommand(window,native,lease);
+        if(!singleWindow()||native.activeWorkspace===id||ownedTabs(native,id)?.length!==0)throw Error("Not all tabs moved. Workspace kept.");
+        switchGuard();requireWorkspaceCommand(window,native,lease);await native.removeWorkspace(id);
         if(native.getWorkspaceFromId(id))throw Error("Workspace not removed.");
         // Only auto-expand for a deletion from this same Hub opening.
         if(destination&&open&&hubSession===session)trashOpen=true;
@@ -915,11 +925,11 @@
         projectionLog(child,"spaces-ready",{candidates:startupTabs.size});
         if(child.closed||destroyed||!child.gZenWorkspaces?.currentWindowIsSyncing||
           child.gZenWindowSync!==window.gZenWindowSync||!child.gZenWorkspaces.getWorkspaceFromId(id))throw Error("Native sync unavailable");
-        const alreadyActive=child.gZenWorkspaces.activeWorkspace===id;
-        // The cloned window may already be on the requested workspace.
-        // A redundant native switch is a no-op and can disturb focus.
-        if(!alreadyActive)await child.gZenWorkspaces.changeWorkspaceWithID(id);
-        if(child.gZenWorkspaces.activeWorkspace!==id)throw Error("Workspace not activated");
+        const childNative=child.gZenWorkspaces,alreadyActive=childNative.activeWorkspace===id;
+        if(interacted){projectionLog(child,"takeover");await placementTask;return;}
+        await requestWorkspaceSwitch(child,childNative,id,"projection",()=>!interacted&&!destroyed&&!window.closed&&!child.closed&&
+          child.gZenWorkspaces===childNative&&childNative.currentWindowIsSyncing&&child.gZenWindowSync===window.gZenWindowSync,{motion:false});
+        if(interacted){projectionLog(child,"takeover");await placementTask;return;}
         projectionLog(child,"workspace-active",{alreadyActive,sourceActive:native.activeWorkspace===id});
         // Select Zen's transparent placeholder first, including when the
         // synthetic startup tab was the selected tab in this window.
@@ -932,6 +942,7 @@
         projectionLog(child,"projection-complete",{placed,searchVisible:!!searchVisible,alreadyActive});
         status.textContent=placed?"":"Window opened; placement could not be verified.";
       }catch(error){
+        if(interacted&&child&&!child.closed){projectionLog(child,"takeover");return;}
         if(child&&!child.closed)delete child[PROJECTION];
         if(!destroyed)status.textContent="Could not open synced workspace. Check window sync settings.";
         projectionLog(child,"failed",{error:String(error)});
@@ -962,9 +973,8 @@
       busy=true;status.textContent="";render();
       try{switchGuard();const transition=window.__zenRefinedWorkspaceTransition;
     typeof window!=="undefined"&&window.__nocturneTrace?.("hub.workspace.request",()=>({hasTransition:!!transition}),{sample:1800});
-        const change=()=>native.changeWorkspaceWithID(id);
-        await (typeof transition?.run==="function"?transition.run(change):change());
-        if(!destroyed){if(native.activeWorkspace!==id)throw Error("Workspace did not activate");contextId=null;confirmation=null;scheduleHubGeometry();}
+        await requestWorkspaceSwitch(window,native,id,"hub-select",()=>!destroyed&&manager()===native);
+        if(!destroyed){contextId=null;confirmation=null;scheduleHubGeometry();}
       }catch(error){if(!destroyed)status.textContent="Could not switch workspace.";console.warn("[OnePlane] Hub switch:",error);}
       finally{busy=false;if(!destroyed&&open)render();}
     }
@@ -972,8 +982,11 @@
       event.preventDefault();const value=name.value.trim(),native=manager();
       if(!value||busy||destroyed||!hubWorkspaceSnapshot(native)||typeof native.createAndSaveWorkspace!=="function")return;
       busy=true;status.textContent="";render();
-      try{const result=await native.createAndSaveWorkspace(value,undefined,true);
+      try{await runWorkspaceCommand(window,native,"hub-create",()=>!destroyed&&manager()===native&&canManage(),async lease=>{
+        const result=await native.createAndSaveWorkspace(value,undefined,true);
+        requireWorkspaceCommand(window,native,lease);
         if(!result?.uuid||!native.getWorkspaceFromId(result.uuid))throw Error("Native workspace creation unavailable");
+      },{data:true});
         if(!destroyed){name.value="";contextId=null;confirmation=null;scheduleHubGeometry();}
       }catch(error){if(!destroyed)status.textContent="Could not create workspace.";console.warn("[OnePlane] Hub create:",error);}
       finally{busy=false;if(!destroyed&&open)render();}

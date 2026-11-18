@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="workspace.script",data={version:"0.3.0-preview.65"};
+  const event="workspace.script",data={version:"0.3.0-preview.66"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -22,6 +22,10 @@ try{if(typeof window!=="undefined"){
   function visualStep(fn){syncDepth++;try{return fn();}finally{syncDepth--;}}
   function invokeNative(req,nativeSwitch){
     if(dead||win.closed||req.superseded||request!==req)return;
+    if(req.lease){
+      if(gate.owner!==req.lease||!gate.pending)throw Error("Workspace command lease lost");
+      return nativeSwitch();
+    }
     if(gate.pending)throw Error("Workspace command already pending");
     const pending=Promise.resolve().then(()=>{
       if(dead||win.closed||req.superseded||request!==req)return;
@@ -207,13 +211,16 @@ try{if(typeof window!=="undefined"){
       win.__nocturneTrace?.("workspace.settled",()=>({sequence:tx.sequence,elapsed:win.performance.now()-start,quiet:win.performance.now()-changed}),{sample:1000});
     }finally{try{observer?.disconnect();}catch{try{win.__nocturneTrace?.("workspace.settle.cleanup",{failed:1},{flush:true});}catch{}}}
   }
-  async function run(nativeSwitch){
+  async function run(nativeSwitch,{lease=null}={}){
     if(typeof nativeSwitch!=="function")throw TypeError("Native workspace callback required");
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.run",()=>({active:!!active,pending:!!gate.pending,phase:root.getAttribute(PHASE)}),{sample:1800});
     if(dead||win.closed)return;
+    // Production callers hold the same gate from admission to settlement.
+    // Unowned compatibility callbacks cannot interrupt a managed command.
+    if(lease?gate.owner!==lease:!!gate.owner)return;
     // Register intent before any synchronous native/visual callbacks.
     if(request)request.superseded=true;
-    const req={superseded:false,carrySwap:root.getAttribute(PHASE)==="swap"};request=req;
+    const req={superseded:false,carrySwap:root.getAttribute(PHASE)==="swap",lease};request=req;
     const current=()=>!dead&&!win.closed&&!req.superseded&&request===req;
     try{
       if(syncDepth){await Promise.resolve();if(!current())return;}
@@ -224,7 +231,7 @@ try{if(typeof window!=="undefined"){
       }
       if(!current())return;
       // A native command gate survives generation replacement.
-      while(gate.pending){
+      while(gate.pending&&!req.lease){
         try{await gate.pending;}catch{}
         if(!current())return;
       }

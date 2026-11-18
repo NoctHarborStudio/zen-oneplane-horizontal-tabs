@@ -118,8 +118,8 @@ test("Hub Trash resets on a fresh opening and stale workspace deletion cannot ex
     const supported=()=>true,ensure=()=>{},setHold=()=>{},render=()=>{if(trashOpen)attrs.add("data-op-trash-open");else attrs.delete("data-op-trash-open");},
       showPopup=()=>{panel.hidden=false;return true;},finishTrashDrag=()=>{},setTrashAgeOpen=()=>{},stopTrashUpdates=()=>{},
       hideNow=()=>{panel.hidden=true;},fluid=()=>{},switchGuard=()=>{},singleWindow=()=>true,freeId=()=>"free",
-      ensureTrash=async()=>"trash",ownedTabs=()=>[],trashSessionStore=()=>({setCustomTabValue(){}}),moveNativeTab=()=>{},TRASH_TIME="stamp",
-      deletionDetails=id=>({id,native,description:"delete",plan:[tab]}),operation=async fn=>{await fn();if(open)render();};
+      ensureTrash=async()=>"trash",trashId=()=>"trash",requireWorkspaceCommand=()=>{},ownedTabs=()=>moved?[]:[tab],trashSessionStore=()=>({setCustomTabValue(){}}),moveNativeTab=()=>{moved=true;},TRASH_TIME="stamp",
+      deletionDetails=id=>({id,native,description:"delete",plan:[tab]}),operation=async fn=>{moved=false;await fn({native});if(open)render();};let moved=false;
     ${toggle}
     ${close}
     ${deletion}

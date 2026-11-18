@@ -18,6 +18,10 @@
       "kind": "section"
     },
     {
+      "path": "src/core/workspace-commands.mjs",
+      "kind": "esm-inline"
+    },
+    {
       "path": "src/home/shared-home.js.part",
       "kind": "section"
     },

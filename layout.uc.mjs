@@ -41,7 +41,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.65",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.66",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -906,6 +906,141 @@ function updateNativeAfterCleanup(pendingClose,nativeExit){
 }
 
 
+/* Nocturne mod-origin native command boundary. Zen remains authoritative.
+ * Window lease survives visual/entrypoint reload; data mutations additionally
+ * use a process-local primitive token on the native module identity. */
+const WORKSPACE_GATE="__nocturneWorkspaceCommandGate";
+const WORKSPACE_DATA_GATE=Symbol.for("nocturne.workspace.data-command.v1");
+function workspaceCommandError(code,message="Workspace command could not be confirmed."){
+  const error=new Error(message);error.name="WorkspaceCommandError";error.code=code;return error;
+}
+function commandTrace(win,event,data){try{win.__nocturneTrace?.("workspace.command."+event,data,{flush:true});}catch{}}
+function dataAnchor(){
+  try{return ChromeUtils.importESModule("resource:///modules/BrowserWindowTracker.sys.mjs").BrowserWindowTracker;}catch{return null;}
+}
+function workspaceCommandGate(win){return win[WORKSPACE_GATE]??(win[WORKSPACE_GATE]={pending:null});}
+function requireWorkspaceCommand(win,native,lease){
+  if(!lease||lease.native!==native||lease.win!==win||workspaceCommandGate(win).owner!==lease||
+    win.closed||win.gZenWorkspaces!==native||!native?.workspaceEnabled||!lease.current())
+    throw workspaceCommandError("stale","Workspace command is no longer current.");
+  if(lease.token&&lease.anchor[WORKSPACE_DATA_GATE]!==lease.token)throw workspaceCommandError("data-lease-lost");
+  if(native.isChangingWorkspace!==false)throw workspaceCommandError("native-busy","Native Workspace switch is still in progress.");
+}
+function runWorkspaceCommand(win,native,kind,current,execute,{data=false,anchor=data?dataAnchor():null}={}){
+  const gate=workspaceCommandGate(win);
+  const reject=code=>{commandTrace(win,"rejected",{kind,code});return Promise.reject(workspaceCommandError(code,"Workspace command is busy or unavailable. Try again when ready."));};
+  if(win.closed||win.gZenWorkspaces!==native||!native?.workspaceEnabled||!current())return reject("stale");
+  if(gate.pending||gate.owner)return reject("busy");
+  if(native.isChangingWorkspace!==false)return reject("native-busy");
+  const token=data?Symbol("Nocturne data command"):null;
+  if(data){
+    if(!anchor)return reject("data-unavailable");
+    try{
+      if(anchor[WORKSPACE_DATA_GATE])return reject("data-busy");
+      Object.defineProperty(anchor,WORKSPACE_DATA_GATE,{value:token,configurable:true});
+      if(anchor[WORKSPACE_DATA_GATE]!==token)return reject("data-unavailable");
+    }catch{return reject("data-unavailable");}
+  }
+  const lease={win,native,kind,current,anchor,token};
+  let resolve,rejectResult;const pending=new Promise((a,b)=>{resolve=a;rejectResult=b;});
+  // Publish before any native/visual callback can synchronously re-enter.
+  gate.owner=lease;gate.pending=pending;
+  const finish=(ok,value)=>{
+    if(data)try{if(anchor[WORKSPACE_DATA_GATE]===token)delete anchor[WORKSPACE_DATA_GATE];}catch{}
+    if(gate.owner===lease&&gate.pending===pending){gate.owner=null;gate.pending=null;}
+    commandTrace(win,"end",{kind,ok,code:ok?null:value?.code||"error"});
+    if(ok)resolve(value);else rejectResult(value);
+  };
+  try{
+    commandTrace(win,"begin",{kind,data});
+    requireWorkspaceCommand(win,native,lease);
+    Promise.resolve(execute(lease)).then(v=>finish(true,v),e=>finish(false,e));
+  }catch(error){finish(false,error);}
+  return pending;
+}
+// Only read authoritative native structure. _shouldShowTab is NOT a safe
+// predicate for unassigned tabs: Zen can move them as a side effect.
+function inspectWorkspaceSwitch(win,native,id){
+  try{
+    if(win.closed||win.gZenWorkspaces!==native||!native?.workspaceEnabled)return "stale";
+    if(native.isChangingWorkspace!==false)return "native-busy";
+    if(!native.getWorkspaceFromId(id)||native.activeWorkspace!==id)return "active-mismatch";
+    const element=native.workspaceElement(id),spaces=native.getWorkspaces();
+    if(!element?.isConnected||!element.active||!element.tabsContainer?.isConnected||
+      !element.pinnedTabsContainer?.isConnected||!element.scrollbox||!Array.isArray(spaces))return "container-unready";
+    if(spaces.some(s=>{const node=native.workspaceElement(s.uuid);return !node?.isConnected||!!node.active!==(s.uuid===id);}))return "container-mismatch";
+    const browser=win.gBrowser,tc=browser?.tabContainer,tab=browser?.selectedTab;
+    if(!tc||tc.arrowScrollbox!==element.scrollbox||tc.pinnedTabsContainer!==element.pinnedTabsContainer||
+      browser.pinnedTabsContainer!==element.pinnedTabsContainer)return "binding-mismatch";
+    if(!tab?.isConnected||tab.closing)return "selection-unverified";
+    const empty=tab===native._emptyTab&&tab.hasAttribute("zen-empty-tab");
+    if(!empty&&!Array.from(browser.visibleTabs||[]).includes(tab))return "selection-unverified";
+    const essential=tab.getAttribute("zen-essential")==="true",glance=tab.hasAttribute("zen-glance-tab");
+    if(essential&&!glance&&native.containerSpecificEssentials){
+      const context=tab.getAttribute("usercontextid")||"0",space=native.getWorkspaceFromId(id);
+      if(space.containerTabId?String(space.containerTabId)!==context:context!=="0"&&spaces.some(s=>s.containerTabId===Number(context)))return "selection-mismatch";
+    }
+    if(!essential&&!glance&&(tab.getAttribute("zen-workspace-id")!==id||
+      !(element.tabsContainer.contains(tab)||element.pinnedTabsContainer.contains(tab))))return "selection-mismatch";
+    return "confirmed";
+  }catch{return "inspection-error";}
+}
+const switchWorkspaceWithin=async function(win,native,id,lease,{motion=false}={}){
+  const verify=()=>{
+    requireWorkspaceCommand(win,native,lease);
+    const outcome=inspectWorkspaceSwitch(win,native,id);
+    commandTrace(win,"switch-result",{kind:lease.kind,outcome});
+    if(outcome!=="confirmed")throw workspaceCommandError(outcome);
+    return {status:"confirmed"};
+  };
+  requireWorkspaceCommand(win,native,lease);
+  if(!native.getWorkspaceFromId(id)||typeof native.changeWorkspaceWithID!=="function")throw workspaceCommandError("missing-target");
+  if(native.activeWorkspace===id)return verify();
+  const invoke=async()=>{
+    requireWorkspaceCommand(win,native,lease);
+    if(!native.getWorkspaceFromId(id))throw workspaceCommandError("missing-target");
+    if(native.activeWorkspace!==id)await native.changeWorkspaceWithID(id);
+    // Fulfilled native promise and ID alone do not certify a native switch.
+    return verify();
+  };
+  const transition=motion?win.__zenRefinedWorkspaceTransition:null;
+  const result=await (typeof transition?.run==="function"?transition.run(invoke,{lease}):invoke());
+  if(result?.status!=="confirmed")throw workspaceCommandError("not-started");
+  return verify();
+}
+function requestWorkspaceSwitch(win,native,id,kind,current,{motion=true}={}){
+  return runWorkspaceCommand(win,native,kind,current,lease=>switchWorkspaceWithin(win,native,id,lease,{motion}));
+}
+const FREE_ROLE="zen.oneplane.free-space-id",TRASH_ROLE="zen.oneplane.trash-space-id";
+const designateWorkspaceFree=async function(win,native,prefs,lease,id=null){
+  requireWorkspaceCommand(win,native,lease);
+  const previous=prefs.getStringPref(FREE_ROLE,""),trash=prefs.getStringPref(TRASH_ROLE,"");
+  if(previous&&native.getWorkspaceFromId(previous))throw workspaceCommandError("free-exists","Free is already designated.");
+  // Automatic creation must not silently claim an ambiguous existing Free.
+  if(!id&&native.getWorkspaces().some(s=>String(s.name||"").trim().toLowerCase()==="free"))
+    throw workspaceCommandError("free-ambiguous","Choose the existing Free workspace manually.");
+  const ws=id?native.getWorkspaceFromId(id):await native.createAndSaveWorkspace("Free","⌂",true);
+  requireWorkspaceCommand(win,native,lease);
+  const valid=()=>ws?.uuid&&ws.uuid!==prefs.getStringPref(TRASH_ROLE,"")&&
+    !!native.getWorkspaceFromId(ws.uuid);
+  const beforeRole=()=>valid()&&prefs.getStringPref(FREE_ROLE,"")===previous&&prefs.getStringPref(TRASH_ROLE,"")===trash;
+  if(!beforeRole())throw workspaceCommandError("free-changed");
+  if(id){
+    if(typeof native.saveWorkspace!=="function")throw workspaceCommandError("rename-unavailable");
+    native.saveWorkspace({...ws,name:"Free"});
+    requireWorkspaceCommand(win,native,lease);
+    if(!beforeRole()||native.getWorkspaceFromId(ws.uuid)?.name!=="Free")throw workspaceCommandError("free-changed");
+  }
+  prefs.setStringPref(FREE_ROLE,ws.uuid);
+  requireWorkspaceCommand(win,native,lease);
+  const owns=()=>valid()&&prefs.getStringPref(FREE_ROLE,"")===ws.uuid;
+  if(!owns())throw workspaceCommandError("free-changed");
+  if(typeof native.reorderWorkspace==="function")await native.reorderWorkspace(ws.uuid,0);
+  requireWorkspaceCommand(win,native,lease);
+  if(!owns())throw workspaceCommandError("free-changed");
+  if(typeof native.reorderWorkspace==="function"&&native.getWorkspaces()[0]?.uuid!==ws.uuid)throw workspaceCommandError("free-order-unverified","Free was designated but its order could not be confirmed.");
+  return ws.uuid;
+}
 // Shared Zen Home v1: portable core, independent of both mod hosts.
 function acquireZenHome(win, services) {
   const KEY="__zenSharedHomeV1", PREF="zen.home.shortcuts.v1", STARTUP="__zenSharedHomeStartupV1";
@@ -1800,9 +1935,7 @@ function acquireZenHome(win, services) {
   }
   function switchHomeWorkspace(manager,id){
     typeof win!=="undefined"&&win.__nocturneTrace?.("home.workspace.request",()=>({hasTransition:!!win.__zenRefinedWorkspaceTransition}),{sample:1800});
-    const transition=win.__zenRefinedWorkspaceTransition;
-    const native=()=>manager.changeWorkspaceWithID(id);
-    return typeof transition?.run==="function"?transition.run(native):native();
+    return requestWorkspaceSwitch(win,manager,id,"home",()=>!dead&&win.gZenWorkspaces===manager);
   }
   function render(){
     if(!open||dead||searchToken)return;
@@ -4112,7 +4245,8 @@ function installTabStrip() {
     async function operation(fn){
       if(busy||projectionBusy||destroyed||!canManage())return;
       busy=true;status.textContent="";
-      try{await fn();}catch(error){status.textContent=String(error.message||error);console.warn("[OnePlane] Workspace Engine:",error);}
+      const native=manager(),current=()=>!destroyed&&manager()===native&&canManage();
+      try{await runWorkspaceCommand(window,native,"hub-data",current,fn,{data:true});}catch(error){if(!destroyed)status.textContent=String(error.message||error);console.warn("[OnePlane] Workspace Engine:",error);}
       finally{busy=false;if(!destroyed&&open)render();}
     }
     function renderFreeSetup(snapshot){
@@ -4123,14 +4257,9 @@ function installTabStrip() {
       freeSetup.append(msg,btn);
     }
     async function designateFree(id){
-      await operation(async()=>{
-        if(freeId())throw Error("Free is already designated.");
-        const native=manager(),ws=id?native.getWorkspaceFromId(id):await native.createAndSaveWorkspace("Free","⌂",true);
-        if(!ws?.uuid||ws.uuid===trashId()||!native.getWorkspaceFromId(ws.uuid))throw Error("Could not designate Free.");
-        if(id){if(typeof native.saveWorkspace!=="function")throw Error("Native rename unavailable.");native.saveWorkspace({...ws,name:"Free"});}
-        prefs.setStringPref(FREE_PREF,ws.uuid);
-        if(typeof native.reorderWorkspace==="function")await native.reorderWorkspace(ws.uuid,0);
-        contextId=null;editId=null;
+      await operation(async lease=>{
+        await designateWorkspaceFree(window,lease.native,prefs,lease,id);
+        if(!destroyed){contextId=null;editId=null;}
       });
     }
     function workspaceEditor(space){
@@ -4165,17 +4294,22 @@ function installTabStrip() {
       catch{return ChromeUtils.importESModule("resource:///modules/sessionstore/SessionStore.sys.mjs").SessionStore;}
     }
     function trashStamp(tab){try{return Number(trashSessionStore().getCustomTabValue(tab,TRASH_TIME))||0;}catch{return 0;}}
-    async function ensureTrash(){
-      const native=manager();
+    async function ensureTrash(lease){
+      const native=lease.native;
+      requireWorkspaceCommand(window,native,lease);
       if(!singleWindow()||!freeId())throw Error("Set up Free and close other browser windows first.");
       let id=trashId();
       if(!id){
+        const previous=prefs.getStringPref(TRASH_PREF,"");
+        if(native.getWorkspaces().some(s=>String(s.name||"").trim().toLowerCase()==="trash"))throw Error("An existing Trash workspace needs review.");
         const result=await native.createAndSaveWorkspace("Trash","🗑",true);
-        if(!result?.uuid||!native.getWorkspaceFromId(result.uuid))throw Error("Could not create Trash.");
+        requireWorkspaceCommand(window,native,lease);
+        if(!singleWindow()||!freeId()||prefs.getStringPref(TRASH_PREF,"")!==previous||!result?.uuid||!native.getWorkspaceFromId(result.uuid)||result.uuid===freeId())throw Error("Could not designate Trash.");
         id=result.uuid;prefs.setStringPref(TRASH_PREF,id);
       }
       for(let i=0;i<20&&!native.workspaceElement(id);i++)await new Promise(r=>window.setTimeout(r,50));
-      if(destroyed||!singleWindow()||!native.workspaceElement(id))throw Error("Trash is not ready.");
+      requireWorkspaceCommand(window,native,lease);
+      if(destroyed||!singleWindow()||!freeId()||freeId()===id||trashId()!==id||!native.workspaceElement(id))throw Error("Trash is not ready.");
       return id;
     }
     function moveNativeTab(tab,destination){
@@ -4209,19 +4343,28 @@ function installTabStrip() {
       }
       confirmation=null;contextId=null;
       const session=hubSession;
-      await operation(async()=>{
-        const native=now.native,destination=now.plan.length?await ensureTrash():null;
-        if(native.activeWorkspace===id){switchGuard();await native.changeWorkspaceWithID(freeId());}
+      await operation(async lease=>{
+        const native=now.native;
+        requireWorkspaceCommand(window,native,lease);
+        const destination=now.plan.length?await ensureTrash(lease):null;
+        requireWorkspaceCommand(window,native,lease);
+        if(native.activeWorkspace===id){switchGuard();await switchWorkspaceWithin(window,native,freeId(),lease);}
+        requireWorkspaceCommand(window,native,lease);
         if(destroyed||!singleWindow()||native.activeWorkspace===id)throw Error("Workspace is still active.");
         const fresh=deletionDetails(id);
         if(!fresh||fresh.plan.length!==now.plan.length||fresh.plan.some(t=>!now.plan.includes(t)))throw Error("Workspace changed. Nothing deleted.");
         const store=destination?trashSessionStore():null;
         for(const tab of fresh.plan){
+          requireWorkspaceCommand(window,native,lease);
+          if(!singleWindow()||trashId()!==destination||native.activeWorkspace===id||!ownedTabs(native,id)?.includes(tab))throw Error("Workspace changed. Workspace kept.");
           store.setCustomTabValue(tab,TRASH_TIME,String(Date.now()));
+          requireWorkspaceCommand(window,native,lease);
+          if(!singleWindow()||trashId()!==destination||native.activeWorkspace===id||!ownedTabs(native,id)?.includes(tab))throw Error("Workspace changed. Workspace kept.");
           moveNativeTab(tab,destination);
         }
-        if(!singleWindow()||ownedTabs(native,id)?.length!==0)throw Error("Not all tabs moved. Workspace kept.");
-        switchGuard();await native.removeWorkspace(id);
+        requireWorkspaceCommand(window,native,lease);
+        if(!singleWindow()||native.activeWorkspace===id||ownedTabs(native,id)?.length!==0)throw Error("Not all tabs moved. Workspace kept.");
+        switchGuard();requireWorkspaceCommand(window,native,lease);await native.removeWorkspace(id);
         if(native.getWorkspaceFromId(id))throw Error("Workspace not removed.");
         // Only auto-expand for a deletion from this same Hub opening.
         if(destination&&open&&hubSession===session)trashOpen=true;
@@ -4777,11 +4920,11 @@ function installTabStrip() {
         projectionLog(child,"spaces-ready",{candidates:startupTabs.size});
         if(child.closed||destroyed||!child.gZenWorkspaces?.currentWindowIsSyncing||
           child.gZenWindowSync!==window.gZenWindowSync||!child.gZenWorkspaces.getWorkspaceFromId(id))throw Error("Native sync unavailable");
-        const alreadyActive=child.gZenWorkspaces.activeWorkspace===id;
-        // The cloned window may already be on the requested workspace.
-        // A redundant native switch is a no-op and can disturb focus.
-        if(!alreadyActive)await child.gZenWorkspaces.changeWorkspaceWithID(id);
-        if(child.gZenWorkspaces.activeWorkspace!==id)throw Error("Workspace not activated");
+        const childNative=child.gZenWorkspaces,alreadyActive=childNative.activeWorkspace===id;
+        if(interacted){projectionLog(child,"takeover");await placementTask;return;}
+        await requestWorkspaceSwitch(child,childNative,id,"projection",()=>!interacted&&!destroyed&&!window.closed&&!child.closed&&
+          child.gZenWorkspaces===childNative&&childNative.currentWindowIsSyncing&&child.gZenWindowSync===window.gZenWindowSync,{motion:false});
+        if(interacted){projectionLog(child,"takeover");await placementTask;return;}
         projectionLog(child,"workspace-active",{alreadyActive,sourceActive:native.activeWorkspace===id});
         // Select Zen's transparent placeholder first, including when the
         // synthetic startup tab was the selected tab in this window.
@@ -4794,6 +4937,7 @@ function installTabStrip() {
         projectionLog(child,"projection-complete",{placed,searchVisible:!!searchVisible,alreadyActive});
         status.textContent=placed?"":"Window opened; placement could not be verified.";
       }catch(error){
+        if(interacted&&child&&!child.closed){projectionLog(child,"takeover");return;}
         if(child&&!child.closed)delete child[PROJECTION];
         if(!destroyed)status.textContent="Could not open synced workspace. Check window sync settings.";
         projectionLog(child,"failed",{error:String(error)});
@@ -4824,9 +4968,8 @@ function installTabStrip() {
       busy=true;status.textContent="";render();
       try{switchGuard();const transition=window.__zenRefinedWorkspaceTransition;
     typeof window!=="undefined"&&window.__nocturneTrace?.("hub.workspace.request",()=>({hasTransition:!!transition}),{sample:1800});
-        const change=()=>native.changeWorkspaceWithID(id);
-        await (typeof transition?.run==="function"?transition.run(change):change());
-        if(!destroyed){if(native.activeWorkspace!==id)throw Error("Workspace did not activate");contextId=null;confirmation=null;scheduleHubGeometry();}
+        await requestWorkspaceSwitch(window,native,id,"hub-select",()=>!destroyed&&manager()===native);
+        if(!destroyed){contextId=null;confirmation=null;scheduleHubGeometry();}
       }catch(error){if(!destroyed)status.textContent="Could not switch workspace.";console.warn("[OnePlane] Hub switch:",error);}
       finally{busy=false;if(!destroyed&&open)render();}
     }
@@ -4834,8 +4977,11 @@ function installTabStrip() {
       event.preventDefault();const value=name.value.trim(),native=manager();
       if(!value||busy||destroyed||!hubWorkspaceSnapshot(native)||typeof native.createAndSaveWorkspace!=="function")return;
       busy=true;status.textContent="";render();
-      try{const result=await native.createAndSaveWorkspace(value,undefined,true);
+      try{await runWorkspaceCommand(window,native,"hub-create",()=>!destroyed&&manager()===native&&canManage(),async lease=>{
+        const result=await native.createAndSaveWorkspace(value,undefined,true);
+        requireWorkspaceCommand(window,native,lease);
         if(!result?.uuid||!native.getWorkspaceFromId(result.uuid))throw Error("Native workspace creation unavailable");
+      },{data:true});
         if(!destroyed){name.value="";contextId=null;confirmation=null;scheduleHubGeometry();}
       }catch(error){if(!destroyed)status.textContent="Could not create workspace.";console.warn("[OnePlane] Hub create:",error);}
       finally{busy=false;if(!destroyed&&open)render();}
@@ -8077,36 +8223,32 @@ async function initializeFreeAtStartup(){
     const native=window.gZenWorkspaces;
     const current=()=>!disposed&&!window.closed&&!window.__oneplaneWorkspaceProjection&&
       window.gZenWorkspaces===native&&native?.workspaceEnabled&&!native.privateWindowOrDisabled&&native.currentWindowIsSyncing;
-    const stale=stage=>{try{window.__nocturneTrace?.("layout.free.stale",{stage},{flush:true});}catch{}};
     if(!current())return;
-    // Default-branch prefs are process-local and not saved in prefs.js.
-    // Unlike hiddenDOMWindow, this works in Windows browser chrome.
     const runtime=Services.prefs.getDefaultBranch("");
     const key="zen.oneplane.runtime.free-startup-claimed";
     if(runtime.getBoolPref(key,false))return;
-    runtime.setBoolPref(key,true);
-    const snapshot=native.getWorkspaces().map(s=>({id:s.uuid,name:typeof s.name==="string"?s.name:""}));
-    const freeKey="zen.oneplane.free-space-id",trashKey="zen.oneplane.trash-space-id";
-    const stored=prefs.getStringPref(freeKey,"");
-    const trash=prefs.getStringPref(trashKey,"");
-    const valid=id=>current()&&!!id&&prefs.getStringPref(freeKey,"")===id&&
-      prefs.getStringPref(trashKey,"")!==id&&!!native.getWorkspaceFromId(id);
-    let id=stored&&stored!==trash&&snapshot.some(s=>s.id===stored)?stored:"";
-    if(!id){
-      if(snapshot.some(s=>s.name.trim().toLowerCase()==="free"))return;
-      const ws=await native.createAndSaveWorkspace("Free","⌂",true);
-      if(!current()){stale("create");return;}
-      if(!ws?.uuid||!native.getWorkspaceFromId(ws.uuid))return;
-      // Another owner may have designated Free/Trash while creation was pending.
-      if(prefs.getStringPref(freeKey,"")!==stored||prefs.getStringPref(trashKey,"")===ws.uuid){stale("designation");return;}
-      id=ws.uuid;prefs.setStringPref(freeKey,id);
-      if(!valid(id)){stale("before-reorder");return;}
-      if(typeof native.reorderWorkspace==="function")await native.reorderWorkspace(id,0);
-    }
-    if(!valid(id)){stale("before-select");return;}
-    if(native.activeWorkspace!==id)await native.changeWorkspaceWithID(id);
-    if(!current()){stale("after-select");return;}
-    console.info("[OnePlane] Free startup",JSON.stringify({selected:native.activeWorkspace===id}));
+    await runWorkspaceCommand(window,native,"free-startup",current,async lease=>{
+      if(runtime.getBoolPref(key,false))return;
+      const stored=prefs.getStringPref("zen.oneplane.free-space-id","");
+      const trash=prefs.getStringPref("zen.oneplane.trash-space-id","");
+      let id=stored&&stored!==trash&&native.getWorkspaceFromId(stored)?stored:"";
+      if(!id){
+        if(stored&&stored===trash)throw workspaceCommandError("free-role-conflict");
+        if(native.getWorkspaces().some(s=>String(s.name||"").trim().toLowerCase()==="free")){
+          runtime.setBoolPref(key,true);return; // explicit manual designation
+        }
+        id=await designateWorkspaceFree(window,native,prefs,lease);
+      }
+      requireWorkspaceCommand(window,native,lease);
+      if(prefs.getStringPref("zen.oneplane.free-space-id","")!==id||prefs.getStringPref("zen.oneplane.trash-space-id","")===id)throw workspaceCommandError("free-changed");
+      await switchWorkspaceWithin(window,native,id,lease);
+      requireWorkspaceCommand(window,native,lease);
+      // Only a confirmed selection (or deliberate ambiguity) consumes the
+      // process startup claim. Native partial creation is never rolled back.
+      if(prefs.getStringPref("zen.oneplane.free-space-id","")!==id||prefs.getStringPref("zen.oneplane.trash-space-id","")===id)throw workspaceCommandError("free-changed");
+      runtime.setBoolPref(key,true);
+      console.info("[OnePlane] Free startup",JSON.stringify({selected:true}));
+    },{data:true});
   }catch(error){console.warn("[OnePlane] Free startup:",error);}
 }
 
