@@ -63,3 +63,19 @@ test("layout cleanup continues after feature disposal throws",()=>{
  return {disposed,applied,restored,controllerStillRegistered:window.layout===controller};`)();
  assert.deepEqual(result,{disposed:true,applied:false,restored:true,controllerStillRegistered:false});
 });
+
+test("layout preference restore isolates failed keys and retains complete backup",()=>{
+ const src=read("src/core/preferences.js.part");
+ const code=src.slice(src.indexOf("function restorePrefs()"),src.indexOf("function markClosing"));
+ const backup={a:{value:false,user:true},b:{value:true,user:false},c:{value:false,user:true}};
+ const values=new Map([["a",true],["b",false],["c",false]]);
+ const cleared=[],traces=[];let fail=true,raw=JSON.stringify(backup);
+ const prefs={getStringPref:()=>raw,getBoolPref:k=>values.get(k),setBoolPref(k,v){if(k==="a"&&fail)throw Error("locked");values.set(k,v);},
+  clearUserPref(k){cleared.push(k);if(k==="backup")raw="";else values.set(k,true);}};
+ const restore=new Function("prefs","window","console","TARGET","KEY",code+"return restorePrefs;")(prefs,{__nocturneTrace:(event,data)=>traces.push({event,data})},{warn(){}},{a:true,b:false,c:true},"backup");
+ assert.equal(restore(),false);assert.equal(values.get("b"),true);assert.equal(values.get("c"),false);
+ assert.equal(raw,JSON.stringify(backup));assert.deepEqual(cleared,["b"]);
+ assert.deepEqual(traces[0].data,{restored:1,skipped:1,failed:1,backupRetained:true});
+ fail=false;assert.equal(restore(),true);assert.equal(values.get("a"),false);assert.equal(raw,"");
+ assert.deepEqual(cleared,["b","backup"]);
+});

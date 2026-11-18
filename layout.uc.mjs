@@ -39,7 +39,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.47",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.48",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -653,16 +653,30 @@ function restorePrefs() {
   if (!raw) return;
   const saved = JSON.parse(raw);
   // Compact Mode is a user-owned setting.
+  let restored=0,skipped=0,failed=0;
   for (const name of Object.keys(TARGET)) {
-    const original = saved[name];
-    if (!original || typeof original.value !== "boolean" || typeof original.user !== "boolean") continue;
-    // Do not overwrite settings changed by the user while the mod was active.
-    const expected = TARGET[name];
-    if (prefs.getBoolPref(name) !== expected) continue;
-    if (original.user) prefs.setBoolPref(name, original.value);
-    else prefs.clearUserPref(name);
+    try {
+      const original = saved[name];
+      if (!original || typeof original.value !== "boolean" || typeof original.user !== "boolean")
+        throw new Error("Invalid saved preference");
+      // Do not overwrite settings changed by the user while the mod was active.
+      if (prefs.getBoolPref(name) !== TARGET[name]) { skipped++; continue; }
+      if (original.user) prefs.setBoolPref(name, original.value);
+      else prefs.clearUserPref(name);
+      restored++;
+    } catch (error) {
+      failed++;
+      console.warn("[Nocturne] Layout preference restore:", name, error?.name || "Error");
+    }
   }
-  prefs.clearUserPref(KEY);
+  // Preserve the complete snapshot on failure; snapshot() requires all keys.
+  // A subsequent activation/cleanup can retry rather than lose the backup.
+  if (!failed) {
+    try { prefs.clearUserPref(KEY); }
+    catch (error) { failed++; console.warn("[Nocturne] Layout backup release:", error?.name || "Error"); }
+  }
+  try { window.__nocturneTrace?.("layout.prefs.restore",{restored,skipped,failed,backupRetained:failed>0},{flush:true}); } catch {}
+  return failed===0;
 }
 
 function markClosing(event) {
@@ -7641,7 +7655,10 @@ const controller = { get active() { return applied && !disposed; }, cleanup,
 async function initializeFreeAtStartup(){
   try{
     const native=window.gZenWorkspaces;
-    if(window.__oneplaneWorkspaceProjection||!native?.workspaceEnabled||native.privateWindowOrDisabled||!native.currentWindowIsSyncing)return;
+    const current=()=>!disposed&&!window.closed&&!window.__oneplaneWorkspaceProjection&&
+      window.gZenWorkspaces===native&&native?.workspaceEnabled&&!native.privateWindowOrDisabled&&native.currentWindowIsSyncing;
+    const stale=stage=>{try{window.__nocturneTrace?.("layout.free.stale",{stage},{flush:true});}catch{}};
+    if(!current())return;
     // Default-branch prefs are process-local and not saved in prefs.js.
     // Unlike hiddenDOMWindow, this works in Windows browser chrome.
     const runtime=Services.prefs.getDefaultBranch("");
@@ -7655,11 +7672,12 @@ async function initializeFreeAtStartup(){
     if(!id){
       if(snapshot.some(s=>s.name.trim().toLowerCase()==="free"))return;
       const ws=await native.createAndSaveWorkspace("Free","⌂",true);
+      if(!current()){stale("create");return;}
       if(!ws?.uuid||!native.getWorkspaceFromId(ws.uuid))return;
       id=ws.uuid;prefs.setStringPref("zen.oneplane.free-space-id",id);
       if(typeof native.reorderWorkspace==="function")await native.reorderWorkspace(id,0);
     }
-    if(disposed||window.closed||window.__oneplaneWorkspaceProjection)return;
+    if(!current()){stale("before-select");return;}
     if(native.activeWorkspace!==id)await native.changeWorkspaceWithID(id);
     console.info("[OnePlane] Free startup",JSON.stringify({selected:native.activeWorkspace===id}));
   }catch(error){console.warn("[OnePlane] Free startup:",error);}

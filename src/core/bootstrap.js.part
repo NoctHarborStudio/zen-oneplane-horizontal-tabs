@@ -34,7 +34,10 @@ const controller = { get active() { return applied && !disposed; }, cleanup,
 async function initializeFreeAtStartup(){
   try{
     const native=window.gZenWorkspaces;
-    if(window.__oneplaneWorkspaceProjection||!native?.workspaceEnabled||native.privateWindowOrDisabled||!native.currentWindowIsSyncing)return;
+    const current=()=>!disposed&&!window.closed&&!window.__oneplaneWorkspaceProjection&&
+      window.gZenWorkspaces===native&&native?.workspaceEnabled&&!native.privateWindowOrDisabled&&native.currentWindowIsSyncing;
+    const stale=stage=>{try{window.__nocturneTrace?.("layout.free.stale",{stage},{flush:true});}catch{}};
+    if(!current())return;
     // Default-branch prefs are process-local and not saved in prefs.js.
     // Unlike hiddenDOMWindow, this works in Windows browser chrome.
     const runtime=Services.prefs.getDefaultBranch("");
@@ -48,11 +51,12 @@ async function initializeFreeAtStartup(){
     if(!id){
       if(snapshot.some(s=>s.name.trim().toLowerCase()==="free"))return;
       const ws=await native.createAndSaveWorkspace("Free","⌂",true);
+      if(!current()){stale("create");return;}
       if(!ws?.uuid||!native.getWorkspaceFromId(ws.uuid))return;
       id=ws.uuid;prefs.setStringPref("zen.oneplane.free-space-id",id);
       if(typeof native.reorderWorkspace==="function")await native.reorderWorkspace(id,0);
     }
-    if(disposed||window.closed||window.__oneplaneWorkspaceProjection)return;
+    if(!current()){stale("before-select");return;}
     if(native.activeWorkspace!==id)await native.changeWorkspaceWithID(id);
     console.info("[OnePlane] Free startup",JSON.stringify({selected:native.activeWorkspace===id}));
   }catch(error){console.warn("[OnePlane] Free startup:",error);}

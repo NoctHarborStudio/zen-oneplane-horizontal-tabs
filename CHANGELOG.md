@@ -1,3 +1,9 @@
+## 0.3.0-preview.48 — Lifecycle safety guards
+
+- Isolate native layout preference restoration per key, preserve the complete backup on partial failure, and record aggregate outcomes without user values.
+- Revalidate the Free startup window and native manager after asynchronous creation and reorder; never publish an ID or start another native action from a stale continuation. Already-completed native creation is not rolled back.
+- Synchronize diagnostic version tags across all entrypoints, including Library and Library Services. Add four regression fixtures; native validation pending. No visual behavior or preference defaults changed.
+
 ## 0.3.0-preview.47 — Unconstrained Bunny drag popup
 
 - Set XUL panel `flip="none"` before attachment so Gecko does not constrain the live drag image to the monitor work area.
