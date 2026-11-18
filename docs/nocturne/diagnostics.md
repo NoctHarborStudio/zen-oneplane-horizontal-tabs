@@ -71,3 +71,7 @@ Same-window recorder reload reuses the existing write coordinator; all coalesced
 ### Preview.59 startup preference review
 
 `startup-prefs.restore.result` records restored/skipped/failed counts and checkpointFailed; `startup-prefs.sync.error` and `startup-prefs.cleanup.error` record error class only. Existing invalid backup is not overwritten. Pending replacements are cancellable before acquiring preferences; old lease retained until restoration returns. No preference values or profile content recorded.
+
+### Preview.60 workspace/closing cleanup
+
+`workspace.geometry.cleanup`, `workspace.effects.cleanup`, `workspace.settle.cleanup`, `workspace.cleanup`, `workspace.dispose`, `disassembly.cleanup`, `disassembly.dispose` report bounded aggregate failure counts, sequence/keepGate or delegated flags where applicable. `workspace.visual.error` records error class only when native operation already succeeded. No URLs, profile values or raw error messages in new diagnostic payloads. Failed cleanup is not native-release proof.
