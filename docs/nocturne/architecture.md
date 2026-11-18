@@ -178,3 +178,7 @@ Closing sets its existing phase and synchronizes Magnetic Bookmarks before colle
 ### A3.3a Assembly effect ownership
 
 Direct WAAPI acquisition registers the exact animation and completion before pause. Failed acquisition cancels its effect, and external cancellation restores that record only. Assembly captures one Center Motion generation at launch; fold acquisition temporarily admits nodes into the existing managed set, and failure restores fallback eligibility. This is an incremental MB1/2 change; Boot adoption, readiness ownership and Home structural lease remain in A3.3b. Existing approved timing and native operations unchanged.
+
+### A3.3b1 Boot / Assembly / Home
+
+Prelude owns the exact early cover and its marker baselines until adoption; Assembly owns adopted node and markers thereafter. Native readiness RAFs are captured and cancelled by Assembly. Shared Home startup lease is attached to the existing exact timeline, not a separate global controller; Home render invalidates old animated children, and Assembly closes the timeline before releasing the lease. Legacy registry compatibility is additive and remains an explicit test gate. No approved visual/timing changes.

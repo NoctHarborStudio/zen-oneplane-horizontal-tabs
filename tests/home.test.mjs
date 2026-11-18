@@ -397,7 +397,7 @@ test("Home startup groups are gated, decoded, staggered and cleaned up",()=>{
  assert.ok(core.includes(':root[data-zr-startup-phase="waiting"] #zen-shared-home[data-zh-startup]'));
  assert.ok(core.includes('if(src&&startupIconSources.get(img)!==src)'));
  assert.ok(core.includes('Math.min(i*65,195)'));
- assert.ok(core.includes('if(startupEffects===owned)finishStartupHome()'));
+ assert.ok(core.includes('if(startupRun===run)finishStartupHome(run)'));
  assert.ok(core.includes('if(!startup&&!staged)content.querySelector'));
 });
 test("Home search close gate survives native floating attribute teardown",()=>{

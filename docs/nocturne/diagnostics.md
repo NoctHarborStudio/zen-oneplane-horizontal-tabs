@@ -198,3 +198,7 @@ Existing `disassembly.bypass` now also records `bookmark-preflight-failed` and `
 ### Preview.82 Assembly direct-effect outcomes
 
 `assembly.effect.error` reports the error class and paused preparation state; `assembly.effect.cancel` reports external cancellation of an exact record; `assembly.effect.cleanup-error` / `assembly.effect.cleanup` report restoration failure, and `assembly.bookmarks.error/fallback` report shared acquisition failure and number of fallback candidates. Uses existing bounded startup decision path, no URLs, titles, extra writer or per-frame telemetry. Native evidence pending.
+
+### Preview.83 Boot and Home ownership
+
+`boot.prelude.cleanup` reports isolated cleanup failure counts; `home.startup.error` reports only error class on group acquisition failure. Existing startup/boot decisions and readiness timeout events remain authoritative. No new writer, observer for telemetry, or private fields.

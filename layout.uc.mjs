@@ -11,37 +11,50 @@
      root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"||
      win.performance.now()>=3500||!prefs.getBoolPref("zen.refined.startup.animation",true)||
      !prefs.getBoolPref("zen.nocturne.boot.enabled",true)||win.matchMedia("(prefers-reduced-motion: reduce)").matches)return;
-  let node=null,timer=0,claimed=false,cleaned=false,oldPhase=root.getAttribute(PHASE);
+  let node=null,timer=0,claimed=false,cleaned=false,phaseOwned=false,bootOwned=false;
+  const oldPhase=root.getAttribute(PHASE),oldBoot=root.getAttribute(BOOT);
+  const restore=(key,value)=>{if(value===null)root.removeAttribute(key);else root.setAttribute(key,value);};
+  function stopTimer(){const id=timer;timer=0;if(id)try{win.clearTimeout(id);}catch{}}
   const cleanup=()=>{
     if(claimed||cleaned)return;cleaned=true;
-    if(timer)win.clearTimeout(timer);timer=0;
-    node?.remove();root.removeAttribute(BOOT);
-    if(root.getAttribute(PHASE)==="waiting"){if(oldPhase===null)root.removeAttribute(PHASE);else root.setAttribute(PHASE,oldPhase);}
-    if(win[KEY]===record)delete win[KEY];
+    stopTimer();let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
+    step(()=>node?.remove());
+    if(win[KEY]===record){
+      if(bootOwned&&root.getAttribute(BOOT)==="waiting")step(()=>restore(BOOT,oldBoot));
+      if(phaseOwned&&root.getAttribute(PHASE)==="waiting")step(()=>restore(PHASE,oldPhase));
+      delete win[KEY];
+      step(()=>win.__zenMagneticBookmarksShared?.syncAddressState?.());
+    }
+    if(failed)try{win.__nocturneTrace?.("boot.prelude.cleanup",{failed},{flush:true});}catch{}
   };
   const record={node:null,at:0,adopt(){
-    if(claimed||!node?.isConnected)return null;
-    claimed=true;if(timer)win.clearTimeout(timer);timer=0;
-    if(win[KEY]===record)delete win[KEY];
-    return {node,at:record.at};
+    if(claimed||cleaned||win[KEY]!==record||!node?.isConnected)return null;
+    claimed=true;stopTimer();delete win[KEY];
+    return {node,at:record.at,phaseBaseline:oldPhase,bootBaseline:oldBoot};
   },cleanup};
   try{
     node=document.createElementNS("http://www.w3.org/1999/xhtml","div");
     node.id="nocturne-boot";node.setAttribute("aria-hidden","true");node.inert=true;
     Object.assign(node.style,{position:"fixed",inset:"0",zIndex:"2147483647",display:"grid",placeItems:"center",background:"#111219",color:"#e4e5ef",pointerEvents:"none",overflow:"hidden",willChange:"opacity"});
     node.style.setProperty("-moz-window-dragging","default","important");
-    root.append(node);record.node=node;record.at=win.performance.now();win[KEY]=record;
-    root.setAttribute(BOOT,"waiting");root.setAttribute(PHASE,"waiting");
+    record.node=node;record.at=win.performance.now();win[KEY]=record;
+    root.append(node);
+    if(cleaned||claimed||win[KEY]!==record)return;
+    bootOwned=true;root.setAttribute(BOOT,"waiting");
+    if(cleaned||claimed||win[KEY]!==record)return;
+    phaseOwned=true;root.setAttribute(PHASE,"waiting");
+    if(cleaned||claimed||win[KEY]!==record)return;
     const data={age:record.at,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished};
     if(win.__nocturneTrace)win.__nocturneTrace("boot.prelude",data,{sample:1800});
     else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"boot.prelude",t:record.at,data});}
+    if(cleaned||claimed||win[KEY]!==record)return;
     timer=win.setTimeout(cleanup,8000);win.addUnloadListener(cleanup);
   }catch{cleanup();}
 })();
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.82",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.83",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -851,7 +864,7 @@
   // The layout entrypoint runs before its own projection. Gate only a
   // genuinely new window, never a Sine reload. Fail open on missing Assembly.
   try{
-    if(!win.__nocturneLayoutStartup&&win.performance.now()<3500&&Services.prefs.getBoolPref("zen.refined.startup.animation",true)&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches){
+    if(!win.__nocturneLayoutStartup&&(!win.__zenRefinedStartupAnimationSeen||win.__zenRefinedStartupAnimation)&&win.performance.now()<3500&&Services.prefs.getBoolPref("zen.refined.startup.animation",true)&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches){
       win.__nocturneTrace?.("assembly.gate",{age:win.performance.now(),pending:true},{flush:true});
       root.setAttribute(PENDING,"true");pendingTimer=win.setTimeout(()=>{if(dead||!current())return;trace("assembly.gate.timeout",{age:win.performance.now()},{flush:true});releasePending();},8500);
     }
@@ -1723,10 +1736,13 @@ function acquireZenHome(win, services) {
     }else if(browser.selectedTab)close();
   }
   function restore(){if(!covered)return;covered=false;panels.removeAttribute("data-zr-home-covered");if(!oldInert)panels.removeAttribute("inert");host.removeAttribute("data-zr-home-host");}
-  let startupEffects=[],startupIconSources=new WeakMap();
-  function finishStartupHome(){
-    for(const a of startupEffects)try{a.cancel();}catch{}
-    startupEffects=[];panel.removeAttribute("data-zh-startup");
+  let startupRun=null,startupIconSources=new WeakMap();
+  function finishStartupHome(expected=null){
+    if(expected&&startupRun!==expected)return;
+    const run=startupRun;startupRun=null;
+    if(run&&run.timeline.homeLease===run.lease)delete run.timeline.homeLease;
+    for(const a of run?.effects||[])try{a.cancel();}catch{}
+    panel.removeAttribute("data-zh-startup");
   }
   function warmStartupIcons(){
     let total=0,pending=0;
@@ -1742,19 +1758,32 @@ function acquireZenHome(win, services) {
     return {total,pending};
   }
   function playStartupHome(timeline){
-    if(!open||!panel.hasAttribute("data-zh-startup")||startupEffects.length||searchToken)return;
-    if(win.matchMedia("(prefers-reduced-motion: reduce)").matches){finishStartupHome();return;}
-    const nodes=[...content.children],elapsed=timeline.paused?0:Math.max(0,(win.performance?.now?.()??timeline.start)-timeline.start);
-    for(const [i,node] of nodes.entries()){
-      const delay=Math.max(0,(timeline.home+Math.min(i*65,195))*timeline.scale-elapsed);
-      try{const a=node.animate([{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}],{delay,duration:timeline.homeLength*timeline.scale,easing:"cubic-bezier(.2,.75,.25,1)",fill:"both"});if(timeline.paused){a.pause();a.currentTime=0;}startupEffects.push(a);}catch{}
-    }
-    if(startupEffects.length){
-      const owned=startupEffects;
-      Promise.all(owned.map(a=>a.finished.catch(()=>{}))).then(()=>{if(startupEffects===owned)finishStartupHome();});
-    }else finishStartupHome();
+    if(!open||dead||!panel.hasAttribute("data-zh-startup")||searchToken||!timeline||timeline.closed)return null;
+    if(startupRun)return startupRun.timeline===timeline?startupRun.lease:null;
+    if(win.matchMedia("(prefers-reduced-motion: reduce)").matches||timeline.homeLease){finishStartupHome();return null;}
+    const run={timeline,effects:[],lease:null};
+    const lease={resume(){if(startupRun===run)for(const a of run.effects)try{a.play();}catch{}},release(){finishStartupHome(run);}};
+    run.lease=lease;startupRun=run;timeline.homeLease=lease;
+    try{
+      const nodes=[...content.children],elapsed=timeline.paused?0:Math.max(0,(win.performance?.now?.()??timeline.start)-timeline.start);
+      for(const [i,node] of nodes.entries()){
+        const delay=Math.max(0,(timeline.home+Math.min(i*65,195))*timeline.scale-elapsed);
+        const a=node.animate([{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}],{delay,duration:timeline.homeLength*timeline.scale,easing:"cubic-bezier(.2,.75,.25,1)",fill:"both"});
+        run.effects.push(a);a.finished.catch(()=>{});
+        if(startupRun!==run){try{a.cancel();}catch{}return null;}
+        if(timeline.closed){finishStartupHome(run);return null;}
+        if(timeline.paused){a.pause();a.currentTime=0;}
+        if(startupRun!==run)return null;
+        if(timeline.closed){finishStartupHome(run);return null;}
+      }
+      if(run.effects.length){
+        Promise.all(run.effects.map(a=>a.finished.catch(()=>{}))).then(()=>{if(startupRun===run)finishStartupHome(run);});
+        return lease;
+      }
+    }catch(error){try{win.__nocturneTrace?.("home.startup.error",{name:error?.name},{flush:true});}catch{}}
+    finishStartupHome(run);return null;
   }
-  function resumeStartupHome(){for(const a of startupEffects)try{a.play();}catch{}}
+  function resumeStartupHome(){startupRun?.lease.resume();}
   function stopMotion(){motion?.cancel();motion=null;finishStartupHome();}
   function close(restoreFocus=false){
     typeof win!=="undefined"&&win.__nocturneTrace?.("home.close",()=>({restoreFocus,open}),{sample:1800});
@@ -2299,6 +2328,9 @@ function acquireZenHome(win, services) {
   }
   function render(){
     if(!open||dead||searchToken)return;
+    // A native data refresh replaces the animated children. Retire the
+    // exact old effect instead of leaving animations on detached nodes.
+    if(startupRun)finishStartupHome(startupRun);
     const oldGrid=content.querySelector(".zh-recommendations");
     if(adding&&oldGrid)pinScrollTop=oldGrid.scrollTop;
     const nextMode=adding?(pinCustom?"custom-url":"add-pin"):(editing?"customize":"home");
@@ -2393,7 +2425,7 @@ function acquireZenHome(win, services) {
     if(dead)return;close();dead=true;for(const fn of cleanups.splice(0))try{fn();}catch{}
     panel.remove();style.remove();if(win[KEY]===registry)delete win[KEY];
   }
-  const registry={apiVersion:1,warmStartupIcons,playStartup:playStartupHome,resumeStartup:resumeStartupHome,finishStartup:finishStartupHome,acquire(){
+  const registry={apiVersion:1,startupLeaseVersion:1,warmStartupIcons,playStartup:playStartupHome,resumeStartup:resumeStartupHome,finishStartup:finishStartupHome,acquire(){
     if(dead)return null;const lease={listeners:new Set()};leases.add(lease);let released=false;
     return {get open(){return !released&&open;},show:()=>!released&&show(),close:(focus=false)=>{if(!released)leaveHome(focus);},
       showOnStartup(){
@@ -2474,8 +2506,11 @@ function acquireZenHome(win, services) {
       if(searchToken&&!searchClosing&&!searchReturn&&searchBar?.contains?.(e.target))captureSearchSnapshot();
     },true);
     listen(panel,"pointerdown",e=>{if(e.target===panel&&searchToken&&!searchClosing&&cancelHomeSearch("home-background")){e.preventDefault();e.stopPropagation();}},true);
-    const stateObserver=new win.MutationObserver(()=>{if(open&&!allowed())close();else if(!open)ensurePrimaryHome();});
-    stateObserver.observe(root,{attributes:true,attributeFilter:["customizing","inDOMFullscreen","inFullscreen","popup-window","data-op-startup-ready"]});cleanups.push(()=>stateObserver.disconnect());
+    const stateObserver=new win.MutationObserver(()=>{
+      if(panel.hasAttribute("data-zh-startup")&&!root.hasAttribute("data-zr-startup-phase"))finishStartupHome();
+      if(open&&!allowed())close();else if(!open)ensurePrimaryHome();
+    });
+    stateObserver.observe(root,{attributes:true,attributeFilter:["customizing","inDOMFullscreen","inFullscreen","popup-window","data-op-startup-ready","data-zr-startup-phase"]});cleanups.push(()=>stateObserver.disconnect());
     listen(win,"unload",destroy,{once:true});
     const progress={onLocationChange(b,wp,uri){
       if(switching||b!==browser.selectedBrowser||!wp?.isTopLevel)return;

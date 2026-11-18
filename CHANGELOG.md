@@ -1,3 +1,10 @@
+## 0.3.0-preview.83 — Boot adoption and Home startup lease
+
+- Transfer exact boot/phase baselines from Prelude to Assembly; isolate cleanup failures and fence stale prelude callbacks.
+- Own native readiness frames and cancel them on teardown; avoid recreating the startup pending gate after Assembly has finished.
+- Give Home an exact timeline-bound startup lease, roll back partial effects, reject closed timelines and retire effects before replacing animated children.
+- Preserve the existing choreography, eligibility, timing and native data ownership. Four new regression cases; native verification pending.
+
 ## 0.3.0-preview.82 — Startup direct effect ownership
 
 - Own each direct WAAPI effect before pause/currentTime; cancel late or failed acquisition, restore exact recorded styles and settle external cancellation.

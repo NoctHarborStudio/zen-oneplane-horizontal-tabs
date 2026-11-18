@@ -22,7 +22,7 @@ test("startup uses only the explicit optional chrome boot layer, never a page la
 test("interruption samples current progress and settles before cleanup",()=>{
  const segment=source.slice(source.indexOf("function settle()"),source.indexOf("function interrupt("));
  const run=new Function(segment+
- 'let dead=false,playing=true,settling=false,lateObserver=null,lateResize=null,lateFrame=0,timer=0;const reduced={matches:false},PHASE="phase",FADE="ease",root={setAttribute(){}},log=[];const a={cancel(){log.push("cancel");}},n={},complete=()=>{};const animations=new Map([[a,{n,frames:[{"--p":"0"},{"--p":"1"}],complete}]]);const window={getComputedStyle(){return {getPropertyValue(){return ".37"}}},setTimeout(fn,t){log.push(t);return 1},clearTimeout(){}};function play(n,f,d,t){log.push(f[0]["--p"],f[1]["--p"],t);return true}function finish(){log.push("finish")}settle();settle();return log;');
+ 'let dead=false,playing=true,settling=false,bootPreparing=false,lateObserver=null,lateResize=null,lateFrame=0,timer=0;const reduced={matches:false},PHASE="phase",FADE="ease",root={setAttribute(){}},log=[];const a={cancel(){log.push("cancel");}},n={},complete=()=>{};const animations=new Map([[a,{n,frames:[{"--p":"0"},{"--p":"1"}],complete}]]);const window={getComputedStyle(){return {getPropertyValue(){return ".37"}}},setTimeout(fn,t){log.push(t);return 1},clearTimeout(){}};function play(n,f,d,t){log.push(f[0]["--p"],f[1]["--p"],t);return true}function finish(){log.push("finish")}settle();settle();return log;');
  assert.deepEqual(run(),["cancel",".37","1",120,155]);
 });
 
@@ -97,7 +97,7 @@ test("boot waits for minimum visibility and a quiet readiness window, with hard 
  assert.equal(ready(1010,0,1010,890,8000),true);
  assert.equal(ready(1100,0,1010,1050,8000),false);
  assert.equal(ready(8000,0,1010,7999,8000),true);
- assert.ok(source.includes('if(!prefs.getBoolPref(BOOT_PREF,true)){window.__nocturneEarlyBoot?.cleanup?.();return;}'));
+ assert.ok(source.includes('if(!prefs.getBoolPref(BOOT_PREF,true))window.__nocturneEarlyBoot?.cleanup?.()'));
  assert.ok(source.includes('root.append(boot)'));
  assert.ok(source.includes('boot.inert=true'));
  assert.ok(source.includes('pointerEvents:"none"'));
@@ -126,7 +126,7 @@ test("early boot is installed before layout and adopted without duplicate cover"
  assert.equal(Object.keys(manifest.scripts)[0],"startup-animation.uc.mjs");
  assert.ok(pre.includes('win.__zenRefinedStartupAnimationSeen||win.__nocturneLayoutStartup'));
  assert.ok(pre.includes('timer=win.setTimeout(cleanup,8000)'));
- assert.ok(source.includes('const early=window.__nocturneEarlyBoot?.adopt?.()'));
+ assert.ok(source.includes('earlyBoot=window.__nocturneEarlyBoot?.adopt?.()'));
  assert.ok(source.includes('if(!early)root.append(boot)'));
  assert.ok(source.includes('BOOT_MIN=1010,BOOT_EXIT=320,BOOT_LEAD=150,BOOT_ENTER=460'));
  assert.ok(source.indexOf('decision("boot.ready"')<source.indexOf('decision("assembly.icons.ready"'));
@@ -141,11 +141,13 @@ test("startup animation preserves explicit 760 ms and does not migrate saved cho
 test("Assembly cleanup continues after Center Motion and Home failures",()=>{
  const code=source.slice(source.indexOf("  function finish(){"),source.indexOf("  function settle(){"));
  const run=new Function(`
- let dead=false,playing=true,settling=false,raf=1,timer=2,nativeTimer=3,lateFrame=4,lateObserver={disconnect(){throw Error("observer");}},lateResize=null,nativeObserver=null,centerHandle={seal(){throw Error("seal");},release(){log.push("center");}},bookmarkHandle={seal(){},release(){log.push("bookmarks");}},sheetURI=null,style=null,holdNode=null,bootPreparing=true;
+ let dead=false,playing=true,settling=false,raf=1,timer=2,nativeTimer=3,nativeFrame=0,nativeFrame2=0,lateFrame=4,lateObserver={disconnect(){throw Error("observer");}},lateResize=null,nativeObserver=null,centerHandle={seal(){throw Error("seal");},release(){log.push("center");}},bookmarkHandle={seal(){},release(){log.push("bookmarks");}},sheetURI=null,style=null,holdNode=null,bootPreparing=true;
  const log=[],KEY="assembly",PHASE="phase",HOLD="hold",MANAGED="managed",EXISTING="existing",ENABLE="enable",started=0,now=()=>1;
  const window={cancelAnimationFrame(){},clearTimeout(){},removeEventListener(){},__nocturneCenterMotion:{releasePending(){log.push("pending");}},__zenSharedHomeV1:{finishStartup(){throw Error("home");}},__nocturneTrace(e,d){if(e==="assembly.cleanup")log.push(d.failed);}};
  const root={removeAttribute(){log.push("phase");}},reduced={removeEventListener(){}},prefs={removeObserver(){}},Services={};
  const animations=new Map(),owned=new Map(),seen=new Set(),baseline=new Set(),inputs=[];
+ let pendingEngine=window.__nocturneCenterMotion,homeRegistry=window.__zenSharedHomeV1,ownedTimeline={},phaseOwned=true,phaseBaseline=null,holdBaseline=null;
+ function restoreMark(n,k,v){n.removeAttribute(k);}
  function restore(){}function removeBoot(){log.push("boot");}function interrupt(){}function onResize(){}function schedule(){}function preferenceChanged(){}
  ${code}window[KEY]=finish;finish();finish();return {log,registered:!!window[KEY]};`);
  assert.deepEqual(run(),{log:["center","bookmarks","pending","phase","boot",3],registered:false});
@@ -154,7 +156,7 @@ test("Assembly cleanup continues after Center Motion and Home failures",()=>{
 test("Boot teardown continues after timer failure and preserves replacement marker",()=>{
  const code=source.slice(source.indexOf("  function removeBoot(){"),source.indexOf("  function exitBoot("));
  const run=new Function(`
- let bootTimer=1,bootFrame=2,bootEffects=[{cancel(){log.push("effect");}}],boot={remove(){log.push("node");}},bootMark={};
+ let bootOwned=true,bootBaseline=null,earlyBoot=null,bootTimer=1,bootFrame=2,bootEffects=[{cancel(){log.push("effect");}}],boot={remove(){log.push("node");}},bootMark={};
  const log=[],KEY="assembly",window={assembly:()=>{},clearTimeout(){throw Error("timer");},cancelAnimationFrame(){log.push("frame");}};
  const root={removeAttribute(){log.push("marker");}};function finish(){}function decision(e,d){log.push(d.failed);}
  ${code}removeBoot();return log;`);
@@ -217,4 +219,62 @@ test("direct reveal rollback continues after individual style restoration failur
  function decision(e,d){events.push(d.failed);}
  ${code}restore(n);return {events,size:owned.size};`);
  assert.deepEqual(run(),{events:["bad","good","effect","move","clip",1],size:0});
+});
+
+test("native readiness frame callbacks cannot schedule successors after disposal",()=>{
+ const code=source.slice(source.indexOf("  function onNativeReady()"),source.indexOf("  try{\n    window[KEY]?.()",source.indexOf("  function onNativeReady()")));
+ const run=new Function(`
+ let dead=false,nativeReady=false,nativeTimer=0,nativeFrame=0,nativeFrame2=0,settled=false,readyAt=0,schedules=0;
+ const frames=[],timers=[],window={requestAnimationFrame(fn){frames.push(fn);return frames.length;},setTimeout(fn){timers.push(fn);return timers.length;},clearTimeout(){}};
+ const Promise={allSettled(){return {then(){}}}};function decision(){}function schedule(){schedules++;}function now(){return 1;}function finish(){dead=true;}
+ ${code}
+ onNativeReady();timers[0]();dead=true;frames[0]();return {frames:frames.length,schedules,settled};
+ `);
+ assert.deepEqual(run(),{frames:1,schedules:0,settled:false});
+});
+test("Home owns an exact timeline lease and rolls back all partial pause effects",()=>{
+ const home=readFileSync(new URL("../src/home/shared-home.js.part",import.meta.url),"utf8");
+ const code=home.slice(home.indexOf("  let startupRun="),home.indexOf("  function stopMotion()"));
+ const run=new Function(`
+ let open=true,dead=false,searchToken=null,mark=true,fail=true;
+ const panel={hasAttribute:()=>mark,removeAttribute(){mark=false;}},effects=[];
+ const nodes=[0,1].map(i=>({animate(){const a={cancelled:0,played:0,finished:Promise.resolve(),pause(){if(i===1&&fail)throw Error("pause");},cancel(){this.cancelled++;},play(){this.played++;}};effects.push(a);return a;}}));
+ const content={children:nodes},win={matchMedia:()=>({matches:false}),performance:{now:()=>0}};
+ ${code}
+ const timeline={start:0,scale:1,home:650,homeLength:330,paused:true};
+ const first=playStartupHome(timeline);const afterFail={lease:!!timeline.homeLease,mark,cancelled:effects.map(a=>a.cancelled)};
+ fail=false;mark=true;const a=playStartupHome(timeline);a.release();
+ mark=true;const next={...timeline};const b=playStartupHome(next);a.release();a.resume();b.resume();
+ const afterStale={owned:next.homeLease===b,mark,played:effects.slice(-2).map(a=>a.played)};b.release();
+ return {first,afterFail,afterStale,final:!!next.homeLease};
+ `);
+ assert.deepEqual(run(),{first:null,afterFail:{lease:false,mark:false,cancelled:[1,1]},afterStale:{owned:true,mark:true,played:[1,1]},final:false});
+});
+test("early prelude restores exact baseline and stale cleanup cannot erase a replacement",()=>{
+ const pre=readFileSync(new URL("../src/core/boot-prelude.js.part",import.meta.url),"utf8");
+ function fixture({failAppend=false}={}){
+  const attrs=new Map([["data-zr-startup-phase","prior-phase"],["data-nocturne-boot","prior-boot"]]);
+  const node={isConnected:false,style:{setProperty(){}},setAttribute(){},remove(){this.isConnected=false;}};
+  const root={hasAttribute:k=>attrs.has(k),getAttribute:k=>attrs.get(k)??null,setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k),append(n){n.isConnected=true;if(failAppend)throw Error("append");}};
+  let timer;const window={performance:{now:()=>1},matchMedia:()=>({matches:false}),setTimeout(fn){timer=fn;return 1;},clearTimeout(){throw Error("timer");},addUnloadListener(){}};
+  new Function("window","document","Services",pre)(window,{documentElement:root,createElementNS:()=>node},{prefs:{getBoolPref:()=>true}});
+  return {window,attrs,node,timer};
+ }
+ const f=fixture(),record=f.window.__nocturneEarlyBoot;const adopted=record.adopt();assert.equal(adopted.node,f.node);assert.equal(adopted.phaseBaseline,"prior-phase");assert.equal(adopted.bootBaseline,"prior-boot");record.cleanup();assert.equal(f.node.isConnected,true);
+ const g=fixture();g.timer();assert.equal(g.node.isConnected,false);assert.equal(g.attrs.get("data-zr-startup-phase"),"prior-phase");assert.equal(g.attrs.get("data-nocturne-boot"),"prior-boot");
+ const h=fixture();h.window.__nocturneEarlyBoot={};h.attrs.set("data-nocturne-boot","replacement");h.timer();assert.equal(h.attrs.get("data-nocturne-boot"),"replacement");
+ const partial=fixture({failAppend:true});assert.equal(partial.node.isConnected,false);assert.equal(partial.window.__nocturneEarlyBoot,undefined);
+});
+
+test("closed startup timeline cannot acquire a late Home lease",()=>{
+ const home=readFileSync(new URL("../src/home/shared-home.js.part",import.meta.url),"utf8");
+ const code=home.slice(home.indexOf("  let startupRun="),home.indexOf("  function stopMotion()"));
+ const run=new Function(`
+ let open=true,dead=false,searchToken=null,mark=true,calls=0;
+ const panel={hasAttribute:()=>mark,removeAttribute(){mark=false;}},content={children:[{animate(){calls++;}}]};
+ const win={matchMedia:()=>({matches:false})};
+ ${code}
+ const timeline={closed:true};return {lease:playStartupHome(timeline),calls,registered:!!timeline.homeLease};
+ `);
+ assert.deepEqual(run(),{lease:null,calls:0,registered:false});
 });

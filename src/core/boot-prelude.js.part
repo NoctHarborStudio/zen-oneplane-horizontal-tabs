@@ -11,30 +11,43 @@
      root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"||
      win.performance.now()>=3500||!prefs.getBoolPref("zen.refined.startup.animation",true)||
      !prefs.getBoolPref("zen.nocturne.boot.enabled",true)||win.matchMedia("(prefers-reduced-motion: reduce)").matches)return;
-  let node=null,timer=0,claimed=false,cleaned=false,oldPhase=root.getAttribute(PHASE);
+  let node=null,timer=0,claimed=false,cleaned=false,phaseOwned=false,bootOwned=false;
+  const oldPhase=root.getAttribute(PHASE),oldBoot=root.getAttribute(BOOT);
+  const restore=(key,value)=>{if(value===null)root.removeAttribute(key);else root.setAttribute(key,value);};
+  function stopTimer(){const id=timer;timer=0;if(id)try{win.clearTimeout(id);}catch{}}
   const cleanup=()=>{
     if(claimed||cleaned)return;cleaned=true;
-    if(timer)win.clearTimeout(timer);timer=0;
-    node?.remove();root.removeAttribute(BOOT);
-    if(root.getAttribute(PHASE)==="waiting"){if(oldPhase===null)root.removeAttribute(PHASE);else root.setAttribute(PHASE,oldPhase);}
-    if(win[KEY]===record)delete win[KEY];
+    stopTimer();let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
+    step(()=>node?.remove());
+    if(win[KEY]===record){
+      if(bootOwned&&root.getAttribute(BOOT)==="waiting")step(()=>restore(BOOT,oldBoot));
+      if(phaseOwned&&root.getAttribute(PHASE)==="waiting")step(()=>restore(PHASE,oldPhase));
+      delete win[KEY];
+      step(()=>win.__zenMagneticBookmarksShared?.syncAddressState?.());
+    }
+    if(failed)try{win.__nocturneTrace?.("boot.prelude.cleanup",{failed},{flush:true});}catch{}
   };
   const record={node:null,at:0,adopt(){
-    if(claimed||!node?.isConnected)return null;
-    claimed=true;if(timer)win.clearTimeout(timer);timer=0;
-    if(win[KEY]===record)delete win[KEY];
-    return {node,at:record.at};
+    if(claimed||cleaned||win[KEY]!==record||!node?.isConnected)return null;
+    claimed=true;stopTimer();delete win[KEY];
+    return {node,at:record.at,phaseBaseline:oldPhase,bootBaseline:oldBoot};
   },cleanup};
   try{
     node=document.createElementNS("http://www.w3.org/1999/xhtml","div");
     node.id="nocturne-boot";node.setAttribute("aria-hidden","true");node.inert=true;
     Object.assign(node.style,{position:"fixed",inset:"0",zIndex:"2147483647",display:"grid",placeItems:"center",background:"#111219",color:"#e4e5ef",pointerEvents:"none",overflow:"hidden",willChange:"opacity"});
     node.style.setProperty("-moz-window-dragging","default","important");
-    root.append(node);record.node=node;record.at=win.performance.now();win[KEY]=record;
-    root.setAttribute(BOOT,"waiting");root.setAttribute(PHASE,"waiting");
+    record.node=node;record.at=win.performance.now();win[KEY]=record;
+    root.append(node);
+    if(cleaned||claimed||win[KEY]!==record)return;
+    bootOwned=true;root.setAttribute(BOOT,"waiting");
+    if(cleaned||claimed||win[KEY]!==record)return;
+    phaseOwned=true;root.setAttribute(PHASE,"waiting");
+    if(cleaned||claimed||win[KEY]!==record)return;
     const data={age:record.at,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished};
     if(win.__nocturneTrace)win.__nocturneTrace("boot.prelude",data,{sample:1800});
     else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"boot.prelude",t:record.at,data});}
+    if(cleaned||claimed||win[KEY]!==record)return;
     timer=win.setTimeout(cleanup,8000);win.addUnloadListener(cleanup);
   }catch{cleanup();}
 })();

@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.82"};
+  const event="assembly.script",data={version:"0.3.0-preview.83"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -59,6 +59,8 @@ try{if(typeof window!=="undefined"){
   const started=now(),deadline=started+8000;
   let dead=false,playing=false,settling=false,raf=0,timer=0,settled=false,nativeReady=false,readyAt=0,holdNode=null;
   let nativeObserver=null,style=null,lateObserver=null,lateResize=null,lateFrame=0,playStart=0,finishAt=0,sheetURI=null,nativeTimer=0;
+  let nativeFrame=0,nativeFrame2=0,ownedTimeline=null,homeRegistry=null,pendingEngine=null;
+  let earlyBoot=null,phaseBaseline=null,bootBaseline=null,phaseOwned=false,bootOwned=false,holdBaseline=null;
   const animations=new Map(),owned=new Map(),seen=new Set(),baseline=new Set();
   let centerHandle=null,bookmarkHandle=null,iconWaitAt=0,iconCheckAt=-Infinity,iconStatus=null,homeIcons=null;
   const EXISTING="data-zr-startup-existing";
@@ -74,11 +76,19 @@ try{if(typeof window!=="undefined"){
   function bootReady(now,shown,min,quietSince,deadline){
     return now>=deadline||now-shown>=min&&now-quietSince>=120;
   }
+  const restoreMark=(node,key,value)=>{if(value===null)node.removeAttribute(key);else node.setAttribute(key,value);};
+  function claimBoot(){
+    if(!prefs.getBoolPref(BOOT_PREF,true))window.__nocturneEarlyBoot?.cleanup?.();
+    else earlyBoot=window.__nocturneEarlyBoot?.adopt?.()||null;
+    phaseBaseline=earlyBoot?(earlyBoot.phaseBaseline??null):root.getAttribute(PHASE);
+    bootBaseline=earlyBoot?(earlyBoot.bootBaseline??null):root.getAttribute("data-nocturne-boot");
+    if(earlyBoot){boot=earlyBoot.node;phaseOwned=true;bootOwned=true;}
+  }
   function mountBoot(){
-    if(!prefs.getBoolPref(BOOT_PREF,true)){window.__nocturneEarlyBoot?.cleanup?.();return;}
+    if(!prefs.getBoolPref(BOOT_PREF,true)){removeBoot();return;}
     try{
       // Chrome-only, no network assets, no blur, no page mutation.
-      const early=window.__nocturneEarlyBoot?.adopt?.();
+      const early=earlyBoot;
       boot=early?.node||html("div");boot.id="nocturne-boot";boot.setAttribute("aria-hidden","true");boot.inert=true;
       Object.assign(boot.style,{position:"fixed",inset:"0",zIndex:"2147483647",display:"grid",placeItems:"center",background:"#111219",color:"#e4e5ef",pointerEvents:"none",overflow:"hidden",willChange:"opacity"});
       boot.style.setProperty("-moz-window-dragging","default","important");
@@ -93,7 +103,7 @@ try{if(typeof window!=="undefined"){
       const label=html("div");label.textContent="NOCTURNE";
       Object.assign(label.style,{font:"300 24px system-ui, sans-serif",letterSpacing:"7px",paddingInlineStart:"7px"});
       bootMark.append(svg,label);boot.append(bootMark);if(!early)root.append(boot);
-      root.setAttribute("data-nocturne-boot","waiting");bootAt=now();
+      bootOwned=true;root.setAttribute("data-nocturne-boot","waiting");bootAt=now();
       // First show the brand background, then ease in the mark. The
       // minimum readable hold is measured from this logo clock, not
       // from the earlier blank prelude.
@@ -111,7 +121,8 @@ try{if(typeof window!=="undefined"){
     for(const a of bootEffects)step(()=>a.cancel());
     bootEffects=[];
     step(()=>boot?.remove());boot=null;bootMark=null;
-    if(window[KEY]===finish)step(()=>root.removeAttribute("data-nocturne-boot"));
+    if(window[KEY]===finish&&bootOwned)step(()=>restoreMark(root,"data-nocturne-boot",bootBaseline));
+    bootOwned=false;earlyBoot=null;
     if(failed)decision("boot.cleanup",{failed});
   }
   function exitBoot(resume){
@@ -137,7 +148,8 @@ try{if(typeof window!=="undefined"){
   function hold(){
     const w=get("zen-appcontent-navbar-wrapper");
     if(w&&w!==holdNode){
-      holdNode?.removeAttribute(HOLD);holdNode=w;
+      if(holdNode)restoreMark(holdNode,HOLD,holdBaseline);
+      holdNode=w;holdBaseline=w.getAttribute(HOLD);
       w.setAttribute(HOLD,"true");
     }
   }
@@ -149,7 +161,9 @@ try{if(typeof window!=="undefined"){
     step(()=>window.__nocturneTrace?.("assembly.finish",()=>({playing,settling,seen:seen.size,effects:animations.size,age:now()-started}),{flush:true}));
     step(()=>{if(raf)window.cancelAnimationFrame(raf);});
     step(()=>{if(timer)window.clearTimeout(timer);});
-    step(()=>{if(nativeTimer)window.clearTimeout(nativeTimer);});
+    step(()=>{if(nativeTimer)window.clearTimeout(nativeTimer);});nativeTimer=0;
+    step(()=>{if(nativeFrame)window.cancelAnimationFrame(nativeFrame);});nativeFrame=0;
+    step(()=>{if(nativeFrame2)window.cancelAnimationFrame(nativeFrame2);});nativeFrame2=0;
     step(()=>{if(lateFrame)window.cancelAnimationFrame(lateFrame);});
     step(()=>lateObserver?.disconnect());lateObserver=null;
     step(()=>lateResize?.disconnect());lateResize=null;
@@ -159,7 +173,7 @@ try{if(typeof window!=="undefined"){
     animations.clear();
     step(()=>centerHandle?.seal());step(()=>centerHandle?.release());centerHandle=null;
     step(()=>bookmarkHandle?.seal());step(()=>bookmarkHandle?.release());bookmarkHandle=null;
-    if(owns)step(()=>window.__nocturneCenterMotion?.releasePending());
+    if(owns)step(()=>{if(!pendingEngine)pendingEngine=window.__nocturneCenterMotion;pendingEngine?.releasePending();});
     for(const n of [...owned.keys()])step(()=>restore(n));
     for(const n of seen)step(()=>n.removeAttribute(MANAGED));
     seen.clear();
@@ -167,13 +181,21 @@ try{if(typeof window!=="undefined"){
     step(()=>{if(sheetURI)window.windowUtils.removeSheet(sheetURI,window.windowUtils.USER_SHEET);});
     sheetURI=null;
     step(()=>style?.remove());style=null;
-    if(owns){
-      step(()=>root.removeAttribute(PHASE));
-      step(()=>window.__zenMagneticBookmarksShared?.syncAddressState?.());
-      step(()=>holdNode?.removeAttribute(HOLD));
-      step(()=>{delete window.__nocturneStartupTimeline;});
-      step(()=>window.__zenSharedHomeV1?.finishStartup?.());
+    const timeline=ownedTimeline;
+    if(timeline){
+      timeline.closed=true;
+      const lease=timeline.homeLease;
+      if(lease)step(()=>lease.release());
+      else if(homeRegistry&&homeRegistry.startupLeaseVersion!==1&&window.__zenSharedHomeV1===homeRegistry)step(()=>homeRegistry.finishStartup?.());
+      if(window.__nocturneStartupTimeline===timeline)delete window.__nocturneStartupTimeline;
     }
+    ownedTimeline=null;homeRegistry=null;
+    if(owns){
+      if(phaseOwned)step(()=>restoreMark(root,PHASE,phaseBaseline));
+      step(()=>window.__zenMagneticBookmarksShared?.syncAddressState?.());
+      if(holdNode)step(()=>restoreMark(holdNode,HOLD,holdBaseline));
+    }
+    phaseOwned=false;holdNode=null;
     bootPreparing=false;step(removeBoot);
     for(const type of inputs)step(()=>window.removeEventListener(type,interrupt,true));
     step(()=>window.removeEventListener("resize",onResize));
@@ -187,7 +209,7 @@ try{if(typeof window!=="undefined"){
   function settle(){
     typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.settle",()=>({playing,settling,effects:animations.size}),{sample:1800});
     if(dead||settling)return;
-    if(!playing||reduced.matches||!animations.size){finish();return;}
+    if(!playing||bootPreparing||reduced.matches||!animations.size){finish();return;}
     settling=true;
     // The native background and page have never been touched.
     // Finish active effects from current values, not a different frame.
@@ -232,7 +254,7 @@ try{if(typeof window!=="undefined"){
     typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.resize",()=>({changed,playing,size:next}),{throttle:100,sample:1500});
     viewport=next;if(playing&&changed){if(bootPreparing)finish();else settle();}
   }
-  function preferenceChanged(){if(reduced.matches)finish();else if(!prefs.getBoolPref(ENABLE,true))settle();}
+  function preferenceChanged(){if(reduced.matches||bootPreparing&&!prefs.getBoolPref(ENABLE,true))finish();else if(!prefs.getBoolPref(ENABLE,true))settle();}
   function bounds(n,ignoreOpacity=false){
     if(!n||n.hidden||n.collapsed)return null;
     const s=window.getComputedStyle(n),r=n.getBoundingClientRect();
@@ -432,7 +454,7 @@ try{if(typeof window!=="undefined"){
       try{window.__zenMagneticBookmarksShared?.syncAddressState?.();}catch{}
       if(one)try{window.__oneplaneLayoutController?.prepareWorkspaceGeometry?.();}catch{}
       window.__nocturneTrace?.("assembly.preflight",{elapsed:now()-preflightAt},{sample:1000});
-      const engine=window.__nocturneCenterMotion;
+      const engine=window.__nocturneCenterMotion;pendingEngine=engine;
       const row=get("oneplane-tabs"),url=get("urlbar-container");
       const bookmarks=get("PersonalToolbar"),items=get("PlacesToolbarItems");
       const floating=floatingBar();
@@ -445,7 +467,8 @@ try{if(typeof window!=="undefined"){
       const timeline=startupTimeline(playStart,scale);
       timeline.paused=bootPreparing;
       finishAt=playStart+Math.max(duration+80,timeline.end*scale);
-      window.__nocturneStartupTimeline=timeline;
+      ownedTimeline=timeline;window.__nocturneStartupTimeline=timeline;
+      homeRegistry=window.__zenSharedHomeV1;
       const surface=one?get("oneplane-toolbar-surface"):null;
       // Animate the actual decorative surface, not a full-window cover.
       if(surface)reveal(surface,{y:-18,delay:timeline.panel,length:timeline.panelLength});
@@ -487,7 +510,7 @@ try{if(typeof window!=="undefined"){
       if(!bookmarkHandle)revealBookmarks(center);
       if(floating)openFromCenter(floating,590,440);
       if(dead)return;
-      window.__zenSharedHomeV1?.playStartup?.(timeline);
+      homeRegistry?.playStartup?.(timeline);
       if(dead)return;
       root.setAttribute(PHASE,"playing");
       // Places and Zen's floating input can initialize after chrome-ready.
@@ -509,18 +532,21 @@ try{if(typeof window!=="undefined"){
       }
     typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.targets",()=>({seen:seen.size,effects:animations.size,duration,finishAt}),{sample:1800});
       const resume=()=>{
-        if(dead)return;
+        if(dead||timeline.closed||ownedTimeline!==timeline)return;
         bootPreparing=false;
         playStart=now();timeline.start=playStart;timeline.paused=false;
         finishAt=playStart+Math.max(duration+80,timeline.end*scale);
         for(const a of animations.keys())try{a.play();}catch{}
         centerHandle?.resume?.();bookmarkHandle?.resume?.();
-        window.__zenSharedHomeV1?.resumeStartup?.();
+        if(timeline.homeLease)timeline.homeLease.resume();
+        else if(homeRegistry&&homeRegistry.startupLeaseVersion!==1&&window.__zenSharedHomeV1===homeRegistry)homeRegistry.resumeStartup?.();
+        if(dead)return;
         decision("boot.assembly.start",{age:playStart-started,prepared:animations.size});
         scheduleLate();
         if(timer)window.clearTimeout(timer);
         timer=window.setTimeout(finish,Math.max(0,finishAt-now()));
       };
+      if(dead)return;
       if(bootPreparing){
         // Keep the hard fail-open deadline while waiting for the exit.
         timer=window.setTimeout(finish,Math.max(0,deadline-now()));
@@ -539,7 +565,7 @@ try{if(typeof window!=="undefined"){
   function tick(){
     raf=0;if(dead||playing)return;
     if(now()>=deadline){decision("assembly.skip",{reason:"deadline",nativeReady,settled,state:root.getAttribute(READY)});finish();return;}
-    hold();
+    hold();pendingEngine=window.__nocturneCenterMotion;
     // Warm icons while native restore is still running, not only after it.
     const earlyRow=get("oneplane-tabs");
     if(boot&&earlyRow&&now()-iconCheckAt>=75){
@@ -597,15 +623,22 @@ try{if(typeof window!=="undefined"){
     const markReady=()=>{
       if(dead||queued)return;queued=true;
       if(nativeTimer)window.clearTimeout(nativeTimer);nativeTimer=0;
-      window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>{
-        if(dead)return;settled=true;readyAt=now();schedule();
-      }));
+      try{
+        nativeFrame=window.requestAnimationFrame(()=>{
+          nativeFrame=0;if(dead)return;
+          try{nativeFrame2=window.requestAnimationFrame(()=>{
+            nativeFrame2=0;if(dead)return;settled=true;readyAt=now();schedule();
+          });}catch{finish();}
+        });
+      }catch{finish();}
     };
     nativeTimer=window.setTimeout(()=>{decision("assembly.native.timeout",{});markReady();},900);
-    Promise.allSettled([window.SessionStore?.promiseAllWindowsRestored,window.gZenWorkspaces?.promiseInitialized]).then(markReady);
+    try{Promise.allSettled([window.SessionStore?.promiseAllWindowsRestored,window.gZenWorkspaces?.promiseInitialized]).then(markReady,markReady);}
+    catch{markReady();}
   }
   try{
     window[KEY]?.();window[KEY]=finish;
+    claimBoot();pendingEngine=window.__nocturneCenterMotion;
     window.addUnloadListener(finish);window.addEventListener("unload",finish,{once:true});
     for(const type of inputs)window.addEventListener(type,interrupt,true);
     window.addEventListener("resize",onResize);
@@ -670,7 +703,8 @@ try{if(typeof window!=="undefined"){
     // inserted controls remain eligible for the full center reveal.
     lateStart=lateStart||!canStartBeforePaint(window.windowUtils,document.readyState);
     if(lateStart)for(const selector of earlyTargets)for(const n of document.querySelectorAll(selector))if(!baseline.has(n)){baseline.add(n);n.setAttribute(EXISTING,"true");}
-    root.setAttribute(PHASE,"waiting");try{window.__zenMagneticBookmarksShared?.syncAddressState?.();}catch{}hold();mountBoot();
+    phaseOwned=true;root.setAttribute(PHASE,"waiting");try{window.__zenMagneticBookmarksShared?.syncAddressState?.();}catch{}
+    if(dead)return;hold();if(dead)return;mountBoot();if(dead)return;
     console.info("[Zen Refined] Center Assembly: "+(lateStart?"late chrome startup":"prepaint startup"));
     timer=window.setTimeout(finish,Math.max(0,deadline-now()));
     if(window.gBrowserInit?.delayedStartupFinished)onNativeReady();

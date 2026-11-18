@@ -309,3 +309,7 @@ Three new permanent regressions; 26/26 focused Closing and shared-bookmarks test
 ### Preview.82 Startup direct effects
 
 Six new regression tests; 21/21 focused startup-transparency fixtures PASS in isolated JS harness. Tests cover actual extracted direct play, restore and shared bookmark acquisition paths, not Gecko paint or end-to-end native startup. Existing source-shape checks for timelines, early cover, native readiness and user durations remain passing in the same harness. Canonical Node CI pending; native acceptance deferred.
+
+### Preview.83 Boot and Home lifecycle
+
+Four new regression tests use actual extracted native readiness, prelude IIFE and Home startup effect functions. Verify cancelled readiness cannot queue successor, partial Home pause cancels every acquired effect, stale exact lease cannot affect successor, closed timeline cannot acquire a late lease, and Prelude cleanup restores prior markers and leaves replacement untouched. Startup-transparency and Center Motion regression suites rerun on candidate; canonical Node CI pending; native acceptance deferred. Older Home registry remains a compatibility test gate.
