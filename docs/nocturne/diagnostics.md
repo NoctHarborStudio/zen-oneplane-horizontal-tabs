@@ -63,3 +63,7 @@ Same-window recorder reload reuses the existing write coordinator; all coalesced
 ### Preview.57 native resource self-review
 
 `hub.uri.transaction.release` records failed transaction-token release; `hub.uri.scope.restore` includes the new cancelled phase. No content fields. Downloads pre-acquisition disposal releases the lease without claiming native removal: `library.downloads.detach` remains an actual removal-attempt event only.
+
+### Preview.58 cross-owner startup cleanup
+
+`assembly.cleanup` records aggregate failed cleanup count and ownership flag; `boot.cleanup` reports failed removal count; `startup-prefs.cleanup` reports interrupted/successor/modUnload booleans. No preference values, content or paths. Layout invokes active Assembly before Center Motion disposal so terminal effects are released while their hosts exist. Terminal writes remain best effort.

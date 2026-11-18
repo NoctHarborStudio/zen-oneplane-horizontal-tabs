@@ -801,3 +801,16 @@ NC4-043 refinement: shared synchronous URI transaction token on the imported nat
 
 Eight added regression tests; 21 focused source fixtures passed in isolated JS (nine Downloads and twelve Hub), runtime parser passed. Full Node CI/served artifact and real Zen validation pending at publication. Arbitrary direct helper calls outside the installed wrappers, native cross-compartment identity, unknown foreign wrappers and permanently unresolved native promises remain limitations. A1.8 cross-owner review next after CI; keep all issue IDs open pending required validation.
 
+
+### A1.8a — Cross-owner startup lifecycle checkpoint (preview.58)
+
+Pinned preview.57 1b7b4781bc73382baf98d0f100356ffe10c5afaf: [CI 44233842195](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/44233842195) PASS, 367/367 Node tests and current/immutable served archive verification. AGENTS re-read in full; source/architecture/pipeline/validation reviewed. A1.8 review identifies incomplete startup and preference lifecycle ownership, not a completed A1 gate.
+
+NC4-097: remove ambiguous 760-to-1050 rewrite in startup-animation.uc.mjs. Preserve all supported existing values, including 760; manifest default remains 1050. Leave the historical migration flag untouched; cannot reconstruct an already overwritten user choice. No profile data migration. One regression fixture.
+
+NC4-037/006: Startup Placeholder sync now holds its active lease through synchronous native preference writes, defers final release during reentrant cleanup, checks disposal before each write, and reconciles a reentrant option change after current sync. If an interrupted owner transfers to a surviving window, the successor reconciles the current option. Existing native close versus mod disable distinction retained. Two regression fixtures. This is not a unified process-wide preference coordinator; final restoration, same-window replacement during a synchronous observer, mixed-version windows, and callback/backup write faults warrant independent review. No new preference keys.
+
+NC4-005/044: Layout cleanup stops active Assembly before releasing Center Motion and strip hosts. Assembly isolates cleanup calls (timers, observers, animation handles, Home handoff, owned styles/marks and listeners), logs aggregate failures; Boot separately isolates removal and avoids clearing a replacement's marker. Preserve normal close visual delegation, no new motion timeline or synthetic delay. Three additional fixtures, including ordered cross-owner Layout teardown. Native unload order, reentrant replacement of shared DOM owners and arbitrary failed native removals remain open.
+
+Six new regression tests. Eleven focused extracted-source checks executed in isolated JS (eight startup preference tests, three Assembly/Boot tests); new Layout order fixture awaits full Node CI. Changed runtime parser checked. CI/native acceptance pending at publication. NC4-005/030 remaining scope/dependency extraction, startup and workspace/close ownership interactions, diagnostics terminal persistence and process/window permutations require A1.8-R independent review and potentially further A1.8 checkpoints; A1 remains open. Do not request a native smoke test until candidate and scope are checked; retain the intended multiwindow/user preference/Downloads/URI/Split View checkpoint.
+
