@@ -25,12 +25,15 @@ function workspaceCommandNow(win){
   try{const p=win.performance,t=p?.timeOrigin+p?.now();if(Number.isFinite(t))return t;}catch{}
   return Date.now();
 }
+export function workspacePendingState(startedAt,now,reserved=false,projection=false){
+  const remaining=Number.isFinite(startedAt)?Math.max(0,Math.min(WORKSPACE_PENDING_NOTICE,WORKSPACE_PENDING_NOTICE-(now-startedAt))):0;
+  return {blocked:true,phase:remaining?"pending":"unknown",remaining,reserved,projection};
+}
 export function workspaceCommandState(win,now=workspaceCommandNow(win)){
   try{
     const gate=win[WORKSPACE_GATE],reserved=!!gate?.reservation;
     if(gate?.pending||gate?.owner||reserved){
-      const remaining=Number.isFinite(gate.startedAt)?Math.max(0,Math.min(WORKSPACE_PENDING_NOTICE,WORKSPACE_PENDING_NOTICE-(now-gate.startedAt))):0;
-      return {blocked:true,phase:remaining?"pending":"unknown",remaining,reserved};
+      return workspacePendingState(gate.startedAt,now,reserved);
     }
     if(win.gZenWorkspaces?.isChangingWorkspace===true)return {blocked:true,phase:"native-busy",remaining:0,reserved:false};
     return {blocked:false,phase:"idle",remaining:0,reserved:false};
@@ -39,7 +42,13 @@ export function workspaceCommandState(win,now=workspaceCommandNow(win)){
 function notifyWorkspaceCommand(win){
   try{if(!win.closed)win.dispatchEvent(new win.CustomEvent("Nocturne:WorkspaceCommandChanged"));}catch{}
 }
+// Native-only busy has no Nocturne lease to observe on settlement.
+// Keep controls retryable; their real command preflight still fails closed.
+export function workspaceCommandPresentationBlocked(state){return state.blocked&&state.phase!=="native-busy";}
 export function workspaceCommandMessage(state){
+  if(state.projection)return state.phase==="unknown"?
+    "Synced window setup is still pending. You can close this panel; interact with the new window to stop automatic setup.":
+    "Opening a synced window…";
   if(state.phase==="pending")return state.reserved?"Returning a synced window…":"Workspace command in progress…";
   if(state.phase==="unknown")return "Native command is still pending. You can close this panel; workspace commands remain blocked. If it never settles, restart Zen.";
   if(state.phase==="native-busy")return "Zen is changing workspace. Try again when ready.";
@@ -47,21 +56,30 @@ export function workspaceCommandMessage(state){
 }
 // Presentation observes the existing gate; timeout changes the message,
 // not admission or ownership. No persistent polling, no promise race.
-export function watchWorkspaceCommand(win,active,update){
-  let disposed=false,timer=0,generation=0,lastPhase=null;
+export function watchWorkspaceCommand(win,active,update,read=()=>workspaceCommandState(win)){
+  let disposed=false,timer=0,generation=0,lastPhase=null,nativeDeadline=null;
   const refresh=()=>{
     const token=++generation;
     if(timer)try{win.clearTimeout(timer);}catch{}
-    timer=0;if(disposed||!active()){lastPhase=null;return;}
-    const state=workspaceCommandState(win);
+    timer=0;if(disposed||!active()){lastPhase=null;nativeDeadline=null;return;}
+    let state;
+    try{state=read();}catch{commandTrace(win,"presentation-error",{});return;}
+    // Zen emits UI updates before its native isChangingWorkspace flag
+    // clears. Probe only within a bounded visible-view interval, not for
+    // the lifetime of a native command.
+    if(state.phase==="native-busy"){
+      nativeDeadline??=workspaceCommandNow(win)+WORKSPACE_PENDING_NOTICE;
+    }else nativeDeadline=null;
     if(state.phase!==lastPhase){
       lastPhase=state.phase;
-      if(state.phase==="unknown")commandTrace(win,"presentation-unknown",{reserved:state.reserved});
+      if(state.phase==="unknown")commandTrace(win,"presentation-unknown",{reserved:state.reserved,projection:!!state.projection});
     }
     if(disposed||generation!==token||!active())return;
     try{update(state);}catch{commandTrace(win,"presentation-error",{});}
-    if(disposed||generation!==token||!active()||!state.remaining)return;
-    try{timer=win.setTimeout(()=>{if(!disposed&&generation===token){timer=0;refresh();}},Math.ceil(state.remaining));}catch{}
+    if(disposed||generation!==token||!active())return;
+    const remaining=state.phase==="native-busy"?Math.min(250,Math.max(0,nativeDeadline-workspaceCommandNow(win))):state.remaining;
+    if(!remaining)return;
+    try{timer=win.setTimeout(()=>{if(!disposed&&generation===token){timer=0;refresh();}},Math.ceil(remaining));}catch{}
   };
   const dispose=()=>{
     if(disposed)return;disposed=true;generation++;
@@ -88,7 +106,9 @@ export function requireWorkspaceDataCommand(win,native,lease){
 }
 export function runWorkspaceCommand(win,native,kind,current,execute,{data=false,anchor=data?dataAnchor():null,peer=null}={}){
   const gate=workspaceCommandGate(win);
-  const reject=code=>{commandTrace(win,"rejected",{kind,code});return Promise.reject(workspaceCommandError(code,"Workspace command is busy or unavailable. Try again when ready."));};
+  const reject=code=>{commandTrace(win,"rejected",{kind,code});return Promise.reject(workspaceCommandError(code,
+    code==="data-busy"?"Another native Workspace data command is pending. If it never settles, restart Zen.":
+    "Workspace command is busy or unavailable. Try again when ready."));};
   if(win.closed||win.gZenWorkspaces!==native||!native?.workspaceEnabled||!current())return reject("stale");
   if(gate.pending||gate.owner||gate.reservation)return reject("busy");
   if(native.isChangingWorkspace!==false)return reject("native-busy");
@@ -113,17 +133,27 @@ export function runWorkspaceCommand(win,native,kind,current,execute,{data=false,
   let resolve,rejectResult;const pending=new Promise((a,b)=>{resolve=a;rejectResult=b;});
   // Publish both gates before any native/visual callback can re-enter.
   const startedAt=workspaceCommandNow(win);
-  gate.owner=lease;gate.pending=pending;gate.startedAt=startedAt;
-  if(peerLease){peerLease.gate.reservation=token;peerLease.gate.startedAt=startedAt;}
+  let finished=false;
   const finish=(ok,value)=>{
+    if(finished)return;finished=true;
     if(peerLease)try{if(peerLease.gate.reservation===token){delete peerLease.gate.reservation;delete peerLease.gate.startedAt;}}catch{}
     if(data)try{if(anchor[WORKSPACE_DATA_GATE]===token)delete anchor[WORKSPACE_DATA_GATE];}catch{}
-    if(gate.owner===lease&&gate.pending===pending){gate.owner=null;gate.pending=null;delete gate.startedAt;}
+    try{if(gate.owner===lease){
+      if(gate.pending===pending){gate.pending=null;delete gate.startedAt;}
+      else if(!gate.pending&&gate.startedAt===startedAt)delete gate.startedAt;
+      gate.owner=null;
+    }}catch{}
     commandTrace(win,"end",{kind,ok,peer:!!peerLease,elapsed:Math.max(0,workspaceCommandNow(win)-startedAt),code:ok?null:value?.name==="WorkspaceCommandError"?value.code:"error"});
     notifyWorkspaceCommand(win);if(peerLease)notifyWorkspaceCommand(peerLease.win);
     if(ok)resolve(value);else rejectResult(value);
   };
   try{
+    gate.owner=lease;gate.pending=pending;gate.startedAt=startedAt;
+    if(gate.owner!==lease||gate.pending!==pending)throw workspaceCommandError("gate-unavailable");
+    if(peerLease){
+      peerLease.gate.reservation=token;peerLease.gate.startedAt=startedAt;
+      if(peerLease.gate.reservation!==token)throw workspaceCommandError("peer-unavailable");
+    }
     commandTrace(win,"begin",{kind,data,peer:!!peerLease});
     notifyWorkspaceCommand(win);if(peerLease)notifyWorkspaceCommand(peerLease.win);
     requireWorkspaceCommand(win,native,lease);

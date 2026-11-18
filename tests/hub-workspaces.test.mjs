@@ -265,3 +265,23 @@ test("Hub shared URL bar wrapper suppresses a nested unregistered window client"
  f.setNative(()=>{foreign.switchToTab({url:"https://example.org"});return true;});
  assert.equal(f.lookup("https://example.org",true),true);assert.equal(f.calls.length,1);assert.equal(f.providerCalls.length,0);f.release();
 });
+
+test("late workspace creation cannot clear a reopened Hub draft or edit session",async()=>{
+ const source=readFileSync(new URL("../src/hub/controller.js.part",import.meta.url),"utf8");
+ const view=source.slice(source.indexOf("    const hubViewCurrent="),source.indexOf("    function updatePending("));
+ const create=source.slice(source.indexOf("    async function create(event)"),source.indexOf("    function ensure(){"));
+ const run=new Function(`
+  let destroyed=false,open=true,hubSession=1,editId=null,drag=null,trashDrag=null,busy=false,projectionBusy=false,contextId="old",confirmation=null;
+  let release,renders=0,refreshes=0;
+  const window={closed:false},status={textContent:""},name={value:"original"},pendingWatch={refresh(){refreshes++;}};
+  const native={createAndSaveWorkspace:()=>new Promise(r=>release=r),getWorkspaceFromId:()=>({uuid:"created"})};
+  const manager=()=>native,canManage=()=>true,hubWorkspaceSnapshot=()=>[],commandBlocked=()=>false,requireWorkspaceCommand=()=>{},
+    runWorkspaceCommand=(w,n,k,current,execute)=>execute({}),scheduleHubGeometry=()=>{},render=()=>{renders++;};
+  ${view}
+  ${create}
+  return {start:()=>create({preventDefault(){}}),reopen(){hubSession++;name.value="new draft";contextId="new";editId="new edit";status.textContent="new status";},
+    complete:()=>release({uuid:"created"}),state:()=>({value:name.value,contextId,editId,status:status.textContent,busy,renders,refreshes})};
+ `)();
+ const pending=run.start();run.reopen();run.complete();await pending;
+ assert.deepEqual(run.state(),{value:"new draft",contextId:"new",editId:"new edit",status:"new status",busy:false,renders:1,refreshes:1});
+});

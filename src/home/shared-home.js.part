@@ -275,7 +275,7 @@ function acquireZenHome(win, services) {
   function updateWorkspacePending(state){
     const status=content.querySelector(".zh-workspace-pending");
     if(status){const message=workspaceCommandMessage(state);status.textContent=message;status.hidden=!message;}
-    for(const b of Array.from(content.querySelectorAll?.(".zh-space[data-zh-workspace-id]")||[]))b.disabled=switching||state.blocked;
+    for(const b of Array.from(content.querySelectorAll?.(".zh-space[data-zh-workspace-id]")||[]))b.disabled=switching||workspaceCommandPresentationBlocked(state);
   }
   const leases=new Set(),cleanups=[];
   function listen(node,type,fn,options){node.addEventListener(type,fn,options);cleanups.push(()=>node.removeEventListener(type,fn,options));}
@@ -947,7 +947,9 @@ function acquireZenHome(win, services) {
       for(const ws of workspaces){
         if(!ws?.uuid)continue;
         const b=button("zh-space","",async()=>{
-          if(switching||workspaceCommandState(win).blocked||manager.activeWorkspace===ws.uuid)return;switching=true;
+          if(switching||manager.activeWorkspace===ws.uuid)return;
+          if(workspaceCommandState(win).blocked){pendingWatch?.refresh();return;}
+          switching=true;
           pendingWatch?.refresh();
           try{await switchHomeWorkspace(manager,ws.uuid);}catch(error){win.console.warn("[Zen Home] workspace",error);}
           finally{switching=false;if(open){refreshWorkspaceSelection();pendingWatch?.refresh();}}

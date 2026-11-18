@@ -41,7 +41,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.73",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.74",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -933,12 +933,15 @@ function workspaceCommandNow(win){
   try{const p=win.performance,t=p?.timeOrigin+p?.now();if(Number.isFinite(t))return t;}catch{}
   return Date.now();
 }
+function workspacePendingState(startedAt,now,reserved=false,projection=false){
+  const remaining=Number.isFinite(startedAt)?Math.max(0,Math.min(WORKSPACE_PENDING_NOTICE,WORKSPACE_PENDING_NOTICE-(now-startedAt))):0;
+  return {blocked:true,phase:remaining?"pending":"unknown",remaining,reserved,projection};
+}
 function workspaceCommandState(win,now=workspaceCommandNow(win)){
   try{
     const gate=win[WORKSPACE_GATE],reserved=!!gate?.reservation;
     if(gate?.pending||gate?.owner||reserved){
-      const remaining=Number.isFinite(gate.startedAt)?Math.max(0,Math.min(WORKSPACE_PENDING_NOTICE,WORKSPACE_PENDING_NOTICE-(now-gate.startedAt))):0;
-      return {blocked:true,phase:remaining?"pending":"unknown",remaining,reserved};
+      return workspacePendingState(gate.startedAt,now,reserved);
     }
     if(win.gZenWorkspaces?.isChangingWorkspace===true)return {blocked:true,phase:"native-busy",remaining:0,reserved:false};
     return {blocked:false,phase:"idle",remaining:0,reserved:false};
@@ -947,7 +950,13 @@ function workspaceCommandState(win,now=workspaceCommandNow(win)){
 function notifyWorkspaceCommand(win){
   try{if(!win.closed)win.dispatchEvent(new win.CustomEvent("Nocturne:WorkspaceCommandChanged"));}catch{}
 }
+// Native-only busy has no Nocturne lease to observe on settlement.
+// Keep controls retryable; their real command preflight still fails closed.
+function workspaceCommandPresentationBlocked(state){return state.blocked&&state.phase!=="native-busy";}
 function workspaceCommandMessage(state){
+  if(state.projection)return state.phase==="unknown"?
+    "Synced window setup is still pending. You can close this panel; interact with the new window to stop automatic setup.":
+    "Opening a synced window…";
   if(state.phase==="pending")return state.reserved?"Returning a synced window…":"Workspace command in progress…";
   if(state.phase==="unknown")return "Native command is still pending. You can close this panel; workspace commands remain blocked. If it never settles, restart Zen.";
   if(state.phase==="native-busy")return "Zen is changing workspace. Try again when ready.";
@@ -955,21 +964,30 @@ function workspaceCommandMessage(state){
 }
 // Presentation observes the existing gate; timeout changes the message,
 // not admission or ownership. No persistent polling, no promise race.
-function watchWorkspaceCommand(win,active,update){
-  let disposed=false,timer=0,generation=0,lastPhase=null;
+function watchWorkspaceCommand(win,active,update,read=()=>workspaceCommandState(win)){
+  let disposed=false,timer=0,generation=0,lastPhase=null,nativeDeadline=null;
   const refresh=()=>{
     const token=++generation;
     if(timer)try{win.clearTimeout(timer);}catch{}
-    timer=0;if(disposed||!active()){lastPhase=null;return;}
-    const state=workspaceCommandState(win);
+    timer=0;if(disposed||!active()){lastPhase=null;nativeDeadline=null;return;}
+    let state;
+    try{state=read();}catch{commandTrace(win,"presentation-error",{});return;}
+    // Zen emits UI updates before its native isChangingWorkspace flag
+    // clears. Probe only within a bounded visible-view interval, not for
+    // the lifetime of a native command.
+    if(state.phase==="native-busy"){
+      nativeDeadline??=workspaceCommandNow(win)+WORKSPACE_PENDING_NOTICE;
+    }else nativeDeadline=null;
     if(state.phase!==lastPhase){
       lastPhase=state.phase;
-      if(state.phase==="unknown")commandTrace(win,"presentation-unknown",{reserved:state.reserved});
+      if(state.phase==="unknown")commandTrace(win,"presentation-unknown",{reserved:state.reserved,projection:!!state.projection});
     }
     if(disposed||generation!==token||!active())return;
     try{update(state);}catch{commandTrace(win,"presentation-error",{});}
-    if(disposed||generation!==token||!active()||!state.remaining)return;
-    try{timer=win.setTimeout(()=>{if(!disposed&&generation===token){timer=0;refresh();}},Math.ceil(state.remaining));}catch{}
+    if(disposed||generation!==token||!active())return;
+    const remaining=state.phase==="native-busy"?Math.min(250,Math.max(0,nativeDeadline-workspaceCommandNow(win))):state.remaining;
+    if(!remaining)return;
+    try{timer=win.setTimeout(()=>{if(!disposed&&generation===token){timer=0;refresh();}},Math.ceil(remaining));}catch{}
   };
   const dispose=()=>{
     if(disposed)return;disposed=true;generation++;
@@ -996,7 +1014,9 @@ function requireWorkspaceDataCommand(win,native,lease){
 }
 function runWorkspaceCommand(win,native,kind,current,execute,{data=false,anchor=data?dataAnchor():null,peer=null}={}){
   const gate=workspaceCommandGate(win);
-  const reject=code=>{commandTrace(win,"rejected",{kind,code});return Promise.reject(workspaceCommandError(code,"Workspace command is busy or unavailable. Try again when ready."));};
+  const reject=code=>{commandTrace(win,"rejected",{kind,code});return Promise.reject(workspaceCommandError(code,
+    code==="data-busy"?"Another native Workspace data command is pending. If it never settles, restart Zen.":
+    "Workspace command is busy or unavailable. Try again when ready."));};
   if(win.closed||win.gZenWorkspaces!==native||!native?.workspaceEnabled||!current())return reject("stale");
   if(gate.pending||gate.owner||gate.reservation)return reject("busy");
   if(native.isChangingWorkspace!==false)return reject("native-busy");
@@ -1021,17 +1041,27 @@ function runWorkspaceCommand(win,native,kind,current,execute,{data=false,anchor=
   let resolve,rejectResult;const pending=new Promise((a,b)=>{resolve=a;rejectResult=b;});
   // Publish both gates before any native/visual callback can re-enter.
   const startedAt=workspaceCommandNow(win);
-  gate.owner=lease;gate.pending=pending;gate.startedAt=startedAt;
-  if(peerLease){peerLease.gate.reservation=token;peerLease.gate.startedAt=startedAt;}
+  let finished=false;
   const finish=(ok,value)=>{
+    if(finished)return;finished=true;
     if(peerLease)try{if(peerLease.gate.reservation===token){delete peerLease.gate.reservation;delete peerLease.gate.startedAt;}}catch{}
     if(data)try{if(anchor[WORKSPACE_DATA_GATE]===token)delete anchor[WORKSPACE_DATA_GATE];}catch{}
-    if(gate.owner===lease&&gate.pending===pending){gate.owner=null;gate.pending=null;delete gate.startedAt;}
+    try{if(gate.owner===lease){
+      if(gate.pending===pending){gate.pending=null;delete gate.startedAt;}
+      else if(!gate.pending&&gate.startedAt===startedAt)delete gate.startedAt;
+      gate.owner=null;
+    }}catch{}
     commandTrace(win,"end",{kind,ok,peer:!!peerLease,elapsed:Math.max(0,workspaceCommandNow(win)-startedAt),code:ok?null:value?.name==="WorkspaceCommandError"?value.code:"error"});
     notifyWorkspaceCommand(win);if(peerLease)notifyWorkspaceCommand(peerLease.win);
     if(ok)resolve(value);else rejectResult(value);
   };
   try{
+    gate.owner=lease;gate.pending=pending;gate.startedAt=startedAt;
+    if(gate.owner!==lease||gate.pending!==pending)throw workspaceCommandError("gate-unavailable");
+    if(peerLease){
+      peerLease.gate.reservation=token;peerLease.gate.startedAt=startedAt;
+      if(peerLease.gate.reservation!==token)throw workspaceCommandError("peer-unavailable");
+    }
     commandTrace(win,"begin",{kind,data,peer:!!peerLease});
     notifyWorkspaceCommand(win);if(peerLease)notifyWorkspaceCommand(peerLease.win);
     requireWorkspaceCommand(win,native,lease);
@@ -1486,7 +1516,7 @@ function acquireZenHome(win, services) {
   function updateWorkspacePending(state){
     const status=content.querySelector(".zh-workspace-pending");
     if(status){const message=workspaceCommandMessage(state);status.textContent=message;status.hidden=!message;}
-    for(const b of Array.from(content.querySelectorAll?.(".zh-space[data-zh-workspace-id]")||[]))b.disabled=switching||state.blocked;
+    for(const b of Array.from(content.querySelectorAll?.(".zh-space[data-zh-workspace-id]")||[]))b.disabled=switching||workspaceCommandPresentationBlocked(state);
   }
   const leases=new Set(),cleanups=[];
   function listen(node,type,fn,options){node.addEventListener(type,fn,options);cleanups.push(()=>node.removeEventListener(type,fn,options));}
@@ -2158,7 +2188,9 @@ function acquireZenHome(win, services) {
       for(const ws of workspaces){
         if(!ws?.uuid)continue;
         const b=button("zh-space","",async()=>{
-          if(switching||workspaceCommandState(win).blocked||manager.activeWorkspace===ws.uuid)return;switching=true;
+          if(switching||manager.activeWorkspace===ws.uuid)return;
+          if(workspaceCommandState(win).blocked){pendingWatch?.refresh();return;}
+          switching=true;
           pendingWatch?.refresh();
           try{await switchHomeWorkspace(manager,ws.uuid);}catch(error){win.console.warn("[Zen Home] workspace",error);}
           finally{switching=false;if(open){refreshWorkspaceSelection();pendingWatch?.refresh();}}
@@ -4273,26 +4305,37 @@ function installTabStrip() {
     const TRASH_ROW_HEIGHT=54;
     const FREE_PREF="zen.oneplane.free-space-id",TRASH_PREF="zen.oneplane.trash-space-id",COLOR_PREF="zen.oneplane.workspace-colors",TRASH_TIME="oneplane-trashed-at";
     let geometryFrame=0,motion=null,confirmation=null,drag=null,suppressClickUntil=0,projectionBusy=false;
-    let pendingWatch=null,pendingBlocked=null;
+    let pendingWatch=null,pendingBlocked=null,projectionStartedAt=null;
     const commandBlocked=()=>workspaceCommandState(window).blocked;
+    const hubCommandState=()=>{
+      const state=workspaceCommandState(window);
+      return !state.blocked&&projectionBusy?workspacePendingState(projectionStartedAt,workspaceCommandNow(window),false,true):state;
+    };
+    const hubViewCurrent=session=>!destroyed&&open&&hubSession===session;
+    function settleHubView(session){
+      if(!destroyed&&!window.closed&&open){
+        if(hubViewCurrent(session)||(!editId&&!drag&&!trashDrag))render();
+        else pendingWatch?.refresh();
+      }
+    }
     function updatePending(state){
-      const message=workspaceCommandMessage(state);
+      const message=workspaceCommandMessage(state),blocked=workspaceCommandPresentationBlocked(state);
       pendingStatus.textContent=message;pendingStatus.hidden=!message;
       // Only the workspace command controls are blocked. Settings,
       // Escape, overlay yield and native browser interaction stay live.
-      for(const entry of spaces.querySelectorAll(".op-hub-space"))entry.disabled=busy||state.blocked;
-      for(const entry of freeSlot.querySelectorAll(".op-hub-space"))entry.disabled=busy||state.blocked;
-      name.disabled=busy||state.blocked;add.disabled=busy||state.blocked||!name.value.trim();
-      returnButton.disabled=busy||projectionBusy||state.blocked;
+      for(const entry of spaces.querySelectorAll(".op-hub-space"))entry.disabled=busy||blocked;
+      for(const entry of freeSlot.querySelectorAll(".op-hub-space"))entry.disabled=busy||blocked;
+      name.disabled=busy||blocked;add.disabled=busy||blocked||!name.value.trim();
+      returnButton.disabled=busy||projectionBusy||blocked;
       for(const node of panel.querySelectorAll(".op-hub-context button,.op-hub-free-setup button")){
         if(node.textContent==="Cancel")continue;
         // Add the live gate restriction without clearing an existing
         // render-time disabled state.
-        if(state.blocked&&!node.disabled){node.disabled=true;node.setAttribute("data-op-command-disabled","");}
-        else if(!state.blocked&&node.hasAttribute("data-op-command-disabled")){node.removeAttribute("data-op-command-disabled");node.disabled=false;}
+        if(blocked&&!node.disabled){node.disabled=true;node.setAttribute("data-op-command-disabled","");}
+        else if(!blocked&&node.hasAttribute("data-op-command-disabled")){node.removeAttribute("data-op-command-disabled");node.disabled=false;}
       }
-      const changed=pendingBlocked!==state.blocked;pendingBlocked=state.blocked;
-      if(state.blocked){clearTrash.disabled=true;ageSelect.disabled=true;}
+      const changed=pendingBlocked!==blocked;pendingBlocked=blocked;
+      if(blocked){clearTrash.disabled=true;ageSelect.disabled=true;}
       if(changed&&open&&trashOpen&&!trashDrag)renderTrash();
     }
     const PROJECTION="__oneplaneWorkspaceProjection";
@@ -4473,9 +4516,9 @@ function installTabStrip() {
       if(busy||projectionBusy||destroyed||!canManage())return;
       if(commandBlocked()){pendingWatch?.refresh();return;}
       busy=true;status.textContent="";
-      const native=manager(),current=()=>!destroyed&&manager()===native&&canManage();
-      try{return await runWorkspaceCommand(window,native,"hub-data",current,fn,{data:true});}catch(error){if(!destroyed)status.textContent=String(error.message||error);console.warn("[OnePlane] Workspace Engine:",error);}
-      finally{busy=false;if(!destroyed&&open)render();}
+      const session=hubSession,native=manager(),current=()=>!destroyed&&manager()===native&&canManage();
+      try{return await runWorkspaceCommand(window,native,"hub-data",current,fn,{data:true});}catch(error){if(hubViewCurrent(session))status.textContent=String(error.message||error);console.warn("[OnePlane] Workspace Engine:",error);}
+      finally{busy=false;settleHubView(session);}
     }
     function renderFreeSetup(snapshot){
       freeSetup.replaceChildren();freeSetup.hidden=!!freeId()||!snapshot?.length;
@@ -4485,9 +4528,10 @@ function installTabStrip() {
       freeSetup.append(msg,btn);
     }
     async function designateFree(id){
+      const session=hubSession;
       await operation(async lease=>{
         await designateWorkspaceFree(window,lease.native,prefs,lease,id);
-        if(!destroyed){contextId=null;editId=null;}
+        if(hubViewCurrent(session)){contextId=null;editId=null;}
       });
     }
     function workspaceEditor(space){
@@ -4496,6 +4540,7 @@ function installTabStrip() {
       icon.value=space.icon;icon.maxLength=24;icon.placeholder="Icon / emoji";icon.setAttribute("aria-label","Workspace icon");
       color.type="color";color.value=workspaceColor(space.id)||"#7089b8";color.setAttribute("aria-label","Hub icon color");
       let colorEdited=false;color.addEventListener("input",()=>{colorEdited=true;});
+      const session=hubSession;
       const controls=make("div","op-hub-confirm-controls"),cancel=action("Cancel",()=>{editId=null;render();});
       const save=action("Save",()=>void operation(async lease=>{
         const native=lease.native,ws=native.getWorkspaceFromId(space.id),value=label.value.trim();
@@ -4508,7 +4553,7 @@ function installTabStrip() {
         const saved=native.getWorkspaceFromId(space.id);
         if(!saved||saved.name!==next.name||saved.icon!==next.icon)throw Error("Workspace changes could not be confirmed.");
         if(colorEdited)saveWorkspaceColor(space.id,color.value);
-        editId=null;
+        if(hubViewCurrent(session))editId=null;
       }));
       controls.append(cancel,save);wrap.append(label,icon,color,controls);return wrap;
     }
@@ -4671,14 +4716,14 @@ function installTabStrip() {
     function trashTabs(){const id=trashId();return id?(ownedTabs(manager(),id)||[]):[];}
     function restoreTargets(){return hubWorkspaceOrder(hubWorkspaceSnapshot(manager()),freeId(),trashId())||[];}
     function restoreTrashTab(tab,id,approval){
-      const source=approval?.trash,roles={free:approval?.free,trash:source};
+      const source=approval?.trash,roles={free:approval?.free,trash:source},session=hubSession;
       return operation(async lease=>{
         if(!approval||approval.native!==lease.native||approval.browser!==browser||
           !source||!trashTabs().includes(tab)||id===source||!restoreTargets().some(s=>s.id===id))throw Error("Restore target changed.");
         workspaceDataGuard(lease,roles);
         const result=workspaceTabJournal([tab],t=>moveNativeTab(t,source,id,lease,roles,()=>trashSessionStore().deleteCustomTabValue(t,TRASH_TIME)));
         reportWorkspaceJournal("restore",result);
-        purgePlan=null;
+        if(!destroyed&&open&&hubSession===session)purgePlan=null;
         if(!workspaceJournalComplete(result))throw Error(journalText(result,"restored")+" Review again.");
         return true;
       });
@@ -4856,7 +4901,7 @@ function installTabStrip() {
       purgePlan={age,native,source,free:freeId(),tabs,stamps};renderTrash();
     }
     async function executePurge(){
-      const approved=purgePlan;purgePlan=null;if(!approved)return;
+      const approved=purgePlan,session=hubSession;purgePlan=null;if(!approved)return;
       await operation(async lease=>{
         const native=lease.native,roles={free:approved.free,trash:approved.source};
         const eligible=(tab,ownership)=>{
@@ -4883,7 +4928,7 @@ function installTabStrip() {
           return {attempted:true,state,reason};
         });
         reportWorkspaceJournal("purge",result);
-        if(!destroyed)status.textContent=journalText(result,"removed")+(workspaceJournalComplete(result)?"":" Review again.");
+        if(!destroyed&&open&&hubSession===session)status.textContent=journalText(result,"removed")+(workspaceJournalComplete(result)?"":" Review again.");
       });
     }
     function trashTabUrl(tab){
@@ -4946,7 +4991,7 @@ function installTabStrip() {
       trashPanel.toggleAttribute("data-op-trash-open",trashOpen);trashDrawer.inert=!trashOpen;trashTools.inert=!trashOpen;
       if(!trashOpen)setTrashAgeOpen(false);
       if(!open||!trashOpen){stopTrashUpdates();return;}
-      trashAllowed=!busy&&canManage()&&singleWindow()&&!commandBlocked();
+      trashAllowed=!busy&&!projectionBusy&&canManage()&&singleWindow()&&!workspaceCommandPresentationBlocked(hubCommandState());
       trashData=tabs.map(tab=>({tab,stamp:trashStamp(tab)})).sort((a,b)=>b.stamp-a.stamp);
       trashRangeKey="";trashConfirmation.replaceChildren();trashNotice.replaceChildren();
       if(!tabs.length)trashNotice.append(make("p","op-hub-confirm-text","Trash is empty."));
@@ -5225,6 +5270,19 @@ function installTabStrip() {
         }catch(error){fail(error);}
       });
     }
+    // Cancels only the opener's presentation/automatic setup. The
+    // actual child command keeps its gate until its native promise settles.
+    function waitProjectionSelection(scope,pending){
+      return new Promise((resolve,reject)=>{
+        let settled=false,release=()=>{};
+        const finish=(ok,value)=>{
+          if(settled)return;settled=true;release();
+          if(ok)resolve(value);else reject(value);
+        };
+        release=scope.defer("projection-selection-wait",()=>finish(false,Error("Projection owner disposed")));
+        Promise.resolve(pending).then(v=>finish(true,v),e=>finish(false,e));
+      });
+    }
     async function project(id,display){
       if(projectionBusy||busy||destroyed)return;
       if(commandBlocked()){pendingWatch?.refresh();return;}
@@ -5232,7 +5290,8 @@ function installTabStrip() {
       const native=manager();
       if(!native.getWorkspaceFromId(id))return;
       const sync=window.gZenWindowSync;
-      projectionBusy=true;status.textContent="Opening workspace…";render();
+      const session=hubSession;
+      projectionBusy=true;projectionStartedAt=workspaceCommandNow(window);status.textContent="";render();
       let child=null,interacted=false,projection=null;
       const projectionScope=createDisposableScope({onError:()=>projectionLog(child,"startup-cleanup-error")});
       const releaseProjection=hubScope.defer("projection-startup",()=>projectionScope.dispose());
@@ -5262,6 +5321,12 @@ function installTabStrip() {
         if(!child||destroyed||hubScope.closed)throw Error("Native window did not open or owner disposed");
         projection={source:window,id,sequence:++projectionSequence};child[PROJECTION]=projection;
         projectionScope.listen(child,"pointerdown",onInput,true);projectionScope.listen(child,"keydown",onInput,true);
+        // Keep real window-close cancellation through native selection
+        // and search, not just through startup readiness.
+        const closed=subject=>{if(subject===child||subject===window)projectionScope.dispose();};
+        projectionScope.defer("projection-close-observer",()=>Services.obs.removeObserver(closed,"domwindowclosed"));
+        Services.obs.addObserver(closed,"domwindowclosed");
+        if(!current()){try{Services.obs.removeObserver(closed,"domwindowclosed");}catch{}throw Error("Projection owner changed");}
         const placementTask=display?placeAfterStartup(child,display):Promise.resolve(true);
         const startupTabs=new Set();
         const record=tab=>{if(tab)startupTabs.add(tab);};
@@ -5285,12 +5350,13 @@ function installTabStrip() {
         const alreadyActive=childNative.activeWorkspace===id;
         // Keep the same selection lease through switch and placeholder
         // preparation; no second independent native command boundary.
-        const preparedEmpty=await runWorkspaceCommand(child,childNative,"projection",eligible,async lease=>{
+        const pending=runWorkspaceCommand(child,childNative,"projection",eligible,async lease=>{
           await switchWorkspaceWithin(child,childNative,id,lease,{motion:false});
           requireWorkspaceCommand(child,childNative,lease);
           projectionLog(child,"workspace-active",{alreadyActive,sourceActive:native.activeWorkspace===id});
           return prepareProjectionStart(child,id,startupTabs,childNative,browser,lease);
         });
+        const preparedEmpty=await waitProjectionSelection(projectionScope,pending);
         if(interacted){projectionLog(child,"takeover");await placementTask;return;}
         if(!eligible())throw Error("Projection owner changed");
         // Keep empty-tab selection independent of placement. Open the
@@ -5300,16 +5366,16 @@ function installTabStrip() {
         const searchVisible=!!preparedEmpty&&await openProjectionSearch(child,id,childNative,browser,preparedEmpty,projectionScope,()=>!eligible());
         if(!eligible()){projectionLog(child,"takeover");return;}
         projectionLog(child,"projection-complete",{placed,searchVisible:!!searchVisible,alreadyActive});
-        status.textContent=placed?"":"Window opened; placement could not be verified.";
+        if(hubViewCurrent(session))status.textContent=placed?"":"Window opened; placement could not be verified.";
       }catch(error){
         if(interacted&&child&&!child.closed){projectionLog(child,"takeover");return;}
         if(child&&!child.closed&&child[PROJECTION]===projection)delete child[PROJECTION];
-        if(!destroyed)status.textContent="Could not open synced workspace. Check window sync settings.";
+        if(hubViewCurrent(session))status.textContent="Could not open synced workspace. Check window sync settings.";
         projectionLog(child,"failed",{reason:"native-error"});
         console.warn("[OnePlane] Workspace projection:",error);
       }finally{
         releaseProjection();
-        projectionBusy=false;if(!destroyed&&open)render();
+        projectionBusy=false;projectionStartedAt=null;settleHubView(session);
       }
     }
     // Native synced-window close moves live docshells itself. Verify the
@@ -5353,61 +5419,144 @@ function installTabStrip() {
         return true;
       }catch{return false;}
     }
+    // Zen chooses the first eligible surviving window in its own native
+    // order. A focus-order snapshot cannot guarantee the target after a
+    // native confirmation dialog; accept only the single intended survivor.
+    function projectionReturnTarget(child,source,tracker,store){
+      try{
+        const windows=Array.from(tracker.orderedWindows);
+        if(!windows.includes(child)||!windows.includes(source)||
+          !store.getWindowId(child)||!store.getWindowId(source))return false;
+        return windows.every(win=>win===child||win===source||win.closed||win.gZenWorkspaces?.privateWindowOrDisabled===true);
+      }catch{return false;}
+    }
+    // Runs in the SURVIVING opener realm. Gecko FinalClose sets closed
+    // before ReallyCloseWindow; SessionStore handles SSWindowClosing on
+    // domwindowclosed, and AppWindow destroys/detaches its chrome context
+    // before xul-window-destroyed. Do not release on a timer or mere flag.
+    async function invokeProjectionClose(child,verify,invoke,obs=Services.obs){
+      const context=child.browsingContext;
+      if(!context||context.isDiscarded!==false)throw workspaceCommandError("close-unavailable");
+      let active=true,observed=false,ownerClosed=false,resolveClosed;
+      const closedPromise=new Promise(resolve=>{resolveClosed=resolve;});
+      const cleanup=()=>{
+        if(!active)return;active=false;
+        for(const [fn,topic] of [[onClosed,"domwindowclosed"],[onDestroyed,"xul-window-destroyed"]]){
+          try{obs.removeObserver(fn,topic);}catch{}
+        }
+      };
+      const check=()=>{
+        if(!active||!observed)return;
+        try{if(context.isDiscarded===true){cleanup();resolveClosed({status:"closed"});}}catch{}
+      };
+      const onClosed=subject=>{
+        if(!active)return;
+        if(subject===child){observed=true;check();}
+        else if(subject===window){
+          // The surviving owner is being destroyed too. No native
+          // completion certificate: retain the primitive data token.
+          ownerClosed=true;cleanup();
+          projectionLog(window,"return-owner-closed");
+        }
+      };
+      const onDestroyed=()=>check();
+      try{
+        obs.addObserver(onClosed,"domwindowclosed");
+        obs.addObserver(onDestroyed,"xul-window-destroyed");
+        if(!active)throw workspaceCommandError("close-unavailable");
+        verify();
+        if(!active)throw workspaceCommandError("close-unavailable");
+      }catch(error){cleanup();throw error;}
+      let failure=null;
+      try{const result=invoke();if(result&&typeof result.then==="function")await result;}
+      catch(error){failure=error;}
+      // Target Firefox 160 BrowserCommands.tryToCloseWindow is synchronous
+      // through native confirmation and FinalClose. A false closed flag
+      // with no observed close is a veto, not a pending native mutation.
+      let accepted=true;
+      try{accepted=ownerClosed||observed||child.closed===true||context.isDiscarded===true;}catch{}
+      if(!accepted){cleanup();if(failure)throw failure;return {status:"not-closed"};}
+      check();
+      return closedPromise;
+    }
+    async function acceptProjectionReturn(child,projection){
+      const native=manager(),childNative=child?.gZenWorkspaces,sync=window.gZenWindowSync;
+      const current=()=>{
+        try{return !destroyed&&!window.closed&&manager()===native&&canProject()&&
+          workspaceCommandGate(window).returnEndpoint===acceptProjectionReturn&&
+          !!child&&!child.closed&&child[PROJECTION]===projection&&projection?.source===window&&
+          child.gZenWorkspaces===childNative&&child.gZenWindowSync===sync&&window.gZenWindowSync===sync&&
+          !child._zenClosingWindow&&!window._zenClosingWindow;}
+        catch{return false;}
+      };
+      const {BrowserWindowTracker}=ChromeUtils.importESModule("resource:///modules/BrowserWindowTracker.sys.mjs");
+      return runWorkspaceCommand(window,native,"projection-return",current,async lease=>{
+        const verify=()=>{
+          requireWorkspaceDataCommand(window,native,lease);
+          if(!projectionReturnTarget(child,window,BrowserWindowTracker,trashSessionStore()))
+            throw workspaceCommandError("return-target","Return requires the original window to be the only eligible surviving window.");
+          if(!inspectProjectionReturn(child,window,childNative,native,sync))
+            throw workspaceCommandError("return-unverified","Some tabs are not synced yet. Return cancelled to protect them.");
+          requireWorkspaceDataCommand(window,native,lease);
+        };
+        projectionLog(child,"return-request");
+        const result=await invokeProjectionClose(child,verify,()=>{
+          // The pinned native API performs its own beforeunload checks.
+          // No trusted event is synthesized to enter close animation.
+          if(typeof child.BrowserCommands?.tryToCloseWindow!=="function")
+            throw workspaceCommandError("return-unavailable","Use the native close-window command.");
+          return child.BrowserCommands.tryToCloseWindow();
+        });
+        projectionLog(window,"return-result",{outcome:result.status});
+        if(result.status==="closed"&&!window.closed)try{window.focus();}catch{}
+        return result;
+      },{data:true,peer:{win:child,native:childNative}});
+    }
     async function returnProjection(){
-      const projection=window[PROJECTION],source=projection?.source,native=manager(),sourceNative=source?.gZenWorkspaces,sync=window.gZenWindowSync;
+      const projection=window[PROJECTION],source=projection?.source,native=manager(),sync=window.gZenWindowSync;
       if(projectionBusy||busy||destroyed||commandBlocked()||!source||source.closed||!canProject()||source.gZenWindowSync!==sync){
         status.textContent="Main synced window unavailable.";return;
       }
-      const current=()=>{
-        try{return !destroyed&&!window.closed&&window[PROJECTION]===projection&&manager()===native&&canProject()&&
-          source.gZenWorkspaces===sourceNative&&window.gZenWindowSync===sync&&source.gZenWindowSync===sync&&
-          !source.closed&&!source._zenClosingWindow;}
-        catch{return false;}
-      };
-      projectionBusy=true;
+      const session=hubSession;
+      projectionBusy=true;projectionStartedAt=workspaceCommandNow(window);pendingWatch?.refresh();
       try{
-        await runWorkspaceCommand(window,native,"projection-return",current,async lease=>{
-          projectionLog(window,"return-request");
-          requireWorkspaceDataCommand(window,native,lease);
-          if(!inspectProjectionReturn(window,source,native,sourceNative,sync))
-            throw workspaceCommandError("return-unverified","Some tabs are not synced yet. Return cancelled to protect them.");
-          requireWorkspaceDataCommand(window,native,lease);
-          // A request is not a confirmed close. Never call removeTab here.
-          if(typeof window.BrowserTryToCloseWindow==="function")await window.BrowserTryToCloseWindow();
-          else if(typeof window.BrowserCommands?.tryToCloseWindow==="function")await window.BrowserCommands.tryToCloseWindow();
-          else throw workspaceCommandError("return-unavailable","Use the native close-window command.");
-          if(window.closed&&!source.closed)source.focus();
-          else if(!destroyed)status.textContent="Close requested. The window remains open if cancelled.";
-        },{data:true,peer:{win:source,native:sourceNative}});
+        const endpoint=workspaceCommandGate(source).returnEndpoint;
+        if(typeof endpoint!=="function")throw workspaceCommandError("return-unavailable","Open the native window close command instead.");
+        const result=await endpoint(window,projection);
+        if(hubViewCurrent(session)&&result?.status==="not-closed")status.textContent="Native window close was not completed.";
       }catch(error){
-        if(!destroyed)status.textContent=error?.code==="return-unverified"?error.message:"Could not return safely.";
-        projectionLog(window,"return-rejected",{reason:error?.code==="return-unverified"?"unverified":"unavailable"});
-      }finally{projectionBusy=false;if(!destroyed&&!window.closed&&open)render();}
+        if(hubViewCurrent(session))status.textContent=["return-target","return-unverified","return-unavailable","data-busy"].includes(error?.code)?error.message:"Could not return safely.";
+        projectionLog(window,"return-rejected",{reason:["return-target","return-unverified"].includes(error?.code)?error.code:"unavailable"});
+      }finally{projectionBusy=false;projectionStartedAt=null;settleHubView(session);}
     }
     async function select(id){
-      if(busy||projectionBusy||destroyed||commandBlocked())return;
+      if(busy||projectionBusy||destroyed)return;
+      if(commandBlocked()){pendingWatch?.refresh();return;}
       const native=manager(),space=hubWorkspaceSnapshot(native)?.find(s=>s.id===id);
       if(!space){render();return;}if(space.active){contextId=null;confirmation=null;render();return;}
+      const session=hubSession;
       busy=true;status.textContent="";render();
       try{switchGuard();const transition=window.__zenRefinedWorkspaceTransition;
     typeof window!=="undefined"&&window.__nocturneTrace?.("hub.workspace.request",()=>({hasTransition:!!transition}),{sample:1800});
         await requestWorkspaceSwitch(window,native,id,"hub-select",()=>!destroyed&&manager()===native);
-        if(!destroyed){contextId=null;confirmation=null;scheduleHubGeometry();}
-      }catch(error){if(!destroyed)status.textContent="Could not switch workspace.";console.warn("[OnePlane] Hub switch:",error);}
-      finally{busy=false;if(!destroyed&&open)render();}
+        if(hubViewCurrent(session)){contextId=null;confirmation=null;scheduleHubGeometry();}
+      }catch(error){if(hubViewCurrent(session))status.textContent="Could not switch workspace.";console.warn("[OnePlane] Hub switch:",error);}
+      finally{busy=false;settleHubView(session);}
     }
     async function create(event){
       event.preventDefault();const value=name.value.trim(),native=manager();
-      if(!value||busy||projectionBusy||destroyed||commandBlocked()||!hubWorkspaceSnapshot(native)||typeof native.createAndSaveWorkspace!=="function")return;
+      if(!value||busy||projectionBusy||destroyed||!hubWorkspaceSnapshot(native)||typeof native.createAndSaveWorkspace!=="function")return;
+      if(commandBlocked()){pendingWatch?.refresh();return;}
+      const session=hubSession;
       busy=true;status.textContent="";render();
       try{await runWorkspaceCommand(window,native,"hub-create",()=>!destroyed&&manager()===native&&canManage(),async lease=>{
         const result=await native.createAndSaveWorkspace(value,undefined,true);
         requireWorkspaceCommand(window,native,lease);
         if(!result?.uuid||!native.getWorkspaceFromId(result.uuid))throw Error("Native workspace creation unavailable");
       },{data:true});
-        if(!destroyed){name.value="";contextId=null;confirmation=null;scheduleHubGeometry();}
-      }catch(error){if(!destroyed)status.textContent="Could not create workspace.";console.warn("[OnePlane] Hub create:",error);}
-      finally{busy=false;if(!destroyed&&open)render();}
+        if(hubViewCurrent(session)){name.value="";contextId=null;confirmation=null;scheduleHubGeometry();}
+      }catch(error){if(hubViewCurrent(session))status.textContent=error?.code==="data-busy"?error.message:"Could not create workspace.";console.warn("[OnePlane] Hub create:",error);}
+      finally{busy=false;settleHubView(session);}
     }
     function ensure(){
       if(destroyed)return;
@@ -5447,7 +5596,7 @@ function installTabStrip() {
       setHold(true);
       try{cmd.doCommand();changed();}catch(error){console.warn("[OnePlane] Compact Mode:",error);}
     }
-    function onInput(){add.disabled=busy||commandBlocked()||!name.value.trim();}
+    function onInput(){add.disabled=busy||workspaceCommandPresentationBlocked(hubCommandState())||!name.value.trim();}
     function onOutside(event){
       if(!open)return;const path=event.composedPath();
       if(!path.includes(panel)&&!path.includes(button)){close();return;}
@@ -5483,7 +5632,10 @@ function installTabStrip() {
       if(destroyed||mounted)return;
       mounted=true;
       bindOverlay();
-      pendingWatch=watchWorkspaceCommand(window,()=>open&&!destroyed,updatePending);
+      const gate=workspaceCommandGate(window);
+      gate.returnEndpoint=acceptProjectionReturn;
+      hubScope.defer("projection-return-endpoint",()=>{if(gate.returnEndpoint===acceptProjectionReturn)delete gate.returnEndpoint;});
+      pendingWatch=watchWorkspaceCommand(window,()=>open&&!destroyed,updatePending,hubCommandState);
       hubScope.defer("workspace-pending-view",()=>pendingWatch.dispose());
       hubScope.listen(window,"pointerdown",onOutside,true);
       for(const [node,event,fn] of listeners)hubScope.listen(node,event,fn);

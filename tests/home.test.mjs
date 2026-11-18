@@ -1,4 +1,4 @@
-import {watchWorkspaceCommand,workspaceCommandState,workspaceCommandMessage} from "../src/core/workspace-commands.mjs";
+import {watchWorkspaceCommand,workspaceCommandState,workspaceCommandMessage,workspaceCommandPresentationBlocked} from "../src/core/workspace-commands.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
@@ -34,7 +34,7 @@ test("Home leases share one instance and only the last release tears down",()=>{
  const doc={documentElement:root,getElementById:id=>id==="zen-tabbox-wrapper"?host:id==="tabbrowser-tabpanels"?panels:null,createElementNS:()=>new Node()};
  const win=new Node();win.document=doc;win.gBrowser={tabContainer:tabs};win.MutationObserver=class{observe(){} disconnect(){}};win.console={warn(){}};
  const observers=new Set(),services={prefs:{addObserver(k,o){observers.add(o)},removeObserver(k,o){observers.delete(o)}}};
- const acquire=new Function("ChromeUtils","watchWorkspaceCommand","workspaceCommandState","workspaceCommandMessage",core+"return acquireZenHome;")({importESModule:()=>({PrivateBrowsingUtils:{isWindowPrivate:()=>false}})},watchWorkspaceCommand,workspaceCommandState,workspaceCommandMessage);
+ const acquire=new Function("ChromeUtils","watchWorkspaceCommand","workspaceCommandState","workspaceCommandMessage","workspaceCommandPresentationBlocked",core+"return acquireZenHome;")({importESModule:()=>({PrivateBrowsingUtils:{isWindowPrivate:()=>false}})},watchWorkspaceCommand,workspaceCommandState,workspaceCommandMessage,workspaceCommandPresentationBlocked);
  const a=acquire(win,services),b=acquire(win,services);
  assert.ok(a&&b);assert.equal(host.children.length,2);assert.equal(observers.size,1);
  a.release();assert.ok(win.__zenSharedHomeV1);assert.equal(host.children.length,2);
@@ -187,7 +187,7 @@ test("Home is primary: repeated clicks, Escape, background opens and real naviga
  pending.setAttribute("pending","");pending.linkedBrowser={currentURI:{spec:"about:blank"}};
  let progress;win.gBrowser={tabContainer:tabs,selectedTab:blank,get selectedBrowser(){return this.selectedTab.linkedBrowser;},addTabsProgressListener(p){progress=p},removeTabsProgressListener(){}};
  const services={prefs:{getStringPref:(k,v)=>v,addObserver(){},removeObserver(){}}};
- const acquire=new Function("ChromeUtils","watchWorkspaceCommand","workspaceCommandState","workspaceCommandMessage",core+"return acquireZenHome;")({importESModule:()=>({PrivateBrowsingUtils:{isWindowPrivate:()=>false}})},watchWorkspaceCommand,workspaceCommandState,workspaceCommandMessage);
+ const acquire=new Function("ChromeUtils","watchWorkspaceCommand","workspaceCommandState","workspaceCommandMessage","workspaceCommandPresentationBlocked",core+"return acquireZenHome;")({importESModule:()=>({PrivateBrowsingUtils:{isWindowPrivate:()=>false}})},watchWorkspaceCommand,workspaceCommandState,workspaceCommandMessage,workspaceCommandPresentationBlocked);
  const lease=acquire(win,services),states=[];lease.subscribe(v=>states.push(v));
  assert.equal(lease.open,true);assert.equal(panels.hasAttribute("data-zr-home-covered"),true);
  const content=host.children[1].children[0],initial=content.children;

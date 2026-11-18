@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {runWorkspaceCommand,requireWorkspaceCommand,requestWorkspaceSwitch,inspectWorkspaceSwitch,switchWorkspaceWithin,designateWorkspaceFree,workspaceCommandGate,workspaceCommandState,workspaceCommandMessage,watchWorkspaceCommand} from "../src/core/workspace-commands.mjs";
+import {runWorkspaceCommand,requireWorkspaceCommand,requestWorkspaceSwitch,inspectWorkspaceSwitch,switchWorkspaceWithin,designateWorkspaceFree,workspaceCommandGate,workspaceCommandState,workspaceCommandMessage,watchWorkspaceCommand,workspaceCommandPresentationBlocked} from "../src/core/workspace-commands.mjs";
 function fixture(){
  const entries=[{uuid:"a",name:"A"},{uuid:"b",name:"B"}],elements=new Map(),events=[],calls=[],values=new Map();
  let active="a",selected,changing=false;
@@ -150,4 +150,25 @@ test("pending watcher cancels its timer and never changes gate ownership",()=>{
  assert.equal(timers.size,0);assert.equal(gate.pending,pending);
  active=true;gate.startedAt=Date.now()-5000;watch.refresh();assert.equal(states.at(-1),"unknown");assert.equal(timers.size,0);
  watch.dispose();assert.equal(listeners.size,0);assert.equal(gate.pending,pending);
+});
+
+test("failed peer publication rolls back only its own process token and primary gate",async()=>{
+ const a=fixture(),b=fixture(),anchor={};let called=0;
+ const peerGate=workspaceCommandGate(b.win);Object.defineProperty(peerGate,"reservation",{value:null,writable:false,configurable:true});
+ await assert.rejects(runWorkspaceCommand(a.win,a.native,"return",()=>true,()=>called++,{data:true,anchor,peer:{win:b.win,native:b.native}}));
+ assert.equal(called,0);assert.equal(workspaceCommandGate(a.win).pending,null);assert.equal(peerGate.reservation,null);
+ assert.equal(await runWorkspaceCommand(a.win,a.native,"data",()=>true,()=>42,{data:true,anchor}),42);
+});
+
+test("native-only busy view probes boundedly and remains retryable after native flag clears without an event",()=>{
+ const f=fixture(),timers=new Map(),states=[];let clock=0,seq=0;
+ Object.assign(f.win,{performance:{timeOrigin:1000,now:()=>clock},setTimeout(fn,ms){timers.set(++seq,{fn,ms});return seq;},clearTimeout(id){timers.delete(id);},
+ addEventListener(){},removeEventListener(){}});
+ f.setChanging(true);
+ const watch=watchWorkspaceCommand(f.win,()=>true,s=>states.push(s));watch.refresh();
+ assert.equal(workspaceCommandPresentationBlocked(states.at(-1)),false);
+ for(let i=0;i<20;i++){const [id,timer]=[...timers][0];timers.delete(id);clock+=timer.ms;timer.fn();}
+ assert.equal(clock,5000);assert.equal(timers.size,0);assert.equal(workspaceCommandState(f.win).blocked,true);
+ f.setChanging(false);watch.refresh();assert.equal(states.at(-1).phase,"idle");assert.equal(timers.size,0);
+ watch.dispose();
 });

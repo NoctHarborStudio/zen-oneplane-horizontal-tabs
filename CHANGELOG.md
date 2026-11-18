@@ -1,3 +1,10 @@
+## 0.3.0-preview.74 — Workspace native close completion and pending recovery
+
+- Keep Return's lease in the surviving original window until exact native child close and chrome context discard; reject ambiguous native destinations, preserve native close confirmation.
+- Cancel only opener-side Projection setup on actual close or trusted takeover; preserve active native command ownership.
+- Scope late Hub results to the opening session; bounded native-busy refresh, retryable controls and exact partial-admission cleanup.
+- Ten new regression tests; native acceptance pending.
+
 ## 0.3.0-preview.73 — Workspace pending presentation and Return peer reservation
 
 - Reserve the surviving source's existing Workspace gate while the managed Return request is pending; independent third-window selection remains available.
