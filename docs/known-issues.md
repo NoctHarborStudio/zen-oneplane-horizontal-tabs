@@ -354,3 +354,92 @@ closing-animation:176–185 eligible checks startup/workspace/customization/full
 **Required:** A3/A5/A6: terminal priority policy; cancel/settle visual owners without suppressing native close or forcing drop. Test close while drag/search/Library active, second close, cancellation, global quit.
 
 Four extracted-source mock fixtures confirmed NC4-035/036/037/039, not live Zen. Do not close these issues until relevant regression and native validation gates pass. No runtime changes in this audit.
+
+
+### Motion and geometry checkpoint — NC4-047–060
+
+#### NC4-047 — Startup interruption uses inconsistent settlement (S/R/P1)
+
+startup-animation.uc.mjs:179–207 seals/releases CenterMotion and bookmarks immediately while other effects interpolate for 120ms. Visible discontinuity is a risk, not native reproduced.
+
+**Required:** A3: shared current-progress settlement for all surfaces; resize/input during each phase; match last/first paint.
+
+#### NC4-048 — Proxy topology can diverge from live tabs at handoff (S/R/P1)
+
+center-motion.js.part:215–285 freezes proxy slots; tab-sync.js.part:8–14 allows only icon refresh while center owner active; topology changes reconcile after release. No end-position equivalence check.
+
+**Required:** A3/A4: record topology generation, reconcile under gate, retarget or settle on incompatible geometry; test open/close/split/resize during motion.
+
+#### NC4-049 — Startup effects may target detached Home nodes (S/R/P1)
+
+shared-home.js.part:341–354 stores startupEffects on content children; render:899–908 replaces content; workspace/pref events trigger render while open; playStartupHome refuses if effects array nonempty. New nodes can miss choreography. Actual event overlap pending.
+
+**Required:** A3/A6: freeze structural render or keyed nodes and generation-aware retarget; test pref/workspace updates during staged and active Home entry.
+
+#### NC4-050 — Address reverse can retain old cascade timeline (S/R/P1)
+
+address-controller.js.part:62–127 restarts main effect; address-cascade.js.part:109–114 returns early if requested direction already hiding/showing. Reopening a close while first hide remains active can leave old cascade timings unrelated to new address phase. Exact user sequence pending.
+
+**Required:** A3/A6: cascade keyed by transaction generation and sampled progress, not direction alone; test rapid open-close-open and fallback.
+
+#### NC4-051 — Address phase may be stranded by external WAAPI cancellation (S/R/P1)
+
+address-controller.js.part:108 sets onfinish only; no oncancel terminal path for unexpected external cancellation and no normal-phase watchdog. stopAddressAnimations clears handles intentionally; updateAddressAnimation may return while addressWasOpen true. Native external cancellation not demonstrated.
+
+**Required:** A3: bounded transaction completion, explicit unexpected cancellation recovery; distinguish own cancel from stale callbacks; test native element replacement/theme/disable.
+
+#### NC4-052 — Geometry freeze still writes bias and lane layout (S/R/P1)
+
+geometry.js.part:48–118 sets frozen during drag/cascade but still calculates bias, writes center spacers and left room, syncs lane scroll and refreshes slider. This is partial rather than complete geometry freeze.
+
+**Required:** A4/A5: specify which geometry is immutable vs live; snapshot committed slot coordinates, test edge controls changing during Bunny/address motion.
+
+#### NC4-053 — Contour cache committed before successful rendering (S/R/P1)
+
+contour-controller.js.part:78–83 sets contourKey before style writes and contourImage generation; bookmarks.uc.mjs:179–185 similarly stores key before render. A throw can suppress retry for same geometry.
+
+**Required:** A4: compute mask then commit/cache only after success, preserve last valid surface; fault-injection for generator or style failure.
+
+#### NC4-054 — Bookmark suspension omits startup and closing phases (S/R/P1)
+
+bookmarks.uc.mjs:51–68 syncAddressState checks address wave and workspace only; root observer:827–830 observes those but not startup/closing/center. Hover/FLIP and reserve may run while parent fold controls scale/opacity. Need inspect actual eligible/pointer guard before calling a reproduced conflict.
+
+**Required:** A3/A4: explicit motion surface permissions, suspend/reconcile before geometry snapshots; native pointer/focus/resize during startup/close.
+
+#### NC4-055 — Home search snapshot is expensive on mutation-heavy results (S/R/P1)
+
+shared-home.js.part:580–645 recursively copies up to 900 nodes, computed style longhands and pseudos, repeated capture via 80ms timer. Budget caps nodes not style calls, decode or total time; return writes per-card styles each RAF (556–578,721–733). No measured regression yet.
+
+**Required:** A6/A8: profile capture and return separately, cap time/bytes and capture frequency; compare stable snapshot vs lightweight render, preserve visual approval.
+
+#### NC4-056 — Home search animation readiness is frame-count based (S/R/P1)
+
+shared-home.js.part:457–490 retries up to 120 RAF callbacks waiting for results; elapsed time varies with display rate/background throttling. It can release visual gate before late results at high refresh or hold it longer at low refresh.
+
+**Required:** A6: monotonic deadline plus native result readiness; test 60/144Hz, background, slow provider and focus interruption.
+
+#### NC4-057 — Home search return geometry can become stale (S/R/P1)
+
+shared-home.js.part:680–738 snapshots result box and destination then drives height/top/width per RAF; window resize ends visual immediately (1023–1031). Other content layout/font/viewport changes during return are not explicitly retargeted. Native scenario pending.
+
+**Required:** A6/A4: geometry revision, bounded settle on invalid destination, verify return-to-source under font/size/workspace changes.
+
+#### NC4-058 — Center Motion proxy setup scales with all visible DOM descendants (S/R/P2)
+
+center-motion.js.part:115–192 clones each subtree, copies computed paint properties, creates per-icon canvas, MutationObserver and four listeners, sets willChange for every proxy. Bounded by visible cards but no explicit total budget. No native profiling yet.
+
+**Required:** A3/A8: measure snapshot acquisition and compositor memory at 1/30/100+ tabs, compare shared icon observation and real-slot animation; retain fallback if budget exceeded.
+
+#### NC4-059 — Workspace settlement uses quiet interval rather than readiness contract (S/R/P1)
+
+workspace-transition.uc.mjs:155–179 waits mutation quiet up to 400ms, warms icons only first sequence; later transitions can still have late decode, and quiet does not prove native structure readiness. Related NC4-033, not independent replacement.
+
+**Required:** A2/A3: structural ready + bounded asset readiness, explicit timeout outcome; test slow icon on later workspace and delayed native container.
+
+#### NC4-060 — Address cascade captures only currently mounted visible slots (S/R/P1)
+
+address-cascade.js.part:70–108 takes a fixed snapshot of tab and bookmark nodes; tab-sync can still reparent/remove nodes outside center owner. CSS hides unmarked new nodes until gate release; new nodes may appear abruptly.
+
+**Required:** A3/A4: topology lease or reconcile newly added nodes under existing wave progress; test native tab open/close and bookmark overflow during search.
+
+Source-only checkpoint. Native reproduction and performance evidence pending; all findings remain open. See the surface ownership matrix in the [0.4.0 pipeline](nocturne/pipeline-0.4.0.md).
