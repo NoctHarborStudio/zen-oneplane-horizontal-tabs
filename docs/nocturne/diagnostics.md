@@ -182,3 +182,7 @@ A2 source implementation and independent integrated audit complete at R2, subjec
 ### Preview.77 bookmark fold ownership
 
 `center.bookmarks.acquire/release/error` records numeric handle ID, static owner, direction/duration, release reason and cleanup failure count. `center.dispose` adds bookmarkDelegated and replacement. No content, new writer or per-frame telemetry. Existing privacy/size limits unchanged. Native verification pending.
+
+### Preview.78 tab proxy transactional ownership
+
+`center.motion` and `center.motion.release` include numeric handle ID; release includes static reason (superseded, setup-failed, disposed, release, no-visible-cards) and cleanup failure count. `center.motion.error` reports prepare/setup stage and error class. `center.dispose` retains existing delegation fields; exact close commit predicate determines retention. No new recorder, private fields or per-frame events. Native verification pending.

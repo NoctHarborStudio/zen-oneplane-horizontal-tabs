@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="disassembly.script",data={version:"0.3.0-preview.77"};
+  const event="disassembly.script",data={version:"0.3.0-preview.78"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -171,8 +171,8 @@ try{if(typeof window!=="undefined"){
     }
     root.setAttribute("data-zr-closing","true");
     try{window.__zenMagneticBookmarksShared?.syncAddressState?.();}catch{}
-    centerHandle=window.__nocturneCenterMotion?.start(get("oneplane-tabs"),{owner:"close",direction:"out",duration:620});
-    bookmarkHandle=window.__nocturneCenterMotion?.bookmarks({owner:"close",direction:"out",duration:650});
+    centerHandle=window.__nocturneCenterMotion?.start(get("oneplane-tabs"),{owner:"close",direction:"out",duration:620,retainOnDispose:()=>controller.committing});
+    bookmarkHandle=window.__nocturneCenterMotion?.bookmarks({owner:"close",direction:"out",duration:650,retainOnDispose:()=>controller.committing});
     for(const {n,x,y,clip,delay,length,opacity} of targets){
       try{
         let frames;

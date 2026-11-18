@@ -10,11 +10,11 @@
   // Gecko user sheets may not register @property. The JS registration
   // guarantees smooth interpolation of the shared hover slot.
   try{win.CSS.registerProperty({name:"--op-hover-progress",syntax:"<number>",inherits:false,initialValue:"0"});}catch{}
-  let active=null,activeBookmark=null,pendingTimer=0,dead=false,bookmarkBusy=false,disposing=false,disposed=false,pendingDispose=null,bookmarkSequence=0;
+  let active=null,activeBookmark=null,pendingTimer=0,dead=false,motionBusy=false,disposing=false,disposed=false,pendingDispose=null,bookmarkSequence=0,tabSequence=0;
   const current=()=>win[KEY]===api;
   function trace(event,data,options){try{win.__nocturneTrace?.(event,data,options);}catch{}}
   function retire(){if(disposed&&!disposing&&!active&&!activeBookmark&&current())delete win[KEY];}
-  function drainDispose(){if(!bookmarkBusy&&!disposing&&pendingDispose){const options=pendingDispose;pendingDispose=null;dispose(options);}}
+  function drainDispose(){if(!motionBusy&&!disposing&&pendingDispose){const options=pendingDispose;pendingDispose=null;dispose(options);}}
   // Magnetic Fold, ported from Motion Lab B. p=0 docked, p=1 resting.
   const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
   const smooth=p=>{p=clamp(p);return p*p*(3-2*p);};
@@ -151,8 +151,10 @@
       Object.assign(canvas.style,{position:"absolute",inset:"0",width:"16px",height:"16px",display:"none",pointerEvents:"none"});
       img.parentNode.append(canvas,fallback);
       Object.assign(img.style,{position:"absolute",inset:"0",width:"16px",height:"16px",objectFit:"contain"});
-      let current=null,wasReady=false,bitmapSource=null;
+      let current=null,wasReady=false,bitmapSource=null,alive=true;
+      cleanups.push(()=>{alive=false;});
       function paint(){
+        if(!alive)return;
         // Paint an already decoded chrome favicon directly. A detached
         // clone can otherwise have its own asynchronous image request.
         // No canvas readback, disk cache, content or URL telemetry.
@@ -172,19 +174,23 @@
         canvas.style.display=bitmap?"block":"none";
         img.style.display=!bitmap&&image?"block":"none";img.style.visibility="visible";
         fallback.style.visibility=ready?"hidden":"visible";
-        if(ready&&!wasReady){stats.iconLoads++;win.__nocturneTrace?.("center.icon.ready",()=>({owner:root.getAttribute(OWNER),ready:stats.iconLoads,total:stats.icons,bitmap}),{throttle:100});}
+        if(ready&&!wasReady){stats.iconLoads++;trace("center.icon.ready",()=>({owner:root.getAttribute(OWNER),ready:stats.iconLoads,total:stats.icons,bitmap}),{throttle:100});}
         wasReady=ready;
       }
       function update(){
+        if(!alive)return;
         const value=src.getAttribute("src");
         if(value!==current){current=value;bitmapSource=null;wasReady=false;img.hidden=false;if(value)img.setAttribute("src",value);else img.removeAttribute("src");}
         paint();
       }
       stats.icons++;
-      const observer=new win.MutationObserver(update);observer.observe(src,{attributes:true,attributeFilter:["src","hidden"]});
-      src.addEventListener("load",update);src.addEventListener("error",update);
-      img.addEventListener("load",paint);img.addEventListener("error",paint);
-      cleanups.push(()=>{observer.disconnect();src.removeEventListener("load",update);src.removeEventListener("error",update);img.removeEventListener("load",paint);img.removeEventListener("error",paint);});
+      const observer=new win.MutationObserver(update);
+      cleanups.push(()=>observer.disconnect());
+      observer.observe(src,{attributes:true,attributeFilter:["src","hidden"]});
+      for(const [target,type,fn] of [[src,"load",update],[src,"error",update],[img,"load",paint],[img,"error",paint]]){
+        cleanups.push(()=>target.removeEventListener(type,fn));
+        target.addEventListener(type,fn);
+      }
       update();
     }
     const outer=document.createElementNS("http://www.w3.org/1999/xhtml","div");
@@ -206,7 +212,7 @@
     const r=icon.getBoundingClientRect(),geometry=r.width>0&&r.height>0;
     return {visible:!hidden&&geometry&&alpha>0,alpha,geometry};
   }
-  function releasePending(){if(pendingTimer)win.clearTimeout(pendingTimer);pendingTimer=0;if(!win[KEY]||win[KEY]===api)root.removeAttribute(PENDING);}
+  function releasePending(){if(pendingTimer)win.clearTimeout(pendingTimer);pendingTimer=0;if(current())root.removeAttribute(PENDING);}
   let handoffFrame=0,handoffFrame2=0,handoffGeneration=0,handoffOwned=false;
   function finishHandoff(){
     handoffGeneration++;
@@ -227,28 +233,64 @@
       });
     }catch{finishHandoff();}
   }
-  function start(row,{owner,direction="in",duration=520,delay=0,paused=false}={}){
-    if(dead)return null;
-    stopSelection();active?.release();finishHandoff();releasePending();
-    if(!row){win.__nocturneTrace?.("center.motion.skip",{owner,reason:"no-row"});return null;}
-    const measuring=root.getAttribute("data-zr-workspace-phase")==="swap";
-    if(measuring)root.setAttribute("data-zr-fold-measuring","true");
-    let cards;try{cards=collect(row);}catch{root.removeAttribute("data-zr-fold-measuring");return null;}
-    if(!cards.length){root.removeAttribute("data-zr-fold-measuring");win.__nocturneTrace?.("center.motion.skip",{owner,reason:"no-visible-cards"});return null;}
-    const rr=row.getBoundingClientRect(),host=document.createElementNS("http://www.w3.org/1999/xhtml","div");
-    host.setAttribute("data-zr-magnetic-layer","true");host.setAttribute("aria-hidden","true");host.inert=true;
-    Object.assign(host.style,{position:"absolute",inset:"0",zIndex:"14",pointerEvents:"none",overflow:"visible"});
-    const hub=cards[0].hub;
-    if(hub)host.style.clipPath=portalClip(hub,rr,win.innerWidth,win.innerHeight);
-    let layer;try{layer=host.attachShadow({mode:"closed"});}catch{root.removeAttribute("data-zr-fold-measuring");return null;}const effects=[],saved=[],cleanups=[],stats={groups:0,handles:0,handleOffset:0,icons:0,iconLoads:0,bitmapIcons:0,bitmapFailures:0};
-    // Measure and build all proxies before hiding any real card.
+  function start(row,options={}){
+    if(dead||motionBusy||disposing||!current())return null;
+    motionBusy=true;
+    try{return acquireTabs(row,options);}catch(error){trace("center.motion.error",{stage:"prepare",name:error?.name},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
+  }
+  function acquireTabs(row,{owner,direction="in",duration=520,delay=0,paused=false,retainOnDispose=null}={}){
+    stopSelection();active?.release("superseded");finishHandoff();releasePending();
+    if(dead||!current())return null;
+    if(!row){trace("center.motion.skip",{owner,reason:"no-row"});return null;}
+    const id=++tabSequence,effects=[],saved=[],cleanups=[],running=[],stats={groups:0,handles:0,handleOffset:0,icons:0,iconLoads:0,bitmapIcons:0,bitmapFailures:0};
+    let host=null,cards=[],rr,hub,measuring=false,measuringMark=null,ownerMark=null,ownerWritten=false,committed=false,released=false;
+    const restoreMark=(node,key,value)=>{if(value===null)node.removeAttribute(key);else node.setAttribute(key,value);};
+    const handle={owner,retainOnDispose,count:0,finished:Promise.resolve(),
+      resume(){if(!released)for(const a of running)try{a.play();}catch{}},
+      seal(){if(!released)for(const a of running)try{a.finish();}catch{}},
+      release(reason="release"){
+        if(released)return;released=true;
+        const wasBusy=motionBusy;motionBusy=true;
+        let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
+        try{
+          if(committed&&!dead&&current())step(holdHandoff);
+          for(const a of running)step(()=>a.cancel());
+          for(const off of cleanups)step(off);
+          if(host)step(()=>host.remove());
+          for(const {n,mark} of saved)step(()=>restoreMark(n,MARK,mark));
+          if(active===handle){
+            active=null;
+            if(current()){
+              if(measuring)step(()=>restoreMark(root,"data-zr-fold-measuring",measuringMark));
+              if(ownerWritten)step(()=>restoreMark(root,OWNER,ownerMark));
+              if(ownerWritten&&!dead&&!win.closed)step(()=>win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd")));
+            }
+          }
+          retire();
+          trace("center.motion.release",()=>({id,owner,direction,count:cards.length,...stats,sourceIcons:iconStats(row),failed,reason}),{sample:600,flush:failed>0});
+        }finally{motionBusy=wasBusy;drainDispose();}
+      }};
+    active=handle;
     try{
+      if(root.getAttribute("data-zr-workspace-phase")==="swap"){
+        measuringMark=root.getAttribute("data-zr-fold-measuring");measuring=true;root.setAttribute("data-zr-fold-measuring","true");
+      }
+      cards=collect(row);handle.count=cards.length;
+      if(!cards.length){handle.release("no-visible-cards");trace("center.motion.skip",{owner,reason:"no-visible-cards"});return null;}
+      rr=row.getBoundingClientRect();host=document.createElementNS("http://www.w3.org/1999/xhtml","div");
+      host.setAttribute("data-zr-magnetic-layer","true");host.setAttribute("aria-hidden","true");host.inert=true;
+      Object.assign(host.style,{position:"absolute",inset:"0",zIndex:"14",pointerEvents:"none",overflow:"visible"});
+      hub=cards[0].hub;
+      if(hub)host.style.clipPath=portalClip(hub,rr,win.innerWidth,win.innerHeight);
+      const layer=host.attachShadow({mode:"closed"});
+      // Own every resource before acquisition; never hide cards until all
+      // detached proxies have been prepared.
       for(const c of cards){const n=proxy(c,layer,rr,cleanups,stats),frames=keyframes(c,direction==="out");effects.push({n,frames,c});}
-    }catch(error){for(const off of cleanups)off();win.__nocturneTrace?.("center.motion.error",{owner,stage:"proxy",name:error?.name});return null;}
-    finally{root.removeAttribute("data-zr-fold-measuring");}
-    root.setAttribute(OWNER,owner);
-    row.append(host);
-    for(const c of cards){saved.push({n:c.n,mark:c.n.getAttribute(MARK)});c.n.setAttribute(MARK,"true");}
+      if(measuring){restoreMark(root,"data-zr-fold-measuring",measuringMark);measuring=false;}
+      if(dead||!current()){handle.release("disposed");return null;}
+      ownerMark=root.getAttribute(OWNER);ownerWritten=true;root.setAttribute(OWNER,owner);
+      row.append(host);
+      for(const c of cards){saved.push({n:c.n,mark:c.n.getAttribute(MARK)});c.n.setAttribute(MARK,"true");}
     // Inspect the mounted proxy in its unanimated coordinate space once.
     // No titles, image URLs, or DOM identifiers are logged.
     let handleError=0,measuredHandles=0;
@@ -259,10 +301,10 @@
       handleError=Math.max(handleError,Math.abs((a.left-c.r.left)-(b.left-o.left)),Math.abs((a.top-c.r.top)-(b.top-o.top)));
       measuredHandles++;
     }
-    if(measuredHandles)win.__nocturneTrace?.("center.group.geometry",()=>({owner,count:measuredHandles,maxOffsetError:handleError}),{sample:800});
+    if(measuredHandles)trace("center.group.geometry",()=>({owner,count:measuredHandles,maxOffsetError:handleError}),{sample:800});
     // Inspect the actual mounted shadow copies before WAAPI changes
     // their outer alpha and scale. Ignore the intentional real-card gate.
-    win.__nocturneTrace?.("center.icon.paint",()=>{
+    trace("center.icon.paint",()=>{
       let total=0,paintable=0,zeroAlpha=0,zeroGeometry=0,sourceButtonZero=0,minAlpha=1;
       for(const {n,c} of effects){
         for(const b of c.n.querySelectorAll(".oneplane-tab-select"))
@@ -277,46 +319,32 @@
       }
       return {owner,total,paintable,zeroAlpha,zeroGeometry,sourceButtonZero,minAlpha};
     },{sample:800});
-    const running=[];
-    for(const {n,frames} of effects){
-      n.style.transform=frames[0].transform;n.style.opacity=String(frames[0].opacity);
-      try{const a=n.animate(frames,{duration,delay,easing:"linear",fill:"both"});if(paused){a.pause();a.currentTime=0;}running.push(a);}
-      catch{n.style.transform=frames.at(-1).transform;n.style.opacity=String(frames.at(-1).opacity);}
+      for(const {n,frames} of effects){
+        n.style.transform=frames[0].transform;n.style.opacity=String(frames[0].opacity);
+        const a=n.animate(frames,{duration,delay,easing:"linear",fill:"both"});
+        // Install cancellation handling immediately, even when pause or
+        // currentTime subsequently throws. Fail open as one surface.
+        running.push(a);a.finished.catch(()=>{});
+        if(paused){a.pause();a.currentTime=0;}
+      }
+      handle.finished=Promise.all(running.map(a=>a.finished.catch(()=>{})));
+      if(dead||!current()){handle.release("disposed");return null;}
+      committed=true;
+      trace("center.motion",()=>({id,owner,direction,count:cards.length,duration,mode:"magnetic-fold",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length,groups:stats.groups,handles:stats.handles,handleOffset:stats.handleOffset,icons:iconStats(row),bitmapIcons:stats.bitmapIcons,bitmapFailures:stats.bitmapFailures,animated:running.length}),{sample:duration+250});
+      if(dead||!current()){handle.release("disposed");return null;}
+      return handle;
+    }catch(error){
+      handle.release("setup-failed");
+      trace("center.motion.error",{id,owner,stage:"setup",name:error?.name},{flush:true});return null;
     }
-    let released=false;
-    const handle={owner,count:cards.length,finished:Promise.all(running.map(a=>a.finished.catch(()=>{}))),
-      resume(){for(const a of running)try{a.play();}catch{}},
-      seal(){for(const a of running)try{a.finish();}catch{}},
-      release(){
-        if(released)return;released=true;
-        let failed=0;
-        const step=fn=>{try{fn();}catch{failed++;}};
-        if(!dead)step(holdHandoff);
-        for(const a of running)step(()=>a.cancel());
-        for(const off of cleanups)step(off);
-        step(()=>host.remove());
-        for(const {n,mark} of saved)step(()=>{if(mark===null)n.removeAttribute(MARK);else n.setAttribute(MARK,mark);});
-        if(active===handle){
-          active=null;
-          if(!win[KEY]||win[KEY]===api){
-            step(()=>root.removeAttribute(OWNER));
-            if(!dead&&!win.closed)step(()=>win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd")));
-          }
-        }
-        retire();
-        win.__nocturneTrace?.("center.motion.release",()=>({owner,direction,count:cards.length,...stats,sourceIcons:iconStats(row),failed}),{sample:600});
-      }};
-    active=handle;
-    win.__nocturneTrace?.("center.motion",()=>({owner,direction,count:cards.length,duration,mode:"magnetic-fold",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length,groups:stats.groups,handles:stats.handles,handleOffset:stats.handleOffset,icons:iconStats(row),bitmapIcons:stats.bitmapIcons,bitmapFailures:stats.bitmapFailures,animated:running.length}),{sample:duration+250});
-    return handle;
   }
   // Bookmarks use the Lab's center squeeze, not individual vertical slides.
   function bookmarks(options={}){
-    if(dead||bookmarkBusy||disposing||!current())return null;
-    bookmarkBusy=true;
-    try{return acquireBookmark(options);}finally{bookmarkBusy=false;drainDispose();}
+    if(dead||motionBusy||disposing||!current())return null;
+    motionBusy=true;
+    try{return acquireBookmark(options);}catch(error){trace("center.bookmarks.error",{stage:"prepare",name:error?.name},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
   }
-  function acquireBookmark({owner="unknown",direction="in",duration=520,delay=0,paused=false}={}){
+  function acquireBookmark({owner="unknown",direction="in",duration=520,delay=0,paused=false,retainOnDispose=null}={}){
     activeBookmark?.release("superseded");
     if(dead||!current())return null;
     const n=document.getElementById("PlacesToolbarItems"),markKey="data-zr-fold-bookmarks";
@@ -324,12 +352,12 @@
     const id=++bookmarkSequence,frames=Array.from({length:21},(_,i)=>{const p=smooth(direction==="out"?1-i/20:i/20);return {offset:i/20,[B]:String(p)};});
     const old=n.style.getPropertyValue(B),priority=n.style.getPropertyPriority(B),mark=n.getAttribute(markKey);
     let a=null,released=false;
-    const handle={owner,finished:Promise.resolve(),
+    const handle={owner,retainOnDispose,finished:Promise.resolve(),
       resume(){if(!released)try{a?.play();}catch{}},
       seal(){if(!released)try{a?.finish();}catch{}},
       release(reason="release"){
         if(released)return;released=true;
-        const wasBusy=bookmarkBusy;bookmarkBusy=true;
+        const wasBusy=motionBusy;motionBusy=true;
         let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
         try{
           step(()=>a?.cancel());
@@ -342,7 +370,7 @@
             }
           }
           retire();trace("center.bookmarks.release",{id,owner,reason,failed},{flush:failed>0});
-        }finally{bookmarkBusy=wasBusy;drainDispose();}
+        }finally{motionBusy=wasBusy;drainDispose();}
       }};
     activeBookmark=handle;
     try{
@@ -350,8 +378,8 @@
       win.__zenMagneticBookmarksShared?.syncAddressState?.();
       if(dead||!current()){handle.release("disposed");return null;}
       a=n.animate(frames,{duration,delay,easing:"linear",fill:"both"});
-      if(paused){a.pause();a.currentTime=0;}
       handle.finished=a.finished.catch(()=>{});
+      if(paused){a.pause();a.currentTime=0;}
       trace("center.bookmarks.acquire",{id,owner,direction,duration},{sample:duration+250});
       if(dead||released||!current()){handle.release("disposed");return null;}
       return handle;
@@ -359,7 +387,7 @@
   }
   function dispose({replacement=false}={}){
     if(disposing)return false;
-    if(bookmarkBusy){
+    if(motionBusy){
       dead=true;pendingDispose={replacement:replacement||pendingDispose?.replacement===true};
       return false;
     }
@@ -374,7 +402,11 @@
       // Preserve the existing close-seal contract, but only for exact
       // close-owned handles. Replacement always reclaims retained handles.
       const closing=!replacement&&root.hasAttribute("data-zr-closing");
-      const delegated=!!(closing&&active?.owner==="close"),bookmarkDelegated=!!(closing&&activeBookmark?.owner==="close");
+      const retain=handle=>{
+        if(!closing||handle?.owner!=="close")return false;
+        try{return handle.retainOnDispose?.()===true;}catch{return false;}
+      };
+      const delegated=retain(active),bookmarkDelegated=retain(activeBookmark);
       if(!delegated)step(()=>active?.release());
       if(!bookmarkDelegated)step(()=>activeBookmark?.release("dispose"));
       step(finishHandoff);
@@ -420,7 +452,7 @@
   try{
     if(!win.__nocturneLayoutStartup&&win.performance.now()<3500&&Services.prefs.getBoolPref("zen.refined.startup.animation",true)&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches){
       win.__nocturneTrace?.("assembly.gate",{age:win.performance.now(),pending:true},{flush:true});
-      root.setAttribute(PENDING,"true");pendingTimer=win.setTimeout(()=>{win.__nocturneTrace?.("assembly.gate.timeout",{age:win.performance.now()},{flush:true});releasePending();},8500);
+      root.setAttribute(PENDING,"true");pendingTimer=win.setTimeout(()=>{if(dead||!current())return;trace("assembly.gate.timeout",{age:win.performance.now()},{flush:true});releasePending();},8500);
     }
   }catch{}
 })();

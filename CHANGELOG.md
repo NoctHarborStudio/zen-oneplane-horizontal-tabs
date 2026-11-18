@@ -1,3 +1,10 @@
+## 0.3.0-preview.78 — Center Motion transactional proxy ownership
+
+- Reserve the exact tab proxy handle before acquisition; fence reentrant callbacks across both tab and bookmark surfaces, restore exact markers and roll back partial DOM/WAAPI initialization.
+- Register favicon observers and listeners individually before acquisition; ignore callbacks after release.
+- Fail open as a whole surface on partial WAAPI failure; retain close effects only during the actual native commit, never from the closing marker alone.
+- Eleven new regression tests. Preserve normal Fold trajectories, durations and native commands; native verification pending.
+
 ## 0.3.0-preview.77 — Bookmark fold lifecycle ownership
 
 - Track exact bookmark fold handles, cancel superseded effects, restore original inline priority and marker, and roll back partial WAAPI acquisition.

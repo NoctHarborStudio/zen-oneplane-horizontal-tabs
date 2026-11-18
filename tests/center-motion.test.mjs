@@ -97,7 +97,7 @@ test("icon updates remain live in the proxy without layout or private URL loggin
  assert.ok(source.includes('attributeFilter:["src","hidden"]'));
  assert.ok(source.includes("img.complete&&img.naturalWidth>0"));
  assert.ok(source.includes('fallback.style.visibility=ready?"hidden":"visible"'));
- assert.ok(source.includes('for(const off of cleanups)off()'));
+ assert.ok(source.includes('for(const off of cleanups)step(off)'));
  const sync=read("src/toolbar/tab-sync.js.part");
  const active=sync.slice(sync.indexOf('if(root.hasAttribute("data-zr-center-motion"))'),sync.indexOf("const homeOpen="));
  assert.ok(active.includes("refreshEntryIcon(tab,entry)"));assert.ok(!active.includes("centerToolbar()"));
@@ -181,12 +181,12 @@ test("bookmark fold disposal and hot reload cancel the acquired old handle",()=>
 });
 test("only exact close handles may outlive disposal; replacement reclaims them",()=>{
  const f=bookmarkFixture(),old=f.mount();f.root.setAttribute("data-zr-closing","true");
- const a=old.bookmarks({owner:"close"});old.dispose();assert.equal(f.effects[0].cancelled,0);a.seal();assert.equal(f.effects[0].sealed,1);
+ const a=old.bookmarks({owner:"close",retainOnDispose:()=>true});old.dispose();assert.equal(f.effects[0].cancelled,0);a.seal();assert.equal(f.effects[0].sealed,1);
  const next=f.mount();assert.equal(f.effects[0].cancelled,1);const b=next.bookmarks({owner:"startup"});a.release();assert.equal(f.node.getAttribute(foldMark),"true");
  next.dispose();assert.equal(f.effects[1].cancelled,1);assert.equal(f.node.getAttribute(foldMark),null);b.release();
 });
 test("delegated close release retires the disposed engine without replacement",()=>{
- const f=bookmarkFixture(),engine=f.mount();f.root.setAttribute("data-zr-closing","true");const a=engine.bookmarks({owner:"close"});
+ const f=bookmarkFixture(),engine=f.mount();f.root.setAttribute("data-zr-closing","true");const a=engine.bookmarks({owner:"close",retainOnDispose:()=>true});
  engine.dispose();a.release();assert.equal(f.window.__nocturneCenterMotion,undefined);assert.equal(f.node.getAttribute(foldMark),null);
 });
 test("bookmark pause failure rolls back WAAPI, inline properties and marker",()=>{
@@ -201,4 +201,116 @@ test("bookmark admission rejects reentry and cleans deferred disposal",()=>{
 test("missing or zero-width surfaces do not acquire effects",()=>{
  const f=bookmarkFixture({width:0}),engine=f.mount();
  assert.equal(engine.bookmarks(),null);assert.equal(engine.start(null,{owner:"startup"}),null);assert.equal(f.effects.length,0);
+});
+
+function proxyFixture(){
+ const effects=[],nodes=[],observers=[],events=[],frames=new Map(),fault={},rect={left:0,top:0,right:200,bottom:40,width:200,height:40};
+ let nextFrame=0;
+ function node(kind="div",r=rect){
+  const attrs=new Map(),listeners=new Map();
+  const n={kind,style:{setProperty(){}},children:[],parentNode:null,hidden:false,complete:false,naturalWidth:0,
+   get attributes(){return [...attrs.keys()].map(name=>({name}));},
+   classList:{contains:k=>kind==="card"&&k==="oneplane-tab"},matches:k=>kind==="img"&&k===".oneplane-tab-icon img",
+   closest:()=>null,hasAttribute:k=>attrs.has(k),getAttribute:k=>attrs.get(k)??null,
+   setAttribute(k,v){attrs.set(k,v);if(fault.mark&&kind==="card"&&k==="data-zr-center-card")throw Error("mark");},removeAttribute:k=>attrs.delete(k),
+   getBoundingClientRect:()=>r,querySelector(k){return kind==="row"&&k===".oneplane-tab-list"?list:null;},
+   querySelectorAll(k){if(kind==="list"&&k===".oneplane-tab,.oneplane-split-group")return this.children;
+    if(k==="*")return this.children.flatMap(c=>[c,...c.querySelectorAll("*")]);return [];},
+   append(...cs){for(const c of cs){this.children.push(c);c.parentNode=this;}if(kind==="row"&&fault.append)throw Error("append");},
+   remove(){if(this.parentNode){const p=this.parentNode;p.children=p.children.filter(x=>x!==this);this.parentNode=null;}},
+   attachShadow(){if(fault.shadow)throw Error("shadow");return node("shadow");},
+   cloneNode(){const c=node(kind,r);for(const child of this.children)c.append(child.cloneNode());return c;},
+   addEventListener(k,fn){listeners.set(k,fn);if(fault.listener&&kind==="img"&&k==="error")throw Error("listener");},
+   removeEventListener(k,fn){if(listeners.get(k)===fn)listeners.delete(k);},listeners,
+   animate(){if(fault.animate===effects.length+1)throw Error("animate");
+    const a={finished:Promise.resolve(),cancelled:0,sealed:0,played:0,cancel(){this.cancelled++;},finish(){this.sealed++;},play(){this.played++;},pause(){if(fault.pause)throw Error("pause");}};
+    effects.push(a);fault.onAnimate?.();return a;}
+  };nodes.push(n);return n;
+ }
+ const root=node("root"),row=node("row"),list=node("list"),cards=[node("card",{left:20,top:0,right:50,bottom:30,width:30,height:30}),node("card",{left:60,top:0,right:90,bottom:30,width:30,height:30})];
+ row.append(list);list.append(...cards);
+ const document={documentElement:root,getElementById:()=>null,createElementNS:(ns,tag)=>node(tag)};
+ const window={__nocturneLayoutStartup:{},CSS:{registerProperty(){}},addUnloadListener(){},addEventListener(){},removeEventListener(){},
+  getComputedStyle:()=>({opacity:"1",visibility:"visible",display:"block",getPropertyValue:()=>""}),
+  requestAnimationFrame(fn){const id=++nextFrame;frames.set(id,fn);return id;},cancelAnimationFrame(id){frames.delete(id);},
+  CustomEvent:class{constructor(type){this.type=type;}},dispatchEvent(event){events.push(event.type);fault.onEnd?.();},
+  MutationObserver:class{constructor(fn){this.fn=fn;this.active=false;observers.push(this);}observe(){this.active=true;if(fault.observe)throw Error("observe");}disconnect(){this.active=false;}}
+ };
+ const mount=()=>{new Function("window","document","Services",source)(window,document,{});return window.__nocturneCenterMotion;};
+ const addIcon=()=>{const wrap=node("icon"),img=node("img");wrap.append(img);cards[0].append(wrap);return img;};
+ return {root,row,cards,nodes,effects,observers,events,frames,fault,window,mount,addIcon};
+}
+const ownerMark="data-zr-center-motion",cardMark="data-zr-center-card";
+function assertProxyClean(f){
+ assert.equal(f.root.hasAttribute(ownerMark),false);assert.equal(f.root.hasAttribute("data-zr-fold-measuring"),false);
+ assert.ok(f.cards.every(c=>!c.hasAttribute(cardMark)));
+ assert.equal(f.row.children.length,1);assert.ok(f.effects.every(a=>a.cancelled===1));
+ assert.ok(f.observers.every(o=>!o.active));assert.ok(f.nodes.every(n=>n.listeners.size===0));
+}
+test("tab proxy failure restores every acquired resource at each setup stage",()=>{
+ for(const key of ["shadow","append","mark","observe","listener","pause","animate"]){
+  const f=proxyFixture(),engine=f.mount();f.addIcon();f.root.setAttribute("data-zr-workspace-phase","swap");
+  f.fault[key]=key==="animate"?2:true;
+  assert.equal(engine.start(f.row,{owner:"workspace",paused:true}),null,key);assertProxyClean(f);
+ }
+});
+test("proxy supersession rejects synchronous CenterMotionEnd reentry and stale handles",()=>{
+ const f=proxyFixture(),engine=f.mount(),a=engine.start(f.row,{owner:"startup"});let nested;
+ f.fault.onEnd=()=>{nested=engine.start(f.row,{owner:"close"});};
+ const b=engine.start(f.row,{owner:"workspace"});assert.ok(b);assert.equal(nested,null);
+ a.resume();a.seal();a.release();assert.equal(f.effects[0].played,0);assert.equal(f.effects[0].sealed,0);
+ assert.equal(f.root.getAttribute(ownerMark),"workspace");assert.equal(f.row.children.length,2);b.release();assertProxyClean(f);
+});
+test("dispose during proxy acquisition rolls back before returning; cross-surface reentry rejected",()=>{
+ const f=proxyFixture(),engine=f.mount();let nested;
+ f.fault.onAnimate=()=>{nested=engine.bookmarks();engine.dispose();};
+ assert.equal(engine.start(f.row,{owner:"startup"}),null);assert.equal(nested,null);
+ assertProxyClean(f);assert.equal(f.window.__nocturneCenterMotion,undefined);
+});
+test("dispose from CenterMotionEnd aborts the superseding acquisition",()=>{
+ const f=proxyFixture(),engine=f.mount();engine.start(f.row,{owner:"startup"});
+ f.fault.onEnd=()=>engine.dispose();
+ assert.equal(engine.start(f.row,{owner:"workspace"}),null);assertProxyClean(f);
+ assert.equal(f.window.__nocturneCenterMotion,undefined);
+});
+test("close proxy retention is exact and replacement cancels the old handles",()=>{
+ const f=proxyFixture(),engine=f.mount();f.root.setAttribute("data-zr-closing","true");
+ const a=engine.start(f.row,{owner:"close",direction:"out",retainOnDispose:()=>true});engine.dispose();assert.equal(f.effects[0].cancelled,0);
+ const next=f.mount();assertProxyClean(f);const b=next.start(f.row,{owner:"startup"});a.release();a.seal();
+ assert.equal(f.root.getAttribute(ownerMark),"startup");b.release();assertProxyClean(f);
+});
+test("stale handoff callback cannot clear a successor handoff",()=>{
+ const f=proxyFixture(),engine=f.mount(),a=engine.start(f.row,{owner:"startup"});a.release();
+ const old=[...f.frames.values()][0];const b=engine.start(f.row,{owner:"workspace"});b.release();
+ old();assert.equal(f.root.getAttribute("data-zr-center-handoff"),"true");
+ const [key,fn]=[...f.frames][0];f.frames.delete(key);fn();
+ const [key2,fn2]=[...f.frames][0];f.frames.delete(key2);fn2();
+ assert.equal(f.root.hasAttribute("data-zr-center-handoff"),false);assertProxyClean(f);
+});
+test("proxy release restores exact prior card and root markers",()=>{
+ const f=proxyFixture(),engine=f.mount();f.cards[0].setAttribute(cardMark,"prior");f.root.setAttribute(ownerMark,"prior");
+ const a=engine.start(f.row,{owner:"workspace"});a.release();
+ assert.equal(f.cards[0].getAttribute(cardMark),"prior");assert.equal(f.root.getAttribute(ownerMark),"prior");assert.equal(f.row.children.length,1);
+});
+test("queued favicon callback after release cannot update detached copies",()=>{
+ const f=proxyFixture(),engine=f.mount(),img=f.addIcon();const a=engine.start(f.row,{owner:"startup"});
+ const callback=f.observers[0].fn;a.release();img.getAttribute=()=>{throw Error("stale callback");};callback();assertProxyClean(f);
+});
+
+test("closing phase alone cannot retain effects during mod disable",()=>{
+ const f=proxyFixture(),engine=f.mount();f.root.setAttribute("data-zr-closing","true");
+ engine.start(f.row,{owner:"close",direction:"out",retainOnDispose:()=>false});engine.dispose();assertProxyClean(f);
+ assert.equal(f.window.__nocturneCenterMotion,undefined);
+ const b=bookmarkFixture(),other=b.mount();b.root.setAttribute("data-zr-closing","true");
+ other.bookmarks({owner:"close",retainOnDispose:()=>false});other.dispose();assert.equal(b.effects[0].cancelled,1);assert.equal(b.node.hasAttribute(foldMark),false);
+});
+test("delegated tab release after cancelled native close restores sources",()=>{
+ const f=proxyFixture(),engine=f.mount();let committing=true;
+ f.root.setAttribute("data-zr-closing","true");const a=engine.start(f.row,{owner:"close",direction:"out",retainOnDispose:()=>committing});
+ engine.dispose();assert.equal(f.effects[0].cancelled,0);committing=false;a.release();assertProxyClean(f);
+ assert.equal(f.window.__nocturneCenterMotion,undefined);
+});
+test("close consumer uses actual native commit predicate for both handles",()=>{
+ const code=read("closing-animation.uc.mjs");
+ assert.equal((code.match(/retainOnDispose:\(\)=>controller\.committing/g)||[]).length,2);
 });
