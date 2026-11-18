@@ -1,3 +1,10 @@
+## 0.3.0-preview.52 — Layout preference leases and close fallback
+
+- Separate window preference ownership from UI active state. The first live layout applies native overrides; joining windows share the lease, and the last owner restores after local teardown.
+- Track actual native writes in new backups, preserve user/default state for unmodified keys, and retain compatibility with older backups.
+- Expire tentative close hints and update native layout after Sine unload if the window survives without a replacement. Actual native unload does not schedule recovery. Sine beforeunload cancellation behavior remains a native integration limitation.
+- Add seven regression cases; no intended visual/default changes, native verification pending.
+
 ## 0.3.0-preview.51 — Lifecycle scope self-review
 
 - Preserve the first release outcome, count nested and late cleanup during disposal, and invalidate scoped listener callbacks before attempting native removal. Try compensating removal if registration throws.

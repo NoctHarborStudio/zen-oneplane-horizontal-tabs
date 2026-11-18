@@ -39,7 +39,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.51",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.52",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -614,7 +614,8 @@ const root = document.documentElement;
 const prefs = Services.prefs;
 let disposed = false;
 let applied = false;
-let closing = false;
+let ownsPreferences = false;
+let closing = false,closeTimer=0;
 let startupObserver = null;
 let removeTabStrip = null;
 
@@ -622,7 +623,7 @@ function snapshot() {
   const capture=name=>{
     if (prefs.getPrefType(name) !== prefs.PREF_BOOL)
       throw new Error("Unsupported Zen preference: " + name);
-    return { value: prefs.getBoolPref(name), user: prefs.prefHasUserValue(name) };
+    return { value: prefs.getBoolPref(name), user: prefs.prefHasUserValue(name), owned:false };
   };
   const raw = prefs.getStringPref(KEY, "");
   if (raw) {
@@ -650,7 +651,11 @@ function otherActiveWindow() {
   const windows = Services.wm.getEnumerator("navigator:browser");
   while (windows.hasMoreElements()) {
     const other = windows.getNext();
-    if (other !== window && !other.closed && other[CONTROLLER]?.active) return true;
+    if (other === window || other.closed) continue;
+    const lease=other[CONTROLLER];
+    // A disposing window retains its lease until local teardown finishes.
+    // Older generations expose only active.
+    if (lease && (lease.ownsPreferences ?? lease.active)) return true;
   }
   return false;
 }
@@ -667,8 +672,13 @@ function restorePrefs() {
       if (!original || typeof original.value !== "boolean" || typeof original.user !== "boolean")
         throw new Error("Invalid saved preference");
       if (original.released===true) { alreadyReleased++; continue; }
-      // Do not overwrite settings changed by the user while the mod was active.
-      if (prefs.getBoolPref(name) !== TARGET[name]) { skipped++; original.released=true; continue; }
+      // New snapshots distinguish a no-op acquisition from a native write.
+      // Legacy backups retain their old value-based restoration contract.
+      if (original.owned===false ||
+          prefs.getBoolPref(name) !== TARGET[name] ||
+          (original.owned===true&&!prefs.prefHasUserValue(name))) {
+        skipped++; original.released=true; continue;
+      }
       if (original.user) prefs.setBoolPref(name, original.value);
       else prefs.clearUserPref(name);
       restored++;
@@ -693,8 +703,27 @@ function restorePrefs() {
 }
 
 function markClosing(event) {
-  if (event.target === document) closing = true;
-    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.markClosing",()=>({closing}),{flush:true});
+  if(event.target!==document&&event.target!==window)return;
+  closing=true;
+  if(closeTimer)window.clearTimeout(closeTimer);
+  closeTimer=window.setTimeout(()=>{
+    closeTimer=0;closing=false;
+    try{window.__nocturneTrace?.("layout.close.pending-expired",{active:!disposed},{flush:true});}catch{}
+  },1000);
+  try{window.__nocturneTrace?.("layout.markClosing",{closing},{flush:true});}catch{}
+}
+function nativeUnload(){cleanup(true);}
+function updateNativeAfterCleanup(pendingClose,nativeExit){
+  if(nativeExit||window.closed||Services.startup?.shuttingDown)return;
+  const update=()=>{
+    if(window.closed||Services.startup?.shuttingDown||window[CONTROLLER])return;
+    window.dispatchEvent(new window.CustomEvent("ZenCompactMode:LayoutUpdate"));
+  };
+  // Sine 2.3.3 may unload on beforeunload, even if close is cancelled.
+  // This is a bounded native fallback, not a proof of cancellation or a
+  // request to remount Sine scripts.
+  if(pendingClose)window.setTimeout(()=>cleanupStep("native layout fallback",update),1000);
+  else update();
 }
 
 
@@ -7733,7 +7762,7 @@ function installTabStrip() {
 function cleanupStep(label,fn){
   try{fn();}catch(error){console.warn("[Nocturne] Cleanup "+label+":",error);}
 }
-function cleanup() {
+function cleanup(nativeExit=false) {
     typeof window!=="undefined"&&window.__nocturneTrace?.("layout.cleanup.begin",()=>({disposed,applied,closing}),{flush:true});
   if (disposed) return;
   disposed = true;
@@ -7747,16 +7776,22 @@ function cleanup() {
     startupObserver = null;
   }
   cleanupStep("beforeunload",()=>window.removeEventListener("beforeunload", markClosing, true));
-  cleanupStep("unload",()=>window.removeEventListener("unload", cleanup));
-  const wasApplied = applied;
-  applied = false;
-  if (window[CONTROLLER] === controller) delete window[CONTROLLER];
-  if (!wasApplied) return;
-  cleanupStep("layout preferences",()=>{if (!otherActiveWindow()) restorePrefs();});
-  if (!closing) cleanupStep("native layout update",()=>window.dispatchEvent(new CustomEvent("ZenCompactMode:LayoutUpdate")));
+  cleanupStep("unload",()=>window.removeEventListener("unload", nativeUnload));
+  cleanupStep("close timer",()=>{if(closeTimer)window.clearTimeout(closeTimer);closeTimer=0;});
+  const wasApplied=applied,wasOwner=ownsPreferences,pendingClose=closing;
+  applied=false;ownsPreferences=false;closing=false;
+  const registered=window[CONTROLLER]===controller;
+  if(registered)delete window[CONTROLLER];
+  if(wasOwner)cleanupStep("layout preferences",()=>{
+    const shared=otherActiveWindow()||!!window[CONTROLLER]?.ownsPreferences;
+    if(!shared)restorePrefs();
+    try{window.__nocturneTrace?.("layout.prefs.lease",{action:"release",last:!shared},{flush:true});}catch{}
+  });
+  if(wasApplied&&registered)cleanupStep("native layout update",()=>updateNativeAfterCleanup(pendingClose,nativeExit===true));
 }
 
-const controller = { get active() { return applied && !disposed; }, cleanup,
+const controller = { get active() { return applied && !disposed; },
+  get ownsPreferences(){return ownsPreferences;}, cleanup,
   prepareWorkspaceGeometry(){return removeTabStrip?.prepareWorkspaceGeometry?.();} };
 
 // One startup selection per browser process. Never redirect a projected
@@ -7813,12 +7848,24 @@ async function activate() {
     if (!manager || typeof manager.hideToolbar !== "function") {
       throw new Error("Unsupported Zen Compact Mode API.");
     }
-    snapshot();
+    const shared=otherActiveWindow();
+    const saved=shared?null:snapshot();
     if(!current())return;
-    applied = true;
-    for (const [name, value] of Object.entries(TARGET)) {
-      if (!current())return;
-      if (prefs.getBoolPref(name) !== value) prefs.setBoolPref(name, value);
+    ownsPreferences=true;applied=true;
+    try{window.__nocturneTrace?.("layout.prefs.lease",{action:"acquire",shared},{flush:true});}catch{}
+    // Only the first live window applies global native preferences. Joining
+    // windows must not reassert values the user changed during the lease.
+    if(!shared)for (const [name, value] of Object.entries(TARGET)) {
+      if(!current())return;
+      const actual=prefs.getBoolPref(name);
+      if(actual===value)continue;
+      if(saved[name].owned!==undefined){
+        saved[name]={value:actual,user:prefs.prefHasUserValue(name),owned:true};
+        // Record the original before writing a native preference.
+        prefs.setStringPref(KEY,JSON.stringify(saved));
+        if(!current())return;
+      }
+      prefs.setBoolPref(name,value);
     }
     if(!current())return;
     // Configure the hide target without forcing Compact Mode on.
@@ -7863,7 +7910,7 @@ if (!root.hasAttribute("popup-window") && typeof window.addUnloadListener === "f
   root.setAttribute("data-op-startup-ready","pending");
   window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
   window.addEventListener("beforeunload", markClosing, true);
-  window.addEventListener("unload", cleanup, { once: true });
+  window.addEventListener("unload", nativeUnload, { once: true });
   window.addUnloadListener(cleanup);
   if (window.gBrowserInit?.delayedStartupFinished) {
     void activate();

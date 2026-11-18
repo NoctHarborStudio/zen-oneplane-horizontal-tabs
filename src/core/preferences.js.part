@@ -17,7 +17,8 @@ const root = document.documentElement;
 const prefs = Services.prefs;
 let disposed = false;
 let applied = false;
-let closing = false;
+let ownsPreferences = false;
+let closing = false,closeTimer=0;
 let startupObserver = null;
 let removeTabStrip = null;
 
@@ -25,7 +26,7 @@ function snapshot() {
   const capture=name=>{
     if (prefs.getPrefType(name) !== prefs.PREF_BOOL)
       throw new Error("Unsupported Zen preference: " + name);
-    return { value: prefs.getBoolPref(name), user: prefs.prefHasUserValue(name) };
+    return { value: prefs.getBoolPref(name), user: prefs.prefHasUserValue(name), owned:false };
   };
   const raw = prefs.getStringPref(KEY, "");
   if (raw) {
@@ -53,7 +54,11 @@ function otherActiveWindow() {
   const windows = Services.wm.getEnumerator("navigator:browser");
   while (windows.hasMoreElements()) {
     const other = windows.getNext();
-    if (other !== window && !other.closed && other[CONTROLLER]?.active) return true;
+    if (other === window || other.closed) continue;
+    const lease=other[CONTROLLER];
+    // A disposing window retains its lease until local teardown finishes.
+    // Older generations expose only active.
+    if (lease && (lease.ownsPreferences ?? lease.active)) return true;
   }
   return false;
 }
@@ -70,8 +75,13 @@ function restorePrefs() {
       if (!original || typeof original.value !== "boolean" || typeof original.user !== "boolean")
         throw new Error("Invalid saved preference");
       if (original.released===true) { alreadyReleased++; continue; }
-      // Do not overwrite settings changed by the user while the mod was active.
-      if (prefs.getBoolPref(name) !== TARGET[name]) { skipped++; original.released=true; continue; }
+      // New snapshots distinguish a no-op acquisition from a native write.
+      // Legacy backups retain their old value-based restoration contract.
+      if (original.owned===false ||
+          prefs.getBoolPref(name) !== TARGET[name] ||
+          (original.owned===true&&!prefs.prefHasUserValue(name))) {
+        skipped++; original.released=true; continue;
+      }
       if (original.user) prefs.setBoolPref(name, original.value);
       else prefs.clearUserPref(name);
       restored++;
@@ -96,8 +106,27 @@ function restorePrefs() {
 }
 
 function markClosing(event) {
-  if (event.target === document) closing = true;
-    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.markClosing",()=>({closing}),{flush:true});
+  if(event.target!==document&&event.target!==window)return;
+  closing=true;
+  if(closeTimer)window.clearTimeout(closeTimer);
+  closeTimer=window.setTimeout(()=>{
+    closeTimer=0;closing=false;
+    try{window.__nocturneTrace?.("layout.close.pending-expired",{active:!disposed},{flush:true});}catch{}
+  },1000);
+  try{window.__nocturneTrace?.("layout.markClosing",{closing},{flush:true});}catch{}
+}
+function nativeUnload(){cleanup(true);}
+function updateNativeAfterCleanup(pendingClose,nativeExit){
+  if(nativeExit||window.closed||Services.startup?.shuttingDown)return;
+  const update=()=>{
+    if(window.closed||Services.startup?.shuttingDown||window[CONTROLLER])return;
+    window.dispatchEvent(new window.CustomEvent("ZenCompactMode:LayoutUpdate"));
+  };
+  // Sine 2.3.3 may unload on beforeunload, even if close is cancelled.
+  // This is a bounded native fallback, not a proof of cancellation or a
+  // request to remount Sine scripts.
+  if(pendingClose)window.setTimeout(()=>cleanupStep("native layout fallback",update),1000);
+  else update();
 }
 
 

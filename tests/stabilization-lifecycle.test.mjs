@@ -54,9 +54,9 @@ test("Dock disable and re-enable share the same in-flight native subscription",a
 });
 test("layout cleanup continues after feature disposal throws",()=>{
  const src=read("src/core/bootstrap.js.part"),cleanup=src.slice(0,src.indexOf("const controller ="));
- const result=new Function(`let disposed=false,applied=true,closing=false,startupObserver=null;
+ const result=new Function(`let disposed=false,applied=true,ownsPreferences=true,closing=false,closeTimer=0,startupObserver=null;
  const root={removeAttribute(){}};const window={dispatchEvent(){},CustomEvent:class{},removeEventListener(){},layout:{}};
- const CONTROLLER="layout",controller=window.layout;function markClosing(){}let restored=false;
+ const CONTROLLER="layout",controller=window.layout;function markClosing(){}function nativeUnload(){}function updateNativeAfterCleanup(){}let restored=false;
  function otherActiveWindow(){return false}function restorePrefs(){restored=true}
  let removeTabStrip=()=>{throw Error("injected feature cleanup failure")};const console={warn(){}};
  const CustomEvent=window.CustomEvent;${cleanup}cleanup();
@@ -91,8 +91,8 @@ test("new activation captures released preference keys without losing unresolved
  const prefs={PREF_BOOL:128,getPrefType:()=>128,getStringPref:()=>raw,setStringPref(k,v){raw=v;},
   getBoolPref:k=>false,prefHasUserValue:k=>true};
  const snapshot=new Function("prefs","TARGET","STARTUP","KEY",code+"return snapshot;")(prefs,{a:true,b:false},"startup","backup");
- assert.deepEqual(snapshot(),{a:saved.a,b:{value:false,user:true},startup:saved.startup});
- assert.deepEqual(JSON.parse(raw),{a:saved.a,b:{value:false,user:true},startup:saved.startup});
+ assert.deepEqual(snapshot(),{a:saved.a,b:{value:false,user:true,owned:false},startup:saved.startup});
+ assert.deepEqual(JSON.parse(raw),{a:saved.a,b:{value:false,user:true,owned:false},startup:saved.startup});
 });
 test("failed backup removal checkpoints release progress before retry",()=>{
  const src=read("src/core/preferences.js.part");
@@ -115,12 +115,12 @@ test("Hub and drag publication occur only in guarded strip mount",()=>{
 test("layout activation releases strip returned after synchronous cleanup and never publishes readiness",async()=>{
  const src=read("src/core/bootstrap.js.part");
  const code=src.slice(src.indexOf("async function activate()"),src.indexOf("const reloadingLayout="));
- const run=new Function(`let disposed=false,applied=false,removeTabStrip=null;
+ const run=new Function(`let disposed=false,applied=false,ownsPreferences=false,removeTabStrip=null;
  const reloadingLayout=true,startupRecord={},CONTROLLER="controller",controller={};const marks=[],calls=[];
  const root={hasAttribute:()=>false,setAttribute:k=>marks.push(k)};
  const prefs={getBoolPref:()=>true};const TARGET={};
  const window={controller,gZenCompactModeManager:{hideToolbar(){}},dispatchEvent(){},CustomEvent:class{},requestAnimationFrame(){calls.push("raf")}};
- function snapshot(){}function cleanup(){disposed=true;}function cleanupStep(label,fn){fn();}
+ function otherActiveWindow(){return false;}function snapshot(){return {};}function cleanup(){disposed=true;}function cleanupStep(label,fn){fn();}
  function installTabStrip(){cleanup();return ()=>calls.push("strip cleanup");}const console={error(){}};
  ${code}return async()=>{await activate();return {marks,calls,disposed,installed:!!removeTabStrip};};`)();
  assert.deepEqual(await run(),{marks:[],calls:["strip cleanup"],disposed:true,installed:false});

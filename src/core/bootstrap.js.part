@@ -3,7 +3,7 @@
 function cleanupStep(label,fn){
   try{fn();}catch(error){console.warn("[Nocturne] Cleanup "+label+":",error);}
 }
-function cleanup() {
+function cleanup(nativeExit=false) {
     typeof window!=="undefined"&&window.__nocturneTrace?.("layout.cleanup.begin",()=>({disposed,applied,closing}),{flush:true});
   if (disposed) return;
   disposed = true;
@@ -17,16 +17,22 @@ function cleanup() {
     startupObserver = null;
   }
   cleanupStep("beforeunload",()=>window.removeEventListener("beforeunload", markClosing, true));
-  cleanupStep("unload",()=>window.removeEventListener("unload", cleanup));
-  const wasApplied = applied;
-  applied = false;
-  if (window[CONTROLLER] === controller) delete window[CONTROLLER];
-  if (!wasApplied) return;
-  cleanupStep("layout preferences",()=>{if (!otherActiveWindow()) restorePrefs();});
-  if (!closing) cleanupStep("native layout update",()=>window.dispatchEvent(new CustomEvent("ZenCompactMode:LayoutUpdate")));
+  cleanupStep("unload",()=>window.removeEventListener("unload", nativeUnload));
+  cleanupStep("close timer",()=>{if(closeTimer)window.clearTimeout(closeTimer);closeTimer=0;});
+  const wasApplied=applied,wasOwner=ownsPreferences,pendingClose=closing;
+  applied=false;ownsPreferences=false;closing=false;
+  const registered=window[CONTROLLER]===controller;
+  if(registered)delete window[CONTROLLER];
+  if(wasOwner)cleanupStep("layout preferences",()=>{
+    const shared=otherActiveWindow()||!!window[CONTROLLER]?.ownsPreferences;
+    if(!shared)restorePrefs();
+    try{window.__nocturneTrace?.("layout.prefs.lease",{action:"release",last:!shared},{flush:true});}catch{}
+  });
+  if(wasApplied&&registered)cleanupStep("native layout update",()=>updateNativeAfterCleanup(pendingClose,nativeExit===true));
 }
 
-const controller = { get active() { return applied && !disposed; }, cleanup,
+const controller = { get active() { return applied && !disposed; },
+  get ownsPreferences(){return ownsPreferences;}, cleanup,
   prepareWorkspaceGeometry(){return removeTabStrip?.prepareWorkspaceGeometry?.();} };
 
 // One startup selection per browser process. Never redirect a projected
@@ -83,12 +89,24 @@ async function activate() {
     if (!manager || typeof manager.hideToolbar !== "function") {
       throw new Error("Unsupported Zen Compact Mode API.");
     }
-    snapshot();
+    const shared=otherActiveWindow();
+    const saved=shared?null:snapshot();
     if(!current())return;
-    applied = true;
-    for (const [name, value] of Object.entries(TARGET)) {
-      if (!current())return;
-      if (prefs.getBoolPref(name) !== value) prefs.setBoolPref(name, value);
+    ownsPreferences=true;applied=true;
+    try{window.__nocturneTrace?.("layout.prefs.lease",{action:"acquire",shared},{flush:true});}catch{}
+    // Only the first live window applies global native preferences. Joining
+    // windows must not reassert values the user changed during the lease.
+    if(!shared)for (const [name, value] of Object.entries(TARGET)) {
+      if(!current())return;
+      const actual=prefs.getBoolPref(name);
+      if(actual===value)continue;
+      if(saved[name].owned!==undefined){
+        saved[name]={value:actual,user:prefs.prefHasUserValue(name),owned:true};
+        // Record the original before writing a native preference.
+        prefs.setStringPref(KEY,JSON.stringify(saved));
+        if(!current())return;
+      }
+      prefs.setBoolPref(name,value);
     }
     if(!current())return;
     // Configure the hide target without forcing Compact Mode on.
@@ -133,7 +151,7 @@ if (!root.hasAttribute("popup-window") && typeof window.addUnloadListener === "f
   root.setAttribute("data-op-startup-ready","pending");
   window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
   window.addEventListener("beforeunload", markClosing, true);
-  window.addEventListener("unload", cleanup, { once: true });
+  window.addEventListener("unload", nativeUnload, { once: true });
   window.addUnloadListener(cleanup);
   if (window.gBrowserInit?.delayedStartupFinished) {
     void activate();
