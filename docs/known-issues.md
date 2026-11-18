@@ -538,3 +538,110 @@ split-drop.css.part:2–7 absolute inset:0 z-index:101 pointer-events:auto while
 **Required:** A4/A5: define source card, native hit rect, return zone and decorative ghost separately; native point tests in compact/2-row/search, outside-window and no-drag baseline; do not use full-window transparent hitbox unless native operation requires it.
 
 Three extracted-source experiments confirmed missing-method handling, same-target identity predicate limitation and outside-rectangle split classification. Native event reachability and Windows drag behavior are unverified. All findings open; see [pipeline](nocturne/pipeline-0.4.0.md).
+
+
+### Shared services checkpoint — NC4-076–092
+
+#### NC4-076 — Downloads bulk clear omits skipped records (S/P1)
+
+downloads-service.mjs:83–87 increments removed on true and failed on throw, not on false. Extracted-source fixture: two initially clearable entries, second becomes partial after first remove; result removed=1 failed=0 with one remaining. Safe skip is correct; summary is incomplete.
+
+**Required:** A7: shared native operation result requested/completed/skipped/failed, preserve eligibility and never delete files; test disposal and changed eligibility.
+
+#### NC4-077 — Media refresh invalidates old handles before new cache is ready (S/P1)
+
+media-service.mjs:31–46 deletes owned handles, mutates new handles per item, commits cache only at end. Extracted-source fixture: describe throws on second item of second refresh; old rows stay visible but old ID action returns false; partial new handles remain.
+
+**Required:** A7: stage complete immutable cache/handle map, commit after success and generation check; preserve previous valid cache on failure.
+
+#### NC4-078 — Closed tabs disposal stops after failing unsubscribe (S/P1)
+
+closed-tabs-service.mjs:26–30 release removes itself before off; dispose loops without per-release isolation. Fixture: first off throws, second never runs, subsequent dispose no-op. Native observer callback checks dead but observer may retain old closure.
+
+**Required:** A1/A7: failure-isolated scope, report per-resource failure and retry where safe; test two subscriptions and throwing native removal.
+
+#### NC4-079 — Overlay partial handoff reproduced (S/P1)
+
+Refines NC4-019. overlay-coordinator.mjs:14–28 preflights canYield then yields sequentially. Actual fixture: owner A yields, B returns false, request denied, A inactive. This is non-atomic handoff, not evidence of native data loss.
+
+**Required:** A6: document partial result and safe recovery or implement prepare/commit if supported; no automatic reopening native popups or forced drag cancellation.
+
+#### NC4-080 — Failed Downloads removeView releases reload barrier (S/R/P1)
+
+downloads-service.mjs:32–35 clears source before await and catches removal failure; dispose:89–95 resolves barrier. Fixture: native removeView throws, replacement start succeeds, native mock retains two views. Old callback is dead-guarded, so not duplicate active processing, but old view remains retained.
+
+**Required:** A1/A7: report detach outcome, preserve retryable handle; replacement policy must explicitly address retained subscription rather than assert exclusive native view; test native failure and teardown.
+
+#### NC4-081 — Oversized startup archive prevents diagnostic file update (S/P1)
+
+diagnostics.js.part:39–56 trims only events with more than one entry, never startup. Synthetic ASCII packSessions fixture with 100 startup items and one event returns 2304335 bytes > 2000000. Persist:78 rejects rather than writing oversize; cap is enforced but recording can fail entirely. Refines NC4-025.
+
+**Required:** A0/A8: enforce per-event/startup and total byte budget, preserve minimal keyframes and newest evidence; test oversized archive and old malformed persisted data, Unicode bytes.
+
+#### NC4-082 — Native scan result limit is not a traversal or memory budget (S/R/P1)
+
+Zen 1.24.2b nsZenLibraryFiles.cpp WalkFolder accumulates every matching entry and child directory before recursion; ScanMedia sorts all found entries then truncates to maxItems. Nocturne requests depth=2 folders=60 items=300. One huge folder can still enumerate and allocate many entries; earlier roots can exhaust global folder budget. Native scan is background but resource cost is not bounded by 300.
+
+**Required:** A7/A8: document actual output cap, measure large and network folders; narrow/explicit root policy, consider native API improvement only if supported upstream; no replacement JS recursive scanner by default.
+
+#### NC4-083 — Native scan has no cancellation or timeout contract (S/R/P1)
+
+nsIZenLibraryFiles.idl scanMedia returns void and callback only; media-service.mjs:27–34 serializes pending promises, runtime:41–48 wraps callback without deadline. Closing suppresses stale results but a stalled native scan can block later requests and reload barrier. No native stall reproduced.
+
+**Required:** A7: separate UI deadline from native outstanding ownership, expose busy/unknown and safe retry, do not start overlapping walks merely on timeout; test delayed/missing callback.
+
+#### NC4-084 — History clear operations can overlap destructive commands (S/R/P0)
+
+library/controller.js.part:148–155 checks clearing but does not set it or acquire actionSerial; clearRecentHistory invokes native removal after confirmation, other clear or row actions can still start. Each action is explicitly confirmed; no unexpected deletion proven.
+
+**Required:** A7: one destructive-command gate with exact scope, confirmation generation and native result; define close behavior during accepted operation; test duplicate range clear and row deletion while pending.
+
+#### NC4-085 — History result updates recreate date heading nodes (S/R/P2)
+
+library/controller.js.part:247–277 reuses row DOM by ID but creates a new h3 per day each render; unchanged comparison then fails even with same row order. Potential DOM churn/focus scroll cost, not measured.
+
+**Required:** A7: stable group keys and keyed heading reconciliation; measure native history updates and preserve focus.
+
+#### NC4-086 — Smart Search manager state fallback needs exact controller identity (S/R/P1)
+
+smart-search.uc.mjs:145–152 resolves window from controller then registry.windows/byId/controllers, replaces win with state.win. Missing or stale controller metadata can resolve a previous state if manager/controller replaced; disposal unregisters original references only. Existing tests cover normal exact-window and partial install, not manager replacement; no cross-window/private leak established.
+
+**Required:** A6: verify live window/controller/manager generation on query and engagement; fail closed on conflicting identity, keep private guard; test replaced manager, stale controller and same URL across windows.
+
+#### NC4-087 — Page Progress ignores request identity across overlapping loads (S/R/P1)
+
+page-progress.uc.mjs:162–182 uses one active flag per browser and ignores request. Actual listener fixture START A, START B, STOP A, PROGRESS B -> active=false, progress=null, finish(true). Native Gecko ordering/reachability not verified; refines NC4-024.
+
+**Required:** A7: validate real nsIWebProgress network event semantics (redirect, request replacement, cancel) before changing aggregation; test matching native trace and no false completion.
+
+#### NC4-088 — Diagnostics disabled state does not gate pending persistence (S/R/P1)
+
+diagnostics.js.part:93–118 record gates enabled, but flush/persist do not recheck enabled; already queued write can occur after pref off. Private check remains. Whether opt-out should finish previously captured local records is not specified.
+
+**Required:** A0: define disable semantics explicitly, cancel or complete preauthorized flush consistently; test pref flip during queued/write and no new capture; do not claim old files are deleted.
+
+#### NC4-089 — Diagnostics accepts arbitrary event keys and user mark strings (S/R/P1)
+
+diagnostics.js.part:26–34 truncates string values but not key names; record:101–118 accepts caller event/options.key, last map has no cap; api.mark:198–199 stores arbitrary label. Existing producers mostly use fixed names/counts; no demonstrated private data leak. String truncation is not redaction.
+
+**Required:** A0/A8: fixed event schemas, bounded key cardinality and mark enum or explicit safe label policy; audit all producers, no query/path/title/URL payload, test adversarial detail and keys.
+
+#### NC4-090 — Dock and Library duplicate bulk removal orchestration (S/R/P1)
+
+downloads-indicator.uc.mjs:473–493 captures targets and checks generation per entry; library/controller:125–133 calls service.clearCompleted with different result semantics. Both use same native service, not duplicate native data ownership. Independent clear operations can interleave across UI/windows.
+
+**Required:** A7: shared operation service and result contract, explicit scope and concurrency policy; preserve different confirmations and native list-only behavior.
+
+#### NC4-091 — Smart Search collects recent native tabs twice per zero-prefix query (S/R/P2)
+
+smart-search.uc.mjs:394–399 wrapped startQuery collects to set budget; provider.startQuery:175–187 collects again and sorts. Both traverse all stored/native tabs and lazy metadata. Correctness of fresh collection is valuable; cost not measured.
+
+**Required:** A6/A8: profile large tab sets; if justified use query-scoped immutable candidate snapshot keyed by live window/manager generation, revalidate selection; avoid persistent URL database.
+
+#### NC4-092 — Media IDs are regenerated on every refresh (S/R/P1)
+
+media-service.mjs:35–45 assigns new serial ID to every unchanged path on each successful scan. Library render keyed by ID loses stable row/focus identity. Old IDs intentionally invalidated, but no stable view identity separate from capability handle.
+
+**Required:** A7: separate stable opaque view key within session from generation-validated action capability; test same files refresh, rename, removal, focus and stale action rejection.
+
+Seven extracted-source experiments in this checkpoint; NC4-081 uses synthetic ASCII archive and NC4-087 uses synthetic network event order, not native event evidence. All issues remain open. Existing NC4-019/024/025 are refined by NC4-079/087/081, not independent replacement projects. See [pipeline](nocturne/pipeline-0.4.0.md).
