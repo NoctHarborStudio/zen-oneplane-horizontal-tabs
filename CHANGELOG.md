@@ -1,3 +1,9 @@
+## 0.3.0-preview.79 — Independent Workspace admission and selection review
+
+- Require the selected Workspace in the authoritative list, distinct physical containers and exact exclusive pin-role membership, including nested group ancestry.
+- Recheck the actual peer gate and native manager after the final native busy check; preserve foreign reservations on rejection.
+- Four permanent regression tests; no animation timing, close behavior or native data ownership changes.
+
 ## 0.3.0-preview.78 — Center Motion transactional proxy ownership
 
 - Reserve the exact tab proxy handle before acquisition; fence reentrant callbacks across both tab and bookmark surfaces, restore exact markers and roll back partial DOM/WAAPI initialization.

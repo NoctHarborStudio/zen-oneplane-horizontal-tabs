@@ -166,3 +166,7 @@ A2 source implementation and independent integrated audit complete at R2, subjec
 ### A3.2a — Bookmark fold lifecycle ownership
 
 Center Motion owns one exact bookmark-fold handle per window and restores the prior inline CSS value, priority and marker only for the current lease. Supersession and replacement cancel the old effect before capturing a new baseline; acquisition failure rolls back. Existing close-seal retention is explicitly restricted to close-owned handles, reclaimed on replacement. Magnetic Bookmarks observes existing phase markers and suspends normal hover. The shared tab proxy acquisition and wider motion transaction remain in A3.2b/A3.3; see [pipeline](pipeline-0.4.0.md). No change to native workspace admission or normal animation timing.
+
+### Independent A2 follow-up — preview.79
+
+Preview.79 independent review extends the existing Workspace command contract: selected item must be in exactly the expected native container (outermost group role if grouped), and the peer reservation must belong to the actual current peer gate after the final native busy check. Zen remains sole native data owner.

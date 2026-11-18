@@ -41,7 +41,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.78",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.79",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -1104,7 +1104,11 @@ function requireWorkspaceCommand(win,native,lease){
     gate.reservation||win.closed||win.gZenWorkspaces!==native)
     throw workspaceCommandError("stale");
   if(lease.token&&lease.anchor[WORKSPACE_DATA_GATE]!==lease.token)throw workspaceCommandError("data-lease-lost");
-  if(lease.peer&&lease.peer.gate.reservation!==lease.token)throw workspaceCommandError("peer-lease-lost");
+  // A later native getter can replace the peer manager or its entire gate.
+  // Read the published gate again; an old reservation alone proves nothing.
+  if(lease.peer&&(lease.peer.win.closed||lease.peer.win.gZenWorkspaces!==lease.peer.native||
+    lease.peer.win[WORKSPACE_GATE]!==lease.peer.gate||lease.peer.gate.reservation!==lease.token||
+    lease.peer.gate.pending||lease.peer.gate.owner))throw workspaceCommandError("peer-lease-lost");
 }
 function requireWorkspaceDataCommand(win,native,lease){
   requireWorkspaceCommand(win,native,lease);
@@ -1202,7 +1206,8 @@ function inspectWorkspaceSwitch(win,native,id){
     if(!element?.isConnected||!element.active||!element.tabsContainer?.isConnected||
       !element.pinnedTabsContainer?.isConnected||!element.scrollbox||!Array.isArray(spaces)||
       spaces.some(s=>!s?.uuid)||new Set(spaces.map(s=>s.uuid)).size!==spaces.length)return "container-unready";
-    if(spaces.some(s=>{const node=native.workspaceElement(s.uuid);return !node?.isConnected||!!node.active!==(s.uuid===id);}))return "container-mismatch";
+    if(!spaces.some(s=>s.uuid===id)||element.tabsContainer===element.pinnedTabsContainer||
+      spaces.some(s=>{const node=native.workspaceElement(s.uuid);return !node?.isConnected||!!node.active!==(s.uuid===id);}))return "container-mismatch";
     const browser=win.gBrowser,tc=browser?.tabContainer,tab=browser?.selectedTab;
     if(!tc||tc.arrowScrollbox!==element.scrollbox||tc.pinnedTabsContainer!==element.pinnedTabsContainer||
       browser.pinnedTabsContainer!==element.pinnedTabsContainer)return "binding-mismatch";
@@ -1227,8 +1232,20 @@ function inspectWorkspaceSwitch(win,native,id){
         const context=Number(owner.getAttribute("usercontextid")||0),space=native.getWorkspaceFromId(id),target=Number(space.containerTabId||0);
         if(target?target!==context:context!==0&&spaces.some(s=>Number(s.containerTabId||0)===context))return "selection-mismatch";
       }
-    }else if(owner.hasAttribute("zen-essential")||owner.getAttribute("zen-workspace-id")!==id||
-      !(element.tabsContainer.contains(owner)||element.pinnedTabsContainer.contains(owner)))return "selection-mismatch";
+    }else{
+      if(owner.hasAttribute("zen-essential")||owner.getAttribute("zen-workspace-id")!==id)return "selection-mismatch";
+      // Native Zen places the outermost folder/group by its own pin role,
+      // which can differ from an individual member tab. A Glance child
+      // was resolved to its parent above. Verify the exact physical chain.
+      let item=owner;const seen=new Set([owner]);
+      for(let group=owner.group;group;group=group.group){
+        if(seen.has(group)||!group.isConnected||!group.contains(item))return "selection-mismatch";
+        seen.add(group);item=group;
+      }
+      const normal=element.tabsContainer,pinned=element.pinnedTabsContainer;
+      const expected=item.pinned?pinned:normal,other=item.pinned?normal:pinned;
+      if(!expected.contains(owner)||!expected.contains(item)||other.contains(owner)||other.contains(item))return "selection-mismatch";
+    }
     return "confirmed";
   }catch{return "inspection-error";}
 }

@@ -220,3 +220,49 @@ test("container-specific Essential must be in its actual native section",()=>{
  section.getAttribute=()=>"2";assert.equal(inspectWorkspaceSwitch(f.win,f.native,"a"),"confirmed");
  f.entries[0].containerTabId=3;assert.equal(inspectWorkspaceSwitch(f.win,f.native,"a"),"selection-mismatch");
 });
+
+test("selected Workspace must occur in the authoritative list and have distinct native containers",()=>{
+ const f=fixture();f.settle("b");f.native.getWorkspaces=()=>[f.entries[0]];
+ assert.equal(inspectWorkspaceSwitch(f.win,f.native,"b"),"container-mismatch");
+ const g=fixture(),e=g.element("a");e.pinnedTabsContainer=e.tabsContainer;
+ assert.equal(inspectWorkspaceSwitch(g.win,g.native,"a"),"container-mismatch");
+});
+test("ordinary selected tab requires exclusive membership in its pin-role container",()=>{
+ const f=fixture(),tab=f.browser.selectedTab,e=f.element("a");
+ tab.pinned=true;assert.equal(inspectWorkspaceSwitch(f.win,f.native,"a"),"selection-mismatch");
+ e.pinnedTabsContainer.contains=t=>t===tab;
+ assert.equal(inspectWorkspaceSwitch(f.win,f.native,"a"),"selection-mismatch");
+ e.tabsContainer.contains=()=>false;
+ assert.equal(inspectWorkspaceSwitch(f.win,f.native,"a"),"confirmed");
+ tab.pinned=false;assert.equal(inspectWorkspaceSwitch(f.win,f.native,"a"),"selection-mismatch");
+});
+test("nested native group selection uses outermost group pin role rather than member role",()=>{
+ const f=fixture(),tab=f.browser.selectedTab,e=f.element("a");
+ const inner={isConnected:true,pinned:false,contains:t=>t===tab};
+ const outer={isConnected:true,pinned:true,contains:t=>t===inner||t===tab};
+ tab.group=inner;inner.group=outer;
+ e.tabsContainer.contains=()=>false;e.pinnedTabsContainer.contains=t=>t===tab||t===outer||t===inner;
+ assert.equal(inspectWorkspaceSwitch(f.win,f.native,"a"),"confirmed");
+ outer.pinned=false;assert.equal(inspectWorkspaceSwitch(f.win,f.native,"a"),"selection-mismatch");
+ outer.pinned=true;inner.isConnected=false;assert.equal(inspectWorkspaceSwitch(f.win,f.native,"a"),"selection-mismatch");
+ inner.isConnected=true;outer.group=inner;assert.equal(inspectWorkspaceSwitch(f.win,f.native,"a"),"selection-mismatch");
+});
+test("Return rejects replacement peer gate or manager during final native busy check",async()=>{
+ for(const replace of ["gate","manager"]){
+  const a=fixture(),b=fixture(),anchor={},foreign=Symbol("foreign");let continued=0;
+  const successor={pending:null,reservation:foreign};
+  const p=runWorkspaceCommand(a.win,a.native,"projection-return",()=>true,lease=>{
+   Object.defineProperty(a.native,"isChangingWorkspace",{configurable:true,get(){
+    if(replace==="gate")b.win.__nocturneWorkspaceCommandGate=successor;
+    else b.win.gZenWorkspaces={...b.native};
+    return false;
+   }});
+   requireWorkspaceCommand(a.win,a.native,lease);continued++;
+  },{data:true,anchor,peer:{win:b.win,native:b.native}});
+  await assert.rejects(p,code("peer-lease-lost"));assert.equal(continued,0);
+  assert.equal(workspaceCommandGate(a.win).pending,null);
+  assert.equal(anchor[Symbol.for("nocturne.workspace.data-command.v1")],undefined);
+  if(replace==="gate")assert.equal(workspaceCommandGate(b.win).reservation,foreign);
+  else assert.equal(workspaceCommandGate(b.win).reservation,undefined);
+ }
+});
