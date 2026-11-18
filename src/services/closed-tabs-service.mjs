@@ -24,9 +24,12 @@ import { createDisposableScope } from "../core/disposable-scope.mjs";
     function forget(id){if(dead||!allowed()||typeof forgetNative!=="function"||!getClosed().some(tab=>tab.closedId===id))return false;return forgetNative(id)!==false;}
     function subscribe(fn){
       if(dead||!allowed())throw Error("Closed tabs unavailable in this window");
-      let active=true;
-      const off=observe(()=>{if(active&&!dead&&allowed())fn();});
-      return subscriptions.defer("closed-tabs-observer",()=>{active=false;off();});
+      let active=true,notify=fn;
+      // A consumer exception must not abort native registration before
+      // the removal handle is returned.
+      const report=error=>{try{onError("closed-tabs-callback",error);}catch{}};
+      const off=observe(()=>{if(active&&!dead&&allowed()&&notify)try{notify();}catch(error){report(error);}});
+      return subscriptions.defer("closed-tabs-observer",()=>{active=false;notify=null;off();});
     }
     function dispose(){dead=true;return subscriptions.dispose();}
     return {query,subscribe,restore,forget,dispose};

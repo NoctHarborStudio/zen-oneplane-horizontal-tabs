@@ -39,7 +39,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.50",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.51",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -1787,38 +1787,55 @@ function acquireZenHome(win, services) {
 }
 
 // Synchronous acquisition scope. Each release is attempted at most once;
-// native failures are reported, never retried implicitly or treated as success.
+// the original outcome is retained. Native failures are never retried implicitly.
 function createDisposableScope({onError=()=>{}}={}){
-  let closed=false;
+  let closed=false,disposing=null;
   const releases=new Set();
   function defer(label,cleanup){
     if(typeof cleanup!=="function")throw new TypeError("Expected cleanup function");
-    let active=true;
+    let active=true,outcome=false;
     const release=()=>{
-      if(!active)return true;
+      if(!active)return outcome;
       active=false;releases.delete(release);
-      try{cleanup();return true;}
-      catch(error){try{onError(label,error);}catch{}return false;}
+      const run=cleanup;cleanup=null;
+      try{run();outcome=true;}
+      catch(error){try{onError(label,error);}catch{}}
+      // Count nested and late releases during the same disposal, too.
+      if(disposing)disposing[outcome?"released":"failed"]++;
+      return outcome;
     };
     if(closed)release();else releases.add(release);
     return release;
   }
   function listen(node,type,fn,options){
     if(closed)throw Error("Disposable scope closed");
-    // Keep the exact acquisition target and capture flag.
     const capture=typeof options==="boolean"?options:!!options?.capture;
-    node.addEventListener(type,fn,options);
-    return defer("listener",()=>node.removeEventListener(type,fn,capture));
+    let callback=fn;
+    const guarded=function(event){
+      if(closed||!callback)return;
+      if(typeof callback==="function")return callback.call(this,event);
+      return callback.handleEvent(event);
+    };
+    // Keep the exact registered wrapper and invalidate it even if native
+    // removal fails. Register cleanup after add so synchronous disposal
+    // inside acquisition immediately releases the newly attached wrapper.
+    try{node.addEventListener(type,guarded,options);}
+    catch(error){
+      defer("listener",()=>{callback=null;node.removeEventListener(type,guarded,capture);})();
+      throw error;
+    }
+    return defer("listener",()=>{callback=null;node.removeEventListener(type,guarded,capture);});
   }
   function dispose(){
     if(closed)return {released:0,failed:0};
     closed=true;
-    let released=0,failed=0;
-    for(const release of [...releases].reverse()){
-      if(!releases.has(release))continue;
-      if(release())released++;else failed++;
-    }
-    return {released,failed};
+    const result={released:0,failed:0};disposing=result;
+    try{
+      for(const release of [...releases].reverse()){
+        if(releases.has(release))release();
+      }
+    }finally{disposing=null;}
+    return result;
   }
   return {defer,listen,dispose,get closed(){return closed;},get size(){return releases.size;}};
 }
@@ -4666,17 +4683,22 @@ function installTabStrip() {
     const hubScope=createDisposableScope({onError:(resource,error)=>{
       try{window.__nocturneTrace?.("layout.scope.error",{owner:"hub",resource,error:error?.name||"Error"},{flush:true});}catch{}
     }});
-    let unregisterOverlay=()=>true,mounted=false;
+    let unregisterOverlay=()=>true,mounted=false,overlayGeneration=0;
     function bindOverlay(){
       if(destroyed||hubScope.closed)return;
+      const generation=++overlayGeneration;
       unregisterOverlay();
+      if(destroyed||hubScope.closed||generation!==overlayGeneration)return;
+      const live=()=>!destroyed&&!hubScope.closed&&generation===overlayGeneration;
       const off=window.__nocturneOverlay?.register("hub",{
-        priority:20,isActive:()=>!destroyed&&(open||!panel.hidden),
-        canYield:()=>!busy&&!projectionBusy&&!drag&&!trashDrag,
-        yield:()=>{close(false,true);return panel.hidden;},
-        onEscape:event=>{if(open)key(event);return true;}
+        priority:20,isActive:()=>live()&&(open||!panel.hidden),
+        canYield:()=>live()&&!busy&&!projectionBusy&&!drag&&!trashDrag,
+        yield:()=>{if(!live())return false;close(false,true);return panel.hidden;},
+        onEscape:event=>{if(!live())return false;if(open)key(event);return true;}
       });
-      unregisterOverlay=typeof off==="function"?hubScope.defer("overlay",off):()=>true;
+      const release=typeof off==="function"?hubScope.defer("overlay",off):()=>true;
+      if(!live()){release();return;}
+      unregisterOverlay=release;
     }
     listeners.push([window,"Nocturne:OverlayReady",bindOverlay]);
     for(const event of ["ZenWorkspaceDataChanged","ZenWorkspacesUIUpdate","ZenCompactMode:Toggled","ZenCompactMode:LayoutUpdate"])listeners.push([window,event,changed]);
@@ -7573,6 +7595,10 @@ function installTabStrip() {
     cleanupStep("splitEntries.clear()",()=>{splitEntries.clear();});
   }
 
+  const checkMount=()=>{
+    if(disposed||window.closed||window[CONTROLLER]!==controller)
+      throw Error("Stale strip mount");
+  };
   try {
     // No globally visible Hub/drag owner before all strip declarations
     // are initialized and the existing rollback guard is active.
@@ -7581,9 +7607,9 @@ function installTabStrip() {
       if(window[DRAG_CONTROLLER]===dragController)delete window[DRAG_CONTROLLER];
     });
     window[DRAG_CONTROLLER]=dragController;
-    hub.mount();
+    hub.mount();checkMount();
     url.after(row);url.append(compactSearch);
-    hub.ensure();ensureDownloadHost();
+    hub.ensure();ensureDownloadHost();checkMount();
     releaseDragEngine=installDragEngine();
     try{releaseWorkspaceLinkScope=installWorkspaceLinkScope();}catch(error){console.warn("[OnePlane] Workspace link isolation:",error);}
     target.prepend(leftSpacer);
@@ -7613,9 +7639,9 @@ function installTabStrip() {
     url.addEventListener("focusout", onAddressMutation);
     actionObserver.observe(url, { subtree: true, childList: true });
     alignAddressStart();
-    mountHome();
+    mountHome();checkMount();
     applyHoverMode();
-    sync();
+    sync();checkMount();
     try { browser.addProgressListener(progressListener); } catch {}
     for(const lane of [list,leftLane,rightLane,bottomLane]){
       lane.addEventListener("scroll",refreshIndicator,{passive:true});
@@ -7692,6 +7718,7 @@ function installTabStrip() {
     window.addEventListener("ZenCompactMode:LayoutUpdate", onCompactChanged);
     window.addEventListener("resize", onWindowGeometryChanged);
     window.addEventListener("sizemodechange", onWindowGeometryChanged);
+    checkMount();
     row.setAttribute("data-ready", "true");
   } catch (error) {
     destroy();
@@ -7774,33 +7801,48 @@ async function initializeFreeAtStartup(){
 
 async function activate() {
     typeof window!=="undefined"&&window.__nocturneTrace?.("layout.activate.begin",()=>({reloadingLayout}),{sample:1800});
+  const current=()=>!disposed&&!window.closed&&window[CONTROLLER]===controller;
   try {
     await window.SessionStore?.promiseAllWindowsRestored;
     await window.gZenWorkspaces?.promiseInitialized;
     typeof window!=="undefined"&&window.__nocturneTrace?.("layout.native.ready",()=>({closed:window.closed}),{sample:1800});
-    if (disposed || window.closed || root.hasAttribute("popup-window")) return;
+    if (!current() || root.hasAttribute("popup-window")) return;
     if(!reloadingLayout)await initializeFreeAtStartup();
-    if(disposed||window.closed)return;
+    if(!current())return;
     const manager = window.gZenCompactModeManager;
     if (!manager || typeof manager.hideToolbar !== "function") {
       throw new Error("Unsupported Zen Compact Mode API.");
     }
     snapshot();
+    if(!current())return;
     applied = true;
     for (const [name, value] of Object.entries(TARGET)) {
+      if (!current())return;
       if (prefs.getBoolPref(name) !== value) prefs.setBoolPref(name, value);
     }
+    if(!current())return;
     // Configure the hide target without forcing Compact Mode on.
     manager.hideToolbar();
-    removeTabStrip = installTabStrip();
+    if(!current())return;
+    const strip=installTabStrip();
+    // Mount dispatches synchronous native/UI events. Cleanup may have run
+    // before installTabStrip returned its handle.
+    if(!current()){
+      cleanupStep("stale strip mount",strip);
+      try{window.__nocturneTrace?.("layout.mount.stale",{stage:"return"},{flush:true});}catch{}
+      return;
+    }
+    removeTabStrip = strip;
     typeof window!=="undefined"&&window.__nocturneTrace?.("layout.strip.installed",()=>({installed:!!removeTabStrip}),{sample:1800});
     // Native state changes and animations remain owned by Zen.
     root.setAttribute("oneplane-active", "true");
+    if(!current())return;
     // Publish readiness after activation has allowed geometry and the
     // native toolbar to settle. No dependency on Zen Refined.
     window.dispatchEvent(new window.CustomEvent("ZenCompactMode:LayoutUpdate"));
+    if(!current())return;
     window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>{
-      if(disposed||window.closed)return;
+      if(!current())return;
       root.setAttribute("data-op-startup-ready","true");
     typeof window!=="undefined"&&window.__nocturneTrace?.("layout.ready",()=>({paintCount:window.windowUtils?.paintCount}),{sample:3000,flush:true});
       if(window.__nocturneLayoutStartup===startupRecord)startupRecord.readyAt=window.performance.now();

@@ -129,6 +129,10 @@
     cleanupStep("splitEntries.clear()",()=>{splitEntries.clear();});
   }
 
+  const checkMount=()=>{
+    if(disposed||window.closed||window[CONTROLLER]!==controller)
+      throw Error("Stale strip mount");
+  };
   try {
     // No globally visible Hub/drag owner before all strip declarations
     // are initialized and the existing rollback guard is active.
@@ -137,9 +141,9 @@
       if(window[DRAG_CONTROLLER]===dragController)delete window[DRAG_CONTROLLER];
     });
     window[DRAG_CONTROLLER]=dragController;
-    hub.mount();
+    hub.mount();checkMount();
     url.after(row);url.append(compactSearch);
-    hub.ensure();ensureDownloadHost();
+    hub.ensure();ensureDownloadHost();checkMount();
     releaseDragEngine=installDragEngine();
     try{releaseWorkspaceLinkScope=installWorkspaceLinkScope();}catch(error){console.warn("[OnePlane] Workspace link isolation:",error);}
     target.prepend(leftSpacer);
@@ -169,9 +173,9 @@
     url.addEventListener("focusout", onAddressMutation);
     actionObserver.observe(url, { subtree: true, childList: true });
     alignAddressStart();
-    mountHome();
+    mountHome();checkMount();
     applyHoverMode();
-    sync();
+    sync();checkMount();
     try { browser.addProgressListener(progressListener); } catch {}
     for(const lane of [list,leftLane,rightLane,bottomLane]){
       lane.addEventListener("scroll",refreshIndicator,{passive:true});
@@ -248,6 +252,7 @@
     window.addEventListener("ZenCompactMode:LayoutUpdate", onCompactChanged);
     window.addEventListener("resize", onWindowGeometryChanged);
     window.addEventListener("sizemodechange", onWindowGeometryChanged);
+    checkMount();
     row.setAttribute("data-ready", "true");
   } catch (error) {
     destroy();

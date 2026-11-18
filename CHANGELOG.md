@@ -1,3 +1,9 @@
+## 0.3.0-preview.51 — Lifecycle scope self-review
+
+- Preserve the first release outcome, count nested and late cleanup during disposal, and invalidate scoped listener callbacks before attempting native removal. Try compensating removal if registration throws.
+- Revalidate layout activation and guarded mount at synchronous handoffs; discard a strip returned after cancellation instead of publishing readiness. Reject stale Hub overlay generations and isolate Closed Tabs subscriber exceptions during acquisition.
+- Add six regression cases and strengthen existing scope fixtures. No intended visual changes or new preference IDs; native validation remains pending.
+
 ## 0.3.0-preview.50 — Scoped resource acquisition
 
 - Add a shared synchronous DisposableScope used by Layout, Hub and Closed Tabs Service. Isolate release failures, retain exact listener targets and release late acquisitions immediately.

@@ -1029,17 +1029,22 @@
     const hubScope=createDisposableScope({onError:(resource,error)=>{
       try{window.__nocturneTrace?.("layout.scope.error",{owner:"hub",resource,error:error?.name||"Error"},{flush:true});}catch{}
     }});
-    let unregisterOverlay=()=>true,mounted=false;
+    let unregisterOverlay=()=>true,mounted=false,overlayGeneration=0;
     function bindOverlay(){
       if(destroyed||hubScope.closed)return;
+      const generation=++overlayGeneration;
       unregisterOverlay();
+      if(destroyed||hubScope.closed||generation!==overlayGeneration)return;
+      const live=()=>!destroyed&&!hubScope.closed&&generation===overlayGeneration;
       const off=window.__nocturneOverlay?.register("hub",{
-        priority:20,isActive:()=>!destroyed&&(open||!panel.hidden),
-        canYield:()=>!busy&&!projectionBusy&&!drag&&!trashDrag,
-        yield:()=>{close(false,true);return panel.hidden;},
-        onEscape:event=>{if(open)key(event);return true;}
+        priority:20,isActive:()=>live()&&(open||!panel.hidden),
+        canYield:()=>live()&&!busy&&!projectionBusy&&!drag&&!trashDrag,
+        yield:()=>{if(!live())return false;close(false,true);return panel.hidden;},
+        onEscape:event=>{if(!live())return false;if(open)key(event);return true;}
       });
-      unregisterOverlay=typeof off==="function"?hubScope.defer("overlay",off):()=>true;
+      const release=typeof off==="function"?hubScope.defer("overlay",off):()=>true;
+      if(!live()){release();return;}
+      unregisterOverlay=release;
     }
     listeners.push([window,"Nocturne:OverlayReady",bindOverlay]);
     for(const event of ["ZenWorkspaceDataChanged","ZenWorkspacesUIUpdate","ZenCompactMode:Toggled","ZenCompactMode:LayoutUpdate"])listeners.push([window,event,changed]);

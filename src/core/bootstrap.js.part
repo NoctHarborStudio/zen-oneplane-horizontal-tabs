@@ -71,33 +71,48 @@ async function initializeFreeAtStartup(){
 
 async function activate() {
     typeof window!=="undefined"&&window.__nocturneTrace?.("layout.activate.begin",()=>({reloadingLayout}),{sample:1800});
+  const current=()=>!disposed&&!window.closed&&window[CONTROLLER]===controller;
   try {
     await window.SessionStore?.promiseAllWindowsRestored;
     await window.gZenWorkspaces?.promiseInitialized;
     typeof window!=="undefined"&&window.__nocturneTrace?.("layout.native.ready",()=>({closed:window.closed}),{sample:1800});
-    if (disposed || window.closed || root.hasAttribute("popup-window")) return;
+    if (!current() || root.hasAttribute("popup-window")) return;
     if(!reloadingLayout)await initializeFreeAtStartup();
-    if(disposed||window.closed)return;
+    if(!current())return;
     const manager = window.gZenCompactModeManager;
     if (!manager || typeof manager.hideToolbar !== "function") {
       throw new Error("Unsupported Zen Compact Mode API.");
     }
     snapshot();
+    if(!current())return;
     applied = true;
     for (const [name, value] of Object.entries(TARGET)) {
+      if (!current())return;
       if (prefs.getBoolPref(name) !== value) prefs.setBoolPref(name, value);
     }
+    if(!current())return;
     // Configure the hide target without forcing Compact Mode on.
     manager.hideToolbar();
-    removeTabStrip = installTabStrip();
+    if(!current())return;
+    const strip=installTabStrip();
+    // Mount dispatches synchronous native/UI events. Cleanup may have run
+    // before installTabStrip returned its handle.
+    if(!current()){
+      cleanupStep("stale strip mount",strip);
+      try{window.__nocturneTrace?.("layout.mount.stale",{stage:"return"},{flush:true});}catch{}
+      return;
+    }
+    removeTabStrip = strip;
     typeof window!=="undefined"&&window.__nocturneTrace?.("layout.strip.installed",()=>({installed:!!removeTabStrip}),{sample:1800});
     // Native state changes and animations remain owned by Zen.
     root.setAttribute("oneplane-active", "true");
+    if(!current())return;
     // Publish readiness after activation has allowed geometry and the
     // native toolbar to settle. No dependency on Zen Refined.
     window.dispatchEvent(new window.CustomEvent("ZenCompactMode:LayoutUpdate"));
+    if(!current())return;
     window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>{
-      if(disposed||window.closed)return;
+      if(!current())return;
       root.setAttribute("data-op-startup-ready","true");
     typeof window!=="undefined"&&window.__nocturneTrace?.("layout.ready",()=>({paintCount:window.windowUtils?.paintCount}),{sample:3000,flush:true});
       if(window.__nocturneLayoutStartup===startupRecord)startupRecord.readyAt=window.performance.now();

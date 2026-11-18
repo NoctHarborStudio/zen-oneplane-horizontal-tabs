@@ -111,3 +111,28 @@ test("Hub and drag publication occur only in guarded strip mount",()=>{
  assert.match(life,/try \{\s*\/\/ No globally visible[\s\S]*?mountScope\.defer\("hub"[\s\S]*?window\[DRAG_CONTROLLER\]=dragController;\s*hub\.mount\(\)/);
  assert.match(hub,/function mount\(\)\{[\s\S]*?bindOverlay\(\);[\s\S]*?hubScope\.listen/);
 });
+
+test("layout activation releases strip returned after synchronous cleanup and never publishes readiness",async()=>{
+ const src=read("src/core/bootstrap.js.part");
+ const code=src.slice(src.indexOf("async function activate()"),src.indexOf("const reloadingLayout="));
+ const run=new Function(`let disposed=false,applied=false,removeTabStrip=null;
+ const reloadingLayout=true,startupRecord={},CONTROLLER="controller",controller={};const marks=[],calls=[];
+ const root={hasAttribute:()=>false,setAttribute:k=>marks.push(k)};
+ const prefs={getBoolPref:()=>true};const TARGET={};
+ const window={controller,gZenCompactModeManager:{hideToolbar(){}},dispatchEvent(){},CustomEvent:class{},requestAnimationFrame(){calls.push("raf")}};
+ function snapshot(){}function cleanup(){disposed=true;}function cleanupStep(label,fn){fn();}
+ function installTabStrip(){cleanup();return ()=>calls.push("strip cleanup");}const console={error(){}};
+ ${code}return async()=>{await activate();return {marks,calls,disposed,installed:!!removeTabStrip};};`)();
+ assert.deepEqual(await run(),{marks:[],calls:["strip cleanup"],disposed:true,installed:false});
+});
+test("Hub overlay stale generation cannot handle Escape after rebinding",()=>{
+ const source=read("src/hub/controller.js.part"),code=source.slice(source.indexOf("    const hubScope="),source.indexOf('    listeners.push([window,"Nocturne:OverlayReady"'));
+ const scope=read("src/core/disposable-scope.mjs").replace("export function","function");
+ const run=new Function(`${scope}
+ let destroyed=false,open=true,busy=false,projectionBusy=false,drag=null,trashDrag=null,escapes=0;
+ const panel={hidden:false},specs=[];const window={__nocturneOverlay:{register(id,spec){specs.push(spec);return()=>{throw Error("native");};}}};
+ function close(){}function key(){escapes++;}
+ ${code}bindOverlay();bindOverlay();const old=specs[0],live=specs[1];
+ return {old:old.isActive(),oldEscape:old.onEscape({}),live:live.isActive(),liveEscape:live.onEscape({}),escapes};`);
+ assert.deepEqual(run(),{old:false,oldEscape:false,live:true,liveEscape:true,escapes:1});
+});

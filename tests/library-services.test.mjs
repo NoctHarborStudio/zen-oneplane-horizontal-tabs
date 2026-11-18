@@ -77,3 +77,10 @@ test("subscription acquired during synchronous disposal is immediately released"
  let s,removed=0; s=createClosedTabsService({getClosed:()=>[],observe(fn){fn();return()=>removed++;}});
  s.subscribe(()=>s.dispose());assert.equal(removed,1);
 });
+
+test("closed tabs subscriber failure during acquisition does not lose native unsubscribe",()=>{
+ let removed=0,errors=[];
+ const s=createClosedTabsService({getClosed:()=>[],observe(fn){fn();return()=>removed++;},onError:label=>errors.push(label)});
+ s.subscribe(()=>{throw Error("consumer");});assert.deepEqual(errors,["closed-tabs-callback"]);
+ assert.deepEqual(s.dispose(),{released:1,failed:0});assert.equal(removed,1);
+});
