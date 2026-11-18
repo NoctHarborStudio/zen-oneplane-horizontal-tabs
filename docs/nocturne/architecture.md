@@ -114,3 +114,7 @@ Approved design, not implemented (preview.40 planning baseline). The previous br
 - Shared Home supplies readiness/eligibility and a stable structural lease; it keeps native selection and normal interaction semantics. Center Motion supplies effects; keep existing workspace/close Fold behavior. Layout supplies geometry/dirty-state reconciliation. No participant independently starts or ends the global startup.
 - One pure timing source is built into both the HTML Lab and existing startup runtime entry. Prefer fixed real slots and safely composed visual properties for Bloom; use proxy fallback only if measured necessary. Existing Sine script names remain unchanged.
 - Prepare before revealing, bind to a single document timeline epoch, then atomically seal/reconcile/release. Cancellation and timeout use the same idempotent cleanup. No input starvation or unbounded startup wait. Native pre-injection flash is separate.
+
+### Diagnostic terminal ownership (A1.10)
+
+Layout owns its cleanup and native preference lease. Diagnostics claims that specific generation's cleanup callback, quiesces sampling on a real chrome-window unload and delegates to the same owner; completion is explicit after the terminal Layout event and lease release. A filtered, idempotent native Layout listener covers absent/forced-disposed Diagnostics. Partial-init Sine fallback has no required Layout owner. The final microtask is not a guarantee for independent late listeners. See [Diagnostics](diagnostics.md) and [Pipeline](pipeline-0.4.0.md).
