@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="startup-prefs.script",data={version:"0.3.0-preview.58"};
+  const event="startup-prefs.script",data={version:"0.3.0-preview.59"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -13,7 +13,7 @@ const OPTION="zen.refined.startup.disable-placeholders";
 const BACKUP="zen.refined.startup.previous-placeholders";
 const TARGETS=["browser.startup.blankWindow","browser.startup.preXulSkeletonUI"];
 const prefs=Services.prefs;
-const KEY="__zenRefinedStartupPlaceholders";
+const KEY="__zenRefinedStartupPlaceholders",PENDING=KEY+"Pending";
 const LEGACY_ID="9d788b55-d497-41da-8444-993c603e89e4";
 // Sine owns mod installation state. Read it only for diagnostics, never
 // change the other mod, and do not hold up browser startup.
@@ -28,8 +28,17 @@ async function warnLegacyConflict(getMods,logger){
   return false;
 }
 function readBackup(){
-  try{const b=JSON.parse(prefs.getStringPref(BACKUP,"{}"));return b&&typeof b==="object"&&!Array.isArray(b)?b:{};}catch{return {};}
+  const backup=JSON.parse(prefs.getStringPref(BACKUP,"{}"));
+  if(!backup||typeof backup!=="object"||Array.isArray(backup)||
+     Object.keys(backup).some(name=>!TARGETS.includes(name)||
+       typeof backup[name]?.user!=="boolean"||typeof backup[name]?.value!=="boolean"||
+       (backup[name].released!==undefined&&typeof backup[name].released!=="boolean")))
+    throw Error("Invalid startup preference backup");
+  return backup;
 }
+function trace(event,data){try{window.__nocturneTrace?.(event,data,{flush:true});}catch{}}
+function checkpoint(backup){prefs.setStringPref(BACKUP,JSON.stringify(backup));}
+
 function persist(){try{prefs.savePrefFile(null);}catch(error){console.warn("[Zen Refined] Could not save startup preferences",error);}}
 function apply(){
     typeof window!=="undefined"&&window.__nocturneTrace?.("startup-prefs.apply",()=>(null),{sample:1800});
@@ -39,9 +48,9 @@ function apply(){
     try{
       if(prefs.prefIsLocked(name)||prefs.getPrefType(name)!==prefs.PREF_BOOL)continue;
       if(prefs.getBoolPref(name)===false)continue;
-      if(!Object.hasOwn(backup,name)){
+      if(!Object.hasOwn(backup,name)||backup[name].released===true){
         backup[name]={user:prefs.prefHasUserValue(name),value:prefs.getBoolPref(name)};
-        prefs.setStringPref(BACKUP,JSON.stringify(backup));
+        checkpoint(backup);
       }
       if(disposed)break;
       prefs.setBoolPref(name,false);changed=true;
@@ -50,23 +59,32 @@ function apply(){
   if(changed)persist();
 }
 function restore(){
-    typeof window!=="undefined"&&window.__nocturneTrace?.("startup-prefs.restore",()=>(null),{sample:1800});
-  const backup=readBackup();let changed=false;
+  trace("startup-prefs.restore",null);
+  const backup=readBackup();let restored=0,skipped=0,failed=0,checkpointFailed=false;
   for(const name of TARGETS){
-    const old=backup[name];if(!old||typeof old.user!=="boolean"||typeof old.value!=="boolean")continue;
+    const old=backup[name];if(!old||old.released===true)continue;
     try{
-      if(prefs.prefIsLocked(name))continue;
-      // Respect a later explicit change made by another tool or the user.
-      if(prefs.getPrefType(name)===prefs.PREF_BOOL&&prefs.getBoolPref(name)===false){
+      if(prefs.prefIsLocked(name)||prefs.getPrefType(name)!==prefs.PREF_BOOL)throw Error("Startup preference unavailable");
+      // Only a user value written by the mod can still be ours.
+      if(prefs.getBoolPref(name)===false&&prefs.prefHasUserValue(name)){
         if(old.user)prefs.setBoolPref(name,old.value);else prefs.clearUserPref(name);
-      }
-      delete backup[name];changed=true;
-    }catch(error){console.warn("[Zen Refined] Startup restore",name,error);}
+        restored++;
+      }else skipped++;
+      old.released=true;
+      // Retain progress even when another key or backup deletion fails.
+      try{checkpoint(backup);}catch{checkpointFailed=true;}
+    }catch(error){failed++;console.warn("[Zen Refined] Startup restore",name,error?.name||"Error");}
   }
-  if(changed){
-    if(Object.keys(backup).length)prefs.setStringPref(BACKUP,JSON.stringify(backup));else prefs.clearUserPref(BACKUP);
+  if(Object.keys(backup).length){
+    if(!failed){
+      try{prefs.clearUserPref(BACKUP);}
+      catch{failed++;try{checkpoint(backup);}catch{checkpointFailed=true;}}
+    }else{
+      try{checkpoint(backup);}catch{checkpointFailed=true;}
+    }
     persist();
   }
+  trace("startup-prefs.restore.result",{restored,skipped,failed,checkpointFailed});
 }
 function sync(){
   if(disposed)return;
@@ -75,7 +93,8 @@ function sync(){
   try{
     do{
       pendingSync=false;
-      if(prefs.getBoolPref(OPTION,true))apply();else restore();
+      try{if(prefs.getBoolPref(OPTION,true))apply();else restore();}
+      catch(error){trace("startup-prefs.sync.error",{name:error?.name||"Error"});console.warn("[Zen Refined] Startup preference sync",error?.name||"Error");}
     }while(pendingSync&&!disposed);
   }finally{
     mutating=false;
@@ -98,7 +117,7 @@ function otherOwner(){
   return null;
 }
 function observe(reconcile=false){
-  if(disposed)return;
+  if(disposed||!cleanup.active)return;
   if(!observing){prefs.addObserver(OPTION,sync);observing=true;}
   if(reconcile)sync();
 }
@@ -115,44 +134,68 @@ function beforeClose(event){
 function cleanup(modUnload=false){
   if(disposed)return;disposed=true;
   const wasObserving=observing,interrupted=mutating;
+  if(window[PENDING]===cleanup)delete window[PENDING];
+  const step=fn=>{try{fn();}catch(error){trace("startup-prefs.cleanup.error",{name:error?.name||"Error"});}};
+  step(()=>{if(closeTimer)window.clearTimeout(closeTimer);});
+  step(stopObserving);
+  step(()=>window.removeEventListener("beforeunload",beforeClose,true));
+  step(()=>window.removeEventListener("unload",nativeUnload));
+  // A queued replacement has not acquired native ownership.
+  if(!cleanup.active)return;
   pendingCleanup={modUnload,wasObserving,interrupted};
-  // Invalidate callbacks now, but keep the preference lease visible until
-  // synchronous preference notifications have returned.
-  if(closeTimer)window.clearTimeout(closeTimer);
-  stopObserving();
-  window.removeEventListener("beforeunload",beforeClose,true);
-  window.removeEventListener("unload",nativeUnload);
   finishCleanup();
 }
 function finishCleanup(){
   if(mutating||!pendingCleanup)return;
   const {modUnload,wasObserving,interrupted}=pendingCleanup;pendingCleanup=null;
-  cleanup.active=false;
-  if(window[KEY]===cleanup)delete window[KEY];
+  let successor=null,restoring=false;
   try{
-    const successor=otherOwner();
-    if(successor){
-      if(wasObserving&&!Services.startup.shuttingDown)successor.observe(interrupted);
-    }else if(modUnload&&!closing&&!window.closed&&!Services.startup.shuttingDown){
-      // Normal window exit must preserve the pre-startup settings.
-      restore();
+    successor=otherOwner();
+    if(!successor&&modUnload&&!closing&&!window.closed&&!Services.startup.shuttingDown){
+      // Keep the last lease published while native restore notifies
+      // synchronous observers. New windows join rather than race restore.
+      restoring=true;mutating=true;
+      try{restore();}finally{mutating=false;}
     }
-    try{window.__nocturneTrace?.("startup-prefs.cleanup",{interrupted,successor:!!successor,modUnload},{flush:true});}catch{}
-  }catch(error){console.warn("[Nocturne] Startup ownership cleanup",error);}
+  }catch(error){trace("startup-prefs.cleanup.error",{name:error?.name||"Error"});console.warn("[Zen Refined] Startup ownership cleanup",error?.name||"Error");}
+  finally{
+    cleanup.active=false;
+    if(window[KEY]===cleanup)delete window[KEY];
+  }
+  try{
+    // A successor may have joined during final restoration.
+    successor=otherOwner();
+    if(successor&&(wasObserving||restoring)&&!Services.startup.shuttingDown)
+      successor.observe(interrupted||restoring);
+    trace("startup-prefs.cleanup",{interrupted,successor:!!successor,modUnload});
+  }catch(error){trace("startup-prefs.cleanup.error",{name:error?.name||"Error"});}
 }
 function nativeUnload(){cleanup(false);}
 cleanup.active=false;cleanup.observe=observe;
 if(typeof window.addUnloadListener==="function"&&!document.documentElement.hasAttribute("popup-window")){
-  // A replacement in the same window transfers the existing backup.
-  window[KEY]?.(false);window[KEY]=cleanup;cleanup.active=true;
-  window.addEventListener("beforeunload",beforeClose,true);
+  // Register cancellation before asking the old owner to release. A
+  // reentrant replacement must not overwrite its still-active lease.
+  window[PENDING]?.(false);window[PENDING]=cleanup;
   window.addEventListener("unload",nativeUnload,{once:true});
   window.addUnloadListener(()=>cleanup(true));
-  if(!otherOwner()){
-    observe();sync();
-    void warnLegacyConflict(
-      ()=>ChromeUtils.importESModule("chrome://userscripts/content/core/utils.sys.mjs").default.getMods(),
-      console
-    );
+  const previous=window[KEY];
+  previous?.(false);
+  function install(){
+    if(disposed||window.closed||window[PENDING]!==cleanup)return;
+    if(previous?.active){
+      // Only synchronous mutations can hold this lease; resume at the
+      // microtask boundary after the old stack unwinds.
+      if(window[KEY]===previous){cleanup(false);return;}
+    }
+    delete window[PENDING];window[KEY]=cleanup;cleanup.active=true;
+    window.addEventListener("beforeunload",beforeClose,true);
+    if(!otherOwner()){
+      observe();sync();
+      void warnLegacyConflict(
+        ()=>ChromeUtils.importESModule("chrome://userscripts/content/core/utils.sys.mjs").default.getMods(),
+        console
+      );
+    }
   }
+  if(previous?.active)void Promise.resolve().then(install);else install();
 }

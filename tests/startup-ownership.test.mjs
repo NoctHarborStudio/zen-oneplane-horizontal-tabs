@@ -72,3 +72,44 @@ test("startup option changes during target write reconcile after current mutatio
  f.prefs.setBoolPref=(k,v)=>{set(k,v);if(k===TARGETS[0]&&v===false&&!triggered){triggered=true;f.option(false);}};
  const a=f.mount();assert.equal(triggered,true);assert.deepEqual(f.states(),[true,true]);assert.equal(f.values.has(BACKUP),false);a.unload();
 });
+
+test("same-window reload during final restore waits for old preference lease",async()=>{
+ const f=fixture(),a=f.mount();let b,triggered=false;const clear=f.prefs.clearUserPref;
+ f.prefs.clearUserPref=k=>{clear(k);if(k===TARGETS[0]&&!triggered){triggered=true;b=f.mount(a.window);}};
+ a.unload();await Promise.resolve();
+ assert.equal(triggered,true);assert.deepEqual(f.states(),[false,false]);assert.equal(f.observers.size,1);assert.ok(f.values.has(BACKUP));
+ b.unload();assert.deepEqual(f.states(),[true,true]);assert.equal(f.values.has(BACKUP),false);
+});
+test("new window joining during final restore reconciles after old lease releases",()=>{
+ const f=fixture(),a=f.mount();let b,triggered=false;const clear=f.prefs.clearUserPref;
+ f.prefs.clearUserPref=k=>{clear(k);if(k===TARGETS[0]&&!triggered){triggered=true;b=f.mount();assert.equal(f.observers.size,0);}};
+ a.unload();assert.deepEqual(f.states(),[false,false]);assert.equal(f.observers.size,1);assert.ok(f.values.has(BACKUP));
+ b.unload();assert.deepEqual(f.states(),[true,true]);
+});
+test("same-window reload during apply keeps the old backup and replays only after release",async()=>{
+ const f=fixture(),win={closed:false};let b,triggered=false;const set=f.prefs.setBoolPref;
+ f.prefs.setBoolPref=(k,v)=>{set(k,v);if(k===TARGETS[0]&&v===false&&!triggered){triggered=true;b=f.mount(win);}};
+ const a=f.mount(win);await Promise.resolve();
+ assert.deepEqual(f.states(),[false,false]);assert.equal(f.observers.size,1);a.unload();
+ assert.deepEqual(f.states(),[false,false]);b.unload();assert.deepEqual(f.states(),[true,true]);
+});
+test("pending same-window replacement cancelled before install cannot reacquire prefs",async()=>{
+ const f=fixture(),a=f.mount();let triggered=false;const clear=f.prefs.clearUserPref;
+ f.prefs.clearUserPref=k=>{clear(k);if(k===TARGETS[0]&&!triggered){triggered=true;const b=f.mount(a.window);b.unload();}};
+ a.unload();await Promise.resolve();
+ assert.deepEqual(f.states(),[true,true]);assert.equal(f.observers.size,0);assert.equal(f.values.has(BACKUP),false);
+});
+test("invalid startup backup is not overwritten or used for mutation",()=>{
+ for(const raw of ["not-json","null","[]",JSON.stringify({[TARGETS[0]]:{value:42,user:false}})]){
+   const f=fixture({[BACKUP]:raw}),a=f.mount();
+   assert.deepEqual(f.states(),[true,true]);assert.equal(f.values.get(BACKUP),raw);
+   a.unload();assert.equal(f.values.get(BACKUP),raw);
+ }
+});
+test("failed startup backup removal keeps release progress and later edits",()=>{
+ const f=fixture(),a=f.mount(),clear=f.prefs.clearUserPref;let fail=true;
+ f.prefs.clearUserPref=k=>{if(k===BACKUP&&fail)throw Error("locked backup");clear(k);};
+ f.option(false);assert.deepEqual(f.states(),[true,true]);assert.ok(JSON.parse(f.values.get(BACKUP))[TARGETS[0]].released);
+ f.values.set(TARGETS[0],false);fail=false;f.option(false);
+ assert.deepEqual(f.states(),[false,true]);assert.equal(f.values.has(BACKUP),false);a.unload();
+});

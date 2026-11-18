@@ -1,3 +1,9 @@
+## 0.3.0-preview.59 — Startup preference ownership self-review
+
+- Preserve the last Startup Placeholders lease through final native restoration. Queue same-window replacement until synchronous mutation unwinds; reconcile newly joined windows without racing the backup.
+- Validate the existing backup before mutation, preserve invalid data, and checkpoint per-key release progress to avoid restoring previously relinquished values.
+- Six new regression fixtures. No new preference IDs or intended visual changes; native validation pending.
+
 ## 0.3.0-preview.58 — Cross-owner startup lifecycle review
 
 - Preserve supported saved startup duration choices, including 760 ms. New installs retain the existing 1050 ms default; no attempt to reverse ambiguous legacy migrations.
