@@ -443,3 +443,98 @@ address-cascade.js.part:70–108 takes a fixed snapshot of tab and bookmark node
 **Required:** A3/A4: topology lease or reconcile newly added nodes under existing wave progress; test native tab open/close and bookmark overflow during search.
 
 Source-only checkpoint. Native reproduction and performance evidence pending; all findings remain open. See the surface ownership matrix in the [0.4.0 pipeline](nocturne/pipeline-0.4.0.md).
+
+
+### Interaction checkpoint — NC4-061–075
+
+#### NC4-061 — Strip drop ignores rejected or unavailable native move (S/P0)
+
+drag-controller.js.part:129–135 returns false if move method unavailable; onStripDrop:153–181 ignores return and calls markHandled. Actual extracted-source fixture with missing moveTabBefore: handled and schedule invoked, no move. Handled currently suppresses fallback detach; not itself proof of native success.
+
+**Required:** A5: distinguish handled event from successful native outcome; preflight capability and verify ordering/group/adoption; preserve no-op and suppress unintended detach on rejected drop.
+
+#### NC4-062 — Native dragend identity does not encode gesture generation (S/R/P1)
+
+drag-lifecycle.mjs:32–34 compares target and tab only; drag-engine:54–57 finishes current token after that check. Extracted-source predicate fixture accepts old event for the same tab/node after a new token starts; native ordering feasibility unverified.
+
+**Required:** A5: bind native session identity where Gecko supports it, fence callbacks by token and reject ambiguous old events; test repeated same-card drag and delayed release.
+
+#### NC4-063 — Split side classifier accepts points outside its hit rectangle (S/R/P1)
+
+split-drop.js.part:1–10 normalizes coordinates but does not reject x/y outside [0,1]. Actual function fixture: rect (100,100,400,300), point (90,250) -> left. Event routing may prevent this in normal native use; no unintended split reproduced.
+
+**Required:** A5: validate finite inside point and real drop target, test boundary/negative/retargeted events and native split hit regions.
+
+#### NC4-064 — Tab OS image ownership is one-way within a gesture (S/R/P1)
+
+native-drag-image.js.part:176–181 returns immediately if current mode is outside; later else-if previous outside:199–202 is unreachable. strip-drag:274–278 uses external image plus reorder preview on return. This may be intentional to avoid duplicate OS image, but cannot restore local Bunny curve after real external handoff.
+
+**Required:** A5: explicitly model outside-reentry policy, confirm actual Gecko image update ability on Windows; retain one visual owner, no blank/duplicate image; remove unreachable branch only after validation.
+
+#### NC4-065 — Incoming tab into empty strip has no destination command (S/R/P1)
+
+strip-drag.js.part:108–110 returns null if stripNodes empty; native/tab-adapter dropTarget also returns null when no children; drag-controller:148–152 handles local no-destination only, never adopts incoming into empty target. Native drop event may still be prevented, source remains under OS drag semantics.
+
+**Required:** A5: explicit empty-strip destination (native active Workspace and insertion contract), verify incoming tab adoption into zero-tab Home/Free without unintended detach or duplicate window.
+
+#### NC4-066 — Mirror sync can remove or reparent native drag source during active session (S/R/P1)
+
+tab-sync.js.part:8–14 freezes structural changes only for center-motion; normal sync removes entries and applies partition; reorder.js.part:1–2 explicitly requires stable drag source. Native tab close/workspace/group changes can invalidate snapshot; no explicit drag topology generation.
+
+**Required:** A4/A5: source-node lease with native validity, cancel safely if source gone, defer or reconcile other topology, test external events during drag and insertion tail.
+
+#### NC4-067 — Session watchdog treats API error as ongoing drag (S/R/P1)
+
+drag-engine.js.part:18–26 resets missing count on exceptions or does not advance if getCurrentSession unavailable; downloads-indicator:646–648,754–760 returns undefined on exception and resets missing. Both can keep scheduling if dragend lost and capability fails; not proven in native Gecko.
+
+**Required:** A5: shared tri-state session probe, error threshold/terminal recovery with no fake drop, source identity and interruption signals; test missing API, repeated throws and lost dragend.
+
+#### NC4-068 — Library fallback file drag has no independent end recovery (S/R/P1)
+
+library/controller.js.part:187–204 falls back to downloads.drag when Dock bridge unavailable; only node dragend releases dragSource. onPref/onTab/onWorkspace defer close while dragSource set; fallback has no watchdog/blur recovery. Native lost event pending.
+
+**Required:** A5/A7: lease owned by shared file adapter even with no animated Dock, bounded native session recovery and exactly-once callback; test Dock disabled, service reload and lost dragend.
+
+#### NC4-069 — File Bunny setup failure can strand source lease without watchdog (S/R/P1)
+
+downloads-indicator.uc.mjs:815–837 sets fileDragSource before beginFileBunny; catch clears artwork but returns true. Watchdog is created near end of beginFileBunny:730–763; early failure leaves no q/watch, only dragend. Native payload may still be valid so do not abort export merely because art fails.
+
+**Required:** A5: native file lifecycle independent of artwork; acquire watcher before optional visual setup, terminal path for fallback and failure; fault-inject card/popup construction.
+
+#### NC4-070 — File popup hidden does not stop animation loop (S/R/P1)
+
+downloads-indicator.uc.mjs:678–684 popuphidden only logs, tickFilePopup:712–725 continues as long as q.shown and not ending, without checking popup state. If widget hides unexpectedly while native session stays live, timer/layout flush continues on hidden art.
+
+**Required:** A5/A8: explicit native artwork visibility state, stop or bounded recovery on hidden, keep native drag separate; verify external Windows drop and popup rollup.
+
+#### NC4-071 — File Bunny tick forces style/layout every 16ms (S/R/P1)
+
+downloads-indicator.uc.mjs:687–695 updates width/height/transform; tickFilePopup:712–725 reads popup screen rect then writes artwork and forces getBoundingClientRect. This is intentionally designed for Windows nested OLE loop where RAF may stall; cost and presented frames not measured.
+
+**Required:** A5/A8: profile actual nested native loop, compare fixed-size stage + transform/dirty updates/adaptive cadence; keep live outside-window animation if native evidence supports it.
+
+#### NC4-072 — Snap preference also controls coordinate validation and ordinary detachment (S/R/P1)
+
+display-engine.js.part:12–49 gates displayEventPoint on experimental-display-snap; pointInSourceWindow:50–55 falls back to CSS coordinates when disabled/unverified. drag-end:29–36 refuses detach if snap enabled and no verified seed. preferences.json:540 default true. Current intended monitor placement is separate from unwanted ghost edge constraints fixed earlier.
+
+**Required:** A5: separate coordinate conversion/validation from snap policy; explicitly approve default behavior and safe native detach fallback, verify mixed DPI, negative monitors, target disconnect, pref off/on. Do not silently change current defaults.
+
+#### NC4-073 — Delayed startup search restoration is not gesture-scoped (S/R/P1)
+
+startup-search.js.part:14–35 schedules restore after 80ms; checks same selected tab and native URLbar closed but no gesture generation/user intent; endDragVisual calls it on normal release. New drag begin does not universally invalidate prior restore timer (cancelNativeDrag does). Could reopen stale search mid next gesture.
+
+**Required:** A5/A6: bind restore to native search token and completed gesture generation, invalidate on new input/navigation; test fast repeat drag, Escape and native newtab session.
+
+#### NC4-074 — Legacy drag implementations remain unreferenced in generated layout (S/P2)
+
+Pinned layout.uc.mjs identifier scan: captureGroupPull, previewGroupPull, dragPaintedBox, markDrop each occur once (definition only); group-pull helper and older state branches coexist with magnetic anchor path. No claim that all group-pull helpers are unused (clearGroupPull/setPull remain live).
+
+**Required:** A5: build call graph incl dynamic references and tests, remove proven dead paths only after replacement parity; keep native group behavior and regression fixtures.
+
+#### NC4-075 — Full content split overlay and broad toolbar return use different hit contracts (S/R/P1)
+
+split-drop.css.part:2–7 absolute inset:0 z-index:101 pointer-events:auto while dragging; strip-drag:225–234 uses max of measured/painted/nav/row heights +4, unlike toolbarContainsPoint in reorder:55–59. These are deliberate separate surfaces but can overlap or accept invisible portions during resize/compact transition; not proof of earlier invisible rectangle cause.
+
+**Required:** A4/A5: define source card, native hit rect, return zone and decorative ghost separately; native point tests in compact/2-row/search, outside-window and no-drag baseline; do not use full-window transparent hitbox unless native operation requires it.
+
+Three extracted-source experiments confirmed missing-method handling, same-target identity predicate limitation and outside-rectangle split classification. Native event reachability and Windows drag behavior are unverified. All findings open; see [pipeline](nocturne/pipeline-0.4.0.md).
