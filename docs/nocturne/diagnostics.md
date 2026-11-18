@@ -81,3 +81,7 @@ Same-window recorder reload reuses the existing write coordinator; all coalesced
 Existing preview.60 cleanup/phase/native events retained. Workspace intent is registered before synchronous teardown; close reentrant requests serialized through acquisition/seal/completion. No additional content fields, no artificial shutdown delay.
 
 Preview.61 native file retains all three sessions with zero dropped, yet both closed-window tails stop at disassembly.native.before. Surviving-window activity and successful pre-close seal are evidenced; terminal cleanup and lease release are not. Investigate stable process/surviving-window persistence ownership, without native shutdown delay, under A1/A0.4. Do not interpret absent terminal records as failed cleanup.
+
+### Preview.62 independent writer
+
+`diagnostics.ready.writer`: process = independent sandbox and module anchor; independent = standalone sandbox without process anchor; local = window-local fallback; legacy-blocked = incompatible old queue, restart required; unavailable = no writer. Snapshot submission happens synchronously, disk writes remain asynchronous. One active write, at most three pending latest session snapshots, retained file cap unchanged. Private windows never submit. Terminal events still depend on actual producer execution and process survival; no shutdown delay or guarantee. Static packaged writer code only; no user content evaluation.
