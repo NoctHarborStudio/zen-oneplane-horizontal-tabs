@@ -122,7 +122,7 @@ test("Hub Trash resets on a fresh opening and stale workspace deletion cannot ex
       ensureTrash=async()=>"trash",trashId=()=>"trash",requireWorkspaceDataCommand=()=>{},workspaceDataGuard=()=>{},
       readWorkspaceOwnership=(w,n,id)=>({tabs:id==="trash"?(moved?[tab]:[]):moved?[]:[tab],normal:{contains:()=>true}}),
       trashSessionStore=()=>({setCustomTabValue(){}}),moveNativeTab=()=>{moved=true;return {attempted:true,state:"confirmed"};},TRASH_TIME="stamp",
-      workspaceTabJournal=(tabs,step)=>{tabs.forEach(step);return {planned:1,confirmed:1};},workspaceJournalComplete=()=>true,reportWorkspaceJournal=()=>{},hubTrashTabEligible=()=>true,
+      workspaceTabJournal=(tabs,step)=>{tabs.forEach(step);return {planned:1,confirmed:1};},workspaceJournalComplete=()=>true,reportWorkspaceJournal=()=>{},hubTrashTabEligible=()=>true,inspectWorkspaceDeletion=()=>"confirmed",
       deletionDetails=id=>({id,native,free:"free",trash:"trash",description:"delete",plan:[tab]}),operation=async fn=>{moved=false;await fn({native});if(open)render();};let moved=false;
     ${toggle}
     ${close}

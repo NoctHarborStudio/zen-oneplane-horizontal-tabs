@@ -41,7 +41,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.67",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.68",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -1117,6 +1117,20 @@ function workspaceTabJournal(tabs,step){
 }
 function workspaceJournalComplete(result){
   return result.confirmed===result.planned&&!result.reason;
+}
+
+function inspectWorkspaceDeletion(win,native,id,roles,browser){
+  try{
+    if(win.closed||win.gZenWorkspaces!==native||win.gBrowser!==browser||!native.workspaceEnabled||
+      native.isChangingWorkspace!==false||id===roles.free||id===roles.trash)return "unknown";
+    // getWorkspaceFromId swallows native lookup failures. Require an
+    // actual authoritative list rather than interpreting null as absence.
+    const spaces=native.getWorkspaces();
+    if(!Array.isArray(spaces)||spaces.some(s=>!s?.uuid)||new Set(spaces.map(s=>s.uuid)).size!==spaces.length||
+      !spaces.some(s=>s.uuid===roles.free)||(roles.trash&&!spaces.some(s=>s.uuid===roles.trash)))return "unknown";
+    if(spaces.some(s=>s.uuid===id)||native.workspaceElement(id))return "unknown";
+    return "confirmed";
+  }catch{return "unknown";}
 }
 // Shared Zen Home v1: portable core, independent of both mod hosts.
 function acquireZenHome(win, services) {
@@ -4507,8 +4521,7 @@ function installTabStrip() {
         let deletion="unknown";
         try{
           await native.removeWorkspace(id);
-          if(window.gZenWorkspaces===native&&window.gBrowser===browser&&!window.closed&&
-            !native.getWorkspaceFromId(id)&&!native.workspaceElement(id))deletion="confirmed";
+          deletion=inspectWorkspaceDeletion(window,native,id,roles,browser);
         }catch{
           // Native may already have applied part of the request. Never
           // retry it or suggest that no data changed.
@@ -4520,10 +4533,12 @@ function installTabStrip() {
     }
     function trashTabs(){const id=trashId();return id?(ownedTabs(manager(),id)||[]):[];}
     function restoreTargets(){return hubWorkspaceOrder(hubWorkspaceSnapshot(manager()),freeId(),trashId())||[];}
-    function restoreTrashTab(tab,id){
-      const source=trashId(),roles={free:freeId(),trash:source};
+    function restoreTrashTab(tab,id,approval){
+      const source=approval?.trash,roles={free:approval?.free,trash:source};
       return operation(async lease=>{
-        if(!source||!trashTabs().includes(tab)||id===source||!restoreTargets().some(s=>s.id===id))throw Error("Restore target changed.");
+        if(!approval||approval.native!==lease.native||approval.browser!==browser||
+          !source||!trashTabs().includes(tab)||id===source||!restoreTargets().some(s=>s.id===id))throw Error("Restore target changed.");
+        workspaceDataGuard(lease,roles);
         const result=workspaceTabJournal([tab],t=>moveNativeTab(t,source,id,lease,roles,()=>trashSessionStore().deleteCustomTabValue(t,TRASH_TIME)));
         reportWorkspaceJournal("restore",result);
         purgePlan=null;
@@ -4559,6 +4574,9 @@ function installTabStrip() {
     function beginTrashDrag(event,tab,row){
       if(!event.isTrusted||event.button!==0||!(event.buttons&1)||!open||!trashOpen||busy||projectionBusy||destroyed||
         !trashAllowed||!singleWindow()||!hubTrashTabEligible(tab)||tab===browser.selectedTab)return;
+      const approval={native:manager(),browser,free:freeId(),trash:trashId()};
+      if(!approval.trash||!approval.free||approval.trash===approval.free||
+        !readWorkspaceOwnership(window,approval.native,approval.trash)?.tabs.includes(tab))return;
       if(trashDrag?.settling)finishTrashDrag();
       else if(trashDrag)return;
       if(dragLifecycle.current())cancelActiveDrag("superseded");
@@ -4566,7 +4584,7 @@ function installTabStrip() {
       const token=dragLifecycle.begin("trash",{pointerId:event.pointerId,onMove:moveTrashDrag,onUp:endTrashDrag,onCancel:cancelTrashDrag});
       if(token===null)return;
       const rect=row.getBoundingClientRect();
-      trashDrag={tab,row,token,pointer:event.pointerId,rect,x:event.clientX,y:event.clientY,point:null,moved:false,frame:0,animation:null,placeholder:null,dx:0,dy:0,settling:false};
+      trashDrag={tab,row,token,approval,pointer:event.pointerId,rect,x:event.clientX,y:event.clientY,point:null,moved:false,frame:0,animation:null,placeholder:null,dx:0,dy:0,settling:false};
       try{panel.setPointerCapture(event.pointerId);}catch{dragLifecycle.cancel("trash-capture-failed",token);}
     }
     function trashDestination(x,y){
@@ -4631,10 +4649,12 @@ function installTabStrip() {
       try{if(panel.hasPointerCapture(d.pointer))panel.releasePointerCapture(d.pointer);}catch{}
       // Commit native transfer once at release. Rendering remains frozen
       // until the SAME visual card has finished its absorption.
-      const restored=id?await restoreTrashTab(d.tab,id):false;
+      const approval=d.approval;
+      const current=()=>manager()===approval.native&&window.gBrowser===approval.browser&&
+        trashId()===approval.trash&&freeId()===approval.free;
+      const restored=id&&current()?await restoreTrashTab(d.tab,id,approval):false;
       if(trashDrag!==d)return;
-      const native=manager(),source=trashId();
-      const outcome=id&&source?inspectWorkspaceTabMove(window,native,d.tab,source,id):"retained";
+      const outcome=!current()?"unknown":id?inspectWorkspaceTabMove(window,approval.native,d.tab,approval.trash,id):"retained";
       const moved=restored===true&&outcome==="confirmed";
       // An unconfirmed or metadata-failed transfer is not a visual
       // success, but neither should a card fly back into a false source.
@@ -4682,26 +4702,39 @@ function installTabStrip() {
       purgePlan=null;setTrashAgeOpen(false);renderTrash();ageSelect.focus({preventScroll:true});
     }
     function askPurge(){
-      if(busy||!canManage()||!singleWindow())return;
+      if(busy)return;
+      // A failed replacement approval must never retain the previous one.
+      purgePlan=null;
+      if(!canManage()||!singleWindow()){renderTrash();return;}
       setTrashAgeOpen(false);
       const age=trashAge,now=Date.now();
-      const native=manager(),source=trashId(),ownership=readWorkspaceOwnership(window,native,source);
-      if(!ownership){status.textContent="Trash is not ready. Review again.";return;}
-      purgePlan={age,native,source,free:freeId(),tabs:ownership.tabs.filter(t=>purgeEligible(t)&&hubTrashAgeMatches(trashStamp(t),age,now))};renderTrash();
+      const native=manager(),source=trashId(),ownership=readWorkspaceOwnership(window,native,source,{fresh:true});
+      if(!ownership){status.textContent="Trash is not ready. Review again.";renderTrash();return;}
+      const stamps=new Map(),tabs=ownership.tabs.filter(t=>{
+        if(!purgeEligible(t))return false;
+        const stamp=trashStamp(t);
+        if(!hubTrashAgeMatches(stamp,age,now))return false;
+        stamps.set(t,stamp);return true;
+      });
+      purgePlan={age,native,source,free:freeId(),tabs,stamps};renderTrash();
     }
     async function executePurge(){
       const approved=purgePlan;purgePlan=null;if(!approved)return;
       await operation(async lease=>{
         const native=lease.native,roles={free:approved.free,trash:approved.source};
-        const eligible=tab=>{
+        const eligible=(tab,ownership)=>{
           workspaceDataGuard(lease,roles);
-          const ownership=readWorkspaceOwnership(window,native,roles.trash,{fresh:true});
+          ownership??=readWorkspaceOwnership(window,native,roles.trash,{fresh:true});
+          const stamp=trashStamp(tab);
           if(native!==approved.native||!ownership?.tabs.includes(tab)||!purgeEligible(tab)||
-            !hubTrashAgeMatches(trashStamp(tab),approved.age,Date.now()))return false;
+            !approved.stamps?.has(tab)||approved.stamps.get(tab)!==stamp||
+            !hubTrashAgeMatches(stamp,approved.age,Date.now()))return false;
           workspaceDataGuard(lease,roles);
           return true;
         };
-        if(approved.tabs.some(t=>!eligible(t)))throw Error("Trash changed. Review again.");
+        workspaceDataGuard(lease,roles);
+        const initial=readWorkspaceOwnership(window,native,roles.trash,{fresh:true});
+        if(!initial||approved.tabs.some(t=>!eligible(t,initial)))throw Error("Trash changed. Review again.");
         const result=workspaceTabJournal(approved.tabs,tab=>{
           if(!eligible(tab))return {attempted:false,state:"unknown",reason:"purge-preflight"};
           let reason=null;

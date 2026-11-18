@@ -210,3 +210,17 @@ export function workspaceTabJournal(tabs,step){
 export function workspaceJournalComplete(result){
   return result.confirmed===result.planned&&!result.reason;
 }
+
+export function inspectWorkspaceDeletion(win,native,id,roles,browser){
+  try{
+    if(win.closed||win.gZenWorkspaces!==native||win.gBrowser!==browser||!native.workspaceEnabled||
+      native.isChangingWorkspace!==false||id===roles.free||id===roles.trash)return "unknown";
+    // getWorkspaceFromId swallows native lookup failures. Require an
+    // actual authoritative list rather than interpreting null as absence.
+    const spaces=native.getWorkspaces();
+    if(!Array.isArray(spaces)||spaces.some(s=>!s?.uuid)||new Set(spaces.map(s=>s.uuid)).size!==spaces.length||
+      !spaces.some(s=>s.uuid===roles.free)||(roles.trash&&!spaces.some(s=>s.uuid===roles.trash)))return "unknown";
+    if(spaces.some(s=>s.uuid===id)||native.workspaceElement(id))return "unknown";
+    return "confirmed";
+  }catch{return "unknown";}
+}

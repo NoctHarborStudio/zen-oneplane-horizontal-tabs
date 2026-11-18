@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
-import {readWorkspaceOwnership,inspectWorkspaceTabMove,inspectWorkspaceTabRemoval,workspaceTabJournal,workspaceJournalComplete,runWorkspaceCommand,requireWorkspaceDataCommand,workspaceCommandError,designateWorkspaceFree} from "../src/core/workspace-commands.mjs";
+import {readWorkspaceOwnership,inspectWorkspaceTabMove,inspectWorkspaceTabRemoval,inspectWorkspaceDeletion,workspaceTabJournal,workspaceJournalComplete,runWorkspaceCommand,requireWorkspaceDataCommand,workspaceCommandError,designateWorkspaceFree} from "../src/core/workspace-commands.mjs";
 import {hubTrashTabEligible,hubTrashAgeMatches,hubWorkspaceOrder,hubWorkspaceSnapshot} from "../src/algorithms/hub-workspaces.mjs";
 const code=readFileSync(new URL("../src/hub/controller.js.part",import.meta.url),"utf8");
 const extract=(a,b)=>code.slice(code.indexOf(a),code.indexOf(b,code.indexOf(a)));
@@ -41,7 +41,7 @@ function fixture(){
  // Exercise actual Hub command bodies and real lease/inspection helpers.
  const bindings={window,browser,manager:()=>window.gZenWorkspaces,singleWindow:api.singleWindow,
   freeId:api.freeId,trashId:api.trashId,canManage:()=>true,requireWorkspaceDataCommand,
-  workspaceCommandError,readWorkspaceOwnership,inspectWorkspaceTabMove,inspectWorkspaceTabRemoval,
+  workspaceCommandError,readWorkspaceOwnership,inspectWorkspaceTabMove,inspectWorkspaceTabRemoval,inspectWorkspaceDeletion,
   workspaceTabJournal,workspaceJournalComplete,hubTrashTabEligible,hubTrashAgeMatches,hubWorkspaceOrder,hubWorkspaceSnapshot,
   trashSessionStore:()=>store,trashStamp:t=>Number(stamps.get(t)||1),TRASH_TIME:"stamp",
   ensureTrash:async()=>trash,switchGuard:()=>{},
@@ -61,8 +61,8 @@ function fixture(){
  }
  ${segment}
  return {approveDelete:id=>{confirmation=deletionDetails(id);},removeSpace,
-  approvePurge:tabs=>{purgePlan={age:"all",native:manager(),source:trashId(),free:freeId(),tabs};},
-  executePurge,restoreTrashTab,status,moveNativeTab};
+  approvePurge:tabs=>{purgePlan={age:"all",native:manager(),source:trashId(),free:freeId(),tabs,stamps:new Map(tabs.map(t=>[t,trashStamp(t)]))};},
+  executePurge,restoreTrashTab:(tab,id,approval={native:manager(),browser,free:freeId(),trash:trashId()})=>restoreTrashTab(tab,id,approval),status,moveNativeTab};
  `)(...Object.values(bindings));
  return {...api,runtime};
 }
@@ -152,4 +152,25 @@ test("data mutation helpers reject a selection-only lease",async()=>{
  await assert.rejects(runWorkspaceCommand(f.window,f.native,"selection",()=>true,
   lease=>designateWorkspaceFree(f.window,f.native,prefs,lease,"work")),e=>e.code==="data-lease-required");
  assert.deepEqual(f.calls,[]);
+});
+
+test("deletion is not confirmed when native list is unavailable even if lookup and DOM are absent",async()=>{
+ const f=fixture();const roles={free:"free",trash:"trash"};
+ f.native.getWorkspaceFromId=()=>null;f.elements.delete("work");f.native.getWorkspaces=()=>{throw Error("cache unavailable");};
+ assert.equal(inspectWorkspaceDeletion(f.window,f.native,"work",roles,f.browser),"unknown");
+ f.native.getWorkspaces=()=>[{uuid:"free"},{uuid:"trash"},{uuid:"work"}];
+ assert.equal(inspectWorkspaceDeletion(f.window,f.native,"work",roles,f.browser),"unknown");
+ f.native.getWorkspaces=()=>[{uuid:"free"},{uuid:"trash"}];
+ assert.equal(inspectWorkspaceDeletion(f.window,f.native,"work",roles,f.browser),"confirmed");
+});
+test("stale Trash drag approval cannot transfer from a replacement role",async()=>{
+ const f=fixture(),tab=f.add("trash"),approval={native:f.native,browser:f.browser,free:"free",trash:"trash"};
+ f.setTrash("work");f.move(tab,"work");
+ await assert.rejects(f.runtime.restoreTrashTab(tab,"free",approval));
+ assert.deepEqual(f.calls,[]);
+});
+test("restamped Trash tab requires renewed approval even with all-age filter",async()=>{
+ const f=fixture(),tab=f.add("trash");f.stamps.set(tab,"1");
+ f.runtime.approvePurge([tab]);f.stamps.set(tab,"2");
+ await assert.rejects(f.runtime.executePurge(),/Trash changed/);assert.deepEqual(f.calls,[]);
 });

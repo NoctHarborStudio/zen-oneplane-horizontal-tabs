@@ -1,3 +1,10 @@
+## 0.3.0-preview.68 — Independent Workspace data review
+
+- Require an authoritative native workspace list to confirm deletion; a failed native lookup returning null is not proof of absence.
+- Invalidate an old Trash purge approval when a new preflight fails; capture and revalidate removal timestamps, including the all-age filter. Reuse the initial native ownership snapshot for batch preflight, with fresh per-tab validation retained.
+- Capture native manager, browser and Free/Trash roles when a Trash card drag begins; reject stale role/owner changes before restore and suppress false settlement animation.
+- Four new regression tests and strengthened existing fixtures. Native validation and the native removeWorkspace reentrancy limitation remain open.
+
 ## 0.3.0-preview.67 — Reconciled Workspace transfers and Trash outcomes
 
 - Verify native Workspace tab ownership against physical normal/pinned containers and refreshed native tab caches. Stop transfers on mismatch or exception and never remove the source Workspace unless its owned-tab set is demonstrably empty.
