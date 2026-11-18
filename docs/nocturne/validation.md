@@ -239,3 +239,6 @@ Initial [CI 44245610763](https://github.com/NoctHarborStudio/zen-oneplane-horizo
 
 ### A2.6a — Projection startup ownership (preview.69)
 Two focused extracted-runtime fixtures PASS: old manager readiness cannot certify replacement; stale empty guard wrapper delegates to its exact original and does not record or select. Permanent Node regression tests added. Eleven versioned runtime bodies parse; exact generated fragment substitutions used. Full build/test CI pending; native acceptance deferred. Destructive startup-tab cleanup, Return peer verification, placement in-flight takeover and A2.7 pending recovery remain open. No claim of complete A2.6 or native PASS.
+
+### Preview.69 publication correction
+Initial CI run 44246407594 failed the pinned Magnetic Bookmarks provenance test: the diagnostic version marker changed but `scripts/shared-bookmarks.lock.json` retained the prior Git blob. Correct the explicit local override to runtime commit `4070d3191974bacde71d246e3df7b5c397f96ba4`, blob `2c86636b64bf1415a26d584381eb9843c394f764`. No runtime change or version increment; rerun canonical CI before advancing A2.6b.
