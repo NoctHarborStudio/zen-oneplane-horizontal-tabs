@@ -45,19 +45,26 @@ async function initializeFreeAtStartup(){
     if(runtime.getBoolPref(key,false))return;
     runtime.setBoolPref(key,true);
     const snapshot=native.getWorkspaces().map(s=>({id:s.uuid,name:typeof s.name==="string"?s.name:""}));
-    const stored=prefs.getStringPref("zen.oneplane.free-space-id","");
-    const trash=prefs.getStringPref("zen.oneplane.trash-space-id","");
+    const freeKey="zen.oneplane.free-space-id",trashKey="zen.oneplane.trash-space-id";
+    const stored=prefs.getStringPref(freeKey,"");
+    const trash=prefs.getStringPref(trashKey,"");
+    const valid=id=>current()&&!!id&&prefs.getStringPref(freeKey,"")===id&&
+      prefs.getStringPref(trashKey,"")!==id&&!!native.getWorkspaceFromId(id);
     let id=stored&&stored!==trash&&snapshot.some(s=>s.id===stored)?stored:"";
     if(!id){
       if(snapshot.some(s=>s.name.trim().toLowerCase()==="free"))return;
       const ws=await native.createAndSaveWorkspace("Free","⌂",true);
       if(!current()){stale("create");return;}
       if(!ws?.uuid||!native.getWorkspaceFromId(ws.uuid))return;
-      id=ws.uuid;prefs.setStringPref("zen.oneplane.free-space-id",id);
+      // Another owner may have designated Free/Trash while creation was pending.
+      if(prefs.getStringPref(freeKey,"")!==stored||prefs.getStringPref(trashKey,"")===ws.uuid){stale("designation");return;}
+      id=ws.uuid;prefs.setStringPref(freeKey,id);
+      if(!valid(id)){stale("before-reorder");return;}
       if(typeof native.reorderWorkspace==="function")await native.reorderWorkspace(id,0);
     }
-    if(!current()){stale("before-select");return;}
+    if(!valid(id)){stale("before-select");return;}
     if(native.activeWorkspace!==id)await native.changeWorkspaceWithID(id);
+    if(!current()){stale("after-select");return;}
     console.info("[OnePlane] Free startup",JSON.stringify({selected:native.activeWorkspace===id}));
   }catch(error){console.warn("[OnePlane] Free startup:",error);}
 }

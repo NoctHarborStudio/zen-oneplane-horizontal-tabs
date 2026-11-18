@@ -45,3 +45,24 @@ test("disposal during Free reorder suppresses subsequent native selection",async
   const p=h.run();await started;h.context.disposed=true;resolve();await p;
   assert.deepEqual(h.calls,["create"]);assert.equal(h.map.get("zen.oneplane.free-space-id"),"new");
 });
+
+test("Free removed during reorder is not selected",async()=>{
+  const h=harness();
+  h.native.reorderWorkspace=async()=>{h.entries.pop();};
+  await h.run();assert.deepEqual(h.calls,["create"]);
+});
+test("Free designation changed during create is not overwritten",async()=>{
+  const h=harness();let resolve;h.native.createAndSaveWorkspace=()=>new Promise(r=>{resolve=r;});
+  const pending=h.run();h.map.set("zen.oneplane.free-space-id","id0");
+  const ws={name:"Free",uuid:"late"};h.entries.push(ws);resolve(ws);await pending;
+  assert.equal(h.map.get("zen.oneplane.free-space-id"),"id0");assert.deepEqual(h.calls,[]);
+});
+test("Free reassigned during reorder is not selected",async()=>{
+  const h=harness();h.native.reorderWorkspace=async()=>h.map.set("zen.oneplane.trash-space-id","new");
+  await h.run();assert.deepEqual(h.calls,["create"]);
+});
+test("synchronous preference observer can invalidate Free before reorder",async()=>{
+  const h=harness(),set=h.context.prefs.setStringPref;
+  h.context.prefs.setStringPref=(k,v)=>{set(k,v);h.context.disposed=true;};
+  await h.run();assert.deepEqual(h.calls,["create"]);
+});

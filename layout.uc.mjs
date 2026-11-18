@@ -39,7 +39,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.48",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.49",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
@@ -619,22 +619,29 @@ let startupObserver = null;
 let removeTabStrip = null;
 
 function snapshot() {
+  const capture=name=>{
+    if (prefs.getPrefType(name) !== prefs.PREF_BOOL)
+      throw new Error("Unsupported Zen preference: " + name);
+    return { value: prefs.getBoolPref(name), user: prefs.prefHasUserValue(name) };
+  };
   const raw = prefs.getStringPref(KEY, "");
   if (raw) {
     const saved = JSON.parse(raw);
     if (Object.keys({...TARGET, [STARTUP]: true}).every(name =>
       typeof saved[name]?.value === "boolean" && typeof saved[name]?.user === "boolean")) {
+      // A partial release may leave a complete backup. Reacquire only
+      // previously released keys from their current user/default state.
+      let changed=false;
+      for (const name of Object.keys(TARGET)) {
+        if (saved[name].released===true) { saved[name]=capture(name); changed=true; }
+      }
+      if (changed) prefs.setStringPref(KEY, JSON.stringify(saved));
       return saved;
     }
     throw new Error("Invalid OnePlane layout backup; refusing to overwrite it.");
   }
   const saved = {};
-  for (const name of [...Object.keys(TARGET), STARTUP]) {
-    if (prefs.getPrefType(name) !== prefs.PREF_BOOL) {
-      throw new Error("Unsupported Zen preference: " + name);
-    }
-    saved[name] = { value: prefs.getBoolPref(name), user: prefs.prefHasUserValue(name) };
-  }
+  for (const name of [...Object.keys(TARGET), STARTUP]) saved[name]=capture(name);
   prefs.setStringPref(KEY, JSON.stringify(saved));
   return saved;
 }
@@ -653,29 +660,35 @@ function restorePrefs() {
   if (!raw) return;
   const saved = JSON.parse(raw);
   // Compact Mode is a user-owned setting.
-  let restored=0,skipped=0,failed=0;
+  let restored=0,skipped=0,failed=0,alreadyReleased=0,checkpointFailed=false;
   for (const name of Object.keys(TARGET)) {
     try {
       const original = saved[name];
       if (!original || typeof original.value !== "boolean" || typeof original.user !== "boolean")
         throw new Error("Invalid saved preference");
+      if (original.released===true) { alreadyReleased++; continue; }
       // Do not overwrite settings changed by the user while the mod was active.
-      if (prefs.getBoolPref(name) !== TARGET[name]) { skipped++; continue; }
+      if (prefs.getBoolPref(name) !== TARGET[name]) { skipped++; original.released=true; continue; }
       if (original.user) prefs.setBoolPref(name, original.value);
       else prefs.clearUserPref(name);
       restored++;
+      original.released=true;
     } catch (error) {
       failed++;
       console.warn("[Nocturne] Layout preference restore:", name, error?.name || "Error");
     }
   }
-  // Preserve the complete snapshot on failure; snapshot() requires all keys.
-  // A subsequent activation/cleanup can retry rather than lose the backup.
+  // Keep original values and release progress when a native key or backup
+  // removal fails. Retrying must not touch keys we already relinquished.
   if (!failed) {
     try { prefs.clearUserPref(KEY); }
     catch (error) { failed++; console.warn("[Nocturne] Layout backup release:", error?.name || "Error"); }
   }
-  try { window.__nocturneTrace?.("layout.prefs.restore",{restored,skipped,failed,backupRetained:failed>0},{flush:true}); } catch {}
+  if (failed) {
+    try { prefs.setStringPref(KEY,JSON.stringify(saved)); }
+    catch (error) { checkpointFailed=true; console.warn("[Nocturne] Layout backup checkpoint:",error?.name || "Error"); }
+  }
+  try { window.__nocturneTrace?.("layout.prefs.restore",{restored,skipped,failed,alreadyReleased,checkpointFailed,backupRetained:failed>0},{flush:true}); } catch {}
   return failed===0;
 }
 
@@ -7666,19 +7679,26 @@ async function initializeFreeAtStartup(){
     if(runtime.getBoolPref(key,false))return;
     runtime.setBoolPref(key,true);
     const snapshot=native.getWorkspaces().map(s=>({id:s.uuid,name:typeof s.name==="string"?s.name:""}));
-    const stored=prefs.getStringPref("zen.oneplane.free-space-id","");
-    const trash=prefs.getStringPref("zen.oneplane.trash-space-id","");
+    const freeKey="zen.oneplane.free-space-id",trashKey="zen.oneplane.trash-space-id";
+    const stored=prefs.getStringPref(freeKey,"");
+    const trash=prefs.getStringPref(trashKey,"");
+    const valid=id=>current()&&!!id&&prefs.getStringPref(freeKey,"")===id&&
+      prefs.getStringPref(trashKey,"")!==id&&!!native.getWorkspaceFromId(id);
     let id=stored&&stored!==trash&&snapshot.some(s=>s.id===stored)?stored:"";
     if(!id){
       if(snapshot.some(s=>s.name.trim().toLowerCase()==="free"))return;
       const ws=await native.createAndSaveWorkspace("Free","⌂",true);
       if(!current()){stale("create");return;}
       if(!ws?.uuid||!native.getWorkspaceFromId(ws.uuid))return;
-      id=ws.uuid;prefs.setStringPref("zen.oneplane.free-space-id",id);
+      // Another owner may have designated Free/Trash while creation was pending.
+      if(prefs.getStringPref(freeKey,"")!==stored||prefs.getStringPref(trashKey,"")===ws.uuid){stale("designation");return;}
+      id=ws.uuid;prefs.setStringPref(freeKey,id);
+      if(!valid(id)){stale("before-reorder");return;}
       if(typeof native.reorderWorkspace==="function")await native.reorderWorkspace(id,0);
     }
-    if(!current()){stale("before-select");return;}
+    if(!valid(id)){stale("before-select");return;}
     if(native.activeWorkspace!==id)await native.changeWorkspaceWithID(id);
+    if(!current()){stale("after-select");return;}
     console.info("[OnePlane] Free startup",JSON.stringify({selected:native.activeWorkspace===id}));
   }catch(error){console.warn("[OnePlane] Free startup:",error);}
 }

@@ -1,3 +1,9 @@
+## 0.3.0-preview.49 — Lifecycle self-review follow-up
+
+- Keep per-key release progress when native preference restoration is partial; retry only unresolved keys, reacquire released keys from their current user/default values on a new activation, and log checkpoint failure.
+- Revalidate Free designation, native target existence and window/manager identity before reorder and selection; avoid overwriting a designation changed while creation is pending. Do not roll back completed native actions.
+- Add six regression tests and extend the existing partial-restore test. No visual changes or new preference IDs; native verification remains pending.
+
 ## 0.3.0-preview.48 — Lifecycle safety guards
 
 - Isolate native layout preference restoration per key, preserve the complete backup on partial failure, and record aggregate outcomes without user values.
