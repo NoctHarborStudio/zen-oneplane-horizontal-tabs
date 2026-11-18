@@ -43,3 +43,7 @@ Preview.51 adds `layout.mount.stale` (stage: return) and refines scope disposal 
 Preview.52 adds `layout.prefs.lease` (acquire/shared, release/last), `layout.close.pending-expired` (active flag). No pref values or window data. Close hint timeout is not proof of native cancellation; Sine beforeunload behavior is an integration limitation.
 
 Preview.53 retains `layout.prefs.lease` and existing cleanup events; final release may follow synchronous native preference observer cancellation, after mutation returns. `ZenCompactMode:LayoutUpdate` replaces duplicate hideToolbar writes. No additional user data logged.
+
+### Preview.53 native terminal evidence gap
+
+All three sessions in the supplied native smoke trace end at `disassembly.native.before`, with no retained final cleanup or recorder-dispose events. Closing writes are best effort; asynchronous persistence and Sine unload order may prevent final producers reaching disk. This does not establish a cleanup failure. A1.7 must improve terminal lifecycle evidence within existing recorder and privacy/size limits, without delaying OS/browser shutdown; see [pipeline](pipeline-0.4.0.md).
