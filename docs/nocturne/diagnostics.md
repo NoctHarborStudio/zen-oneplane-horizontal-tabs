@@ -79,3 +79,5 @@ Same-window recorder reload reuses the existing write coordinator; all coalesced
 ### Preview.61 reentrant motion lifecycle
 
 Existing preview.60 cleanup/phase/native events retained. Workspace intent is registered before synchronous teardown; close reentrant requests serialized through acquisition/seal/completion. No additional content fields, no artificial shutdown delay.
+
+Preview.61 native file retains all three sessions with zero dropped, yet both closed-window tails stop at disassembly.native.before. Surviving-window activity and successful pre-close seal are evidenced; terminal cleanup and lease release are not. Investigate stable process/surviving-window persistence ownership, without native shutdown delay, under A1/A0.4. Do not interpret absent terminal records as failed cleanup.
