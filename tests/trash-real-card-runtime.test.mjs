@@ -15,7 +15,7 @@ function harness({confirmed=true,reduced=true}={}){
  const panel={scrollLeft:0,scrollTop:0,getBoundingClientRect:()=>panelRect,setPointerCapture(){capture=true;},hasPointerCapture:()=>capture,releasePointerCapture(){capture=false;},append(n){assert.equal(n,row);calls.push("lift");},contains:n=>n===target,querySelectorAll:()=>[target]};
  const tab={getAttribute:()=>workspace},native={},browser={selectedTab:null};
  const ctx={window:{gBrowser:browser,matchMedia:()=>({matches:reduced}),requestAnimationFrame(fn){frames.set(++next,fn);return next;},cancelAnimationFrame(id){frames.delete(id);},performance:{now:()=>0}},prefs:{getIntPref:()=>160},
-  dragLifecycle:lifecycle,cancelActiveDrag:r=>lifecycle.cancel(r),panel,document:{elementFromPoint:(x,y)=>y<100?{closest:()=>target}:null},open:true,trashOpen:true,busy:false,projectionBusy:false,destroyed:false,trashAllowed:true,
+  dragLifecycle:lifecycle,cancelActiveDrag:r=>lifecycle.cancel(r),panel,document:{elementFromPoint:(x,y)=>y<100?{closest:()=>target}:null},open:true,trashOpen:true,busy:false,projectionBusy:false,destroyed:false,trashAllowed:true,commandBlocked:()=>false,
   singleWindow:()=>true,hubTrashTabEligible:()=>true,browser,freeId:()=>"free",trashId:()=>role,trashTabs:()=>workspace===role?[tab]:[],
   readWorkspaceOwnership:(w,n,id)=>{assert.equal(n,native);return {tabs:workspace===id?[tab]:[]};},
   manager:()=>native,inspectWorkspaceTabMove:(w,n,t,source,id)=>{assert.equal(n,native);assert.equal(t,tab);assert.equal(source,"trash");return workspace===id?(confirmed?"confirmed":"unknown"):"retained";},

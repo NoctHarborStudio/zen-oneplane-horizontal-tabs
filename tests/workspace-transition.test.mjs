@@ -264,3 +264,10 @@ test("managed native verification rejection cleans swap gate without incoming mo
  const result=f.win.__zenRefinedWorkspaceTransition.run(()=>{throw Error("unconfirmed");},{lease});
  await assert.rejects(result,/unconfirmed/);assert.equal(f.root.hasAttribute("data-zr-workspace-phase"),false);assert.ok(!f.events.includes("in"));assert.equal(f.timers.size,0);
 });
+
+test("unowned compatibility transition cannot invoke native while source is reserved by Return",async()=>{
+ const f=lifecycleFixture(),gate=f.win.__nocturneWorkspaceCommandGate,token=Symbol("return");gate.reservation=token;
+ let called=0;await f.win.__zenRefinedWorkspaceTransition.run(()=>{called++;});
+ assert.equal(called,0);assert.equal(gate.reservation,token);assert.equal(gate.pending,null);
+ f.win.__zenRefinedWorkspaceTransition.dispose();
+});

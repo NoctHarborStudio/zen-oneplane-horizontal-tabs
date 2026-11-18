@@ -111,7 +111,7 @@ test("Hub Trash resets on a fresh opening and stale workspace deletion cannot ex
   const tab={isConnected:true};
   const attrs=new Set();
   const state=new Function("native","tab","attrs",`
-    let open=false,trashOpen=false,hubSession=0,destroyed=false,busy=false,contextId=null,confirmation=null,editId=null,purgePlan=null,drag=null,geometryFrame=0;
+    let open=false,trashOpen=false,hubSession=0,destroyed=false,busy=false,contextId=null,confirmation=null,editId=null,purgePlan=null,drag=null,geometryFrame=0,pendingWatch=null;
     const browser={selectedTab:null};
     const window={gZenWorkspaces:native,gBrowser:browser,__nocturneOverlay:{request:()=>true}};
     const panel={hidden:true,isConnected:true,querySelector:()=>null},mode={focus(){}},button={setAttribute(){},focus(){}},status={};

@@ -271,7 +271,12 @@ function acquireZenHome(win, services) {
   let searchInput=null,searchOriginalPlaceholder=null,searchSessionLabel=null;
   let searchSnapshot=null,searchSnapshotTimer=0,searchSnapshotObserver=null,searchSnapshotDirty=true,searchSnapshotView=null;
   let searchReturnParts=[],searchLastRect=null;
-  let pinScrollTop=0,pinCustom=false,pinViewMode="home";
+  let pinScrollTop=0,pinCustom=false,pinViewMode="home",pendingWatch=null;
+  function updateWorkspacePending(state){
+    const status=content.querySelector(".zh-workspace-pending");
+    if(status){const message=workspaceCommandMessage(state);status.textContent=message;status.hidden=!message;}
+    for(const b of Array.from(content.querySelectorAll?.(".zh-space[data-zh-workspace-id]")||[]))b.disabled=switching||state.blocked;
+  }
   const leases=new Set(),cleanups=[];
   function listen(node,type,fn,options){node.addEventListener(type,fn,options);cleanups.push(()=>node.removeEventListener(type,fn,options));}
   const button=(cls,label,fn)=>{const n=html("button",cls,label);n.type="button";n.addEventListener("click",fn);return n;};
@@ -355,7 +360,7 @@ function acquireZenHome(win, services) {
   function stopMotion(){motion?.cancel();motion=null;finishStartupHome();}
   function close(restoreFocus=false){
     typeof win!=="undefined"&&win.__nocturneTrace?.("home.close",()=>({restoreFocus,open}),{sample:1800});
-    if(!open)return;open=false;editing=false;adding=false;pinScrollTop=0;pinCustom=false;pinViewMode="home";panel.removeAttribute("data-zh-adding");dragId=null;startupHome=false;homeOnPlaceholder=false;finishSearchVisual();stopMotion();panel.hidden=true;restore();notify();
+    if(!open)return;open=false;pendingWatch?.refresh();editing=false;adding=false;pinScrollTop=0;pinCustom=false;pinViewMode="home";panel.removeAttribute("data-zh-adding");dragId=null;startupHome=false;homeOnPlaceholder=false;finishSearchVisual();stopMotion();panel.hidden=true;restore();notify();
     if(restoreFocus)try{if(focusHome?.isConnected)focusHome.focus({preventScroll:true});else browser.selectedBrowser?.focus();}catch{}
     focusHome=null;
   }
@@ -942,19 +947,24 @@ function acquireZenHome(win, services) {
       for(const ws of workspaces){
         if(!ws?.uuid)continue;
         const b=button("zh-space","",async()=>{
-          if(switching||manager.activeWorkspace===ws.uuid)return;switching=true;
+          if(switching||workspaceCommandState(win).blocked||manager.activeWorkspace===ws.uuid)return;switching=true;
+          pendingWatch?.refresh();
           try{await switchHomeWorkspace(manager,ws.uuid);}catch(error){win.console.warn("[Zen Home] workspace",error);}
-          finally{switching=false;if(open)refreshWorkspaceSelection();}
+          finally{switching=false;if(open){refreshWorkspaceSelection();pendingWatch?.refresh();}}
         });
         b.setAttribute("data-zh-workspace-id",ws.uuid);b.setAttribute("data-zh-workspace-name",String(ws.name||"Workspace"));
         b.append(html("span","","◦"),html("span","",String(ws.name||"Workspace")));
         if(manager.activeWorkspace===ws.uuid)b.setAttribute("aria-current","true");list.append(b);
       }
-      if(list.childElementCount)content.append(spaces);
+      if(list.childElementCount){
+        const pending=html("p","zh-workspace-pending zh-picker-note");pending.setAttribute("role","status");pending.setAttribute("aria-live","polite");pending.hidden=true;
+        spaces.append(pending);content.append(spaces);
+      }
     }
     const footer=html("div","zh-footer");footer.append(button("zh-small",editing?"Done":"Customize Home",()=>{if(adding){leavePinPicker();return;}editing=!editing;render();}));content.append(footer);
     const grid=content.querySelector(".zh-recommendations");
     if(grid)pinScrollTop=restorePinScroll(grid,pinScrollTop);
+    pendingWatch?.refresh();
   }
   function show(startup=false){
     typeof win!=="undefined"&&win.__nocturneTrace?.("home.show",()=>({startup,open}),{sample:1800});
@@ -997,6 +1007,7 @@ function acquireZenHome(win, services) {
   }};
   try{
     root.append(style);host.append(panel);
+    pendingWatch=watchWorkspaceCommand(win,()=>open&&!dead,updateWorkspacePending);cleanups.push(()=>pendingWatch.dispose());
     // Idle Home is a destination, not an exclusive overlay. Only its
     // native search handoff owns this registration.
     let unregisterOverlay=()=>{};
@@ -1016,7 +1027,7 @@ function acquireZenHome(win, services) {
       if(!open&&e.target===browser.selectedTab&&e.detail?.changed?.some?.(name=>name==="busy"||name==="pending"||name==="discarded"||name==="zen-empty-tab"))ensurePrimaryHome();
     });
     listen(win,"ZenWorkspaceDataChanged",()=>{if(open&&!switching)render();});
-    listen(win,"ZenWorkspacesUIUpdate",()=>{if(open&&!switching)refreshWorkspaceSelection();});
+    listen(win,"ZenWorkspacesUIUpdate",()=>{if(open&&!switching){refreshWorkspaceSelection();pendingWatch?.refresh();}});
     listen(win,"ZenURLBarClosed",onSearchClosed);
     listen(win,"resize",()=>{
       if(!searchToken||!searchBar)return;

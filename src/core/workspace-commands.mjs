@@ -10,24 +10,96 @@ function commandTrace(win,event,data){try{win.__nocturneTrace?.("workspace.comma
 function dataAnchor(){
   try{return ChromeUtils.importESModule("resource:///modules/BrowserWindowTracker.sys.mjs").BrowserWindowTracker;}catch{return null;}
 }
-export function workspaceCommandGate(win){return win[WORKSPACE_GATE]??(win[WORKSPACE_GATE]={pending:null});}
+export function workspaceCommandGate(win){
+  if(win[WORKSPACE_GATE])return win[WORKSPACE_GATE];
+  // Allocate in the target chrome realm when possible. A peer reservation
+  // must not turn its gate into an object owned by a closing child realm.
+  const gate=typeof win.Object==="function"?new win.Object():{};
+  gate.pending=null;
+  return win[WORKSPACE_GATE]??(win[WORKSPACE_GATE]=gate);
+}
+// A reservation is a primitive on the surviving peer's existing gate;
+// never retain a destroyed child Window/Promise in that peer.
+const WORKSPACE_PENDING_NOTICE=5000;
+function workspaceCommandNow(win){
+  try{const p=win.performance,t=p?.timeOrigin+p?.now();if(Number.isFinite(t))return t;}catch{}
+  return Date.now();
+}
+export function workspaceCommandState(win,now=workspaceCommandNow(win)){
+  try{
+    const gate=win[WORKSPACE_GATE],reserved=!!gate?.reservation;
+    if(gate?.pending||gate?.owner||reserved){
+      const remaining=Number.isFinite(gate.startedAt)?Math.max(0,Math.min(WORKSPACE_PENDING_NOTICE,WORKSPACE_PENDING_NOTICE-(now-gate.startedAt))):0;
+      return {blocked:true,phase:remaining?"pending":"unknown",remaining,reserved};
+    }
+    if(win.gZenWorkspaces?.isChangingWorkspace===true)return {blocked:true,phase:"native-busy",remaining:0,reserved:false};
+    return {blocked:false,phase:"idle",remaining:0,reserved:false};
+  }catch{return {blocked:true,phase:"unknown",remaining:0,reserved:false};}
+}
+function notifyWorkspaceCommand(win){
+  try{if(!win.closed)win.dispatchEvent(new win.CustomEvent("Nocturne:WorkspaceCommandChanged"));}catch{}
+}
+export function workspaceCommandMessage(state){
+  if(state.phase==="pending")return state.reserved?"Returning a synced window…":"Workspace command in progress…";
+  if(state.phase==="unknown")return "Native command is still pending. You can close this panel; workspace commands remain blocked. If it never settles, restart Zen.";
+  if(state.phase==="native-busy")return "Zen is changing workspace. Try again when ready.";
+  return "";
+}
+// Presentation observes the existing gate; timeout changes the message,
+// not admission or ownership. No persistent polling, no promise race.
+export function watchWorkspaceCommand(win,active,update){
+  let disposed=false,timer=0,generation=0,lastPhase=null;
+  const refresh=()=>{
+    const token=++generation;
+    if(timer)try{win.clearTimeout(timer);}catch{}
+    timer=0;if(disposed||!active()){lastPhase=null;return;}
+    const state=workspaceCommandState(win);
+    if(state.phase!==lastPhase){
+      lastPhase=state.phase;
+      if(state.phase==="unknown")commandTrace(win,"presentation-unknown",{reserved:state.reserved});
+    }
+    if(disposed||generation!==token||!active())return;
+    try{update(state);}catch{commandTrace(win,"presentation-error",{});}
+    if(disposed||generation!==token||!active()||!state.remaining)return;
+    try{timer=win.setTimeout(()=>{if(!disposed&&generation===token){timer=0;refresh();}},Math.ceil(state.remaining));}catch{}
+  };
+  const dispose=()=>{
+    if(disposed)return;disposed=true;generation++;
+    if(timer)try{win.clearTimeout(timer);}catch{}timer=0;
+    try{win.removeEventListener("Nocturne:WorkspaceCommandChanged",refresh);}catch{}
+  };
+  try{win.addEventListener("Nocturne:WorkspaceCommandChanged",refresh);}catch(error){dispose();throw error;}
+  return {refresh,dispose};
+}
 export function requireWorkspaceCommand(win,native,lease){
   if(!lease||lease.native!==native||lease.win!==win||workspaceCommandGate(win).owner!==lease||
     win.closed||win.gZenWorkspaces!==native||!native?.workspaceEnabled||!lease.current())
     throw workspaceCommandError("stale","Workspace command is no longer current.");
   if(lease.token&&lease.anchor[WORKSPACE_DATA_GATE]!==lease.token)throw workspaceCommandError("data-lease-lost");
+  if(lease.peer&&(!lease.peer.win||lease.peer.win.closed||lease.peer.win.gZenWorkspaces!==lease.peer.native||
+    !lease.peer.native?.workspaceEnabled||lease.peer.native.isChangingWorkspace!==false||
+    workspaceCommandGate(lease.peer.win)!==lease.peer.gate||lease.peer.gate.reservation!==lease.token))
+    throw workspaceCommandError("peer-lease-lost");
   if(native.isChangingWorkspace!==false)throw workspaceCommandError("native-busy","Native Workspace switch is still in progress.");
 }
 export function requireWorkspaceDataCommand(win,native,lease){
   requireWorkspaceCommand(win,native,lease);
   if(!lease.token)throw workspaceCommandError("data-lease-required");
 }
-export function runWorkspaceCommand(win,native,kind,current,execute,{data=false,anchor=data?dataAnchor():null}={}){
+export function runWorkspaceCommand(win,native,kind,current,execute,{data=false,anchor=data?dataAnchor():null,peer=null}={}){
   const gate=workspaceCommandGate(win);
   const reject=code=>{commandTrace(win,"rejected",{kind,code});return Promise.reject(workspaceCommandError(code,"Workspace command is busy or unavailable. Try again when ready."));};
   if(win.closed||win.gZenWorkspaces!==native||!native?.workspaceEnabled||!current())return reject("stale");
-  if(gate.pending||gate.owner)return reject("busy");
+  if(gate.pending||gate.owner||gate.reservation)return reject("busy");
   if(native.isChangingWorkspace!==false)return reject("native-busy");
+  let peerLease=null;
+  if(peer){
+    if(!data||!peer.win||peer.win===win||peer.win.closed||peer.win.gZenWorkspaces!==peer.native||
+      !peer.native?.workspaceEnabled||peer.native.isChangingWorkspace!==false)return reject("peer-unavailable");
+    const peerGate=workspaceCommandGate(peer.win);
+    if(peerGate.pending||peerGate.owner||peerGate.reservation)return reject("peer-busy");
+    peerLease={win:peer.win,native:peer.native,gate:peerGate};
+  }
   const token=data?Symbol("Nocturne data command"):null;
   if(data){
     if(!anchor)return reject("data-unavailable");
@@ -37,18 +109,23 @@ export function runWorkspaceCommand(win,native,kind,current,execute,{data=false,
       if(anchor[WORKSPACE_DATA_GATE]!==token)return reject("data-unavailable");
     }catch{return reject("data-unavailable");}
   }
-  const lease={win,native,kind,current,anchor,token};
+  const lease={win,native,kind,current,anchor,token,peer:peerLease};
   let resolve,rejectResult;const pending=new Promise((a,b)=>{resolve=a;rejectResult=b;});
-  // Publish before any native/visual callback can synchronously re-enter.
-  gate.owner=lease;gate.pending=pending;
+  // Publish both gates before any native/visual callback can re-enter.
+  const startedAt=workspaceCommandNow(win);
+  gate.owner=lease;gate.pending=pending;gate.startedAt=startedAt;
+  if(peerLease){peerLease.gate.reservation=token;peerLease.gate.startedAt=startedAt;}
   const finish=(ok,value)=>{
+    if(peerLease)try{if(peerLease.gate.reservation===token){delete peerLease.gate.reservation;delete peerLease.gate.startedAt;}}catch{}
     if(data)try{if(anchor[WORKSPACE_DATA_GATE]===token)delete anchor[WORKSPACE_DATA_GATE];}catch{}
-    if(gate.owner===lease&&gate.pending===pending){gate.owner=null;gate.pending=null;}
-    commandTrace(win,"end",{kind,ok,code:ok?null:value?.name==="WorkspaceCommandError"?value.code:"error"});
+    if(gate.owner===lease&&gate.pending===pending){gate.owner=null;gate.pending=null;delete gate.startedAt;}
+    commandTrace(win,"end",{kind,ok,peer:!!peerLease,elapsed:Math.max(0,workspaceCommandNow(win)-startedAt),code:ok?null:value?.name==="WorkspaceCommandError"?value.code:"error"});
+    notifyWorkspaceCommand(win);if(peerLease)notifyWorkspaceCommand(peerLease.win);
     if(ok)resolve(value);else rejectResult(value);
   };
   try{
-    commandTrace(win,"begin",{kind,data});
+    commandTrace(win,"begin",{kind,data,peer:!!peerLease});
+    notifyWorkspaceCommand(win);if(peerLease)notifyWorkspaceCommand(peerLease.win);
     requireWorkspaceCommand(win,native,lease);
     Promise.resolve(execute(lease)).then(v=>finish(true,v),e=>finish(false,e));
   }catch(error){finish(false,error);}

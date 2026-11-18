@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="workspace.script",data={version:"0.3.0-preview.72"};
+  const event="workspace.script",data={version:"0.3.0-preview.73"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -26,13 +26,15 @@ try{if(typeof window!=="undefined"){
       if(gate.owner!==req.lease||!gate.pending)throw Error("Workspace command lease lost");
       return nativeSwitch();
     }
-    if(gate.pending)throw Error("Workspace command already pending");
+    if(gate.pending||gate.reservation)throw Error("Workspace command already pending");
     const pending=Promise.resolve().then(()=>{
-      if(dead||win.closed||req.superseded||request!==req)return;
+      if(dead||win.closed||req.superseded||request!==req||gate.reservation)return;
       return nativeSwitch();
     });
-    gate.pending=pending;
-    const release=()=>{if(gate.pending===pending)gate.pending=null;};
+    gate.pending=pending;gate.startedAt=Number.isFinite(win.performance?.timeOrigin)?win.performance.timeOrigin+win.performance.now():Date.now();
+    const notify=()=>{try{if(!win.closed)win.dispatchEvent(new win.CustomEvent("Nocturne:WorkspaceCommandChanged"));}catch{}};
+    const release=()=>{if(gate.pending===pending){gate.pending=null;delete gate.startedAt;notify();}};
+    notify();
     pending.then(release,release);
     return pending;
   }
@@ -217,7 +219,7 @@ try{if(typeof window!=="undefined"){
     if(dead||win.closed)return;
     // Production callers hold the same gate from admission to settlement.
     // Unowned compatibility callbacks cannot interrupt a managed command.
-    if(lease?gate.owner!==lease:!!gate.owner)return;
+    if(lease?gate.owner!==lease:!!(gate.owner||gate.reservation))return;
     // Register intent before any synchronous native/visual callbacks.
     if(request)request.superseded=true;
     const req={superseded:false,carrySwap:root.getAttribute(PHASE)==="swap",lease};request=req;
@@ -235,7 +237,7 @@ try{if(typeof window!=="undefined"){
         try{await gate.pending;}catch{}
         if(!current())return;
       }
-      if(!current())return;
+      if(!current()||(!req.lease&&gate.reservation))return;
       if(active)cleanup(active,req.carrySwap);
       if(!current())return;
       return await perform(req,nativeSwitch);

@@ -1,3 +1,9 @@
+## 0.3.0-preview.73 — Workspace pending presentation and Return peer reservation
+
+- Reserve the surviving source's existing Workspace gate while the managed Return request is pending; independent third-window selection remains available.
+- Home and Hub show shared pending/unknown state without timing out the actual native command. Hub can yield while not dragging.
+- Keep exact lease release on settlement only. Six new regression tests; native validation pending.
+
 ## 0.3.0-preview.72 — Independent Projection search review
 
 - Preserve the exact prepared native placeholder across placement and search; reject replacement before focus or any native search command.

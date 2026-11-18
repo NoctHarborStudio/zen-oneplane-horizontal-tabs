@@ -41,7 +41,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.72",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.73",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -918,24 +918,96 @@ function commandTrace(win,event,data){try{win.__nocturneTrace?.("workspace.comma
 function dataAnchor(){
   try{return ChromeUtils.importESModule("resource:///modules/BrowserWindowTracker.sys.mjs").BrowserWindowTracker;}catch{return null;}
 }
-function workspaceCommandGate(win){return win[WORKSPACE_GATE]??(win[WORKSPACE_GATE]={pending:null});}
+function workspaceCommandGate(win){
+  if(win[WORKSPACE_GATE])return win[WORKSPACE_GATE];
+  // Allocate in the target chrome realm when possible. A peer reservation
+  // must not turn its gate into an object owned by a closing child realm.
+  const gate=typeof win.Object==="function"?new win.Object():{};
+  gate.pending=null;
+  return win[WORKSPACE_GATE]??(win[WORKSPACE_GATE]=gate);
+}
+// A reservation is a primitive on the surviving peer's existing gate;
+// never retain a destroyed child Window/Promise in that peer.
+const WORKSPACE_PENDING_NOTICE=5000;
+function workspaceCommandNow(win){
+  try{const p=win.performance,t=p?.timeOrigin+p?.now();if(Number.isFinite(t))return t;}catch{}
+  return Date.now();
+}
+function workspaceCommandState(win,now=workspaceCommandNow(win)){
+  try{
+    const gate=win[WORKSPACE_GATE],reserved=!!gate?.reservation;
+    if(gate?.pending||gate?.owner||reserved){
+      const remaining=Number.isFinite(gate.startedAt)?Math.max(0,Math.min(WORKSPACE_PENDING_NOTICE,WORKSPACE_PENDING_NOTICE-(now-gate.startedAt))):0;
+      return {blocked:true,phase:remaining?"pending":"unknown",remaining,reserved};
+    }
+    if(win.gZenWorkspaces?.isChangingWorkspace===true)return {blocked:true,phase:"native-busy",remaining:0,reserved:false};
+    return {blocked:false,phase:"idle",remaining:0,reserved:false};
+  }catch{return {blocked:true,phase:"unknown",remaining:0,reserved:false};}
+}
+function notifyWorkspaceCommand(win){
+  try{if(!win.closed)win.dispatchEvent(new win.CustomEvent("Nocturne:WorkspaceCommandChanged"));}catch{}
+}
+function workspaceCommandMessage(state){
+  if(state.phase==="pending")return state.reserved?"Returning a synced window…":"Workspace command in progress…";
+  if(state.phase==="unknown")return "Native command is still pending. You can close this panel; workspace commands remain blocked. If it never settles, restart Zen.";
+  if(state.phase==="native-busy")return "Zen is changing workspace. Try again when ready.";
+  return "";
+}
+// Presentation observes the existing gate; timeout changes the message,
+// not admission or ownership. No persistent polling, no promise race.
+function watchWorkspaceCommand(win,active,update){
+  let disposed=false,timer=0,generation=0,lastPhase=null;
+  const refresh=()=>{
+    const token=++generation;
+    if(timer)try{win.clearTimeout(timer);}catch{}
+    timer=0;if(disposed||!active()){lastPhase=null;return;}
+    const state=workspaceCommandState(win);
+    if(state.phase!==lastPhase){
+      lastPhase=state.phase;
+      if(state.phase==="unknown")commandTrace(win,"presentation-unknown",{reserved:state.reserved});
+    }
+    if(disposed||generation!==token||!active())return;
+    try{update(state);}catch{commandTrace(win,"presentation-error",{});}
+    if(disposed||generation!==token||!active()||!state.remaining)return;
+    try{timer=win.setTimeout(()=>{if(!disposed&&generation===token){timer=0;refresh();}},Math.ceil(state.remaining));}catch{}
+  };
+  const dispose=()=>{
+    if(disposed)return;disposed=true;generation++;
+    if(timer)try{win.clearTimeout(timer);}catch{}timer=0;
+    try{win.removeEventListener("Nocturne:WorkspaceCommandChanged",refresh);}catch{}
+  };
+  try{win.addEventListener("Nocturne:WorkspaceCommandChanged",refresh);}catch(error){dispose();throw error;}
+  return {refresh,dispose};
+}
 function requireWorkspaceCommand(win,native,lease){
   if(!lease||lease.native!==native||lease.win!==win||workspaceCommandGate(win).owner!==lease||
     win.closed||win.gZenWorkspaces!==native||!native?.workspaceEnabled||!lease.current())
     throw workspaceCommandError("stale","Workspace command is no longer current.");
   if(lease.token&&lease.anchor[WORKSPACE_DATA_GATE]!==lease.token)throw workspaceCommandError("data-lease-lost");
+  if(lease.peer&&(!lease.peer.win||lease.peer.win.closed||lease.peer.win.gZenWorkspaces!==lease.peer.native||
+    !lease.peer.native?.workspaceEnabled||lease.peer.native.isChangingWorkspace!==false||
+    workspaceCommandGate(lease.peer.win)!==lease.peer.gate||lease.peer.gate.reservation!==lease.token))
+    throw workspaceCommandError("peer-lease-lost");
   if(native.isChangingWorkspace!==false)throw workspaceCommandError("native-busy","Native Workspace switch is still in progress.");
 }
 function requireWorkspaceDataCommand(win,native,lease){
   requireWorkspaceCommand(win,native,lease);
   if(!lease.token)throw workspaceCommandError("data-lease-required");
 }
-function runWorkspaceCommand(win,native,kind,current,execute,{data=false,anchor=data?dataAnchor():null}={}){
+function runWorkspaceCommand(win,native,kind,current,execute,{data=false,anchor=data?dataAnchor():null,peer=null}={}){
   const gate=workspaceCommandGate(win);
   const reject=code=>{commandTrace(win,"rejected",{kind,code});return Promise.reject(workspaceCommandError(code,"Workspace command is busy or unavailable. Try again when ready."));};
   if(win.closed||win.gZenWorkspaces!==native||!native?.workspaceEnabled||!current())return reject("stale");
-  if(gate.pending||gate.owner)return reject("busy");
+  if(gate.pending||gate.owner||gate.reservation)return reject("busy");
   if(native.isChangingWorkspace!==false)return reject("native-busy");
+  let peerLease=null;
+  if(peer){
+    if(!data||!peer.win||peer.win===win||peer.win.closed||peer.win.gZenWorkspaces!==peer.native||
+      !peer.native?.workspaceEnabled||peer.native.isChangingWorkspace!==false)return reject("peer-unavailable");
+    const peerGate=workspaceCommandGate(peer.win);
+    if(peerGate.pending||peerGate.owner||peerGate.reservation)return reject("peer-busy");
+    peerLease={win:peer.win,native:peer.native,gate:peerGate};
+  }
   const token=data?Symbol("Nocturne data command"):null;
   if(data){
     if(!anchor)return reject("data-unavailable");
@@ -945,18 +1017,23 @@ function runWorkspaceCommand(win,native,kind,current,execute,{data=false,anchor=
       if(anchor[WORKSPACE_DATA_GATE]!==token)return reject("data-unavailable");
     }catch{return reject("data-unavailable");}
   }
-  const lease={win,native,kind,current,anchor,token};
+  const lease={win,native,kind,current,anchor,token,peer:peerLease};
   let resolve,rejectResult;const pending=new Promise((a,b)=>{resolve=a;rejectResult=b;});
-  // Publish before any native/visual callback can synchronously re-enter.
-  gate.owner=lease;gate.pending=pending;
+  // Publish both gates before any native/visual callback can re-enter.
+  const startedAt=workspaceCommandNow(win);
+  gate.owner=lease;gate.pending=pending;gate.startedAt=startedAt;
+  if(peerLease){peerLease.gate.reservation=token;peerLease.gate.startedAt=startedAt;}
   const finish=(ok,value)=>{
+    if(peerLease)try{if(peerLease.gate.reservation===token){delete peerLease.gate.reservation;delete peerLease.gate.startedAt;}}catch{}
     if(data)try{if(anchor[WORKSPACE_DATA_GATE]===token)delete anchor[WORKSPACE_DATA_GATE];}catch{}
-    if(gate.owner===lease&&gate.pending===pending){gate.owner=null;gate.pending=null;}
-    commandTrace(win,"end",{kind,ok,code:ok?null:value?.name==="WorkspaceCommandError"?value.code:"error"});
+    if(gate.owner===lease&&gate.pending===pending){gate.owner=null;gate.pending=null;delete gate.startedAt;}
+    commandTrace(win,"end",{kind,ok,peer:!!peerLease,elapsed:Math.max(0,workspaceCommandNow(win)-startedAt),code:ok?null:value?.name==="WorkspaceCommandError"?value.code:"error"});
+    notifyWorkspaceCommand(win);if(peerLease)notifyWorkspaceCommand(peerLease.win);
     if(ok)resolve(value);else rejectResult(value);
   };
   try{
-    commandTrace(win,"begin",{kind,data});
+    commandTrace(win,"begin",{kind,data,peer:!!peerLease});
+    notifyWorkspaceCommand(win);if(peerLease)notifyWorkspaceCommand(peerLease.win);
     requireWorkspaceCommand(win,native,lease);
     Promise.resolve(execute(lease)).then(v=>finish(true,v),e=>finish(false,e));
   }catch(error){finish(false,error);}
@@ -1405,7 +1482,12 @@ function acquireZenHome(win, services) {
   let searchInput=null,searchOriginalPlaceholder=null,searchSessionLabel=null;
   let searchSnapshot=null,searchSnapshotTimer=0,searchSnapshotObserver=null,searchSnapshotDirty=true,searchSnapshotView=null;
   let searchReturnParts=[],searchLastRect=null;
-  let pinScrollTop=0,pinCustom=false,pinViewMode="home";
+  let pinScrollTop=0,pinCustom=false,pinViewMode="home",pendingWatch=null;
+  function updateWorkspacePending(state){
+    const status=content.querySelector(".zh-workspace-pending");
+    if(status){const message=workspaceCommandMessage(state);status.textContent=message;status.hidden=!message;}
+    for(const b of Array.from(content.querySelectorAll?.(".zh-space[data-zh-workspace-id]")||[]))b.disabled=switching||state.blocked;
+  }
   const leases=new Set(),cleanups=[];
   function listen(node,type,fn,options){node.addEventListener(type,fn,options);cleanups.push(()=>node.removeEventListener(type,fn,options));}
   const button=(cls,label,fn)=>{const n=html("button",cls,label);n.type="button";n.addEventListener("click",fn);return n;};
@@ -1489,7 +1571,7 @@ function acquireZenHome(win, services) {
   function stopMotion(){motion?.cancel();motion=null;finishStartupHome();}
   function close(restoreFocus=false){
     typeof win!=="undefined"&&win.__nocturneTrace?.("home.close",()=>({restoreFocus,open}),{sample:1800});
-    if(!open)return;open=false;editing=false;adding=false;pinScrollTop=0;pinCustom=false;pinViewMode="home";panel.removeAttribute("data-zh-adding");dragId=null;startupHome=false;homeOnPlaceholder=false;finishSearchVisual();stopMotion();panel.hidden=true;restore();notify();
+    if(!open)return;open=false;pendingWatch?.refresh();editing=false;adding=false;pinScrollTop=0;pinCustom=false;pinViewMode="home";panel.removeAttribute("data-zh-adding");dragId=null;startupHome=false;homeOnPlaceholder=false;finishSearchVisual();stopMotion();panel.hidden=true;restore();notify();
     if(restoreFocus)try{if(focusHome?.isConnected)focusHome.focus({preventScroll:true});else browser.selectedBrowser?.focus();}catch{}
     focusHome=null;
   }
@@ -2076,19 +2158,24 @@ function acquireZenHome(win, services) {
       for(const ws of workspaces){
         if(!ws?.uuid)continue;
         const b=button("zh-space","",async()=>{
-          if(switching||manager.activeWorkspace===ws.uuid)return;switching=true;
+          if(switching||workspaceCommandState(win).blocked||manager.activeWorkspace===ws.uuid)return;switching=true;
+          pendingWatch?.refresh();
           try{await switchHomeWorkspace(manager,ws.uuid);}catch(error){win.console.warn("[Zen Home] workspace",error);}
-          finally{switching=false;if(open)refreshWorkspaceSelection();}
+          finally{switching=false;if(open){refreshWorkspaceSelection();pendingWatch?.refresh();}}
         });
         b.setAttribute("data-zh-workspace-id",ws.uuid);b.setAttribute("data-zh-workspace-name",String(ws.name||"Workspace"));
         b.append(html("span","","◦"),html("span","",String(ws.name||"Workspace")));
         if(manager.activeWorkspace===ws.uuid)b.setAttribute("aria-current","true");list.append(b);
       }
-      if(list.childElementCount)content.append(spaces);
+      if(list.childElementCount){
+        const pending=html("p","zh-workspace-pending zh-picker-note");pending.setAttribute("role","status");pending.setAttribute("aria-live","polite");pending.hidden=true;
+        spaces.append(pending);content.append(spaces);
+      }
     }
     const footer=html("div","zh-footer");footer.append(button("zh-small",editing?"Done":"Customize Home",()=>{if(adding){leavePinPicker();return;}editing=!editing;render();}));content.append(footer);
     const grid=content.querySelector(".zh-recommendations");
     if(grid)pinScrollTop=restorePinScroll(grid,pinScrollTop);
+    pendingWatch?.refresh();
   }
   function show(startup=false){
     typeof win!=="undefined"&&win.__nocturneTrace?.("home.show",()=>({startup,open}),{sample:1800});
@@ -2131,6 +2218,7 @@ function acquireZenHome(win, services) {
   }};
   try{
     root.append(style);host.append(panel);
+    pendingWatch=watchWorkspaceCommand(win,()=>open&&!dead,updateWorkspacePending);cleanups.push(()=>pendingWatch.dispose());
     // Idle Home is a destination, not an exclusive overlay. Only its
     // native search handoff owns this registration.
     let unregisterOverlay=()=>{};
@@ -2150,7 +2238,7 @@ function acquireZenHome(win, services) {
       if(!open&&e.target===browser.selectedTab&&e.detail?.changed?.some?.(name=>name==="busy"||name==="pending"||name==="discarded"||name==="zen-empty-tab"))ensurePrimaryHome();
     });
     listen(win,"ZenWorkspaceDataChanged",()=>{if(open&&!switching)render();});
-    listen(win,"ZenWorkspacesUIUpdate",()=>{if(open&&!switching)refreshWorkspaceSelection();});
+    listen(win,"ZenWorkspacesUIUpdate",()=>{if(open&&!switching){refreshWorkspaceSelection();pendingWatch?.refresh();}});
     listen(win,"ZenURLBarClosed",onSearchClosed);
     listen(win,"resize",()=>{
       if(!searchToken||!searchBar)return;
@@ -4124,8 +4212,9 @@ function installTabStrip() {
     for(const [key,value] of Object.entries({role:"dialog","aria-label":"One Plane Hub"}))panel.setAttribute(key,value);
     const make=(tag,cls,text)=>{const n=html(tag,cls);if(text!==undefined)n.textContent=text;return n;};
     const content=make("div","op-hub-content");
-    const spaces=make("div","op-hub-spaces"),status=make("div","op-hub-status");
+    const spaces=make("div","op-hub-spaces"),status=make("div","op-hub-status"),pendingStatus=make("div","op-hub-status");
     status.setAttribute("role","status");status.setAttribute("aria-live","polite");
+    pendingStatus.setAttribute("role","status");pendingStatus.setAttribute("aria-live","polite");pendingStatus.hidden=true;
     const form=make("form","op-hub-create"),name=make("input","op-hub-name"),add=make("button","op-hub-add","+");
     name.type="text";name.maxLength=80;name.placeholder="New workspace";name.setAttribute("aria-label","New workspace name");
     add.type="submit";add.setAttribute("aria-label","Create workspace");form.append(name,add);
@@ -4174,7 +4263,7 @@ function installTabStrip() {
     clearTrash.addEventListener("click",()=>askPurge());
     const freeSlot=make("div","op-hub-free-slot"),freeDivider=make("div","op-hub-divider");
     freeDivider.hidden=true;
-    content.append(titleRow,make("h3","op-hub-heading","Workspaces"),freeSetup,freeSlot,freeDivider,spaces,form,status,make("div","op-hub-divider"),make("h3","op-hub-heading","Settings"),mode,trashPanel);
+    content.append(titleRow,make("h3","op-hub-heading","Workspaces"),freeSetup,freeSlot,freeDivider,spaces,form,status,pendingStatus,make("div","op-hub-divider"),make("h3","op-hub-heading","Settings"),mode,trashPanel);
     const returnButton=make("button","op-hub-return","Return to main window");returnButton.type="button";returnButton.hidden=true;content.prepend(returnButton);
     panel.append(content);
     let destroyed=false,busy=false,open=false,contextId=null,hubSession=0;
@@ -4184,6 +4273,28 @@ function installTabStrip() {
     const TRASH_ROW_HEIGHT=54;
     const FREE_PREF="zen.oneplane.free-space-id",TRASH_PREF="zen.oneplane.trash-space-id",COLOR_PREF="zen.oneplane.workspace-colors",TRASH_TIME="oneplane-trashed-at";
     let geometryFrame=0,motion=null,confirmation=null,drag=null,suppressClickUntil=0,projectionBusy=false;
+    let pendingWatch=null,pendingBlocked=null;
+    const commandBlocked=()=>workspaceCommandState(window).blocked;
+    function updatePending(state){
+      const message=workspaceCommandMessage(state);
+      pendingStatus.textContent=message;pendingStatus.hidden=!message;
+      // Only the workspace command controls are blocked. Settings,
+      // Escape, overlay yield and native browser interaction stay live.
+      for(const entry of spaces.querySelectorAll(".op-hub-space"))entry.disabled=busy||state.blocked;
+      for(const entry of freeSlot.querySelectorAll(".op-hub-space"))entry.disabled=busy||state.blocked;
+      name.disabled=busy||state.blocked;add.disabled=busy||state.blocked||!name.value.trim();
+      returnButton.disabled=busy||projectionBusy||state.blocked;
+      for(const node of panel.querySelectorAll(".op-hub-context button,.op-hub-free-setup button")){
+        if(node.textContent==="Cancel")continue;
+        // Add the live gate restriction without clearing an existing
+        // render-time disabled state.
+        if(state.blocked&&!node.disabled){node.disabled=true;node.setAttribute("data-op-command-disabled","");}
+        else if(!state.blocked&&node.hasAttribute("data-op-command-disabled")){node.removeAttribute("data-op-command-disabled");node.disabled=false;}
+      }
+      const changed=pendingBlocked!==state.blocked;pendingBlocked=state.blocked;
+      if(state.blocked){clearTrash.disabled=true;ageSelect.disabled=true;}
+      if(changed&&open&&trashOpen&&!trashDrag)renderTrash();
+    }
     const PROJECTION="__oneplaneWorkspaceProjection";
     let projectionSequence=0;
     let dragBadge=null,dragBadgeFrame=0,dragBadgePoint=null;
@@ -4231,6 +4342,7 @@ function installTabStrip() {
       if(drag)cancelDrag();
       if(geometryFrame)window.cancelAnimationFrame(geometryFrame);geometryFrame=0;
       button.setAttribute("aria-expanded","false");
+      pendingWatch?.refresh();
       if(restoreFocus&&!destroyed&&supported())button.focus({preventScroll:true});
       if(!wasVisible||immediate||destroyed||!supported()){hideNow();return;}
       panel.inert=true;fluid(false,()=>{if(!open)hideNow();});
@@ -4300,6 +4412,7 @@ function installTabStrip() {
       const compact=root.getAttribute("zen-compact-mode")==="true";
       const modeLabel=make("span","op-hub-mode-label","Compact Mode"),modeState=make("span","op-hub-mode-state",compact?"On":"Off");mode.replaceChildren(modeLabel,modeState);
       mode.setAttribute("aria-pressed",String(compact));mode.disabled=typeof command()?.doCommand!=="function";
+      pendingWatch?.refresh();
     }
     function workspaceMenu(space,snapshot){
       const menu=make("div","op-hub-context");menu.setAttribute("role","group");menu.setAttribute("aria-label","Workspace actions");
@@ -4358,6 +4471,7 @@ function installTabStrip() {
     }
     async function operation(fn){
       if(busy||projectionBusy||destroyed||!canManage())return;
+      if(commandBlocked()){pendingWatch?.refresh();return;}
       busy=true;status.textContent="";
       const native=manager(),current=()=>!destroyed&&manager()===native&&canManage();
       try{return await runWorkspaceCommand(window,native,"hub-data",current,fn,{data:true});}catch(error){if(!destroyed)status.textContent=String(error.message||error);console.warn("[OnePlane] Workspace Engine:",error);}
@@ -4595,7 +4709,7 @@ function installTabStrip() {
       if(open&&!destroyed)render();
     }
     function beginTrashDrag(event,tab,row){
-      if(!event.isTrusted||event.button!==0||!(event.buttons&1)||!open||!trashOpen||busy||projectionBusy||destroyed||
+      if(!event.isTrusted||event.button!==0||!(event.buttons&1)||!open||!trashOpen||busy||projectionBusy||destroyed||commandBlocked()||
         !trashAllowed||!singleWindow()||!hubTrashTabEligible(tab)||tab===browser.selectedTab)return;
       const approval={native:manager(),browser,free:freeId(),trash:trashId()};
       if(!approval.trash||!approval.free||approval.trash===approval.free||
@@ -4832,11 +4946,11 @@ function installTabStrip() {
       trashPanel.toggleAttribute("data-op-trash-open",trashOpen);trashDrawer.inert=!trashOpen;trashTools.inert=!trashOpen;
       if(!trashOpen)setTrashAgeOpen(false);
       if(!open||!trashOpen){stopTrashUpdates();return;}
-      trashAllowed=!busy&&canManage()&&singleWindow();
+      trashAllowed=!busy&&canManage()&&singleWindow()&&!commandBlocked();
       trashData=tabs.map(tab=>({tab,stamp:trashStamp(tab)})).sort((a,b)=>b.stamp-a.stamp);
       trashRangeKey="";trashConfirmation.replaceChildren();trashNotice.replaceChildren();
       if(!tabs.length)trashNotice.append(make("p","op-hub-confirm-text","Trash is empty."));
-      else if(!trashAllowed)trashNotice.append(make("p","op-hub-confirm-text","Close other browser windows to restore or clear tabs."));
+      else if(!trashAllowed)trashNotice.append(make("p","op-hub-confirm-text",commandBlocked()?"Workspace command is pending.":"Close other browser windows to restore or clear tabs."));
       trashList.hidden=!tabs.length;
       renderTrashRows();scheduleTrashRows();
       if(!trashAgeTimer)trashAgeTimer=window.setInterval(updateTrashAges,60000);
@@ -4857,7 +4971,7 @@ function installTabStrip() {
         prefs.getBoolPref("zen.window-sync.enabled",true)&&!prefs.getBoolPref("zen.window-sync.sync-only-pinned-tabs",true);
     }
     function beginDrag(event,id,entry){
-      if(!event.isTrusted||event.button!==0||!(event.buttons&1)||busy||projectionBusy||destroyed||!open||trashDrag)return;
+      if(!event.isTrusted||event.button!==0||!(event.buttons&1)||busy||projectionBusy||destroyed||!open||trashDrag||commandBlocked())return;
       if(dragLifecycle.current())cancelActiveDrag("superseded");
       const token=dragLifecycle.begin("workspace",{pointerId:event.pointerId,onMove:moveDrag,onUp:endDrag,onCancel:()=>cleanupDrag()});
       if(token===null)return;
@@ -5113,6 +5227,7 @@ function installTabStrip() {
     }
     async function project(id,display){
       if(projectionBusy||busy||destroyed)return;
+      if(commandBlocked()){pendingWatch?.refresh();return;}
       if(!canProject()){status.textContent="Enable native window sync for all tabs to use this feature.";return;}
       const native=manager();
       if(!native.getWorkspaceFromId(id))return;
@@ -5240,13 +5355,13 @@ function installTabStrip() {
     }
     async function returnProjection(){
       const projection=window[PROJECTION],source=projection?.source,native=manager(),sourceNative=source?.gZenWorkspaces,sync=window.gZenWindowSync;
-      if(projectionBusy||busy||destroyed||!source||source.closed||!canProject()||source.gZenWindowSync!==sync){
+      if(projectionBusy||busy||destroyed||commandBlocked()||!source||source.closed||!canProject()||source.gZenWindowSync!==sync){
         status.textContent="Main synced window unavailable.";return;
       }
       const current=()=>{
         try{return !destroyed&&!window.closed&&window[PROJECTION]===projection&&manager()===native&&canProject()&&
           source.gZenWorkspaces===sourceNative&&window.gZenWindowSync===sync&&source.gZenWindowSync===sync&&
-          !source.closed&&!source._zenClosingWindow&&!workspaceCommandGate(source).pending&&!workspaceCommandGate(source).owner;}
+          !source.closed&&!source._zenClosingWindow;}
         catch{return false;}
       };
       projectionBusy=true;
@@ -5263,14 +5378,14 @@ function installTabStrip() {
           else throw workspaceCommandError("return-unavailable","Use the native close-window command.");
           if(window.closed&&!source.closed)source.focus();
           else if(!destroyed)status.textContent="Close requested. The window remains open if cancelled.";
-        },{data:true});
+        },{data:true,peer:{win:source,native:sourceNative}});
       }catch(error){
         if(!destroyed)status.textContent=error?.code==="return-unverified"?error.message:"Could not return safely.";
         projectionLog(window,"return-rejected",{reason:error?.code==="return-unverified"?"unverified":"unavailable"});
       }finally{projectionBusy=false;if(!destroyed&&!window.closed&&open)render();}
     }
     async function select(id){
-      if(busy||destroyed)return;
+      if(busy||projectionBusy||destroyed||commandBlocked())return;
       const native=manager(),space=hubWorkspaceSnapshot(native)?.find(s=>s.id===id);
       if(!space){render();return;}if(space.active){contextId=null;confirmation=null;render();return;}
       busy=true;status.textContent="";render();
@@ -5283,7 +5398,7 @@ function installTabStrip() {
     }
     async function create(event){
       event.preventDefault();const value=name.value.trim(),native=manager();
-      if(!value||busy||destroyed||!hubWorkspaceSnapshot(native)||typeof native.createAndSaveWorkspace!=="function")return;
+      if(!value||busy||projectionBusy||destroyed||commandBlocked()||!hubWorkspaceSnapshot(native)||typeof native.createAndSaveWorkspace!=="function")return;
       busy=true;status.textContent="";render();
       try{await runWorkspaceCommand(window,native,"hub-create",()=>!destroyed&&manager()===native&&canManage(),async lease=>{
         const result=await native.createAndSaveWorkspace(value,undefined,true);
@@ -5332,7 +5447,7 @@ function installTabStrip() {
       setHold(true);
       try{cmd.doCommand();changed();}catch(error){console.warn("[OnePlane] Compact Mode:",error);}
     }
-    function onInput(){add.disabled=busy||!name.value.trim();}
+    function onInput(){add.disabled=busy||commandBlocked()||!name.value.trim();}
     function onOutside(event){
       if(!open)return;const path=event.composedPath();
       if(!path.includes(panel)&&!path.includes(button)){close();return;}
@@ -5354,7 +5469,7 @@ function installTabStrip() {
       const live=()=>!destroyed&&!hubScope.closed&&generation===overlayGeneration;
       const off=window.__nocturneOverlay?.register("hub",{
         priority:20,isActive:()=>live()&&(open||!panel.hidden),
-        canYield:()=>live()&&!busy&&!projectionBusy&&!drag&&!trashDrag,
+        canYield:()=>live()&&!drag&&!trashDrag,
         yield:()=>{if(!live())return false;close(false,true);return panel.hidden;},
         onEscape:event=>{if(!live())return false;if(open)key(event);return true;}
       });
@@ -5368,6 +5483,8 @@ function installTabStrip() {
       if(destroyed||mounted)return;
       mounted=true;
       bindOverlay();
+      pendingWatch=watchWorkspaceCommand(window,()=>open&&!destroyed,updatePending);
+      hubScope.defer("workspace-pending-view",()=>pendingWatch.dispose());
       hubScope.listen(window,"pointerdown",onOutside,true);
       for(const [node,event,fn] of listeners)hubScope.listen(node,event,fn);
     }

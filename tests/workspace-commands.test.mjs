@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {runWorkspaceCommand,requireWorkspaceCommand,requestWorkspaceSwitch,inspectWorkspaceSwitch,switchWorkspaceWithin,designateWorkspaceFree,workspaceCommandGate} from "../src/core/workspace-commands.mjs";
+import {runWorkspaceCommand,requireWorkspaceCommand,requestWorkspaceSwitch,inspectWorkspaceSwitch,switchWorkspaceWithin,designateWorkspaceFree,workspaceCommandGate,workspaceCommandState,workspaceCommandMessage,watchWorkspaceCommand} from "../src/core/workspace-commands.mjs";
 function fixture(){
  const entries=[{uuid:"a",name:"A"},{uuid:"b",name:"B"}],elements=new Map(),events=[],calls=[],values=new Map();
  let active="a",selected,changing=false;
@@ -106,4 +106,48 @@ test("lost data token blocks continuation and does not clear a foreign owner",as
  const p=runWorkspaceCommand(f.win,f.native,"data",()=>true,async lease=>{await new Promise(r=>release=r);requireWorkspaceCommand(f.win,f.native,lease);},{data:true,anchor:f.anchor});
  Object.defineProperty(f.anchor,symbol,{value:foreign,configurable:true});release();await assert.rejects(p,code("data-lease-lost"));
  assert.equal(f.anchor[symbol],foreign);
+});
+
+test("Return reserves exact source before callbacks and independent third-window selection stays available",async()=>{
+ const a=fixture(),b=fixture(),c=fixture(),anchor={};let release,nested;
+ a.win.__nocturneTrace=event=>{if(event==="workspace.command.begin")nested=request(b,"b");};
+ const p=runWorkspaceCommand(a.win,a.native,"projection-return",()=>true,()=>new Promise(r=>release=r),{data:true,anchor,peer:{win:b.win,native:b.native}});
+ await assert.rejects(nested,code("busy"));await assert.rejects(request(b,"b"),code("busy"));
+ assert.equal(workspaceCommandState(b.win).reserved,true);assert.equal(workspaceCommandGate(b.win).pending,null);
+ assert.equal((await request(c,"b")).status,"confirmed");
+ release();await p;assert.equal(workspaceCommandState(b.win).blocked,false);assert.equal((await request(b,"b")).status,"confirmed");
+});
+test("Return rejects busy source and never leaks data token",async()=>{
+ const a=fixture(),b=fixture(),anchor={};let release;
+ const p=runWorkspaceCommand(b.win,b.native,"selection",()=>true,()=>new Promise(r=>release=r));
+ await assert.rejects(runWorkspaceCommand(a.win,a.native,"projection-return",()=>true,()=>{}, {data:true,anchor,peer:{win:b.win,native:b.native}}),code("peer-busy"));
+ assert.equal(await runWorkspaceCommand(a.win,a.native,"data",()=>true,()=>42,{data:true,anchor}),42);
+ release();await p;
+});
+test("unknown presentation never releases either Return gate or process token",async()=>{
+ const a=fixture(),b=fixture(),c=fixture(),anchor={};let release;
+ const p=runWorkspaceCommand(a.win,a.native,"projection-return",()=>true,()=>new Promise(r=>release=r),{data:true,anchor,peer:{win:b.win,native:b.native}});
+ const state=workspaceCommandState(b.win,workspaceCommandGate(b.win).startedAt+5000);
+ assert.equal(state.phase,"unknown");assert.match(workspaceCommandMessage(state),/remain blocked/);
+ await assert.rejects(request(b,"b"),code("busy"));
+ await assert.rejects(runWorkspaceCommand(c.win,c.native,"data",()=>true,()=>{}, {data:true,anchor}),code("data-busy"));
+ release();await p;assert.equal(workspaceCommandState(b.win).phase,"idle");
+});
+test("peer identity replacement rejects late continuation and exact release preserves foreign reservation",async()=>{
+ const a=fixture(),b=fixture(),anchor={};let release;const foreign=Symbol("foreign");
+ const p=runWorkspaceCommand(a.win,a.native,"projection-return",()=>true,async lease=>{await new Promise(r=>release=r);requireWorkspaceCommand(a.win,a.native,lease);},{data:true,anchor,peer:{win:b.win,native:b.native}});
+ workspaceCommandGate(b.win).reservation=foreign;release();await assert.rejects(p,code("peer-lease-lost"));
+ assert.equal(workspaceCommandGate(b.win).reservation,foreign);
+});
+test("pending watcher cancels its timer and never changes gate ownership",()=>{
+ const f=fixture(),gate=workspaceCommandGate(f.win),timers=new Map(),listeners=new Map(),states=[];let seq=0,active=true;
+ gate.pending={};gate.startedAt=Date.now();const pending=gate.pending;
+ Object.assign(f.win,{setTimeout(fn){timers.set(++seq,fn);return seq;},clearTimeout(id){timers.delete(id);},
+ addEventListener(name,fn){listeners.set(name,fn);},removeEventListener(name){listeners.delete(name);}});
+ const watch=watchWorkspaceCommand(f.win,()=>active,s=>states.push(s.phase));watch.refresh();
+ assert.equal(states.at(-1),"pending");assert.equal(timers.size,1);
+ const stale=[...timers.values()][0];active=false;watch.refresh();stale();
+ assert.equal(timers.size,0);assert.equal(gate.pending,pending);
+ active=true;gate.startedAt=Date.now()-5000;watch.refresh();assert.equal(states.at(-1),"unknown");assert.equal(timers.size,0);
+ watch.dispose();assert.equal(listeners.size,0);assert.equal(gate.pending,pending);
 });
