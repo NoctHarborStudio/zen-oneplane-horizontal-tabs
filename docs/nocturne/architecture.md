@@ -122,3 +122,7 @@ Layout owns its cleanup and native preference lease. Diagnostics claims that spe
 ### A2 — Native Workspace command ownership
 
 The Layout-inlined workspace-commands module owns Nocturne-origin command admission, not native workspace data. Its window lease reuses the existing transition gate; data mutations additionally acquire a primitive process token on BrowserWindowTracker. WorkspaceTransition is a presentation consumer of the same lease, not another managed native queue. Home, Hub, Free and projection use the shared command boundary; native structural outcome must be verified before incoming success motion. Pending native operations never release due only to a visual watchdog; competing managed commands fail busy. Native external mutations and asynchronous peer propagation remain authoritative and are not wrapped. See [Pipeline](pipeline-0.4.0.md) for partial-result and pending-state gates.
+
+### A2 — Destructive Workspace data reconciliation
+
+The existing workspace-commands module compares authoritative native tab identity with physical normal/pinned container membership before and after destructive commands. Hub holds the same data lease across transfer/delete/purge; the journal is transient counts, not another tab store. No destructive rollback, no stale approval retry and no native removeWorkspace call before a freshly reconciled empty source. Transfer metadata follows confirmed physical movement. See [Pipeline](pipeline-0.4.0.md) and [Validation](validation.md) for evidence and unresolved native/pending-state gates.
