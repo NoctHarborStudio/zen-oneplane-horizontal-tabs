@@ -41,7 +41,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.69",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.70",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -4967,62 +4967,33 @@ function installTabStrip() {
       stop.probe=install;
       return stop;
     }
-    function untouchedProjectionTab(tab,win){
-      if(!tab||tab.closing||tab.pinned||tab.group||tab.hasAttribute("zen-essential")||
-        tab.hasAttribute("zen-empty-tab")||tab.hasAttribute("split-view")||tab.hasAttribute("split-view-group")||
-        tab.hasAttribute("busy")||tab.hasAttribute("soundplaying")||tab.hasAttribute("muted")||
-        tab.linkedBrowser?.userTypedValue)return false;
-      // A synced/lazy tab can expose about:blank while holding a real page
-      // in SessionStore. Inspect the stored history as well, fail closed.
-      try{
-        const {SessionStore}=ChromeUtils.importESModule("moz-src:///browser/components/sessionstore/SessionStore.sys.mjs");
-        const stored=JSON.parse(SessionStore.getTabState(tab));
-        const empty=url=>url==="about:blank"||url==="about:newtab";
-        const entries=stored.entries;
-        if(!Array.isArray(entries)||entries.length>1||entries.some(entry=>!empty(entry.url))||
-          stored.userTypedValue||stored.userTypedClear||stored.formdata)return false;
-        const browser=tab.linkedBrowser;
-        return !!browser&&empty(browser.currentURI?.spec)&&!browser.canGoBack&&!browser.canGoForward&&
-          (!tab._originalUrl||empty(tab._originalUrl));
-      }catch{return false;}
-    }
-    function prepareProjectionStart(child,id,startupTabs,preexistingIds,identifiable,interacted){
-      if(interacted||child.closed||destroyed){projectionLog(child,"start-cancelled",{interacted});return false;}
-      const manager=child.gZenWorkspaces,b=child.gBrowser,empty=manager?._emptyTab;
-      // Do not use selectEmptyTab's fallback, which can create a real tab
-      // when the native floating-new-tab mode is unavailable.
-      if(manager?.activeWorkspace!==id||!empty?.isConnected||empty.closing||
-        !empty.hasAttribute("zen-empty-tab")||!b?.isTab(empty)){projectionLog(child,"empty-unavailable");return false;}
-      b.selectedTab=empty;
-      if(b.selectedTab!==empty){projectionLog(child,"empty-selection-rejected");return false;}
-      let removed=0;
-      for(const startupTab of startupTabs)if(identifiable&&startupTab?.id&&!preexistingIds.has(startupTab.id)&&
-        startupTab.isConnected&&startupTab!==empty&&b.isTab(startupTab)&&untouchedProjectionTab(startupTab,child)){
-        // Verify all extant synced peers, not merely the opener. Never
-        // delete a tab whose authoritative copy has been navigated.
-        let safe=true;
-        try{
-          const wins=Services.wm.getEnumerator("navigator:browser");
-          while(wins.hasMoreElements()){
-            const win=wins.getNext();
-            if(win===child||win.closed||win.gZenWindowSync!==child.gZenWindowSync||
-              !win.gZenWorkspaces?.currentWindowIsSyncing)continue;
-            const peer=win.gZenWindowSync.getItemFromWindow(win,startupTab.id);
-            if(peer&&(!win.gBrowser?.isTab(peer)||!untouchedProjectionTab(peer,win))){safe=false;break;}
-          }
-        }catch{safe=false;}
-        if(safe){b.removeTab(startupTab,{animate:false,skipSessionStore:true,closeWindowWithLastTab:false});removed++;}
-      }
-      projectionLog(child,"start-prepared",{candidates:startupTabs.size,removed,identifiable});
-      return b.selectedTab===empty;
+    function prepareProjectionStart(child,id,startupTabs,native,browser,lease){
+      requireWorkspaceCommand(child,native,lease);
+      const empty=native._emptyTab;
+      if(child.gBrowser!==browser||native.activeWorkspace!==id||!empty?.isConnected||empty.closing||
+        !empty.hasAttribute("zen-empty-tab")||!browser?.isTab(empty)){projectionLog(child,"empty-unavailable");return false;}
+      browser.selectedTab=empty;
+      requireWorkspaceCommand(child,native,lease);
+      if(child.gBrowser!==browser||native._emptyTab!==empty||native.activeWorkspace!==id||
+        browser.selectedTab!==empty){projectionLog(child,"empty-selection-rejected");return false;}
+      // Zen owns startup-tab cleanup. Its TabClose event is queued and
+      // may later remove a synced peer whose state changed in the meantime.
+      // No public native atomic/local-only close contract: keep residual
+      // ordinary tabs rather than risk deleting a different live page.
+      let retained=0;
+      for(const tab of startupTabs)if(tab!==empty&&tab.isConnected&&browser.isTab(tab))retained++;
+      projectionLog(child,"start-prepared",{candidates:startupTabs.size,retained,removed:0});
+      return true;
     }
     // A synced child can inherit an empty-page search session whose
     // zen-newtab attribute remains set even after native focus/rollup hides
     // its result view. Check the actual floating view, not just its flag.
     async function openProjectionSearch(child,id,interacted){
+      const native=child.gZenWorkspaces,browser=child.gBrowser,empty=native?._emptyTab;
       const eligible=()=>!child.closed&&!window.closed&&!destroyed&&!interacted()&&
-        child.gZenWorkspaces?.activeWorkspace===id&&
-        child.gBrowser?.selectedTab?.hasAttribute("zen-empty-tab");
+        child.gZenWorkspaces===native&&child.gBrowser===browser&&native?.activeWorkspace===id&&
+        !!empty?.isConnected&&!empty.closing&&native._emptyTab===empty&&browser.selectedTab===empty&&
+        empty.hasAttribute("zen-empty-tab");
       const isVisible=bar=>!!bar?.hasAttribute("zen-newtab")&&
         !!(bar.view?.isOpen||bar.hasAttribute("open"));
       const wait=()=>new Promise(resolve=>window.setTimeout(resolve,100));
@@ -5043,6 +5014,7 @@ function installTabStrip() {
             // Resume the already-owned native new-tab session, rather than
             // calling handleNewTab again or creating an ordinary tab.
             bar.search("");
+            if(!eligible()||child.gURLBar!==bar||!child.document?.hasFocus?.())return false;
             child.document.getElementById("Browser:OpenLocation")?.doCommand();
           }else child.gZenUIManager?.handleNewTab(false,false,"tab",true);
           projectionLog(child,"search-attempt",{attempt,resumed:session,viewOpen:isVisible(bar),focused});
@@ -5107,23 +5079,20 @@ function installTabStrip() {
       if(!canProject()){status.textContent="Enable native window sync for all tabs to use this feature.";return;}
       const native=manager();
       if(!native.getWorkspaceFromId(id))return;
-      const preexistingIds=new Set();let identifiable=true;
-      try{const wins=Services.wm.getEnumerator("navigator:browser");while(wins.hasMoreElements()){
-        const win=wins.getNext();if(win.closed||win.gZenWindowSync!==window.gZenWindowSync||!win.gZenWorkspaces?.currentWindowIsSyncing)continue;
-        const tabs=win.gZenWorkspaces.allStoredTabs;if(!Array.isArray(tabs)){identifiable=false;break;}
-        for(const tab of tabs){if(tab.hasAttribute("zen-empty-tab"))continue;if(!tab.id)identifiable=false;else preexistingIds.add(tab.id);}
-      }}catch{identifiable=false;}
+      const sync=window.gZenWindowSync;
       projectionBusy=true;status.textContent="Opening workspace…";render();
       let child=null,interacted=false,stopEmptyGuard=()=>{},captureStartup=null,projection=null;
       const current=()=>{
         try{return !interacted&&!destroyed&&!window.closed&&manager()===native&&canProject()&&
-          !!native.getWorkspaceFromId(id)&&!!child&&!child.closed&&child[PROJECTION]===projection;}
+          window.gZenWindowSync===sync&&!!native.getWorkspaceFromId(id)&&!!child&&!child.closed&&child[PROJECTION]===projection;}
         catch{return false;}
       };
-      const childCurrent=childNative=>current()&&child.gZenWorkspaces===childNative&&
-        !!childNative?.currentWindowIsSyncing&&child.gZenWindowSync===window.gZenWindowSync&&
-        !!childNative.getWorkspaceFromId(id);
-      const onInput=event=>{if(event.isTrusted){interacted=true;stopEmptyGuard();}};
+      const childCurrent=(childNative,browser)=>{
+        try{return current()&&child.gZenWorkspaces===childNative&&child.gBrowser===browser&&
+          !!childNative?.currentWindowIsSyncing&&child.gZenWindowSync===sync&&!!childNative.getWorkspaceFromId(id);}
+        catch{return false;}
+      };
+      const onInput=event=>{if(event.isTrusted){interacted=true;try{stopEmptyGuard();}catch{}}};
       try{
         const {BrowserWindowTracker}=ChromeUtils.importESModule("resource:///modules/BrowserWindowTracker.sys.mjs");
         // Supply the final snap rectangle at native window creation,
@@ -5153,21 +5122,26 @@ function installTabStrip() {
         stopEmptyGuard();
         projectionLog(child,"spaces-ready",{candidates:startupTabs.size});
         if(interacted){projectionLog(child,"takeover");await placementTask;return;}
-        if(!childCurrent(childNative))throw Error("Native sync unavailable");
+        const browser=child.gBrowser;
+        const eligible=()=>childCurrent(childNative,browser);
+        if(!eligible())throw Error("Native sync unavailable");
         const alreadyActive=childNative.activeWorkspace===id;
-        await requestWorkspaceSwitch(child,childNative,id,"projection",()=>childCurrent(childNative),{motion:false});
+        // Keep the same selection lease through switch and placeholder
+        // preparation; no second independent native command boundary.
+        const showStart=await runWorkspaceCommand(child,childNative,"projection",eligible,async lease=>{
+          await switchWorkspaceWithin(child,childNative,id,lease,{motion:false});
+          requireWorkspaceCommand(child,childNative,lease);
+          projectionLog(child,"workspace-active",{alreadyActive,sourceActive:native.activeWorkspace===id});
+          return prepareProjectionStart(child,id,startupTabs,childNative,browser,lease);
+        });
         if(interacted){projectionLog(child,"takeover");await placementTask;return;}
-        if(!childCurrent(childNative))throw Error("Projection owner changed");
-        projectionLog(child,"workspace-active",{alreadyActive,sourceActive:native.activeWorkspace===id});
-        // Select Zen's transparent placeholder first, including when the
-        // synthetic startup tab was the selected tab in this window.
-        const showStart=prepareProjectionStart(child,id,startupTabs,preexistingIds,identifiable,interacted);
+        if(!eligible())throw Error("Projection owner changed");
         // Keep empty-tab selection independent of placement. Open the
         // floating search AFTER window placement settles, because native
         // activation/maximize may otherwise dismiss it on the same space.
         const placed=await placementTask;
-        const searchVisible=showStart&&await openProjectionSearch(child,id,()=>!childCurrent(childNative));
-        if(!childCurrent(childNative)){projectionLog(child,"takeover");return;}
+        const searchVisible=showStart&&await openProjectionSearch(child,id,()=>!eligible());
+        if(!eligible()){projectionLog(child,"takeover");return;}
         projectionLog(child,"projection-complete",{placed,searchVisible:!!searchVisible,alreadyActive});
         status.textContent=placed?"":"Window opened; placement could not be verified.";
       }catch(error){
@@ -5184,22 +5158,77 @@ function installTabStrip() {
         projectionBusy=false;if(!destroyed&&open)render();
       }
     }
+    // Native synced-window close moves live docshells itself. Verify the
+    // exact current tab identities in the intended surviving peer first.
+    function inspectProjectionReturn(child,source,native,sourceNative,sync){
+      try{
+        if(!source||source===child||!sync||child.closed||source.closed||
+          child._zenClosingWindow||source._zenClosingWindow||
+          child.gZenWorkspaces!==native||source.gZenWorkspaces!==sourceNative||
+          child.gZenWindowSync!==sync||source.gZenWindowSync!==sync||
+          !native?.workspaceEnabled||!sourceNative?.workspaceEnabled||
+          !native.currentWindowIsSyncing||!sourceNative.currentWindowIsSyncing||
+          native.isChangingWorkspace!==false||sourceNative.isChangingWorkspace!==false||
+          !child.gZenStartup?.isReady||!source.gZenStartup?.isReady)return false;
+        const b=child.gBrowser,peerBrowser=source.gBrowser;
+        const snapshot=(win,manager,browser)=>{
+          if(typeof browser?.tabContainer?._invalidateCachedTabs!=="function"||typeof browser.isTab!=="function")return null;
+          browser.tabContainer._invalidateCachedTabs();
+          const tabs=manager.allStoredTabs;
+          if(!Array.isArray(tabs)||new Set(tabs).size!==tabs.length)return null;
+          const byId=new Map();
+          for(const tab of tabs){
+            if(tab===manager._emptyTab&&tab.hasAttribute("zen-empty-tab"))continue;
+            if(!tab?.isConnected||tab.closing||!browser.isTab(tab)||tab.hasAttribute("zen-empty-tab")||
+              !tab.id||byId.has(tab.id)||sync.getItemFromWindow(win,tab.id)!==tab)return null;
+            byId.set(tab.id,tab);
+          }
+          // A native tab absent from the workspace cache is not certified.
+          if(!browser.tabs||Array.from(browser.tabs).some(tab=>
+            tab!==manager._emptyTab&&byId.get(tab.id)!==tab))return null;
+          return byId;
+        };
+        const own=snapshot(child,native,b),other=snapshot(source,sourceNative,peerBrowser);
+        if(!own||!other||child.gBrowser!==b||source.gBrowser!==peerBrowser)return false;
+        for(const [id,tab] of own){
+          const peer=other.get(id);
+          if(!peer||peer===tab||tab.getAttribute("zen-workspace-id")!==peer.getAttribute("zen-workspace-id")||
+            !!tab.pinned!==!!peer.pinned||tab.getAttribute("usercontextid")!==peer.getAttribute("usercontextid")||
+            tab.hasAttribute("zen-essential")!==peer.hasAttribute("zen-essential"))return false;
+        }
+        return true;
+      }catch{return false;}
+    }
     async function returnProjection(){
-      const projection=window[PROJECTION],source=projection?.source;
-      if(projectionBusy||!source||source.closed||!canProject()||source.gZenWindowSync!==window.gZenWindowSync){
+      const projection=window[PROJECTION],source=projection?.source,native=manager(),sourceNative=source?.gZenWorkspaces,sync=window.gZenWindowSync;
+      if(projectionBusy||busy||destroyed||!source||source.closed||!canProject()||source.gZenWindowSync!==sync){
         status.textContent="Main synced window unavailable.";return;
       }
-      const own=manager()?.allStoredTabs,other=source.gZenWorkspaces?.allStoredTabs;
-      if(!Array.isArray(own)||!Array.isArray(other)||!own.filter(t=>!t.hasAttribute("zen-empty-tab")).every(t=>
-        t.id&&other.some(o=>o.id===t.id&&!o.closing&&o.getAttribute("zen-workspace-id")===t.getAttribute("zen-workspace-id")))){
-        status.textContent="Some tabs are not synced yet. Return cancelled to protect them.";return;
-      }
+      const current=()=>{
+        try{return !destroyed&&!window.closed&&window[PROJECTION]===projection&&manager()===native&&canProject()&&
+          source.gZenWorkspaces===sourceNative&&window.gZenWindowSync===sync&&source.gZenWindowSync===sync&&
+          !source.closed&&!source._zenClosingWindow&&!workspaceCommandGate(source).pending&&!workspaceCommandGate(source).owner;}
+        catch{return false;}
+      };
+      projectionBusy=true;
       try{
-        if(typeof window.BrowserTryToCloseWindow==="function")window.BrowserTryToCloseWindow();
-        else if(typeof window.BrowserCommands?.tryToCloseWindow==="function")window.BrowserCommands.tryToCloseWindow();
-        else {status.textContent="Use the native close-window command.";return;}
-        if(window.closed)source.focus();
-      }catch(error){status.textContent="Could not return safely.";console.warn("[OnePlane] Return:",error);}
+        await runWorkspaceCommand(window,native,"projection-return",current,async lease=>{
+          projectionLog(window,"return-request");
+          requireWorkspaceDataCommand(window,native,lease);
+          if(!inspectProjectionReturn(window,source,native,sourceNative,sync))
+            throw workspaceCommandError("return-unverified","Some tabs are not synced yet. Return cancelled to protect them.");
+          requireWorkspaceDataCommand(window,native,lease);
+          // A request is not a confirmed close. Never call removeTab here.
+          if(typeof window.BrowserTryToCloseWindow==="function")await window.BrowserTryToCloseWindow();
+          else if(typeof window.BrowserCommands?.tryToCloseWindow==="function")await window.BrowserCommands.tryToCloseWindow();
+          else throw workspaceCommandError("return-unavailable","Use the native close-window command.");
+          if(window.closed&&!source.closed)source.focus();
+          else if(!destroyed)status.textContent="Close requested. The window remains open if cancelled.";
+        },{data:true});
+      }catch(error){
+        if(!destroyed)status.textContent=error?.code==="return-unverified"?error.message:"Could not return safely.";
+        projectionLog(window,"return-rejected",{reason:error?.code==="return-unverified"?"unverified":"unavailable"});
+      }finally{projectionBusy=false;if(!destroyed&&!window.closed&&open)render();}
     }
     async function select(id){
       if(busy||destroyed)return;

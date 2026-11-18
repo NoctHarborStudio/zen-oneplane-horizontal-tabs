@@ -242,3 +242,6 @@ Two focused extracted-runtime fixtures PASS: old manager readiness cannot certif
 
 ### Preview.69 publication correction
 Initial CI run 44246407594 failed the pinned Magnetic Bookmarks provenance test: the diagnostic version marker changed but `scripts/shared-bookmarks.lock.json` retained the prior Git blob. Correct the explicit local override to runtime commit `4070d3191974bacde71d246e3df7b5c397f96ba4`, blob `2c86636b64bf1415a26d584381eb9843c394f764`. No runtime change or version increment; rerun canonical CI before advancing A2.6b.
+
+### A2.6b — Projection native data safety (preview.70)
+Nine focused extracted-source fixtures PASS: retained residual, reentrant placeholder selection, live native peer identity, duplicate/unlisted tabs, changed manager/closing/pin/native switch, existing search flows and synchronous takeover before OpenLocation. Six permanent new tests; existing search/empty guard fixtures updated. Eleven runtime parser checks; full CI pending. Native close is a request, not a certified close or atomic peer handoff; asynchronous native external changes and a destroyed realm stranding the primitive token remain limitations. Placement already has trusted-input listeners both before startup and during native geometry retries; shared placement reentrancy/teardown review remains open. No geometry/timing change. Native acceptance deferred.

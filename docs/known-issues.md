@@ -964,3 +964,6 @@ Runtime `140711300677d2fb02d09fa0f431a697e0a144a8`: 59/59 focused extracted-sour
 
 ### A2.6a — Projection startup ownership (preview.69)
 NC4-040 partial: exact manager/marker and source sync eligibility fence automatic Workspace selection and startup search. Native work already started cannot be cancelled by this fence. NC4-045 partial: existing JSON trace receives phase data. Destructive startup-tab cleanup, Return peer verification, placement in-flight takeover and A2.7 pending recovery remain open. No claim of complete A2.6 or native PASS.
+
+### A2.6b — Projection native data safety (preview.70)
+NC4-010/040: queued native TabClose makes old mod-origin startup-tab removal non-atomic across synced peers. Remove this mod-origin destructive fallback; native startup cleanup remains. Strengthen Return and keep selection/placeholder preparation under one lease. Residual ordinary blank tab is an explicit conservative fallback, not a confirmed native regression. Native close is a request, not a certified close or atomic peer handoff; asynchronous native external changes and a destroyed realm stranding the primitive token remain limitations. Placement already has trusted-input listeners both before startup and during native geometry retries; shared placement reentrancy/teardown review remains open. No geometry/timing change. Native acceptance deferred.

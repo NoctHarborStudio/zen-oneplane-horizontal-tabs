@@ -9,7 +9,8 @@ function harness(session=false,visible=false){
   const attrs=new Set(session?["zen-newtab"]:[]);
   let opened=0,resumed=0,focused=0,interacted=false;
   const bar={view:{isOpen:visible},hasAttribute:k=>attrs.has(k),search(){resumed++;}};
-  const child={closed:false,gURLBar:bar,gZenWorkspaces:{activeWorkspace:"work"},gBrowser:{selectedTab:{hasAttribute:k=>k==="zen-empty-tab"}},
+  const empty={isConnected:true,closing:false,hasAttribute:k=>k==="zen-empty-tab"};
+  const child={closed:false,gURLBar:bar,gZenWorkspaces:{activeWorkspace:"work",_emptyTab:empty},gBrowser:{selectedTab:empty},
     document:{hasFocus:()=>true,getElementById:()=>({doCommand(){bar.view.isOpen=true;}})},
     focus(){focused++;},gZenUIManager:{handleNewTab(){opened++;attrs.add("zen-newtab");bar.view.isOpen=true;return true;}}};
   const run=runInNewContext(source.slice(a,b)+"\nopenProjectionSearch",{
@@ -28,4 +29,9 @@ test("fresh search opens once; already visible search never toggles",async()=>{
 test("real input or changed workspace prevents startup takeover",async()=>{
   const h=harness(true,false),p=h.run();h.interact();assert.equal(await p,false);assert.equal(h.counts().resumed,0);
   const j=harness(),q=j.run();j.child.gZenWorkspaces.activeWorkspace="other";assert.equal(await q,false);assert.equal(j.counts().opened,0);
+});
+
+test("synchronous search callback takeover prevents native OpenLocation",async()=>{
+  const h=harness(true,false);h.bar.search=()=>h.interact();
+  assert.equal(await h.run(),false);assert.equal(h.bar.view.isOpen,false);
 });

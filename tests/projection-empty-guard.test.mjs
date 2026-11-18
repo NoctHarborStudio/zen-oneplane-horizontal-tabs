@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {runInNewContext} from "node:vm";
 const s=readFileSync(new URL("../src/hub/controller.js.part",import.meta.url),"utf8");
-const a=s.indexOf("    function installProjectionEmptyGuard("),b=s.indexOf("    function untouchedProjectionTab(",a);
+const a=s.indexOf("    function installProjectionEmptyGuard("),b=s.indexOf("    function prepareProjectionStart(",a);
 assert.ok(a>=0&&b>a);
 const install=runInNewContext(s.slice(a,b)+"\ninstallProjectionEmptyGuard",{projectionLog(){}});
 function harness(hasEmpty=true){

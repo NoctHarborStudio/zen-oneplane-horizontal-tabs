@@ -1,3 +1,10 @@
+## 0.3.0-preview.70 — Projection native data safety
+
+- Keep selection and native placeholder preparation within the same Workspace command lease; fence startup search by exact native identities.
+- Leave residual synced startup tabs intact rather than enqueue an unsafe cross-window TabClose. Zen remains responsible for startup cleanup.
+- Verify exact live synced tab identities before native Return; reject uncertain ownership and overlapping managed data operations. Native close remains a request, not a confirmed result.
+- Six added regression tests; native validation pending.
+
 ## 0.3.0-preview.69 — Projection startup ownership
 
 - Reject stale Workspace readiness and guard ownership after manager replacement; fence automatic selection/search by the current projection identity.
