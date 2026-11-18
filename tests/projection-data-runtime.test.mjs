@@ -30,9 +30,13 @@ const inspect=runInNewContext(cut("    function inspectProjectionReturn(","    /
 function harness(){
   const sync={getItemFromWindow(w,id){return w.gZenWorkspaces.allStoredTabs.find(t=>t.id===id);}};
   const make=()=>{const t=tab("tab",{"zen-workspace-id":"work"}),tabs=[t];
-    const native={workspaceEnabled:true,currentWindowIsSyncing:true,isChangingWorkspace:false,allStoredTabs:tabs};
+    const physical=[t],normal={isConnected:true,querySelectorAll:()=>physical},pinned={isConnected:true,querySelectorAll:()=>[]};
+    const element={isConnected:true,tabsContainer:normal,pinnedTabsContainer:pinned};
+    const native={workspaceEnabled:true,currentWindowIsSyncing:true,isChangingWorkspace:false,allStoredTabs:tabs,
+      getWorkspaces:()=>[{uuid:"work"}],workspaceElement:()=>element};
     const browser={tabs,isTab:()=>true,tabContainer:{_invalidateCachedTabs(){}}};
-    return {gZenWindowSync:sync,gZenWorkspaces:native,gZenStartup:{isReady:true},gBrowser:browser};
+    return {gZenWindowSync:sync,gZenWorkspaces:native,gZenStartup:{isReady:true},gBrowser:browser,
+      document:{querySelectorAll:()=>[]},physical};
   };
   const child=make(),source=make(),native=child.gZenWorkspaces,sourceNative=source.gZenWorkspaces;
   return {child,source,native,sourceNative,run:()=>inspect(child,source,native,sourceNative,sync)};
@@ -127,4 +131,15 @@ test("surviving source owns Return lease through actual child close, then releas
  context.isDiscarded=true;notify(null,"xul-window-destroyed");
  assert.equal((await pending).status,"closed");assert.equal(workspaceCommandState(window).blocked,false);
  assert.equal(observers.size,0);assert.equal(await runWorkspaceCommand(third,third.gZenWorkspaces,"data",()=>true,()=>42,{data:true,anchor}),42);
+});
+
+test("Return rejects unlisted physical tabs and physically mismatched workspace ownership",()=>{
+ const h=harness();h.source.physical.push(tab("hidden",{"zen-workspace-id":"work"}));assert.equal(h.run(),false);
+ const j=harness();j.source.physical.length=0;assert.equal(j.run(),false);
+ const k=harness();k.sourceNative.workspaceElement().tabsContainer.querySelectorAll=()=>[tab("other",{"zen-workspace-id":"work"})];assert.equal(k.run(),false);
+});
+test("Return rejects mismatched native group membership despite matching tab IDs",()=>{
+ const h=harness(),t=h.sourceNative.allStoredTabs[0];
+ t.group={id:"group",isConnected:true,contains:x=>x===t,hasAttribute:()=>false};
+ assert.equal(h.run(),false);
 });

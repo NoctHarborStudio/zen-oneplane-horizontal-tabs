@@ -15,9 +15,9 @@ function harness(stored="",names=["Space"],projection=false){
     async reorderWorkspace(id){calls.push("reorder");entries.unshift(...entries.splice(entries.findIndex(s=>s.uuid===id),1));},async changeWorkspaceWithID(id){calls.push(id);this.activeWorkspace=id;}};
   const gBrowser={selectedTab:selected,visibleTabs:[selected],get pinnedTabsContainer(){return element(native.activeWorkspace).pinnedTabsContainer;},tabContainer:{get arrowScrollbox(){return element(native.activeWorkspace).scrollbox;},get pinnedTabsContainer(){return element(native.activeWorkspace).pinnedTabsContainer;}}};
   const window={gZenWorkspaces:native,gBrowser,closed:false,__oneplaneWorkspaceProjection:projection};
-  const context={window,disposed:false,ChromeUtils:{importESModule:()=>({BrowserWindowTracker:anchor})},Services:{prefs:{getDefaultBranch:()=>({getBoolPref:(k,f)=>host[k]??f,setBoolPref:(k,v)=>host[k]=v})}},prefs:{getStringPref:(k,f)=>map.get(k)||f,setStringPref:(k,v)=>map.set(k,v)},console:{info(){},warn(){}}};
-  const run=runInNewContext(service+"\n"+s.slice(a,b)+"\ninitializeFreeAtStartup",context);
-  return {run,calls,native,entries,context,map,window};
+  const context={window,disposed:false,cancelFreeStartupWait:null,ChromeUtils:{importESModule:()=>({BrowserWindowTracker:anchor})},Services:{prefs:{getDefaultBranch:()=>({getBoolPref:(k,f)=>host[k]??f,setBoolPref:(k,v)=>host[k]=v})}},prefs:{getStringPref:(k,f)=>map.get(k)||f,setStringPref:(k,v)=>map.set(k,v)},console:{info(){},warn(){}}};
+  const run=runInNewContext(service+"\n"+s.slice(a,b)+"\n({run:initializeFreeAtStartup,wait:waitFreeAtStartup,gate:()=>workspaceCommandGate(window)})",context);
+  return {...run,calls,native,entries,context,map,window};
 }
 test("first normal startup creates Free without renaming existing spaces",async()=>{
   const h=harness();await h.run();await h.run();assert.deepEqual(h.calls,["create","reorder","new"]);assert.ok(h.entries.some(s=>s.name==="Space"));assert.equal(h.entries[0].name,"Free");
@@ -81,4 +81,15 @@ test("partial native creation without role designation is not repeated or silent
  const h=harness(),create=h.native.createAndSaveWorkspace;
  h.native.createAndSaveWorkspace=async function(...args){await create.apply(this,args);throw Error("partial");};
  await h.run();await h.run();assert.deepEqual(h.calls,["create"]);assert.equal(h.map.get("zen.oneplane.free-space-id"),"");
+});
+
+test("Free startup deadline releases only Layout waiting, not native ownership or stale role writes",async()=>{
+ const h=harness();let resolve,deadline;const timers=new Set();
+ h.window.setTimeout=fn=>{deadline=fn;timers.add(1);return 1;};h.window.clearTimeout=id=>timers.delete(id);
+ h.native.createAndSaveWorkspace=()=>new Promise(r=>resolve=r);
+ const p=h.wait();assert.ok(h.gate().pending);deadline();await p;
+ assert.equal(timers.size,0);assert.ok(h.gate().pending);
+ const ws={name:"Free",uuid:"late"};h.entries.push(ws);const nativePending=h.gate().pending;
+ resolve(ws);await assert.rejects(nativePending,e=>e.code==="stale");
+ assert.equal(h.gate().pending,null);assert.equal(h.map.get("zen.oneplane.free-space-id"),"");assert.deepEqual(h.calls,[]);
 });

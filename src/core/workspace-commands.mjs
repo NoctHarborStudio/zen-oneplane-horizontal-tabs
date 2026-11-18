@@ -93,12 +93,22 @@ export function requireWorkspaceCommand(win,native,lease){
   if(!lease||lease.native!==native||lease.win!==win||workspaceCommandGate(win).owner!==lease||
     win.closed||win.gZenWorkspaces!==native||!native?.workspaceEnabled||!lease.current())
     throw workspaceCommandError("stale","Workspace command is no longer current.");
+  // current() may synchronously re-enter through native getters or a
+  // lifecycle callback. Validate exact ownership again after it returns.
+  const gate=workspaceCommandGate(win);
+  if(gate.owner!==lease||gate.pending!==lease.pending||!gate.pending||gate.reservation||win.closed||win.gZenWorkspaces!==native)
+    throw workspaceCommandError("stale");
   if(lease.token&&lease.anchor[WORKSPACE_DATA_GATE]!==lease.token)throw workspaceCommandError("data-lease-lost");
   if(lease.peer&&(!lease.peer.win||lease.peer.win.closed||lease.peer.win.gZenWorkspaces!==lease.peer.native||
     !lease.peer.native?.workspaceEnabled||lease.peer.native.isChangingWorkspace!==false||
     workspaceCommandGate(lease.peer.win)!==lease.peer.gate||lease.peer.gate.reservation!==lease.token))
     throw workspaceCommandError("peer-lease-lost");
   if(native.isChangingWorkspace!==false)throw workspaceCommandError("native-busy","Native Workspace switch is still in progress.");
+  if(workspaceCommandGate(win)!==gate||gate.owner!==lease||gate.pending!==lease.pending||
+    gate.reservation||win.closed||win.gZenWorkspaces!==native)
+    throw workspaceCommandError("stale");
+  if(lease.token&&lease.anchor[WORKSPACE_DATA_GATE]!==lease.token)throw workspaceCommandError("data-lease-lost");
+  if(lease.peer&&lease.peer.gate.reservation!==lease.token)throw workspaceCommandError("peer-lease-lost");
 }
 export function requireWorkspaceDataCommand(win,native,lease){
   requireWorkspaceCommand(win,native,lease);
@@ -120,6 +130,12 @@ export function runWorkspaceCommand(win,native,kind,current,execute,{data=false,
     if(peerGate.pending||peerGate.owner||peerGate.reservation)return reject("peer-busy");
     peerLease={win:peer.win,native:peer.native,gate:peerGate};
   }
+  const startedAt=workspaceCommandNow(win);
+  // Peer admission and clock access can call native getters. Re-read
+  // both exact gates immediately before publishing any owner.
+  if(workspaceCommandGate(win)!==gate||gate.pending||gate.owner||gate.reservation)return reject("busy");
+  if(peerLease&&(workspaceCommandGate(peerLease.win)!==peerLease.gate||peerLease.gate.pending||peerLease.gate.owner||peerLease.gate.reservation))
+    return reject("peer-busy");
   const token=data?Symbol("Nocturne data command"):null;
   if(data){
     if(!anchor)return reject("data-unavailable");
@@ -131,23 +147,28 @@ export function runWorkspaceCommand(win,native,kind,current,execute,{data=false,
   }
   const lease={win,native,kind,current,anchor,token,peer:peerLease};
   let resolve,rejectResult;const pending=new Promise((a,b)=>{resolve=a;rejectResult=b;});
+  lease.pending=pending;
   // Publish both gates before any native/visual callback can re-enter.
-  const startedAt=workspaceCommandNow(win);
   let finished=false;
   const finish=(ok,value)=>{
     if(finished)return;finished=true;
     if(peerLease)try{if(peerLease.gate.reservation===token){delete peerLease.gate.reservation;delete peerLease.gate.startedAt;}}catch{}
     if(data)try{if(anchor[WORKSPACE_DATA_GATE]===token)delete anchor[WORKSPACE_DATA_GATE];}catch{}
-    try{if(gate.owner===lease){
-      if(gate.pending===pending){gate.pending=null;delete gate.startedAt;}
-      else if(!gate.pending&&gate.startedAt===startedAt)delete gate.startedAt;
-      gate.owner=null;
-    }}catch{}
+    try{
+      if((!gate.owner||gate.owner===lease)&&gate.pending===pending){gate.pending=null;delete gate.startedAt;}
+      if(gate.owner===lease){
+        if(!gate.pending&&gate.startedAt===startedAt)delete gate.startedAt;
+        gate.owner=null;
+      }
+    }catch{}
     commandTrace(win,"end",{kind,ok,peer:!!peerLease,elapsed:Math.max(0,workspaceCommandNow(win)-startedAt),code:ok?null:value?.name==="WorkspaceCommandError"?value.code:"error"});
     notifyWorkspaceCommand(win);if(peerLease)notifyWorkspaceCommand(peerLease.win);
     if(ok)resolve(value);else rejectResult(value);
   };
   try{
+    if(workspaceCommandGate(win)!==gate||gate.pending||gate.owner||gate.reservation)throw workspaceCommandError("busy");
+    if(peerLease&&(workspaceCommandGate(peerLease.win)!==peerLease.gate||peerLease.gate.pending||peerLease.gate.owner||peerLease.gate.reservation))
+      throw workspaceCommandError("peer-busy");
     gate.owner=lease;gate.pending=pending;gate.startedAt=startedAt;
     if(gate.owner!==lease||gate.pending!==pending)throw workspaceCommandError("gate-unavailable");
     if(peerLease){
@@ -266,7 +287,9 @@ export function readWorkspaceOwnership(win,native,id,{fresh=false}={}){
     }
     const cached=native.allStoredTabs;
     if(!Array.isArray(cached))return null;
-    const physical=[...normal.querySelectorAll(".tabbrowser-tab"),...pinned.querySelectorAll(".tabbrowser-tab")];
+    const normalTabs=Array.from(normal.querySelectorAll(".tabbrowser-tab")),pinnedTabs=Array.from(pinned.querySelectorAll(".tabbrowser-tab"));
+    const physical=[...normalTabs,...pinnedTabs];
+    if(normalTabs.some(t=>t.pinned)||pinnedTabs.some(t=>!t.pinned))return null;
     if(new Set(physical).size!==physical.length||physical.some(t=>!browser.isTab(t)||!t.isConnected))return null;
     // Essentials are not supposed to live in these containers. Only the
     // exact native empty placeholder can be ignored by this safety guard.
@@ -274,8 +297,10 @@ export function readWorkspaceOwnership(win,native,id,{fresh=false}={}){
       (!workspaceOwned(t)&&(t!==native._emptyTab||!t.hasAttribute("zen-empty-tab")))))return null;
     const owned=physical.filter(workspaceOwned);
     if(owned.some(t=>t.getAttribute("zen-workspace-id")!==id))return null;
-    const listed=cached.filter(t=>workspaceOwned(t)&&t.getAttribute("zen-workspace-id")===id);
-    if(!sameWorkspaceTabs(owned,listed))return null;
+    const listed=cached.filter(t=>t.getAttribute("zen-workspace-id")===id);
+    if(listed.some(t=>!workspaceOwned(t)&&!t.hasAttribute("zen-essential")&&t!==native._emptyTab))return null;
+    const listedOwned=listed.filter(workspaceOwned);
+    if(!sameWorkspaceTabs(owned,listedOwned))return null;
     return {element,normal,pinned,tabs:owned,browser};
   }catch{return null;}
 }

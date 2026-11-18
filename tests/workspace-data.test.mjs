@@ -174,3 +174,25 @@ test("restamped Trash tab requires renewed approval even with all-age filter",as
  f.runtime.approvePurge([tab]);f.stamps.set(tab,"2");
  await assert.rejects(f.runtime.executePurge(),/Trash changed/);assert.deepEqual(f.calls,[]);
 });
+
+test("physical pin-role mismatch and cached fake placeholder block workspace data admission",()=>{
+ const f=fixture(),t=f.add("work");t.pinned=true;
+ assert.equal(readWorkspaceOwnership(f.window,f.native,"work"),null);
+ const g=fixture(),fake=g.add("trash",{"zen-empty-tab":"true"});fake.attrs.set("zen-workspace-id","work");
+ assert.equal(readWorkspaceOwnership(g.window,g.native,"work"),null);
+});
+
+test("single-window admission excludes windows flagged closed but still registered",()=>{
+ const body=extract("    function singleWindow(){","    function action(");
+ const window={closed:false};let windows=[window,{closed:true}];
+ const single=new Function("window","Services",body+"return singleWindow;")(window,{wm:{getEnumerator(){let i=0;return {hasMoreElements:()=>i<windows.length,getNext:()=>windows[i++]};}}});
+ assert.equal(single(),false);windows=[window];assert.equal(single(),true);windows=[];assert.equal(single(),false);
+});
+test("Trash readiness delay settles on scope disposal without further native work",async()=>{
+ const body=extract("    function waitTrashReadiness(","    async function ensureTrash(");
+ let timer,release,cancelled=0;
+ const scope={closed:false,defer(label,fn){let live=true;release=()=>{if(live){live=false;fn();}};return release;}};
+ const wait=new Function("window","hubScope",body+"return waitTrashReadiness;")({setTimeout:fn=>{timer=fn;return 1;},clearTimeout:()=>cancelled++},scope);
+ const p=wait();scope.closed=true;release();assert.equal(await p,false);assert.equal(cancelled,1);
+ timer();assert.equal(cancelled,1);
+});

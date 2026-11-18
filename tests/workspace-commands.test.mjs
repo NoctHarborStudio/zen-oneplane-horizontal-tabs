@@ -172,3 +172,29 @@ test("native-only busy view probes boundedly and remains retryable after native 
  f.setChanging(false);watch.refresh();assert.equal(states.at(-1).phase,"idle");assert.equal(timers.size,0);
  watch.dispose();
 });
+
+test("peer getter reentry during admission cannot overwrite a newly admitted window command",async()=>{
+ const a=fixture(),b=fixture(),anchor={};let release,entered=false,pending;
+ Object.defineProperty(b.native,"isChangingWorkspace",{get(){
+   if(!entered){entered=true;pending=runWorkspaceCommand(a.win,a.native,"select",()=>true,()=>new Promise(r=>release=r));}
+   return false;
+ }});
+ await assert.rejects(runWorkspaceCommand(a.win,a.native,"return",()=>true,()=>{}, {data:true,anchor,peer:{win:b.win,native:b.native}}),code("busy"));
+ assert.equal(workspaceCommandGate(a.win).pending,pending);release();await pending;
+ assert.equal(await runWorkspaceCommand(a.win,a.native,"data",()=>true,()=>42,{data:true,anchor}),42);
+});
+test("current callback invalidating the exact owner cannot admit a native continuation",async()=>{
+ const f=fixture();let count=0,calls=0;
+ const p=runWorkspaceCommand(f.win,f.native,"data",()=>{
+   if(++count===2)workspaceCommandGate(f.win).owner=null;
+   return true;
+ },()=>calls++);
+ await assert.rejects(p,code("stale"));assert.equal(calls,0);assert.equal(workspaceCommandGate(f.win).pending,null);
+});
+
+test("changed pending identity blocks stale lease and preserves a foreign pending command",async()=>{
+ const f=fixture(),foreign=Promise.resolve();let release;
+ const p=runWorkspaceCommand(f.win,f.native,"select",()=>true,async lease=>{await new Promise(r=>release=r);requireWorkspaceCommand(f.win,f.native,lease);});
+ workspaceCommandGate(f.win).pending=foreign;release();
+ await assert.rejects(p,code("stale"));assert.equal(workspaceCommandGate(f.win).pending,foreign);
+});

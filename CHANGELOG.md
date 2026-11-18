@@ -1,3 +1,10 @@
+## 0.3.0-preview.75 — Integrated Workspace command safety audit
+
+- Bound optional Free startup wait without releasing the native command; fence late automatic actions.
+- Guard exact pending identity and reentrant admission; reconcile Return physical ownership and group metadata.
+- Tighten destructive pin-role and single-window checks; scope Trash readiness delay.
+- Nine new regression tests; native validation pending.
+
 ## 0.3.0-preview.74 — Workspace native close completion and pending recovery
 
 - Keep Return's lease in the surviving original window until exact native child close and chrome context discard; reject ambiguous native destinations, preserve native close confirmation.

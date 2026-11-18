@@ -2,7 +2,7 @@
 // The final Layout callback owns normal teardown; early fragment callbacks
 // are partial-initialization fallbacks only.
 const layoutResources={boot:window.__nocturneEarlyBoot,center:window.__nocturneCenterMotion,diagnostics:window.__nocturneDiagnostics};
-let cleanupErrors=0,cleanupErrorStart=0,completeDiagnostics=null;
+let cleanupErrors=0,cleanupErrorStart=0,completeDiagnostics=null,cancelFreeStartupWait=null;
 // Each release is isolated: one feature failure must not prevent native
 // preference restoration or the remaining controller cleanup.
 function cleanupStep(label,fn){
@@ -12,6 +12,7 @@ function cleanup(nativeExit=false) {
   if (disposed) return;
   disposed = true;
   cleanupErrorStart=cleanupErrors;
+  cleanupStep("Free startup wait",()=>cancelFreeStartupWait?.("layout-dispose"));
   try{window.__nocturneTrace?.("layout.cleanup.begin",{applied,closing,nativeExit:nativeExit===true},{flush:true});}catch{}
   // Stop the active Assembly consumer before releasing its Layout hosts.
   cleanupStep("startup animation",()=>{if(window[CONTROLLER]===controller)window.__zenRefinedStartupAnimation?.();});
@@ -62,16 +63,17 @@ const controller = { get active() { return applied && !disposed; },
 
 // One startup selection per browser process. Never redirect a projected
 // child, a private/unsynced window or a live reload of this mod.
-async function initializeFreeAtStartup(){
+async function initializeFreeAtStartup(allowed=()=>true){
   try{
     const native=window.gZenWorkspaces;
-    const current=()=>!disposed&&!window.closed&&!window.__oneplaneWorkspaceProjection&&
+    const current=()=>allowed()&&!disposed&&!window.closed&&!window.__oneplaneWorkspaceProjection&&
       window.gZenWorkspaces===native&&native?.workspaceEnabled&&!native.privateWindowOrDisabled&&native.currentWindowIsSyncing;
     if(!current())return;
     const runtime=Services.prefs.getDefaultBranch("");
     const key="zen.oneplane.runtime.free-startup-claimed";
     if(runtime.getBoolPref(key,false))return;
     await runWorkspaceCommand(window,native,"free-startup",current,async lease=>{
+      requireWorkspaceCommand(window,native,lease);
       if(runtime.getBoolPref(key,false))return;
       const stored=prefs.getStringPref("zen.oneplane.free-space-id","");
       const trash=prefs.getStringPref("zen.oneplane.trash-space-id","");
@@ -96,6 +98,25 @@ async function initializeFreeAtStartup(){
   }catch(error){console.warn("[OnePlane] Free startup:",error);}
 }
 
+// A slow Free command must not prevent the entire Layout from mounting.
+// This deadline ends only startup intent, never the actual native lease.
+function waitFreeAtStartup(){
+  return new Promise(resolve=>{
+    let active=true,timer=0;
+    const finish=reason=>{
+      if(!active)return;active=false;
+      if(timer)try{window.clearTimeout(timer);}catch{}
+      if(cancelFreeStartupWait===finish)cancelFreeStartupWait=null;
+      try{window.__nocturneTrace?.("workspace.startup.wait",{reason},{flush:true});}catch{}
+      resolve();
+    };
+    cancelFreeStartupWait=finish;
+    try{timer=window.setTimeout(()=>finish("deadline"),5000);}
+    catch{finish("timer-error");return;}
+    Promise.resolve(initializeFreeAtStartup(()=>active)).then(()=>finish("settled"),()=>finish("error"));
+  });
+}
+
 async function activate() {
     typeof window!=="undefined"&&window.__nocturneTrace?.("layout.activate.begin",()=>({reloadingLayout}),{sample:1800});
   const current=()=>!disposed&&!window.closed&&window[CONTROLLER]===controller;
@@ -104,7 +125,7 @@ async function activate() {
     await window.gZenWorkspaces?.promiseInitialized;
     typeof window!=="undefined"&&window.__nocturneTrace?.("layout.native.ready",()=>({closed:window.closed}),{sample:1800});
     if (!current() || root.hasAttribute("popup-window")) return;
-    if(!reloadingLayout)await initializeFreeAtStartup();
+    if(!reloadingLayout)await waitFreeAtStartup();
     if(!current())return;
     const manager = window.gZenCompactModeManager;
     if (!manager || typeof manager.hideToolbar !== "function") {

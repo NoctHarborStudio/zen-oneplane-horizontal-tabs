@@ -41,7 +41,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.74",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.75",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -1001,12 +1001,22 @@ function requireWorkspaceCommand(win,native,lease){
   if(!lease||lease.native!==native||lease.win!==win||workspaceCommandGate(win).owner!==lease||
     win.closed||win.gZenWorkspaces!==native||!native?.workspaceEnabled||!lease.current())
     throw workspaceCommandError("stale","Workspace command is no longer current.");
+  // current() may synchronously re-enter through native getters or a
+  // lifecycle callback. Validate exact ownership again after it returns.
+  const gate=workspaceCommandGate(win);
+  if(gate.owner!==lease||gate.pending!==lease.pending||!gate.pending||gate.reservation||win.closed||win.gZenWorkspaces!==native)
+    throw workspaceCommandError("stale");
   if(lease.token&&lease.anchor[WORKSPACE_DATA_GATE]!==lease.token)throw workspaceCommandError("data-lease-lost");
   if(lease.peer&&(!lease.peer.win||lease.peer.win.closed||lease.peer.win.gZenWorkspaces!==lease.peer.native||
     !lease.peer.native?.workspaceEnabled||lease.peer.native.isChangingWorkspace!==false||
     workspaceCommandGate(lease.peer.win)!==lease.peer.gate||lease.peer.gate.reservation!==lease.token))
     throw workspaceCommandError("peer-lease-lost");
   if(native.isChangingWorkspace!==false)throw workspaceCommandError("native-busy","Native Workspace switch is still in progress.");
+  if(workspaceCommandGate(win)!==gate||gate.owner!==lease||gate.pending!==lease.pending||
+    gate.reservation||win.closed||win.gZenWorkspaces!==native)
+    throw workspaceCommandError("stale");
+  if(lease.token&&lease.anchor[WORKSPACE_DATA_GATE]!==lease.token)throw workspaceCommandError("data-lease-lost");
+  if(lease.peer&&lease.peer.gate.reservation!==lease.token)throw workspaceCommandError("peer-lease-lost");
 }
 function requireWorkspaceDataCommand(win,native,lease){
   requireWorkspaceCommand(win,native,lease);
@@ -1028,6 +1038,12 @@ function runWorkspaceCommand(win,native,kind,current,execute,{data=false,anchor=
     if(peerGate.pending||peerGate.owner||peerGate.reservation)return reject("peer-busy");
     peerLease={win:peer.win,native:peer.native,gate:peerGate};
   }
+  const startedAt=workspaceCommandNow(win);
+  // Peer admission and clock access can call native getters. Re-read
+  // both exact gates immediately before publishing any owner.
+  if(workspaceCommandGate(win)!==gate||gate.pending||gate.owner||gate.reservation)return reject("busy");
+  if(peerLease&&(workspaceCommandGate(peerLease.win)!==peerLease.gate||peerLease.gate.pending||peerLease.gate.owner||peerLease.gate.reservation))
+    return reject("peer-busy");
   const token=data?Symbol("Nocturne data command"):null;
   if(data){
     if(!anchor)return reject("data-unavailable");
@@ -1039,23 +1055,28 @@ function runWorkspaceCommand(win,native,kind,current,execute,{data=false,anchor=
   }
   const lease={win,native,kind,current,anchor,token,peer:peerLease};
   let resolve,rejectResult;const pending=new Promise((a,b)=>{resolve=a;rejectResult=b;});
+  lease.pending=pending;
   // Publish both gates before any native/visual callback can re-enter.
-  const startedAt=workspaceCommandNow(win);
   let finished=false;
   const finish=(ok,value)=>{
     if(finished)return;finished=true;
     if(peerLease)try{if(peerLease.gate.reservation===token){delete peerLease.gate.reservation;delete peerLease.gate.startedAt;}}catch{}
     if(data)try{if(anchor[WORKSPACE_DATA_GATE]===token)delete anchor[WORKSPACE_DATA_GATE];}catch{}
-    try{if(gate.owner===lease){
-      if(gate.pending===pending){gate.pending=null;delete gate.startedAt;}
-      else if(!gate.pending&&gate.startedAt===startedAt)delete gate.startedAt;
-      gate.owner=null;
-    }}catch{}
+    try{
+      if((!gate.owner||gate.owner===lease)&&gate.pending===pending){gate.pending=null;delete gate.startedAt;}
+      if(gate.owner===lease){
+        if(!gate.pending&&gate.startedAt===startedAt)delete gate.startedAt;
+        gate.owner=null;
+      }
+    }catch{}
     commandTrace(win,"end",{kind,ok,peer:!!peerLease,elapsed:Math.max(0,workspaceCommandNow(win)-startedAt),code:ok?null:value?.name==="WorkspaceCommandError"?value.code:"error"});
     notifyWorkspaceCommand(win);if(peerLease)notifyWorkspaceCommand(peerLease.win);
     if(ok)resolve(value);else rejectResult(value);
   };
   try{
+    if(workspaceCommandGate(win)!==gate||gate.pending||gate.owner||gate.reservation)throw workspaceCommandError("busy");
+    if(peerLease&&(workspaceCommandGate(peerLease.win)!==peerLease.gate||peerLease.gate.pending||peerLease.gate.owner||peerLease.gate.reservation))
+      throw workspaceCommandError("peer-busy");
     gate.owner=lease;gate.pending=pending;gate.startedAt=startedAt;
     if(gate.owner!==lease||gate.pending!==pending)throw workspaceCommandError("gate-unavailable");
     if(peerLease){
@@ -1174,7 +1195,9 @@ function readWorkspaceOwnership(win,native,id,{fresh=false}={}){
     }
     const cached=native.allStoredTabs;
     if(!Array.isArray(cached))return null;
-    const physical=[...normal.querySelectorAll(".tabbrowser-tab"),...pinned.querySelectorAll(".tabbrowser-tab")];
+    const normalTabs=Array.from(normal.querySelectorAll(".tabbrowser-tab")),pinnedTabs=Array.from(pinned.querySelectorAll(".tabbrowser-tab"));
+    const physical=[...normalTabs,...pinnedTabs];
+    if(normalTabs.some(t=>t.pinned)||pinnedTabs.some(t=>!t.pinned))return null;
     if(new Set(physical).size!==physical.length||physical.some(t=>!browser.isTab(t)||!t.isConnected))return null;
     // Essentials are not supposed to live in these containers. Only the
     // exact native empty placeholder can be ignored by this safety guard.
@@ -1182,8 +1205,10 @@ function readWorkspaceOwnership(win,native,id,{fresh=false}={}){
       (!workspaceOwned(t)&&(t!==native._emptyTab||!t.hasAttribute("zen-empty-tab")))))return null;
     const owned=physical.filter(workspaceOwned);
     if(owned.some(t=>t.getAttribute("zen-workspace-id")!==id))return null;
-    const listed=cached.filter(t=>workspaceOwned(t)&&t.getAttribute("zen-workspace-id")===id);
-    if(!sameWorkspaceTabs(owned,listed))return null;
+    const listed=cached.filter(t=>t.getAttribute("zen-workspace-id")===id);
+    if(listed.some(t=>!workspaceOwned(t)&&!t.hasAttribute("zen-essential")&&t!==native._emptyTab))return null;
+    const listedOwned=listed.filter(workspaceOwned);
+    if(!sameWorkspaceTabs(owned,listedOwned))return null;
     return {element,normal,pinned,tabs:owned,browser};
   }catch{return null;}
 }
@@ -4501,7 +4526,15 @@ function installTabStrip() {
     function canManage(){const native=manager();return !!native?.workspaceEnabled&&!native.privateWindowOrDisabled&&native.currentWindowIsSyncing&&privateState(window)===false;}
     function singleWindow(){
       try{const windows=Services.wm.getEnumerator("navigator:browser");
-        while(windows.hasMoreElements()){const win=windows.getNext();if(win!==window&&!win.closed)return false;}return true;
+        let found=false;
+        while(windows.hasMoreElements()){
+          const win=windows.getNext();
+          // FinalClose sets closed before the native window is unregistered.
+          // Until then it is not a certified single-window operation.
+          if(win!==window)return false;
+          found=true;
+        }
+        return found&&!window.closed;
       }catch{return false;}
     }
     function action(label,fn){const btn=make("button","op-hub-action",label);btn.type="button";btn.addEventListener("click",fn);return btn;}
@@ -4576,6 +4609,18 @@ function installTabStrip() {
       catch{return ChromeUtils.importESModule("resource:///modules/sessionstore/SessionStore.sys.mjs").SessionStore;}
     }
     function trashStamp(tab){try{return Number(trashSessionStore().getCustomTabValue(tab,TRASH_TIME))||0;}catch{return 0;}}
+    function waitTrashReadiness(scope=hubScope){
+      return new Promise(resolve=>{
+        let timer=0,elapsed=false;
+        const release=scope.defer("trash-readiness",()=>{
+          try{if(timer)window.clearTimeout(timer);}catch{}
+          resolve(elapsed);
+        });
+        if(scope.closed)return;
+        try{timer=window.setTimeout(()=>{elapsed=true;release();},50);}
+        catch{release();}
+      });
+    }
     async function ensureTrash(lease,expected){
       const native=lease.native;
       workspaceDataGuard(lease,expected);
@@ -4591,7 +4636,7 @@ function installTabStrip() {
       const roles={free:expected.free,trash:id};
       workspaceDataGuard(lease,roles);
       for(let i=0;i<20&&!native.workspaceElement(id);i++){
-        await new Promise(r=>window.setTimeout(r,50));
+        if(!await waitTrashReadiness())throw workspaceCommandError("trash-readiness-cancelled");
         workspaceDataGuard(lease,roles);
       }
       if(!readWorkspaceOwnership(window,native,id,{fresh:true}))throw Error("Trash is not ready.");
@@ -5396,25 +5441,54 @@ function installTabStrip() {
           browser.tabContainer._invalidateCachedTabs();
           const tabs=manager.allStoredTabs;
           if(!Array.isArray(tabs)||new Set(tabs).size!==tabs.length)return null;
+          // Independently scan physical containers; cache invalidation
+          // alone cannot detect a tab with an inconsistent workspace ID
+          // or a group omitted by the native cache traversal.
+          const spaces=manager.getWorkspaces(),physical=new Map(),containers=new Set();
+          if(!Array.isArray(spaces)||!spaces.length||spaces.some(s=>!s?.uuid)||
+            new Set(spaces.map(s=>s.uuid)).size!==spaces.length)return null;
+          const scan=(container,kind,id=null)=>{
+            if(!container?.isConnected||containers.has(container))return false;
+            containers.add(container);
+            for(const tab of container.querySelectorAll(".tabbrowser-tab")){
+              if(!tab?.isConnected||tab.closing||!browser.isTab(tab)||physical.has(tab))return false;
+              const essential=tab.getAttribute("zen-essential")==="true";
+              if(kind==="essential"? !essential : essential||tab.getAttribute("zen-workspace-id")!==id||!!tab.pinned!==(kind==="pinned"))return false;
+              physical.set(tab,kind);
+            }
+            return true;
+          };
+          for(const space of spaces){
+            const element=manager.workspaceElement(space.uuid);
+            if(!element?.isConnected||!scan(element.tabsContainer,"normal",space.uuid)||!scan(element.pinnedTabsContainer,"pinned",space.uuid))return null;
+          }
+          for(const section of win.document.querySelectorAll("#zen-essentials .zen-workspace-tabs-section"))
+            if(!scan(section,"essential"))return null;
+          if(physical.size!==tabs.length||tabs.some(tab=>!physical.has(tab)))return null;
           const byId=new Map();
           for(const tab of tabs){
             if(tab===manager._emptyTab&&tab.hasAttribute("zen-empty-tab"))continue;
             if(!tab?.isConnected||tab.closing||!browser.isTab(tab)||tab.hasAttribute("zen-empty-tab")||
               !tab.id||byId.has(tab.id)||sync.getItemFromWindow(win,tab.id)!==tab)return null;
-            byId.set(tab.id,tab);
+            const group=tab.group;
+            if(group&&(!group.id||!group.isConnected||!group.contains(tab)))return null;
+            byId.set(tab.id,{tab,kind:physical.get(tab),group:group?.id??null,split:!!group?.hasAttribute("split-view-group")});
           }
           // A native tab absent from the workspace cache is not certified.
           if(!browser.tabs||Array.from(browser.tabs).some(tab=>
-            tab!==manager._emptyTab&&byId.get(tab.id)!==tab))return null;
+            !(tab===manager._emptyTab&&tab.hasAttribute("zen-empty-tab"))&&byId.get(tab.id)?.tab!==tab))return null;
           return byId;
         };
         const own=snapshot(child,native,b),other=snapshot(source,sourceNative,peerBrowser);
         if(!own||!other||child.gBrowser!==b||source.gBrowser!==peerBrowser)return false;
-        for(const [id,tab] of own){
-          const peer=other.get(id);
-          if(!peer||peer===tab||tab.getAttribute("zen-workspace-id")!==peer.getAttribute("zen-workspace-id")||
-            !!tab.pinned!==!!peer.pinned||tab.getAttribute("usercontextid")!==peer.getAttribute("usercontextid")||
-            tab.hasAttribute("zen-essential")!==peer.hasAttribute("zen-essential"))return false;
+        for(const [id,entry] of own){
+          const peer=other.get(id),tab=entry.tab;
+          if(!peer||peer.tab===tab||entry.kind!==peer.kind||entry.group!==peer.group||entry.split!==peer.split||
+            tab.getAttribute("zen-workspace-id")!==peer.tab.getAttribute("zen-workspace-id")||
+            !!tab.pinned!==!!peer.tab.pinned||tab.getAttribute("usercontextid")!==peer.tab.getAttribute("usercontextid")||
+            tab.getAttribute("zen-essential")!==peer.tab.getAttribute("zen-essential")||
+            tab.getAttribute("glance-id")!==peer.tab.getAttribute("glance-id")||
+            tab.hasAttribute("zen-glance-tab")!==peer.tab.hasAttribute("zen-glance-tab"))return false;
         }
         return true;
       }catch{return false;}
@@ -8735,7 +8809,7 @@ function installTabStrip() {
 // The final Layout callback owns normal teardown; early fragment callbacks
 // are partial-initialization fallbacks only.
 const layoutResources={boot:window.__nocturneEarlyBoot,center:window.__nocturneCenterMotion,diagnostics:window.__nocturneDiagnostics};
-let cleanupErrors=0,cleanupErrorStart=0,completeDiagnostics=null;
+let cleanupErrors=0,cleanupErrorStart=0,completeDiagnostics=null,cancelFreeStartupWait=null;
 // Each release is isolated: one feature failure must not prevent native
 // preference restoration or the remaining controller cleanup.
 function cleanupStep(label,fn){
@@ -8745,6 +8819,7 @@ function cleanup(nativeExit=false) {
   if (disposed) return;
   disposed = true;
   cleanupErrorStart=cleanupErrors;
+  cleanupStep("Free startup wait",()=>cancelFreeStartupWait?.("layout-dispose"));
   try{window.__nocturneTrace?.("layout.cleanup.begin",{applied,closing,nativeExit:nativeExit===true},{flush:true});}catch{}
   // Stop the active Assembly consumer before releasing its Layout hosts.
   cleanupStep("startup animation",()=>{if(window[CONTROLLER]===controller)window.__zenRefinedStartupAnimation?.();});
@@ -8795,16 +8870,17 @@ const controller = { get active() { return applied && !disposed; },
 
 // One startup selection per browser process. Never redirect a projected
 // child, a private/unsynced window or a live reload of this mod.
-async function initializeFreeAtStartup(){
+async function initializeFreeAtStartup(allowed=()=>true){
   try{
     const native=window.gZenWorkspaces;
-    const current=()=>!disposed&&!window.closed&&!window.__oneplaneWorkspaceProjection&&
+    const current=()=>allowed()&&!disposed&&!window.closed&&!window.__oneplaneWorkspaceProjection&&
       window.gZenWorkspaces===native&&native?.workspaceEnabled&&!native.privateWindowOrDisabled&&native.currentWindowIsSyncing;
     if(!current())return;
     const runtime=Services.prefs.getDefaultBranch("");
     const key="zen.oneplane.runtime.free-startup-claimed";
     if(runtime.getBoolPref(key,false))return;
     await runWorkspaceCommand(window,native,"free-startup",current,async lease=>{
+      requireWorkspaceCommand(window,native,lease);
       if(runtime.getBoolPref(key,false))return;
       const stored=prefs.getStringPref("zen.oneplane.free-space-id","");
       const trash=prefs.getStringPref("zen.oneplane.trash-space-id","");
@@ -8829,6 +8905,25 @@ async function initializeFreeAtStartup(){
   }catch(error){console.warn("[OnePlane] Free startup:",error);}
 }
 
+// A slow Free command must not prevent the entire Layout from mounting.
+// This deadline ends only startup intent, never the actual native lease.
+function waitFreeAtStartup(){
+  return new Promise(resolve=>{
+    let active=true,timer=0;
+    const finish=reason=>{
+      if(!active)return;active=false;
+      if(timer)try{window.clearTimeout(timer);}catch{}
+      if(cancelFreeStartupWait===finish)cancelFreeStartupWait=null;
+      try{window.__nocturneTrace?.("workspace.startup.wait",{reason},{flush:true});}catch{}
+      resolve();
+    };
+    cancelFreeStartupWait=finish;
+    try{timer=window.setTimeout(()=>finish("deadline"),5000);}
+    catch{finish("timer-error");return;}
+    Promise.resolve(initializeFreeAtStartup(()=>active)).then(()=>finish("settled"),()=>finish("error"));
+  });
+}
+
 async function activate() {
     typeof window!=="undefined"&&window.__nocturneTrace?.("layout.activate.begin",()=>({reloadingLayout}),{sample:1800});
   const current=()=>!disposed&&!window.closed&&window[CONTROLLER]===controller;
@@ -8837,7 +8932,7 @@ async function activate() {
     await window.gZenWorkspaces?.promiseInitialized;
     typeof window!=="undefined"&&window.__nocturneTrace?.("layout.native.ready",()=>({closed:window.closed}),{sample:1800});
     if (!current() || root.hasAttribute("popup-window")) return;
-    if(!reloadingLayout)await initializeFreeAtStartup();
+    if(!reloadingLayout)await waitFreeAtStartup();
     if(!current())return;
     const manager = window.gZenCompactModeManager;
     if (!manager || typeof manager.hideToolbar !== "function") {
