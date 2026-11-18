@@ -206,3 +206,7 @@ Existing `disassembly.bypass` now also records `bookmark-preflight-failed` and `
 ### Preview.84 readiness outcomes
 
 `home.startup.ready` reports ready/skipped/failed, `assembly.icons.ready` reports Home state, local topology revision and existing resource budget timeout; `assembly.readiness.error` and `assembly.resume.error` identify error class before fail-open cleanup. No DOM references, favicon URLs or additional writer.
+
+### Preview.85 absolute Startup watchdog
+
+`assembly.watchdog` reports age and active phase flags on hard timeout; `assembly.skip` with insufficient-budget reports remaining/required milliseconds; `assembly.settle.error` and `assembly.late.error` report error class and terminal fail-open. No separate logger or private fields. Prelude orphan expiry prevents replay; the existing Center Motion gate timeout remains an orphan safety fallback.

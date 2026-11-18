@@ -75,7 +75,8 @@ test("Home native search preserves surface on cancel and ignores stale close",()
 });
 test("Startup uses existing readiness handshake and one shared claim",()=>{
  assert.ok(layout.includes('window.addEventListener("OnePlane:StartupState",onHomeStartup)'));
- assert.ok(layout.includes('homeLease?.showOnStartup?.()'));
+ assert.ok(layout.includes('lease.showOnStartup?.()'));
+ assert.ok(layout.includes('homeLease===lease&&window.__nocturneLayoutStartup===startup'));
  assert.ok(core.includes("if(released||win[STARTUP])return false"));
  assert.ok(core.includes("(!startupHome||homeOnPlaceholder)"));
 });

@@ -186,3 +186,7 @@ Prelude owns the exact early cover and its marker baselines until adoption; Asse
 ### A3.3b2 bounded readiness and Home structure
 
 The existing Layout startup record publishes the Home trigger's readiness outcome. Assembly owns the launch boundary and observes this state with its existing icon budget. The Home lease defers passive structural refresh, not native user input or authoritative data. The existing sampler tracks local row/engine/Home identity and tab/card/image topology; no permanent polling or new controller. Remaining MB1/2 absolute watchdog and mixed-runtime acceptance plus MB6 geometry handoff remain explicit gates.
+
+### A3.3-R absolute deadline contract
+
+Prelude owns the initial cover and absolute expiry until adoption, then Assembly owns the inherited deadline. Its existing finish timer is rearmed for earlier completion but never beyond that deadline; stale callbacks are fenced. Center Motion's independent orphan guard is bounded to the available deadline. Full timeline/outcome consolidation and topology handoff remain A3.4/A3.6. Native compatibility and paintability are not established by source tests.

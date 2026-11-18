@@ -212,7 +212,11 @@
     const r=icon.getBoundingClientRect(),geometry=r.width>0&&r.height>0;
     return {visible:!hidden&&geometry&&alpha>0,alpha,geometry};
   }
-  function releasePending(){if(pendingTimer)win.clearTimeout(pendingTimer);pendingTimer=0;if(current())root.removeAttribute(PENDING);}
+  function releasePending(){
+    const id=pendingTimer;pendingTimer=0;
+    if(id)try{win.clearTimeout(id);}catch{}
+    if(current())root.removeAttribute(PENDING);
+  }
   let handoffFrame=0,handoffFrame2=0,handoffGeneration=0,handoffOwned=false;
   function finishHandoff(){
     handoffGeneration++;
@@ -452,7 +456,10 @@
   try{
     if(!win.__nocturneLayoutStartup&&(!win.__zenRefinedStartupAnimationSeen||win.__zenRefinedStartupAnimation)&&win.performance.now()<3500&&Services.prefs.getBoolPref("zen.refined.startup.animation",true)&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches){
       win.__nocturneTrace?.("assembly.gate",{age:win.performance.now(),pending:true},{flush:true});
-      root.setAttribute(PENDING,"true");pendingTimer=win.setTimeout(()=>{if(dead||!current())return;trace("assembly.gate.timeout",{age:win.performance.now()},{flush:true});releasePending();},8500);
+      root.setAttribute(PENDING,"true");
+      const deadline=win.__nocturneEarlyBoot?.deadline??win.__zenRefinedStartupAnimation?.deadline??(win.performance.now()+8000);
+      const id=win.setTimeout(()=>{if(dead||!current()||pendingTimer!==id)return;trace("assembly.gate.timeout",{age:win.performance.now()},{flush:true});releasePending();},Math.max(0,deadline-win.performance.now()));
+      pendingTimer=id;
     }
-  }catch{}
+  }catch{try{releasePending();}catch{}}
 })();

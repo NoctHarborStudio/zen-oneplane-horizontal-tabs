@@ -317,3 +317,7 @@ Four new regression tests use actual extracted native readiness, prelude IIFE an
 ### Preview.84 readiness integration
 
 Six new permanent regressions: actual async Home trigger tested across launch/abort and Layout replacement; extracted resource sampler detects equal-count identity change and warms Home with no row; readiness exception uses terminal cleanup; exact Home lease coalesces passive refresh and rejects late stage replay. Startup/Center Motion/Home trigger fixtures on candidate, canonical Node CI and native Zen runtime remain distinct evidence levels. Native verification remains deferred.
+
+### Preview.85 integrated Startup deadline audit
+
+Preview.84 canonical CI reported one outdated Home source assertion (540/541 passed); corrected it to require the captured lease and exact Layout record guard. Two new regression cases verify the inherited deadline and stale timer/cap; prelude fixture also verifies expiry prevents replay. Candidate focused fixtures and generated output checks are separate from full canonical CI. All native MB1/2/6/7 validation remains open.

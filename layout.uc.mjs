@@ -27,17 +27,23 @@
     }
     if(failed)try{win.__nocturneTrace?.("boot.prelude.cleanup",{failed},{flush:true});}catch{}
   };
-  const record={node:null,at:0,adopt(){
+  const record={node:null,at:0,deadline:0,adopt(){
     if(claimed||cleaned||win[KEY]!==record||!node?.isConnected)return null;
+    if(win.performance.now()>=record.deadline){expire();return null;}
     claimed=true;stopTimer();delete win[KEY];
-    return {node,at:record.at,phaseBaseline:oldPhase,bootBaseline:oldBoot};
+    return {node,at:record.at,deadline:record.deadline,phaseBaseline:oldPhase,bootBaseline:oldBoot};
   },cleanup};
+  function expire(){
+    if(claimed||cleaned||win[KEY]!==record)return;
+    // The orphan cover's budget has expired. A late Assembly must not replay.
+    win.__zenRefinedStartupAnimationSeen=true;cleanup();
+  }
   try{
     node=document.createElementNS("http://www.w3.org/1999/xhtml","div");
     node.id="nocturne-boot";node.setAttribute("aria-hidden","true");node.inert=true;
     Object.assign(node.style,{position:"fixed",inset:"0",zIndex:"2147483647",display:"grid",placeItems:"center",background:"#111219",color:"#e4e5ef",pointerEvents:"none",overflow:"hidden",willChange:"opacity"});
     node.style.setProperty("-moz-window-dragging","default","important");
-    record.node=node;record.at=win.performance.now();win[KEY]=record;
+    record.node=node;record.at=win.performance.now();record.deadline=record.at+8000;win[KEY]=record;
     root.append(node);
     if(cleaned||claimed||win[KEY]!==record)return;
     bootOwned=true;root.setAttribute(BOOT,"waiting");
@@ -48,13 +54,13 @@
     if(win.__nocturneTrace)win.__nocturneTrace("boot.prelude",data,{sample:1800});
     else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"boot.prelude",t:record.at,data});}
     if(cleaned||claimed||win[KEY]!==record)return;
-    timer=win.setTimeout(cleanup,8000);win.addUnloadListener(cleanup);
+    timer=win.setTimeout(expire,Math.max(0,record.deadline-win.performance.now()));win.addUnloadListener(cleanup);
   }catch{cleanup();}
 })();
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.84",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.85",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -626,7 +632,11 @@
     const r=icon.getBoundingClientRect(),geometry=r.width>0&&r.height>0;
     return {visible:!hidden&&geometry&&alpha>0,alpha,geometry};
   }
-  function releasePending(){if(pendingTimer)win.clearTimeout(pendingTimer);pendingTimer=0;if(current())root.removeAttribute(PENDING);}
+  function releasePending(){
+    const id=pendingTimer;pendingTimer=0;
+    if(id)try{win.clearTimeout(id);}catch{}
+    if(current())root.removeAttribute(PENDING);
+  }
   let handoffFrame=0,handoffFrame2=0,handoffGeneration=0,handoffOwned=false;
   function finishHandoff(){
     handoffGeneration++;
@@ -866,9 +876,12 @@
   try{
     if(!win.__nocturneLayoutStartup&&(!win.__zenRefinedStartupAnimationSeen||win.__zenRefinedStartupAnimation)&&win.performance.now()<3500&&Services.prefs.getBoolPref("zen.refined.startup.animation",true)&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches){
       win.__nocturneTrace?.("assembly.gate",{age:win.performance.now(),pending:true},{flush:true});
-      root.setAttribute(PENDING,"true");pendingTimer=win.setTimeout(()=>{if(dead||!current())return;trace("assembly.gate.timeout",{age:win.performance.now()},{flush:true});releasePending();},8500);
+      root.setAttribute(PENDING,"true");
+      const deadline=win.__nocturneEarlyBoot?.deadline??win.__zenRefinedStartupAnimation?.deadline??(win.performance.now()+8000);
+      const id=win.setTimeout(()=>{if(dead||!current()||pendingTimer!==id)return;trace("assembly.gate.timeout",{age:win.performance.now()},{flush:true});releasePending();},Math.max(0,deadline-win.performance.now()));
+      pendingTimer=id;
     }
-  }catch{}
+  }catch{try{releasePending();}catch{}}
 })();
 /* OnePlane — local, reversible Zen layout configuration.
  * Runs only in browser.xhtml via Sine; no network or page access.

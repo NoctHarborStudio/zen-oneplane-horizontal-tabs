@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.84"};
+  const event="assembly.script",data={version:"0.3.0-preview.85"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -56,7 +56,7 @@ try{if(typeof window!=="undefined"){
   function startupTimeline(start,scale){
     return {start,scale,panel:0,panelLength:220,cards:245,cardsLength:650,bookmarks:470,home:650,homeLength:330,end:1190};
   }
-  const started=now(),deadline=started+8000;
+  const started=now();let deadline=started+8000,timerEpoch=0;
   let dead=false,playing=false,settling=false,raf=0,timer=0,settled=false,nativeReady=false,readyAt=0,holdNode=null;
   let nativeObserver=null,style=null,lateObserver=null,lateResize=null,lateFrame=0,playStart=0,finishAt=0,sheetURI=null,nativeTimer=0;
   let nativeFrame=0,nativeFrame2=0,ownedTimeline=null,homeRegistry=null,pendingEngine=null;
@@ -78,11 +78,29 @@ try{if(typeof window!=="undefined"){
   }
   const restoreMark=(node,key,value)=>{if(value===null)node.removeAttribute(key);else node.setAttribute(key,value);};
   function claimBoot(){
-    if(!prefs.getBoolPref(BOOT_PREF,true))window.__nocturneEarlyBoot?.cleanup?.();
-    else earlyBoot=window.__nocturneEarlyBoot?.adopt?.()||null;
+    const prelude=window.__nocturneEarlyBoot;
+    if(Number.isFinite(prelude?.deadline))deadline=Math.min(deadline,prelude.deadline);
+    if(!prefs.getBoolPref(BOOT_PREF,true))prelude?.cleanup?.();
+    else earlyBoot=prelude?.adopt?.()||null;
+    if(Number.isFinite(earlyBoot?.deadline))deadline=Math.min(deadline,earlyBoot.deadline);
     phaseBaseline=earlyBoot?(earlyBoot.phaseBaseline??null):root.getAttribute(PHASE);
     bootBaseline=earlyBoot?(earlyBoot.bootBaseline??null):root.getAttribute("data-nocturne-boot");
     if(earlyBoot){boot=earlyBoot.node;phaseOwned=true;bootOwned=true;}
+  }
+  // One Assembly timer serves both the absolute watchdog and the earlier
+  // normal completion. Rearming never extends the inherited deadline.
+  function armFinish(until=deadline){
+    if(dead)return;
+    const epoch=++timerEpoch,old=timer;timer=0;
+    if(old)try{window.clearTimeout(old);}catch{}
+    const end=Math.min(deadline,until);
+    if(now()>=end){finish();return;}
+    timer=window.setTimeout(()=>{
+      if(dead||epoch!==timerEpoch)return;
+      timer=0;
+      if(end===deadline)decision("assembly.watchdog",{age:now()-started,playing,settling,bootPreparing});
+      finish();
+    },Math.max(0,end-now()));
   }
   function mountBoot(){
     if(!prefs.getBoolPref(BOOT_PREF,true)){removeBoot();return;}
@@ -103,12 +121,15 @@ try{if(typeof window!=="undefined"){
       const label=html("div");label.textContent="NOCTURNE";
       Object.assign(label.style,{font:"300 24px system-ui, sans-serif",letterSpacing:"7px",paddingInlineStart:"7px"});
       bootMark.append(svg,label);boot.append(bootMark);if(!early)root.append(boot);
+      if(dead)return;
       bootOwned=true;root.setAttribute("data-nocturne-boot","waiting");bootAt=now();
+      if(dead)return;
       // First show the brand background, then ease in the mark. The
       // minimum readable hold is measured from this logo clock, not
       // from the earlier blank prelude.
       const lead=Math.max(0,BOOT_LEAD-(early?bootAt-early.at:0));
       const logo=bootMark.animate([{opacity:0,transform:"translateY(7px) scale(.96)"},{opacity:1,transform:"translateY(0) scale(1)"}],{delay:lead,duration:BOOT_ENTER,easing:"cubic-bezier(.2,.75,.25,1)",fill:"both"});
+      if(dead){try{logo.finished.catch(()=>{});}catch{}try{logo.cancel();}catch{}return;}
       bootEffects.push(logo);logo.finished.catch(()=>{});
       decision("boot.show",{age:bootAt-started,adopted:!!early,backgroundAt:early?.at??bootAt,lead,minimum:BOOT_MIN,exit:BOOT_EXIT});
     }catch(error){removeBoot();decision("boot.error",{name:error?.name});}
@@ -139,8 +160,10 @@ try{if(typeof window!=="undefined"){
       bootFrame=0;if(dead||boot!==overlay)return;
       try{
         const logo=bootMark.animate([{opacity:1,transform:"scale(1)"},{opacity:0,transform:"scale(.94)"}],{duration:260,easing:"ease-in-out",fill:"both"});
+        if(dead||boot!==overlay){try{logo.finished.catch(()=>{});}catch{}try{logo.cancel();}catch{}return;}
         bootEffects.push(logo);logo.finished.catch(()=>{});
         const fade=overlay.animate([{opacity:1},{opacity:0}],{delay:110,duration:BOOT_EXIT-110,easing:"ease-in-out",fill:"both"});
+        if(dead||boot!==overlay){try{fade.finished.catch(()=>{});}catch{}try{fade.cancel();}catch{}return;}
         bootEffects.push(fade);fade.finished.then(done,done);
         bootTimer=window.setTimeout(done,BOOT_EXIT+150);
       }catch{done();}
@@ -161,7 +184,7 @@ try{if(typeof window!=="undefined"){
     const owns=window[KEY]===finish;
     step(()=>window.__nocturneTrace?.("assembly.finish",()=>({playing,settling,seen:seen.size,effects:animations.size,age:now()-started}),{flush:true}));
     step(()=>{if(raf)window.cancelAnimationFrame(raf);});
-    step(()=>{if(timer)window.clearTimeout(timer);});
+    step(()=>{if(timer)window.clearTimeout(timer);});timer=0;
     step(()=>{if(nativeTimer)window.clearTimeout(nativeTimer);});nativeTimer=0;
     step(()=>{if(nativeFrame)window.cancelAnimationFrame(nativeFrame);});nativeFrame=0;
     step(()=>{if(nativeFrame2)window.cancelAnimationFrame(nativeFrame2);});nativeFrame2=0;
@@ -212,6 +235,7 @@ try{if(typeof window!=="undefined"){
     if(dead||settling)return;
     if(!playing||bootPreparing||reduced.matches||!animations.size){finish();return;}
     settling=true;
+    try{
     // The native background and page have never been touched.
     // Finish active effects from current values, not a different frame.
     root.setAttribute(PHASE,"settling");
@@ -219,7 +243,6 @@ try{if(typeof window!=="undefined"){
     if(typeof bookmarkHandle!=="undefined"){bookmarkHandle?.seal();bookmarkHandle?.release();bookmarkHandle=null;}
     lateObserver?.disconnect();lateObserver=null;lateResize?.disconnect();lateResize=null;
     if(lateFrame)window.cancelAnimationFrame(lateFrame);lateFrame=0;
-    if(timer)window.clearTimeout(timer);
     const pending=[];
     for(const [a,record] of animations){
       try{
@@ -235,7 +258,8 @@ try{if(typeof window!=="undefined"){
       animations.delete(a);try{a.cancel();}catch{}
       if(!from||!play(record.n,[from,to],0,120,false,FADE,record.complete))record.complete?.();
     }
-    timer=window.setTimeout(finish,155);
+    armFinish(now()+155);
+    }catch(error){decision("assembly.settle.error",{name:error?.name});finish();}
   }
   function interrupt(event){
     // Typing in Home or a web page must not terminate a chrome animation.
@@ -352,11 +376,10 @@ try{if(typeof window!=="undefined"){
   function extendFinish(until){
     // Late chrome may get a short reveal but cannot keep the startup hold
     // forever. All cleanup is still guaranteed by the final timer.
-    const end=Math.min(playStart+duration+420,Math.max(finishAt,until));
+    const end=Math.min(deadline,playStart+duration+420,Math.max(finishAt,until));
     if(end===finishAt)return;
     finishAt=end;
-    if(timer)window.clearTimeout(timer);
-    timer=window.setTimeout(finish,Math.max(0,finishAt-now()));
+    armFinish(finishAt);
   }
   function slide(n,x,y,delay,length){return reveal(n,{x,y,delay,length});}
   function openFromCenter(n,delay,length,late=false){return reveal(n,{clip:true,delay,length,late,easing:FADE});}
@@ -436,6 +459,7 @@ try{if(typeof window!=="undefined"){
     if(dead||!playing||settling||bootPreparing||lateFrame)return;
     lateFrame=window.requestAnimationFrame(()=>{
       lateFrame=0;if(dead||settling)return;
+      try{
       const bar=floatingBar();
       if(bar&&!seen.has(bar))openFromCenter(bar,590,440,true);
       if(!bookmarkHandle)revealBookmarks(window.innerWidth/2,true);
@@ -444,6 +468,7 @@ try{if(typeof window!=="undefined"){
       controls(row,url,center,true);
       // Cards inserted after the snapshot appear in their real slots.
       // Never restart an already-playing train for late mirror mutations.
+      }catch(error){decision("assembly.late.error",{name:error?.name});finish();}
     });
   }
   function launch(one){
@@ -452,8 +477,9 @@ try{if(typeof window!=="undefined"){
     try{
       // Prime the resting contour while the startup gate is still held.
       const preflightAt=now();
-      try{window.__zenMagneticBookmarksShared?.syncAddressState?.();}catch{}
-      if(one)try{window.__oneplaneLayoutController?.prepareWorkspaceGeometry?.();}catch{}
+      window.__zenMagneticBookmarksShared?.syncAddressState?.();
+      if(one)window.__oneplaneLayoutController?.prepareWorkspaceGeometry?.();
+      if(dead)return;
       window.__nocturneTrace?.("assembly.preflight",{elapsed:now()-preflightAt},{sample:1000});
       const engine=window.__nocturneCenterMotion;pendingEngine=engine;
       const row=get("oneplane-tabs"),url=get("urlbar-container");
@@ -534,6 +560,7 @@ try{if(typeof window!=="undefined"){
     typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.targets",()=>({seen:seen.size,effects:animations.size,duration,finishAt}),{sample:1800});
       const resume=()=>{
         if(dead||timeline.closed||ownedTimeline!==timeline)return;
+        if(now()>=deadline){finish();return;}
         bootPreparing=false;
         playStart=now();timeline.start=playStart;timeline.paused=false;
         finishAt=playStart+Math.max(duration+80,timeline.end*scale);
@@ -544,17 +571,16 @@ try{if(typeof window!=="undefined"){
         if(dead)return;
         decision("boot.assembly.start",{age:playStart-started,prepared:animations.size});
         scheduleLate();
-        if(timer)window.clearTimeout(timer);
-        timer=window.setTimeout(finish,Math.max(0,finishAt-now()));
+        armFinish(finishAt);
       };
       if(dead)return;
       if(bootPreparing){
         // Keep the hard fail-open deadline while waiting for the exit.
-        timer=window.setTimeout(finish,Math.max(0,deadline-now()));
-        exitBoot(resume);
+        armFinish();
+        if(!dead)exitBoot(resume);
       }else{
         scheduleLate();
-        timer=window.setTimeout(finish,Math.max(0,finishAt-now()));
+        armFinish(finishAt);
       }
     }catch(error){console.warn("[Zen Refined] Startup reveal failed:",error);finish();}
   }
@@ -583,6 +609,7 @@ try{if(typeof window!=="undefined"){
   }
   function checkReadiness(){
     if(now()>=deadline){decision("assembly.skip",{reason:"deadline",nativeReady,settled,state:root.getAttribute(READY)});finish();return;}
+    if(window.closed||root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"){finish();return;}
     hold();pendingEngine=window.__nocturneCenterMotion;
     // Warm icons while native restore is still running, not only after it.
     const earlyRow=get("oneplane-tabs");
@@ -620,7 +647,9 @@ try{if(typeof window!=="undefined"){
     decision("assembly.icons.ready",{...iconStatus,homeIcons,homeState,revision:resourceRevision,wait:now()-iconWaitAt,timeout:waiting});
     window.__nocturneTrace?.("assembly.ready",{one,active,state,expected,nativeReady,settled,homeState,resourceTimeout:waiting},{sample:2500});
     if(dead)return;
-    if(timer)window.clearTimeout(timer);
+    // Do not start a full sequence which cannot fit the remaining budget.
+    const needed=Math.max(duration+80,1190*scale)+(boot?BOOT_EXIT+150:0);
+    if(now()+needed>=deadline){decision("assembly.skip",{reason:"insufficient-budget",remaining:deadline-now(),needed});finish();return;}
     console.info("[Zen Refined] Center Assembly launch: "+(one?"OnePlane":"native"));
     launch(one);
   }
@@ -649,6 +678,8 @@ try{if(typeof window!=="undefined"){
   try{
     window[KEY]?.();window[KEY]=finish;
     claimBoot();pendingEngine=window.__nocturneCenterMotion;
+    Object.defineProperty(finish,"deadline",{get:()=>deadline});
+    armFinish();if(dead)return;
     window.addUnloadListener(finish);window.addEventListener("unload",finish,{once:true});
     for(const type of inputs)window.addEventListener(type,interrupt,true);
     window.addEventListener("resize",onResize);
@@ -716,7 +747,6 @@ try{if(typeof window!=="undefined"){
     phaseOwned=true;root.setAttribute(PHASE,"waiting");try{window.__zenMagneticBookmarksShared?.syncAddressState?.();}catch{}
     if(dead)return;hold();if(dead)return;mountBoot();if(dead)return;
     console.info("[Zen Refined] Center Assembly: "+(lateStart?"late chrome startup":"prepaint startup"));
-    timer=window.setTimeout(finish,Math.max(0,deadline-now()));
     if(window.gBrowserInit?.delayedStartupFinished)onNativeReady();
     else{nativeObserver=subject=>{if(subject!==window)return;Services.obs.removeObserver(nativeObserver,"browser-delayed-startup-finished");nativeObserver=null;onNativeReady();};
       Services.obs.addObserver(nativeObserver,"browser-delayed-startup-finished");}

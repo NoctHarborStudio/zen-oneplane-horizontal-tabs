@@ -1,3 +1,10 @@
+## 0.3.0-preview.85 — Startup absolute watchdog and audit
+
+- Correct stale Home source-contract assertion in preview.84 CI; keep captured lease and generation guards.
+- Transfer the exact Prelude deadline and cap all Assembly finish/rearm paths; reject stale timer callbacks and late orphan startup replay.
+- Bound the Center Motion pending gate to the known startup deadline; isolate partial cancellation and setup failures.
+- Fail open on startup preflight, settle and late readiness errors; skip reveal when the complete sequence cannot fit its remaining budget. Normal choreography unchanged.
+
 ## 0.3.0-preview.84 — Startup readiness and Home structural lease
 
 - Resolve Home readiness within the existing icon budget and reject late automatic Home opening after the Assembly launch boundary.
