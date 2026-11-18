@@ -101,7 +101,7 @@ test("boot waits for minimum visibility and a quiet readiness window, with hard 
  assert.ok(source.includes('root.append(boot)'));
  assert.ok(source.includes('boot.inert=true'));
  assert.ok(source.includes('pointerEvents:"none"'));
- assert.ok(source.includes('bootPreparing=false;removeBoot();'));
+ assert.ok(source.includes('bootPreparing=false;step(removeBoot);'));
 });
 test("all prepared effects remain paused until the boot handoff",()=>{
  const launch=source.slice(source.indexOf("function launch("),source.indexOf("function schedule(){"));
