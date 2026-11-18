@@ -176,7 +176,7 @@ async function activate() {
   }
 }
 
-const reloadingLayout=!!window[CONTROLLER];
+const reloadingLayout=!!(window[CONTROLLER]||window.__nocturneLayoutStartup);
 const startupRecord={initial:!reloadingLayout&&!window.__nocturneLayoutStartup,readyAt:null};
 if (!root.hasAttribute("popup-window") && typeof window.addUnloadListener === "function") {
   window[CONTROLLER]?.cleanup();

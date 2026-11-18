@@ -4,14 +4,16 @@
 (()=>{
   const win=window,root=document.documentElement,prefs=Services.prefs;
   const KEY="__nocturneEarlyBoot",PHASE="data-zr-startup-phase",BOOT="data-nocturne-boot";
+  // Finish the previous Layout generation before any replacement resources.
+  if(typeof win.addUnloadListener==="function"&&!win.closed&&!root.hasAttribute("popup-window"))win.__oneplaneLayoutController?.cleanup?.();
   if(win[KEY]||win.__zenRefinedStartupAnimationSeen||win.__nocturneLayoutStartup||
      typeof win.addUnloadListener!=="function"||win.closed||root.hasAttribute("popup-window")||
      root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"||
      win.performance.now()>=3500||!prefs.getBoolPref("zen.refined.startup.animation",true)||
      !prefs.getBoolPref("zen.nocturne.boot.enabled",true)||win.matchMedia("(prefers-reduced-motion: reduce)").matches)return;
-  let node=null,timer=0,claimed=false,oldPhase=root.getAttribute(PHASE);
+  let node=null,timer=0,claimed=false,cleaned=false,oldPhase=root.getAttribute(PHASE);
   const cleanup=()=>{
-    if(claimed)return;
+    if(claimed||cleaned)return;cleaned=true;
     if(timer)win.clearTimeout(timer);timer=0;
     node?.remove();root.removeAttribute(BOOT);
     if(root.getAttribute(PHASE)==="waiting"){if(oldPhase===null)root.removeAttribute(PHASE);else root.setAttribute(PHASE,oldPhase);}
@@ -39,7 +41,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.54",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.55",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -47,8 +49,8 @@
   // Cross-window queue: all currently open browser windows share the same
   // coordinator object. Persist operations never race read/modify/write.
   const STORE="__nocturneDiagnosticStore";
-  let store=null;
-  try{const windows=Services.wm.getEnumerator("navigator:browser");while(windows.hasMoreElements()){const w=windows.getNext();if(w!==win&&w[STORE]){store=w[STORE];break;}}}catch{}
+  let store=win[STORE]||null;
+  try{const windows=Services.wm.getEnumerator("navigator:browser");while(!store&&windows.hasMoreElements()){const w=windows.getNext();if(w!==win&&w[STORE]){store=w[STORE];break;}}}catch{}
   if(!store)store={tail:Promise.resolve(),sessions:null};
   win[STORE]=store;
   let previousMetrics={},sampleIndex=0;
@@ -136,7 +138,7 @@
   },2200);}
   function flush(){
     if(writeTimer){win.clearTimeout(writeTimer);writeTimer=0;}
-    if(writing)return writing.then(result=>dirty?flush():result);
+    if(writing)return writing.then(result=>dirty||writing?flush():result);
     if(!dirty)return Promise.resolve(false);
     dirty=false;
     writing=persist().finally(()=>{writing=null;if(dirty&&!dead&&!quiescing)scheduleWrite();});
@@ -226,7 +228,7 @@
   function frameTick(t){raf=0;if(dead||quiescing||!enabled()||now()>until)return;if(frameLast&&gaps.length<300)gaps.push(t-frameLast);frameLast=t;raf=win.requestAnimationFrame(frameTick);}
   function sample(){timer=0;if(dead||quiescing||!enabled()||now()>until){frameLast=0;return;}record("sample",snapshot);timer=win.setTimeout(sample,180);}
   function arm(ms=1600){if(dead||quiescing||!enabled())return;until=Math.max(until,now()+Math.min(3000,Math.max(100,ms)));if(!timer)timer=win.setTimeout(sample,50);if(!raf){frameLast=0;raf=win.requestAnimationFrame(frameTick);}}
-  function listen(target,type,fn){target.addEventListener(type,fn,true);removers.push(()=>target.removeEventListener(type,fn,true));}
+  function listen(target,type,fn){const guarded=(...args)=>{if(!dead&&!quiescing)fn(...args);};target.addEventListener(type,guarded,true);removers.push(()=>target.removeEventListener(type,guarded,true));}
   function bindNative(){
     const tc=win.gBrowser?.tabContainer;if(!tc||nativeContainer===tc)return;nativeContainer=tc;
     for(const type of ["TabSelect","TabOpen","TabClose","TabMove","TabPinned","TabUnpinned"])listen(tc,type,()=>record("native."+type,()=>({total:win.gBrowser?.tabs?.length,visible:win.gBrowser?.visibleTabs?.length}),{sample:1800}));
@@ -258,7 +260,10 @@
   }
   const api={version:VERSION,fileName,dump,flush,dispose,requestDispose,mark:label=>record("user.mark",{label:String(label).slice(0,80)},{sample:2500,flush:true})};
   win.__nocturneDiagnostics=api;win.__nocturneTrace=record;
+  const earlyBoot=win.__nocturneEarlyBoot;
   try{
+    // If later Layout fragments fail, this registration still owns boot.
+    win.addUnloadListener(()=>{try{earlyBoot?.cleanup?.();}finally{requestDispose();}});
     observer=new win.MutationObserver(records=>{
       if(dead||quiescing||!enabled())return;
       const changes=[];for(const r of records){const key=r.target===root?"root":[...nodes].find(x=>x[1]===r.target)?.[0];if(key){const value=r.target.getAttribute(r.attributeName),cache=changedAttrs.get(r.target)||new Map();if(cache.has(r.attributeName)&&cache.get(r.attributeName)===value)continue;cache.set(r.attributeName,value);changedAttrs.set(r.target,cache);changes.push({node:key,attr:r.attributeName,value});}}
@@ -273,7 +278,7 @@
     record("diagnostics.ready",()=>({version:VERSION,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished,size:[win.innerWidth,win.innerHeight],private:privateWindow()}),{sample:6000,flush:true});
     const early=win.__nocturneEarlyTrace||[];delete win.__nocturneEarlyTrace;
     for(const item of early)record(item.event,()=>({earlyAt:item.t,...item.data}),{sample:2000});
-    win.addUnloadListener(requestDispose);listen(win,"unload",requestDispose);
+    listen(win,"unload",requestDispose);
   }catch(error){record("diagnostics.setup-error",{name:error?.name});dispose();}
 })();
 /* Nocturne Center Motion — shared deterministic card choreography.
@@ -364,6 +369,7 @@
   const paintProps=["display","position","inset","top","right","bottom","left","box-sizing","width","height","min-width","max-width","min-height","max-height","flex","flex-direction","flex-wrap","align-items","align-self","justify-content","place-items","gap","padding","margin","overflow","border","border-radius","box-shadow","background","color","font","font-family","font-size","font-weight","font-style","line-height","white-space","text-overflow","text-align","object-fit","fill","stroke","stroke-width","opacity","visibility","filter","transform","translate","scale","grid-template-columns","grid-template-rows","grid-auto-flow","grid-auto-columns","grid-auto-rows","align-content","justify-items","justify-self","place-content","row-gap","column-gap"];
   const decodeSources=new WeakMap();
   function warmIcons(row){
+    if(dead)return iconStats(row);
     for(const img of row?.querySelectorAll(".oneplane-tab-icon img")||[]){
       const value=img.getAttribute("src");if(!value||decodeSources.get(img)===value)continue;
       decodeSources.set(img,value);try{img.decode?.()?.catch(()=>{});}catch{}
@@ -479,7 +485,7 @@
     const r=icon.getBoundingClientRect(),geometry=r.width>0&&r.height>0;
     return {visible:!hidden&&geometry&&alpha>0,alpha,geometry};
   }
-  function releasePending(){if(pendingTimer)win.clearTimeout(pendingTimer);pendingTimer=0;root.removeAttribute(PENDING);}
+  function releasePending(){if(pendingTimer)win.clearTimeout(pendingTimer);pendingTimer=0;if(!win[KEY]||win[KEY]===api)root.removeAttribute(PENDING);}
   let handoffFrame=0,handoffFrame2=0;
   function finishHandoff(){
     if(handoffFrame)win.cancelAnimationFrame(handoffFrame);
@@ -491,8 +497,9 @@
     handoffFrame=win.requestAnimationFrame(()=>{handoffFrame=0;handoffFrame2=win.requestAnimationFrame(()=>{handoffFrame2=0;root.removeAttribute("data-zr-center-handoff");});});
   }
   function start(row,{owner,direction="in",duration=520,delay=0,paused=false}={}){
+    if(dead)return null;
     stopSelection();active?.release();finishHandoff();releasePending();
-    if(dead||!row){win.__nocturneTrace?.("center.motion.skip",{owner,reason:dead?"disposed":"no-row"});return null;}
+    if(!row){win.__nocturneTrace?.("center.motion.skip",{owner,reason:"no-row"});return null;}
     const measuring=root.getAttribute("data-zr-workspace-phase")==="swap";
     if(measuring)root.setAttribute("data-zr-fold-measuring","true");
     let cards;try{cards=collect(row);}catch{root.removeAttribute("data-zr-fold-measuring");return null;}
@@ -550,13 +557,22 @@
       resume(){for(const a of running)try{a.play();}catch{}},
       seal(){for(const a of running)try{a.finish();}catch{}},
       release(){
-        if(released)return;released=true;holdHandoff();
-        for(const a of running)try{a.cancel();}catch{}
-        for(const off of cleanups)off();
-        win.__nocturneTrace?.("center.motion.release",()=>({owner,direction,count:cards.length,...stats,sourceIcons:iconStats(row)}),{sample:600});
-        host.remove();
-        for(const {n,mark} of saved){if(mark===null)n.removeAttribute(MARK);else n.setAttribute(MARK,mark);}
-        if(active===handle){active=null;root.removeAttribute(OWNER);if(!win.closed)win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd"));}
+        if(released)return;released=true;
+        let failed=0;
+        const step=fn=>{try{fn();}catch{failed++;}};
+        if(!dead)step(holdHandoff);
+        for(const a of running)step(()=>a.cancel());
+        for(const off of cleanups)step(off);
+        step(()=>host.remove());
+        for(const {n,mark} of saved)step(()=>{if(mark===null)n.removeAttribute(MARK);else n.setAttribute(MARK,mark);});
+        if(active===handle){
+          active=null;
+          if(!win[KEY]||win[KEY]===api){
+            step(()=>root.removeAttribute(OWNER));
+            if(!dead&&!win.closed)step(()=>win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd")));
+          }
+        }
+        win.__nocturneTrace?.("center.motion.release",()=>({owner,direction,count:cards.length,...stats,sourceIcons:iconStats(row),failed}),{sample:600});
       }};
     active=handle;
     win.__nocturneTrace?.("center.motion",()=>({owner,direction,count:cards.length,duration,mode:"magnetic-fold",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length,groups:stats.groups,handles:stats.handles,handleOffset:stats.handleOffset,icons:iconStats(row),bitmapIcons:stats.bitmapIcons,bitmapFailures:stats.bitmapFailures,animated:running.length}),{sample:duration+250});
@@ -564,6 +580,7 @@
   }
   // Bookmarks use the Lab's center squeeze, not individual vertical slides.
   function bookmarks({direction="in",duration=520,delay=0,paused=false}={}){
+    if(dead)return null;
     const n=document.getElementById("PlacesToolbarItems");
     if(!n||!n.getBoundingClientRect().width)return null;
     const frames=Array.from({length:21},(_,i)=>{const p=smooth(direction==="out"?1-i/20:i/20);return {offset:i/20,[B]:String(p)};});
@@ -578,15 +595,26 @@
     }catch{release();return null;}
   }
   function dispose(){
-    if(dead)return;dead=true;releasePending();stopSelection();selectionContainer?.removeEventListener("TabSelect",onSelect);win.removeEventListener("OnePlane:StartupState",bindSelection);
-    if(!root.hasAttribute("data-zr-closing"))active?.release();finishHandoff();
+    if(dead)return;dead=true;
+    let failed=0;
+    const step=fn=>{try{fn();}catch{failed++;}};
+    step(releasePending);step(stopSelection);
+    step(()=>selectionContainer?.removeEventListener("TabSelect",onSelect));selectionContainer=null;
+    step(()=>win.removeEventListener("OnePlane:StartupState",bindSelection));
+    // The existing close transaction retains its sealed frame until native
+    // close returns. A later release must not start a dead handoff.
+    const delegated=!!active&&root.hasAttribute("data-zr-closing");
+    if(!delegated)step(()=>active?.release());
+    step(finishHandoff);
     if(win[KEY]===api)delete win[KEY];
+    win.__nocturneTrace?.("center.dispose",{failed,delegated},{flush:true});
   }
   // Ordinary selection uses the same ownership boundary but never delays
   // native TabSelect. Animate the chrome deck, not remote page DOM.
   let selection=null,selectionContainer=null,lastTab=null;
   function stopSelection(){if(selection){try{selection.cancel();}catch{}selection=null;}}
   function onSelect(){
+    if(dead)return;
     const browser=win.gBrowser,next=browser?.selectedTab,previous=lastTab;lastTab=next;
     stopSelection();
     if(!next||!previous||next===previous||active||root.hasAttribute(PENDING)||
@@ -601,13 +629,19 @@
     win.__nocturneTrace?.("selection.native",{direction:to>from?1:-1});
   }
   function bindSelection(){
+    if(dead)return;
     const tc=win.gBrowser?.tabContainer;if(!tc||tc===selectionContainer)return;
     selectionContainer?.removeEventListener("TabSelect",onSelect);
     selectionContainer=tc;lastTab=win.gBrowser.selectedTab;tc.addEventListener("TabSelect",onSelect);
   }
+  const api={start,bookmarks,iconStats,warmIcons,releasePending,dispose};win[KEY]=api;
+  const earlyBoot=win.__nocturneEarlyBoot,diagnostics=win.__nocturneDiagnostics;
+  // This is the last Sine slot if subsequent Layout fragments fail.
+  win.addUnloadListener(()=>{
+    try{dispose();}finally{try{earlyBoot?.cleanup?.();}finally{diagnostics?.requestDispose?.();}}
+  });
   win.addEventListener("OnePlane:StartupState",bindSelection);
   bindSelection();
-  const api={start,bookmarks,iconStats,warmIcons,releasePending,dispose};win[KEY]=api;
   // The layout entrypoint runs before its own projection. Gate only a
   // genuinely new window, never a Sine reload. Fail open on missing Assembly.
   try{
@@ -616,7 +650,6 @@
       root.setAttribute(PENDING,"true");pendingTimer=win.setTimeout(()=>{win.__nocturneTrace?.("assembly.gate.timeout",{age:win.performance.now()},{flush:true});releasePending();},8500);
     }
   }catch{}
-  win.addUnloadListener(dispose);
 })();
 /* OnePlane — local, reversible Zen layout configuration.
  * Runs only in browser.xhtml via Sine; no network or page access.
@@ -7959,7 +7992,7 @@ async function activate() {
   }
 }
 
-const reloadingLayout=!!window[CONTROLLER];
+const reloadingLayout=!!(window[CONTROLLER]||window.__nocturneLayoutStartup);
 const startupRecord={initial:!reloadingLayout&&!window.__nocturneLayoutStartup,readyAt:null};
 if (!root.hasAttribute("popup-window") && typeof window.addUnloadListener === "function") {
   window[CONTROLLER]?.cleanup();

@@ -3,18 +3,19 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 const version=JSON.parse(readFileSync(new URL("../theme.json",import.meta.url),"utf8")).version;
 const source=readFileSync(new URL("../src/core/diagnostics.js.part",import.meta.url),"utf8");
-function fixture({isPrivate=false,on=true,prior=null,failWrite=false}={}){
+function fixture({isPrivate=false,on=true,prior=null,failWrite=false,writeHook=()=>{},removeFails=false}={}){
  let time=0,serial=0,enabled=on,unload;const timers=new Map(),frames=new Map(),logs=[],writes=[],listeners=new Map();
  const attrs=new Map(),root={hasAttribute:k=>attrs.has(k),getAttribute:k=>attrs.get(k)??null};
  const doc={documentElement:root,getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[]};
  const win={performance:{now:()=>time},innerWidth:1200,innerHeight:800,PrivateBrowsingUtils:{isWindowPrivate:()=>isPrivate},console:{info:s=>logs.push(s),warn:s=>logs.push(s)},addUnloadListener(fn){unload=fn;},
- MutationObserver:class{observe(){}disconnect(){}},addEventListener(k,f){listeners.set(k,f);},removeEventListener(k){listeners.delete(k);},
+ MutationObserver:class{observe(){}disconnect(){}},addEventListener(k,f){listeners.set(k,f);},removeEventListener(k){if(removeFails)throw Error("injected remove failure");listeners.delete(k);},
  setTimeout(f,ms){const id=++serial;timers.set(id,{f,ms});return id;},clearTimeout:id=>timers.delete(id),requestAnimationFrame(f){const id=++serial;frames.set(id,f);return id;},cancelAnimationFrame:id=>frames.delete(id),
  __nocturneEarlyTrace:[{event:"assembly.script",t:0,data:{version:"0.3.0-preview.19"}}]};
- const io={readUTF8:async()=>JSON.stringify(prior),makeDirectory:async()=>{},getChildren:async()=>[],writeUTF8:async(path,data)=>{if(failWrite)throw Error("injected write failure");writes.push({path,data});}};
+ const io={readUTF8:async()=>writes.at(-1)?.data??JSON.stringify(prior),makeDirectory:async()=>{},getChildren:async()=>[],writeUTF8:async(path,data)=>{if(failWrite)throw Error("injected write failure");writeHook(data);writes.push({path,data});}};
  const paths={profileDir:"profile",join:(...p)=>p.join("/"),filename:p=>p.split("/").at(-1)};
- new Function("window","document","Services","IOUtils","PathUtils",source)(win,doc,{prefs:{getBoolPref:()=>enabled}},io,paths);
- return {win,timers,frames,logs,writes,listeners,attrs,unload:()=>unload(),setTime:t=>time=t,disable:()=>enabled=false,api:win.__nocturneDiagnostics};
+ const reload=()=>{new Function("window","document","Services","IOUtils","PathUtils",source)(win,doc,{prefs:{getBoolPref:()=>enabled},wm:{getEnumerator(){let sent=false;return {hasMoreElements:()=>!sent,getNext:()=>{sent=true;return win;}};}}},io,paths);return win.__nocturneDiagnostics;};
+ reload();
+ return {reload,win,timers,frames,logs,writes,listeners,attrs,unload:()=>unload(),setTime:t=>time=t,disable:()=>enabled=false,api:win.__nocturneDiagnostics};
 }
 test("recorder keeps ordered events, early markers, lazy detail and bounded ring",async()=>{
  const f=fixture();const trace=f.win.__nocturneTrace;
@@ -84,4 +85,36 @@ test("oversize startup archive cannot consume the entire file budget",async()=>{
  assert.equal(saved.events.at(-1).event,"terminal");
  assert.ok(new TextEncoder().encode(f.writes.at(-1).data).length<=2000000);
  f.api.dispose();
+});
+
+test("same-window recorder reload shares pending writes and retains both sessions",async()=>{
+ const f=fixture(),old=f.api;const store=f.win.__nocturneDiagnosticStore;
+ f.win.__nocturneTrace("old.pending",{count:1});
+ old.requestDispose();
+ const next=f.reload();
+ assert.equal(f.win.__nocturneDiagnosticStore,store);
+ f.win.__nocturneTrace("replacement.pending",{count:2});
+ await old.flush();await next.flush();
+ const sessions=JSON.parse(f.writes.at(-1).data).sessions;
+ assert.equal(sessions.length,2);
+ assert.ok(sessions.some(s=>s.events.some(e=>e.event==="old.pending")));
+ assert.ok(sessions.some(s=>s.events.some(e=>e.event==="replacement.pending")));
+ assert.equal(f.win.__nocturneDiagnostics,next);next.dispose();
+});
+test("all coalesced flush callers join the failing follow-up write",async()=>{
+ const f=fixture({writeHook:data=>{if(data.includes('"followup.failure"'))throw Error("injected follow-up failure");}});
+ await f.api.flush();
+ f.win.__nocturneTrace("first.write",{count:1});const first=f.api.flush();
+ f.win.__nocturneTrace("followup.failure",{count:2});
+ const a=f.api.flush(),b=f.api.flush();
+ assert.equal(await first,true);assert.equal(await a,false);assert.equal(await b,false);f.api.dispose();
+});
+test("failed listener removal cannot re-arm diagnostic sampling",async()=>{
+ const f=fixture({removeFails:true});
+ const stale=f.listeners.get("resize");assert.ok(stale);
+ f.unload();stale();assert.equal(f.frames.size,0);assert.equal(f.timers.size,0);
+ await Promise.resolve();await f.api.flush();
+ const events=JSON.parse(f.writes.at(-1).data).sessions.at(-1).events;
+ assert.ok(events.some(e=>e.event==="diagnostics.quiesce"&&e.data.failed>0));
+ assert.ok(!events.some(e=>e.event==="event.resize"));
 });

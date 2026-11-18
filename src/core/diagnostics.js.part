@@ -1,7 +1,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.54",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.55",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -9,8 +9,8 @@
   // Cross-window queue: all currently open browser windows share the same
   // coordinator object. Persist operations never race read/modify/write.
   const STORE="__nocturneDiagnosticStore";
-  let store=null;
-  try{const windows=Services.wm.getEnumerator("navigator:browser");while(windows.hasMoreElements()){const w=windows.getNext();if(w!==win&&w[STORE]){store=w[STORE];break;}}}catch{}
+  let store=win[STORE]||null;
+  try{const windows=Services.wm.getEnumerator("navigator:browser");while(!store&&windows.hasMoreElements()){const w=windows.getNext();if(w!==win&&w[STORE]){store=w[STORE];break;}}}catch{}
   if(!store)store={tail:Promise.resolve(),sessions:null};
   win[STORE]=store;
   let previousMetrics={},sampleIndex=0;
@@ -98,7 +98,7 @@
   },2200);}
   function flush(){
     if(writeTimer){win.clearTimeout(writeTimer);writeTimer=0;}
-    if(writing)return writing.then(result=>dirty?flush():result);
+    if(writing)return writing.then(result=>dirty||writing?flush():result);
     if(!dirty)return Promise.resolve(false);
     dirty=false;
     writing=persist().finally(()=>{writing=null;if(dirty&&!dead&&!quiescing)scheduleWrite();});
@@ -188,7 +188,7 @@
   function frameTick(t){raf=0;if(dead||quiescing||!enabled()||now()>until)return;if(frameLast&&gaps.length<300)gaps.push(t-frameLast);frameLast=t;raf=win.requestAnimationFrame(frameTick);}
   function sample(){timer=0;if(dead||quiescing||!enabled()||now()>until){frameLast=0;return;}record("sample",snapshot);timer=win.setTimeout(sample,180);}
   function arm(ms=1600){if(dead||quiescing||!enabled())return;until=Math.max(until,now()+Math.min(3000,Math.max(100,ms)));if(!timer)timer=win.setTimeout(sample,50);if(!raf){frameLast=0;raf=win.requestAnimationFrame(frameTick);}}
-  function listen(target,type,fn){target.addEventListener(type,fn,true);removers.push(()=>target.removeEventListener(type,fn,true));}
+  function listen(target,type,fn){const guarded=(...args)=>{if(!dead&&!quiescing)fn(...args);};target.addEventListener(type,guarded,true);removers.push(()=>target.removeEventListener(type,guarded,true));}
   function bindNative(){
     const tc=win.gBrowser?.tabContainer;if(!tc||nativeContainer===tc)return;nativeContainer=tc;
     for(const type of ["TabSelect","TabOpen","TabClose","TabMove","TabPinned","TabUnpinned"])listen(tc,type,()=>record("native."+type,()=>({total:win.gBrowser?.tabs?.length,visible:win.gBrowser?.visibleTabs?.length}),{sample:1800}));
@@ -220,7 +220,10 @@
   }
   const api={version:VERSION,fileName,dump,flush,dispose,requestDispose,mark:label=>record("user.mark",{label:String(label).slice(0,80)},{sample:2500,flush:true})};
   win.__nocturneDiagnostics=api;win.__nocturneTrace=record;
+  const earlyBoot=win.__nocturneEarlyBoot;
   try{
+    // If later Layout fragments fail, this registration still owns boot.
+    win.addUnloadListener(()=>{try{earlyBoot?.cleanup?.();}finally{requestDispose();}});
     observer=new win.MutationObserver(records=>{
       if(dead||quiescing||!enabled())return;
       const changes=[];for(const r of records){const key=r.target===root?"root":[...nodes].find(x=>x[1]===r.target)?.[0];if(key){const value=r.target.getAttribute(r.attributeName),cache=changedAttrs.get(r.target)||new Map();if(cache.has(r.attributeName)&&cache.get(r.attributeName)===value)continue;cache.set(r.attributeName,value);changedAttrs.set(r.target,cache);changes.push({node:key,attr:r.attributeName,value});}}
@@ -235,6 +238,6 @@
     record("diagnostics.ready",()=>({version:VERSION,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished,size:[win.innerWidth,win.innerHeight],private:privateWindow()}),{sample:6000,flush:true});
     const early=win.__nocturneEarlyTrace||[];delete win.__nocturneEarlyTrace;
     for(const item of early)record(item.event,()=>({earlyAt:item.t,...item.data}),{sample:2000});
-    win.addUnloadListener(requestDispose);listen(win,"unload",requestDispose);
+    listen(win,"unload",requestDispose);
   }catch(error){record("diagnostics.setup-error",{name:error?.name});dispose();}
 })();

@@ -86,6 +86,7 @@
   const paintProps=["display","position","inset","top","right","bottom","left","box-sizing","width","height","min-width","max-width","min-height","max-height","flex","flex-direction","flex-wrap","align-items","align-self","justify-content","place-items","gap","padding","margin","overflow","border","border-radius","box-shadow","background","color","font","font-family","font-size","font-weight","font-style","line-height","white-space","text-overflow","text-align","object-fit","fill","stroke","stroke-width","opacity","visibility","filter","transform","translate","scale","grid-template-columns","grid-template-rows","grid-auto-flow","grid-auto-columns","grid-auto-rows","align-content","justify-items","justify-self","place-content","row-gap","column-gap"];
   const decodeSources=new WeakMap();
   function warmIcons(row){
+    if(dead)return iconStats(row);
     for(const img of row?.querySelectorAll(".oneplane-tab-icon img")||[]){
       const value=img.getAttribute("src");if(!value||decodeSources.get(img)===value)continue;
       decodeSources.set(img,value);try{img.decode?.()?.catch(()=>{});}catch{}
@@ -201,7 +202,7 @@
     const r=icon.getBoundingClientRect(),geometry=r.width>0&&r.height>0;
     return {visible:!hidden&&geometry&&alpha>0,alpha,geometry};
   }
-  function releasePending(){if(pendingTimer)win.clearTimeout(pendingTimer);pendingTimer=0;root.removeAttribute(PENDING);}
+  function releasePending(){if(pendingTimer)win.clearTimeout(pendingTimer);pendingTimer=0;if(!win[KEY]||win[KEY]===api)root.removeAttribute(PENDING);}
   let handoffFrame=0,handoffFrame2=0;
   function finishHandoff(){
     if(handoffFrame)win.cancelAnimationFrame(handoffFrame);
@@ -213,8 +214,9 @@
     handoffFrame=win.requestAnimationFrame(()=>{handoffFrame=0;handoffFrame2=win.requestAnimationFrame(()=>{handoffFrame2=0;root.removeAttribute("data-zr-center-handoff");});});
   }
   function start(row,{owner,direction="in",duration=520,delay=0,paused=false}={}){
+    if(dead)return null;
     stopSelection();active?.release();finishHandoff();releasePending();
-    if(dead||!row){win.__nocturneTrace?.("center.motion.skip",{owner,reason:dead?"disposed":"no-row"});return null;}
+    if(!row){win.__nocturneTrace?.("center.motion.skip",{owner,reason:"no-row"});return null;}
     const measuring=root.getAttribute("data-zr-workspace-phase")==="swap";
     if(measuring)root.setAttribute("data-zr-fold-measuring","true");
     let cards;try{cards=collect(row);}catch{root.removeAttribute("data-zr-fold-measuring");return null;}
@@ -272,13 +274,22 @@
       resume(){for(const a of running)try{a.play();}catch{}},
       seal(){for(const a of running)try{a.finish();}catch{}},
       release(){
-        if(released)return;released=true;holdHandoff();
-        for(const a of running)try{a.cancel();}catch{}
-        for(const off of cleanups)off();
-        win.__nocturneTrace?.("center.motion.release",()=>({owner,direction,count:cards.length,...stats,sourceIcons:iconStats(row)}),{sample:600});
-        host.remove();
-        for(const {n,mark} of saved){if(mark===null)n.removeAttribute(MARK);else n.setAttribute(MARK,mark);}
-        if(active===handle){active=null;root.removeAttribute(OWNER);if(!win.closed)win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd"));}
+        if(released)return;released=true;
+        let failed=0;
+        const step=fn=>{try{fn();}catch{failed++;}};
+        if(!dead)step(holdHandoff);
+        for(const a of running)step(()=>a.cancel());
+        for(const off of cleanups)step(off);
+        step(()=>host.remove());
+        for(const {n,mark} of saved)step(()=>{if(mark===null)n.removeAttribute(MARK);else n.setAttribute(MARK,mark);});
+        if(active===handle){
+          active=null;
+          if(!win[KEY]||win[KEY]===api){
+            step(()=>root.removeAttribute(OWNER));
+            if(!dead&&!win.closed)step(()=>win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd")));
+          }
+        }
+        win.__nocturneTrace?.("center.motion.release",()=>({owner,direction,count:cards.length,...stats,sourceIcons:iconStats(row),failed}),{sample:600});
       }};
     active=handle;
     win.__nocturneTrace?.("center.motion",()=>({owner,direction,count:cards.length,duration,mode:"magnetic-fold",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length,groups:stats.groups,handles:stats.handles,handleOffset:stats.handleOffset,icons:iconStats(row),bitmapIcons:stats.bitmapIcons,bitmapFailures:stats.bitmapFailures,animated:running.length}),{sample:duration+250});
@@ -286,6 +297,7 @@
   }
   // Bookmarks use the Lab's center squeeze, not individual vertical slides.
   function bookmarks({direction="in",duration=520,delay=0,paused=false}={}){
+    if(dead)return null;
     const n=document.getElementById("PlacesToolbarItems");
     if(!n||!n.getBoundingClientRect().width)return null;
     const frames=Array.from({length:21},(_,i)=>{const p=smooth(direction==="out"?1-i/20:i/20);return {offset:i/20,[B]:String(p)};});
@@ -300,15 +312,26 @@
     }catch{release();return null;}
   }
   function dispose(){
-    if(dead)return;dead=true;releasePending();stopSelection();selectionContainer?.removeEventListener("TabSelect",onSelect);win.removeEventListener("OnePlane:StartupState",bindSelection);
-    if(!root.hasAttribute("data-zr-closing"))active?.release();finishHandoff();
+    if(dead)return;dead=true;
+    let failed=0;
+    const step=fn=>{try{fn();}catch{failed++;}};
+    step(releasePending);step(stopSelection);
+    step(()=>selectionContainer?.removeEventListener("TabSelect",onSelect));selectionContainer=null;
+    step(()=>win.removeEventListener("OnePlane:StartupState",bindSelection));
+    // The existing close transaction retains its sealed frame until native
+    // close returns. A later release must not start a dead handoff.
+    const delegated=!!active&&root.hasAttribute("data-zr-closing");
+    if(!delegated)step(()=>active?.release());
+    step(finishHandoff);
     if(win[KEY]===api)delete win[KEY];
+    win.__nocturneTrace?.("center.dispose",{failed,delegated},{flush:true});
   }
   // Ordinary selection uses the same ownership boundary but never delays
   // native TabSelect. Animate the chrome deck, not remote page DOM.
   let selection=null,selectionContainer=null,lastTab=null;
   function stopSelection(){if(selection){try{selection.cancel();}catch{}selection=null;}}
   function onSelect(){
+    if(dead)return;
     const browser=win.gBrowser,next=browser?.selectedTab,previous=lastTab;lastTab=next;
     stopSelection();
     if(!next||!previous||next===previous||active||root.hasAttribute(PENDING)||
@@ -323,13 +346,19 @@
     win.__nocturneTrace?.("selection.native",{direction:to>from?1:-1});
   }
   function bindSelection(){
+    if(dead)return;
     const tc=win.gBrowser?.tabContainer;if(!tc||tc===selectionContainer)return;
     selectionContainer?.removeEventListener("TabSelect",onSelect);
     selectionContainer=tc;lastTab=win.gBrowser.selectedTab;tc.addEventListener("TabSelect",onSelect);
   }
+  const api={start,bookmarks,iconStats,warmIcons,releasePending,dispose};win[KEY]=api;
+  const earlyBoot=win.__nocturneEarlyBoot,diagnostics=win.__nocturneDiagnostics;
+  // This is the last Sine slot if subsequent Layout fragments fail.
+  win.addUnloadListener(()=>{
+    try{dispose();}finally{try{earlyBoot?.cleanup?.();}finally{diagnostics?.requestDispose?.();}}
+  });
   win.addEventListener("OnePlane:StartupState",bindSelection);
   bindSelection();
-  const api={start,bookmarks,iconStats,warmIcons,releasePending,dispose};win[KEY]=api;
   // The layout entrypoint runs before its own projection. Gate only a
   // genuinely new window, never a Sine reload. Fail open on missing Assembly.
   try{
@@ -338,5 +367,4 @@
       root.setAttribute(PENDING,"true");pendingTimer=win.setTimeout(()=>{win.__nocturneTrace?.("assembly.gate.timeout",{age:win.performance.now()},{flush:true});releasePending();},8500);
     }
   }catch{}
-  win.addUnloadListener(dispose);
 })();

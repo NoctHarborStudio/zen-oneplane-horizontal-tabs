@@ -1,3 +1,9 @@
+## 0.3.0-preview.55 — Lifecycle and diagnostic ownership self-review
+
+- Tear down the previous Layout before replacement fragments initialize, retain the same window's diagnostic write coordinator, and join the actual follow-up write across concurrent flush callers.
+- Compose partial-initialization unload fallbacks; make stale Center Motion calls inert and isolate cleanup failures. Preserve the existing close-animation handoff without re-arming a disposed owner.
+- Correct Magnetic Bookmarks source provenance for the version-only update. Add five regression fixtures; native validation pending, no intended visual changes.
+
 ## 0.3.0-preview.54 — Layout terminal lifecycle ownership
 
 - Compose early boot, Center Motion, strip, preferences and diagnostics cleanup under the final Layout Sine callback. Capture terminal outcomes and stop diagnostic sampling synchronously; retain the trace for one microtask without delaying shutdown.

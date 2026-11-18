@@ -129,3 +129,22 @@ test("paint readiness detects the zero-opacity ancestor that hid decoded startup
  icon.css.visibility="visible";assert.equal(paint(node(icon,1,"block","visible",0),outer).geometry,false);
  assert.ok(source.includes('center.icon.paint'));
 });
+
+test("disposed Center Motion cannot mutate the replacement generation's markers",()=>{
+ const attrs=new Map(),root={hasAttribute:k=>attrs.has(k),getAttribute:k=>attrs.get(k)??null,setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k)};
+ const document={documentElement:root,getElementById(){throw Error("stale bookmarks");}};
+ let unload,boot=0,diag=0;const window={__nocturneLayoutStartup:{},__nocturneEarlyBoot:{cleanup(){boot++;}},__nocturneDiagnostics:{requestDispose(){diag++;}},CSS:{registerProperty(){}},addUnloadListener(fn){unload=fn;},addEventListener(){},removeEventListener(){}};
+ const run=new Function("window","document","Services",source);
+ run(window,document,{});const old=window.__nocturneCenterMotion;unload();assert.equal(boot,1);assert.equal(diag,1);
+ run(window,document,{});const next=window.__nocturneCenterMotion;
+ for(const k of ["data-zr-center-pending","data-zr-center-handoff","data-zr-center-motion"])attrs.set(k,"replacement");
+ assert.equal(old.start(null,{owner:"startup"}),null);assert.equal(old.bookmarks(),null);old.releasePending();old.dispose();
+ assert.equal(window.__nocturneCenterMotion,next);
+ assert.deepEqual([...attrs.values()],["replacement","replacement","replacement"]);next.dispose();
+});
+test("boot prelude cleans the old Layout before replacement fragments mount",()=>{
+ const prelude=readFileSync(new URL("../src/core/boot-prelude.js.part",import.meta.url),"utf8");
+ let cleaned=0;const window={__nocturneLayoutStartup:{},__oneplaneLayoutController:{cleanup(){cleaned++;}},addUnloadListener(){}};
+ new Function("window","document","Services",prelude)(window,{documentElement:{hasAttribute:()=>false}},{prefs:{}});
+ assert.equal(cleaned,1);
+});

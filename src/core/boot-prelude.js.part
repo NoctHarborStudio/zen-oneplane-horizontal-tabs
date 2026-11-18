@@ -4,14 +4,16 @@
 (()=>{
   const win=window,root=document.documentElement,prefs=Services.prefs;
   const KEY="__nocturneEarlyBoot",PHASE="data-zr-startup-phase",BOOT="data-nocturne-boot";
+  // Finish the previous Layout generation before any replacement resources.
+  if(typeof win.addUnloadListener==="function"&&!win.closed&&!root.hasAttribute("popup-window"))win.__oneplaneLayoutController?.cleanup?.();
   if(win[KEY]||win.__zenRefinedStartupAnimationSeen||win.__nocturneLayoutStartup||
      typeof win.addUnloadListener!=="function"||win.closed||root.hasAttribute("popup-window")||
      root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"||
      win.performance.now()>=3500||!prefs.getBoolPref("zen.refined.startup.animation",true)||
      !prefs.getBoolPref("zen.nocturne.boot.enabled",true)||win.matchMedia("(prefers-reduced-motion: reduce)").matches)return;
-  let node=null,timer=0,claimed=false,oldPhase=root.getAttribute(PHASE);
+  let node=null,timer=0,claimed=false,cleaned=false,oldPhase=root.getAttribute(PHASE);
   const cleanup=()=>{
-    if(claimed)return;
+    if(claimed||cleaned)return;cleaned=true;
     if(timer)win.clearTimeout(timer);timer=0;
     node?.remove();root.removeAttribute(BOOT);
     if(root.getAttribute(PHASE)==="waiting"){if(oldPhase===null)root.removeAttribute(PHASE);else root.setAttribute(PHASE,oldPhase);}
