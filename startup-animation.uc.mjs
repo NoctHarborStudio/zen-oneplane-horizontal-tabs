@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.81"};
+  const event="assembly.script",data={version:"0.3.0-preview.82"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -98,7 +98,8 @@ try{if(typeof window!=="undefined"){
       // minimum readable hold is measured from this logo clock, not
       // from the earlier blank prelude.
       const lead=Math.max(0,BOOT_LEAD-(early?bootAt-early.at:0));
-      bootEffects.push(bootMark.animate([{opacity:0,transform:"translateY(7px) scale(.96)"},{opacity:1,transform:"translateY(0) scale(1)"}],{delay:lead,duration:BOOT_ENTER,easing:"cubic-bezier(.2,.75,.25,1)",fill:"both"}));
+      const logo=bootMark.animate([{opacity:0,transform:"translateY(7px) scale(.96)"},{opacity:1,transform:"translateY(0) scale(1)"}],{delay:lead,duration:BOOT_ENTER,easing:"cubic-bezier(.2,.75,.25,1)",fill:"both"});
+      bootEffects.push(logo);logo.finished.catch(()=>{});
       decision("boot.show",{age:bootAt-started,adopted:!!early,backgroundAt:early?.at??bootAt,lead,minimum:BOOT_MIN,exit:BOOT_EXIT});
     }catch(error){removeBoot();decision("boot.error",{name:error?.name});}
   }
@@ -125,7 +126,8 @@ try{if(typeof window!=="undefined"){
     bootFrame=window.requestAnimationFrame(()=>{
       bootFrame=0;if(dead||boot!==overlay)return;
       try{
-        bootEffects.push(bootMark.animate([{opacity:1,transform:"scale(1)"},{opacity:0,transform:"scale(.94)"}],{duration:260,easing:"ease-in-out",fill:"both"}));
+        const logo=bootMark.animate([{opacity:1,transform:"scale(1)"},{opacity:0,transform:"scale(.94)"}],{duration:260,easing:"ease-in-out",fill:"both"});
+        bootEffects.push(logo);logo.finished.catch(()=>{});
         const fade=overlay.animate([{opacity:1},{opacity:0}],{delay:110,duration:BOOT_EXIT-110,easing:"ease-in-out",fill:"both"});
         bootEffects.push(fade);fade.finished.then(done,done);
         bootTimer=window.setTimeout(done,BOOT_EXIT+150);
@@ -238,19 +240,31 @@ try{if(typeof window!=="undefined"){
       r.right>0&&r.left<window.innerWidth&&r.bottom>0&&r.top<window.innerHeight?r:null;
   }
   function play(n,frames,delay,length,retain=false,easing=EASE,complete=null){
-    if(!n)return false;
+    if(!n||dead)return false;
+    let a=null;
     try{
-      const a=n.animate(frames,{delay,duration:length,easing,fill:"both"});
-      if(bootPreparing){a.pause();a.currentTime=0;}
-      animations.set(a,{n,frames,complete});
-      a.finished?.then(()=>{
-        if(dead||!animations.has(a)||retain)return;
+      a=n.animate(frames,{delay,duration:length,easing,fill:"both"});
+      const record={n,frames,complete};
+      // Observe cancellation and own the effect before pause/currentTime
+      // can fail. External cancellation settles this exact record only.
+      animations.set(a,record);
+      const done=(cancelled=false)=>{
+        if(dead||animations.get(a)!==record||!cancelled&&retain)return;
         animations.delete(a);
-        try{a.cancel();}catch{}
-        complete?.();
-      },()=>{});
+        if(!cancelled)try{a.cancel();}catch{}
+        try{complete?.();}catch(error){decision("assembly.effect.cleanup-error",{name:error?.name});}
+        if(cancelled)decision("assembly.effect.cancel",{retained:retain});
+      };
+      a.finished?.then(()=>done(),()=>done(true));
+      if(dead)throw Error("assembly-disposed");
+      if(bootPreparing){a.pause();a.currentTime=0;}
+      if(dead||animations.get(a)!==record)throw Error("assembly-disposed");
       return true;
-    }catch(error){console.warn("[Zen Refined] Startup animation effect:",error);return false;}
+    }catch(error){
+      if(a){animations.delete(a);try{a.cancel();}catch{}}
+      decision("assembly.effect.error",{name:error?.name,paused:bootPreparing});
+      return false;
+    }
   }
   function save(n,k,value){
     let record=owned.get(n);
@@ -260,14 +274,14 @@ try{if(typeof window!=="undefined"){
   }
   function restore(n){
     const record=owned.get(n);if(!record)return;
-    for(const [k,v] of record){
-      if(v.value)n.style.setProperty(k,v.value,v.priority);else n.style.removeProperty(k);
-    }
-    n.removeAttribute(EFFECT);n.removeAttribute(MOVE);n.removeAttribute(CLIP);
     owned.delete(n);
+    let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
+    for(const [k,v] of record)step(()=>{if(v.value)n.style.setProperty(k,v.value,v.priority);else n.style.removeProperty(k);});
+    for(const mark of [EFFECT,MOVE,CLIP])step(()=>n.removeAttribute(mark));
+    if(failed)decision("assembly.effect.cleanup",{failed});
   }
   function reveal(n,{x=0,y=0,clip=false,delay=0,length=350,easing=EASE,late=false}={}){
-    if(!n||seen.has(n)||!bounds(n,true))return false;
+    if(dead||!n||seen.has(n)||!bounds(n,true))return false;
     // Remove the pending gate before sampling native opacity. All changes
     // occur synchronously, before the next paint.
     n.setAttribute(MANAGED,"true");
@@ -288,6 +302,7 @@ try{if(typeof window!=="undefined"){
     const start=late?Math.max(0,playStart+delay*scale-now()):Math.max(0,delay*scale);
     const time=late?Math.max(240,Math.min(length*scale,finishAt-now()-start-60)):length*scale;
     if(late)extendFinish(now()+start+time+65);
+    let acquired=false;
     if(registered){
       // Important theme opacity/translate/clip-path declarations defeat
       // ordinary animation effects. Animate a registered number instead;
@@ -300,14 +315,16 @@ try{if(typeof window!=="undefined"){
       n.setAttribute(EFFECT,"true");
       if(x||y){save(n,"--zr-startup-dx",x+"px");save(n,"--zr-startup-dy",y+"px");n.setAttribute(MOVE,"true");}
       if(clip)n.setAttribute(CLIP,"true");
-      if(!play(n,[{[PROGRESS]:String(initial)},{[PROGRESS]:"1"}],start,time,false,easing,()=>restore(n)))restore(n);
+      acquired=play(n,[{[PROGRESS]:String(initial)},{[PROGRESS]:"1"}],start,time,false,easing,()=>restore(n));
+      if(!acquired)restore(n);
     }else{
       const from={opacity:opacity*initial},to={opacity};
       if(x||y){from.translate=x*(1-initial)+"px "+y*(1-initial)+"px";to.translate="0px 0px";}
       if(clip){from.clipPath="inset(0 49% 0 49% round 8px)";to.clipPath="inset(-8px round 8px)";}
-      play(n,[from,to],start,time,false,easing);
+      acquired=play(n,[from,to],start,time,false,easing);
     }
-    return true;
+    // Keep a failed direct target ungated and at its resting style.
+    return acquired;
   }
   function extendFinish(until){
     // Late chrome may get a short reveal but cannot keep the startup hold
@@ -366,6 +383,32 @@ try{if(typeof window!=="undefined"){
       reveal(n,{x:0,y:-16,delay:430+dx/max*115,length:430,easing:FADE,late});
     }
   }
+  function acquireStartupBookmarks(engine,items,timeline){
+    if(dead||!centerHandle||!items||!engine||window.__nocturneCenterMotion!==engine)return null;
+    const prepared=[];
+    let handle=null;
+    try{
+      for(const n of items.children){
+        if(seen.has(n))continue;
+        prepared.push({n,mark:n.getAttribute(MANAGED)});
+        seen.add(n);n.setAttribute(MANAGED,"true");
+      }
+      handle=engine.bookmarks?.({owner:"startup",direction:"in",duration:Math.round(420*scale),delay:Math.round(timeline.bookmarks*scale),paused:bootPreparing})||null;
+      if(dead||window.__nocturneCenterMotion!==engine){handle?.release();handle=null;}
+      return handle;
+    }catch(error){
+      try{handle?.release();}catch{}
+      handle=null;decision("assembly.bookmarks.error",{name:error?.name});return null;
+    }finally{
+      if(!handle&&!dead){
+        for(const {n,mark} of prepared){
+          seen.delete(n);
+          if(mark===null)n.removeAttribute(MANAGED);else n.setAttribute(MANAGED,mark);
+        }
+        decision("assembly.bookmarks.fallback",{count:prepared.length});
+      }
+    }
+  }
   function scheduleLate(){
     if(dead||!playing||settling||bootPreparing||lateFrame)return;
     lateFrame=window.requestAnimationFrame(()=>{
@@ -389,6 +432,7 @@ try{if(typeof window!=="undefined"){
       try{window.__zenMagneticBookmarksShared?.syncAddressState?.();}catch{}
       if(one)try{window.__oneplaneLayoutController?.prepareWorkspaceGeometry?.();}catch{}
       window.__nocturneTrace?.("assembly.preflight",{elapsed:now()-preflightAt},{sample:1000});
+      const engine=window.__nocturneCenterMotion;
       const row=get("oneplane-tabs"),url=get("urlbar-container");
       const bookmarks=get("PersonalToolbar"),items=get("PlacesToolbarItems");
       const floating=floatingBar();
@@ -409,16 +453,19 @@ try{if(typeof window!=="undefined"){
       // The native floating field may be a top-layer popover; never clip
       // its parent during its independent entrance.
       if(ur&&!floating)openFromCenter(url,45,410);
+      if(dead)return;
       if(one&&rr){
-        const engine=window.__nocturneCenterMotion;
         const cards=[...row.querySelectorAll(".oneplane-tab,.oneplane-split-group")];
         const gated=root.hasAttribute("data-zr-center-pending");
         const cold=window.__nocturneLayoutStartup?.initial===true;
         const painted=!gated&&!cold&&cards.some(n=>baseline.has(n));
         // Remove per-card startup gates together, including split members.
         for(const n of cards){n.setAttribute(MANAGED,"true");seen.add(n);}
-        if(!painted)centerHandle=engine?.start(row,{owner:"startup",direction:"in",duration:Math.round(timeline.cardsLength*scale),delay:Math.round(timeline.cards*scale),paused:bootPreparing});
-        else engine?.releasePending();
+        if(!painted){
+          const handle=engine?.start(row,{owner:"startup",direction:"in",duration:Math.round(timeline.cardsLength*scale),delay:Math.round(timeline.cards*scale),paused:bootPreparing});
+          if(dead||window.__nocturneCenterMotion!==engine){handle?.release();finish();return;}
+          centerHandle=handle;
+        }else engine?.releasePending();
         decision("assembly.center.result",{painted,gated,cold,engine:!!engine,count:centerHandle?.count||0});
         const plus=row.querySelector(".oneplane-new-tab");if(bounds(plus,true))slide(plus,-26,0,400,350);
         if(ir)reveal(island,{delay:150,length:190});
@@ -433,13 +480,15 @@ try{if(typeof window!=="undefined"){
         }
       }
       controls(row,url,center);
-      if(centerHandle&&items){
-        for(const n of items.children){n.setAttribute(MANAGED,"true");seen.add(n);}
-        bookmarkHandle=window.__nocturneCenterMotion?.bookmarks({owner:"startup",direction:"in",duration:Math.round(420*scale),delay:Math.round(timeline.bookmarks*scale),paused:bootPreparing});
-      }
+      if(dead)return;
+      bookmarkHandle=acquireStartupBookmarks(engine,items,timeline);
+      if(dead)return;
+      if(one&&window.__nocturneCenterMotion!==engine){finish();return;}
       if(!bookmarkHandle)revealBookmarks(center);
       if(floating)openFromCenter(floating,590,440);
+      if(dead)return;
       window.__zenSharedHomeV1?.playStartup?.(timeline);
+      if(dead)return;
       root.setAttribute(PHASE,"playing");
       // Places and Zen's floating input can initialize after chrome-ready.
       // Keep only these late nodes gated until they receive their effect.

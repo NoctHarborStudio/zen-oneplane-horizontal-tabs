@@ -1,3 +1,9 @@
+## 0.3.0-preview.82 — Startup direct effect ownership
+
+- Own each direct WAAPI effect before pause/currentTime; cancel late or failed acquisition, restore exact recorded styles and settle external cancellation.
+- Capture one Center Motion engine for Assembly; release rejected handles, restore bookmark fallback eligibility and avoid mixed-generation acquisition.
+- Observe boot logo cancellation; six focused startup regression tests. Existing timing, eligibility and choreography unchanged. Native verification pending.
+
 ## 0.3.0-preview.81 — Motion preflight and bookmark geometry audit
 
 - Settle close phase and Magnetic Bookmarks before the first target/visibility measurement; native close bypass on failed preflight or replaced engine.

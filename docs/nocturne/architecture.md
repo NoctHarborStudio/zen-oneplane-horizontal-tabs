@@ -174,3 +174,7 @@ Preview.79 independent review extends the existing Workspace command contract: s
 ### A3.2-R preflight contract
 
 Closing sets its existing phase and synchronizes Magnetic Bookmarks before collecting target rectangles; acquisition failure uses the existing native-only bypass. Workspace phase already suspends before geometry lock. Startup rechecks suspension before resting contour preflight; the existing Magnetic Bookmarks controller coalesces preference changes until its last suspension phase clears. No new owner. Older shared Refined registry first-owner compatibility remains a native/mixed-install gate. Startup structural readiness, common timeline and topology reconciliation remain in A3.3–A3.6.
+
+### A3.3a Assembly effect ownership
+
+Direct WAAPI acquisition registers the exact animation and completion before pause. Failed acquisition cancels its effect, and external cancellation restores that record only. Assembly captures one Center Motion generation at launch; fold acquisition temporarily admits nodes into the existing managed set, and failure restores fallback eligibility. This is an incremental MB1/2 change; Boot adoption, readiness ownership and Home structural lease remain in A3.3b. Existing approved timing and native operations unchanged.

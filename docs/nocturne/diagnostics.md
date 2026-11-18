@@ -194,3 +194,7 @@ Preview.80 emits bounded disassembly.bypass with static reasons tab-engine-unava
 ### Preview.81 preflight outcome
 
 Existing `disassembly.bypass` now also records `bookmark-preflight-failed` and `engine-replaced` before first measurement. Existing cleanup and native-before/after diagnostics track rollback and invocation; no new logger, per-frame recording, or private payload. Preference changes use the existing observer/RAF and apply only after motion suspension ends.
+
+### Preview.82 Assembly direct-effect outcomes
+
+`assembly.effect.error` reports the error class and paused preparation state; `assembly.effect.cancel` reports external cancellation of an exact record; `assembly.effect.cleanup-error` / `assembly.effect.cleanup` report restoration failure, and `assembly.bookmarks.error/fallback` report shared acquisition failure and number of fallback candidates. Uses existing bounded startup decision path, no URLs, titles, extra writer or per-frame telemetry. Native evidence pending.

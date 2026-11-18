@@ -305,3 +305,7 @@ Preview.80 independent close acquisition review: 28/28 prior Workspace core fixt
 ### Preview.81 preflight review verification
 
 Three new permanent regressions; 26/26 focused Closing and shared-bookmarks test bodies pass in isolated V8 with actual source and mock DOM. Both new close regressions fail on preview.80 and pass on candidate. Generated Layout/Library bundles version-synchronized from previous verified output with exact changed source checks; full candidate focused regression suite and canonical Node CI tracked separately. No real Gecko or Windows run; native acceptance deferred. Mixed Refined-first owner and startup late readiness remain explicit gates.
+
+### Preview.82 Startup direct effects
+
+Six new regression tests; 21/21 focused startup-transparency fixtures PASS in isolated JS harness. Tests cover actual extracted direct play, restore and shared bookmark acquisition paths, not Gecko paint or end-to-end native startup. Existing source-shape checks for timelines, early cover, native readiness and user durations remain passing in the same harness. Canonical Node CI pending; native acceptance deferred.

@@ -160,3 +160,61 @@ test("Boot teardown continues after timer failure and preserves replacement mark
  ${code}removeBoot();return log;`);
  assert.deepEqual(run(),["frame","effect","node",1]);
 });
+
+function directEffectFixture({paused=true,pauseFails=false,cancelDuringAnimate=false}={}){
+ const code=source.slice(source.indexOf("  function play(n,"),source.indexOf("  function save("));
+ return new Function("paused","pauseFails","cancelDuringAnimate",`
+  let dead=false,bootPreparing=paused,animations=new Map(),events=[],callbacks=[],EASE="ease";
+  const a={cancelled:0,finished:{then(ok,fail){callbacks.push({ok,fail});}},pause(){if(pauseFails)throw Error("pause");},cancel(){this.cancelled++;}};
+  const n={animate(){if(cancelDuringAnimate)dead=true;return a;}};
+  function decision(e){events.push(e);}
+  ${code}
+  return {a,animations,callbacks,events,run(retain=false){return play(n,[{opacity:0},{opacity:1}],0,1,retain,EASE,()=>events.push("complete"));}};
+ `)(paused,pauseFails,cancelDuringAnimate);
+}
+test("startup direct effect owns WAAPI before pause failure and rolls back",()=>{
+ const h=directEffectFixture({pauseFails:true});assert.equal(h.run(),false);
+ assert.equal(h.a.cancelled,1);assert.equal(h.animations.size,0);assert.equal(h.callbacks.length,1);
+ h.callbacks[0].fail();assert.deepEqual(h.events,["assembly.effect.error"]);
+});
+test("external cancellation settles only the exact direct effect record",()=>{
+ const h=directEffectFixture({paused:false});assert.equal(h.run(true),true);
+ h.callbacks[0].ok();assert.equal(h.animations.size,1);
+ h.callbacks[0].fail();h.callbacks[0].fail();assert.equal(h.animations.size,0);
+ assert.deepEqual(h.events,["complete","assembly.effect.cancel"]);
+});
+test("disposal during direct animate cancels late returned effect",()=>{
+ const h=directEffectFixture({cancelDuringAnimate:true});assert.equal(h.run(),false);assert.equal(h.a.cancelled,1);assert.equal(h.animations.size,0);
+});
+function foldFixture({mode="null"}={}){
+ const code=source.slice(source.indexOf("  function acquireStartupBookmarks("),source.indexOf("  function scheduleLate("));
+ return new Function("mode",`
+ let dead=false,centerHandle={},seen=new Set(),bootPreparing=true,scale=1;const MANAGED="managed",events=[];
+ const attrs=new Map(),n={getAttribute:k=>attrs.get(k)??null,setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k)};
+ const items={children:[n]},timeline={bookmarks:470};
+ const h={release(){events.push("release");}},engine={bookmarks(){events.push("fold");if(mode==="throw")throw Error("fold");if(mode==="replace")window.__nocturneCenterMotion={};return mode==="null"?null:h;}};
+ const window={__nocturneCenterMotion:engine};function decision(e){events.push(e);}
+ ${code}
+ const handle=acquireStartupBookmarks(engine,items,timeline);
+ return {seen:seen.has(n),mark:n.getAttribute(MANAGED),handle:!!handle,events};
+ `)(mode);
+}
+test("failed shared bookmark acquisition restores fallback eligibility",()=>{
+ for(const mode of ["null","throw","replace"]){
+  const h=foldFixture({mode});assert.equal(h.handle,false);assert.equal(h.seen,false);assert.equal(h.mark,null);
+  assert.ok(h.events.includes("assembly.bookmarks.fallback"));if(mode==="replace")assert.ok(h.events.includes("release"));
+ }
+});
+test("successful bookmark acquisition keeps temporary gates owned by Assembly",()=>{
+ assert.deepEqual(foldFixture({mode:"ok"}),{seen:true,mark:"true",handle:true,events:["fold"]});
+});
+test("direct reveal rollback continues after individual style restoration failure",()=>{
+ const code=source.slice(source.indexOf("  function restore(n)"),source.indexOf("  function reveal(n,"));
+ const run=new Function(`
+ const events=[],EFFECT="effect",MOVE="move",CLIP="clip";
+ const n={style:{removeProperty(k){events.push(k);if(k==="bad")throw Error("style");}},removeAttribute:k=>events.push(k)};
+ const owned=new Map([[n,new Map([["bad",{value:""}],["good",{value:""}]])]]);
+ function decision(e,d){events.push(d.failed);}
+ ${code}restore(n);return {events,size:owned.size};`);
+ assert.deepEqual(run(),{events:["bad","good","effect","move","clip",1],size:0});
+});
