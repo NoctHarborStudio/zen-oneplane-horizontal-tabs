@@ -1,3 +1,9 @@
+## 0.3.0-preview.63 — Diagnostic writer self-review
+
+- Check all available window aliases and the process anchor before choosing a diagnostic queue; block new recorder writes on legacy or distinct active queue conflicts until restart.
+- Assign sequence and time after lazy detail returns; discard events whose callback disposed or disabled the recorder. Keep synchronous terminal handoff.
+- Four regression fixtures; unchanged visual behavior, preference IDs, file format and native shutdown policy. Native Gecko/Sine evidence pending.
+
 ## 0.3.0-preview.62 — Independent diagnostic persistence queue
 
 - Submit sanitized snapshots synchronously to a single bounded writer, including during an outstanding write and synchronous teardown.

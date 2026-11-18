@@ -41,7 +41,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.62",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.63",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -49,12 +49,30 @@
   // Native module identity survives even a zero-window interval. The only
   // expando is our own non-enumerable process queue; no native state changes.
   const STORE="__nocturneDiagnosticStore",PROCESS=Symbol.for("nocturne.diagnostics.writer.v1");
-  let anchor=null,store=win[STORE]||null,anchored=false;
-  try{anchor=ChromeUtils.importESModule("resource:///modules/BrowserWindowTracker.sys.mjs").BrowserWindowTracker;}catch{}
-  try{const windows=Services.wm.getEnumerator("navigator:browser");while(!store&&windows.hasMoreElements()){const w=windows.getNext();if(w!==win&&w[STORE]){store=w[STORE];break;}}}catch{}
-  // Mixed legacy windows are unsupported; never race their old file queue.
-  if(!store||store.contract===1){
-    try{if(anchor?.[PROCESS])store=anchor[PROCESS];}catch{}
+  let anchor=null,store=null,legacy=null,conflict=false,anchored=false;
+  function consider(candidate){
+    if(!candidate)return;
+    if(candidate.contract!==1||typeof candidate.submit!=="function"){legacy=legacy||candidate;return;}
+    if(!store)store=candidate;
+    else if(store!==candidate)conflict=true;
+  }
+  try{consider(win[STORE]);}catch{}
+  try{
+    anchor=ChromeUtils.importESModule("resource:///modules/BrowserWindowTracker.sys.mjs").BrowserWindowTracker;
+    consider(anchor?.[PROCESS]);
+  }catch{}
+  // Inspect all visible peers, even after finding a usable modern writer.
+  // Mixed generations or distinct active queues require a process restart.
+  try{
+    const windows=Services.wm.getEnumerator("navigator:browser");
+    while(windows.hasMoreElements()){
+      const w=windows.getNext();if(w===win)continue;
+      try{consider(w[STORE]);}catch{}
+    }
+  }catch{}
+  if(legacy)store=legacy;
+  else if(conflict)store=null;
+  else{
     if(!store)store=makeWriter();
     if(store&&!store.local&&anchor)try{
       if(!anchor[PROCESS])Object.defineProperty(anchor,PROCESS,{value:store,configurable:true});
@@ -62,7 +80,7 @@
     }catch{}
   }
   if(store)win[STORE]=store;
-  const writerMode=store?.contract===1?(store.local?"local":anchored?"process":"independent"):store?"legacy-blocked":"unavailable";
+  const writerMode=legacy?"legacy-blocked":conflict?"conflict-blocked":store?.contract===1?(store.local?"local":anchored?"process":"independent"):"unavailable";
   let previousMetrics={},sampleIndex=0;
   const startupEvents=[];
   const changedAttrs=new WeakMap();
@@ -181,11 +199,11 @@
   }
   const MAX_EVENTS=3200;
   function persist(){
-    if(privateWindow()||!enabled()||store?.contract!==1)return Promise.resolve(false);
+    if(privateWindow()||!enabled()||legacy||conflict||store?.contract!==1)return Promise.resolve(false);
     try{
       const job=store.submit(JSON.stringify({...exportData(),updated:Date.now()}));
       return Promise.resolve(job).then(ok=>{
-        if(!ok&&!ioError){ioError=true;try{win.console.warn("[Nocturne diag] Local file unavailable; use __nocturneDiagnostics.dump()");}catch{}}
+        if(!ok&&!ioError){ioError=true;try{win.console.warn("[Nocturne diag] Local snapshot not retained; use __nocturneDiagnostics.dump()");}catch{}}
         return ok;
       },()=>false);
     }catch{return Promise.resolve(false);}
@@ -209,7 +227,11 @@
       const t=now(),key=options.key||event,interval=options.throttle||0;
       if(interval&&last.has(key)&&t-last.get(key)<interval)return;
       last.set(key,t);
-      const item={n:++seq,t:round(t),event,data:safe(typeof detail==="function"?detail():detail)};
+      const data=safe(typeof detail==="function"?detail():detail);
+      // Lazy detail may synchronously trace, disable or dispose this recorder.
+      // Commit sequence/time only after it returns; a dead recorder is terminal.
+      if(dead||!enabled())return;
+      const item={n:++seq,t:round(now()),event,data};
       if(startupEvents.length<100&&(/^(assembly\.|layout\.|boot\.)/.test(event)||event.startsWith("center.")&&item.data?.owner==="startup"))startupEvents.push(item);
       entries.push(item);if(entries.length>MAX_EVENTS){entries.shift();dropped++;}
       dirty=true;

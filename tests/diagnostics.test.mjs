@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 const version=JSON.parse(readFileSync(new URL("../theme.json",import.meta.url),"utf8")).version;
 const source=readFileSync(new URL("../src/core/diagnostics.js.part",import.meta.url),"utf8");
-function fixture({isPrivate=false,on=true,prior=null,failWrite=false,writeHook=()=>{},removeFails=false,standalone=false,shared=null,anchor=null}={}){
+function fixture({isPrivate=false,on=true,prior=null,failWrite=false,writeHook=()=>{},removeFails=false,standalone=false,shared=null,anchor=null,peers=[]}={}){
  let time=0,serial=0,enabled=on,unload;const timers=new Map(),frames=new Map(),logs=[],writes=[],listeners=new Map();
  const attrs=new Map(),root={hasAttribute:k=>attrs.has(k),getAttribute:k=>attrs.get(k)??null};
  const doc={documentElement:root,getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[]};
@@ -16,7 +16,7 @@ function fixture({isPrivate=false,on=true,prior=null,failWrite=false,writeHook=(
  const components=standalone?{utils:{Sandbox:()=>({}),evalInSandbox:code=>new Function("IOUtils","PathUtils","TextEncoder","return "+code)(io,paths,TextEncoder)}}:undefined;
  const chrome=anchor?{importESModule:()=>({BrowserWindowTracker:anchor})}:undefined;
  if(shared?.store)win.__nocturneDiagnosticStore=shared.store;
- const reload=()=>{new Function("window","document","Services","IOUtils","PathUtils","Components","ChromeUtils","TextEncoder",source)(win,doc,{scriptSecurityManager:{getSystemPrincipal:()=>({})},prefs:{getBoolPref:()=>enabled},wm:{getEnumerator(){let sent=false;return {hasMoreElements:()=>!sent,getNext:()=>{sent=true;return win;}};}}},io,paths,components,chrome,TextEncoder);return win.__nocturneDiagnostics;};
+ const reload=()=>{new Function("window","document","Services","IOUtils","PathUtils","Components","ChromeUtils","TextEncoder",source)(win,doc,{scriptSecurityManager:{getSystemPrincipal:()=>({})},prefs:{getBoolPref:()=>enabled},wm:{getEnumerator(){let i=0;const windows=[win,...peers];return {hasMoreElements:()=>i<windows.length,getNext:()=>windows[i++]};}}},io,paths,components,chrome,TextEncoder);return win.__nocturneDiagnostics;};
  reload();
  return {reload,win,timers,frames,logs,writes,io,listeners,attrs,unload:()=>unload(),setTime:t=>time=t,disable:()=>enabled=false,api:win.__nocturneDiagnostics};
 }
@@ -160,4 +160,42 @@ test("legacy store is not replaced by a competing file writer",async()=>{
  const store={tail:Promise.resolve(),sessions:null},f=fixture({standalone:true,shared:{store}});
  assert.equal(f.win.__nocturneDiagnosticStore,store);assert.equal(await f.api.flush(),false);assert.equal(f.writes.length,0);
  assert.equal(JSON.parse(f.api.dump()).events.find(e=>e.event==="diagnostics.ready").data.writer,"legacy-blocked");
+});
+
+test("legacy peer blocks a modern alias regardless of enumeration order",async()=>{
+ const anchor={},a=fixture({standalone:true,anchor});await a.api.flush();
+ const legacy={tail:Promise.resolve(),sessions:null},peer={__nocturneDiagnosticStore:legacy};
+ for(const shared of [null,{store:a.win.__nocturneDiagnosticStore}]){
+  const f=fixture({standalone:true,anchor,shared,peers:[a.win,peer]});
+  assert.equal(f.win.__nocturneDiagnosticStore,legacy);
+  assert.equal(JSON.parse(f.api.dump()).events.find(e=>e.event==="diagnostics.ready").data.writer,"legacy-blocked");
+  assert.equal(await f.api.flush(),false);assert.equal(f.writes.length,0);f.api.dispose();
+ }
+ a.api.dispose();await a.api.flush();
+});
+test("distinct modern peer queues block rather than silently switching owners",async()=>{
+ const a=fixture({standalone:true}),b=fixture({standalone:true});
+ await Promise.all([a.api.flush(),b.api.flush()]);
+ const anchor={},f=fixture({standalone:true,anchor,peers:[a.win,b.win]});
+ assert.equal(JSON.parse(f.api.dump()).events.find(e=>e.event==="diagnostics.ready").data.writer,"conflict-blocked");
+ assert.equal(await f.api.flush(),false);assert.equal(f.writes.length,0);
+ assert.equal(anchor[Symbol.for("nocturne.diagnostics.writer.v1")],undefined);
+ f.api.dispose();a.api.dispose();b.api.dispose();await Promise.all([a.api.flush(),b.api.flush()]);
+});
+test("reentrant lazy detail commits events in monotonic sequence and time",()=>{
+ const f=fixture();f.setTime(10);
+ f.win.__nocturneTrace("outer",()=>{f.setTime(20);f.win.__nocturneTrace("inner");f.setTime(30);return {};});
+ const events=JSON.parse(f.api.dump()).events;
+ assert.deepEqual(events.slice(-2).map(e=>e.event),["inner","outer"]);
+ assert.ok(events.every((e,i)=>i===0||e.n>events[i-1].n&&e.t>=events[i-1].t));
+ f.api.dispose();
+});
+test("lazy detail cannot append after synchronous dispose or disable",async()=>{
+ const a=fixture();a.win.__nocturneTrace("late",()=>{a.api.dispose();return {};});
+ const events=JSON.parse(a.api.dump()).events;
+ assert.equal(events.at(-1).event,"diagnostics.dispose");assert.ok(!events.some(e=>e.event==="late"));
+ await a.api.flush();
+ const b=fixture();b.win.__nocturneTrace("disabled.during.detail",()=>{b.disable();return {};});
+ assert.ok(!JSON.parse(b.api.dump()).events.some(e=>e.event==="disabled.during.detail"));
+ b.api.dispose();
 });
