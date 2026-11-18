@@ -260,7 +260,7 @@ Baseline preview.47; audit HEAD 39459794addcc0e0236edd12cd8a636d3b714265. All NC
 | NC4-024 | Page Progress request ordering | A7 |
 | NC4-025 | Diagnostics schema/budget | A0/A8 |
 | NC4-026 | Runtime version metadata drift | A0 |
-| NC4-027 | Documentation-only CI failure | A0 |
+| NC4-027 | Documentation-only CI failure (A0.3 implementation verified in initial CI) | A0 |
 | NC4-028 | Native validation gap | A0/A8 |
 | NC4-029 | Close lifecycle overlap | A1/A3/A8 |
 | NC4-030 | Implicit build dependencies | A1 |
@@ -697,4 +697,13 @@ src/README.md:17 describes Hub/native Zen Spaces as future work and links docs/a
 
 **Required:** A0: mark active owner documents and historical snapshots, reconcile roadmap and release scope without rewriting evidence; vertical implementation still requires explicit decision.
 
-Primary static audit checkpoints complete: 100 evidence IDs, 16 extracted-source experiments (not permanent tests/native PASS). Every ID has one primary workstream in the [consolidated implementation ownership table](nocturne/pipeline-0.4.0.md#consolidated-implementation-ownership-100-evidence-ids-not-100-fixes); cross-links are dependencies, not duplicate implementations. P0 risks are prioritized before broad visual refactors. A0.3 release CI next; native baseline and actual acceptance pending. No runtime/version change.
+Primary static audit checkpoints complete: 100 evidence IDs, 16 extracted-source experiments (not permanent tests/native PASS). Every ID has one primary workstream in the [consolidated implementation ownership table](nocturne/pipeline-0.4.0.md#consolidated-implementation-ownership-100-evidence-ids-not-100-fixes); cross-links are dependencies, not duplicate implementations. P0 risks are prioritized before broad visual refactors. A0.3 release CI implemented; native baseline and actual acceptance pending. No runtime/version change.
+
+
+### A0.3 — release infrastructure implementation and verification
+
+Implementation: [084a90b](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/commit/084a90b586b6140558215fc38b128d19530d8d04), with follow-up publication-snapshot checks in this checkpoint. [CI 44212872005](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/44212872005) passed release-policy fixtures, metadata, npm verify (generated build, runtime syntax, existing Node regressions), immutable/archive and public endpoint verification. Runtime and manifest remain preview.47; no artificial version bump. Follow-up adds intermediate package.json/file checks and two tests; the resulting commit must pass CI as well. NC4-027/095/096 implementation addressed; closure is infrastructure evidence only, not native Sine installation PASS. Other A0 findings remain open.
+
+Contract: an installed-package change is a change to theme.json or manifest-declared CSS/preferences/scripts (including additions/removals). Each package-changing first-parent commit must atomically advance version and updatedAt, with package.json synchronized. Docs/infra-only commits retain metadata and still run the full suite. On push check all package-changing commits from the event's before SHA; on dispatch check current publication boundary against earlier manifest high-water in the retained first-parent lineage. No force-push; history removed by external rewriting cannot be reconstructed by this check. Preview version grammar remains unchanged; rollback publishes restored payload under new metadata. A stable-release grammar is not introduced in A0.3. Immutable Raw manifest and codeload archive must match checkout; moving preview checks may report superseded only after immutable verification and public ref movement, never hide a mismatch at unchanged HEAD. No claim that post-push CI prevents a bad commit being temporarily served; protected/pre-publication workflow would be separate policy.
+
+Regression suite: python -m unittest discover -s tests -p 'test_release.py' (15 cases after follow-up); temporary real Git histories plus mocked endpoint responses. Both existing workflows run it; npm verify remains the existing Node-only command. Native baseline A0.4 and remaining build/import/diagnostic contracts pending. Local full checkout unavailable (GitHub DNS), so CI is the actual executable evidence.

@@ -96,6 +96,22 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Version must exceed"):
             self.check(self.first)
 
+    def test_intermediate_manifest_package_mismatch_rejected(self):
+        self.metadata(2)
+        self.write("package.json", '{"version":"0.3.0-preview.1"}')
+        self.commit("mismatched publication")
+        self.publish(3)
+        with self.assertRaisesRegex(ValueError, "versions differ"):
+            self.check(self.first)
+
+    def test_intermediate_missing_installed_file_rejected(self):
+        self.metadata(2)
+        (self.root / "layout.uc.mjs").unlink()
+        self.commit("missing installed file")
+        self.publish(3)
+        with self.assertRaisesRegex(ValueError, "Missing installed file"):
+            self.check(self.first)
+
     def test_version_high_water_even_after_older_metadata(self):
         self.publish(5)
         self.metadata(2, "2026-11-06T00:00:00Z")

@@ -77,6 +77,12 @@ def package_changed(old, new):
 def check_publication(commit, local):
     require(local["id"] == ID and local["homepage"] == HOMEPAGE, "Sine identity or homepage changed")
     current_version, current_date = version(local["version"]), date(local["updatedAt"])
+    package = git("show", f"{commit}:package.json", optional=True)
+    require(package is not None and json.loads(package)["version"] == local["version"],
+            f"Manifest and package versions differ at {commit[:8]}")
+    for name in package_paths(local):
+        require(git("cat-file", "-t", f"{commit}:{name}", optional=True) == b"blob\n",
+                f"Missing installed file {name} at {commit[:8]}")
     prior = parent(commit)
     if prior is None:
         return
@@ -128,7 +134,7 @@ def verify_archive(data, paths):
 
 def remote_head():
     # Query the public ref, not a potentially stale local tracking branch.
-    result = git("ls-remote", "origin", f"refs/heads/{BRANCH}").decode().split()
+    result = git("ls-remote", f"https://github.com/{REPO}.git", f"refs/heads/{BRANCH}").decode().split()
     require(len(result) == 2 and result[1] == f"refs/heads/{BRANCH}", "Cannot resolve public preview HEAD")
     return result[0]
 

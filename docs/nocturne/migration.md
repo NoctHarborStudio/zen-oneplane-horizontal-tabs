@@ -134,6 +134,10 @@ Prototype on feature/vertical-layout after shared core is stable. First mount na
 Package Fusion imports all seven non-bookmark Refined scripts unchanged with tests and a provenance ledger. Horizontal source remains unchanged. Full native parity and lifecycle refactor remain pending. No repo rename or legacy archive now.
 
 
+### Preview publication contract (A0.3)
+
+Docs and infrastructure-only commits do not change runtime version. Every installed-package-changing commit must include the synchronized new version/updatedAt and package.json version, including rollback to older payload. Preview CI checks the full pushed first-parent range and historical high-water; dispatch validates the current publication boundary. All commits run release regressions and npm verify, with immutable artifact and current public endpoint checks. Concurrent supersession is not a package mismatch. See [A0.3 implementation and evidence](pipeline-0.4.0.md#a03--release-infrastructure-implementation-and-verification). This policy does not introduce stable version numbering or branch protection.
+
 ## 0.4.0 cross-feature stabilization
 
 See the [0.4.0 architecture audit and pipeline](pipeline-0.4.0.md) for the active cross-feature risk register, ownership inventory, sequencing and exit gates. This is planning, not a runtime release; preserve existing MB/Library/Downloads and native validation contracts. Recheck current preview HEAD before implementation.
