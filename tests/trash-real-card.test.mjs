@@ -9,7 +9,9 @@ test("Trash uses original card with empty spacer and shared pointer lifecycle, n
  assert.match(s,/d\.row\.before\(d\.placeholder\)/);assert.match(s,/panel\.append\(d\.row\)/);
  assert.match(s,/d\.placeholder\.replaceWith\(d\.row\)/);
  assert.doesNotMatch(s,/cloneNode|setDragImage|dataTransfer/);
- assert.match(s,/await restoreTrashTab\(d\.tab,id\)/);
+ assert.match(s,/await restoreTrashTab\(d\.tab,id,approval\)/);
+ assert.match(s,/const approval=d\.approval/);
+ assert.match(s,/id&&current\(\)\?await restoreTrashTab/);
  assert.match(s,/dragLifecycle\.finish\(d\.token\)/);
  assert.match(e,/\["workspace","trash"\]\.includes\(current\.kind\)/);
  assert.match(e,/\["workspace","trash"\]\.includes\(dragLifecycle\.current\(\)\?\.kind\)/);

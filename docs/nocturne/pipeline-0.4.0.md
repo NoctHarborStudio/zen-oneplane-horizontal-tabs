@@ -555,3 +555,7 @@ References: [Migration](migration.md), [Architecture](architecture.md), [Known i
 ### Preview.67 CI fixture correction
 
 The initial [CI 44244545404](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/44244545404) verified the generated outputs, all 12 runtime scripts and 15 Python release tests, but failed 2/440 Node tests: the extracted Trash age-menu and real-card fixtures lacked the newly required manager/ownership dependencies. The runtime was not changed. Updated both existing fixtures to supply the real contract and assert captured roles/manager and confirmed restore outcome; added a regression for unconfirmed drag settlement with motion enabled. The isolated fixture rerun passed all four tests. Full canonical CI must pass before the package is treated as verified. No version increase for this test-only correction.
+
+### Preview.68 CI fixture correction
+
+Initial [CI 44245610763](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/44245610763) passed release policy, build reproducibility and all runtime syntax checks, but 444/445 Node tests passed: the static real-card fixture still required the pre-review two-argument restoreTrashTab signature. Updated it to require the captured approval and current-role guard. Extracted static fixture PASS; no runtime change or version increase. Canonical CI rerun required.
