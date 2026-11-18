@@ -41,7 +41,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.75",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.76",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -1090,6 +1090,19 @@ function runWorkspaceCommand(win,native,kind,current,execute,{data=false,anchor=
   }catch(error){finish(false,error);}
   return pending;
 }
+// Read the native Essentials section without calling getEssentialsSection:
+// that API may CREATE a container and change its visibility.
+function workspaceEssentialSection(win,native,tab){
+  try{
+    if(tab.getAttribute("zen-essential")!=="true"||!tab.pinned)return null;
+    const context=Number(tab.getAttribute("usercontextid")||0);
+    if(!Number.isSafeInteger(context)||context<0)return null;
+    const expected=String(native.containerSpecificEssentials?context:0);
+    const sections=Array.from(win.document.querySelectorAll("#zen-essentials .zen-workspace-tabs-section"));
+    const containing=sections.filter(section=>section.isConnected&&section.contains(tab));
+    return containing.length===1&&containing[0].getAttribute("container")===expected?containing[0]:null;
+  }catch{return null;}
+}
 // Only read authoritative native structure. _shouldShowTab is NOT a safe
 // predicate for unassigned tabs: Zen can move them as a side effect.
 function inspectWorkspaceSwitch(win,native,id){
@@ -1099,7 +1112,8 @@ function inspectWorkspaceSwitch(win,native,id){
     if(!native.getWorkspaceFromId(id)||native.activeWorkspace!==id)return "active-mismatch";
     const element=native.workspaceElement(id),spaces=native.getWorkspaces();
     if(!element?.isConnected||!element.active||!element.tabsContainer?.isConnected||
-      !element.pinnedTabsContainer?.isConnected||!element.scrollbox||!Array.isArray(spaces))return "container-unready";
+      !element.pinnedTabsContainer?.isConnected||!element.scrollbox||!Array.isArray(spaces)||
+      spaces.some(s=>!s?.uuid)||new Set(spaces.map(s=>s.uuid)).size!==spaces.length)return "container-unready";
     if(spaces.some(s=>{const node=native.workspaceElement(s.uuid);return !node?.isConnected||!!node.active!==(s.uuid===id);}))return "container-mismatch";
     const browser=win.gBrowser,tc=browser?.tabContainer,tab=browser?.selectedTab;
     if(!tc||tc.arrowScrollbox!==element.scrollbox||tc.pinnedTabsContainer!==element.pinnedTabsContainer||
@@ -1107,13 +1121,26 @@ function inspectWorkspaceSwitch(win,native,id){
     if(!tab?.isConnected||tab.closing)return "selection-unverified";
     const empty=tab===native._emptyTab&&tab.hasAttribute("zen-empty-tab");
     if(!empty&&!Array.from(browser.visibleTabs||[]).includes(tab))return "selection-unverified";
-    const essential=tab.getAttribute("zen-essential")==="true",glance=tab.hasAttribute("zen-glance-tab");
-    if(essential&&!glance&&native.containerSpecificEssentials){
-      const context=tab.getAttribute("usercontextid")||"0",space=native.getWorkspaceFromId(id);
-      if(space.containerTabId?String(space.containerTabId)!==context:context!=="0"&&spaces.some(s=>s.containerTabId===Number(context)))return "selection-mismatch";
+    // Glance is physically nested under its parent and Zen's visibility
+    // predicate intentionally always returns true for a Glance child.
+    // Prove the parent's workspace rather than accepting any visible child.
+    let owner=tab;
+    if(tab.hasAttribute("zen-glance-tab")){
+      owner=tab.parentNode?.closest?.(".tabbrowser-tab");
+      const glanceId=tab.getAttribute("glance-id");
+      if(!owner||owner===tab||!owner.isConnected||owner.closing||owner.hasAttribute("zen-glance-tab")||
+        !glanceId||owner.getAttribute("glance-id")!==glanceId||!owner.contains(tab)||
+        (typeof browser.isTab==="function"&&!browser.isTab(owner)))return "selection-mismatch";
     }
-    if(!essential&&!glance&&(tab.getAttribute("zen-workspace-id")!==id||
-      !(element.tabsContainer.contains(tab)||element.pinnedTabsContainer.contains(tab))))return "selection-mismatch";
+    const essential=owner.getAttribute("zen-essential")==="true";
+    if(essential){
+      if(!workspaceEssentialSection(win,native,owner))return "selection-mismatch";
+      if(native.containerSpecificEssentials){
+        const context=Number(owner.getAttribute("usercontextid")||0),space=native.getWorkspaceFromId(id),target=Number(space.containerTabId||0);
+        if(target?target!==context:context!==0&&spaces.some(s=>Number(s.containerTabId||0)===context))return "selection-mismatch";
+      }
+    }else if(owner.hasAttribute("zen-essential")||owner.getAttribute("zen-workspace-id")!==id||
+      !(element.tabsContainer.contains(owner)||element.pinnedTabsContainer.contains(owner)))return "selection-mismatch";
     return "confirmed";
   }catch{return "inspection-error";}
 }
@@ -4086,12 +4113,13 @@ function installTabStrip() {
     const matches=()=>displayPlacementMatches(target,nativeWindowRect(win),stateMax())||
       (target.mode==="maximize"&&stateMax()&&childOnTargetScreen(win,target));
     const validTarget=valid;
+    const confirmed=()=>valid()&&matches()&&valid();
     try{
       const full=target.full,work=target.work;
       const onTarget=rect=>rect&&displayContains(full,rect.x+Math.floor(rect.width/2),rect.y+Math.floor(rect.height/2));
       if(!validTarget()){logPlacement("target-disconnected",target);return false;}
       logPlacement("before",target,nativeWindowRect(win),win.windowState);
-      if(matches()&&alive()){logPlacement("already-matched",target,nativeWindowRect(win));return alive();}
+      if(confirmed()){logPlacement("already-matched",target,nativeWindowRect(win));return confirmed();}
       // Maximize a correctly positioned window directly; do not make this
       // depend on a subsequent resize, tab loading or a workspace switch.
       if(target.mode==="maximize"&&(onTarget(nativeWindowRect(win))||childOnTargetScreen(win,target))&&win.windowState!==win.STATE_MINIMIZED){
@@ -4100,7 +4128,7 @@ function installTabStrip() {
           if(!stateMax()){logPlacement("maximize-request",target,nativeWindowRect(win),win.windowState);requireCurrent();win.maximize();}
           await wait();
           if(!alive())return false;
-          if(matches()){logPlacement("maximize",target,nativeWindowRect(win),win.windowState);return true;}
+          if(confirmed()){logPlacement("maximize",target,nativeWindowRect(win),win.windowState);return confirmed();}
         }
       }
       requireCurrent();
@@ -4143,7 +4171,7 @@ function installTabStrip() {
       if(target.mode==="maximize"){
         requireCurrent();win.maximize();await wait();
         logPlacement("maximize",target,nativeWindowRect(win),win.windowState);
-        return alive()&&matches();
+        return confirmed();
       }
       for(let attempt=0;attempt<2;attempt++){
         if(!alive()||!validTarget())return false;
@@ -4155,7 +4183,7 @@ function installTabStrip() {
         if(!alive())return false;
         const actual=nativeWindowRect(win);
         logPlacement("size-"+(attempt+1),target,actual);
-        if(matches())return true;
+        if(confirmed())return true;
       }
       // An OS minimum size may make the exact quarter impossible. Keep
       // the real window/tab intact, but do not call this a successful snap.
@@ -4172,12 +4200,15 @@ function installTabStrip() {
   // Both creation paths schedule this immediately. Native window placement
   // must finish even when workspace initialization or activation fails.
   // Cancel on genuine interaction, close, teardown or startup timeout.
-  function placeAfterStartup(win,target){
+  function placeAfterStartup(win,target,stillWanted=()=>true){
     if(!displaySnapEnabled()||!win||!target||dead||mountScope.closed)return Promise.resolve(false);
     return new Promise(resolve=>{
       let done=false,applying=false,armed=false,observed=false,release=()=>{},timer=0,poll=0;
       const scope=createDisposableScope({onError:()=>{try{logPlacement("startup-cleanup-error",target);}catch{}}});
-      const alive=()=>!done&&!dead&&!mountScope.closed&&!window.closed&&!win.closed&&displaySnapEnabled();
+      const alive=()=>{
+        try{return !done&&!dead&&!mountScope.closed&&!window.closed&&!win.closed&&displaySnapEnabled()&&stillWanted();}
+        catch{return false;}
+      };
       const finish=(ok,reason)=>{
         if(done)return;done=true;
         const result=scope.dispose();
@@ -4192,7 +4223,8 @@ function installTabStrip() {
         if(!alive()){r();return;}
         let id=0,off=()=>{};
         off=scope.defer("delay",()=>{try{if(id)window.clearTimeout(id);}finally{r();}});
-        try{id=window.setTimeout(off,ms);}catch{off();}
+        if(!alive()){off();return;}
+        try{id=window.setTimeout(off,ms);if(scope.closed)window.clearTimeout(id);}catch{off();}
       });
       const input=event=>{if(event.isTrusted)cancel("child-input");};
       const closedObserver=subject=>{if(subject===win||subject===window)cancel("domwindowclosed");};
@@ -4234,11 +4266,13 @@ function installTabStrip() {
         release=mountScope.defer("display-placement",()=>cancel("layout-dispose"));
         if(!alive()){cancel("stale");return;}
         scope.defer("timers",()=>{try{if(timer)window.clearTimeout(timer);}finally{if(poll)window.clearTimeout(poll);}});
-        observe(observer,"browser-delayed-startup-finished");
-        observe(closedObserver,"domwindowclosed");
         scope.listen(win,"pointerdown",input,true);scope.listen(win,"keydown",input,true);
         if(!alive()){cancel("stale");return;}
+        observe(observer,"browser-delayed-startup-finished");
+        observe(closedObserver,"domwindowclosed");
+        if(!alive()){cancel("stale");return;}
         timer=window.setTimeout(()=>cancel("timeout"),15000);
+        if(!alive()){window.clearTimeout(timer);cancel("stale");return;}
         armed=true;if(observed)void apply();else check();
       }catch{cancel("acquisition-error");}
     });
@@ -4336,7 +4370,7 @@ function installTabStrip() {
       const state=workspaceCommandState(window);
       return !state.blocked&&projectionBusy?workspacePendingState(projectionStartedAt,workspaceCommandNow(window),false,true):state;
     };
-    const hubViewCurrent=session=>!destroyed&&open&&hubSession===session;
+    const hubViewCurrent=session=>!destroyed&&!window.closed&&open&&hubSession===session;
     function settleHubView(session){
       if(!destroyed&&!window.closed&&open){
         if(hubViewCurrent(session)||(!editId&&!drag&&!trashDrag))render();
@@ -5372,7 +5406,7 @@ function installTabStrip() {
         projectionScope.defer("projection-close-observer",()=>Services.obs.removeObserver(closed,"domwindowclosed"));
         Services.obs.addObserver(closed,"domwindowclosed");
         if(!current()){try{Services.obs.removeObserver(closed,"domwindowclosed");}catch{}throw Error("Projection owner changed");}
-        const placementTask=display?placeAfterStartup(child,display):Promise.resolve(true);
+        const placementTask=display?placeAfterStartup(child,display,()=>!interacted):Promise.resolve(true);
         const startupTabs=new Set();
         const record=tab=>{if(tab)startupTabs.add(tab);};
         const captureStartup=()=>record(projectionStartupCandidate(child));
@@ -5452,9 +5486,16 @@ function installTabStrip() {
             containers.add(container);
             for(const tab of container.querySelectorAll(".tabbrowser-tab")){
               if(!tab?.isConnected||tab.closing||!browser.isTab(tab)||physical.has(tab))return false;
+              // Zen intentionally skips syncing Glance position; a nested
+              // child may not have its parent's pin/essential role.
+              // Until a native transfer contract exists, Return must not
+              // close a window with an active or retained Glance topology.
+              if(tab.hasAttribute("zen-glance-tab")||tab.hasAttribute("glance-id"))return false;
               const essential=tab.getAttribute("zen-essential")==="true";
-              if(kind==="essential"? !essential : essential||tab.getAttribute("zen-workspace-id")!==id||!!tab.pinned!==(kind==="pinned"))return false;
-              physical.set(tab,kind);
+              if(kind==="essential"){
+                if(!essential||workspaceEssentialSection(win,manager,tab)!==container)return false;
+              }else if(tab.hasAttribute("zen-essential")||tab.getAttribute("zen-workspace-id")!==id)return false;
+              physical.set(tab,{kind,container});
             }
             return true;
           };
@@ -5470,9 +5511,19 @@ function installTabStrip() {
             if(tab===manager._emptyTab&&tab.hasAttribute("zen-empty-tab"))continue;
             if(!tab?.isConnected||tab.closing||!browser.isTab(tab)||tab.hasAttribute("zen-empty-tab")||
               !tab.id||byId.has(tab.id)||sync.getItemFromWindow(win,tab.id)!==tab)return null;
-            const group=tab.group;
-            if(group&&(!group.id||!group.isConnected||!group.contains(tab)))return null;
-            byId.set(tab.id,{tab,kind:physical.get(tab),group:group?.id??null,split:!!group?.hasAttribute("split-view-group")});
+            const location=physical.get(tab),groups=[],seen=new Set();
+            let root=tab;
+            // Zen folders can be nested. Native places the OUTERMOST group
+            // according to its pin role, not the individual child's role.
+            for(let group=tab.group;group;group=group.group){
+              if(seen.has(group)||!group.id||!group.isConnected||!group.contains(root)||
+                sync.getItemFromWindow(win,group.id)!==group)return null;
+              seen.add(group);groups.push([group.id,!!group.pinned,group.hasAttribute("split-view-group")]);root=group;
+            }
+            if(location.kind!=="essential"&&!!root.pinned!==(location.kind==="pinned"))return null;
+            if(root!==tab&&typeof location.container.contains==="function"&&!location.container.contains(root))return null;
+            if(tab.documentGlobal!==win)return null;
+            byId.set(tab.id,{tab,kind:location.kind,groups});
           }
           // A native tab absent from the workspace cache is not certified.
           if(!browser.tabs||Array.from(browser.tabs).some(tab=>
@@ -5483,12 +5534,20 @@ function installTabStrip() {
         if(!own||!other||child.gBrowser!==b||source.gBrowser!==peerBrowser)return false;
         for(const [id,entry] of own){
           const peer=other.get(id),tab=entry.tab;
-          if(!peer||peer.tab===tab||entry.kind!==peer.kind||entry.group!==peer.group||entry.split!==peer.split||
+          if(!peer||peer.tab===tab||entry.kind!==peer.kind||JSON.stringify(entry.groups)!==JSON.stringify(peer.groups)||
             tab.getAttribute("zen-workspace-id")!==peer.tab.getAttribute("zen-workspace-id")||
             !!tab.pinned!==!!peer.tab.pinned||tab.getAttribute("usercontextid")!==peer.tab.getAttribute("usercontextid")||
             tab.getAttribute("zen-essential")!==peer.tab.getAttribute("zen-essential")||
             tab.getAttribute("glance-id")!==peer.tab.getAttribute("glance-id")||
             tab.hasAttribute("zen-glance-tab")!==peer.tab.hasAttribute("zen-glance-tab"))return false;
+          // Match ZenWindowSync.#canSwapBrowsers for every visible child
+          // docshell, not just DOM IDs. A process mismatch is a native
+          // early return, so closing cannot be advertised as safe here.
+          if(tab._zenContentsVisible){
+            const from=tab.linkedBrowser,to=peer.tab.linkedBrowser;
+            if(!from||!to||from===to||peer.tab._zenContentsVisible||
+              typeof from.isRemoteBrowser!=="boolean"||from.isRemoteBrowser!==to.isRemoteBrowser)return false;
+          }
         }
         return true;
       }catch{return false;}
@@ -5535,9 +5594,15 @@ function installTabStrip() {
       };
       const onDestroyed=()=>check();
       try{
-        obs.addObserver(onClosed,"domwindowclosed");
-        obs.addObserver(onDestroyed,"xul-window-destroyed");
-        if(!active)throw workspaceCommandError("close-unavailable");
+        const observe=(fn,topic)=>{
+          obs.addObserver(fn,topic);
+          if(!active){
+            try{obs.removeObserver(fn,topic);}catch{}
+            throw workspaceCommandError("close-unavailable");
+          }
+        };
+        observe(onClosed,"domwindowclosed");
+        observe(onDestroyed,"xul-window-destroyed");
         verify();
         if(!active)throw workspaceCommandError("close-unavailable");
       }catch(error){cleanup();throw error;}
@@ -5570,7 +5635,7 @@ function installTabStrip() {
           if(!projectionReturnTarget(child,window,BrowserWindowTracker,trashSessionStore()))
             throw workspaceCommandError("return-target","Return requires the original window to be the only eligible surviving window.");
           if(!inspectProjectionReturn(child,window,childNative,native,sync))
-            throw workspaceCommandError("return-unverified","Some tabs are not synced yet. Return cancelled to protect them.");
+            throw workspaceCommandError("return-unverified","Tab ownership or browser transfer could not be verified. Close any Glance view and try again.");
           requireWorkspaceDataCommand(window,native,lease);
         };
         projectionLog(child,"return-request");
@@ -8910,16 +8975,24 @@ async function initializeFreeAtStartup(allowed=()=>true){
 function waitFreeAtStartup(){
   return new Promise(resolve=>{
     let active=true,timer=0;
+    const scope=createDisposableScope();
     const finish=reason=>{
       if(!active)return;active=false;
+      scope.dispose();
       if(timer)try{window.clearTimeout(timer);}catch{}
       if(cancelFreeStartupWait===finish)cancelFreeStartupWait=null;
       try{window.__nocturneTrace?.("workspace.startup.wait",{reason},{flush:true});}catch{}
       resolve();
     };
     cancelFreeStartupWait=finish;
-    try{timer=window.setTimeout(()=>finish("deadline"),5000);}
-    catch{finish("timer-error");return;}
+    const onInput=event=>{if(event.isTrusted)finish("user-takeover");};
+    try{
+      scope.listen(window,"pointerdown",onInput,true);
+      scope.listen(window,"keydown",onInput,true);
+      if(!active)return;
+      timer=window.setTimeout(()=>finish("deadline"),5000);
+      if(!active){window.clearTimeout(timer);return;}
+    }catch{finish("setup-error");return;}
     Promise.resolve(initializeFreeAtStartup(()=>active)).then(()=>finish("settled"),()=>finish("error"));
   });
 }

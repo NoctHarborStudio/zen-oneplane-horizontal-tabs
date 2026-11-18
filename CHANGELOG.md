@@ -1,3 +1,10 @@
+## 0.3.0-preview.76 — Native Workspace topology and transfer preflight
+
+- Verify Glance parent and physical Essentials section for Workspace selection; verify nested group ancestry and active native browser compatibility for Return.
+- Reject unsupported Glance Return topology, preserve native window and existing close confirmation.
+- Cancel optional Free startup on trusted input without releasing the actual native lease. Fence early Projection takeover and disconnected monitor success; clean partial Return observer acquisition.
+- Nine new regression tests; native validation pending.
+
 ## 0.3.0-preview.75 — Integrated Workspace command safety audit
 
 - Bound optional Free startup wait without releasing the native command; fence late automatic actions.

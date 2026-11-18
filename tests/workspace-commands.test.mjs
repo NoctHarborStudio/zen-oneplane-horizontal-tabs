@@ -198,3 +198,25 @@ test("changed pending identity blocks stale lease and preserves a foreign pendin
  workspaceCommandGate(f.win).pending=foreign;release();
  await assert.rejects(p,code("stale"));assert.equal(workspaceCommandGate(f.win).pending,foreign);
 });
+
+test("selected Glance must have its exact parent in the destination workspace",()=>{
+ const f=fixture(),glance=f.browser.selectedTab;
+ glance.attrs.set("zen-glance-tab","true");glance.attrs.set("glance-id","g");
+ const attrs=new Map([["zen-workspace-id","b"],["glance-id","g"]]);
+ const parent={isConnected:true,getAttribute:k=>attrs.get(k)??null,hasAttribute:k=>attrs.has(k),contains:t=>t===glance};
+ glance.parentNode={closest:()=>parent};
+ f.element("a").tabsContainer.contains=t=>t===parent;
+ assert.equal(inspectWorkspaceSwitch(f.win,f.native,"a"),"selection-mismatch");
+ attrs.set("zen-workspace-id","a");assert.equal(inspectWorkspaceSwitch(f.win,f.native,"a"),"confirmed");
+ attrs.set("glance-id","other");assert.equal(inspectWorkspaceSwitch(f.win,f.native,"a"),"selection-mismatch");
+});
+test("container-specific Essential must be in its actual native section",()=>{
+ const f=fixture(),tab=f.browser.selectedTab;
+ tab.attrs.set("zen-essential","true");tab.attrs.set("usercontextid","2");tab.pinned=true;
+ f.native.containerSpecificEssentials=true;f.entries[0].containerTabId=2;
+ const section={isConnected:true,contains:t=>t===tab,getAttribute:()=>"1"};
+ f.win.document={querySelectorAll:()=>[section]};
+ assert.equal(inspectWorkspaceSwitch(f.win,f.native,"a"),"selection-mismatch");
+ section.getAttribute=()=>"2";assert.equal(inspectWorkspaceSwitch(f.win,f.native,"a"),"confirmed");
+ f.entries[0].containerTabId=3;assert.equal(inspectWorkspaceSwitch(f.win,f.native,"a"),"selection-mismatch");
+});

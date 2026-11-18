@@ -1,4 +1,4 @@
-import {runWorkspaceCommand,requireWorkspaceDataCommand,workspaceCommandGate,workspaceCommandError,workspaceCommandState} from "../src/core/workspace-commands.mjs";
+import {runWorkspaceCommand,requireWorkspaceDataCommand,workspaceCommandGate,workspaceCommandError,workspaceCommandState,workspaceEssentialSection} from "../src/core/workspace-commands.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
@@ -26,17 +26,19 @@ test("reentrant placeholder selection invalidates the projection lease",()=>{
   });
   assert.throws(()=>run(child,"work",new Set(),native,browser,{}),/stale/);
 });
-const inspect=runInNewContext(cut("    function inspectProjectionReturn(","    // Zen chooses the first eligible")+"\ninspectProjectionReturn");
+const inspect=runInNewContext(cut("    function inspectProjectionReturn(","    // Zen chooses the first eligible")+"\ninspectProjectionReturn",{workspaceEssentialSection});
 function harness(){
-  const sync={getItemFromWindow(w,id){return w.gZenWorkspaces.allStoredTabs.find(t=>t.id===id);}};
+  const sync={getItemFromWindow(w,id){return w.gZenWorkspaces.allStoredTabs.find(t=>t.id===id)||w.groups?.get(id);}};
   const make=()=>{const t=tab("tab",{"zen-workspace-id":"work"}),tabs=[t];
     const physical=[t],normal={isConnected:true,querySelectorAll:()=>physical},pinned={isConnected:true,querySelectorAll:()=>[]};
     const element={isConnected:true,tabsContainer:normal,pinnedTabsContainer:pinned};
     const native={workspaceEnabled:true,currentWindowIsSyncing:true,isChangingWorkspace:false,allStoredTabs:tabs,
       getWorkspaces:()=>[{uuid:"work"}],workspaceElement:()=>element};
     const browser={tabs,isTab:()=>true,tabContainer:{_invalidateCachedTabs(){}}};
-    return {gZenWindowSync:sync,gZenWorkspaces:native,gZenStartup:{isReady:true},gBrowser:browser,
-      document:{querySelectorAll:()=>[]},physical};
+    const win={gZenWindowSync:sync,gZenWorkspaces:native,gZenStartup:{isReady:true},gBrowser:browser,
+      document:{querySelectorAll:()=>[]},physical,groups:new Map()};
+    t.documentGlobal=win;t.linkedBrowser={isRemoteBrowser:true};
+    return win;
   };
   const child=make(),source=make(),native=child.gZenWorkspaces,sourceNative=source.gZenWorkspaces;
   return {child,source,native,sourceNative,run:()=>inspect(child,source,native,sourceNative,sync)};
@@ -115,7 +117,7 @@ test("surviving source owns Return lease through actual child close, then releas
  const accept=runInNewContext(cut("    function inspectProjectionReturn(","    async function returnProjection(")+"\nacceptProjectionReturn",{
    window,manager:()=>f.sourceNative,canProject:()=>true,destroyed:false,PROJECTION:"marker",
    ChromeUtils:{importESModule:()=>({BrowserWindowTracker:tracker})},Services:{obs},trashSessionStore:()=>store,
-   workspaceCommandGate,workspaceCommandError,requireWorkspaceDataCommand,
+   workspaceCommandGate,workspaceCommandError,requireWorkspaceDataCommand,workspaceEssentialSection,
    runWorkspaceCommand:(w,n,k,current,execute,opts)=>runWorkspaceCommand(w,n,k,current,execute,{...opts,anchor}),
    projectionLog(){}
  });
@@ -142,4 +144,38 @@ test("Return rejects mismatched native group membership despite matching tab IDs
  const h=harness(),t=h.sourceNative.allStoredTabs[0];
  t.group={id:"group",isConnected:true,contains:x=>x===t,hasAttribute:()=>false};
  assert.equal(h.run(),false);
+});
+
+test("Return rejects visible child docshell if native swap cannot run",()=>{
+ const h=harness(),tab=h.native.allStoredTabs[0],peer=h.sourceNative.allStoredTabs[0];
+ tab._zenContentsVisible=true;assert.equal(h.run(),true);
+ peer.linkedBrowser.isRemoteBrowser=false;assert.equal(h.run(),false);
+ peer.linkedBrowser.isRemoteBrowser=true;peer._zenContentsVisible=true;assert.equal(h.run(),false);
+ peer._zenContentsVisible=false;peer.linkedBrowser=null;assert.equal(h.run(),false);
+});
+test("Return verifies nested group ancestry, not only the immediate group",()=>{
+ const h=harness();
+ const assign=(win,outerId)=>{
+   const t=win.gZenWorkspaces.allStoredTabs[0],outer={id:outerId,isConnected:true,pinned:false,contains:()=>true,hasAttribute:()=>false};
+   const inner={id:"inner",isConnected:true,pinned:false,contains:x=>x===t,hasAttribute:()=>false,group:outer};
+   t.group=inner;win.groups.set(inner.id,inner);win.groups.set(outer.id,outer);
+ };
+ assign(h.child,"outer");assign(h.source,"outer");assert.equal(h.run(),true);
+ assign(h.source,"different");assert.equal(h.run(),false);
+});
+test("Return fails closed on Glance topology rather than assuming a transferable tab",()=>{
+ const h=harness(),t=h.native.allStoredTabs[0],p=h.sourceNative.allStoredTabs[0];
+ t.hasAttribute=p.hasAttribute=k=>k==="glance-id";
+ assert.equal(h.run(),false);
+});
+test("Return requires native tab document identity even for an otherwise matching peer",()=>{
+ const h=harness();h.sourceNative.allStoredTabs[0].documentGlobal=h.child;
+ assert.equal(h.run(),false);
+});
+
+test("Return observer acquisition interrupted by source close leaves no late observer",async()=>{
+ const h=closeHarness(),add=h.obs.addObserver;let calls=0;
+ h.obs.addObserver=function(fn,topic){add.call(this,fn,topic);h.notify(h.window,"domwindowclosed");};
+ await assert.rejects(h.invoke(h.child,()=>{},()=>calls++,h.obs),/close-unavailable/);
+ assert.equal(calls,0);assert.equal(h.observers.size,0);
 });

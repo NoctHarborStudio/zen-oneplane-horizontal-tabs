@@ -6,14 +6,14 @@ import {runInNewContext} from "node:vm";
 const source=readFileSync(new URL("../src/interactions/display-engine.js.part",import.meta.url),"utf8");
 const start=source.indexOf("  function placeAfterStartup("),end=source.indexOf("  function onSourceDrag(",start);
 assert.ok(start>=0&&end>start);
-function harness(ready=false,{failObserver=false,nativeApply=null}={}){
+function harness(ready=false,{failObserver=false,nativeApply=null,onObserve=null}={}){
   const window=new EventTarget(),child=new EventTarget(),observers=new Map();
   const calls=[],mountScope=createDisposableScope();
   window.setTimeout=setTimeout;window.clearTimeout=clearTimeout;
   child.gBrowserInit={delayedStartupFinished:ready};child.closed=false;
   const place=runInNewContext(source.slice(start,end)+"\nplaceAfterStartup",{
     window,dead:false,displaySnapEnabled:()=>true,mountScope,createDisposableScope,
-    Services:{obs:{addObserver(fn,topic){observers.set(fn,topic);if(failObserver&&topic==="domwindowclosed")throw Error("partial acquisition");},removeObserver(fn){observers.delete(fn)}}},
+    Services:{obs:{addObserver(fn,topic){observers.set(fn,topic);onObserve?.(topic);if(failObserver&&topic==="domwindowclosed")throw Error("partial acquisition");},removeObserver(fn){observers.delete(fn)}}},
     placeNativeWindow:async(w,t,alive,wait)=>{calls.push([w,t]);return nativeApply?nativeApply(alive,wait):true},
     console:{warn(){}},logPlacement(){}
   });
@@ -90,4 +90,13 @@ test("layout disposal during native retry resolves delay and fences further muta
   const p=h.place(h.child,{mode:"left"});assert.equal(h.calls.length,1);
   h.mountScope.dispose();assert.equal(await p,false);
   await Promise.resolve();assert.equal(continued,true);assert.equal(mutated,false);assert.equal(h.observers.size,0);
+});
+
+test("projection takeover before or during placement acquisition prevents geometry mutations",async()=>{
+ const early=harness(true);assert.equal(await early.place(early.child,{mode:"right"},()=>false),false);
+ assert.equal(early.calls.length,0);assert.equal(early.observers.size,0);
+ let wanted=true;
+ const during=harness(true,{onObserve:()=>{wanted=false;}});
+ assert.equal(await during.place(during.child,{mode:"right"},()=>wanted),false);
+ assert.equal(during.calls.length,0);assert.equal(during.observers.size,0);assert.equal(during.mountScope.size,0);
 });

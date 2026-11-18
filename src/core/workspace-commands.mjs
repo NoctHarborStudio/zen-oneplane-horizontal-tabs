@@ -182,6 +182,19 @@ export function runWorkspaceCommand(win,native,kind,current,execute,{data=false,
   }catch(error){finish(false,error);}
   return pending;
 }
+// Read the native Essentials section without calling getEssentialsSection:
+// that API may CREATE a container and change its visibility.
+export function workspaceEssentialSection(win,native,tab){
+  try{
+    if(tab.getAttribute("zen-essential")!=="true"||!tab.pinned)return null;
+    const context=Number(tab.getAttribute("usercontextid")||0);
+    if(!Number.isSafeInteger(context)||context<0)return null;
+    const expected=String(native.containerSpecificEssentials?context:0);
+    const sections=Array.from(win.document.querySelectorAll("#zen-essentials .zen-workspace-tabs-section"));
+    const containing=sections.filter(section=>section.isConnected&&section.contains(tab));
+    return containing.length===1&&containing[0].getAttribute("container")===expected?containing[0]:null;
+  }catch{return null;}
+}
 // Only read authoritative native structure. _shouldShowTab is NOT a safe
 // predicate for unassigned tabs: Zen can move them as a side effect.
 export function inspectWorkspaceSwitch(win,native,id){
@@ -191,7 +204,8 @@ export function inspectWorkspaceSwitch(win,native,id){
     if(!native.getWorkspaceFromId(id)||native.activeWorkspace!==id)return "active-mismatch";
     const element=native.workspaceElement(id),spaces=native.getWorkspaces();
     if(!element?.isConnected||!element.active||!element.tabsContainer?.isConnected||
-      !element.pinnedTabsContainer?.isConnected||!element.scrollbox||!Array.isArray(spaces))return "container-unready";
+      !element.pinnedTabsContainer?.isConnected||!element.scrollbox||!Array.isArray(spaces)||
+      spaces.some(s=>!s?.uuid)||new Set(spaces.map(s=>s.uuid)).size!==spaces.length)return "container-unready";
     if(spaces.some(s=>{const node=native.workspaceElement(s.uuid);return !node?.isConnected||!!node.active!==(s.uuid===id);}))return "container-mismatch";
     const browser=win.gBrowser,tc=browser?.tabContainer,tab=browser?.selectedTab;
     if(!tc||tc.arrowScrollbox!==element.scrollbox||tc.pinnedTabsContainer!==element.pinnedTabsContainer||
@@ -199,13 +213,26 @@ export function inspectWorkspaceSwitch(win,native,id){
     if(!tab?.isConnected||tab.closing)return "selection-unverified";
     const empty=tab===native._emptyTab&&tab.hasAttribute("zen-empty-tab");
     if(!empty&&!Array.from(browser.visibleTabs||[]).includes(tab))return "selection-unverified";
-    const essential=tab.getAttribute("zen-essential")==="true",glance=tab.hasAttribute("zen-glance-tab");
-    if(essential&&!glance&&native.containerSpecificEssentials){
-      const context=tab.getAttribute("usercontextid")||"0",space=native.getWorkspaceFromId(id);
-      if(space.containerTabId?String(space.containerTabId)!==context:context!=="0"&&spaces.some(s=>s.containerTabId===Number(context)))return "selection-mismatch";
+    // Glance is physically nested under its parent and Zen's visibility
+    // predicate intentionally always returns true for a Glance child.
+    // Prove the parent's workspace rather than accepting any visible child.
+    let owner=tab;
+    if(tab.hasAttribute("zen-glance-tab")){
+      owner=tab.parentNode?.closest?.(".tabbrowser-tab");
+      const glanceId=tab.getAttribute("glance-id");
+      if(!owner||owner===tab||!owner.isConnected||owner.closing||owner.hasAttribute("zen-glance-tab")||
+        !glanceId||owner.getAttribute("glance-id")!==glanceId||!owner.contains(tab)||
+        (typeof browser.isTab==="function"&&!browser.isTab(owner)))return "selection-mismatch";
     }
-    if(!essential&&!glance&&(tab.getAttribute("zen-workspace-id")!==id||
-      !(element.tabsContainer.contains(tab)||element.pinnedTabsContainer.contains(tab))))return "selection-mismatch";
+    const essential=owner.getAttribute("zen-essential")==="true";
+    if(essential){
+      if(!workspaceEssentialSection(win,native,owner))return "selection-mismatch";
+      if(native.containerSpecificEssentials){
+        const context=Number(owner.getAttribute("usercontextid")||0),space=native.getWorkspaceFromId(id),target=Number(space.containerTabId||0);
+        if(target?target!==context:context!==0&&spaces.some(s=>Number(s.containerTabId||0)===context))return "selection-mismatch";
+      }
+    }else if(owner.hasAttribute("zen-essential")||owner.getAttribute("zen-workspace-id")!==id||
+      !(element.tabsContainer.contains(owner)||element.pinnedTabsContainer.contains(owner)))return "selection-mismatch";
     return "confirmed";
   }catch{return "inspection-error";}
 }

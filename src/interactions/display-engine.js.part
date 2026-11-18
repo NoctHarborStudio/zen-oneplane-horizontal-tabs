@@ -175,12 +175,13 @@
     const matches=()=>displayPlacementMatches(target,nativeWindowRect(win),stateMax())||
       (target.mode==="maximize"&&stateMax()&&childOnTargetScreen(win,target));
     const validTarget=valid;
+    const confirmed=()=>valid()&&matches()&&valid();
     try{
       const full=target.full,work=target.work;
       const onTarget=rect=>rect&&displayContains(full,rect.x+Math.floor(rect.width/2),rect.y+Math.floor(rect.height/2));
       if(!validTarget()){logPlacement("target-disconnected",target);return false;}
       logPlacement("before",target,nativeWindowRect(win),win.windowState);
-      if(matches()&&alive()){logPlacement("already-matched",target,nativeWindowRect(win));return alive();}
+      if(confirmed()){logPlacement("already-matched",target,nativeWindowRect(win));return confirmed();}
       // Maximize a correctly positioned window directly; do not make this
       // depend on a subsequent resize, tab loading or a workspace switch.
       if(target.mode==="maximize"&&(onTarget(nativeWindowRect(win))||childOnTargetScreen(win,target))&&win.windowState!==win.STATE_MINIMIZED){
@@ -189,7 +190,7 @@
           if(!stateMax()){logPlacement("maximize-request",target,nativeWindowRect(win),win.windowState);requireCurrent();win.maximize();}
           await wait();
           if(!alive())return false;
-          if(matches()){logPlacement("maximize",target,nativeWindowRect(win),win.windowState);return true;}
+          if(confirmed()){logPlacement("maximize",target,nativeWindowRect(win),win.windowState);return confirmed();}
         }
       }
       requireCurrent();
@@ -232,7 +233,7 @@
       if(target.mode==="maximize"){
         requireCurrent();win.maximize();await wait();
         logPlacement("maximize",target,nativeWindowRect(win),win.windowState);
-        return alive()&&matches();
+        return confirmed();
       }
       for(let attempt=0;attempt<2;attempt++){
         if(!alive()||!validTarget())return false;
@@ -244,7 +245,7 @@
         if(!alive())return false;
         const actual=nativeWindowRect(win);
         logPlacement("size-"+(attempt+1),target,actual);
-        if(matches())return true;
+        if(confirmed())return true;
       }
       // An OS minimum size may make the exact quarter impossible. Keep
       // the real window/tab intact, but do not call this a successful snap.
@@ -261,12 +262,15 @@
   // Both creation paths schedule this immediately. Native window placement
   // must finish even when workspace initialization or activation fails.
   // Cancel on genuine interaction, close, teardown or startup timeout.
-  function placeAfterStartup(win,target){
+  function placeAfterStartup(win,target,stillWanted=()=>true){
     if(!displaySnapEnabled()||!win||!target||dead||mountScope.closed)return Promise.resolve(false);
     return new Promise(resolve=>{
       let done=false,applying=false,armed=false,observed=false,release=()=>{},timer=0,poll=0;
       const scope=createDisposableScope({onError:()=>{try{logPlacement("startup-cleanup-error",target);}catch{}}});
-      const alive=()=>!done&&!dead&&!mountScope.closed&&!window.closed&&!win.closed&&displaySnapEnabled();
+      const alive=()=>{
+        try{return !done&&!dead&&!mountScope.closed&&!window.closed&&!win.closed&&displaySnapEnabled()&&stillWanted();}
+        catch{return false;}
+      };
       const finish=(ok,reason)=>{
         if(done)return;done=true;
         const result=scope.dispose();
@@ -281,7 +285,8 @@
         if(!alive()){r();return;}
         let id=0,off=()=>{};
         off=scope.defer("delay",()=>{try{if(id)window.clearTimeout(id);}finally{r();}});
-        try{id=window.setTimeout(off,ms);}catch{off();}
+        if(!alive()){off();return;}
+        try{id=window.setTimeout(off,ms);if(scope.closed)window.clearTimeout(id);}catch{off();}
       });
       const input=event=>{if(event.isTrusted)cancel("child-input");};
       const closedObserver=subject=>{if(subject===win||subject===window)cancel("domwindowclosed");};
@@ -323,11 +328,13 @@
         release=mountScope.defer("display-placement",()=>cancel("layout-dispose"));
         if(!alive()){cancel("stale");return;}
         scope.defer("timers",()=>{try{if(timer)window.clearTimeout(timer);}finally{if(poll)window.clearTimeout(poll);}});
-        observe(observer,"browser-delayed-startup-finished");
-        observe(closedObserver,"domwindowclosed");
         scope.listen(win,"pointerdown",input,true);scope.listen(win,"keydown",input,true);
         if(!alive()){cancel("stale");return;}
+        observe(observer,"browser-delayed-startup-finished");
+        observe(closedObserver,"domwindowclosed");
+        if(!alive()){cancel("stale");return;}
         timer=window.setTimeout(()=>cancel("timeout"),15000);
+        if(!alive()){window.clearTimeout(timer);cancel("stale");return;}
         armed=true;if(observed)void apply();else check();
       }catch{cancel("acquisition-error");}
     });

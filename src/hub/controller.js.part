@@ -83,7 +83,7 @@
       const state=workspaceCommandState(window);
       return !state.blocked&&projectionBusy?workspacePendingState(projectionStartedAt,workspaceCommandNow(window),false,true):state;
     };
-    const hubViewCurrent=session=>!destroyed&&open&&hubSession===session;
+    const hubViewCurrent=session=>!destroyed&&!window.closed&&open&&hubSession===session;
     function settleHubView(session){
       if(!destroyed&&!window.closed&&open){
         if(hubViewCurrent(session)||(!editId&&!drag&&!trashDrag))render();
@@ -1119,7 +1119,7 @@
         projectionScope.defer("projection-close-observer",()=>Services.obs.removeObserver(closed,"domwindowclosed"));
         Services.obs.addObserver(closed,"domwindowclosed");
         if(!current()){try{Services.obs.removeObserver(closed,"domwindowclosed");}catch{}throw Error("Projection owner changed");}
-        const placementTask=display?placeAfterStartup(child,display):Promise.resolve(true);
+        const placementTask=display?placeAfterStartup(child,display,()=>!interacted):Promise.resolve(true);
         const startupTabs=new Set();
         const record=tab=>{if(tab)startupTabs.add(tab);};
         const captureStartup=()=>record(projectionStartupCandidate(child));
@@ -1199,9 +1199,16 @@
             containers.add(container);
             for(const tab of container.querySelectorAll(".tabbrowser-tab")){
               if(!tab?.isConnected||tab.closing||!browser.isTab(tab)||physical.has(tab))return false;
+              // Zen intentionally skips syncing Glance position; a nested
+              // child may not have its parent's pin/essential role.
+              // Until a native transfer contract exists, Return must not
+              // close a window with an active or retained Glance topology.
+              if(tab.hasAttribute("zen-glance-tab")||tab.hasAttribute("glance-id"))return false;
               const essential=tab.getAttribute("zen-essential")==="true";
-              if(kind==="essential"? !essential : essential||tab.getAttribute("zen-workspace-id")!==id||!!tab.pinned!==(kind==="pinned"))return false;
-              physical.set(tab,kind);
+              if(kind==="essential"){
+                if(!essential||workspaceEssentialSection(win,manager,tab)!==container)return false;
+              }else if(tab.hasAttribute("zen-essential")||tab.getAttribute("zen-workspace-id")!==id)return false;
+              physical.set(tab,{kind,container});
             }
             return true;
           };
@@ -1217,9 +1224,19 @@
             if(tab===manager._emptyTab&&tab.hasAttribute("zen-empty-tab"))continue;
             if(!tab?.isConnected||tab.closing||!browser.isTab(tab)||tab.hasAttribute("zen-empty-tab")||
               !tab.id||byId.has(tab.id)||sync.getItemFromWindow(win,tab.id)!==tab)return null;
-            const group=tab.group;
-            if(group&&(!group.id||!group.isConnected||!group.contains(tab)))return null;
-            byId.set(tab.id,{tab,kind:physical.get(tab),group:group?.id??null,split:!!group?.hasAttribute("split-view-group")});
+            const location=physical.get(tab),groups=[],seen=new Set();
+            let root=tab;
+            // Zen folders can be nested. Native places the OUTERMOST group
+            // according to its pin role, not the individual child's role.
+            for(let group=tab.group;group;group=group.group){
+              if(seen.has(group)||!group.id||!group.isConnected||!group.contains(root)||
+                sync.getItemFromWindow(win,group.id)!==group)return null;
+              seen.add(group);groups.push([group.id,!!group.pinned,group.hasAttribute("split-view-group")]);root=group;
+            }
+            if(location.kind!=="essential"&&!!root.pinned!==(location.kind==="pinned"))return null;
+            if(root!==tab&&typeof location.container.contains==="function"&&!location.container.contains(root))return null;
+            if(tab.documentGlobal!==win)return null;
+            byId.set(tab.id,{tab,kind:location.kind,groups});
           }
           // A native tab absent from the workspace cache is not certified.
           if(!browser.tabs||Array.from(browser.tabs).some(tab=>
@@ -1230,12 +1247,20 @@
         if(!own||!other||child.gBrowser!==b||source.gBrowser!==peerBrowser)return false;
         for(const [id,entry] of own){
           const peer=other.get(id),tab=entry.tab;
-          if(!peer||peer.tab===tab||entry.kind!==peer.kind||entry.group!==peer.group||entry.split!==peer.split||
+          if(!peer||peer.tab===tab||entry.kind!==peer.kind||JSON.stringify(entry.groups)!==JSON.stringify(peer.groups)||
             tab.getAttribute("zen-workspace-id")!==peer.tab.getAttribute("zen-workspace-id")||
             !!tab.pinned!==!!peer.tab.pinned||tab.getAttribute("usercontextid")!==peer.tab.getAttribute("usercontextid")||
             tab.getAttribute("zen-essential")!==peer.tab.getAttribute("zen-essential")||
             tab.getAttribute("glance-id")!==peer.tab.getAttribute("glance-id")||
             tab.hasAttribute("zen-glance-tab")!==peer.tab.hasAttribute("zen-glance-tab"))return false;
+          // Match ZenWindowSync.#canSwapBrowsers for every visible child
+          // docshell, not just DOM IDs. A process mismatch is a native
+          // early return, so closing cannot be advertised as safe here.
+          if(tab._zenContentsVisible){
+            const from=tab.linkedBrowser,to=peer.tab.linkedBrowser;
+            if(!from||!to||from===to||peer.tab._zenContentsVisible||
+              typeof from.isRemoteBrowser!=="boolean"||from.isRemoteBrowser!==to.isRemoteBrowser)return false;
+          }
         }
         return true;
       }catch{return false;}
@@ -1282,9 +1307,15 @@
       };
       const onDestroyed=()=>check();
       try{
-        obs.addObserver(onClosed,"domwindowclosed");
-        obs.addObserver(onDestroyed,"xul-window-destroyed");
-        if(!active)throw workspaceCommandError("close-unavailable");
+        const observe=(fn,topic)=>{
+          obs.addObserver(fn,topic);
+          if(!active){
+            try{obs.removeObserver(fn,topic);}catch{}
+            throw workspaceCommandError("close-unavailable");
+          }
+        };
+        observe(onClosed,"domwindowclosed");
+        observe(onDestroyed,"xul-window-destroyed");
         verify();
         if(!active)throw workspaceCommandError("close-unavailable");
       }catch(error){cleanup();throw error;}
@@ -1317,7 +1348,7 @@
           if(!projectionReturnTarget(child,window,BrowserWindowTracker,trashSessionStore()))
             throw workspaceCommandError("return-target","Return requires the original window to be the only eligible surviving window.");
           if(!inspectProjectionReturn(child,window,childNative,native,sync))
-            throw workspaceCommandError("return-unverified","Some tabs are not synced yet. Return cancelled to protect them.");
+            throw workspaceCommandError("return-unverified","Tab ownership or browser transfer could not be verified. Close any Glance view and try again.");
           requireWorkspaceDataCommand(window,native,lease);
         };
         projectionLog(child,"return-request");

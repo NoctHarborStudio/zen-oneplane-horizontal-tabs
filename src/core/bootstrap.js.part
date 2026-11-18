@@ -103,16 +103,24 @@ async function initializeFreeAtStartup(allowed=()=>true){
 function waitFreeAtStartup(){
   return new Promise(resolve=>{
     let active=true,timer=0;
+    const scope=createDisposableScope();
     const finish=reason=>{
       if(!active)return;active=false;
+      scope.dispose();
       if(timer)try{window.clearTimeout(timer);}catch{}
       if(cancelFreeStartupWait===finish)cancelFreeStartupWait=null;
       try{window.__nocturneTrace?.("workspace.startup.wait",{reason},{flush:true});}catch{}
       resolve();
     };
     cancelFreeStartupWait=finish;
-    try{timer=window.setTimeout(()=>finish("deadline"),5000);}
-    catch{finish("timer-error");return;}
+    const onInput=event=>{if(event.isTrusted)finish("user-takeover");};
+    try{
+      scope.listen(window,"pointerdown",onInput,true);
+      scope.listen(window,"keydown",onInput,true);
+      if(!active)return;
+      timer=window.setTimeout(()=>finish("deadline"),5000);
+      if(!active){window.clearTimeout(timer);return;}
+    }catch{finish("setup-error");return;}
     Promise.resolve(initializeFreeAtStartup(()=>active)).then(()=>finish("settled"),()=>finish("error"));
   });
 }
