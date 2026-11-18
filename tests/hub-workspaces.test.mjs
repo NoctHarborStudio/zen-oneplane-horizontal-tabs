@@ -107,19 +107,23 @@ test("Hub Trash resets on a fresh opening and stale workspace deletion cannot ex
   const deletion=source.slice(source.indexOf("    async function removeSpace(id){"),source.indexOf("    function trashTabs(){"));
   let release;
   const gate=new Promise(resolve=>{release=resolve;});
-  const native={activeWorkspace:"free",removeWorkspace:()=>gate,getWorkspaceFromId:()=>null};
-  const tab={};
+  const native={activeWorkspace:"free",removeWorkspace:()=>gate,getWorkspaceFromId:()=>null,workspaceElement:()=>null};
+  const tab={isConnected:true};
   const attrs=new Set();
   const state=new Function("native","tab","attrs",`
     let open=false,trashOpen=false,hubSession=0,destroyed=false,busy=false,contextId=null,confirmation=null,editId=null,purgePlan=null,drag=null,geometryFrame=0;
-    const window={__nocturneOverlay:{request:()=>true}};
+    const browser={selectedTab:null};
+    const window={gZenWorkspaces:native,gBrowser:browser,__nocturneOverlay:{request:()=>true}};
     const panel={hidden:true,isConnected:true,querySelector:()=>null},mode={focus(){}},button={setAttribute(){},focus(){}},status={};
     const trashPanel={hasAttribute:k=>attrs.has(k),setAttribute:k=>attrs.add(k),removeAttribute:k=>attrs.delete(k),getBoundingClientRect(){}};
     const supported=()=>true,ensure=()=>{},setHold=()=>{},render=()=>{if(trashOpen)attrs.add("data-op-trash-open");else attrs.delete("data-op-trash-open");},
       showPopup=()=>{panel.hidden=false;return true;},finishTrashDrag=()=>{},setTrashAgeOpen=()=>{},stopTrashUpdates=()=>{},
       hideNow=()=>{panel.hidden=true;},fluid=()=>{},switchGuard=()=>{},singleWindow=()=>true,freeId=()=>"free",
-      ensureTrash=async()=>"trash",trashId=()=>"trash",requireWorkspaceCommand=()=>{},ownedTabs=()=>moved?[]:[tab],trashSessionStore=()=>({setCustomTabValue(){}}),moveNativeTab=()=>{moved=true;},TRASH_TIME="stamp",
-      deletionDetails=id=>({id,native,description:"delete",plan:[tab]}),operation=async fn=>{moved=false;await fn({native});if(open)render();};let moved=false;
+      ensureTrash=async()=>"trash",trashId=()=>"trash",requireWorkspaceDataCommand=()=>{},workspaceDataGuard=()=>{},
+      readWorkspaceOwnership=(w,n,id)=>({tabs:id==="trash"?(moved?[tab]:[]):moved?[]:[tab],normal:{contains:()=>true}}),
+      trashSessionStore=()=>({setCustomTabValue(){}}),moveNativeTab=()=>{moved=true;return {attempted:true,state:"confirmed"};},TRASH_TIME="stamp",
+      workspaceTabJournal=(tabs,step)=>{tabs.forEach(step);return {planned:1,confirmed:1};},workspaceJournalComplete=()=>true,reportWorkspaceJournal=()=>{},hubTrashTabEligible=()=>true,
+      deletionDetails=id=>({id,native,free:"free",trash:"trash",description:"delete",plan:[tab]}),operation=async fn=>{moved=false;await fn({native});if(open)render();};let moved=false;
     ${toggle}
     ${close}
     ${deletion}

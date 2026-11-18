@@ -18,6 +18,10 @@ export function requireWorkspaceCommand(win,native,lease){
   if(lease.token&&lease.anchor[WORKSPACE_DATA_GATE]!==lease.token)throw workspaceCommandError("data-lease-lost");
   if(native.isChangingWorkspace!==false)throw workspaceCommandError("native-busy","Native Workspace switch is still in progress.");
 }
+export function requireWorkspaceDataCommand(win,native,lease){
+  requireWorkspaceCommand(win,native,lease);
+  if(!lease.token)throw workspaceCommandError("data-lease-required");
+}
 export function runWorkspaceCommand(win,native,kind,current,execute,{data=false,anchor=data?dataAnchor():null}={}){
   const gate=workspaceCommandGate(win);
   const reject=code=>{commandTrace(win,"rejected",{kind,code});return Promise.reject(workspaceCommandError(code,"Workspace command is busy or unavailable. Try again when ready."));};
@@ -40,7 +44,7 @@ export function runWorkspaceCommand(win,native,kind,current,execute,{data=false,
   const finish=(ok,value)=>{
     if(data)try{if(anchor[WORKSPACE_DATA_GATE]===token)delete anchor[WORKSPACE_DATA_GATE];}catch{}
     if(gate.owner===lease&&gate.pending===pending){gate.owner=null;gate.pending=null;}
-    commandTrace(win,"end",{kind,ok,code:ok?null:value?.code||"error"});
+    commandTrace(win,"end",{kind,ok,code:ok?null:value?.name==="WorkspaceCommandError"?value.code:"error"});
     if(ok)resolve(value);else rejectResult(value);
   };
   try{
@@ -105,7 +109,7 @@ export function requestWorkspaceSwitch(win,native,id,kind,current,{motion=true}=
 }
 const FREE_ROLE="zen.oneplane.free-space-id",TRASH_ROLE="zen.oneplane.trash-space-id";
 export const designateWorkspaceFree=async function(win,native,prefs,lease,id=null){
-  requireWorkspaceCommand(win,native,lease);
+  requireWorkspaceDataCommand(win,native,lease);
   const previous=prefs.getStringPref(FREE_ROLE,""),trash=prefs.getStringPref(TRASH_ROLE,"");
   if(previous&&native.getWorkspaceFromId(previous))throw workspaceCommandError("free-exists","Free is already designated.");
   // Automatic creation must not silently claim an ambiguous existing Free.
@@ -132,4 +136,77 @@ export const designateWorkspaceFree=async function(win,native,prefs,lease,id=nul
   if(!owns())throw workspaceCommandError("free-changed");
   if(typeof native.reorderWorkspace==="function"&&native.getWorkspaces()[0]?.uuid!==ws.uuid)throw workspaceCommandError("free-order-unverified","Free was designated but its order could not be confirmed.");
   return ws.uuid;
+}
+
+/* Destructive operations: reconcile exact native identity with physical
+ * membership. No shadow tab store, no automatic retry or rollback. */
+function workspaceOwned(tab){
+  return !tab.hasAttribute("zen-essential")&&!(tab.hasAttribute("zen-empty-tab")&&!tab.group);
+}
+function sameWorkspaceTabs(a,b){
+  if(!Array.isArray(a)||!Array.isArray(b)||a.length!==b.length)return false;
+  const listed=new Set(b);
+  return listed.size===a.length&&new Set(a).size===a.length&&a.every(t=>listed.has(t));
+}
+export function readWorkspaceOwnership(win,native,id,{fresh=false}={}){
+  try{
+    if(win.closed||win.gZenWorkspaces!==native||!native?.workspaceEnabled||!native.getWorkspaceFromId(id))return null;
+    const browser=win.gBrowser,element=native.workspaceElement(id),normal=element?.tabsContainer,pinned=element?.pinnedTabsContainer;
+    if(!element?.isConnected||!normal?.isConnected||!pinned?.isConnected||normal===pinned||!browser?.isTab)return null;
+    if(fresh){
+      if(typeof browser.tabContainer?._invalidateCachedTabs!=="function")return null;
+      browser.tabContainer._invalidateCachedTabs();
+    }
+    const cached=native.allStoredTabs;
+    if(!Array.isArray(cached))return null;
+    const physical=[...normal.querySelectorAll(".tabbrowser-tab"),...pinned.querySelectorAll(".tabbrowser-tab")];
+    if(new Set(physical).size!==physical.length||physical.some(t=>!browser.isTab(t)||!t.isConnected))return null;
+    // Essentials are not supposed to live in these containers. Only the
+    // exact native empty placeholder can be ignored by this safety guard.
+    if(physical.some(t=>t.hasAttribute("zen-essential")||
+      (!workspaceOwned(t)&&(t!==native._emptyTab||!t.hasAttribute("zen-empty-tab")))))return null;
+    const owned=physical.filter(workspaceOwned);
+    if(owned.some(t=>t.getAttribute("zen-workspace-id")!==id))return null;
+    const listed=cached.filter(t=>workspaceOwned(t)&&t.getAttribute("zen-workspace-id")===id);
+    if(!sameWorkspaceTabs(owned,listed))return null;
+    return {element,normal,pinned,tabs:owned,browser};
+  }catch{return null;}
+}
+export function inspectWorkspaceTabMove(win,native,tab,source,destination){
+  try{
+    const from=readWorkspaceOwnership(win,native,source,{fresh:true}),to=readWorkspaceOwnership(win,native,destination);
+    if(!from||!to||from.browser!==to.browser||!tab.isConnected||!from.browser.isTab(tab)||tab.closing)return "unknown";
+    const id=tab.getAttribute("zen-workspace-id"),target=tab.pinned?to.pinned:to.normal,origin=tab.pinned?from.pinned:from.normal;
+    if(id===destination&&to.tabs.includes(tab)&&target.contains(tab)&&!from.tabs.includes(tab))return "confirmed";
+    if(id===source&&from.tabs.includes(tab)&&origin.contains(tab)&&!to.tabs.includes(tab))return "retained";
+    return "unknown";
+  }catch{return "unknown";}
+}
+export function inspectWorkspaceTabRemoval(win,native,tab,source,browser){
+  try{
+    if(win.gBrowser!==browser||win.gZenWorkspaces!==native||win.closed)return "unknown";
+    const owned=readWorkspaceOwnership(win,native,source,{fresh:true});
+    if(!owned||owned.browser!==browser)return "unknown";
+    if(tab.isConnected&&!tab.closing&&owned.tabs.includes(tab))return "retained";
+    if(!tab.isConnected&&tab.linkedBrowser===null&&!owned.tabs.includes(tab)&&!native.allStoredTabs.includes(tab))return "confirmed";
+    return "unknown";
+  }catch{return "unknown";}
+}
+export function workspaceTabJournal(tabs,step){
+  const result={planned:tabs.length,attempted:0,confirmed:0,retained:0,unknown:0,notAttempted:tabs.length,reason:null};
+  for(const tab of tabs){
+    let outcome;
+    try{outcome=step(tab);}catch{outcome={attempted:false,state:"unknown",reason:"preflight-error"};}
+    if(outcome.attempted){
+      result.attempted++;result.notAttempted--;
+      result[outcome.state==="confirmed"||outcome.state==="retained"?outcome.state:"unknown"]++;
+    }
+    if(!outcome.attempted||outcome.state!=="confirmed"||outcome.reason){
+      result.reason=outcome.reason||"unconfirmed";break;
+    }
+  }
+  return result;
+}
+export function workspaceJournalComplete(result){
+  return result.confirmed===result.planned&&!result.reason;
 }

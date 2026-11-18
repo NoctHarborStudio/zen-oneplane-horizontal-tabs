@@ -41,7 +41,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.66",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.67",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -926,6 +926,10 @@ function requireWorkspaceCommand(win,native,lease){
   if(lease.token&&lease.anchor[WORKSPACE_DATA_GATE]!==lease.token)throw workspaceCommandError("data-lease-lost");
   if(native.isChangingWorkspace!==false)throw workspaceCommandError("native-busy","Native Workspace switch is still in progress.");
 }
+function requireWorkspaceDataCommand(win,native,lease){
+  requireWorkspaceCommand(win,native,lease);
+  if(!lease.token)throw workspaceCommandError("data-lease-required");
+}
 function runWorkspaceCommand(win,native,kind,current,execute,{data=false,anchor=data?dataAnchor():null}={}){
   const gate=workspaceCommandGate(win);
   const reject=code=>{commandTrace(win,"rejected",{kind,code});return Promise.reject(workspaceCommandError(code,"Workspace command is busy or unavailable. Try again when ready."));};
@@ -948,7 +952,7 @@ function runWorkspaceCommand(win,native,kind,current,execute,{data=false,anchor=
   const finish=(ok,value)=>{
     if(data)try{if(anchor[WORKSPACE_DATA_GATE]===token)delete anchor[WORKSPACE_DATA_GATE];}catch{}
     if(gate.owner===lease&&gate.pending===pending){gate.owner=null;gate.pending=null;}
-    commandTrace(win,"end",{kind,ok,code:ok?null:value?.code||"error"});
+    commandTrace(win,"end",{kind,ok,code:ok?null:value?.name==="WorkspaceCommandError"?value.code:"error"});
     if(ok)resolve(value);else rejectResult(value);
   };
   try{
@@ -1013,7 +1017,7 @@ function requestWorkspaceSwitch(win,native,id,kind,current,{motion=true}={}){
 }
 const FREE_ROLE="zen.oneplane.free-space-id",TRASH_ROLE="zen.oneplane.trash-space-id";
 const designateWorkspaceFree=async function(win,native,prefs,lease,id=null){
-  requireWorkspaceCommand(win,native,lease);
+  requireWorkspaceDataCommand(win,native,lease);
   const previous=prefs.getStringPref(FREE_ROLE,""),trash=prefs.getStringPref(TRASH_ROLE,"");
   if(previous&&native.getWorkspaceFromId(previous))throw workspaceCommandError("free-exists","Free is already designated.");
   // Automatic creation must not silently claim an ambiguous existing Free.
@@ -1040,6 +1044,79 @@ const designateWorkspaceFree=async function(win,native,prefs,lease,id=null){
   if(!owns())throw workspaceCommandError("free-changed");
   if(typeof native.reorderWorkspace==="function"&&native.getWorkspaces()[0]?.uuid!==ws.uuid)throw workspaceCommandError("free-order-unverified","Free was designated but its order could not be confirmed.");
   return ws.uuid;
+}
+
+/* Destructive operations: reconcile exact native identity with physical
+ * membership. No shadow tab store, no automatic retry or rollback. */
+function workspaceOwned(tab){
+  return !tab.hasAttribute("zen-essential")&&!(tab.hasAttribute("zen-empty-tab")&&!tab.group);
+}
+function sameWorkspaceTabs(a,b){
+  if(!Array.isArray(a)||!Array.isArray(b)||a.length!==b.length)return false;
+  const listed=new Set(b);
+  return listed.size===a.length&&new Set(a).size===a.length&&a.every(t=>listed.has(t));
+}
+function readWorkspaceOwnership(win,native,id,{fresh=false}={}){
+  try{
+    if(win.closed||win.gZenWorkspaces!==native||!native?.workspaceEnabled||!native.getWorkspaceFromId(id))return null;
+    const browser=win.gBrowser,element=native.workspaceElement(id),normal=element?.tabsContainer,pinned=element?.pinnedTabsContainer;
+    if(!element?.isConnected||!normal?.isConnected||!pinned?.isConnected||normal===pinned||!browser?.isTab)return null;
+    if(fresh){
+      if(typeof browser.tabContainer?._invalidateCachedTabs!=="function")return null;
+      browser.tabContainer._invalidateCachedTabs();
+    }
+    const cached=native.allStoredTabs;
+    if(!Array.isArray(cached))return null;
+    const physical=[...normal.querySelectorAll(".tabbrowser-tab"),...pinned.querySelectorAll(".tabbrowser-tab")];
+    if(new Set(physical).size!==physical.length||physical.some(t=>!browser.isTab(t)||!t.isConnected))return null;
+    // Essentials are not supposed to live in these containers. Only the
+    // exact native empty placeholder can be ignored by this safety guard.
+    if(physical.some(t=>t.hasAttribute("zen-essential")||
+      (!workspaceOwned(t)&&(t!==native._emptyTab||!t.hasAttribute("zen-empty-tab")))))return null;
+    const owned=physical.filter(workspaceOwned);
+    if(owned.some(t=>t.getAttribute("zen-workspace-id")!==id))return null;
+    const listed=cached.filter(t=>workspaceOwned(t)&&t.getAttribute("zen-workspace-id")===id);
+    if(!sameWorkspaceTabs(owned,listed))return null;
+    return {element,normal,pinned,tabs:owned,browser};
+  }catch{return null;}
+}
+function inspectWorkspaceTabMove(win,native,tab,source,destination){
+  try{
+    const from=readWorkspaceOwnership(win,native,source,{fresh:true}),to=readWorkspaceOwnership(win,native,destination);
+    if(!from||!to||from.browser!==to.browser||!tab.isConnected||!from.browser.isTab(tab)||tab.closing)return "unknown";
+    const id=tab.getAttribute("zen-workspace-id"),target=tab.pinned?to.pinned:to.normal,origin=tab.pinned?from.pinned:from.normal;
+    if(id===destination&&to.tabs.includes(tab)&&target.contains(tab)&&!from.tabs.includes(tab))return "confirmed";
+    if(id===source&&from.tabs.includes(tab)&&origin.contains(tab)&&!to.tabs.includes(tab))return "retained";
+    return "unknown";
+  }catch{return "unknown";}
+}
+function inspectWorkspaceTabRemoval(win,native,tab,source,browser){
+  try{
+    if(win.gBrowser!==browser||win.gZenWorkspaces!==native||win.closed)return "unknown";
+    const owned=readWorkspaceOwnership(win,native,source,{fresh:true});
+    if(!owned||owned.browser!==browser)return "unknown";
+    if(tab.isConnected&&!tab.closing&&owned.tabs.includes(tab))return "retained";
+    if(!tab.isConnected&&tab.linkedBrowser===null&&!owned.tabs.includes(tab)&&!native.allStoredTabs.includes(tab))return "confirmed";
+    return "unknown";
+  }catch{return "unknown";}
+}
+function workspaceTabJournal(tabs,step){
+  const result={planned:tabs.length,attempted:0,confirmed:0,retained:0,unknown:0,notAttempted:tabs.length,reason:null};
+  for(const tab of tabs){
+    let outcome;
+    try{outcome=step(tab);}catch{outcome={attempted:false,state:"unknown",reason:"preflight-error"};}
+    if(outcome.attempted){
+      result.attempted++;result.notAttempted--;
+      result[outcome.state==="confirmed"||outcome.state==="retained"?outcome.state:"unknown"]++;
+    }
+    if(!outcome.attempted||outcome.state!=="confirmed"||outcome.reason){
+      result.reason=outcome.reason||"unconfirmed";break;
+    }
+  }
+  return result;
+}
+function workspaceJournalComplete(result){
+  return result.confirmed===result.planned&&!result.reason;
 }
 // Shared Zen Home v1: portable core, independent of both mod hosts.
 function acquireZenHome(win, services) {
@@ -4246,7 +4323,7 @@ function installTabStrip() {
       if(busy||projectionBusy||destroyed||!canManage())return;
       busy=true;status.textContent="";
       const native=manager(),current=()=>!destroyed&&manager()===native&&canManage();
-      try{await runWorkspaceCommand(window,native,"hub-data",current,fn,{data:true});}catch(error){if(!destroyed)status.textContent=String(error.message||error);console.warn("[OnePlane] Workspace Engine:",error);}
+      try{return await runWorkspaceCommand(window,native,"hub-data",current,fn,{data:true});}catch(error){if(!destroyed)status.textContent=String(error.message||error);console.warn("[OnePlane] Workspace Engine:",error);}
       finally{busy=false;if(!destroyed&&open)render();}
     }
     function renderFreeSetup(snapshot){
@@ -4269,24 +4346,33 @@ function installTabStrip() {
       color.type="color";color.value=workspaceColor(space.id)||"#7089b8";color.setAttribute("aria-label","Hub icon color");
       let colorEdited=false;color.addEventListener("input",()=>{colorEdited=true;});
       const controls=make("div","op-hub-confirm-controls"),cancel=action("Cancel",()=>{editId=null;render();});
-      const save=action("Save",()=>void operation(async()=>{
-        const native=manager(),ws=native.getWorkspaceFromId(space.id),value=label.value.trim();
+      const save=action("Save",()=>void operation(async lease=>{
+        const native=lease.native,ws=native.getWorkspaceFromId(space.id),value=label.value.trim();
         if(!ws||!value)throw Error("Enter a workspace name.");
         const next={...ws,name:space.id===freeId()?"Free":value};
         if(icon.value.trim()!==space.icon)next.icon=icon.value.trim()||undefined;
+        requireWorkspaceDataCommand(window,native,lease);
         native.saveWorkspace(next);
+        requireWorkspaceDataCommand(window,native,lease);
+        const saved=native.getWorkspaceFromId(space.id);
+        if(!saved||saved.name!==next.name||saved.icon!==next.icon)throw Error("Workspace changes could not be confirmed.");
         if(colorEdited)saveWorkspaceColor(space.id,color.value);
         editId=null;
       }));
       controls.append(cancel,save);wrap.append(label,icon,color,controls);return wrap;
     }
     async function moveWorkspace(id,direction){
-      await operation(async()=>{
-        const native=manager(),ordered=hubWorkspaceOrder(hubWorkspaceSnapshot(native),freeId(),trashId());
+      await operation(async lease=>{
+        const native=lease.native,ordered=hubWorkspaceOrder(hubWorkspaceSnapshot(native),freeId(),trashId());
         const index=ordered.findIndex(s=>s.id===id),destination=ordered[index+direction];
         if(id===freeId()||!destination||destination.id===freeId())return;
         const nativeIndex=native.getWorkspaces().findIndex(s=>s.uuid===destination.id);
-        if(nativeIndex>=0)await native.reorderWorkspace(id,nativeIndex);
+        if(nativeIndex>=0){
+          requireWorkspaceDataCommand(window,native,lease);
+          await native.reorderWorkspace(id,nativeIndex);
+          requireWorkspaceDataCommand(window,native,lease);
+          if(native.getWorkspaces()[nativeIndex]?.uuid!==id)throw Error("Workspace order could not be confirmed.");
+        }
       });
     }
     function trashSessionStore(){
@@ -4294,39 +4380,70 @@ function installTabStrip() {
       catch{return ChromeUtils.importESModule("resource:///modules/sessionstore/SessionStore.sys.mjs").SessionStore;}
     }
     function trashStamp(tab){try{return Number(trashSessionStore().getCustomTabValue(tab,TRASH_TIME))||0;}catch{return 0;}}
-    async function ensureTrash(lease){
+    async function ensureTrash(lease,expected){
       const native=lease.native;
-      requireWorkspaceCommand(window,native,lease);
-      if(!singleWindow()||!freeId())throw Error("Set up Free and close other browser windows first.");
-      let id=trashId();
+      workspaceDataGuard(lease,expected);
+      let id=expected.trash;
       if(!id){
         const previous=prefs.getStringPref(TRASH_PREF,"");
         if(native.getWorkspaces().some(s=>String(s.name||"").trim().toLowerCase()==="trash"))throw Error("An existing Trash workspace needs review.");
         const result=await native.createAndSaveWorkspace("Trash","🗑",true);
-        requireWorkspaceCommand(window,native,lease);
-        if(!singleWindow()||!freeId()||prefs.getStringPref(TRASH_PREF,"")!==previous||!result?.uuid||!native.getWorkspaceFromId(result.uuid)||result.uuid===freeId())throw Error("Could not designate Trash.");
+        workspaceDataGuard(lease,expected);
+        if(prefs.getStringPref(TRASH_PREF,"")!==previous||!result?.uuid||!native.getWorkspaceFromId(result.uuid)||result.uuid===expected.free)throw Error("Could not designate Trash.");
         id=result.uuid;prefs.setStringPref(TRASH_PREF,id);
       }
-      for(let i=0;i<20&&!native.workspaceElement(id);i++)await new Promise(r=>window.setTimeout(r,50));
-      requireWorkspaceCommand(window,native,lease);
-      if(destroyed||!singleWindow()||!freeId()||freeId()===id||trashId()!==id||!native.workspaceElement(id))throw Error("Trash is not ready.");
+      const roles={free:expected.free,trash:id};
+      workspaceDataGuard(lease,roles);
+      for(let i=0;i<20&&!native.workspaceElement(id);i++){
+        await new Promise(r=>window.setTimeout(r,50));
+        workspaceDataGuard(lease,roles);
+      }
+      if(!readWorkspaceOwnership(window,native,id,{fresh:true}))throw Error("Trash is not ready.");
       return id;
     }
-    function moveNativeTab(tab,destination){
-      const native=manager(),element=native.workspaceElement(destination);
-      if(!singleWindow()||!canManage()||!hubTrashTabEligible(tab)||tab===browser.selectedTab||
-        !native.getWorkspaceFromId(destination)||!(tab.pinned?element?.pinnedTabsContainer:element?.tabsContainer))
-        throw Error("Tab cannot be moved safely.");
-      native.moveTabsToWorkspace([tab],destination);
-      if(tab.getAttribute("zen-workspace-id")!==destination)throw Error("Native tab move did not complete.");
+    function workspaceDataGuard(lease,roles){
+      requireWorkspaceDataCommand(window,lease.native,lease);
+      if(!singleWindow()||manager()!==lease.native||window.gBrowser!==browser||
+        freeId()!==roles.free||trashId()!==roles.trash||!roles.free||roles.free===roles.trash)
+        throw workspaceCommandError("workspace-data-changed","Workspace state changed. Review again.");
+    }
+    function moveNativeTab(tab,source,destination,lease,roles,afterMove){
+      const native=lease.native;
+      const guard=()=>{
+        workspaceDataGuard(lease,roles);
+        if(source===destination||!hubTrashTabEligible(tab)||tab===browser.selectedTab||
+          typeof native.moveTabsToWorkspace!=="function"||inspectWorkspaceTabMove(window,native,tab,source,destination)!=="retained")
+          throw workspaceCommandError("move-preflight","Tab cannot be moved safely.");
+      };
+      try{guard();workspaceDataGuard(lease,roles);}
+      catch{return {attempted:false,state:"unknown",reason:"move-preflight"};}
+      let reason=null;
+      try{native.moveTabsToWorkspace([tab],destination);}catch{reason="native-move-error";}
+      const state=inspectWorkspaceTabMove(window,native,tab,source,destination);
+      if(state==="confirmed"&&!reason){
+        try{workspaceDataGuard(lease,roles);afterMove?.();workspaceDataGuard(lease,roles);}
+        catch{reason="move-metadata-or-state";}
+        if(inspectWorkspaceTabMove(window,native,tab,source,destination)!=="confirmed")
+          return {attempted:true,state:"unknown",reason:"move-reconcile"};
+      }
+      return {attempted:true,state,reason};
+    }
+    function reportWorkspaceJournal(kind,result){
+      try{window.__nocturneTrace?.("workspace.data.journal",{kind,...result},{flush:true});}catch{}
+    }
+    function journalText(result,verb){
+      return result.confirmed+" of "+result.planned+" "+verb+"; "+result.retained+" retained, "+
+        result.unknown+" unconfirmed, "+result.notAttempted+" not attempted."+
+        (result.reason==="move-metadata-or-state"?" Transfer metadata or workspace state changed.":"");
     }
     function deletionDetails(id){
       const native=manager(),snapshot=hubWorkspaceOrder(hubWorkspaceSnapshot(native),freeId(),trashId()),space=snapshot?.find(s=>s.id===id);
       if(!space||!freeId()||id===freeId()||snapshot.length<=1||!canManage()||!singleWindow()||
         typeof native.removeWorkspace!=="function"||typeof native.moveTabsToWorkspace!=="function")return null;
-      const tabs=ownedTabs(native,id);
+      const ownership=readWorkspaceOwnership(window,native,id);
+      const tabs=ownership?.tabs;
       if(!tabs||tabs.some(t=>!hubTrashTabEligible(t)))return null;
-      return {id,native,plan:tabs,description:tabs.length?"Move "+tabs.length+" tab(s) to Trash and delete “"+space.name+"”?":"Delete empty workspace “"+space.name+"”?"};
+      return {id,native,free:freeId(),trash:trashId(),plan:tabs,description:tabs.length?"Move "+tabs.length+" tab(s) to Trash and delete “"+space.name+"”?":"Delete empty workspace “"+space.name+"”?"};
     }
     function askDelete(id){
       if(busy||destroyed)return;
@@ -4337,47 +4454,81 @@ function installTabStrip() {
     async function removeSpace(id){
       if(busy||destroyed||confirmation?.id!==id)return;
       const approved=confirmation,now=deletionDetails(id);
-      if(!now||now.native!==approved.native||now.description!==approved.description||
-        now.plan.length!==approved.plan.length||now.plan.some(t=>!approved.plan.includes(t))){
+      if(!now||now.native!==approved.native||now.free!==approved.free||now.trash!==approved.trash||
+        now.description!==approved.description||now.plan.length!==approved.plan.length||now.plan.some(t=>!approved.plan.includes(t))){
         confirmation=now;status.textContent="Workspace changed. Review again.";render();return;
       }
       confirmation=null;contextId=null;
       const session=hubSession;
       await operation(async lease=>{
         const native=now.native;
-        requireWorkspaceCommand(window,native,lease);
-        const destination=now.plan.length?await ensureTrash(lease):null;
-        requireWorkspaceCommand(window,native,lease);
-        if(native.activeWorkspace===id){switchGuard();await switchWorkspaceWithin(window,native,freeId(),lease);}
-        requireWorkspaceCommand(window,native,lease);
-        if(destroyed||!singleWindow()||native.activeWorkspace===id)throw Error("Workspace is still active.");
-        const fresh=deletionDetails(id);
-        if(!fresh||fresh.plan.length!==now.plan.length||fresh.plan.some(t=>!now.plan.includes(t)))throw Error("Workspace changed. Nothing deleted.");
+        requireWorkspaceDataCommand(window,native,lease);
+        const initial={free:now.free,trash:now.trash};
+        workspaceDataGuard(lease,initial);
+        const destination=now.plan.length?await ensureTrash(lease,initial):null;
+        const roles={free:now.free,trash:destination||now.trash};
+        workspaceDataGuard(lease,roles);
+        if(native.activeWorkspace===id){switchGuard();await switchWorkspaceWithin(window,native,roles.free,lease);}
+        workspaceDataGuard(lease,roles);
+        if(native.activeWorkspace===id)throw Error("Workspace is still active.");
+        const fresh=readWorkspaceOwnership(window,native,id,{fresh:true});
+        if(!fresh||fresh.tabs.length!==now.plan.length||fresh.tabs.some(t=>!now.plan.includes(t))||
+          fresh.tabs.some(t=>!hubTrashTabEligible(t)||t===browser.selectedTab))throw Error("Workspace changed. Nothing deleted.");
         const store=destination?trashSessionStore():null;
-        for(const tab of fresh.plan){
-          requireWorkspaceCommand(window,native,lease);
-          if(!singleWindow()||trashId()!==destination||native.activeWorkspace===id||!ownedTabs(native,id)?.includes(tab))throw Error("Workspace changed. Workspace kept.");
-          store.setCustomTabValue(tab,TRASH_TIME,String(Date.now()));
-          requireWorkspaceCommand(window,native,lease);
-          if(!singleWindow()||trashId()!==destination||native.activeWorkspace===id||!ownedTabs(native,id)?.includes(tab))throw Error("Workspace changed. Workspace kept.");
-          moveNativeTab(tab,destination);
-        }
-        requireWorkspaceCommand(window,native,lease);
-        if(!singleWindow()||native.activeWorkspace===id||ownedTabs(native,id)?.length!==0)throw Error("Not all tabs moved. Workspace kept.");
-        switchGuard();requireWorkspaceCommand(window,native,lease);await native.removeWorkspace(id);
-        if(native.getWorkspaceFromId(id))throw Error("Workspace not removed.");
-        // Only auto-expand for a deletion from this same Hub opening.
-        if(destination&&open&&hubSession===session)trashOpen=true;
+        const result=workspaceTabJournal(now.plan,tab=>{
+          if(native.activeWorkspace===id)return {attempted:false,state:"unknown",reason:"source-active"};
+          return moveNativeTab(tab,id,destination,lease,roles,()=>store.setCustomTabValue(tab,TRASH_TIME,String(Date.now())));
+        });
+        reportWorkspaceJournal("delete-transfer",result);
+        if(!workspaceJournalComplete(result))throw Error(journalText(result,"moved")+" Workspace kept. Review again.");
+        // A native deletion closes every residual owned tab. Recheck the
+        // actual source immediately before invoking it, after switchGuard.
+        try{
+          workspaceDataGuard(lease,roles);
+          switchGuard();
+          workspaceDataGuard(lease,roles);
+          const remaining=readWorkspaceOwnership(window,native,id,{fresh:true});
+          if(!remaining||remaining.tabs.length!==0||native.activeWorkspace===id||
+            id===roles.free||id===roles.trash||typeof native.removeWorkspace!=="function")
+            throw workspaceCommandError("delete-preflight");
+          // Verify every approved move still has physical destination
+          // ownership, not merely an ID/cache update.
+          if(now.plan.length){
+            const target=readWorkspaceOwnership(window,native,destination);
+            const moved=new Set(target?.tabs||[]);
+            if(!target||now.plan.some(tab=>!moved.has(tab)||!tab.isConnected||tab.closing||
+              !(tab.pinned?target.pinned:target.normal).contains(tab)))
+              throw workspaceCommandError("delete-transfer-changed");
+          }
+          workspaceDataGuard(lease,roles);
+          const final=readWorkspaceOwnership(window,native,id,{fresh:true});
+          if(!final||final.tabs.length||native.activeWorkspace===id)throw workspaceCommandError("delete-preflight");
+        }catch{throw Error(journalText(result,"moved")+" Workspace kept. Review again.");}
+        let deletion="unknown";
+        try{
+          await native.removeWorkspace(id);
+          if(window.gZenWorkspaces===native&&window.gBrowser===browser&&!window.closed&&
+            !native.getWorkspaceFromId(id)&&!native.workspaceElement(id))deletion="confirmed";
+        }catch{
+          // Native may already have applied part of the request. Never
+          // retry it or suggest that no data changed.
+          throw Error(journalText(result,"moved")+" Workspace removal unconfirmed.");
+        }finally{try{window.__nocturneTrace?.("workspace.data.delete",{outcome:deletion,transferred:result.confirmed},{flush:true});}catch{}}
+        if(deletion!=="confirmed")throw Error(journalText(result,"moved")+" Workspace removal unconfirmed.");
+        if(!destroyed&&destination&&open&&hubSession===session)trashOpen=true;
       });
     }
     function trashTabs(){const id=trashId();return id?(ownedTabs(manager(),id)||[]):[];}
     function restoreTargets(){return hubWorkspaceOrder(hubWorkspaceSnapshot(manager()),freeId(),trashId())||[];}
     function restoreTrashTab(tab,id){
-      return operation(async()=>{
-        if(!trashTabs().includes(tab)||id===trashId()||!restoreTargets().some(s=>s.id===id))throw Error("Restore target changed.");
-        moveNativeTab(tab,id);
-        try{trashSessionStore().deleteCustomTabValue(tab,TRASH_TIME);}catch{}
+      const source=trashId(),roles={free:freeId(),trash:source};
+      return operation(async lease=>{
+        if(!source||!trashTabs().includes(tab)||id===source||!restoreTargets().some(s=>s.id===id))throw Error("Restore target changed.");
+        const result=workspaceTabJournal([tab],t=>moveNativeTab(t,source,id,lease,roles,()=>trashSessionStore().deleteCustomTabValue(t,TRASH_TIME)));
+        reportWorkspaceJournal("restore",result);
         purgePlan=null;
+        if(!workspaceJournalComplete(result))throw Error(journalText(result,"restored")+" Review again.");
+        return true;
       });
     }
     function trashMotionEnabled(){
@@ -4480,9 +4631,14 @@ function installTabStrip() {
       try{if(panel.hasPointerCapture(d.pointer))panel.releasePointerCapture(d.pointer);}catch{}
       // Commit native transfer once at release. Rendering remains frozen
       // until the SAME visual card has finished its absorption.
-      if(id)await restoreTrashTab(d.tab,id);
+      const restored=id?await restoreTrashTab(d.tab,id):false;
       if(trashDrag!==d)return;
-      const moved=!!id&&d.tab.getAttribute("zen-workspace-id")===id&&!trashTabs().includes(d.tab);
+      const native=manager(),source=trashId();
+      const outcome=id&&source?inspectWorkspaceTabMove(window,native,d.tab,source,id):"retained";
+      const moved=restored===true&&outcome==="confirmed";
+      // An unconfirmed or metadata-failed transfer is not a visual
+      // success, but neither should a card fly back into a false source.
+      if(!moved&&outcome!=="retained"){finishTrashDrag();if(open)render();return;}
       const destination=moved?target:d.placeholder;
       if(!open||!destination?.isConnected||!trashMotionEnabled()){finishTrashDrag();if(open)render();return;}
       const dest=destination.getBoundingClientRect(),p=panel.getBoundingClientRect();
@@ -4529,18 +4685,35 @@ function installTabStrip() {
       if(busy||!canManage()||!singleWindow())return;
       setTrashAgeOpen(false);
       const age=trashAge,now=Date.now();
-      purgePlan={age,tabs:trashTabs().filter(t=>purgeEligible(t)&&hubTrashAgeMatches(trashStamp(t),age,now))};renderTrash();
+      const native=manager(),source=trashId(),ownership=readWorkspaceOwnership(window,native,source);
+      if(!ownership){status.textContent="Trash is not ready. Review again.";return;}
+      purgePlan={age,native,source,free:freeId(),tabs:ownership.tabs.filter(t=>purgeEligible(t)&&hubTrashAgeMatches(trashStamp(t),age,now))};renderTrash();
     }
     async function executePurge(){
       const approved=purgePlan;purgePlan=null;if(!approved)return;
-      await operation(async()=>{
-        const current=trashTabs();
-        if(!singleWindow()||approved.tabs.some(t=>!current.includes(t)||!purgeEligible(t)||!hubTrashAgeMatches(trashStamp(t),approved.age,Date.now())))
-          throw Error("Trash changed. Review again.");
-        for(const tab of approved.tabs){
-          if(!singleWindow()||!trashTabs().includes(tab)||!purgeEligible(tab))break;
-          browser.removeTab(tab,{animate:false,closeWindowWithLastTab:false});
-        }
+      await operation(async lease=>{
+        const native=lease.native,roles={free:approved.free,trash:approved.source};
+        const eligible=tab=>{
+          workspaceDataGuard(lease,roles);
+          const ownership=readWorkspaceOwnership(window,native,roles.trash,{fresh:true});
+          if(native!==approved.native||!ownership?.tabs.includes(tab)||!purgeEligible(tab)||
+            !hubTrashAgeMatches(trashStamp(tab),approved.age,Date.now()))return false;
+          workspaceDataGuard(lease,roles);
+          return true;
+        };
+        if(approved.tabs.some(t=>!eligible(t)))throw Error("Trash changed. Review again.");
+        const result=workspaceTabJournal(approved.tabs,tab=>{
+          if(!eligible(tab))return {attempted:false,state:"unknown",reason:"purge-preflight"};
+          let reason=null;
+          try{browser.removeTab(tab,{animate:false,closeWindowWithLastTab:false});}catch{reason="native-remove-error";}
+          const state=inspectWorkspaceTabRemoval(window,native,tab,roles.trash,browser);
+          // Stop on veto, partial removal or invalidated ownership. Never
+          // silently continue applying an old approval to a changed set.
+          try{workspaceDataGuard(lease,roles);}catch{reason=reason||"purge-state-changed";}
+          return {attempted:true,state,reason};
+        });
+        reportWorkspaceJournal("purge",result);
+        if(!destroyed)status.textContent=journalText(result,"removed")+(workspaceJournalComplete(result)?"":" Review again.");
       });
     }
     function trashTabUrl(tab){

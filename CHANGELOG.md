@@ -1,3 +1,10 @@
+## 0.3.0-preview.67 — Reconciled Workspace transfers and Trash outcomes
+
+- Verify native Workspace tab ownership against physical normal/pinned containers and refreshed native tab caches. Stop transfers on mismatch or exception and never remove the source Workspace unless its owned-tab set is demonstrably empty.
+- Journal confirmed, retained, unconfirmed and unattempted transfers/purge outcomes. Write removal timestamps only after confirmed physical transfer, report metadata failures, and honor native close veto without continuing an invalidated approval.
+- Revalidate Free/Trash roles, manager identity, window count and eligibility at destructive boundaries; require the data lease, verify rename/reorder outcomes and suppress false successful drag absorption. Preserve native partial results without rollback.
+- Thirteen additional regression fixtures. Native validation and stuck-command recovery remain pending; no intended animation timing or preference-ID changes.
+
 ## 0.3.0-preview.66 — Native Workspace command ownership
 
 - Share the existing window command gate across Home, Hub, Free startup, projection and the switch before workspace deletion. A process-local data token serializes Nocturne-originated data mutations across synced windows; no native method wrapping or replacement.
