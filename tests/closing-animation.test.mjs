@@ -18,3 +18,27 @@ test("preference change completes pending native command",()=>{const h=harness()
 
 test("cancelled native close restores only after native returns",()=>{const h=harness({cancel:true});h.gate.request({},[]);h.fire();h.fire();assert.deepEqual(h.events,["begin","seal","native","restore"]);});
 test("native error restores hidden chrome",()=>{const h=harness({nativeThrows:true});h.gate.request({},[]);h.fire();assert.throws(()=>h.fire(),/native/);assert.deepEqual(h.events,["begin","seal","native","restore"]);});
+
+test("failed timer cancellation cannot swallow close or dispatch an old timer into a new request",()=>{
+ let callbacks=[],calls=0,clears=0,seals=0;
+ const gate=factory({eligible:()=>true,begin:()=>true,clear:()=>clears++,seal:()=>seals++,later:fn=>{callbacks.push(fn);return callbacks.length;},cancelLater(){throw Error("cancel timer");},invoke:()=>++calls});
+ gate.request({},[]);const stale=callbacks[0];gate.dispose();gate.request({},[]);stale();
+ assert.equal(calls,0);assert.equal(seals,0);assert.equal(clears,1);
+ callbacks[1]();callbacks[2]();assert.equal(calls,1);assert.equal(seals,1);
+});
+test("failed terminal dwell timer still performs exactly one native close",()=>{
+ let first,calls=0,seals=0,scheduled=0;
+ const gate=factory({eligible:()=>true,begin:()=>true,clear(){},seal:()=>seals++,later:fn=>{if(scheduled++)throw Error("timer");first=fn;return 1;},cancelLater(){},invoke:()=>++calls});
+ gate.request({},[]);first();first();assert.equal(calls,1);assert.equal(seals,1);
+});
+test("close restore releases remaining properties and markers after center failure",()=>{
+ const code=source.slice(source.indexOf("  function restore(){"),source.indexOf("  function set("));
+ const run=new Function(`
+ const log=[],window={windowUtils:{USER_SHEET:1,removeSheet(){log.push("sheet");}},__nocturneTrace(e,d){if(e==="disassembly.cleanup")log.push(d.failed);}};
+ const root={hasAttribute:()=>true,removeAttribute(){log.push("root");}};
+ let centerHandle={release(){throw Error("center");}},bookmarkHandle={release(){log.push("bookmark");}},sheet={},style={remove(){log.push("style");}};
+ const n={style:{removeProperty(k){if(k==="bad")throw Error("style");log.push(k);}},removeAttribute:k=>log.push(k)};
+ const animations=new Set([{cancel(){throw Error("animation");}}]),owned=new Map([[n,{styles:new Map([["bad",{value:""}],["good",{value:""}]]),attrs:new Map([["mark",null]])}]]);
+ ${code}restore();return {log,size:owned.size,animations:animations.size};`);
+ assert.deepEqual(run(),{log:["bookmark","good","mark","sheet","style","root",3],size:0,animations:0});
+});

@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="workspace.script",data={version:"0.3.0-preview.59"};
+  const event="workspace.script",data={version:"0.3.0-preview.60"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -61,43 +61,67 @@ try{if(typeof window!=="undefined"){
     const old=geometryLock;geometryLock=null;
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.geometry.release",()=>({locked:!!old,height:old?.height,surfaceHeight:old?.surfaceHeight}),{sample:1800});
     if(!old)return null;
-    old.wrapper.removeAttribute(GEOMETRY);old.wrapper.style.removeProperty(HEIGHT);
-    old.surface.style.removeProperty(SURFACE_HEIGHT);
+    let failed=0;
+    const step=fn=>{try{fn();}catch{failed++;}};
+    step(()=>old.wrapper.removeAttribute(GEOMETRY));
+    step(()=>old.wrapper.style.removeProperty(HEIGHT));
+    step(()=>old.surface.style.removeProperty(SURFACE_HEIGHT));
+    if(failed)try{window.__nocturneTrace?.("workspace.geometry.cleanup",{failed},{flush:true});}catch{}
     return old;
   }
   function phase(value){
+    if(value&&dead)return;
+    if(!value)releaseGeometry();
     if((root.getAttribute(PHASE)||null)===(value||null))return;
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.phase",()=>({from:root.getAttribute(PHASE),to:value,locked:!!geometryLock}),{sample:1800});
-    if(value)root.setAttribute(PHASE,value);else {releaseGeometry();root.removeAttribute(PHASE);}
+    if(value)root.setAttribute(PHASE,value);else root.removeAttribute(PHASE);
     try{win.__zenMagneticBookmarksShared?.syncAddressState?.();}catch(error){console.warn("[Nocturne] Workspace bookmarks:",error);}
     win.dispatchEvent(new win.CustomEvent("ZenRefined:WorkspaceTransition",{detail:{phase:value||"idle"}}));
+    if(dead||root.getAttribute(PHASE)!==(value||null))return;
     // First collapse hover decorations and acquire the panel hold, then
     // snapshot resting geometry. No extra painted frame between these steps.
     if(value==="out"||value==="swap")lockGeometry();
     win.__nocturneTrace?.("workspace.visual.boundary",()=>({phase:value||"idle",sequence:active?.sequence||transitionCount,panelOpen:get("zen-appcontent-navbar-wrapper")?.hasAttribute("data-op-panel-open"),height:rect(get("zen-appcontent-navbar-wrapper"))?.height,surface:rect(get("oneplane-toolbar-surface"))?.height,bookmarkTop:rect(get("PlacesToolbarItems"))?.top}),{sample:1200});
   }
   function restore(tx){
+    let failed=0;
+    const step=fn=>{try{fn();}catch{failed++;}};
     for(const [n,old] of tx.styles){
-      for(const [k,v,p] of old){if(v)n.style.setProperty(k,v,p);else n.style.removeProperty(k);}
-      n.removeAttribute(MARK);n.removeAttribute(SURFACE);n.removeAttribute(PAGE);n.removeAttribute(MOVE);n.removeAttribute(BACKING);
-      n.removeAttribute("data-zr-workspace-card");n.removeAttribute("data-zr-workspace-height-motion");
+      for(const [k,v,p] of old)step(()=>{if(v)n.style.setProperty(k,v,p);else n.style.removeProperty(k);});
+      for(const mark of [MARK,SURFACE,PAGE,MOVE,BACKING,"data-zr-workspace-card","data-zr-workspace-height-motion"])
+        step(()=>n.removeAttribute(mark));
     }
-    tx.styles.clear();
+    tx.styles.clear();return failed;
   }
-  function cancelEffects(tx){tx.center?.release();tx.center=null;for(const a of tx.animations)try{a.cancel();}catch{}tx.animations.clear();restore(tx);}
+  function cancelEffects(tx){
+    let failed=0;
+    const step=fn=>{try{fn();}catch{failed++;}};
+    const center=tx.center;tx.center=null;step(()=>center?.release());
+    for(const a of tx.animations)step(()=>a.cancel());
+    tx.animations.clear();failed+=restore(tx);
+    if(failed)try{window.__nocturneTrace?.("workspace.effects.cleanup",{failed},{flush:true});}catch{}
+    return failed;
+  }
   function cleanup(tx,keepGate=false){
-    if(active!==tx)return;
-    tx.cancelled=true;
-    cancelEffects(tx);
-    for(const t of tx.timers)win.clearTimeout(t);
-    for(const resolve of tx.waiters)resolve();
+    if(active!==tx||tx.cleaning)return;
+    tx.cancelled=true;tx.cleaning=true;
+    let failed=0;
+    const step=fn=>{try{fn();}catch{failed++;}};
+    step(()=>{failed+=cancelEffects(tx);});
+    for(const t of tx.timers)step(()=>win.clearTimeout(t));
+    for(const resolve of [...tx.waiters])step(resolve);
     tx.timers.clear();tx.waiters.clear();
-    active=null;if(!keepGate)phase(null);
+    active=null;tx.cleaning=false;
+    if(!keepGate||dead)step(()=>phase(null));
+    try{win.__nocturneTrace?.("workspace.cleanup",{failed,keepGate:!!keepGate,sequence:tx.sequence},{flush:true});}catch{}
   }
   function pause(tx,ms){
     if(tx.cancelled)return Promise.resolve();
     return new Promise(resolve=>{
-      const done=()=>{win.clearTimeout(t);tx.waiters.delete(done);tx.timers.delete(t);resolve();};
+      const done=()=>{
+        try{win.clearTimeout(t);}catch{}
+        tx.waiters.delete(done);tx.timers.delete(t);resolve();
+      };
       const t=win.setTimeout(done,ms);tx.timers.add(t);tx.waiters.add(done);
     });
   }
@@ -176,12 +200,14 @@ try{if(typeof window!=="undefined"){
       }
       win.__nocturneTrace?.("workspace.preflight.icons",()=>({sequence:tx.sequence,pending:icons?.pending??null,missing:icons?.missing??null}),{sample:800});
       win.__nocturneTrace?.("workspace.settled",()=>({sequence:tx.sequence,elapsed:win.performance.now()-start,quiet:win.performance.now()-changed}),{sample:1000});
-    }finally{observer?.disconnect();}
+    }finally{try{observer?.disconnect();}catch{try{win.__nocturneTrace?.("workspace.settle.cleanup",{failed:1},{flush:true});}catch{}}}
   }
   async function run(nativeSwitch){
     if(typeof nativeSwitch!=="function")throw TypeError("Native workspace callback required");
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.run",()=>({active:!!active,pending:!!gate.pending,phase:root.getAttribute(PHASE)}),{sample:1800});
     if(dead||win.closed)return;
+    // Synchronous cleanup may dispatch a native event that requests another switch.
+    if(active?.cleaning){await Promise.resolve();if(dead||win.closed)return;}
     if(request)request.superseded=true;
     const carrySwap=root.getAttribute(PHASE)==="swap";
     if(active){
@@ -214,15 +240,15 @@ try{if(typeof window!=="undefined"){
     const tx={animations:new Set(),styles:new Map(),timers:new Set(),waiters:new Set(),cancelled:false,superseded:false,skipMotion:false,sequence:++transitionCount};active=tx;
     // Native switching owns its own promise; visual gating must never
     // remain stuck if that promise is slow or fails to settle.
-    tx.timers.add(win.setTimeout(()=>cleanup(tx),3500));
-    let called=false,result;
+    let called=false,nativeResolved=false,result;
     try{
+      tx.timers.add(win.setTimeout(()=>cleanup(tx),3500));
       const old=units();
       if(!old.length&&!req.carrySwap){cleanup(tx);called=true;return await invoke();}
-      if(!req.carrySwap){phase("out");await animate(tx,old,true);}
+      if(!req.carrySwap){phase("out");if(!tx.cancelled&&!dead)await animate(tx,old,true);}
       if(tx.superseded||req.superseded||dead||win.closed)return;
       if(!tx.cancelled){phase("swap");cancelEffects(tx);}
-      called=true;result=await invoke();
+      called=true;result=await invoke();nativeResolved=true;
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.native.end",()=>({cancelled:tx.cancelled,superseded:req.superseded}),{sample:1800});
       if(tx.cancelled||req.superseded)return result;
       await settled(tx);
@@ -231,7 +257,7 @@ try{if(typeof window!=="undefined"){
       const geometry=releaseGeometry();
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.reveal",()=>({skip:tx.skipMotion,oldHeight:geometry?.height,oldSurface:geometry?.surfaceHeight}),{sample:1800});
       try{win.__oneplaneLayoutController?.prepareWorkspaceGeometry?.();}catch(error){console.warn("[Nocturne] Workspace geometry:",error);}
-      if(tx.skipMotion)return result;
+      if(tx.skipMotion||tx.cancelled||dead||req.superseded)return result;
       const incoming=units(),motion=animate(tx,incoming,false,geometry);
       phase("in");
       win.__nocturneTrace?.("workspace.applied",()=>({
@@ -239,35 +265,44 @@ try{if(typeof window!=="undefined"){
         height:rect(get("zen-appcontent-navbar-wrapper"))?.height
       }),{sample:1000});
       await motion;
+      if(tx.cancelled||dead||req.superseded)return result;
       tx.center?.seal();
       // Commit terminal styles while native CSS transitions are still disabled.
       for(const a of tx.animations)try{a.finish();}catch{}
       return result;
     }catch(error){
       if(!called){called=true;cleanup(tx);return tx.superseded||req.superseded||dead||win.closed?undefined:invoke();}
+      if(nativeResolved){try{win.__nocturneTrace?.("workspace.visual.error",{name:error?.name||"Error"},{flush:true});}catch{}return result;}
       throw error;
     }finally{
       const successor=!dead&&request&&request!==req&&!request.superseded&&request.carrySwap;
       cleanup(tx,!!successor&&root.getAttribute(PHASE)==="swap");
     }
   }
-  function abort(){if(active)cleanup(active);else phase(null);}
+  function abort(){if(dead)return;if(active)cleanup(active);else phase(null);}
   function onKey(e){
-    if(e.key!=="Escape"||!active)return;
+    if(dead||e.key!=="Escape"||!active)return;
     const tx=active;tx.skipMotion=true;
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.escape",()=>({phase:root.getAttribute(PHASE)}),{sample:1800});
     // Escape skips decorative motion, not the native command or swap gate.
     if(root.getAttribute(PHASE)==="out"){
-      phase("swap");cancelEffects(tx);
+      phase("swap");if(tx.cancelled||dead)return;cancelEffects(tx);
       for(const resolve of [...tx.waiters])resolve();
     }
     // During swap wait for settled; during incoming let its short fade end.
   }
   function dispose(){
-    if(dead)return;dead=true;if(request)request.superseded=true;abort();phase(null);
-    win.removeEventListener("unload",dispose);win.removeEventListener("keydown",onKey,true);win.removeEventListener("beforecustomization",abort);
-    reduced.removeEventListener("change",abort);try{prefs.removeObserver(PREF,abort);}catch{}
+    if(dead)return;dead=true;if(request)request.superseded=true;
+    let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
+    step(()=>{if(active)cleanup(active);});
+    if(!active?.cleaning)step(()=>phase(null));
+    step(()=>win.removeEventListener("unload",dispose));
+    step(()=>win.removeEventListener("keydown",onKey,true));
+    step(()=>win.removeEventListener("beforecustomization",abort));
+    step(()=>reduced.removeEventListener("change",abort));
+    step(()=>prefs.removeObserver(PREF,abort));
     if(win[KEY]===api)delete win[KEY];
+    try{win.__nocturneTrace?.("workspace.dispose",{failed},{flush:true});}catch{}
   }
   const api={run,dispose};
   try{

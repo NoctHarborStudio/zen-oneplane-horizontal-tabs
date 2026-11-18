@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="disassembly.script",data={version:"0.3.0-preview.59"};
+  const event="disassembly.script",data={version:"0.3.0-preview.60"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -25,7 +25,8 @@ try{if(typeof window!=="undefined"){
     function finish(proceed){
       if(!pending||committing)return;
       const request=pending;pending=null;
-      if(timer!==null)cancelLater(timer);timer=null;
+      const oldTimer=timer;timer=null;
+      if(oldTimer!==null)try{cancelLater(oldTimer);}catch{}
       if(!proceed||!request.animated){
         try{clear();}catch{}
         if(proceed)return invoke(request.receiver,request.args);
@@ -47,17 +48,26 @@ try{if(typeof window!=="undefined"){
         if(committing)return;
         if(pending)return finish(true);
         if(!eligible(args))return invoke(receiver,args);
-        pending={receiver,args,animated:false};
+        const request={receiver,args,animated:false};pending=request;
         try{
-          if(begin()){
-            pending.animated=true;
-            // Seal the real terminal frame before the 110 ms dwell. The
-            // native close cannot occur in the same paint as the final move.
-            timer=later(()=>{if(!pending)return;try{seal();}catch{}pending.sealed=true;timer=later(()=>finish(true),110);},DURATION-110);
+          const animated=begin();
+          if(pending!==request){if(!committing)try{clear();}catch{}return;}
+          if(animated){
+            request.animated=true;
+            // Bind timers to this request even if native cancellation fails.
+            // Preserve the terminal frame for the existing 110 ms dwell.
+            timer=later(()=>{
+              if(pending!==request)return;
+              try{seal();}catch{}
+              if(pending!==request)return;
+              request.sealed=true;
+              try{timer=later(()=>{if(pending===request)finish(true);},110);}
+              catch{if(pending===request)finish(true);}
+            },DURATION-110);
             return;
           }
         }catch{}
-        return finish(true);
+        if(pending===request)return finish(true);
       },
       flush(){return finish(true);},
       dispose(){return finish(false);},
@@ -111,20 +121,21 @@ try{if(typeof window!=="undefined"){
     return result;
   }
   function restore(){
-    typeof window!=="undefined"&&window.__nocturneTrace?.("disassembly.restore",()=>({effects:animations.size,owned:owned.size,closing:root.hasAttribute('data-zr-closing')}),{sample:1000,flush:true});
-    for(const a of animations)try{a.cancel();}catch{}
-    animations.clear();centerHandle?.release();centerHandle=null;bookmarkHandle?.release();bookmarkHandle=null;
+    let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
+    step(()=>window.__nocturneTrace?.("disassembly.restore",()=>({effects:animations.size,owned:owned.size,closing:root.hasAttribute("data-zr-closing")}),{sample:1000,flush:true}));
+    for(const a of animations)step(()=>a.cancel());
+    animations.clear();
+    const center=centerHandle,bookmark=bookmarkHandle;centerHandle=null;bookmarkHandle=null;
+    step(()=>center?.release());step(()=>bookmark?.release());
     for(const [n,record] of owned){
-      for(const [k,v] of record.styles){
-        if(v.value)n.style.setProperty(k,v.value,v.priority);else n.style.removeProperty(k);
-      }
-      for(const [k,v] of record.attrs){
-        if(v===null)n.removeAttribute(k);else n.setAttribute(k,v);
-      }
+      for(const [k,v] of record.styles)step(()=>{if(v.value)n.style.setProperty(k,v.value,v.priority);else n.style.removeProperty(k);});
+      for(const [k,v] of record.attrs)step(()=>{if(v===null)n.removeAttribute(k);else n.setAttribute(k,v);});
     }
     owned.clear();
-    if(sheet)try{window.windowUtils.removeSheet(sheet,window.windowUtils.USER_SHEET);}catch{}
-    sheet=null;style?.remove();style=null;root.removeAttribute("data-zr-closing");
+    step(()=>{if(sheet)window.windowUtils.removeSheet(sheet,window.windowUtils.USER_SHEET);});
+    sheet=null;step(()=>style?.remove());style=null;
+    step(()=>root.removeAttribute("data-zr-closing"));
+    step(()=>window.__nocturneTrace?.("disassembly.cleanup",{failed},{flush:true}));
   }
   function set(n,k,v){
     const rec=owned.get(n);
@@ -206,14 +217,18 @@ try{if(typeof window!=="undefined"){
   }
   function dispose(){
     if(dead)return;dead=true;
-    if(!controller.committing&&!window.closed){controller.dispose();if(animations.size||owned.size||root.hasAttribute("data-zr-closing"))restore();}
-    if(owner&&wrapped&&owner.tryToCloseWindow===wrapped)owner.tryToCloseWindow=original;
-    if(observer)try{Services.obs.removeObserver(observer,"browser-delayed-startup-finished");}catch{}
-    observer=null;
-    try{prefs.removeObserver(PREF,preferenceChanged);}catch{}
-    reduced.removeEventListener("change",preferenceChanged);
-    window.removeEventListener("unload",dispose);
+    let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
+    if(!controller.committing&&!window.closed){
+      step(()=>controller.dispose());
+      step(()=>{if(animations.size||owned.size||root.hasAttribute("data-zr-closing"))restore();});
+    }
+    step(()=>{if(owner&&wrapped&&owner.tryToCloseWindow===wrapped)owner.tryToCloseWindow=original;});
+    step(()=>{if(observer)Services.obs.removeObserver(observer,"browser-delayed-startup-finished");});observer=null;
+    step(()=>prefs.removeObserver(PREF,preferenceChanged));
+    step(()=>reduced.removeEventListener("change",preferenceChanged));
+    step(()=>window.removeEventListener("unload",dispose));
     if(window[KEY]===dispose)delete window[KEY];
+    try{window.__nocturneTrace?.("disassembly.dispose",{failed,delegated:controller.committing},{flush:true});}catch{}
   }
   window[KEY]=dispose;window.addUnloadListener(dispose);window.addEventListener("unload",dispose,{once:true});
   prefs.addObserver(PREF,preferenceChanged);reduced.addEventListener("change",preferenceChanged);

@@ -46,7 +46,7 @@ function lifecycleFixture(){
  reinstall();
  async function flush(){for(let j=0;j<12;j++)await Promise.resolve();}
  async function advance(){await flush();const next=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];if(next){timers.delete(next[0]);clock=next[1].at;next[1].fn();}await flush();}
- return {win,root,bookmarks,old,fresh,events,timers,advance,flush,reinstall,escape:()=>listeners.get("keydown")?.({key:"Escape"})};
+ return {win,root,bookmarks,old,fresh,events,timers,listeners,prefs,advance,flush,reinstall,escape:()=>listeners.get("keydown")?.({key:"Escape"})};
 }
 test("workspace transition keeps native callback single, phases ordered and styles restored",async()=>{
  const f=lifecycleFixture();let calls=0;
@@ -194,4 +194,37 @@ test("workspace captures resting geometry after hover suspension and labels firs
  assert.ok(phase.indexOf("dispatchEvent")<phase.indexOf("lockGeometry()"));
  assert.ok(source.includes("tx.sequence===1?100:65"));
  assert.ok(source.includes("workspace.visual.boundary"));
+});
+
+test("workspace cleanup releases remaining styles, waiters and listeners after native release faults",async()=>{
+ const f=lifecycleFixture(),api=f.win.__zenRefinedWorkspaceTransition;let calls=0;
+ f.bookmarks.animate=()=>({finished:new Promise(()=>{}),cancel(){throw Error("cancel");}});
+ const result=api.run(()=>calls++);
+ const remove=f.bookmarks.style.removeProperty;
+ f.bookmarks.style.removeProperty=k=>{if(k==="--zr-workspace-progress")throw Error("style");remove(k);};
+ const clear=f.win.clearTimeout;let failed=false;
+ f.win.clearTimeout=id=>{if(!failed){failed=true;throw Error("timer");}clear(id);};
+ api.dispose();await f.flush();await result;
+ assert.equal(calls,0);assert.equal(f.root.hasAttribute("data-zr-workspace-phase"),false);
+ assert.equal(f.bookmarks.hasAttribute("data-zr-workspace-motion"),false);
+ assert.equal(f.bookmarks.style.getPropertyValue("--zr-workspace-row-y"),"");
+ assert.equal(f.listeners.size,0);assert.equal(f.win.__zenRefinedWorkspaceTransition,undefined);
+});
+test("workspace incoming visual failure does not change resolved native outcome",async()=>{
+ const f=lifecycleFixture();let count=0;
+ const result=f.win.__zenRefinedWorkspaceTransition.run(()=>{count++;f.bookmarks.style.setProperty=()=>{throw Error("incoming style");};return 42;});
+ await f.flush();await f.advance();assert.equal(await result,42);
+ assert.equal(count,1);assert.equal(f.root.hasAttribute("data-zr-workspace-phase"),false);
+});
+test("workspace native rejection remains a rejection after visual cleanup",async()=>{
+ const f=lifecycleFixture();const result=f.win.__zenRefinedWorkspaceTransition.run(()=>{throw Error("native rejected");});
+ await assert.rejects(result,/native rejected/);
+ assert.equal(f.root.hasAttribute("data-zr-workspace-phase"),false);
+});
+
+test("workspace watchdog acquisition failure falls back to native command once",async()=>{
+ const f=lifecycleFixture();let calls=0;
+ f.win.setTimeout=()=>{throw Error("watchdog");};
+ const result=await f.win.__zenRefinedWorkspaceTransition.run(()=>{calls++;return "native";});
+ assert.equal(result,"native");assert.equal(calls,1);assert.equal(f.root.hasAttribute("data-zr-workspace-phase"),false);
 });

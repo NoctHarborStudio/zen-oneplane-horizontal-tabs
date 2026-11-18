@@ -1,3 +1,9 @@
+## 0.3.0-preview.60 — Workspace and closing lifecycle cleanup
+
+- Isolate Workspace Transition cleanup failures across geometry, effect styles, handles, timers, waiters and listeners. Preserve the native command gate and successful native result even if subsequent decorative motion fails.
+- Bind Closing Animation timers to their original request, fall back to native close if the terminal dwell timer fails, and isolate restoration and wrapper teardown failures.
+- Seven new regression fixtures. No changes to normal animation timings or intended UX. Native validation pending.
+
 ## 0.3.0-preview.59 — Startup preference ownership self-review
 
 - Preserve the last Startup Placeholders lease through final native restoration. Queue same-window replacement until synchronous mutation unwinds; reconcile newly joined windows without racing the backup.
