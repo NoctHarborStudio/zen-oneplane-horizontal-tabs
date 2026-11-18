@@ -41,7 +41,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.70",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.71",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -3933,48 +3933,48 @@ function installTabStrip() {
       });
     }catch{return false;}
   }
-  async function placeNativeWindow(win,target){
-    if(!displaySnapEnabled()||!win||win.closed||!target)return false;
-    let interrupted=false;
-    const stop=event=>{if(event.isTrusted)interrupted=true;};
-    const wait=()=>new Promise(resolve=>window.setTimeout(resolve,120));
-    const alive=()=>!dead&&!win.closed&&!interrupted;
+  async function placeNativeWindow(win,target,alive,wait){
+    if(!displaySnapEnabled()||!win||!target||!alive())return false;
+    const valid=()=>alive()&&!!targetScreen(target)&&alive();
+    const requireCurrent=()=>{if(!valid())throw Error("Placement no longer current");};
     const stateMax=()=>win.windowState===win.STATE_MAXIMIZED;
     const matches=()=>displayPlacementMatches(target,nativeWindowRect(win),stateMax())||
       (target.mode==="maximize"&&stateMax()&&childOnTargetScreen(win,target));
-    const validTarget=()=>!!targetScreen(target);
+    const validTarget=valid;
     try{
-      win.addEventListener("pointerdown",stop,true);win.addEventListener("keydown",stop,true);
       const full=target.full,work=target.work;
       const onTarget=rect=>rect&&displayContains(full,rect.x+Math.floor(rect.width/2),rect.y+Math.floor(rect.height/2));
       if(!validTarget()){logPlacement("target-disconnected",target);return false;}
       logPlacement("before",target,nativeWindowRect(win),win.windowState);
-      if(matches()){logPlacement("already-matched",target,nativeWindowRect(win));return true;}
+      if(matches()&&alive()){logPlacement("already-matched",target,nativeWindowRect(win));return alive();}
       // Maximize a correctly positioned window directly; do not make this
       // depend on a subsequent resize, tab loading or a workspace switch.
       if(target.mode==="maximize"&&(onTarget(nativeWindowRect(win))||childOnTargetScreen(win,target))&&win.windowState!==win.STATE_MINIMIZED){
         for(let attempt=0;attempt<3;attempt++){
           if(!alive()||!validTarget())return false;
-          if(!stateMax()){logPlacement("maximize-request",target,nativeWindowRect(win),win.windowState);win.maximize();}
+          if(!stateMax()){logPlacement("maximize-request",target,nativeWindowRect(win),win.windowState);requireCurrent();win.maximize();}
           await wait();
           if(!alive())return false;
           if(matches()){logPlacement("maximize",target,nativeWindowRect(win),win.windowState);return true;}
         }
       }
+      requireCurrent();
       const base=nativeBase(win);
-      if(stateMax()||win.windowState===win.STATE_MINIMIZED){win.restore();await wait();}
+      requireCurrent();
+      if(stateMax()||win.windowState===win.STATE_MINIMIZED){requireCurrent();win.restore();await wait();}
       if(!alive())return false;
       const seed=displaySnapTarget(full,work,full.x+Math.floor(full.width/2),full.y+Math.floor(full.height/2));
       function nativeSize(rect){
         const n=displayNativeRect(rect,base.devicePixelsPerDesktopPixel);
         if(!n)throw Error("Invalid native display scale");
-        base.setSize(n.width,n.height,true);
+        requireCurrent();base.setSize(n.width,n.height,true);
       }
       function cssApply(rect,resize=true){
         const scale=win.devicePixelRatio/base.devicePixelsPerDesktopPixel;
         if(!Number.isFinite(scale)||scale<=0)throw Error("Invalid CSS display scale");
+        requireCurrent();
         if(resize)win.resizeTo(Math.round(rect.width/scale),Math.round(rect.height/scale));
-        win.moveTo(Math.round(rect.x/scale),Math.round(rect.y/scale));
+        requireCurrent();win.moveTo(Math.round(rect.x/scale),Math.round(rect.y/scale));
       }
       // Retain .23's working monitor-selection path, but only use the
       // center seed for recovering an off-monitor window.
@@ -3983,6 +3983,7 @@ function installTabStrip() {
         for(let attempt=0;attempt<4;attempt++){
           if(!alive()||!validTarget())return false;
           try{
+            requireCurrent();
             if(attempt<2)base.setPositionDesktopPix(seed.x,seed.y);
             else cssApply(seed,false);
           }catch{cssApply(seed,false);}
@@ -3995,14 +3996,14 @@ function installTabStrip() {
       }
       if(!alive()||!validTarget())return false;
       if(target.mode==="maximize"){
-        win.maximize();await wait();
+        requireCurrent();win.maximize();await wait();
         logPlacement("maximize",target,nativeWindowRect(win),win.windowState);
         return alive()&&matches();
       }
       for(let attempt=0;attempt<2;attempt++){
         if(!alive()||!validTarget())return false;
         try{
-          if(attempt===0){nativeSize(target);base.setPositionDesktopPix(target.x,target.y);}
+          if(attempt===0){nativeSize(target);requireCurrent();base.setPositionDesktopPix(target.x,target.y);}
           else cssApply(target);
         }catch{cssApply(target);}
         await wait();
@@ -4017,63 +4018,84 @@ function installTabStrip() {
       if(alive()&&onTarget(actual)&&actual.width<=work.width&&actual.height<=work.height){
         const x=Math.max(work.x,Math.min(work.x+work.width-actual.width,target.x));
         const y=Math.max(work.y,Math.min(work.y+work.height-actual.height,target.y));
-        if(Math.abs(actual.x-x)>2||Math.abs(actual.y-y)>2)try{base.setPositionDesktopPix(x,y);}catch{}
+        if(Math.abs(actual.x-x)>2||Math.abs(actual.y-y)>2)try{requireCurrent();base.setPositionDesktopPix(x,y);}catch{}
       }
       logPlacement("size-unverified",target,nativeWindowRect(win));
       return false;
-    }catch(error){logPlacement("exception",target,nativeWindowRect(win),String(error));console.warn("[OnePlane] Native display placement:",error);return false;}
-    finally{try{win.removeEventListener("pointerdown",stop,true);win.removeEventListener("keydown",stop,true);}catch{}}
+    }catch(error){if(alive()){logPlacement("exception",target,nativeWindowRect(win),{reason:"native-error"});console.warn("[OnePlane] Native display placement:",error);}return false;}
   }
   // Both creation paths schedule this immediately. Native window placement
   // must finish even when workspace initialization or activation fails.
   // Cancel on genuine interaction, close, teardown or startup timeout.
   function placeAfterStartup(win,target){
-    if(!displaySnapEnabled()||!win||!target)return Promise.resolve(false);
+    if(!displaySnapEnabled()||!win||!target||dead||mountScope.closed)return Promise.resolve(false);
     return new Promise(resolve=>{
-      let timer=0,poll=0,settle=0,done=false;
-      const cleanup=()=>{
-        if(done)return false;done=true;
-        try{Services.obs.removeObserver(observer,"browser-delayed-startup-finished");}catch{}
-        try{Services.obs.removeObserver(closedObserver,"domwindowclosed");}catch{}
-        win.removeEventListener("pointerdown",input,true);win.removeEventListener("keydown",input,true);
-        if(timer)window.clearTimeout(timer);if(poll)window.clearTimeout(poll);if(settle)window.clearTimeout(settle);
-        return true;
-      };
-      const cancel=(reason)=>{if(cleanup()){logPlacement("startup-cancelled",target,null,{reason});resolve(false);}};
-      const input=event=>{if(event.isTrusted)cancel("child-input");};
-      const closedObserver=subject=>{if(subject===win||subject===window)cancel("domwindowclosed");};
-      let applying=false;
-      const apply=async()=>{
-        if(done||applying)return;applying=true;
-        logPlacement("startup-observed",target,null,{zenReady:!!win.gZenStartup?.isReady});
-        // Do not wait indefinitely on Zen session initialization. Either
-        // readiness or a bounded settle interval permits native maximize.
-        if(target.mode==="maximize"&&!win.gZenStartup?.isReady&&win.gZenStartup?.promiseInitialized){
-          await Promise.race([Promise.resolve(win.gZenStartup.promiseInitialized).catch(()=>{}),new Promise(r=>{settle=window.setTimeout(r,600);})]);
-        }
-        if(!cleanup())return;
-        if(dead||window.closed||win.closed){resolve(false);return;}
-        const ok=await placeNativeWindow(win,target);
-        if(!ok)console.warn("[OnePlane] Placement not verified; native window kept.");
+      let done=false,applying=false,armed=false,observed=false,release=()=>{},timer=0,poll=0;
+      const scope=createDisposableScope({onError:()=>{try{logPlacement("startup-cleanup-error",target);}catch{}}});
+      const alive=()=>!done&&!dead&&!mountScope.closed&&!window.closed&&!win.closed&&displaySnapEnabled();
+      const finish=(ok,reason)=>{
+        if(done)return;done=true;
+        const result=scope.dispose();
+        try{release();}catch{}
+        try{logPlacement("startup-settled",target,null,{ok,reason,...result});}catch{}
         resolve(ok);
       };
-      const observer=subject=>{if(subject===win)void apply();};
-      Services.obs.addObserver(observer,"browser-delayed-startup-finished");
-      // Initial about:blank document unload is normal when a new chrome
-      // window navigates to browser.xhtml. Only actual window destruction
-      // (WindowWatcher notification) or verified closed state cancels.
-      Services.obs.addObserver(closedObserver,"domwindowclosed");
-      win.addEventListener("pointerdown",input,true);win.addEventListener("keydown",input,true);
-      timer=window.setTimeout(()=>{logPlacement("startup-timeout",target);cancel("timeout");},15000);
-      // Poll only during this startup, so a missed observer or wrapper
-      // mismatch cannot leave a correctly sized but non-maximized window.
+      const cancel=reason=>finish(false,reason);
+      // Every timed wait settles on cancellation too; no continuation
+      // depends on a timer in a destroyed opener realm.
+      const delay=ms=>new Promise(r=>{
+        if(!alive()){r();return;}
+        let id=0,off=()=>{};
+        off=scope.defer("delay",()=>{try{if(id)window.clearTimeout(id);}finally{r();}});
+        try{id=window.setTimeout(off,ms);}catch{off();}
+      });
+      const input=event=>{if(event.isTrusted)cancel("child-input");};
+      const closedObserver=subject=>{if(subject===win||subject===window)cancel("domwindowclosed");};
+      const apply=async()=>{
+        if(!alive()||applying)return;applying=true;
+        try{
+          if(poll)window.clearTimeout(poll);poll=0;
+          logPlacement("startup-observed",target,null,{zenReady:!!win.gZenStartup?.isReady});
+          if(target.mode==="maximize"&&!win.gZenStartup?.isReady&&win.gZenStartup?.promiseInitialized){
+            await Promise.race([Promise.resolve(win.gZenStartup.promiseInitialized).catch(()=>{}),delay(600)]);
+          }
+          if(!alive()){cancel("stale");return;}
+          // The 15s deadline governs startup only; geometry retries
+          // keep their existing bounded native timing.
+          if(timer)window.clearTimeout(timer);timer=0;
+          const ok=await placeNativeWindow(win,target,alive,()=>delay(120));
+          if(!alive()){cancel("stale");return;}
+          if(!ok)console.warn("[OnePlane] Placement not verified; native window kept.");
+          finish(!!ok,ok?"verified":"unverified");
+        }catch{cancel("native-error");}
+      };
+      const observer=subject=>{if(subject===win){observed=true;if(armed)void apply();}};
+      const observe=(fn,topic)=>{
+        // Register inverse before acquisition; a throw after partial
+        // registration still releases this exact observer.
+        scope.defer("observer",()=>Services.obs.removeObserver(fn,topic));
+        Services.obs.addObserver(fn,topic);
+        if(!alive()){try{Services.obs.removeObserver(fn,topic);}catch{}throw Error("Placement cancelled");}
+      };
       const check=()=>{
         if(done||applying)return;
-        if(win.closed||window.closed||dead){cancel("closed-state");return;}
-        if(win.gBrowserInit?.delayedStartupFinished||win.gZenStartup?.isReady){void apply();return;}
-        poll=window.setTimeout(check,100);
+        try{
+          if(!alive()){cancel("closed-state");return;}
+          if(win.gBrowserInit?.delayedStartupFinished||win.gZenStartup?.isReady){void apply();return;}
+          poll=window.setTimeout(check,100);
+        }catch{cancel("probe-error");}
       };
-      check();
+      try{
+        release=mountScope.defer("display-placement",()=>cancel("layout-dispose"));
+        if(!alive()){cancel("stale");return;}
+        scope.defer("timers",()=>{try{if(timer)window.clearTimeout(timer);}finally{if(poll)window.clearTimeout(poll);}});
+        observe(observer,"browser-delayed-startup-finished");
+        observe(closedObserver,"domwindowclosed");
+        scope.listen(win,"pointerdown",input,true);scope.listen(win,"keydown",input,true);
+        if(!alive()){cancel("stale");return;}
+        timer=window.setTimeout(()=>cancel("timeout"),15000);
+        armed=true;if(observed)void apply();else check();
+      }catch{cancel("acquisition-error");}
     });
   }
   function onSourceDrag(event){
@@ -5029,14 +5051,16 @@ function installTabStrip() {
     // replacement. Never use DOM unload as a window-close notification.
     // Keep probes alive until Zen's workspace promise resolves, even when
     // the Gecko startup notification arrives before our listener.
-    function waitForProjectionReady(child,onProbe){
+    function waitForProjectionReady(child,onProbe,scope=hubScope){
       return new Promise((resolve,reject)=>{
-        let finished=false,waiting=null,nativeReady=false,poll=0,timer=0;
+        let finished=false,waiting=null,nativeReady=false,poll=0,timer=0,release=()=>{};
         const cleanup=()=>{
           if(finished)return false;finished=true;
-          if(poll)window.clearTimeout(poll);if(timer)window.clearTimeout(timer);
+          try{if(poll)window.clearTimeout(poll);}catch{}
+          try{if(timer)window.clearTimeout(timer);}catch{}
           try{Services.obs.removeObserver(startup,"browser-delayed-startup-finished");}catch{}
           try{Services.obs.removeObserver(closed,"domwindowclosed");}catch{}
+          try{release();}catch{}
           return true;
         };
         const fail=error=>{if(cleanup())reject(error);};
@@ -5064,11 +5088,15 @@ function installTabStrip() {
               });
             }
           }catch(error){fail(error);return;}
-          if(!finished)poll=window.setTimeout(check,100);
+          if(!finished)try{poll=window.setTimeout(check,100);}catch(error){fail(error);}
         };
         try{
+          release=scope.defer("projection-readiness",()=>fail(Error("Projection owner disposed")));
+          if(finished)return;
           Services.obs.addObserver(startup,"browser-delayed-startup-finished");
+          if(finished){try{Services.obs.removeObserver(startup,"browser-delayed-startup-finished");}catch{}return;}
           Services.obs.addObserver(closed,"domwindowclosed");
+          if(finished){try{Services.obs.removeObserver(closed,"domwindowclosed");}catch{}return;}
           timer=window.setTimeout(()=>fail(Error("Workspace startup timeout")),20000);
           check();
         }catch(error){fail(error);}
@@ -5081,9 +5109,11 @@ function installTabStrip() {
       if(!native.getWorkspaceFromId(id))return;
       const sync=window.gZenWindowSync;
       projectionBusy=true;status.textContent="Opening workspace…";render();
-      let child=null,interacted=false,stopEmptyGuard=()=>{},captureStartup=null,projection=null;
+      let child=null,interacted=false,projection=null;
+      const projectionScope=createDisposableScope({onError:()=>projectionLog(child,"startup-cleanup-error")});
+      const releaseProjection=hubScope.defer("projection-startup",()=>projectionScope.dispose());
       const current=()=>{
-        try{return !interacted&&!destroyed&&!window.closed&&manager()===native&&canProject()&&
+        try{return !interacted&&!projectionScope.closed&&!destroyed&&!window.closed&&manager()===native&&canProject()&&
           window.gZenWindowSync===sync&&!!native.getWorkspaceFromId(id)&&!!child&&!child.closed&&child[PROJECTION]===projection;}
         catch{return false;}
       };
@@ -5092,7 +5122,7 @@ function installTabStrip() {
           !!childNative?.currentWindowIsSyncing&&child.gZenWindowSync===sync&&!!childNative.getWorkspaceFromId(id);}
         catch{return false;}
       };
-      const onInput=event=>{if(event.isTrusted){interacted=true;try{stopEmptyGuard();}catch{}}};
+      const onInput=event=>{if(event.isTrusted){interacted=true;projectionScope.dispose();}};
       try{
         const {BrowserWindowTracker}=ChromeUtils.importESModule("resource:///modules/BrowserWindowTracker.sys.mjs");
         // Supply the final snap rectangle at native window creation,
@@ -5105,21 +5135,24 @@ function installTabStrip() {
         const args=Cc["@mozilla.org/supports-string;1"].createInstance(Ci.nsISupportsString);args.data="about:blank";
         const options={openerWindow:window,private:false,zenSyncedWindow:!prefs.getBoolPref("zen.window-sync.prefer-unsynced-windows",false),args,features};
         child=BrowserWindowTracker.openWindow(options);
-        if(!child)throw Error("Native window did not open");
+        if(!child||destroyed||hubScope.closed)throw Error("Native window did not open or owner disposed");
         projection={source:window,id,sequence:++projectionSequence};child[PROJECTION]=projection;
+        projectionScope.listen(child,"pointerdown",onInput,true);projectionScope.listen(child,"keydown",onInput,true);
         const placementTask=display?placeAfterStartup(child,display):Promise.resolve(true);
-        child.addEventListener("pointerdown",onInput,true);child.addEventListener("keydown",onInput,true);
         const startupTabs=new Set();
         const record=tab=>{if(tab)startupTabs.add(tab);};
-        captureStartup=()=>record(projectionStartupCandidate(child));
-        captureStartup();child.addEventListener("DOMContentLoaded",captureStartup,true);child.addEventListener("load",captureStartup,true);
-        stopEmptyGuard=installProjectionEmptyGuard(child,record,()=>!current());
+        const captureStartup=()=>record(projectionStartupCandidate(child));
+        captureStartup();
+        const offDom=projectionScope.listen(child,"DOMContentLoaded",captureStartup,true);
+        const offLoad=projectionScope.listen(child,"load",captureStartup,true);
+        const stopEmptyGuard=installProjectionEmptyGuard(child,record,()=>!current());
+        const offGuard=projectionScope.defer("empty-guard",stopEmptyGuard);
         projectionLog(child,"opened");
         const childNative=await waitForProjectionReady(child,()=>{
           captureStartup();stopEmptyGuard.probe?.();
-        });
-        captureStartup();child.removeEventListener("DOMContentLoaded",captureStartup,true);child.removeEventListener("load",captureStartup,true);
-        stopEmptyGuard();
+        },projectionScope);
+        if(!current())throw Error("Projection owner changed");
+        captureStartup();offDom();offLoad();offGuard();
         projectionLog(child,"spaces-ready",{candidates:startupTabs.size});
         if(interacted){projectionLog(child,"takeover");await placementTask;return;}
         const browser=child.gBrowser;
@@ -5151,10 +5184,7 @@ function installTabStrip() {
         projectionLog(child,"failed",{reason:"native-error"});
         console.warn("[OnePlane] Workspace projection:",error);
       }finally{
-        try{stopEmptyGuard();}catch{}
-        if(child&&!child.closed)for(const [event,fn] of [["DOMContentLoaded",captureStartup],["load",captureStartup],["pointerdown",onInput],["keydown",onInput]]){
-          if(fn)try{child.removeEventListener(event,fn,true);}catch{}
-        }
+        releaseProjection();
         projectionBusy=false;if(!destroyed&&open)render();
       }
     }

@@ -1,3 +1,4 @@
+import {createDisposableScope} from "../src/core/disposable-scope.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
@@ -9,12 +10,13 @@ function harness(){
   const child=new EventTarget(),window=new EventTarget(),observers=new Map();
   window.setTimeout=setTimeout;window.clearTimeout=clearTimeout;
   child.closed=false;window.closed=false;
+  const hubScope=createDisposableScope();
   let resolveSpaces;
   const spaces=new Promise(r=>{resolveSpaces=r});
   const wait=runInNewContext(s.slice(a,b)+"\nwaitForProjectionReady",{
-    window,destroyed:false,Services:{obs:{addObserver(fn,topic){observers.set(fn,topic)},removeObserver(fn){observers.delete(fn)}}}
+    window,destroyed:false,hubScope,Services:{obs:{addObserver(fn,topic){observers.set(fn,topic)},removeObserver(fn){observers.delete(fn)}}}
   });
-  return {child,window,observers,wait,resolveSpaces,spaces,
+  return {child,window,observers,wait,resolveSpaces,spaces,hubScope,
     notify(subject,topic){for(const [fn,t] of [...observers])if(t===topic)fn(subject);}};
 }
 test("projection survives initial document unload and waits for actual workspace readiness",async()=>{
@@ -49,4 +51,12 @@ test("obsolete workspace readiness cannot certify a replacement manager",async()
   h.child.gZenWorkspaces=replacement;h.resolveSpaces();
   await Promise.resolve();await Promise.resolve();assert.equal(done,false);
   finish();assert.equal(await p,replacement);assert.equal(h.observers.size,0);
+});
+
+test("Hub disposal rejects unresolved native readiness and releases observers",async()=>{
+  const h=harness();h.child.gBrowserInit={delayedStartupFinished:true};
+  h.child.gZenWorkspaces={promiseInitialized:h.spaces};
+  const p=h.wait(h.child);h.hubScope.dispose();
+  await assert.rejects(p,/Projection owner disposed/);assert.equal(h.observers.size,0);
+  h.resolveSpaces();await Promise.resolve();assert.equal(h.observers.size,0);
 });

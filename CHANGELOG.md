@@ -1,3 +1,9 @@
+## 0.3.0-preview.71 — Projection and detach placement lifecycle
+
+- Scope startup observers, input and native placement delays to Layout; cancel and settle on teardown, close or trusted input.
+- Scope Projection startup guard, capture and readiness to Hub; reject stale automatic work without cancelling native data commands.
+- Preserve native geometry and existing animation timings. Four new regression tests.
+
 ## 0.3.0-preview.70 — Projection native data safety
 
 - Keep selection and native placeholder preparation within the same Workspace command lease; fence startup search by exact native identities.
