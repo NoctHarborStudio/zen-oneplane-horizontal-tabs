@@ -3,18 +3,18 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 const version=JSON.parse(readFileSync(new URL("../theme.json",import.meta.url),"utf8")).version;
 const source=readFileSync(new URL("../src/core/diagnostics.js.part",import.meta.url),"utf8");
-function fixture({isPrivate=false,on=true,prior=null}={}){
- let time=0,serial=0,enabled=on;const timers=new Map(),frames=new Map(),logs=[],writes=[],listeners=new Map();
+function fixture({isPrivate=false,on=true,prior=null,failWrite=false}={}){
+ let time=0,serial=0,enabled=on,unload;const timers=new Map(),frames=new Map(),logs=[],writes=[],listeners=new Map();
  const attrs=new Map(),root={hasAttribute:k=>attrs.has(k),getAttribute:k=>attrs.get(k)??null};
  const doc={documentElement:root,getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[]};
- const win={performance:{now:()=>time},innerWidth:1200,innerHeight:800,PrivateBrowsingUtils:{isWindowPrivate:()=>isPrivate},console:{info:s=>logs.push(s),warn:s=>logs.push(s)},addUnloadListener(){},
+ const win={performance:{now:()=>time},innerWidth:1200,innerHeight:800,PrivateBrowsingUtils:{isWindowPrivate:()=>isPrivate},console:{info:s=>logs.push(s),warn:s=>logs.push(s)},addUnloadListener(fn){unload=fn;},
  MutationObserver:class{observe(){}disconnect(){}},addEventListener(k,f){listeners.set(k,f);},removeEventListener(k){listeners.delete(k);},
  setTimeout(f,ms){const id=++serial;timers.set(id,{f,ms});return id;},clearTimeout:id=>timers.delete(id),requestAnimationFrame(f){const id=++serial;frames.set(id,f);return id;},cancelAnimationFrame:id=>frames.delete(id),
  __nocturneEarlyTrace:[{event:"assembly.script",t:0,data:{version:"0.3.0-preview.19"}}]};
- const io={readUTF8:async()=>JSON.stringify(prior),makeDirectory:async()=>{},getChildren:async()=>[],writeUTF8:async(path,data)=>writes.push({path,data})};
+ const io={readUTF8:async()=>JSON.stringify(prior),makeDirectory:async()=>{},getChildren:async()=>[],writeUTF8:async(path,data)=>{if(failWrite)throw Error("injected write failure");writes.push({path,data});}};
  const paths={profileDir:"profile",join:(...p)=>p.join("/"),filename:p=>p.split("/").at(-1)};
  new Function("window","document","Services","IOUtils","PathUtils",source)(win,doc,{prefs:{getBoolPref:()=>enabled}},io,paths);
- return {win,timers,frames,logs,writes,listeners,attrs,setTime:t=>time=t,disable:()=>enabled=false,api:win.__nocturneDiagnostics};
+ return {win,timers,frames,logs,writes,listeners,attrs,unload:()=>unload(),setTime:t=>time=t,disable:()=>enabled=false,api:win.__nocturneDiagnostics};
 }
 test("recorder keeps ordered events, early markers, lazy detail and bounded ring",async()=>{
  const f=fixture();const trace=f.win.__nocturneTrace;
@@ -55,5 +55,33 @@ test("cold assembly keeps frame telemetry without expensive style snapshots",()=
  const sample=[...f.timers.values()].find(x=>x.ms===50);assert.ok(sample);sample.f();
  const data=JSON.parse(f.api.dump());const event=data.events.filter(e=>e.event==="sample").at(-1);
  assert.equal(event.data.light,true);assert.deepEqual(event.data.metrics,{});assert.ok(event.data.frame);assert.equal(event.data.root["data-zr-startup-phase"],"playing");
+ f.api.dispose();
+});
+
+test("Sine teardown quiesces active resources and retains later synchronous producer events",async()=>{
+ const f=fixture();await f.api.flush();f.unload();
+ assert.equal(f.frames.size,0);assert.equal(f.timers.size,0);assert.equal(f.listeners.size,0);
+ f.win.__nocturneTrace("layout.cleanup.end",{failedSteps:0},{sample:1000,flush:true});
+ assert.equal(f.frames.size,0);
+ await Promise.resolve();assert.equal(f.win.__nocturneTrace,undefined);
+ await f.api.flush();
+ const saved=JSON.parse(f.writes.at(-1).data).sessions.at(-1).events;
+ assert.ok(saved.some(e=>e.event==="layout.cleanup.end"));
+ assert.equal(saved.at(-1).event,"diagnostics.dispose");
+});
+test("coalesced flush reports actual write failure",async()=>{
+ const f=fixture({failWrite:true});
+ assert.equal(await f.api.flush(),false);
+ f.win.__nocturneTrace("terminal",{count:1});
+ const first=f.api.flush(),second=f.api.flush();
+ assert.equal(await first,false);assert.equal(await second,false);f.api.dispose();
+});
+test("oversize startup archive cannot consume the entire file budget",async()=>{
+ const prior={schema:2,sessions:[{window:"old",started:1,dropped:0,startup:Array.from({length:100},()=>({event:"assembly.script",data:"я".repeat(12000)})),events:[{event:"terminal",data:{count:1}}]}]};
+ const f=fixture({prior});await f.api.flush();
+ const saved=JSON.parse(f.writes.at(-1).data).sessions[0];
+ assert.ok(saved.startupDropped>0);assert.ok(saved.startup.length>0);
+ assert.equal(saved.events.at(-1).event,"terminal");
+ assert.ok(new TextEncoder().encode(f.writes.at(-1).data).length<=2000000);
  f.api.dispose();
 });

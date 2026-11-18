@@ -8,9 +8,9 @@ function fixture(){
  const values=new Map(),defaults=new Map([[A,true],[B,false],["zen.view.sidebar-expanded",true],["zen.view.compact.hide-tabbar",false],["zen.view.compact.hide-toolbar",true],["zen.view.compact.enable-at-startup",false]]);
  const windows=[],writes=[],prefs={PREF_BOOL:128,getPrefType:()=>128,getStringPref:(k,d)=>values.get(k)??d,setStringPref:(k,v)=>values.set(k,v),getBoolPref:k=>values.get(k)??defaults.get(k),prefHasUserValue:k=>values.has(k),setBoolPref(k,v){writes.push([k,v]);values.set(k,v);},clearUserPref:k=>values.delete(k)};
  const Services={prefs,startup:{shuttingDown:false},wm:{getEnumerator(){const items=[...windows];return {hasMoreElements:()=>items.length>0,getNext:()=>items.shift()};}}};
- function mount(){
+ function mount(resources={}){
   const root={hasAttribute:()=>false,setAttribute(){},removeAttribute(){}},document={documentElement:root},timers=new Map(),events=[],unload=new Map();
-  let n=0,release=()=>{};const window={closed:false,CustomEvent:class{constructor(type){this.type=type;}},gZenCompactModeManager:{hideToolbar(){}},dispatchEvent:e=>events.push(e.type),requestAnimationFrame(){},addEventListener:(k,f)=>unload.set(k,f),removeEventListener:k=>unload.delete(k),setTimeout(fn){timers.set(++n,fn);return n;},clearTimeout:id=>timers.delete(id)};
+  let n=0,release=()=>{};const window={...resources,closed:false,CustomEvent:class{constructor(type){this.type=type;}},gZenCompactModeManager:{hideToolbar(){}},dispatchEvent:e=>events.push(e.type),requestAnimationFrame(){},addEventListener:(k,f)=>unload.set(k,f),removeEventListener:k=>unload.delete(k),setTimeout(fn){timers.set(++n,fn);return n;},clearTimeout:id=>timers.delete(id)};
   windows.push(window);
   const run=new Function("Services","window","document","console","getRelease",source+"\n"+boot.slice(0,boot.indexOf("const reloadingLayout="))+
     "\nconst reloadingLayout=true,startupRecord={};function installTabStrip(){return getRelease();}window[CONTROLLER]=controller;return {activate,cleanup,markClosing,nativeUnload,controller};");
@@ -77,4 +77,15 @@ test("partial target application failure releases previously acquired preference
  const f=fixture(),a=f.mount(),set=f.prefs.setBoolPref;f.values.set(B,true);
  f.prefs.setBoolPref=(k,v)=>{if(k===B&&v===false)throw Error("locked");set(k,v);};
  await a.activate();assert.equal(f.prefs.getBoolPref(A),true);assert.equal(f.prefs.getBoolPref(B),true);assert.equal(f.values.has(KEY),false);assert.equal(a.controller.ownsPreferences,false);
+});
+
+test("final Layout callback releases captured resources and recorder after preference cleanup",async()=>{
+ const f=fixture(),order=[];let a;
+ const diagnostics={requestDispose(){order.push("diagnostics");assert.equal(f.values.has(KEY),false);}};
+ a=f.mount({__nocturneDiagnostics:diagnostics,__nocturneEarlyBoot:{cleanup(){order.push("boot");}},__nocturneCenterMotion:{dispose(){order.push("center");throw Error("injected center failure");}}});
+ a.onRelease(()=>order.push("strip"));await a.activate();
+ a.window.__nocturneDiagnostics={requestDispose(){order.push("replacement");}};
+ a.window.__nocturneTrace=(event,data)=>{if(event==="layout.cleanup.end"){assert.equal(data.failedSteps,1);order.push("end");}};
+ a.cleanup();a.cleanup();
+ assert.deepEqual(order,["boot","center","strip","end","diagnostics"]);
 });

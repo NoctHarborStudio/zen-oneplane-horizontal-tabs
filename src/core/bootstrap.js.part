@@ -1,12 +1,20 @@
+// Sine 2.3.3 replaces callbacks registered for the same script/window.
+// The final Layout callback owns normal teardown; early fragment callbacks
+// are partial-initialization fallbacks only.
+const layoutResources={boot:window.__nocturneEarlyBoot,center:window.__nocturneCenterMotion,diagnostics:window.__nocturneDiagnostics};
+let cleanupErrors=0,cleanupErrorStart=0;
 // Each release is isolated: one feature failure must not prevent native
 // preference restoration or the remaining controller cleanup.
 function cleanupStep(label,fn){
-  try{fn();}catch(error){console.warn("[Nocturne] Cleanup "+label+":",error);}
+  try{fn();}catch(error){cleanupErrors++;console.warn("[Nocturne] Cleanup "+label+":",error);try{window.__nocturneTrace?.("layout.cleanup.error",{resource:label,name:error?.name||"Error"});}catch{}}
 }
 function cleanup(nativeExit=false) {
-    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.cleanup.begin",()=>({disposed,applied,closing}),{flush:true});
   if (disposed) return;
   disposed = true;
+  cleanupErrorStart=cleanupErrors;
+  try{window.__nocturneTrace?.("layout.cleanup.begin",{applied,closing,nativeExit:nativeExit===true},{flush:true});}catch{}
+  cleanupStep("early boot",()=>layoutResources.boot?.cleanup?.());
+  cleanupStep("center motion",()=>layoutResources.center?.dispose?.());
   cleanupStep("active flag",()=>root.removeAttribute("oneplane-active"));
   cleanupStep("ready flag",()=>root.removeAttribute("data-op-startup-ready"));
   cleanupStep("startup event",()=>window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState")));
@@ -39,6 +47,8 @@ function finishCleanup(){
     try{window.__nocturneTrace?.("layout.prefs.lease",{action:"release",last:!shared},{flush:true});}catch{}
   });
   if(wasApplied&&registered)cleanupStep("native layout update",()=>updateNativeAfterCleanup(pendingClose,nativeExit===true));
+  try{window.__nocturneTrace?.("layout.cleanup.end",{wasApplied,wasOwner,registered,pendingClose,nativeExit,failedSteps:cleanupErrors-cleanupErrorStart},{flush:true});}catch{}
+  cleanupStep("diagnostics",()=>layoutResources.diagnostics?.requestDispose?.());
 }
 
 const controller = { get active() { return applied && !disposed; },

@@ -110,3 +110,5 @@ Planning only; all boxes below are open for this workstream. See [B.7](migration
 ### Preview.53 — partial native lifecycle smoke
 
 See [A0.4 / A1.6 checkpoint](pipeline-0.4.0.md#a04--a16--native-smoke-checkpoint-preview53-2026-11-18). Three real recorder sessions confirm Layout acquisition/readiness, shared lease acquisition, 28 matching tab syncs and four noncancelled/nonsuperseded workspace native-end events. User reports no visible regression. Terminal cleanup/release and exact native preference restoration are not present in the saved file. G0/G2 remain open; no full acceptance or performance claim.
+
+A1.7a preview.54: source/fixture candidate only; verify terminal order and cleanup in a surviving normal window after A1.7b/A1.8, including disable/re-enable and close. Expect layout.cleanup.end, diagnostics.quiesce and diagnostics.dispose where persistence completes; absence on process exit is not proof of failure. Existing G0/G2 remain open.

@@ -1,3 +1,8 @@
+## 0.3.0-preview.54 — Layout terminal lifecycle ownership
+
+- Compose early boot, Center Motion, strip, preferences and diagnostics cleanup under the final Layout Sine callback. Capture terminal outcomes and stop diagnostic sampling synchronously; retain the trace for one microtask without delaying shutdown.
+- Bound startup archive bytes and report coalesced write failures. Add four regression fixtures. No intended visual/default changes; native verification pending.
+
 ## 0.3.0-preview.53 — Preference ownership self-review
 
 - Remove duplicate native hideToolbar preference writes after verifying Zen 1.24.2b; emit its layout notification without reapplying hide preferences.

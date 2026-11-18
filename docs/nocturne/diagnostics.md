@@ -47,3 +47,7 @@ Preview.53 retains `layout.prefs.lease` and existing cleanup events; final relea
 ### Preview.53 native terminal evidence gap
 
 All three sessions in the supplied native smoke trace end at `disassembly.native.before`, with no retained final cleanup or recorder-dispose events. Closing writes are best effort; asynchronous persistence and Sine unload order may prevent final producers reaching disk. This does not establish a cleanup failure. A1.7 must improve terminal lifecycle evidence within existing recorder and privacy/size limits, without delaying OS/browser shutdown; see [pipeline](pipeline-0.4.0.md).
+
+### Preview.54 terminal lifecycle contract
+
+Layout owns its final Sine callback and explicitly releases captured early boot/Center Motion resources before strip and preference cleanup. `layout.cleanup.error` records static resource label and error class; `layout.cleanup.end` records flags and thrown-step count (preference restoration has its own aggregate). `diagnostics.quiesce` reports sampling teardown failures; synchronous late producers can still trace until `diagnostics.dispose` at the microtask boundary. Asynchronous writes and cross-entrypoint cleanup remain best effort on shutdown. Archive bytes capped at 120,000 per session; `startupDropped` counts discarded archive entries independently from ring drops. A coalesced flush returns the actual write outcome. No added private data or uploads. Native verification pending.

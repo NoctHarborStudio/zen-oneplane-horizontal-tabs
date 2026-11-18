@@ -39,9 +39,8 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.53",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.54",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
-  if(win.__nocturneDiagnostics?.version===VERSION)return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
   const fileName="nocturne-diagnostics.json",entries=[],last=new Map(),nodes=new Map(),removers=[];
@@ -55,7 +54,7 @@
   let previousMetrics={},sampleIndex=0;
   const startupEvents=[];
   const changedAttrs=new WeakMap();
-  let seq=0,dropped=0,dead=false,timer=0,writeTimer=0,writing=null,dirty=false,until=0,raf=0,frameLast=0,gaps=[],dir=null,ioError=false,observer=null,nativeContainer=null;
+  let seq=0,dropped=0,dead=false,quiescing=false,timer=0,writeTimer=0,writing=null,dirty=false,until=0,raf=0,frameLast=0,gaps=[],dir=null,ioError=false,observer=null,nativeContainer=null;
   const now=()=>win.performance.now(),get=id=>doc.getElementById(id);
   const enabled=()=>{try{return Services.prefs.getBoolPref(PREF,true);}catch{return true;}};
   const round=v=>Number.isFinite(v)?Math.round(v*100)/100:null;
@@ -72,7 +71,7 @@
   }
   function exportData(){return {schema:2,version:VERSION,window:id,started,dropped,startup:startupEvents.slice(),events:entries.slice()};}
   function dump(){return JSON.stringify(exportData(),null,2);}
-  const MAX_FILE_BYTES=2000000,SESSION_BYTES=620000,MAX_EVENTS=3200;
+  const MAX_FILE_BYTES=2000000,SESSION_BYTES=620000,STARTUP_BYTES=120000,MAX_EVENTS=3200;
   const bytes=value=>new TextEncoder().encode(value).length;
   function trimEvents(s){
     if(s.events.length<=1)return false;
@@ -82,8 +81,15 @@
   function packSessions(sessions){
     const pack=()=>JSON.stringify({schema:2,version:VERSION,sessions},null,2);
     for(let i=0;i<sessions.length;i++){
-      const s=sessions[i]={...sessions[i],events:sessions[i].events.slice()};
+      const s=sessions[i]={...sessions[i],startup:Array.isArray(sessions[i].startup)?sessions[i].startup.slice():[],events:sessions[i].events.slice()};
+      // Keep the earliest archive evidence within a separate byte budget.
+      while(s.startup.length&&bytes(JSON.stringify(s.startup,null,2))>STARTUP_BYTES){
+        s.startup.pop();s.startupDropped=(s.startupDropped||0)+1;
+      }
       while(bytes(JSON.stringify(s,null,2))>SESSION_BYTES&&trimEvents(s)){}
+      if(bytes(JSON.stringify(s,null,2))>SESSION_BYTES&&s.events.length===1){
+        s.events.pop();s.dropped=(s.dropped||0)+1;
+      }
     }
     let data=pack();
     while(bytes(data)>MAX_FILE_BYTES){
@@ -125,15 +131,15 @@
     const job=store.tail.then(task,task);store.tail=job.catch(()=>{});return job;
   }
   function startupPlaying(){return root.getAttribute("data-zr-startup-phase")==="playing"||root.hasAttribute("data-nocturne-boot");}
-  function scheduleWrite(){if(!writeTimer&&!dead&&!privateWindow())writeTimer=win.setTimeout(()=>{
+  function scheduleWrite(){if(!writeTimer&&!dead&&!quiescing&&!privateWindow())writeTimer=win.setTimeout(()=>{
     writeTimer=0;if(startupPlaying()){scheduleWrite();return;}void flush();
   },2200);}
   function flush(){
     if(writeTimer){win.clearTimeout(writeTimer);writeTimer=0;}
-    if(writing)return writing.then(()=>dirty?flush():true);
+    if(writing)return writing.then(result=>dirty?flush():result);
     if(!dirty)return Promise.resolve(false);
     dirty=false;
-    writing=persist().finally(()=>{writing=null;if(dirty&&!dead)scheduleWrite();});
+    writing=persist().finally(()=>{writing=null;if(dirty&&!dead&&!quiescing)scheduleWrite();});
     return writing;
   }
   function record(event,detail=null,options={}){
@@ -217,27 +223,44 @@
     previousMetrics=metrics;
     return {root:attrState(root,rootAttrs),counts,frame,full,metrics:delta};
   }
-  function frameTick(t){raf=0;if(dead||!enabled()||now()>until)return;if(frameLast&&gaps.length<300)gaps.push(t-frameLast);frameLast=t;raf=win.requestAnimationFrame(frameTick);}
-  function sample(){timer=0;if(dead||!enabled()||now()>until){frameLast=0;return;}record("sample",snapshot);timer=win.setTimeout(sample,180);}
-  function arm(ms=1600){if(dead||!enabled())return;until=Math.max(until,now()+Math.min(3000,Math.max(100,ms)));if(!timer)timer=win.setTimeout(sample,50);if(!raf){frameLast=0;raf=win.requestAnimationFrame(frameTick);}}
+  function frameTick(t){raf=0;if(dead||quiescing||!enabled()||now()>until)return;if(frameLast&&gaps.length<300)gaps.push(t-frameLast);frameLast=t;raf=win.requestAnimationFrame(frameTick);}
+  function sample(){timer=0;if(dead||quiescing||!enabled()||now()>until){frameLast=0;return;}record("sample",snapshot);timer=win.setTimeout(sample,180);}
+  function arm(ms=1600){if(dead||quiescing||!enabled())return;until=Math.max(until,now()+Math.min(3000,Math.max(100,ms)));if(!timer)timer=win.setTimeout(sample,50);if(!raf){frameLast=0;raf=win.requestAnimationFrame(frameTick);}}
   function listen(target,type,fn){target.addEventListener(type,fn,true);removers.push(()=>target.removeEventListener(type,fn,true));}
   function bindNative(){
     const tc=win.gBrowser?.tabContainer;if(!tc||nativeContainer===tc)return;nativeContainer=tc;
     for(const type of ["TabSelect","TabOpen","TabClose","TabMove","TabPinned","TabUnpinned"])listen(tc,type,()=>record("native."+type,()=>({total:win.gBrowser?.tabs?.length,visible:win.gBrowser?.visibleTabs?.length}),{sample:1800}));
   }
+  function stopSampling(){
+    if(quiescing)return;
+    quiescing=true;
+    let failed=0;
+    const release=fn=>{try{fn();}catch{failed++;}};
+    release(()=>observer?.disconnect());observer=null;
+    for(const off of removers.splice(0))release(off);
+    if(timer)release(()=>win.clearTimeout(timer));if(writeTimer)release(()=>win.clearTimeout(writeTimer));if(raf)release(()=>win.cancelAnimationFrame(raf));
+    timer=writeTimer=raf=0;nodes.clear();
+    record("diagnostics.quiesce",{failed},{flush:true});
+  }
   function dispose(){
     if(dead)return;
+    stopSampling();
     record("diagnostics.dispose",()=>({closed:win.closed,phase:attrState(root,rootAttrs)}),{flush:true});
-    dead=true;observer?.disconnect();for(const off of removers)try{off();}catch{}
-    if(timer)win.clearTimeout(timer);if(writeTimer)win.clearTimeout(writeTimer);if(raf)win.cancelAnimationFrame(raf);
-    timer=writeTimer=raf=0;void flush();
+    dead=true;void flush();
     if(win.__nocturneTrace===record)delete win.__nocturneTrace;if(win.__nocturneDiagnostics===api)delete win.__nocturneDiagnostics;
   }
-  const api={version:VERSION,fileName,dump,flush,dispose,mark:label=>record("user.mark",{label:String(label).slice(0,80)},{sample:2500,flush:true})};
+  function requestDispose(){
+    if(dead||quiescing)return;
+    // Stop active resources now; retain the existing trace for synchronous
+    // unload producers until the next microtask. Never delay native shutdown.
+    stopSampling();
+    void Promise.resolve().then(dispose);
+  }
+  const api={version:VERSION,fileName,dump,flush,dispose,requestDispose,mark:label=>record("user.mark",{label:String(label).slice(0,80)},{sample:2500,flush:true})};
   win.__nocturneDiagnostics=api;win.__nocturneTrace=record;
   try{
     observer=new win.MutationObserver(records=>{
-      if(!enabled())return;
+      if(dead||quiescing||!enabled())return;
       const changes=[];for(const r of records){const key=r.target===root?"root":[...nodes].find(x=>x[1]===r.target)?.[0];if(key){const value=r.target.getAttribute(r.attributeName),cache=changedAttrs.get(r.target)||new Map();if(cache.has(r.attributeName)&&cache.get(r.attributeName)===value)continue;cache.set(r.attributeName,value);changedAttrs.set(r.target,cache);changes.push({node:key,attr:r.attributeName,value});}}
       if(changes.length)record("chrome.attributes",()=>changes);
     });
@@ -250,7 +273,7 @@
     record("diagnostics.ready",()=>({version:VERSION,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished,size:[win.innerWidth,win.innerHeight],private:privateWindow()}),{sample:6000,flush:true});
     const early=win.__nocturneEarlyTrace||[];delete win.__nocturneEarlyTrace;
     for(const item of early)record(item.event,()=>({earlyAt:item.t,...item.data}),{sample:2000});
-    win.addUnloadListener(dispose);listen(win,"unload",dispose);
+    win.addUnloadListener(requestDispose);listen(win,"unload",requestDispose);
   }catch(error){record("diagnostics.setup-error",{name:error?.name});dispose();}
 })();
 /* Nocturne Center Motion — shared deterministic card choreography.
@@ -7758,15 +7781,23 @@ function installTabStrip() {
   return destroy;
 }
 
+// Sine 2.3.3 replaces callbacks registered for the same script/window.
+// The final Layout callback owns normal teardown; early fragment callbacks
+// are partial-initialization fallbacks only.
+const layoutResources={boot:window.__nocturneEarlyBoot,center:window.__nocturneCenterMotion,diagnostics:window.__nocturneDiagnostics};
+let cleanupErrors=0,cleanupErrorStart=0;
 // Each release is isolated: one feature failure must not prevent native
 // preference restoration or the remaining controller cleanup.
 function cleanupStep(label,fn){
-  try{fn();}catch(error){console.warn("[Nocturne] Cleanup "+label+":",error);}
+  try{fn();}catch(error){cleanupErrors++;console.warn("[Nocturne] Cleanup "+label+":",error);try{window.__nocturneTrace?.("layout.cleanup.error",{resource:label,name:error?.name||"Error"});}catch{}}
 }
 function cleanup(nativeExit=false) {
-    typeof window!=="undefined"&&window.__nocturneTrace?.("layout.cleanup.begin",()=>({disposed,applied,closing}),{flush:true});
   if (disposed) return;
   disposed = true;
+  cleanupErrorStart=cleanupErrors;
+  try{window.__nocturneTrace?.("layout.cleanup.begin",{applied,closing,nativeExit:nativeExit===true},{flush:true});}catch{}
+  cleanupStep("early boot",()=>layoutResources.boot?.cleanup?.());
+  cleanupStep("center motion",()=>layoutResources.center?.dispose?.());
   cleanupStep("active flag",()=>root.removeAttribute("oneplane-active"));
   cleanupStep("ready flag",()=>root.removeAttribute("data-op-startup-ready"));
   cleanupStep("startup event",()=>window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState")));
@@ -7799,6 +7830,8 @@ function finishCleanup(){
     try{window.__nocturneTrace?.("layout.prefs.lease",{action:"release",last:!shared},{flush:true});}catch{}
   });
   if(wasApplied&&registered)cleanupStep("native layout update",()=>updateNativeAfterCleanup(pendingClose,nativeExit===true));
+  try{window.__nocturneTrace?.("layout.cleanup.end",{wasApplied,wasOwner,registered,pendingClose,nativeExit,failedSteps:cleanupErrors-cleanupErrorStart},{flush:true});}catch{}
+  cleanupStep("diagnostics",()=>layoutResources.diagnostics?.requestDispose?.());
 }
 
 const controller = { get active() { return applied && !disposed; },
