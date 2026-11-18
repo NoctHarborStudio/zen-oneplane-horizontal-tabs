@@ -1,3 +1,10 @@
+## 0.3.0-preview.84 — Startup readiness and Home structural lease
+
+- Resolve Home readiness within the existing icon budget and reject late automatic Home opening after the Assembly launch boundary.
+- Preserve Home's animated children during passive native data and preference refresh; reconcile the latest state on exact lease release.
+- Resample resources on strip/engine/Home identity replacement; include actual tab topology in boot quiet detection and warm Home without a horizontal strip.
+- Fail open on readiness/RAF/resume exceptions; retain native placeholder behavior and approved animation parameters.
+
 ## 0.3.0-preview.83 — Boot adoption and Home startup lease
 
 - Transfer exact boot/phase baselines from Prelude to Assembly; isolate cleanup failures and fence stale prelude callbacks.

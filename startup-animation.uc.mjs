@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.83"};
+  const event="assembly.script",data={version:"0.3.0-preview.84"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -131,7 +131,8 @@ try{if(typeof window!=="undefined"){
     root.setAttribute("data-nocturne-boot","exit");
     const done=()=>{
       if(dead||boot!==overlay)return;
-      removeBoot();decision("boot.handoff",{elapsed:now()-bootAt});resume();
+      removeBoot();decision("boot.handoff",{elapsed:now()-bootAt});
+      try{resume();}catch(error){decision("assembly.resume.error",{name:error?.name});finish();}
     };
     // Allow the frozen proxy tree to receive a paint before the exit.
     bootFrame=window.requestAnimationFrame(()=>{
@@ -559,20 +560,33 @@ try{if(typeof window!=="undefined"){
   }
   function schedule(){
     if(dead||playing||settling||raf)return;
-    raf=window.requestAnimationFrame(tick);
+    try{raf=window.requestAnimationFrame(tick);}catch(error){decision("assembly.readiness.error",{name:error?.name});finish();}
   }
-  let readinessKey="",quietSince=started;
+  let readinessKey="",quietSince=started,resourceRevision=0,resourceOwners=null,resourceNodes=[];
+  function sampleStartupResources(row,force=false){
+    const engine=window.__nocturneCenterMotion,home=window.__zenSharedHomeV1;
+    const owners=[row,engine,home];
+    const changed=!resourceOwners||owners.some((v,i)=>v!==resourceOwners[i]);
+    if(!force&&!changed&&now()-iconCheckAt<75)return;
+    iconCheckAt=now();
+    // Compare local DOM identities, not the strip's fixed lane count.
+    // Do not serialize nodes or favicon URLs into diagnostics.
+    const nodes=Array.from(row?.querySelectorAll(".oneplane-tab,.oneplane-split-group,.oneplane-tab-icon img")||[]);
+    if(changed||nodes.length!==resourceNodes.length||nodes.some((n,i)=>n!==resourceNodes[i]))resourceRevision++;
+    resourceOwners=owners;resourceNodes=nodes;
+    iconStatus=row?(engine?.warmIcons?.(row)||engine?.iconStats?.(row)||null):null;
+    homeIcons=home?.warmStartupIcons?.()||null;
+  }
   function tick(){
     raf=0;if(dead||playing)return;
+    try{checkReadiness();}catch(error){decision("assembly.readiness.error",{name:error?.name});finish();}
+  }
+  function checkReadiness(){
     if(now()>=deadline){decision("assembly.skip",{reason:"deadline",nativeReady,settled,state:root.getAttribute(READY)});finish();return;}
     hold();pendingEngine=window.__nocturneCenterMotion;
     // Warm icons while native restore is still running, not only after it.
     const earlyRow=get("oneplane-tabs");
-    if(boot&&earlyRow&&now()-iconCheckAt>=75){
-      iconCheckAt=now();iconStatus=window.__nocturneCenterMotion?.warmIcons?.(earlyRow)||null;
-      homeIcons=window.__zenSharedHomeV1?.warmStartupIcons?.()||null;
-    }
-    if(!nativeReady||!settled){schedule();return;}
+    if(!nativeReady||!settled){if(boot)sampleStartupResources(earlyRow);schedule();return;}
     const state=root.getAttribute(READY);
     const controller=window.__oneplaneLayoutController;
     const row=get("oneplane-tabs");
@@ -585,31 +599,27 @@ try{if(typeof window!=="undefined"){
     if(active&&state==="true"&&root.getAttribute("zen-compact-mode")==="true"&&!holdNode?.hasAttribute("data-op-panel-open")){schedule();return;}
     const one=Boolean(active&&bounds(row,true)&&(root.getAttribute("zen-compact-mode")!=="true"||holdNode?.hasAttribute("data-op-panel-open")));
     if(active&&!one){schedule();return;}
-    if(one){
-      const engine=window.__nocturneCenterMotion;
-      if(!iconWaitAt)iconWaitAt=now();
-      if(now()-iconCheckAt>=75){
-        iconCheckAt=now();iconStatus=engine?.warmIcons?.(row)||engine?.iconStats?.(row)||null;
-        homeIcons=window.__zenSharedHomeV1?.warmStartupIcons?.()||null;
-      }
-      const waiting=!!(iconStatus&&(iconStatus.pending+iconStatus.missing)>0||homeIcons?.pending>0);
-      if(waiting&&now()-iconWaitAt<(boot?1400:600)){schedule();return;}
-      // Log readiness once, after the minimum splash duration has elapsed.
-      // The frame loop must not fill the startup event buffer.
+    if(!iconWaitAt)iconWaitAt=now();
+    sampleStartupResources(one?row:null);
+    if(dead)return;
+    const homeState=window.__nocturneLayoutStartup?.homeState||"unavailable";
+    const waiting=homeState==="pending"||!!(iconStatus&&(iconStatus.pending+iconStatus.missing)>0||homeIcons?.pending>0);
+    if(waiting&&now()-iconWaitAt<(boot?1400:600)){schedule();return;}
+    // Missing/late Home and favicons share the existing bounded budget.
+    // A fallback never authorizes replay of the startup stage later.
 
-    }
- 
     // A narrow/hidden legacy strip falls back to native UI, never forces
     // a layout preference. With pending integration, fail open on timeout.
     if(!get("nav-bar")&&!get("navigator-toolbox")){schedule();return;}
     if(boot){
-      const key=JSON.stringify([state,one,iconStatus,homeIcons,row?.childElementCount,window.innerWidth,window.innerHeight]);
+      const key=JSON.stringify([state,one,homeState,resourceRevision,iconStatus,homeIcons,window.innerWidth,window.innerHeight]);
       if(key!==readinessKey){readinessKey=key;quietSince=now();}
       if(!bootReady(now(),bootAt,BOOT_MIN,quietSince,deadline-BOOT_EXIT-200)){schedule();return;}
       decision("boot.ready",{elapsed:now()-bootAt,quiet:now()-quietSince});
     }
-    if(one)decision("assembly.icons.ready",{...iconStatus,homeIcons,wait:now()-iconWaitAt,timeout:!!(iconStatus&&(iconStatus.pending+iconStatus.missing)>0||homeIcons?.pending>0)});
-    window.__nocturneTrace?.("assembly.ready",{one,active,state,expected,nativeReady,settled},{sample:2500});
+    decision("assembly.icons.ready",{...iconStatus,homeIcons,homeState,revision:resourceRevision,wait:now()-iconWaitAt,timeout:waiting});
+    window.__nocturneTrace?.("assembly.ready",{one,active,state,expected,nativeReady,settled,homeState,resourceTimeout:waiting},{sample:2500});
+    if(dead)return;
     if(timer)window.clearTimeout(timer);
     console.info("[Zen Refined] Center Assembly launch: "+(one?"OnePlane":"native"));
     launch(one);
@@ -622,7 +632,7 @@ try{if(typeof window!=="undefined"){
     let queued=false;
     const markReady=()=>{
       if(dead||queued)return;queued=true;
-      if(nativeTimer)window.clearTimeout(nativeTimer);nativeTimer=0;
+      if(nativeTimer)try{window.clearTimeout(nativeTimer);}catch{}nativeTimer=0;
       try{
         nativeFrame=window.requestAnimationFrame(()=>{
           nativeFrame=0;if(dead)return;

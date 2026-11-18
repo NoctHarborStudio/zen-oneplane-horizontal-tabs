@@ -207,7 +207,7 @@ async function activate() {
 }
 
 const reloadingLayout=!!(window[CONTROLLER]||window.__nocturneLayoutStartup);
-const startupRecord={initial:!reloadingLayout&&!window.__nocturneLayoutStartup,readyAt:null};
+const startupRecord={initial:!reloadingLayout&&!window.__nocturneLayoutStartup,readyAt:null,homeState:"skipped"};
 if (!root.hasAttribute("popup-window") && typeof window.addUnloadListener === "function") {
   window[CONTROLLER]?.cleanup();
   window[CONTROLLER] = controller;

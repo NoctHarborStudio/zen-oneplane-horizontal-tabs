@@ -182,3 +182,7 @@ Direct WAAPI acquisition registers the exact animation and completion before pau
 ### A3.3b1 Boot / Assembly / Home
 
 Prelude owns the exact early cover and its marker baselines until adoption; Assembly owns adopted node and markers thereafter. Native readiness RAFs are captured and cancelled by Assembly. Shared Home startup lease is attached to the existing exact timeline, not a separate global controller; Home render invalidates old animated children, and Assembly closes the timeline before releasing the lease. Legacy registry compatibility is additive and remains an explicit test gate. No approved visual/timing changes.
+
+### A3.3b2 bounded readiness and Home structure
+
+The existing Layout startup record publishes the Home trigger's readiness outcome. Assembly owns the launch boundary and observes this state with its existing icon budget. The Home lease defers passive structural refresh, not native user input or authoritative data. The existing sampler tracks local row/engine/Home identity and tab/card/image topology; no permanent polling or new controller. Remaining MB1/2 absolute watchdog and mixed-runtime acceptance plus MB6 geometry handoff remain explicit gates.

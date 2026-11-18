@@ -54,7 +54,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.83",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.84",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -1737,12 +1737,19 @@ function acquireZenHome(win, services) {
   }
   function restore(){if(!covered)return;covered=false;panels.removeAttribute("data-zr-home-covered");if(!oldInert)panels.removeAttribute("inert");host.removeAttribute("data-zr-home-host");}
   let startupRun=null,startupIconSources=new WeakMap();
-  function finishStartupHome(expected=null){
+  function finishStartupHome(expected=null,flush=true){
     if(expected&&startupRun!==expected)return;
     const run=startupRun;startupRun=null;
     if(run&&run.timeline.homeLease===run.lease)delete run.timeline.homeLease;
     for(const a of run?.effects||[])try{a.cancel();}catch{}
+    if(startupRun)return;
     panel.removeAttribute("data-zh-startup");
+    if(flush&&run?.dirty&&open&&!dead&&!searchToken)render();
+  }
+  function refreshHomeStructure(){
+    if(!open||dead)return;
+    if(startupRun){startupRun.dirty=true;return;}
+    render();
   }
   function warmStartupIcons(){
     let total=0,pending=0;
@@ -1758,14 +1765,18 @@ function acquireZenHome(win, services) {
     return {total,pending};
   }
   function playStartupHome(timeline){
-    if(!open||dead||!panel.hasAttribute("data-zh-startup")||searchToken||!timeline||timeline.closed)return null;
+    if(!open||dead||!panel.hasAttribute("data-zh-startup")||searchToken||!timeline)return null;
     if(startupRun)return startupRun.timeline===timeline?startupRun.lease:null;
+    // A late native placeholder may still display Home normally, but
+    // must not replay the startup wave after its scheduled stage began.
+    const elapsed=timeline.paused?0:Math.max(0,(win.performance?.now?.()??timeline.start)-timeline.start);
+    if(timeline.closed||!timeline.paused&&elapsed>=timeline.home*timeline.scale){finishStartupHome();return null;}
     if(win.matchMedia("(prefers-reduced-motion: reduce)").matches||timeline.homeLease){finishStartupHome();return null;}
-    const run={timeline,effects:[],lease:null};
+    const run={timeline,effects:[],lease:null,dirty:false};
     const lease={resume(){if(startupRun===run)for(const a of run.effects)try{a.play();}catch{}},release(){finishStartupHome(run);}};
     run.lease=lease;startupRun=run;timeline.homeLease=lease;
     try{
-      const nodes=[...content.children],elapsed=timeline.paused?0:Math.max(0,(win.performance?.now?.()??timeline.start)-timeline.start);
+      const nodes=[...content.children];
       for(const [i,node] of nodes.entries()){
         const delay=Math.max(0,(timeline.home+Math.min(i*65,195))*timeline.scale-elapsed);
         const a=node.animate([{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}],{delay,duration:timeline.homeLength*timeline.scale,easing:"cubic-bezier(.2,.75,.25,1)",fill:"both"});
@@ -2316,7 +2327,7 @@ function acquireZenHome(win, services) {
     const manager=win.gZenWorkspaces;
     const buttons=Array.from(content.querySelectorAll(".zh-space[data-zh-workspace-id]"));
     let spaces=[];try{spaces=(manager?.getWorkspaces?.()||[]).filter(ws=>ws?.uuid);}catch{return;}
-    if(buttons.length!==spaces.length||buttons.some((b,i)=>b.getAttribute("data-zh-workspace-id")!==spaces[i].uuid||b.getAttribute("data-zh-workspace-name")!==String(spaces[i].name||"Workspace"))){render();return;}
+    if(buttons.length!==spaces.length||buttons.some((b,i)=>b.getAttribute("data-zh-workspace-id")!==spaces[i].uuid||b.getAttribute("data-zh-workspace-name")!==String(spaces[i].name||"Workspace"))){refreshHomeStructure();return;}
     for(const b of buttons){
       if(b.getAttribute("data-zh-workspace-id")===manager.activeWorkspace)b.setAttribute("aria-current","true");
       else b.removeAttribute("aria-current");
@@ -2328,9 +2339,9 @@ function acquireZenHome(win, services) {
   }
   function render(){
     if(!open||dead||searchToken)return;
-    // A native data refresh replaces the animated children. Retire the
-    // exact old effect instead of leaving animations on detached nodes.
-    if(startupRun)finishStartupHome(startupRun);
+    // Explicit interaction may replace the children immediately. Passive
+    // updates use refreshHomeStructure and coalesce under the startup lease.
+    if(startupRun)finishStartupHome(startupRun,false);
     const oldGrid=content.querySelector(".zh-recommendations");
     if(adding&&oldGrid)pinScrollTop=oldGrid.scrollTop;
     const nextMode=adding?(pinCustom?"custom-url":"add-pin"):(editing?"customize":"home");
@@ -2451,14 +2462,14 @@ function acquireZenHome(win, services) {
       })||(()=>{});
     };
     listen(win,"Nocturne:OverlayReady",bindOverlay);cleanups.push(()=>unregisterOverlay());bindOverlay();
-    const observer={observe(){if(open)render();}};prefs.addObserver(PREF,observer);cleanups.push(()=>prefs.removeObserver(PREF,observer));
+    const observer={observe(){if(open)refreshHomeStructure();}};prefs.addObserver(PREF,observer);cleanups.push(()=>prefs.removeObserver(PREF,observer));
     listen(browser.tabContainer,"TabSelect",onSelectedTab);
     // A selected, intentionally blank ordinary tab may finish loading
     // after TabSelect. Recheck only the selected tab, never background opens.
     listen(browser.tabContainer,"TabAttrModified",e=>{
       if(!open&&e.target===browser.selectedTab&&e.detail?.changed?.some?.(name=>name==="busy"||name==="pending"||name==="discarded"||name==="zen-empty-tab"))ensurePrimaryHome();
     });
-    listen(win,"ZenWorkspaceDataChanged",()=>{if(open&&!switching)render();});
+    listen(win,"ZenWorkspaceDataChanged",()=>{if(open&&!switching)refreshHomeStructure();});
     listen(win,"ZenWorkspacesUIUpdate",()=>{if(open&&!switching){refreshWorkspaceSelection();pendingWatch?.refresh();}});
     listen(win,"ZenURLBarClosed",onSearchClosed);
     listen(win,"resize",()=>{
@@ -8058,7 +8069,7 @@ function installTabStrip() {
     scheduleIndicator();
   }
   // OnePlane-only trigger and Compact Mode adapter; core is host-neutral.
-  let homeLease=null, homeUnsubscribe=null, homeIdleTimer=0, homeIdle=false, homeTitleKey=null, homeNativeTitle="";
+  let homeLease=null, homeUnsubscribe=null, homeStartupRecord=null, homeIdleTimer=0, homeIdle=false, homeTitleKey=null, homeNativeTitle="";
   function clearHomeIdle(){if(homeIdleTimer)window.clearTimeout(homeIdleTimer);homeIdleTimer=0;}
   function markHomeTitleActivity(){
     clearHomeIdle();homeIdle=false;if(!homeLease||homeLease.open)return;
@@ -8068,6 +8079,8 @@ function installTabStrip() {
     typeof window!=="undefined"&&window.__nocturneTrace?.("home.mount",()=>(null),{sample:1800});
     try{homeLease=acquireZenHome(window,Services);}catch(error){console.warn("[OnePlane] Home unavailable",error);}
     island.toggleAttribute("data-op-home-enabled",!!homeLease);island.disabled=!homeLease;
+    const startup=homeStartupRecord=window.__nocturneLayoutStartup;
+    if(startup?.initial)startup.homeState=homeLease&&!window.__oneplaneWorkspaceProjection?"pending":"skipped";
     if(!homeLease)return;
     homeUnsubscribe=homeLease.subscribe(open=>{
       row.toggleAttribute("data-op-home-open",open);island.setAttribute("aria-expanded",String(open));
@@ -8085,14 +8098,30 @@ function installTabStrip() {
   async function onHomeStartup(){
     if(root.getAttribute("data-op-startup-ready")!=="true")return;
     window.removeEventListener("OnePlane:StartupState",onHomeStartup);
-    if(dead||disposed||reloadingLayout||window.__oneplaneWorkspaceProjection||!hoverSupported())return;
-    // URL bar blur records an engagement using the native default engine.
-    const selected=browser.selectedTab;
-    try{if(Services.search&&!Services.search.isInitialized)await Services.search.init();}
-    catch(error){window.console.warn("[OnePlane] Startup search initialization:",error);return;}
-    if(dead||disposed||window.closed||!hoverSupported()||browser.selectedTab!==selected)return;
-    // Both hosts use one window startup claim, not independent auto-open timers.
-    homeLease?.showOnStartup?.();
+    const startup=window.__nocturneLayoutStartup,lease=homeLease,selected=browser.selectedTab;
+    let outcome="skipped";
+    const current=()=>!dead&&!disposed&&!reloadingLayout&&!window.closed&&
+      !window.__oneplaneWorkspaceProjection&&hoverSupported()&&browser.selectedTab===selected&&
+      homeLease===lease&&window.__nocturneLayoutStartup===startup;
+    // Assembly owns the launch boundary. A late search-service promise
+    // cannot auto-open Home after that boundary (or after an abort).
+    // With Assembly disabled/absent, retain the existing native startup path.
+    const beforeReveal=()=>!window.__zenRefinedStartupAnimationSeen||
+      !!window.__zenRefinedStartupAnimation&&!window.__nocturneStartupTimeline;
+    try{
+      if(!lease||!current()||!beforeReveal())return;
+      if(lease.open){outcome="ready";return;}
+      if(Services.search&&!Services.search.isInitialized)await Services.search.init();
+      if(!current()||!beforeReveal())return;
+      if(lease.open){outcome="ready";return;}
+      if(lease.showOnStartup?.())outcome="ready";
+    }catch(error){outcome="failed";window.console.warn("[OnePlane] Startup search initialization:",error);}
+    finally{
+      if(startup&&window.__nocturneLayoutStartup===startup){
+        startup.homeState=outcome;
+        try{window.__nocturneTrace?.("home.startup.ready",{state:outcome},{flush:true});}catch{}
+      }
+    }
   }
   function stopHomeDoubleClick(e){e.preventDefault();e.stopPropagation();}
   function stopHomePointer(e){e.stopPropagation();}
@@ -8103,6 +8132,8 @@ function installTabStrip() {
   }
   function destroyHome(){
     typeof window!=="undefined"&&window.__nocturneTrace?.("home.destroy",()=>(null),{sample:1800});
+    const startup=homeStartupRecord;homeStartupRecord=null;
+    if(startup?.homeState==="pending"&&window.__nocturneLayoutStartup===startup)startup.homeState="skipped";
     clearHomeIdle();homeUnsubscribe?.();homeUnsubscribe=null;
     window.removeEventListener("OnePlane:StartupState",onHomeStartup);
     island.removeEventListener("click",onHomeTrigger);island.removeEventListener("dblclick",stopHomeDoubleClick);island.removeEventListener("pointerdown",stopHomePointer);
@@ -9219,7 +9250,7 @@ async function activate() {
 }
 
 const reloadingLayout=!!(window[CONTROLLER]||window.__nocturneLayoutStartup);
-const startupRecord={initial:!reloadingLayout&&!window.__nocturneLayoutStartup,readyAt:null};
+const startupRecord={initial:!reloadingLayout&&!window.__nocturneLayoutStartup,readyAt:null,homeState:"skipped"};
 if (!root.hasAttribute("popup-window") && typeof window.addUnloadListener === "function") {
   window[CONTROLLER]?.cleanup();
   window[CONTROLLER] = controller;

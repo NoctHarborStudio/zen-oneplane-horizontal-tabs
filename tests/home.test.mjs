@@ -101,7 +101,7 @@ test("Home workspace state updates without replacing search and shortcuts",()=>{
  a.setAttribute("aria-current","true");
  const manager={activeWorkspace:"b",getWorkspaces:()=>[{uuid:"a",name:"A"},{uuid:"b",name:"B"}]};
  let renders=0;
- const refresh=new Function("win","content","render",code+"let open=true,dead=false;return refreshWorkspaceSelection;")({gZenWorkspaces:manager},{querySelectorAll:()=>[a,b]},()=>renders++);
+ const refresh=new Function("win","content","refreshHomeStructure",code+"let open=true,dead=false;return refreshWorkspaceSelection;")({gZenWorkspaces:manager},{querySelectorAll:()=>[a,b]},()=>renders++);
  refresh();assert.equal(a.getAttribute("aria-current"),undefined);assert.equal(b.getAttribute("aria-current"),"true");assert.equal(renders,0);
  manager.getWorkspaces=()=>[{uuid:"b",name:"Renamed"}];refresh();assert.equal(renders,1);
 });

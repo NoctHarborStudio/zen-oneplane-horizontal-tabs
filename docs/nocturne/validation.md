@@ -313,3 +313,7 @@ Six new regression tests; 21/21 focused startup-transparency fixtures PASS in is
 ### Preview.83 Boot and Home lifecycle
 
 Four new regression tests use actual extracted native readiness, prelude IIFE and Home startup effect functions. Verify cancelled readiness cannot queue successor, partial Home pause cancels every acquired effect, stale exact lease cannot affect successor, closed timeline cannot acquire a late lease, and Prelude cleanup restores prior markers and leaves replacement untouched. Startup-transparency and Center Motion regression suites rerun on candidate; canonical Node CI pending; native acceptance deferred. Older Home registry remains a compatibility test gate.
+
+### Preview.84 readiness integration
+
+Six new permanent regressions: actual async Home trigger tested across launch/abort and Layout replacement; extracted resource sampler detects equal-count identity change and warms Home with no row; readiness exception uses terminal cleanup; exact Home lease coalesces passive refresh and rejects late stage replay. Startup/Center Motion/Home trigger fixtures on candidate, canonical Node CI and native Zen runtime remain distinct evidence levels. Native verification remains deferred.

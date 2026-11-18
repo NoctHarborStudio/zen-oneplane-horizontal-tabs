@@ -278,3 +278,53 @@ test("closed startup timeline cannot acquire a late Home lease",()=>{
  `);
  assert.deepEqual(run(),{lease:null,calls:0,registered:false});
 });
+
+test("startup resource preflight samples Home without a horizontal row and resets stale owner snapshots",()=>{
+ const code=source.slice(source.indexOf("  let readinessKey="),source.indexOf("  function tick(){"));
+ const run=new Function(`
+ let time=100,started=0,iconCheckAt=-Infinity,iconStatus=null,homeIcons=null;
+ let cards=[{}],calls=0;const row={querySelectorAll:()=>cards};
+ const window={__nocturneCenterMotion:{warmIcons(){calls++;return {total:1,pending:0};}},__zenSharedHomeV1:{warmStartupIcons(){return {total:2,pending:1};}}};
+ const now=()=>time;
+ ${code}
+ sampleStartupResources(null);const native={homeIcons,iconStatus,revision:resourceRevision};
+ sampleStartupResources(row);const first=resourceRevision;
+ cards=[{}];time+=80;sampleStartupResources(row);const changed=resourceRevision;
+ window.__nocturneCenterMotion={warmIcons(){return {total:1,pending:1};}};sampleStartupResources(row);
+ return {native,first,changed,revision:resourceRevision,iconStatus,calls};
+ `);
+ assert.deepEqual(run(),{native:{homeIcons:{total:2,pending:1},iconStatus:null,revision:1},first:2,changed:3,revision:4,iconStatus:{total:1,pending:1},calls:2});
+});
+test("startup readiness exception uses existing fail-open cleanup",()=>{
+ const code=source.slice(source.indexOf("  function tick(){"),source.indexOf("  function checkReadiness(){"));
+ const run=new Function(`
+ let raf=1,dead=false,playing=false,calls=0,events=[];function checkReadiness(){throw Error("readiness");}function finish(){calls++;dead=true;}function decision(e){events.push(e);}
+ ${code}
+ tick();tick();return {raf,calls,events};
+ `);
+ assert.deepEqual(run(),{raf:0,calls:1,events:["assembly.readiness.error"]});
+});
+test("Home startup lease coalesces passive structural refresh and flushes once",()=>{
+ const home=readFileSync(new URL("../src/home/shared-home.js.part",import.meta.url),"utf8");
+ const code=home.slice(home.indexOf("  let startupRun="),home.indexOf("  function warmStartupIcons()"));
+ const run=new Function(`
+ let open=true,dead=false,searchToken=null,renders=0,mark=true,cancelled=0;
+ const panel={removeAttribute(){mark=false;}};function render(){renders++;}
+ ${code}
+ const timeline={},lease={},run={timeline,lease,effects:[{cancel(){cancelled++;}}],dirty:false};timeline.homeLease=lease;startupRun=run;
+ refreshHomeStructure();refreshHomeStructure();const before={renders,mark};finishStartupHome(run);finishStartupHome(run);
+ return {before,renders,mark,cancelled,owned:!!timeline.homeLease};
+ `);
+ assert.deepEqual(run(),{before:{renders:0,mark:true},renders:1,mark:false,cancelled:1,owned:false});
+});
+test("late native Home remains visible without replaying its startup stage",()=>{
+ const home=readFileSync(new URL("../src/home/shared-home.js.part",import.meta.url),"utf8");
+ const code=home.slice(home.indexOf("  let startupRun="),home.indexOf("  function stopMotion()"));
+ const run=new Function(`
+ let open=true,dead=false,searchToken=null,mark=true,calls=0;const panel={hasAttribute:()=>mark,removeAttribute(){mark=false;}},content={children:[{animate(){calls++;}}]};
+ const win={performance:{now:()=>900},matchMedia:()=>({matches:false})};function render(){}
+ ${code}
+ const timeline={start:0,scale:1,home:650,paused:false};return {lease:playStartupHome(timeline),calls,mark};
+ `);
+ assert.deepEqual(run(),{lease:null,calls:0,mark:false});
+});

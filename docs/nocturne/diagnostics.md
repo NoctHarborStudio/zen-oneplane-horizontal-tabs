@@ -202,3 +202,7 @@ Existing `disassembly.bypass` now also records `bookmark-preflight-failed` and `
 ### Preview.83 Boot and Home ownership
 
 `boot.prelude.cleanup` reports isolated cleanup failure counts; `home.startup.error` reports only error class on group acquisition failure. Existing startup/boot decisions and readiness timeout events remain authoritative. No new writer, observer for telemetry, or private fields.
+
+### Preview.84 readiness outcomes
+
+`home.startup.ready` reports ready/skipped/failed, `assembly.icons.ready` reports Home state, local topology revision and existing resource budget timeout; `assembly.readiness.error` and `assembly.resume.error` identify error class before fail-open cleanup. No DOM references, favicon URLs or additional writer.
