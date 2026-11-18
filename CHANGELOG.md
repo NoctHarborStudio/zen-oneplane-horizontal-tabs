@@ -1,3 +1,9 @@
+## 0.3.0-preview.62 — Independent diagnostic persistence queue
+
+- Submit sanitized snapshots synchronously to a single bounded writer, including during an outstanding write and synchronous teardown.
+- Run the writer in a standalone Gecko system-principal sandbox, anchored to the native process module when available; explicit fallback status in diagnostics.ready. No browsing data or window references cross into the writer.
+- Preserve schema 2, three sessions, 2 MB UTF-8 cap and private-window exclusion. Four regression fixtures; native shutdown persistence remains best effort, no shutdown delay.
+
 ## 0.3.0-preview.61 — Workspace and closing lifecycle self-review
 
 - Register the latest Workspace intent before synchronous cleanup/phase callbacks; defer nested visual work until the current synchronous step completes. Prevent a pending native command from being overwritten.

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 const version=JSON.parse(readFileSync(new URL("../theme.json",import.meta.url),"utf8")).version;
 const source=readFileSync(new URL("../src/core/diagnostics.js.part",import.meta.url),"utf8");
-function fixture({isPrivate=false,on=true,prior=null,failWrite=false,writeHook=()=>{},removeFails=false}={}){
+function fixture({isPrivate=false,on=true,prior=null,failWrite=false,writeHook=()=>{},removeFails=false,standalone=false,shared=null,anchor=null}={}){
  let time=0,serial=0,enabled=on,unload;const timers=new Map(),frames=new Map(),logs=[],writes=[],listeners=new Map();
  const attrs=new Map(),root={hasAttribute:k=>attrs.has(k),getAttribute:k=>attrs.get(k)??null};
  const doc={documentElement:root,getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[]};
@@ -11,11 +11,14 @@ function fixture({isPrivate=false,on=true,prior=null,failWrite=false,writeHook=(
  MutationObserver:class{observe(){}disconnect(){}},addEventListener(k,f){listeners.set(k,f);},removeEventListener(k){if(removeFails)throw Error("injected remove failure");listeners.delete(k);},
  setTimeout(f,ms){const id=++serial;timers.set(id,{f,ms});return id;},clearTimeout:id=>timers.delete(id),requestAnimationFrame(f){const id=++serial;frames.set(id,f);return id;},cancelAnimationFrame:id=>frames.delete(id),
  __nocturneEarlyTrace:[{event:"assembly.script",t:0,data:{version:"0.3.0-preview.19"}}]};
- const io={readUTF8:async()=>writes.at(-1)?.data??JSON.stringify(prior),makeDirectory:async()=>{},getChildren:async()=>[],writeUTF8:async(path,data)=>{if(failWrite)throw Error("injected write failure");writeHook(data);writes.push({path,data});}};
+ const io=shared?.io||{readUTF8:async()=>writes.at(-1)?.data??JSON.stringify(prior),makeDirectory:async()=>{},getChildren:async()=>[],writeUTF8:async(path,data)=>{if(failWrite)throw Error("injected write failure");writeHook(data);writes.push({path,data});}};
  const paths={profileDir:"profile",join:(...p)=>p.join("/"),filename:p=>p.split("/").at(-1)};
- const reload=()=>{new Function("window","document","Services","IOUtils","PathUtils",source)(win,doc,{prefs:{getBoolPref:()=>enabled},wm:{getEnumerator(){let sent=false;return {hasMoreElements:()=>!sent,getNext:()=>{sent=true;return win;}};}}},io,paths);return win.__nocturneDiagnostics;};
+ const components=standalone?{utils:{Sandbox:()=>({}),evalInSandbox:code=>new Function("IOUtils","PathUtils","TextEncoder","return "+code)(io,paths,TextEncoder)}}:undefined;
+ const chrome=anchor?{importESModule:()=>({BrowserWindowTracker:anchor})}:undefined;
+ if(shared?.store)win.__nocturneDiagnosticStore=shared.store;
+ const reload=()=>{new Function("window","document","Services","IOUtils","PathUtils","Components","ChromeUtils","TextEncoder",source)(win,doc,{scriptSecurityManager:{getSystemPrincipal:()=>({})},prefs:{getBoolPref:()=>enabled},wm:{getEnumerator(){let sent=false;return {hasMoreElements:()=>!sent,getNext:()=>{sent=true;return win;}};}}},io,paths,components,chrome,TextEncoder);return win.__nocturneDiagnostics;};
  reload();
- return {reload,win,timers,frames,logs,writes,listeners,attrs,unload:()=>unload(),setTime:t=>time=t,disable:()=>enabled=false,api:win.__nocturneDiagnostics};
+ return {reload,win,timers,frames,logs,writes,io,listeners,attrs,unload:()=>unload(),setTime:t=>time=t,disable:()=>enabled=false,api:win.__nocturneDiagnostics};
 }
 test("recorder keeps ordered events, early markers, lazy detail and bounded ring",async()=>{
  const f=fixture();const trace=f.win.__nocturneTrace;
@@ -117,4 +120,44 @@ test("failed listener removal cannot re-arm diagnostic sampling",async()=>{
  const events=JSON.parse(f.writes.at(-1).data).sessions.at(-1).events;
  assert.ok(events.some(e=>e.event==="diagnostics.quiesce"&&e.data.failed>0));
  assert.ok(!events.some(e=>e.event==="event.resize"));
+});
+
+test("terminal snapshot enters independent writer before pending write completes",async()=>{
+ const f=fixture({standalone:true});await f.api.flush();
+ const original=f.io.writeUTF8;let resolve,entered;const held=new Promise(r=>resolve=r),started=new Promise(r=>entered=r);
+ let first=true;f.io.writeUTF8=async(...args)=>{if(first){first=false;entered();await held;}return original(...args);};
+ f.win.__nocturneTrace("preclose",{count:1},{flush:true});await started;
+ f.unload();f.win.__nocturneTrace("layout.cleanup.end",{failedSteps:0});
+ await Promise.resolve();assert.equal(f.win.__nocturneTrace,undefined);
+ const writer=f.win.__nocturneDiagnosticStore;
+ // Do not call producer flush after simulated destruction: join the
+ // writer directly, with a later unrelated session as a queue barrier.
+ resolve();await writer.submit(JSON.stringify({schema:2,version,window:"barrier",started:Date.now()+1,events:[],startup:[]}));
+ const events=JSON.parse(f.writes.at(-1).data).sessions.find(s=>s.window!=="barrier").events;
+ assert.equal(events.find(e=>e.event==="diagnostics.ready").data.writer,"independent");
+ assert.ok(events.some(e=>e.event==="layout.cleanup.end"));assert.equal(events.at(-1).event,"diagnostics.dispose");
+});
+test("writer retains latest queued snapshot per session and bounds queued sessions",async()=>{
+ const f=fixture({standalone:true});await f.api.flush();const writer=f.win.__nocturneDiagnosticStore;
+ const original=f.io.writeUTF8;let release,entered;const held=new Promise(r=>release=r),started=new Promise(r=>entered=r);let first=true;
+ f.io.writeUTF8=async(...args)=>{if(first){first=false;entered();await held;}return original(...args);};
+ const submit=(id,n)=>writer.submit(JSON.stringify({schema:2,version,window:"test"+id,started:id,events:[{n,event:"test"}],startup:[]}));
+ const a=submit(1,1);await started;const b=submit(2,1),b2=submit(2,2);assert.equal(b,b2);
+ const c=submit(3,1),d=submit(4,1),e=submit(5,1);assert.equal(await b,false);
+ release();await Promise.all([a,c,d,e]);const sessions=JSON.parse(f.writes.at(-1).data).sessions;
+ assert.equal(sessions.length,3);assert.ok(!sessions.some(s=>s.window==="test2"));assert.ok(sessions.some(s=>s.window==="test5"));
+});
+test("process anchor reuses independent writer after zero-window interval; private cannot submit",async()=>{
+ const anchor={},a=fixture({standalone:true,anchor});await a.api.flush();const store=a.win.__nocturneDiagnosticStore;
+ a.api.dispose();await a.api.flush();
+ const b=fixture({standalone:true,anchor,shared:{io:a.io}});assert.equal(b.win.__nocturneDiagnosticStore,store);
+ b.win.__nocturneTrace("second.window",{count:2},{flush:true});await b.api.flush();
+ const p=fixture({isPrivate:true,standalone:true,anchor,shared:{io:a.io}});p.win.__nocturneTrace("private.forbidden",{count:1},{flush:true});await p.api.flush();p.api.dispose();
+ const sessions=JSON.parse(a.writes.at(-1).data).sessions;assert.equal(sessions.length,2);assert.ok(sessions.some(s=>s.events.some(e=>e.event==="second.window")));assert.ok(!JSON.stringify(sessions).includes("private.forbidden"));
+ assert.equal(JSON.parse(b.api.dump()).events.find(e=>e.event==="diagnostics.ready").data.writer,"process");
+});
+test("legacy store is not replaced by a competing file writer",async()=>{
+ const store={tail:Promise.resolve(),sessions:null},f=fixture({standalone:true,shared:{store}});
+ assert.equal(f.win.__nocturneDiagnosticStore,store);assert.equal(await f.api.flush(),false);assert.equal(f.writes.length,0);
+ assert.equal(JSON.parse(f.api.dump()).events.find(e=>e.event==="diagnostics.ready").data.writer,"legacy-blocked");
 });

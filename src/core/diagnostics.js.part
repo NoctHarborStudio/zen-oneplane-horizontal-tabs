@@ -1,22 +1,32 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.61",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.62",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
   const fileName="nocturne-diagnostics.json",entries=[],last=new Map(),nodes=new Map(),removers=[];
-  // Cross-window queue: all currently open browser windows share the same
-  // coordinator object. Persist operations never race read/modify/write.
-  const STORE="__nocturneDiagnosticStore";
-  let store=win[STORE]||null;
+  // Native module identity survives even a zero-window interval. The only
+  // expando is our own non-enumerable process queue; no native state changes.
+  const STORE="__nocturneDiagnosticStore",PROCESS=Symbol.for("nocturne.diagnostics.writer.v1");
+  let anchor=null,store=win[STORE]||null,anchored=false;
+  try{anchor=ChromeUtils.importESModule("resource:///modules/BrowserWindowTracker.sys.mjs").BrowserWindowTracker;}catch{}
   try{const windows=Services.wm.getEnumerator("navigator:browser");while(!store&&windows.hasMoreElements()){const w=windows.getNext();if(w!==win&&w[STORE]){store=w[STORE];break;}}}catch{}
-  if(!store)store={tail:Promise.resolve(),sessions:null};
-  win[STORE]=store;
+  // Mixed legacy windows are unsupported; never race their old file queue.
+  if(!store||store.contract===1){
+    try{if(anchor?.[PROCESS])store=anchor[PROCESS];}catch{}
+    if(!store)store=makeWriter();
+    if(store&&!store.local&&anchor)try{
+      if(!anchor[PROCESS])Object.defineProperty(anchor,PROCESS,{value:store,configurable:true});
+      anchored=anchor[PROCESS]===store;
+    }catch{}
+  }
+  if(store)win[STORE]=store;
+  const writerMode=store?.contract===1?(store.local?"local":anchored?"process":"independent"):store?"legacy-blocked":"unavailable";
   let previousMetrics={},sampleIndex=0;
   const startupEvents=[];
   const changedAttrs=new WeakMap();
-  let seq=0,dropped=0,dead=false,quiescing=false,timer=0,writeTimer=0,writing=null,dirty=false,until=0,raf=0,frameLast=0,gaps=[],dir=null,ioError=false,observer=null,nativeContainer=null;
+  let seq=0,dropped=0,dead=false,quiescing=false,timer=0,writeTimer=0,writing=null,dirty=false,until=0,raf=0,frameLast=0,gaps=[],ioError=false,observer=null,nativeContainer=null;
   const now=()=>win.performance.now(),get=id=>doc.getElementById(id);
   const enabled=()=>{try{return Services.prefs.getBoolPref(PREF,true);}catch{return true;}};
   const round=v=>Number.isFinite(v)?Math.round(v*100)/100:null;
@@ -33,64 +43,112 @@
   }
   function exportData(){return {schema:2,version:VERSION,window:id,started,dropped,startup:startupEvents.slice(),events:entries.slice()};}
   function dump(){return JSON.stringify(exportData(),null,2);}
-  const MAX_FILE_BYTES=2000000,SESSION_BYTES=620000,STARTUP_BYTES=120000,MAX_EVENTS=3200;
-  const bytes=value=>new TextEncoder().encode(value).length;
-  function trimEvents(s){
-    if(s.events.length<=1)return false;
-    const count=Math.min(s.events.length-1,Math.max(1,Math.ceil(s.events.length*.15)));
-    s.events.splice(0,count);s.dropped=(s.dropped||0)+count;return true;
-  }
-  function packSessions(sessions){
-    const pack=()=>JSON.stringify({schema:2,version:VERSION,sessions},null,2);
-    for(let i=0;i<sessions.length;i++){
-      const s=sessions[i]={...sessions[i],startup:Array.isArray(sessions[i].startup)?sessions[i].startup.slice():[],events:sessions[i].events.slice()};
-      // Keep the earliest archive evidence within a separate byte budget.
-      while(s.startup.length&&bytes(JSON.stringify(s.startup,null,2))>STARTUP_BYTES){
-        s.startup.pop();s.startupDropped=(s.startupDropped||0)+1;
-      }
-      while(bytes(JSON.stringify(s,null,2))>SESSION_BYTES&&trimEvents(s)){}
-      if(bytes(JSON.stringify(s,null,2))>SESSION_BYTES&&s.events.length===1){
-        s.events.pop();s.dropped=(s.dropped||0)+1;
-      }
+  // Trusted static package code, executed in an independent Gecko global.
+  // The queue retains only parsed JSON, never a browser window or callback.
+  function createWriter(){
+    let sessions=null,dir=null,running=false,cleaned=false;
+    const pending=new Map();
+    const MAX_FILE_BYTES=2000000,SESSION_BYTES=620000,STARTUP_BYTES=120000;
+    const bytes=value=>new TextEncoder().encode(value).length;
+    function trimEvents(s){
+      if(s.events.length<=1)return false;
+      const count=Math.min(s.events.length-1,Math.max(1,Math.ceil(s.events.length*.15)));
+      s.events.splice(0,count);s.dropped=(s.dropped||0)+count;return true;
     }
-    let data=pack();
-    while(bytes(data)>MAX_FILE_BYTES){
-      const s=sessions.filter(s=>s.events.length>1).sort((a,b)=>b.events.length-a.events.length)[0];
-      if(!s||!trimEvents(s))break;
-      data=pack();
-    }
-    return data;
-  }
-  async function persist(){
-    if(privateWindow())return false;
-    if(typeof IOUtils==="undefined"||typeof PathUtils==="undefined"){if(!ioError){ioError=true;win.console.warn("[Nocturne diag] File API unavailable; use __nocturneDiagnostics.dump()");}return false;}
-    const session={...exportData(),updated:Date.now()};
-    const task=async()=>{
-      try{
-        if(!dir){dir=PathUtils.join(PathUtils.profileDir,"nocturne-diagnostics");await IOUtils.makeDirectory(dir,{ignoreExisting:true});}
-        const path=PathUtils.join(dir,fileName);
-        if(!store.sessions){
-          let old=null;try{old=JSON.parse(await IOUtils.readUTF8(path));}catch{}
-          store.sessions=old?.schema===2&&Array.isArray(old.sessions)?old.sessions.filter(x=>x&&Array.isArray(x.events)):[];
+    function packSessions(sessions,version){
+      const pack=()=>JSON.stringify({schema:2,version,sessions},null,2);
+      for(let i=0;i<sessions.length;i++){
+        const s=sessions[i]={...sessions[i],startup:Array.isArray(sessions[i].startup)?sessions[i].startup.slice():[],events:sessions[i].events.slice()};
+        // Keep the earliest archive evidence within a separate byte budget.
+        while(s.startup.length&&bytes(JSON.stringify(s.startup,null,2))>STARTUP_BYTES){
+          s.startup.pop();s.startupDropped=(s.startupDropped||0)+1;
         }
-        const sessions=store.sessions.filter(x=>x.window!==session.window);
-        sessions.push(session);
-        const birth=s=>s.started||parseInt(String(s.window).split("-")[0],36)||s.updated||0;
-        sessions.sort((a,b)=>birth(a)-birth(b));
-        while(sessions.length>3)sessions.shift();
-        // Trim each session independently instead of sacrificing older
-        // sessions when one recent recording is long.
-        const data=packSessions(sessions);
-        if(bytes(data)>MAX_FILE_BYTES)throw Error("Diagnostic session exceeds byte budget");
-        await IOUtils.writeUTF8(path,data,{tmpPath:path+".tmp"});
-        store.sessions=sessions;
-        // Remove only our old per-window diagnostic files after a successful
-        // replacement. Nothing outside this directory is touched.
-        try{for(const p of await IOUtils.getChildren(dir))if(/^nocturne-[a-z0-9]+-[a-z0-9]+\.json$/.test(PathUtils.filename(p))&&PathUtils.filename(p)!==fileName)await IOUtils.remove(p,{ignoreAbsent:true});}catch{}
-        return true;
-      }catch(error){if(!ioError){ioError=true;try{win.console.warn("[Nocturne diag] Local file unavailable; use __nocturneDiagnostics.dump()",error?.name||"Error");}catch{}}return false;}
-    };
-    const job=store.tail.then(task,task);store.tail=job.catch(()=>{});return job;
+        while(bytes(JSON.stringify(s,null,2))>SESSION_BYTES&&trimEvents(s)){}
+        if(bytes(JSON.stringify(s,null,2))>SESSION_BYTES&&s.events.length===1){
+          s.events.pop();s.dropped=(s.dropped||0)+1;
+        }
+      }
+      let data=pack();
+      while(bytes(data)>MAX_FILE_BYTES){
+        const s=sessions.filter(s=>s.events.length>1).sort((a,b)=>b.events.length-a.events.length)[0];
+        if(!s||!trimEvents(s))break;
+        data=pack();
+      }
+      return {data,sessions};
+    }
+  
+    const birth=s=>s.started||parseInt(String(s.window).split("-")[0],36)||s.updated||0;
+    async function write(session){
+      if(!dir){const path=PathUtils.join(PathUtils.profileDir,"nocturne-diagnostics");await IOUtils.makeDirectory(path,{ignoreExisting:true});dir=path;}
+      const path=PathUtils.join(dir,"nocturne-diagnostics.json");
+      if(!sessions){
+        let old=null;try{old=JSON.parse(await IOUtils.readUTF8(path));}catch{}
+        sessions=old?.schema===2&&Array.isArray(old.sessions)?old.sessions.filter(x=>x&&Array.isArray(x.events)):[];
+      }
+      const next=sessions.filter(x=>x.window!==session.window);
+      next.push(session);next.sort((a,b)=>birth(a)-birth(b));while(next.length>3)next.shift();
+      if(!next.includes(session))return false;
+      const packed=packSessions(next,session.version);
+      if(bytes(packed.data)>MAX_FILE_BYTES)throw Error("Diagnostic session exceeds byte budget");
+      await IOUtils.writeUTF8(path,packed.data,{tmpPath:path+".tmp"});
+      sessions=packed.sessions;
+      if(!cleaned){
+        cleaned=true;
+        try{for(const p of await IOUtils.getChildren(dir))if(/^nocturne-[a-z0-9]+-[a-z0-9]+\.json$/.test(PathUtils.filename(p))&&PathUtils.filename(p)!=="nocturne-diagnostics.json")await IOUtils.remove(p,{ignoreAbsent:true});}catch{}
+      }
+      return true;
+    }
+    async function drain(){
+      if(running)return;running=true;
+      try{
+        while(pending.size){
+          const [id,entry]=pending.entries().next().value;pending.delete(id);
+          let ok=false;try{ok=await write(entry.session);}catch{}
+          entry.resolve(ok);
+        }
+      }finally{running=false;}
+    }
+    function submit(json){
+      let session;try{session=JSON.parse(json);}catch{return Promise.resolve(false);}
+      if(session?.schema!==2||typeof session.window!=="string"||typeof session.version!=="string"||!Array.isArray(session.events))return Promise.resolve(false);
+      const existing=pending.get(session.window);
+      if(existing){existing.session=session;return existing.promise;}
+      let resolve;const promise=new Promise(r=>{resolve=r;});
+      pending.set(session.window,{session,promise,resolve});
+      // One active write and at most three queued latest snapshots.
+      if(pending.size>3){
+        const [key,old]=[...pending].sort((a,b)=>birth(a[1].session)-birth(b[1].session))[0];
+        pending.delete(key);old.resolve(false);
+      }
+      void drain();return promise;
+    }
+    return {contract:1,submit};
+  }
+  function makeWriter(){
+    try{
+      const cu=Components.utils;
+      const sandbox=cu.Sandbox(Services.scriptSecurityManager.getSystemPrincipal(),{
+        sandboxName:"Nocturne diagnostic writer",freshZone:true,wantComponents:false,
+        wantGlobalProperties:["IOUtils","PathUtils","TextEncoder"]
+      });
+      return cu.evalInSandbox("("+createWriter.toString()+")()",sandbox);
+    }catch{
+      // Reduced guarantee: the same queue accepts snapshots immediately,
+      // but a window-local fallback may not survive destruction.
+      try{if(typeof IOUtils!=="undefined"&&typeof PathUtils!=="undefined")return {...createWriter(),local:true};}catch{}
+      return null;
+    }
+  }
+  const MAX_EVENTS=3200;
+  function persist(){
+    if(privateWindow()||!enabled()||store?.contract!==1)return Promise.resolve(false);
+    try{
+      const job=store.submit(JSON.stringify({...exportData(),updated:Date.now()}));
+      return Promise.resolve(job).then(ok=>{
+        if(!ok&&!ioError){ioError=true;try{win.console.warn("[Nocturne diag] Local file unavailable; use __nocturneDiagnostics.dump()");}catch{}}
+        return ok;
+      },()=>false);
+    }catch{return Promise.resolve(false);}
   }
   function startupPlaying(){return root.getAttribute("data-zr-startup-phase")==="playing"||root.hasAttribute("data-nocturne-boot");}
   function scheduleWrite(){if(!writeTimer&&!dead&&!quiescing&&!privateWindow())writeTimer=win.setTimeout(()=>{
@@ -98,11 +156,12 @@
   },2200);}
   function flush(){
     if(writeTimer){win.clearTimeout(writeTimer);writeTimer=0;}
-    if(writing)return writing.then(result=>dirty||writing?flush():result);
-    if(!dirty)return Promise.resolve(false);
+    if(!dirty)return writing||Promise.resolve(false);
     dirty=false;
-    writing=persist().finally(()=>{writing=null;if(dirty&&!dead&&!quiescing)scheduleWrite();});
-    return writing;
+    // Snapshot and submit now even if the previous disk write is pending.
+    const job=persist();writing=job;
+    job.then(()=>{if(writing===job)writing=null;},()=>{if(writing===job)writing=null;});
+    return job;
   }
   function record(event,detail=null,options={}){
     if(dead||!enabled())return;
@@ -115,7 +174,7 @@
       entries.push(item);if(entries.length>MAX_EVENTS){entries.shift();dropped++;}
       dirty=true;
       if(event!=="sample")win.console.info("[Nocturne diag "+id+"] "+JSON.stringify(item));
-      if(options.flush)void flush();else scheduleWrite();
+      if(options.flush||quiescing)void flush();else scheduleWrite();
       if(options.sample)arm(options.sample===true?1600:options.sample);
     }catch{}
   }
@@ -235,7 +294,7 @@
     }
     for(const type of ["beforeunload","pagehide","unload"])listen(win,type,()=>record("window."+type,()=>({phase:attrState(root,rootAttrs),closed:win.closed}),{flush:true}));
     bindNative();observeTargets();
-    record("diagnostics.ready",()=>({version:VERSION,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished,size:[win.innerWidth,win.innerHeight],private:privateWindow()}),{sample:6000,flush:true});
+    record("diagnostics.ready",()=>({version:VERSION,writer:writerMode,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished,size:[win.innerWidth,win.innerHeight],private:privateWindow()}),{sample:6000,flush:true});
     const early=win.__nocturneEarlyTrace||[];delete win.__nocturneEarlyTrace;
     for(const item of early)record(item.event,()=>({earlyAt:item.t,...item.data}),{sample:2000});
     listen(win,"unload",requestDispose);
