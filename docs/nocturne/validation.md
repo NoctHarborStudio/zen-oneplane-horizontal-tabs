@@ -433,3 +433,6 @@ A4.3c2 (preview.107): corrected preview.106 CI PASS. 26 window geometry/coordina
 
 
 A4.3-R (preview.108): corrected preview.107 CI PASS (671 Node). Seven new regressions, 114 fixture bodies PASS in isolated V8 (37 coordinator/contour, 10 window geometry, 67 Center Motion), including projection reentry, rejected force dirty retention, phase/owner changes and stale lane move. Canonical CI pending; native first resting paint, handoff, split/hover behavior and matched performance open. A4.4 freeze/hit regions follows after source gate.
+
+
+A4.4a (preview.109): preview.108 canonical CI PASS. 128 focused fixture bodies pass in isolated V8 (41 geometry/contour, 20 address/hover/overflow/lane, 67 Center Motion); four new tests plus extended freeze/scroll cases. Runtime parser and deterministic source substitutions checked. Canonical CI pending. Native test matrix remains open: local/foreign drag, Split member/group pull, drag autoscroll, native resize/DPI/edge changes, Address rapid reversal/hidden update, startup/workspace/close conflicts, actual point hit-testing and post-release convergence. No hit-region CSS changes yet.

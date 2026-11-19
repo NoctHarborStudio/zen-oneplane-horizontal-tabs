@@ -73,6 +73,14 @@
       if(changed)window.__nocturneTrace?.("center.icons.sync",{changed,owner:root.getAttribute("data-zr-center-motion")},{throttle:100});
       return;
     }
+    if(restingGeometryBlocked()){
+      // Leave structural projection and measurements with the active owner.
+      // Icon changes do not affect collapsed slot geometry.
+      for(const [tab,entry] of entries)if(!tab.closing)refreshEntryIcon(tab,entry);
+      return;
+    }
+    if(hoverModePending)applyHoverMode();
+    if(dead||restingGeometryBlocked())return;
     const nativeTopology=readStripTopology();
     const homeOpen=nativeTopology.home;
     // Respect the current workspace and native visibility.
@@ -183,6 +191,7 @@
     syncedTopology=row.hasAttribute("data-op-dragging")?null:nativeTopology;
     typeof window!=="undefined"&&window.__nocturneTrace?.("tabs.sync",()=>({native:tabs.length,mirror:visualTabs.length,groups:groups.length,entries:entries.size,overflow:row.hasAttribute('data-op-overflow-row'),homeOpen,phase:root.getAttribute('data-zr-workspace-phase')}),{throttle:120,sample:1200});
     scheduleGeometry();
+    if(selectedRevealPending&&!restingGeometryBlocked()&&cascadeState==="idle")window.requestAnimationFrame(revealSelectedInStrip);
   }
 
   function schedule() {
@@ -193,8 +202,11 @@
     });
     frame=id;
   }
+  let selectedRevealPending=false;
   function revealSelectedInStrip(){
-    if(dead||cascadeState!=="idle"||root.hasAttribute("data-zr-center-motion"))return;
+    if(dead)return;
+    if(restingGeometryBlocked()||cascadeState!=="idle"||root.hasAttribute("data-zr-center-motion")){selectedRevealPending=true;return;}
+    selectedRevealPending=false;
     const item=entries.get(browser.selectedTab)?.item;
     if(!item||!list.contains(item))return;
     // Never scroll ancestors (native toolbar, page, or window).

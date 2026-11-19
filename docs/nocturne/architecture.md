@@ -295,3 +295,6 @@ A4.3c2 (preview.107): existing pure toolbar-center module owns pass-local collap
 
 
 A4.3-R (preview.108): force geometry is fenced against projection/contour reentry, stale native/mirror topology and phase transitions. Rejected force restores queued dirty work; actual height and contour reject stale revision handoffs. Lane moves use a single captured projection plan, with live ownership checks; tab sync uses one exact RAF identity and defers reentry. Existing native animation owners and physical measurements remain separate.
+
+
+A4.4a (preview.109): shared live resting gate holds center/height/contour, mirror topology and ordinary scroll during drag/live reorder/lane/magnetic pull and transitional address cascade; hidden phase and existing release paths replay projection/geometry. Feature-owned Bunny/Split measurement and lane autoscroll remain active. Native destination is validated against the live topology before drop. This is a resting-write contract, not a guarantee that native resize/CSS cannot change physical slots; native hit regions remain A4.4b.

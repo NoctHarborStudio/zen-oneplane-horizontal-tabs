@@ -104,19 +104,19 @@ test("preflight cancels old work before diagnostics and preserves new invalidati
  assert.equal(x.api.prepareWorkspaceGeometry(),true);assert.equal(x.jobs.size,1);x.tick();assert.equal(x.jobs.size,0);
 });
 
-test("strict resting preflight refuses partial drag and address cascade before any geometry reads",()=>{
+test("all resting centering refuses drag and address cascade before any geometry reads",()=>{
  const code=source.slice(source.indexOf("  function restingGeometryBlocked("),source.indexOf("  // Read actual resting rows"));
  const run=new Function("marker","cascadeState","requireResting",`
  let centering=false,dead=false,stripOrderSnapshot=[];const toolbarWrapper={},root={hasAttribute:()=>false};
+ function geometryWriteAllowed(){return !restingGeometryBlocked()}
  const row={hasAttribute:k=>k===marker},hoverSupported=()=>true;
  const window={innerWidth:1200},target={getBoundingClientRect(){throw Error("read");}};
  ${code}
  return centerToolbar(requireResting);`);
- for(const marker of ["data-op-dragging","data-op-island-incoming","data-op-lane-drag"])
-  assert.equal(run(marker,"idle",true),false);
- for(const phase of ["hiding","showing"])assert.equal(run(null,phase,true),false);
- assert.throws(()=>run("data-op-dragging","idle",false),/read/);
- assert.throws(()=>run(null,"idle",true),/read/);
+ for(const marker of ["data-op-dragging","data-op-island-incoming","data-op-lane-drag","data-op-live-drag","data-op-magnetic-pull"])
+  for(const force of [false,true])assert.equal(run(marker,"idle",force),false);
+ for(const phase of ["hiding","showing"])for(const force of [false,true])assert.equal(run(null,phase,force),false);
+ for(const phase of ["idle","hidden"])assert.throws(()=>run(null,phase,true),/read/);
 });
 test("native topology snapshot resolves each Split group once before projection",()=>{
  const sync=read("src/toolbar/tab-sync.js.part"),adapter=read("src/native/tab-adapter.js.part");
@@ -174,4 +174,41 @@ test("lane mounting stops after a synchronous owner change within the same lane"
 test("preflight cannot acknowledge a contour after startup or workspace phase changed",()=>{
  const x=setup();x.painted=()=>{x.phase="in";return true;};
  assert.equal(x.api.prepareWorkspaceGeometry(),false);assert.ok(!x.calls.includes("indicator"));
+});
+
+test("frozen projection only updates icons and does not read native topology or mutate slots",()=>{
+ const sync=read("src/toolbar/tab-sync.js.part"),code=sync.slice(sync.indexOf("  function syncNow()"),sync.indexOf("  function schedule()"));
+ const run=new Function(`let dead=false,icons=0;const root={hasAttribute:()=>false},row={};
+ const entries=new Map([[{closing:false},{}],[{closing:true},{}]]);
+ function restingGeometryBlocked(){return true}
+ function refreshEntryIcon(){icons++}
+ function readStripTopology(){throw Error("native read")}
+ ${code}syncNow();return icons;`);
+ assert.equal(run(),1);
+});
+test("freeze release replays projection after foreign lane/live drag and address cascade",()=>{
+ const lane=read("src/interactions/strip-drag.js.part"),reorder=read("src/interactions/reorder.js.part"),cascade=read("src/toolbar/address-cascade.js.part");
+ const code=reorder.slice(reorder.indexOf("  function clearLiveDrag()"),reorder.indexOf("  function finishStripCommit()"));
+ const run=new Function("marker",`let dead=false,liveDragTarget=null;const calls=[],dragShifted=new Set(),attrs=new Set([marker]);
+ const row={hasAttribute:k=>attrs.has(k),removeAttribute:k=>attrs.delete(k),style:{removeProperty(){}}};
+ function clearLaneDrag(){}function schedule(){calls.push("projection")}function scheduleGeometry(){calls.push("geometry")}
+ ${code}clearLiveDrag();return {calls,remaining:[...attrs]};`);
+ for(const marker of ["data-op-live-drag","data-op-island-incoming"])assert.deepEqual(run(marker),{calls:["projection","geometry"],remaining:[]});
+ assert.ok(lane.includes("if(active&&!dead){schedule();scheduleGeometry();}"));
+ assert.ok(cascade.includes("if(!dead){schedule();scheduleGeometry();}"));
+ assert.ok(cascade.includes("if(!dead){refreshIndicator();schedule();scheduleGeometry();scheduleContour();}"));
+});
+
+test("drop rejects closed or regrouped frozen mirror before native movement",()=>{
+ const s=read("src/interactions/drag-controller.js.part"),code=s.slice(s.indexOf("  function validStripDropTarget("),s.indexOf("  function moveNativeNextTo("));
+ const run=new Function(`const window={},other={},tab={},group={},member={},owner=new Map([[tab,window],[member,window]]);
+ let tabs=[{tab,group:null},{tab:member,group}];
+ const readStripTopology=()=>({tabs}),tabOwner=t=>owner.get(t);
+ ${code}return {valid:validStripDropTarget,tab,group,member,setTabs:t=>tabs=t,setOwner:(t,w)=>owner.set(t,w),other};`)();
+ const a={native:run.tab,tab:run.tab},b={native:run.group,group:run.group};
+ assert.equal(run.valid(a),true);assert.equal(run.valid(b),true);
+ run.setTabs([{tab:run.member,group:run.group}]);assert.equal(run.valid(a),false);
+ run.setTabs([{tab:run.tab,group:run.group}]);assert.equal(run.valid(a),false);assert.equal(run.valid(b),true);
+ run.setOwner(run.tab,run.other);assert.equal(run.valid(b),false);
+ assert.equal(run.valid({native:run.tab,group:run.group}),false);
 });

@@ -56,7 +56,7 @@
     stopLaneAutoscroll();
     const active=row.hasAttribute("data-op-lane-drag");
     row.removeAttribute("data-op-lane-drag");
-    if(active&&!dead)scheduleGeometry();
+    if(active&&!dead){schedule();scheduleGeometry();}
     dragNode?.removeAttribute("data-op-lane-ghost");
     if(active&&dragImageMode==="inline")hideGhost();
   }

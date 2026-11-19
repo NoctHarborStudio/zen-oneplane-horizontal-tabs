@@ -1168,3 +1168,6 @@ A4.3c2 (preview.107): NC4-004/013 partial source consolidation: pass-local pure 
 
 
 A4.3-R (preview.108): NC4-004/013 integrated source audit adds strict topology/phase/revision fences, preserves rejected-force invalidations, exact sync RAF and stale lane guards. No native performance/paint claim. NC4-052/018 remain active A4.4; do not close native evidence gates.
+
+
+A4.4a (preview.109): NC4-052 partial source fix: hold ordinary geometry/projection/scroll during interaction and replay existing release paths; preserve owner-specific pull/autoscroll. Native actual rectangles can still change due to resize/CSS; validate live behavior and audit those boundaries in A4.4b/R. NC4-018 remains open, no hit-region CSS change in this slice.

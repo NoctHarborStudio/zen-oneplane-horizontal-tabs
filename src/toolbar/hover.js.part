@@ -61,8 +61,11 @@
       !reducedMotion.matches&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0;
     setIslandTitle(title,animate);
   }
+  let hoverModePending=false;
   function applyHoverMode(){
-    if(dead || row.hasAttribute("data-op-dragging")) return;
+    if(dead)return;
+    if(restingGeometryBlocked()){hoverModePending=true;return;}
+    hoverModePending=false;
     const mode=prefs.getIntPref("zen.oneplane.hover-mode",0)===1?"island":"expand";
     const titleMode=mode==="island" && prefs.getBoolPref("zen.oneplane.show-center-island",true);
     const show=titleMode||!!homeLease;
@@ -189,7 +192,7 @@
     // The list is a grid wrapper while centered lanes are active. It must
     // never consume an event bubbling from a non-overflowing child lane.
     if(lane===list&&row.hasAttribute("data-op-show-island")&&!row.hasAttribute("data-op-island-tight"))return;
-    if(!hoverSupported()||cascadeState!=="idle"||row.hasAttribute("data-op-dragging")||
+    if(!hoverSupported()||cascadeState!=="idle"||restingGeometryBlocked()||root.hasAttribute("data-zr-center-motion")||
        event.ctrlKey||event.metaKey||lane.scrollWidth<=lane.clientWidth+1)return;
     const raw=Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.deltaY;
     if(!raw||!Number.isFinite(raw))return;
@@ -220,7 +223,7 @@
     overflowMotionFrame=0;overflowMotion=null;
   }
   function overflowMotionAllowed(){
-    return !dead&&!bottomLane.hidden&&cascadeState==="idle"&&!row.hasAttribute("data-op-dragging")&&!row.hasAttribute("data-op-island-incoming");
+    return !dead&&!bottomLane.hidden&&cascadeState==="idle"&&!restingGeometryBlocked()&&!root.hasAttribute("data-zr-center-motion");
   }
   function tickOverflowMotion(now){
     overflowMotionFrame=0;
@@ -250,7 +253,7 @@
     scrollOverflowTo(from+delta,direct);
   }
   function onOverflowPointerDown(event){
-    if(event.button!==0)return;
+    if(event.button!==0||!overflowMotionAllowed())return;
     cancelOverflowMotion();
     const r=overflowSlider.getBoundingClientRect(),m=overflowScrollMetrics(bottomLane.clientWidth,bottomLane.scrollWidth,bottomLane.scrollLeft);
     const center=r.left+m.thumb/2+m.position*Math.max(0,r.width-m.thumb);
@@ -277,12 +280,12 @@
     if(overflowSlider.getAttribute("aria-valuetext")!==label)overflowSlider.setAttribute("aria-valuetext",label);
   }
   function onOverflowSliderInput(){
-    if(dead||bottomLane.hidden||cascadeState!=="idle"||row.hasAttribute("data-op-dragging"))return;
+    if(!overflowMotionAllowed())return;
     const m=overflowScrollMetrics(bottomLane.clientWidth,bottomLane.scrollWidth,bottomLane.scrollLeft);
     scrollOverflowTo(m.max*Number(overflowSlider.value)/1000,overflowPointer?.direct===true);
   }
   function onOverflowSliderWheel(event){
-    if(event.ctrlKey||event.metaKey||cascadeState!=="idle"||row.hasAttribute("data-op-dragging"))return;
+    if(event.ctrlKey||event.metaKey||!overflowMotionAllowed())return;
     const m=overflowScrollMetrics(bottomLane.clientWidth,bottomLane.scrollWidth,bottomLane.scrollLeft);
     if(!m.visible)return;
     const raw=Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.deltaY;

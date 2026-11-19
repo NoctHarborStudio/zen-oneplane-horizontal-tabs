@@ -32,7 +32,7 @@
     try{return paintContourNow(force,prehover,rows);}finally{contourPainting=false;}
   }
   function contourWriteAllowed(force){
-    return !dead&&!!toolbarWrapper&&hoverSupported()&&!root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&!root.hasAttribute("data-op-bookmark-wave")&&!document.getElementById("PlacesToolbarItems")?.hasAttribute("data-zr-fold-bookmarks")&&
+    return !dead&&!!toolbarWrapper&&hoverSupported()&&!restingGeometryBlocked()&&!root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&!root.hasAttribute("data-op-bookmark-wave")&&!document.getElementById("PlacesToolbarItems")?.hasAttribute("data-zr-fold-bookmarks")&&
       (force||(!root.hasAttribute("data-zr-workspace-phase")&&root.getAttribute("data-zr-startup-phase")!=="playing"));
   }
   function paintContourNow(force,prehover,rows){
@@ -106,7 +106,7 @@
     if(dead)return;
     paintContour(false,false,rows);
     if(bookmarkContourPolicy()!=="off"){contourUntil=0;return;}
-    if(now<contourUntil && hoverSupported()&&!root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-op-bookmark-wave")&&!root.hasAttribute("data-zr-workspace-phase")&&root.getAttribute("data-zr-startup-phase")!=="playing"&&!root.hasAttribute("data-zr-center-motion"))scheduleContour();
+    if(now<contourUntil && hoverSupported()&&!restingGeometryBlocked()&&!root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-op-bookmark-wave")&&!root.hasAttribute("data-zr-workspace-phase")&&root.getAttribute("data-zr-startup-phase")!=="playing"&&!root.hasAttribute("data-zr-center-motion"))scheduleContour();
   }
   function scheduleContour(){
     if(dead)return;

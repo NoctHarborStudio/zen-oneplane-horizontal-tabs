@@ -39,12 +39,11 @@
       node.removeAttribute("data-op-drag-follow");
     }
     dragShifted.clear();
+    const active=row.hasAttribute("data-op-live-drag")||row.hasAttribute("data-op-island-incoming");
     row.removeAttribute("data-op-live-drag");
-    if(row.hasAttribute("data-op-island-incoming")){
-      row.removeAttribute("data-op-island-incoming");
-      scheduleGeometry();
-    }
+    row.removeAttribute("data-op-island-incoming");
     row.style.removeProperty("--op-drag-incoming");
+    if(active&&!dead){schedule();scheduleGeometry();}
   }
   function finishStripCommit() {
     // The visual slots already occupy their destination. Apply the native

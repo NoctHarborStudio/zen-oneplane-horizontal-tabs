@@ -17,7 +17,7 @@ test("range controls the real bottom viewport and reflects scroll",()=>{
  const lane={clientWidth:400,scrollWidth:800,scrollLeft:0,hidden:false};
  const slider={hidden:true,value:"0",style:{getPropertyValue(){return ""},setProperty(){}},getAttribute(){},setAttribute(){}};
  const api=new Function("bottomLane","overflowSlider","overflowScrollMetrics",`
-  const row={hasAttribute:k=>k==="data-op-overflow-row"};let dead=false,cascadeState="idle";const reducedMotion={matches:true};
+  const row={hasAttribute:k=>k==="data-op-overflow-row"};let dead=false,cascadeState="idle",frozen=false;const root={hasAttribute:()=>false},restingGeometryBlocked=()=>frozen;const reducedMotion={matches:true};
   ${code}
   return {refreshOverflowSlider,onOverflowSliderInput};
  `)(lane,slider,overflowScrollMetrics);
@@ -52,9 +52,9 @@ test("real scroll controller accumulates wheel targets and direct drag cancels e
  let now=0,serial=0;const frames=new Map();
  const win={performance:{now:()=>now},requestAnimationFrame(f){frames.set(++serial,f);return serial},cancelAnimationFrame(id){frames.delete(id)}};
  const api=new Function("bottomLane","overflowSlider","overflowScrollMetrics","overflowScrollEase","window",`
-  const row={hasAttribute:k=>k==="data-op-overflow-row"};let dead=false,cascadeState="idle";const reducedMotion={matches:false},prefs={getIntPref:()=>160};
+  const row={hasAttribute:k=>k==="data-op-overflow-row"};let dead=false,cascadeState="idle",frozen=false;const root={hasAttribute:()=>false},restingGeometryBlocked=()=>frozen;const reducedMotion={matches:false},prefs={getIntPref:()=>160};
   ${code}
-  return {scrollOverflowBy,onOverflowSliderInput,onOverflowPointerDown,onOverflowPointerEnd};
+  return {scrollOverflowBy,onOverflowSliderInput,onOverflowPointerDown,onOverflowPointerEnd,setFrozen:v=>frozen=v};
  `)(lane,slider,overflowScrollMetrics,overflowScrollEase,win);
  const step=t=>{now=t;const batch=[...frames.values()];frames.clear();for(const f of batch)f(t)};
  api.scrollOverflowBy(100);api.scrollOverflowBy(100);
@@ -64,4 +64,8 @@ test("real scroll controller accumulates wheel targets and direct drag cancels e
  api.onOverflowPointerDown({button:0,pointerId:1,clientX:m.thumb/2+m.position*(400-m.thumb)});
  slider.value="500";api.onOverflowSliderInput();assert.equal(lane.scrollLeft,300);assert.equal(frames.size,0);
  api.onOverflowPointerEnd({pointerId:1});
+ api.scrollOverflowBy(100);api.setFrozen(true);step(200);
+ assert.equal(lane.scrollLeft,300);assert.equal(frames.size,0);
+ slider.value="1000";api.onOverflowSliderInput();assert.equal(lane.scrollLeft,300);
+ api.setFrozen(false);api.onOverflowSliderInput();step(345);assert.equal(lane.scrollLeft,600);
 });

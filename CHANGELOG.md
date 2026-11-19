@@ -1,3 +1,9 @@
+## 0.3.0-preview.109 — Resting geometry freeze
+
+- Freeze ordinary center, height, contour and structural projection during local/incoming tab drag, lane drag and Address Cascade transitions; replay deferred native projection when the interaction releases or the cascade is fully hidden.
+- Keep explicit Bunny/Split pull measurements and lane drop autoscroll with their interaction owners; defer automatic selection scrolling, hover-mode changes and ordinary overflow motion.
+- Validate the current native drop target before acting on a frozen mirror. Preserve existing native hit-region CSS and the accepted native drop path.
+
 ## 0.3.0-preview.108 — Geometry transaction audit
 
 - Reject geometry preflight during projection/contour reentry and reconcile native topology before capture, even before observer delivery. Preserve pending geometry work on rejection.

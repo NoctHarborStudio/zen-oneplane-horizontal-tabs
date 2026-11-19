@@ -126,6 +126,14 @@
     clearDropMarker();
     previewStripDrag(event, tab);
   }
+  // Frozen mirrors can outlive a native close/group change. Validate the
+  // destination at command time rather than mutating a stale native target.
+  function validStripDropTarget(dest){
+    if(!dest?.native)return false;
+    const tabs=readStripTopology().tabs;
+    if(dest.group)return dest.native===dest.group&&tabs.some(x=>x.group===dest.group&&tabOwner(x.tab)===window);
+    return dest.native===dest.tab&&tabs.some(x=>x.tab===dest.tab&&!x.group&&tabOwner(x.tab)===window);
+  }
   function moveNativeNextTo(element, dest) {
     if (!element || !dest?.native || element === dest.native) return false;
     const method = dest.before ? "moveTabBefore" : "moveTabAfter";
@@ -145,7 +153,7 @@
     if (owner === window && dragNode) { setDragImageMode("inline",event); setPull(0); }
     const dest = previewStripDrag(event, tab) || dropTarget(event);
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.drop",()=>({local:owner===window,group:!!group,dest:!!dest?.native,before:dest?.before,mode:dragImageMode}),{sample:1800});
-    if(!dest?.native){
+    if(!validStripDropTarget(dest)){
       if(owner===window)source?.markHandled();
       clearLiveDrag();clearDropMarker();return;
     }
@@ -166,6 +174,7 @@
         return;
       }
       if (isSplit(tab) && !unsplitTab(tab)) { source?.markHandled(); return; }
+      if(!validStripDropTarget(dest)){source?.markHandled();return;}
       if (owner === window) {
         // Dropping a member beyond its original group detaches only that
         // member. Never insert an ordinary tab inside another split group.
@@ -174,10 +183,10 @@
       } else {
         const all = Array.from(browser.tabs);
         const boundary = dest?.group ? groupMembers(dest.group) : dest?.tab ? [dest.tab] : [];
-        const index = boundary.length
-          ? all.indexOf(dest.before ? boundary[0] : boundary.at(-1)) + (dest.before ? 0 : 1)
-          : all.length;
-        const adopted = browser.adoptTab(tab, { tabIndex: Math.max(0, index), selectTab: true });
+        const boundaryIndex=all.indexOf(dest.before ? boundary[0] : boundary.at(-1));
+        if(!boundary.length||boundaryIndex<0)return;
+        const index=boundaryIndex+(dest.before?0:1);
+        const adopted = browser.adoptTab(tab, { tabIndex: index, selectTab: true });
         if (adopted) source?.markHandled();
       }
       schedule();

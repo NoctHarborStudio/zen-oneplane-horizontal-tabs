@@ -22,7 +22,9 @@
       const group = splitGroup(tab);
       if (group) groups.add(group);
     }
-    for (const group of groups) measureSplitGroup(group);
+    // Explicit pull/mode calls still measure their own group. Do not let
+    // observer-driven resting measurements rewrite the other frozen slots.
+    if(!restingGeometryBlocked())for (const group of groups) measureSplitGroup(group);
     // Existing observer sees slot size changes missed by the toolbar
     // observer. Validate once per delivery, only while Center owns motion.
     checkCenterGeometry("slots");

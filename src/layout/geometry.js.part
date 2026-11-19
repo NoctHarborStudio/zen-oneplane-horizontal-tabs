@@ -58,10 +58,13 @@
     refreshIndicator();
   }
   function restingGeometryBlocked(){
-    return row.hasAttribute("data-op-dragging")||row.hasAttribute("data-op-island-incoming")||row.hasAttribute("data-op-lane-drag")||cascadeState==="hiding"||cascadeState==="showing";
+    // Only the interaction owner may move slots during a drag/cascade.
+    // The fully hidden cascade may reconcile before its next reveal.
+    return row.hasAttribute("data-op-dragging")||row.hasAttribute("data-op-island-incoming")||row.hasAttribute("data-op-lane-drag")||
+      row.hasAttribute("data-op-live-drag")||row.hasAttribute("data-op-magnetic-pull")||cascadeState==="hiding"||cascadeState==="showing";
   }
-  function centerToolbar(requireResting=false){
-    if(centering||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-closing")||root.hasAttribute("data-zr-center-motion")||row.hasAttribute("data-op-magnetic-pull")||(requireResting&&restingGeometryBlocked()))return false;
+  function centerToolbar(){
+    if(centering||!geometryWriteAllowed())return false;
     centering=true;
     try {
       const windowWidth=window.innerWidth,order=stripOrderSnapshot;
@@ -93,23 +96,21 @@
       const dragRoom=parseFloat(style.getPropertyValue("--op-window-drag-room"))||4;
       const wantsIsland=row.hasAttribute("data-op-show-island");
       const iconHome=row.hasAttribute("data-op-home-icon");
-      const frozen=restingGeometryBlocked();
       const addressHidden=url.hasAttribute("data-op-empty")||url.hasAttribute("data-op-home");
       const workspacePhase=root.getAttribute("data-zr-workspace-phase"),startupPhase=root.getAttribute("data-zr-startup-phase");
-      if(requireResting&&frozen)return false;
+      if(!geometryWriteAllowed())return false;
       // Address budgeting and partition use one collapsed input snapshot.
       const widths=order.map(n=>compactSlotWidth(n,tabWidth));
       const groups=order.map(n=>n.classList.contains("oneplane-split-group"));
       const returnReserve=row.hasAttribute("data-op-adaptive-compact")?12:0;
       const {naturalTabsWidth,availableAt,planAt}=restingToolbarBudget({widths,groups,windowWidth,right,tabWidth,dragRoom,iconHome,returnReserve});
       const stillCurrent=()=>!dead&&stripOrderSnapshot===order&&window.innerWidth===windowWidth&&
-        hoverSupported()&&!root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&
-        !row.hasAttribute("data-op-magnetic-pull")&&restingGeometryBlocked()===frozen&&
+        geometryWriteAllowed()&&
         row.hasAttribute("data-op-show-island")===wantsIsland&&row.hasAttribute("data-op-home-icon")===iconHome&&
         (url.hasAttribute("data-op-empty")||url.hasAttribute("data-op-home"))===addressHidden&&
         root.getAttribute("data-zr-workspace-phase")===workspacePhase&&root.getAttribute("data-zr-startup-phase")===startupPhase;
       const rejectStale=()=>{if(!dead){scheduleGeometry();window.__nocturneTrace?.("geometry.center.stale",{},{throttle:500});}return false;};
-      if(!frozen){
+      {
         const preferred=prefs.getIntPref("zen.oneplane.address-width",180);
         const natural=naturalTabsWidth+(iconHome?32:180)+tabWidth+18;
         const fullBudget=2*Math.min(windowWidth/2-left-preferred-8,windowWidth/2-right)-8-2*dragRoom;
@@ -143,7 +144,7 @@
       const trailingReserve=Math.max(0,rowWidth-collapsedTabsWidth);
       const available=availableAt(left);
       const centered=wantsIsland;
-      if(centered&&!frozen){
+      if(centered){
         const layout=planAt(available);
         const metrics=toolbarPartitionMetrics({layout,widths,available,windowWidth,tabWidth,openWidth,iconHome});
         row.removeAttribute("data-op-island-tight");
@@ -159,7 +160,7 @@
       const bias=toolbarCenterBias(left,right,trailingReserve,centered);
       setLength(leftSpacer,"--op-center-bias",bias.left);
       setLength(rightSpacer,"--op-center-bias",bias.right);
-      if(centered&&!frozen){
+      if(centered){
         const rect=row.getBoundingClientRect(),previous=parseFloat(row.style.getPropertyValue("--op-center-correction"))||0;
         const correction=centeredRowCorrection(windowWidth,left,right,rect.left+rect.width/2-previous,rect.width);
         if(previous!==correction)row.style.setProperty("--op-center-correction",correction+"px");
@@ -178,11 +179,11 @@
       bookmark:bookmarks&&!bookmarks.collapsed&&!bookmarks.hidden?bookmarks.getBoundingClientRect():null};
   }
   function geometryWriteAllowed(){
-    return !dead&&hoverSupported()&&!!toolbarWrapper&&!root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion");
+    return !dead&&hoverSupported()&&!!toolbarWrapper&&!root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&!restingGeometryBlocked();
   }
   function measureToolbarGeometry(force=false,center=true){
     if(!geometryWriteAllowed())return null;
-    if(center&&!centerToolbar(force)&&force)return null;
+    if(center&&!centerToolbar()&&force)return null;
     if(!geometryWriteAllowed())return null;
     if(!force&&!adaptiveHeightDirty&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
        window.performance.now()<panelSwitchUntil)return null;
@@ -290,7 +291,7 @@
       const measured=measureToolbarGeometry(true);
       if(!phaseCurrent())return false;
       const topology=measured?.rows?captureCenterTopology(row):null;
-      const current=()=>phaseCurrent()&&!restingGeometryBlocked()&&!row.hasAttribute("data-op-magnetic-pull")&&topology?.()===true;
+      const current=()=>phaseCurrent()&&topology?.()===true;
       const painted=!!measured&&!!topology&&paintContour(true,false,measured.changed?null:measured.rows)===true;
       if(painted&&current())refreshIndicator();
       const ready=painted&&current();

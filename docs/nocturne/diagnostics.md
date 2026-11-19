@@ -307,3 +307,8 @@ Existing geometry.height, geometry.workspace.prepare and contour.paint traces ar
 ### Preview.108 — geometry transaction audit
 
 Existing `geometry.preflight.reentry` also covers projection sync and contour painting; `geometry.preflight.result` stage adds topology/stale. `geometry.center.stale` remains the throttled empty-payload marker when the lane plan loses its current owner/phase. Existing contour and height traces retained. No new sampling, private fields or timers; native fallback rates remain unverified.
+
+
+### Preview.109 — resting geometry freeze
+
+No new trace stream. Existing drag, address.cascade, tabs.sync, geometry.preflight.result/geometry.center.stale and contour.paint remain authoritative; correlate live drag/lane/incoming/magnetic/center and cascade phase markers with the absence of ordinary geometry writes and post-release sync. Explicit pull and lane autoscroll remain allowed. Native freeze and hit-test acceptance require live evidence.

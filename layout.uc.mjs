@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.108",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.109",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -3846,7 +3846,7 @@ function installTabStrip() {
     row.inert=false;
     cancelCascadeAnimations();
     setBookmarkWave(null);
-    if(!dead){refreshIndicator();scheduleGeometry();scheduleContour();}
+    if(!dead){refreshIndicator();schedule();scheduleGeometry();scheduleContour();}
   }
   function settleHidden(generation){
     if(dead||generation!==cascadeGeneration)return;
@@ -3856,6 +3856,8 @@ function installTabStrip() {
     cancelCascadeAnimations();
     setBookmarkWave("hidden");
     clearTabHover();hideIndicator();islandTextAnimation?.cancel();
+    // Hidden is a stable, noninteractive phase: replay deferred projection.
+    if(!dead){schedule();scheduleGeometry();}
   }
   function finishCascadeHandoff(generation){
     if(dead||generation!==cascadeGeneration)return;
@@ -6953,7 +6955,7 @@ function installTabStrip() {
     try{return paintContourNow(force,prehover,rows);}finally{contourPainting=false;}
   }
   function contourWriteAllowed(force){
-    return !dead&&!!toolbarWrapper&&hoverSupported()&&!root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&!root.hasAttribute("data-op-bookmark-wave")&&!document.getElementById("PlacesToolbarItems")?.hasAttribute("data-zr-fold-bookmarks")&&
+    return !dead&&!!toolbarWrapper&&hoverSupported()&&!restingGeometryBlocked()&&!root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&!root.hasAttribute("data-op-bookmark-wave")&&!document.getElementById("PlacesToolbarItems")?.hasAttribute("data-zr-fold-bookmarks")&&
       (force||(!root.hasAttribute("data-zr-workspace-phase")&&root.getAttribute("data-zr-startup-phase")!=="playing"));
   }
   function paintContourNow(force,prehover,rows){
@@ -7027,7 +7029,7 @@ function installTabStrip() {
     if(dead)return;
     paintContour(false,false,rows);
     if(bookmarkContourPolicy()!=="off"){contourUntil=0;return;}
-    if(now<contourUntil && hoverSupported()&&!root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-op-bookmark-wave")&&!root.hasAttribute("data-zr-workspace-phase")&&root.getAttribute("data-zr-startup-phase")!=="playing"&&!root.hasAttribute("data-zr-center-motion"))scheduleContour();
+    if(now<contourUntil && hoverSupported()&&!restingGeometryBlocked()&&!root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-op-bookmark-wave")&&!root.hasAttribute("data-zr-workspace-phase")&&root.getAttribute("data-zr-startup-phase")!=="playing"&&!root.hasAttribute("data-zr-center-motion"))scheduleContour();
   }
   function scheduleContour(){
     if(dead)return;
@@ -7138,10 +7140,13 @@ function installTabStrip() {
     refreshIndicator();
   }
   function restingGeometryBlocked(){
-    return row.hasAttribute("data-op-dragging")||row.hasAttribute("data-op-island-incoming")||row.hasAttribute("data-op-lane-drag")||cascadeState==="hiding"||cascadeState==="showing";
+    // Only the interaction owner may move slots during a drag/cascade.
+    // The fully hidden cascade may reconcile before its next reveal.
+    return row.hasAttribute("data-op-dragging")||row.hasAttribute("data-op-island-incoming")||row.hasAttribute("data-op-lane-drag")||
+      row.hasAttribute("data-op-live-drag")||row.hasAttribute("data-op-magnetic-pull")||cascadeState==="hiding"||cascadeState==="showing";
   }
-  function centerToolbar(requireResting=false){
-    if(centering||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-closing")||root.hasAttribute("data-zr-center-motion")||row.hasAttribute("data-op-magnetic-pull")||(requireResting&&restingGeometryBlocked()))return false;
+  function centerToolbar(){
+    if(centering||!geometryWriteAllowed())return false;
     centering=true;
     try {
       const windowWidth=window.innerWidth,order=stripOrderSnapshot;
@@ -7173,23 +7178,21 @@ function installTabStrip() {
       const dragRoom=parseFloat(style.getPropertyValue("--op-window-drag-room"))||4;
       const wantsIsland=row.hasAttribute("data-op-show-island");
       const iconHome=row.hasAttribute("data-op-home-icon");
-      const frozen=restingGeometryBlocked();
       const addressHidden=url.hasAttribute("data-op-empty")||url.hasAttribute("data-op-home");
       const workspacePhase=root.getAttribute("data-zr-workspace-phase"),startupPhase=root.getAttribute("data-zr-startup-phase");
-      if(requireResting&&frozen)return false;
+      if(!geometryWriteAllowed())return false;
       // Address budgeting and partition use one collapsed input snapshot.
       const widths=order.map(n=>compactSlotWidth(n,tabWidth));
       const groups=order.map(n=>n.classList.contains("oneplane-split-group"));
       const returnReserve=row.hasAttribute("data-op-adaptive-compact")?12:0;
       const {naturalTabsWidth,availableAt,planAt}=restingToolbarBudget({widths,groups,windowWidth,right,tabWidth,dragRoom,iconHome,returnReserve});
       const stillCurrent=()=>!dead&&stripOrderSnapshot===order&&window.innerWidth===windowWidth&&
-        hoverSupported()&&!root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&
-        !row.hasAttribute("data-op-magnetic-pull")&&restingGeometryBlocked()===frozen&&
+        geometryWriteAllowed()&&
         row.hasAttribute("data-op-show-island")===wantsIsland&&row.hasAttribute("data-op-home-icon")===iconHome&&
         (url.hasAttribute("data-op-empty")||url.hasAttribute("data-op-home"))===addressHidden&&
         root.getAttribute("data-zr-workspace-phase")===workspacePhase&&root.getAttribute("data-zr-startup-phase")===startupPhase;
       const rejectStale=()=>{if(!dead){scheduleGeometry();window.__nocturneTrace?.("geometry.center.stale",{},{throttle:500});}return false;};
-      if(!frozen){
+      {
         const preferred=prefs.getIntPref("zen.oneplane.address-width",180);
         const natural=naturalTabsWidth+(iconHome?32:180)+tabWidth+18;
         const fullBudget=2*Math.min(windowWidth/2-left-preferred-8,windowWidth/2-right)-8-2*dragRoom;
@@ -7223,7 +7226,7 @@ function installTabStrip() {
       const trailingReserve=Math.max(0,rowWidth-collapsedTabsWidth);
       const available=availableAt(left);
       const centered=wantsIsland;
-      if(centered&&!frozen){
+      if(centered){
         const layout=planAt(available);
         const metrics=toolbarPartitionMetrics({layout,widths,available,windowWidth,tabWidth,openWidth,iconHome});
         row.removeAttribute("data-op-island-tight");
@@ -7239,7 +7242,7 @@ function installTabStrip() {
       const bias=toolbarCenterBias(left,right,trailingReserve,centered);
       setLength(leftSpacer,"--op-center-bias",bias.left);
       setLength(rightSpacer,"--op-center-bias",bias.right);
-      if(centered&&!frozen){
+      if(centered){
         const rect=row.getBoundingClientRect(),previous=parseFloat(row.style.getPropertyValue("--op-center-correction"))||0;
         const correction=centeredRowCorrection(windowWidth,left,right,rect.left+rect.width/2-previous,rect.width);
         if(previous!==correction)row.style.setProperty("--op-center-correction",correction+"px");
@@ -7258,11 +7261,11 @@ function installTabStrip() {
       bookmark:bookmarks&&!bookmarks.collapsed&&!bookmarks.hidden?bookmarks.getBoundingClientRect():null};
   }
   function geometryWriteAllowed(){
-    return !dead&&hoverSupported()&&!!toolbarWrapper&&!root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion");
+    return !dead&&hoverSupported()&&!!toolbarWrapper&&!root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&!restingGeometryBlocked();
   }
   function measureToolbarGeometry(force=false,center=true){
     if(!geometryWriteAllowed())return null;
-    if(center&&!centerToolbar(force)&&force)return null;
+    if(center&&!centerToolbar()&&force)return null;
     if(!geometryWriteAllowed())return null;
     if(!force&&!adaptiveHeightDirty&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
        window.performance.now()<panelSwitchUntil)return null;
@@ -7370,7 +7373,7 @@ function installTabStrip() {
       const measured=measureToolbarGeometry(true);
       if(!phaseCurrent())return false;
       const topology=measured?.rows?captureCenterTopology(row):null;
-      const current=()=>phaseCurrent()&&!restingGeometryBlocked()&&!row.hasAttribute("data-op-magnetic-pull")&&topology?.()===true;
+      const current=()=>phaseCurrent()&&topology?.()===true;
       const painted=!!measured&&!!topology&&paintContour(true,false,measured.changed?null:measured.rows)===true;
       if(painted&&current())refreshIndicator();
       const ready=painted&&current();
@@ -7596,7 +7599,9 @@ function installTabStrip() {
       const group = splitGroup(tab);
       if (group) groups.add(group);
     }
-    for (const group of groups) measureSplitGroup(group);
+    // Explicit pull/mode calls still measure their own group. Do not let
+    // observer-driven resting measurements rewrite the other frozen slots.
+    if(!restingGeometryBlocked())for (const group of groups) measureSplitGroup(group);
     // Existing observer sees slot size changes missed by the toolbar
     // observer. Validate once per delivery, only while Center owns motion.
     checkCenterGeometry("slots");
@@ -7757,12 +7762,11 @@ function installTabStrip() {
       node.removeAttribute("data-op-drag-follow");
     }
     dragShifted.clear();
+    const active=row.hasAttribute("data-op-live-drag")||row.hasAttribute("data-op-island-incoming");
     row.removeAttribute("data-op-live-drag");
-    if(row.hasAttribute("data-op-island-incoming")){
-      row.removeAttribute("data-op-island-incoming");
-      scheduleGeometry();
-    }
+    row.removeAttribute("data-op-island-incoming");
     row.style.removeProperty("--op-drag-incoming");
+    if(active&&!dead){schedule();scheduleGeometry();}
   }
   function finishStripCommit() {
     // The visual slots already occupy their destination. Apply the native
@@ -8259,7 +8263,7 @@ function installTabStrip() {
     stopLaneAutoscroll();
     const active=row.hasAttribute("data-op-lane-drag");
     row.removeAttribute("data-op-lane-drag");
-    if(active&&!dead)scheduleGeometry();
+    if(active&&!dead){schedule();scheduleGeometry();}
     dragNode?.removeAttribute("data-op-lane-ghost");
     if(active&&dragImageMode==="inline")hideGhost();
   }
@@ -8684,6 +8688,14 @@ function installTabStrip() {
     clearDropMarker();
     previewStripDrag(event, tab);
   }
+  // Frozen mirrors can outlive a native close/group change. Validate the
+  // destination at command time rather than mutating a stale native target.
+  function validStripDropTarget(dest){
+    if(!dest?.native)return false;
+    const tabs=readStripTopology().tabs;
+    if(dest.group)return dest.native===dest.group&&tabs.some(x=>x.group===dest.group&&tabOwner(x.tab)===window);
+    return dest.native===dest.tab&&tabs.some(x=>x.tab===dest.tab&&!x.group&&tabOwner(x.tab)===window);
+  }
   function moveNativeNextTo(element, dest) {
     if (!element || !dest?.native || element === dest.native) return false;
     const method = dest.before ? "moveTabBefore" : "moveTabAfter";
@@ -8703,7 +8715,7 @@ function installTabStrip() {
     if (owner === window && dragNode) { setDragImageMode("inline",event); setPull(0); }
     const dest = previewStripDrag(event, tab) || dropTarget(event);
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.drop",()=>({local:owner===window,group:!!group,dest:!!dest?.native,before:dest?.before,mode:dragImageMode}),{sample:1800});
-    if(!dest?.native){
+    if(!validStripDropTarget(dest)){
       if(owner===window)source?.markHandled();
       clearLiveDrag();clearDropMarker();return;
     }
@@ -8724,6 +8736,7 @@ function installTabStrip() {
         return;
       }
       if (isSplit(tab) && !unsplitTab(tab)) { source?.markHandled(); return; }
+      if(!validStripDropTarget(dest)){source?.markHandled();return;}
       if (owner === window) {
         // Dropping a member beyond its original group detaches only that
         // member. Never insert an ordinary tab inside another split group.
@@ -8732,10 +8745,10 @@ function installTabStrip() {
       } else {
         const all = Array.from(browser.tabs);
         const boundary = dest?.group ? groupMembers(dest.group) : dest?.tab ? [dest.tab] : [];
-        const index = boundary.length
-          ? all.indexOf(dest.before ? boundary[0] : boundary.at(-1)) + (dest.before ? 0 : 1)
-          : all.length;
-        const adopted = browser.adoptTab(tab, { tabIndex: Math.max(0, index), selectTab: true });
+        const boundaryIndex=all.indexOf(dest.before ? boundary[0] : boundary.at(-1));
+        if(!boundary.length||boundaryIndex<0)return;
+        const index=boundaryIndex+(dest.before?0:1);
+        const adopted = browser.adoptTab(tab, { tabIndex: index, selectTab: true });
         if (adopted) source?.markHandled();
       }
       schedule();
@@ -9144,8 +9157,11 @@ function installTabStrip() {
       !reducedMotion.matches&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0;
     setIslandTitle(title,animate);
   }
+  let hoverModePending=false;
   function applyHoverMode(){
-    if(dead || row.hasAttribute("data-op-dragging")) return;
+    if(dead)return;
+    if(restingGeometryBlocked()){hoverModePending=true;return;}
+    hoverModePending=false;
     const mode=prefs.getIntPref("zen.oneplane.hover-mode",0)===1?"island":"expand";
     const titleMode=mode==="island" && prefs.getBoolPref("zen.oneplane.show-center-island",true);
     const show=titleMode||!!homeLease;
@@ -9272,7 +9288,7 @@ function installTabStrip() {
     // The list is a grid wrapper while centered lanes are active. It must
     // never consume an event bubbling from a non-overflowing child lane.
     if(lane===list&&row.hasAttribute("data-op-show-island")&&!row.hasAttribute("data-op-island-tight"))return;
-    if(!hoverSupported()||cascadeState!=="idle"||row.hasAttribute("data-op-dragging")||
+    if(!hoverSupported()||cascadeState!=="idle"||restingGeometryBlocked()||root.hasAttribute("data-zr-center-motion")||
        event.ctrlKey||event.metaKey||lane.scrollWidth<=lane.clientWidth+1)return;
     const raw=Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.deltaY;
     if(!raw||!Number.isFinite(raw))return;
@@ -9303,7 +9319,7 @@ function installTabStrip() {
     overflowMotionFrame=0;overflowMotion=null;
   }
   function overflowMotionAllowed(){
-    return !dead&&!bottomLane.hidden&&cascadeState==="idle"&&!row.hasAttribute("data-op-dragging")&&!row.hasAttribute("data-op-island-incoming");
+    return !dead&&!bottomLane.hidden&&cascadeState==="idle"&&!restingGeometryBlocked()&&!root.hasAttribute("data-zr-center-motion");
   }
   function tickOverflowMotion(now){
     overflowMotionFrame=0;
@@ -9333,7 +9349,7 @@ function installTabStrip() {
     scrollOverflowTo(from+delta,direct);
   }
   function onOverflowPointerDown(event){
-    if(event.button!==0)return;
+    if(event.button!==0||!overflowMotionAllowed())return;
     cancelOverflowMotion();
     const r=overflowSlider.getBoundingClientRect(),m=overflowScrollMetrics(bottomLane.clientWidth,bottomLane.scrollWidth,bottomLane.scrollLeft);
     const center=r.left+m.thumb/2+m.position*Math.max(0,r.width-m.thumb);
@@ -9360,12 +9376,12 @@ function installTabStrip() {
     if(overflowSlider.getAttribute("aria-valuetext")!==label)overflowSlider.setAttribute("aria-valuetext",label);
   }
   function onOverflowSliderInput(){
-    if(dead||bottomLane.hidden||cascadeState!=="idle"||row.hasAttribute("data-op-dragging"))return;
+    if(!overflowMotionAllowed())return;
     const m=overflowScrollMetrics(bottomLane.clientWidth,bottomLane.scrollWidth,bottomLane.scrollLeft);
     scrollOverflowTo(m.max*Number(overflowSlider.value)/1000,overflowPointer?.direct===true);
   }
   function onOverflowSliderWheel(event){
-    if(event.ctrlKey||event.metaKey||cascadeState!=="idle"||row.hasAttribute("data-op-dragging"))return;
+    if(event.ctrlKey||event.metaKey||!overflowMotionAllowed())return;
     const m=overflowScrollMetrics(bottomLane.clientWidth,bottomLane.scrollWidth,bottomLane.scrollLeft);
     if(!m.visible)return;
     const raw=Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.deltaY;
@@ -9611,6 +9627,14 @@ function installTabStrip() {
       if(changed)window.__nocturneTrace?.("center.icons.sync",{changed,owner:root.getAttribute("data-zr-center-motion")},{throttle:100});
       return;
     }
+    if(restingGeometryBlocked()){
+      // Leave structural projection and measurements with the active owner.
+      // Icon changes do not affect collapsed slot geometry.
+      for(const [tab,entry] of entries)if(!tab.closing)refreshEntryIcon(tab,entry);
+      return;
+    }
+    if(hoverModePending)applyHoverMode();
+    if(dead||restingGeometryBlocked())return;
     const nativeTopology=readStripTopology();
     const homeOpen=nativeTopology.home;
     // Respect the current workspace and native visibility.
@@ -9721,6 +9745,7 @@ function installTabStrip() {
     syncedTopology=row.hasAttribute("data-op-dragging")?null:nativeTopology;
     typeof window!=="undefined"&&window.__nocturneTrace?.("tabs.sync",()=>({native:tabs.length,mirror:visualTabs.length,groups:groups.length,entries:entries.size,overflow:row.hasAttribute('data-op-overflow-row'),homeOpen,phase:root.getAttribute('data-zr-workspace-phase')}),{throttle:120,sample:1200});
     scheduleGeometry();
+    if(selectedRevealPending&&!restingGeometryBlocked()&&cascadeState==="idle")window.requestAnimationFrame(revealSelectedInStrip);
   }
 
   function schedule() {
@@ -9731,8 +9756,11 @@ function installTabStrip() {
     });
     frame=id;
   }
+  let selectedRevealPending=false;
   function revealSelectedInStrip(){
-    if(dead||cascadeState!=="idle"||root.hasAttribute("data-zr-center-motion"))return;
+    if(dead)return;
+    if(restingGeometryBlocked()||cascadeState!=="idle"||root.hasAttribute("data-zr-center-motion")){selectedRevealPending=true;return;}
+    selectedRevealPending=false;
     const item=entries.get(browser.selectedTab)?.item;
     if(!item||!list.contains(item))return;
     // Never scroll ancestors (native toolbar, page, or window).

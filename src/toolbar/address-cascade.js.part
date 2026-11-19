@@ -53,7 +53,7 @@
     row.inert=false;
     cancelCascadeAnimations();
     setBookmarkWave(null);
-    if(!dead){refreshIndicator();scheduleGeometry();scheduleContour();}
+    if(!dead){refreshIndicator();schedule();scheduleGeometry();scheduleContour();}
   }
   function settleHidden(generation){
     if(dead||generation!==cascadeGeneration)return;
@@ -63,6 +63,8 @@
     cancelCascadeAnimations();
     setBookmarkWave("hidden");
     clearTabHover();hideIndicator();islandTextAnimation?.cancel();
+    // Hidden is a stable, noninteractive phase: replay deferred projection.
+    if(!dead){schedule();scheduleGeometry();}
   }
   function finishCascadeHandoff(generation){
     if(dead||generation!==cascadeGeneration)return;

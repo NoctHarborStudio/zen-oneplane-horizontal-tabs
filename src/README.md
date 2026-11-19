@@ -48,3 +48,6 @@ A4.3c2: `src/algorithms/toolbar-center.mjs` owns pure resting budget and partiti
 
 
 A4.3-R: Layout force preflight checks the exact native/mirror topology and phase around center/height/contour. Failed force retains pending work; projection sync and lane mounting reject stale callback/owner state. Keep existing physical measurements and feature motion ownership. A4.4 next after CI.
+
+
+A4.4a: Layout resting gate is shared by center/height/contour, projection and ordinary overflow interaction. Existing drag and cascade owners schedule replay on release; hidden cascade is stable. Explicit Split pull and lane autoscroll remain owner-specific exceptions. Native hit-region work follows in A4.4b.

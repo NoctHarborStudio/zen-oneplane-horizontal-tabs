@@ -108,10 +108,10 @@ function layoutFixture(){
  const install=()=>{provider={contourPolicy:()=>policy,readContourEnvelope:()=>envelope};window.__zenMagneticBookmarksShared=provider;};
  const remove=()=>{delete window.__zenMagneticBookmarksShared;provider=null;};
  const c=read("src/layout/contour-controller.js.part");
- const api=new Function("window","document","root","row","navbar","toolbarWrapper","bookmarks","surface","contourGeometry","commitContourMask","defaults",
-  'let dead=false,contourPainting=false,contourKey="",contourMode="",contourUntil=0,panelSwitchUntil=0,contourRevision=0,contourCommittedRevision=-1,contourProvider=null;const contourObserved=new Set();function hoverSupported(){return true}function contourSettings(){return defaults}const GEOMETRY_CONTOUR=2;function queueGeometry(){window.requestAnimationFrame(()=>{})}'+c+
+ const api=new Function("window","document","root","row","navbar","toolbarWrapper","bookmarks","surface","contourGeometry","commitContourMask","defaults","attrs",
+  'let dead=false,contourPainting=false,contourKey="",contourMode="",contourUntil=0,panelSwitchUntil=0,contourRevision=0,contourCommittedRevision=-1,contourProvider=null;const contourObserved=new Set();function hoverSupported(){return true}function restingGeometryBlocked(){return attrs.has("freeze")}function contourSettings(){return defaults}const GEOMETRY_CONTOUR=2;function queueGeometry(){window.requestAnimationFrame(()=>{})}'+c+
   'return {paintContour,stepContour,scheduleContour,onContourTransition,mode:()=>contourMode,key:()=>contourKey,setUntil:n=>contourUntil=n};')
-  (window,document,root,row,navbar,toolbarWrapper,bookmarks,f,contourGeometry,commitContourMask,defaults);
+  (window,document,root,row,navbar,toolbarWrapper,bookmarks,f,contourGeometry,commitContourMask,defaults,attrs);
  return {f,input,attrs,frames,events,api,install,remove,get reads(){return reads;},set envelope(v){envelope=v;},set policy(v){policy=v;}};
 }
 test("Layout selects stable, holds without DOM reads, and falls back on provider removal",()=>{
@@ -183,4 +183,12 @@ test("forced contour cannot acquire a center-owned surface or commit a provider 
  assert.equal(x.api.paintContour(true),false);assert.equal(x.f.writes,writes);
  x.attrs.clear();x.envelope={...x.envelope,current:()=>{x.api.scheduleContour();return true;}};
  assert.equal(x.api.paintContour(true),false);assert.equal(x.f.writes,writes);
+});
+
+test("resting contour is held during drag/cascade, including explicit force",()=>{
+ const x=layoutFixture();x.api.paintContour();const reads=x.reads,writes=x.f.writes;
+ x.attrs.add("freeze");x.api.setUntil(2000);
+ assert.equal(x.api.paintContour(true),false);x.api.stepContour(1000);
+ assert.equal(x.reads,reads);assert.equal(x.f.writes,writes);assert.equal(x.frames.length,0);
+ x.attrs.clear();assert.equal(x.api.paintContour(true),true);
 });

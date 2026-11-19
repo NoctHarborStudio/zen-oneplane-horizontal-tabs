@@ -6,13 +6,14 @@ const code=src.slice(src.indexOf("  function onLaneWheel("),src.indexOf("  funct
 test("wheel moves only its overflowing lane and preserves zoom shortcuts",()=>{
   const left={scrollWidth:600,clientWidth:200,scrollLeft:0},right={scrollWidth:500,clientWidth:200,scrollLeft:0};
   const row={hasAttribute:k=>k==="data-op-show-island"},list={scrollWidth:700,clientWidth:200,scrollLeft:0};
-  const api=new Function("leftLane","row","hoverSupported","refreshIndicator","list","let cascadeState='idle';"+code+"return {onLaneWheel,syncLaneScroll};")(left,row,()=>true,()=>{},list);
+  const api=new Function("leftLane","row","hoverSupported","refreshIndicator","list","let cascadeState='idle',frozen=false;const root={hasAttribute:()=>false},restingGeometryBlocked=()=>frozen;"+code+"return {onLaneWheel,syncLaneScroll,setFrozen:v=>frozen=v};")(left,row,()=>true,()=>{},list);
   let prevented=0,stopped=0;
   const event={currentTarget:left,deltaX:0,deltaY:2,deltaMode:1,preventDefault(){prevented++;},stopPropagation(){stopped++;}};
   api.onLaneWheel(event);assert.equal(left.scrollLeft,64);assert.equal(right.scrollLeft,0);assert.equal(prevented,1);assert.equal(stopped,1);
   api.onLaneWheel({...event,currentTarget:right,deltaX:12,deltaY:1,deltaMode:0});assert.equal(right.scrollLeft,12);
   api.onLaneWheel({...event,ctrlKey:true});assert.equal(left.scrollLeft,64);
   api.onLaneWheel({...event,currentTarget:list});assert.equal(list.scrollLeft,0);
+  api.setFrozen(true);api.onLaneWheel(event);assert.equal(left.scrollLeft,64);api.setFrozen(false);
   api.syncLaneScroll();assert.equal(left.scrollLeft,400);
   left.scrollLeft=120;left.scrollWidth=650;api.syncLaneScroll();assert.equal(left.scrollLeft,120);
   left.scrollLeft=450;left.scrollWidth=700;api.syncLaneScroll();assert.equal(left.scrollLeft,500);
