@@ -277,3 +277,8 @@ Existing assembly launch/resume error and cleanup events cover cohort validation
 ### Preview.102 — single contour renderer
 
 `contour.paint` includes `mode` (visible/stable). `contour.provider.error` is throttled and records only error name; failed reads retain the last mask. `contour.commit.error` retains previous cache on rejected CSS writes. Legacy bmMask/bmContour diagnostic fields can remain null; retired stable marker is no longer observed. No new observer or RAF.
+
+
+### Preview.103 — contour audit
+
+Existing contour.paint/commit.error/provider.error and bookmarks lifecycle traces remain authoritative. Clean stable prehover may skip painting when its committed invalidation revision/provider is unchanged; no new hot-path logging. Native readback, mask paint and performance require evidence.

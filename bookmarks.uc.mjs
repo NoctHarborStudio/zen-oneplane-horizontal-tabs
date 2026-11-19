@@ -1,17 +1,17 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="bookmarks.script",data={version:"0.3.0-preview.102"};
+  const event="bookmarks.script",data={version:"0.3.0-preview.103"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
 /* Zen Refined — Magnetic Bookmarks
  * Native bookmarks only. No page content, network requests or browser preference
- * changes. Reads its own settings and OnePlane's contour preferences.
+ * changes. Provides resting bookmark geometry to Nocturne Layout.
  */
 const PREFIX = "zen.refined.bookmarks.";
 const CONTROLLER = "__zenRefinedMagneticBookmarks";
 const SHARED = "__zenMagneticBookmarksShared";
-const REVISION = 1;
+const REVISION = 2;
 const root = document.documentElement;
 const prefs = Services.prefs;
 let disposed = false;
@@ -107,13 +107,15 @@ function install() {
     if(dead||expectedToolbar!==toolbar||!toolbar.isConnected||!list.isConnected||
       !settings.enabled||!settings.stableBackground||root.getAttribute("zen-compact-mode")!=="true"||
       toolbar.hidden||toolbar.collapsed)return "off";
-    if(busy()||!force&&addressSuspended||root.hasAttribute("data-op-bookmark-wave")||
+    if(busy()||!force&&(addressSuspended||["data-zr-startup-phase","data-zr-closing","data-zr-center-motion","data-zr-workspace-phase"].some(k=>root.hasAttribute(k)))||root.hasAttribute("data-op-bookmark-wave")||
       list.hasAttribute("data-zr-fold-bookmarks"))return "hold";
     return "ready";
   }
   function readContourEnvelope(force=false,expectedToolbar=toolbar){
     const status=contourPolicy(force,expectedToolbar);
     if(status!=="ready")return {status};
+    const style=window.getComputedStyle(toolbar);
+    if(style.display==="none"||style.visibility!=="visible")return {status:"off"};
     const bookmark=toolbar.getBoundingClientRect();
     if(bookmark.height<1)return {status:"hold"};
     const controls=[];
@@ -781,50 +783,93 @@ function install() {
 // independent leases. Legacy scripts yield the controller safely.
 function createSharedRegistry(){
   const clients=new Set();
-  let controller=null,scheduled=false;
+  let controller=null,scheduled=false,busy=false;
+  const current=()=>window[SHARED]===registry;
+  const notify=()=>{try{window.__oneplaneLayoutController?.invalidateBookmarkContour?.();}catch{}};
   const registry={revision:REVISION,clients,
-    syncAddressState(){controller?.syncAddressState();},
-    contourPolicy(force,toolbar){return window[SHARED]===registry?controller?.contourPolicy?.(force,toolbar)??"off":"off";},
+    syncAddressState(){if(current())controller?.syncAddressState();},
+    contourPolicy(force,toolbar){return current()?controller?.contourPolicy?.(force,toolbar)??"off":"off";},
     readContourEnvelope(force,toolbar){
       const exact=controller;
-      if(window[SHARED]!==registry||!exact)return {status:"off"};
+      if(!current()||!exact)return {status:"off"};
       const envelope=exact.readContourEnvelope(force,toolbar);
-      return {...envelope,current:()=>window[SHARED]===registry&&controller===exact};
+      return {...envelope,current:()=>current()&&controller===exact};
     },
-    acquire(token){clients.add(token);ensure();},
+    acquire(token){if(current()){clients.add(token);ensure();}},
     release(token){
-      clients.delete(token);
-      if(clients.size)return;
-      stop();
-      if(window[SHARED]===registry){delete window[SHARED];window.__oneplaneLayoutController?.invalidateBookmarkContour?.();}
+      if(!clients.delete(token)||clients.size||!current())return;
+      if(busy)return; // ensure/stop will settle the final lease
+      settle();
     }};
   function stop(){
-    const previous=controller;controller=null;previous?.destroy();
-    if(window[SHARED]===registry)window.__oneplaneLayoutController?.invalidateBookmarkContour?.();
-    if(window[CONTROLLER]===legacyLease)delete window[CONTROLLER];
+    const previous=controller;controller=null;
+    try{previous?.destroy();}finally{
+      if(window[CONTROLLER]===legacyLease)delete window[CONTROLLER];
+      if(current())notify();
+    }
+  }
+  function settle(){
+    if(busy||!current())return;
+    busy=true;
+    try{if(!clients.size)stop();}
+    finally{
+      busy=false;
+      if(current()){
+        if(!clients.size){delete window[SHARED];notify();}
+        else ensure();
+      }
+    }
   }
   function legacyLease(){
-    // An older Refined copy may call this before registering itself.
-    // Yield synchronously, then reclaim after its synchronous startup
-    // has returned. Never run two installed controllers at once.
-    stop();
-    if(!clients.size||scheduled)return;
+    if(!current()||busy)return;
+    busy=true;
+    try{stop();}finally{busy=false;}
+    if(!clients.size){settle();return;}
+    if(scheduled)return;
     scheduled=true;
-    window.queueMicrotask(()=>{scheduled=false;if(clients.size)ensure();});
+    window.queueMicrotask(()=>{scheduled=false;if(current()&&clients.size)ensure();});
   }
   function ensure(){
-    if(!clients.size||window.closed)return;
+    if(busy||!current()||!clients.size||window.closed)return;
     if(controller&&window[CONTROLLER]===legacyLease)return;
-    if(controller)stop();
-    const legacy=window[CONTROLLER];
-    if(typeof legacy==="function"&&legacy!==legacyLease)legacy();
-    window[CONTROLLER]=legacyLease;
-    try{controller=install();}
-    catch(error){stop();throw error;}
-    if(!controller&&window[CONTROLLER]===legacyLease)delete window[CONTROLLER];
-    if(controller&&window[SHARED]===registry)window.__oneplaneLayoutController?.invalidateBookmarkContour?.();
+    busy=true;
+    let acquired=null;
+    try{
+      if(controller)stop();
+      const legacy=window[CONTROLLER];
+      if(typeof legacy==="function"&&legacy!==legacyLease)legacy();
+      if(!current()||!clients.size||window.closed)return;
+      window[CONTROLLER]=legacyLease;
+      acquired=install();
+      if(current()&&clients.size&&!window.closed&&window[CONTROLLER]===legacyLease){
+        controller=acquired;acquired=null;
+      }
+    }finally{
+      try{acquired?.destroy();}finally{
+        if(!controller&&window[CONTROLLER]===legacyLease)delete window[CONTROLLER];
+        busy=false;
+        if(current()){
+          if(!clients.size)settle();
+          else notify();
+        }
+      }
+    }
   }
   return registry;
+}
+// Nocturne-only migration: retire old in-package leases before installing
+// the new capability. An old unload callback cannot touch the new owner.
+function currentBookmarkRegistry(){
+  let existing=window[SHARED];
+  if(existing&&existing.revision!==REVISION){
+    if(existing.revision!==1||!(existing.clients instanceof Set)||typeof existing.release!=="function")
+      throw Error("unsupported bookmark registry");
+    for(const token of [...existing.clients])existing.release(token);
+    if(window[SHARED]===existing)throw Error("bookmark registry still active");
+    existing=window[SHARED];
+  }
+  if(existing&&existing.revision!==REVISION)throw Error("bookmark registry revision changed");
+  return existing??(window[SHARED]=createSharedRegistry());
 }
 const lease={};
 let shared=null;
@@ -844,7 +889,7 @@ function cleanup() {
 function start() {
   if (disposed || window.closed) return;
   try {
-    shared=window[SHARED]??(window[SHARED]=createSharedRegistry());
+    shared=currentBookmarkRegistry();
     shared.acquire(lease);
   }
   catch (error) { console.error("[Zen Refined] Magnetic Bookmarks:", error); cleanup(); }

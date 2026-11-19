@@ -1,3 +1,10 @@
+## 0.3.0-preview.103 — Contour lifecycle audit
+
+- Fence bookmark registry installation, release and stale generations; retire revision-1 in-package leases before installing revision 2.
+- Hold stable geometry under live exclusive phase markers, reject CSS-hidden bookmark shelves, and suppress even forced contour writes during closing.
+- Reuse the committed stable envelope on repeated prehover while its existing invalidation revision and provider are unchanged.
+- Native mask serialization, paint and performance remain unverified.
+
 ## 0.3.0-preview.102 — One contour renderer
 
 - Cut over Magnetic Bookmarks from an independent SVG renderer and CSS override to a resting envelope provider. Layout alone selects visible/stable geometry, renders and commits the mask.

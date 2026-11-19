@@ -106,7 +106,7 @@ function layoutFixture(){
  const remove=()=>{delete window.__zenMagneticBookmarksShared;provider=null;};
  const c=read("src/layout/contour-controller.js.part");
  const api=new Function("window","document","root","row","navbar","toolbarWrapper","bookmarks","surface","contourGeometry","commitContourMask","defaults",
-  'let dead=false,contourPainting=false,contourKey="",contourMode="",contourFrame=0,contourUntil=0,panelSwitchUntil=0;const contourObserved=new Set();function hoverSupported(){return true}function contourSettings(){return defaults}'+c+
+  'let dead=false,contourPainting=false,contourKey="",contourMode="",contourFrame=0,contourUntil=0,panelSwitchUntil=0,contourRevision=0,contourCommittedRevision=-1,contourProvider=null;const contourObserved=new Set();function hoverSupported(){return true}function contourSettings(){return defaults}'+c+
   'return {paintContour,stepContour,scheduleContour,onContourTransition,mode:()=>contourMode,key:()=>contourKey,setUntil:n=>contourUntil=n};')
   (window,document,root,row,navbar,toolbarWrapper,bookmarks,f,contourGeometry,commitContourMask,defaults);
  return {f,input,attrs,frames,events,api,install,remove,get reads(){return reads;},set envelope(v){envelope=v;},set policy(v){policy=v;}};
@@ -133,12 +133,29 @@ test("bookmark provider returns exact resting expansion budget and refuses busy/
  const mk=(r,magnetic=true)=>({parentElement:magnetic?list:null,matches:()=>magnetic,getAttribute:()=>null,getBoundingClientRect:()=>r});
  list.children=[mk(input.controls[0].rect),mk(input.controls[1].rect)];
  const toolbar={isConnected:true,hidden:false,getBoundingClientRect:()=>input.bookmark,querySelectorAll:()=>[]};
- const root={getAttribute:()=>"true",hasAttribute:()=>false},window={getComputedStyle:()=>({display:"block",visibility:"visible",opacity:"1"})};
+ const markers=new Set();let display="block";const root={getAttribute:()=>"true",hasAttribute:k=>markers.has(k)},window={getComputedStyle:()=>({display,visibility:"visible",opacity:"1"})};
  const api=new Function("root","window","toolbar","list",'let dead=false,addressSuspended=false,working=false;const settings={enabled:true,stableBackground:true,scale:1.4};function busy(){return working}function desiredY(){return 1.3}function availableGrowth(){return 25}'+code+'return {readContourEnvelope,setBusy:v=>working=v,setSuspended:v=>addressSuspended=v};')(root,window,toolbar,list);
  const e=api.readContourEnvelope();assert.equal(e.status,"ready");assert.equal(e.controls.length,2);assert.equal(e.availableGrowth,25);
  assert.ok(Math.abs(e.controls[0].growthX-32)<1e-6);assert.ok(Math.abs(e.controls[0].growthY-14.2)<1e-6);
  api.setBusy(true);assert.equal(api.readContourEnvelope(true).status,"hold");api.setBusy(false);
  api.setSuspended(true);assert.equal(api.readContourEnvelope().status,"hold");assert.equal(api.readContourEnvelope(true).status,"ready");
+ api.setSuspended(false);markers.add("data-zr-startup-phase");assert.equal(api.readContourEnvelope().status,"hold");assert.equal(api.readContourEnvelope(true).status,"ready");markers.clear();
+ display="none";assert.equal(api.readContourEnvelope(true).status,"off");display="block";
  toolbar.hidden=true;assert.equal(api.readContourEnvelope(true).status,"off");
  assert.equal(api.readContourEnvelope(true,{}).status,"off");
+});
+
+test("stable prehover reuses committed geometry until existing invalidation",()=>{
+ const x=layoutFixture();x.install();x.policy="ready";
+ x.envelope={status:"ready",bookmark:x.input.bookmark,controls:x.input.controls,availableGrowth:25,current:()=>true};
+ x.api.paintContour();const reads=x.reads,writes=x.f.writes;
+ x.api.paintContour(false,true);x.api.paintContour(false,true);
+ assert.equal(x.reads,reads);assert.equal(x.f.writes,writes);
+ x.api.scheduleContour();x.api.paintContour(false,true);assert.ok(x.reads>reads);
+ const after=x.reads;x.api.paintContour(false,true);assert.equal(x.reads,after);
+});
+test("close phase never rewrites a contour even in forced preflight",()=>{
+ const x=layoutFixture();x.api.paintContour();const reads=x.reads,writes=x.f.writes;
+ x.attrs.add("data-zr-closing");x.api.paintContour(true);
+ assert.equal(x.reads,reads);assert.equal(x.f.writes,writes);
 });

@@ -409,3 +409,8 @@ For A4.2, use a single Layout-owned renderer with Magnetic Bookmarks as an inter
 ### Preview.102 — contour cutover
 
 Baseline documentation CI PASS. 11 contour + 5 bookmark lifecycle fixture bodies PASS in isolated V8, including golden stable SVG hashes, provider off/hold/ready, stale envelope, partial and silently rejected write, and no secondary renderer. Runtime parser and generated fragment/CSS checks pass. Canonical CI and native visual/runtime/performance verification remain separate. A4.2-R required before A4.3.
+
+
+### Preview.103 — independent contour audit
+
+Preview.102 CI PASS (646 Node, 15 Python). 13 contour + 8 bookmark lifecycle fixture bodies PASS in isolated V8; five new cases. Runtime parser and generated substitutions PASS. Canonical CI pending. Native mask serialization/appearance, reload ordering and matched performance remain open.

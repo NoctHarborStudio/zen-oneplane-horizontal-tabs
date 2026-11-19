@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 const script=readFileSync(new URL("../bookmarks.uc.mjs",import.meta.url),"utf8");
 const registrySource=script.slice(script.indexOf("function createSharedRegistry()"),script.indexOf("const lease={}"));
-function setup(legacyFirst=false){
+function setup(legacyFirst=false,onInstall=null){
   const queue=[],events=[];
   const win={closed:false,queueMicrotask:f=>queue.push(f)};
-  const make=()=>{events.push("install");return {destroy(){events.push("destroy");},syncAddressState(){events.push("sync");}};};
+  const make=()=>{events.push("install");onInstall?.(win);return {destroy(){events.push("destroy");},syncAddressState(){events.push("sync");}};};
   if(legacyFirst)win.legacy=()=>{events.push("legacy-cleanup");delete win.legacy;};
   const registry=new Function("window","install","CONTROLLER","SHARED","REVISION",registrySource+"return createSharedRegistry();")(win,make,"legacy","shared",1);
   win.shared=registry;
@@ -71,4 +71,25 @@ test("preference updates are coalesced until the last exclusive bookmark phase e
  const overlap={reads,reserves};markers.clear();syncAddressState();syncAddressState();
  const after={reads,reserves};refreshSettings();return {during,overlap,after,idle:{reads,reserves},clears};`);
  assert.deepEqual(run(),{during:{reads:0,reserves:0},overlap:{reads:0,reserves:0},after:{reads:1,reserves:1},idle:{reads:2,reserves:2},clears:1});
+});
+
+test("release of final lease during installation retires the unreturned controller",()=>{
+ const token={};const {win,registry,events}=setup(false,w=>w.shared.release(token));
+ registry.acquire(token);
+ assert.deepEqual(events,["install","destroy"]);assert.equal(win.shared,undefined);assert.equal(win.legacy,undefined);
+});
+test("stale registry cannot acquire, notify or delete a successor",()=>{
+ const {win,registry,events}=setup(),token={};registry.acquire(token);registry.release(token);
+ const successor={};win.shared=successor;registry.acquire({});registry.release(token);
+ assert.equal(win.shared,successor);assert.deepEqual(events,["install","destroy"]);
+});
+test("Nocturne registry revision upgrade releases old leases before acquiring new owner",()=>{
+ const token={},events=[],win={closed:false};
+ const old={revision:1,clients:new Set([token]),release(t){events.push("old-release");this.clients.delete(t);delete win.shared;}};
+ win.shared=old;
+ const get=new Function("window","install","CONTROLLER","SHARED","REVISION",registrySource+"return currentBookmarkRegistry;")
+  (win,()=>{events.push("install");return {destroy(){events.push("destroy");}}},"legacy","shared",2);
+ const registry=get();assert.equal(registry.revision,2);assert.deepEqual(events,["old-release"]);
+ registry.acquire({});assert.deepEqual(events,["old-release","install"]);assert.equal(win.shared,registry);
+ old.release=()=>{};old.release(token);assert.equal(win.shared,registry);
 });

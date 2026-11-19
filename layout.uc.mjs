@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.102",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.103",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -6796,7 +6796,7 @@ function installTabStrip() {
     catch(error){cleanup();console.warn("[OnePlane] Native tab menu:",error);}
   }
   const contourPrefPrefix="zen.oneplane.fade-";
-  let contourFrame=0, contourUntil=0, contourKey="",contourMode="",contourPainting=false;
+  let contourFrame=0, contourUntil=0, contourKey="",contourMode="",contourPainting=false,contourRevision=0,contourCommittedRevision=-1,contourProvider=null;
   let contourResize=null, contourObserver=null;
   const contourObserved=new Set();
   function contourSettings(){
@@ -6943,11 +6943,13 @@ function installTabStrip() {
     try{paintContourNow(force,prehover);}finally{contourPainting=false;}
   }
   function paintContourNow(force,prehover){
-    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-op-bookmark-wave")||document.getElementById("PlacesToolbarItems")?.hasAttribute("data-zr-fold-bookmarks")||(!force&&(root.hasAttribute("data-zr-workspace-phase")||root.getAttribute("data-zr-startup-phase")==="playing"||root.hasAttribute("data-zr-center-motion"))))return;
+    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-zr-closing")||root.hasAttribute("data-op-bookmark-wave")||document.getElementById("PlacesToolbarItems")?.hasAttribute("data-zr-fold-bookmarks")||(!force&&(root.hasAttribute("data-zr-workspace-phase")||root.getAttribute("data-zr-startup-phase")==="playing"||root.hasAttribute("data-zr-center-motion"))))return;
     // A switch can briefly hide or resize native bookmark controls.
     // Retain the last valid mask until the native layout settles.
     if(!force&&!prehover&&contourKey&&window.performance.now()<panelSwitchUntil)return;
-    const provider=window.__zenMagneticBookmarksShared;
+    const provider=window.__zenMagneticBookmarksShared,revision=contourRevision;
+    if(prehover&&contourMode==="stable"&&contourProvider===provider&&contourCommittedRevision===revision&&
+      bookmarkContourPolicy()==="ready")return;
     let mode="visible",envelope=null;
     if(bookmarks&&provider?.readContourEnvelope){
       try{envelope=provider.readContourEnvelope(force,bookmarks);}
@@ -6986,10 +6988,12 @@ function installTabStrip() {
     const geometry=contourGeometry({wrapper,nav,row:rr,bookmark,controls,shiftY,trim,settings,mode,
       availableGrowth:mode==="stable"?envelope.availableGrowth:0});
     if(dead||provider!==window.__zenMagneticBookmarksShared||envelope?.current?.()===false||!geometry)return;
-    if(geometry.key===contourKey&&mode===contourMode)return;
+    if(geometry.key===contourKey&&mode===contourMode){
+      contourProvider=provider;contourCommittedRevision=revision;return;
+    }
     try{
       if(geometry.key!==contourKey)contourKey=commitContourMask(surface,geometry,settings);
-      contourMode=mode;
+      contourMode=mode;contourProvider=provider;contourCommittedRevision=revision;
     }
     catch(error){
       // Preserve the last committed key and retry on the next existing
@@ -7009,7 +7013,9 @@ function installTabStrip() {
     if(now<contourUntil && hoverSupported()&&!root.hasAttribute("data-op-bookmark-wave")&&!root.hasAttribute("data-zr-workspace-phase")&&root.getAttribute("data-zr-startup-phase")!=="playing"&&!root.hasAttribute("data-zr-center-motion"))contourFrame=window.requestAnimationFrame(stepContour);
   }
   function scheduleContour(){
-    if(!dead&&!contourFrame)contourFrame=window.requestAnimationFrame(stepContour);
+    if(dead)return;
+    contourRevision++;
+    if(!contourFrame)contourFrame=window.requestAnimationFrame(stepContour);
   }
   function onContourTransition(event){
     if(root.hasAttribute("data-op-bookmark-wave")||!contourObserved.has(event.target)||bookmarkContourPolicy()!=="off")return;

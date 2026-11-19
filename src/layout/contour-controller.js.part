@@ -32,11 +32,13 @@
     try{paintContourNow(force,prehover);}finally{contourPainting=false;}
   }
   function paintContourNow(force,prehover){
-    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-op-bookmark-wave")||document.getElementById("PlacesToolbarItems")?.hasAttribute("data-zr-fold-bookmarks")||(!force&&(root.hasAttribute("data-zr-workspace-phase")||root.getAttribute("data-zr-startup-phase")==="playing"||root.hasAttribute("data-zr-center-motion"))))return;
+    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-zr-closing")||root.hasAttribute("data-op-bookmark-wave")||document.getElementById("PlacesToolbarItems")?.hasAttribute("data-zr-fold-bookmarks")||(!force&&(root.hasAttribute("data-zr-workspace-phase")||root.getAttribute("data-zr-startup-phase")==="playing"||root.hasAttribute("data-zr-center-motion"))))return;
     // A switch can briefly hide or resize native bookmark controls.
     // Retain the last valid mask until the native layout settles.
     if(!force&&!prehover&&contourKey&&window.performance.now()<panelSwitchUntil)return;
-    const provider=window.__zenMagneticBookmarksShared;
+    const provider=window.__zenMagneticBookmarksShared,revision=contourRevision;
+    if(prehover&&contourMode==="stable"&&contourProvider===provider&&contourCommittedRevision===revision&&
+      bookmarkContourPolicy()==="ready")return;
     let mode="visible",envelope=null;
     if(bookmarks&&provider?.readContourEnvelope){
       try{envelope=provider.readContourEnvelope(force,bookmarks);}
@@ -75,10 +77,12 @@
     const geometry=contourGeometry({wrapper,nav,row:rr,bookmark,controls,shiftY,trim,settings,mode,
       availableGrowth:mode==="stable"?envelope.availableGrowth:0});
     if(dead||provider!==window.__zenMagneticBookmarksShared||envelope?.current?.()===false||!geometry)return;
-    if(geometry.key===contourKey&&mode===contourMode)return;
+    if(geometry.key===contourKey&&mode===contourMode){
+      contourProvider=provider;contourCommittedRevision=revision;return;
+    }
     try{
       if(geometry.key!==contourKey)contourKey=commitContourMask(surface,geometry,settings);
-      contourMode=mode;
+      contourMode=mode;contourProvider=provider;contourCommittedRevision=revision;
     }
     catch(error){
       // Preserve the last committed key and retry on the next existing
@@ -98,7 +102,9 @@
     if(now<contourUntil && hoverSupported()&&!root.hasAttribute("data-op-bookmark-wave")&&!root.hasAttribute("data-zr-workspace-phase")&&root.getAttribute("data-zr-startup-phase")!=="playing"&&!root.hasAttribute("data-zr-center-motion"))contourFrame=window.requestAnimationFrame(stepContour);
   }
   function scheduleContour(){
-    if(!dead&&!contourFrame)contourFrame=window.requestAnimationFrame(stepContour);
+    if(dead)return;
+    contourRevision++;
+    if(!contourFrame)contourFrame=window.requestAnimationFrame(stepContour);
   }
   function onContourTransition(event){
     if(root.hasAttribute("data-op-bookmark-wave")||!contourObserved.has(event.target)||bookmarkContourPolicy()!=="off")return;

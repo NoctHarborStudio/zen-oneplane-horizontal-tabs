@@ -1144,3 +1144,8 @@ For A4.2, use a single Layout-owned renderer with Magnetic Bookmarks as an inter
 ### A4.2 — preview.102 contour cutover
 
 NC4-001: single production renderer source cutover, both accepted geometry policies retained. NC4-053: exact CSS mask readback and transactional cache now cover both policies. Off-wrapper reversed stable shelf rejected. Native visual/performance and lifecycle evidence pending; A4.2-R required. NC4-004/013/018/052 remain active A4.3+ work.
+
+
+### A4.2-R — preview.103
+
+NC4-001/053 source audit: exact revision-2 bookmark registry and in-flight install cleanup, CSS-hidden shelf fallback, live phase guard and clean prehover reuse. Native mask readback/paint, Sine reload and performance still open. NC4-004/013/018/052 continue in A4.3+.
