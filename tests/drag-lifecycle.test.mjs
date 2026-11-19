@@ -115,7 +115,7 @@ test("Bunny return restores source highlight and hover only on the visible card"
   const {readFile}=await import("node:fs/promises");
   const read=p=>readFile(new URL("../src/interactions/"+p,import.meta.url),"utf8");
   const [ctrl,strip,end,img]=await Promise.all([read("drag-controller.js.part"),read("strip-drag.js.part"),read("drag-end.js.part"),read("native-drag-image.js.part")]);
-  const a=strip.indexOf("if(dragDetachedOnce&&within)"),b=strip.indexOf("} else if (!local)",a);
+  const a=strip.indexOf("if(dragDetachedOnce&&within)"),b=strip.indexOf("\n    }\n    if (!within)",a);
   const branch=strip.slice(a,b);
   const attrs=new Set();let refresh=0;
   const restore=new Function("event","dragNode","clearLaneDrag","clearDropMarker","refreshIndicator","const dragDetachedOnce=true,within=true;"+branch);

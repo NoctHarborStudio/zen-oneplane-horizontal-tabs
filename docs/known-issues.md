@@ -1179,3 +1179,6 @@ A4.4b (preview.110): NC4-018 source partial: bound Home non-client region to too
 ### A4.4-R1 — Incoming drag viewport (preview.111)
 
 NC4-018/052 partial source correction: destination preview no longer authorizes a drop after viewport or phase invalidation without fresh trusted dragover. Exact source controller/token guards rejection and completion cleanup. Mixed-DPI Gecko behavior, missing native drop dispatch, native event identity and external layout changes remain open; see pipeline.
+
+
+A4.4-R1 CI correction: existing Bunny return fixture extraction boundary moved; targeted corrected fixture passes. No runtime change. Full CI rerun required.
