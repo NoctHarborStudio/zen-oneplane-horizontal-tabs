@@ -87,9 +87,12 @@ test("one contour writer; no bookmark SVG, override, contour RAF or fade prefere
  const b=read("bookmarks.uc.mjs"),css=read("src/styles/magnetic-bookmarks.css.part"),c=read("src/layout/contour-controller.js.part");
  for(const forbidden of ["function contourImage(","function contourPath(","--zr-bm-contour-mask","contourFrame","contourPrefix","panelObserver"])assert.ok(!b.includes(forbidden),forbidden);
  assert.ok(!css.includes("data-zr-bm-stable-contour"));
- assert.ok(c.includes('if(envelope?.status==="hold")return;'));
+ assert.ok(c.includes('if(envelope?.status==="hold")return false;'));
  assert.ok(c.includes('if(bookmarkContourPolicy()!=="off"){contourUntil=0;return;}'));
- assert.ok(read("src/layout/geometry.js.part").includes("syncAddressState?.();\n      const measured=measureToolbarGeometry(true);"));
+ const geometry=read("src/layout/geometry.js.part"),preflight=geometry.slice(geometry.indexOf("function prepareWorkspaceGeometry()"),geometry.indexOf("function observeGeometry("));
+ assert.ok(preflight.includes("syncAddressState?.();"));
+ assert.ok(preflight.includes("const measured=measureToolbarGeometry(true);"));
+ assert.ok(preflight.indexOf("syncAddressState?.();")<preflight.indexOf("const measured=measureToolbarGeometry(true);"));
 });
 function layoutFixture(){
  const f=fakeSurface(),input=fixture(),attrs=new Set(),frames=[],events=[];
