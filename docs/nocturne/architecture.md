@@ -276,3 +276,8 @@ Layout alone renders and commits the toolbar mask using two geometry policies. M
 ### A4.2-R — contour ownership audit (preview.103)
 
 Revision-2 bookmark registry fences installation and final release, retires recognized old in-package leases, and rejects stale owners. Layout uses live phase and provider identity, reuses a clean stable prehover revision and retains sole renderer/cache ownership. Hidden shelves select visible fallback. Native validation remains open; A4.3 coordinates geometry.
+
+
+### A4.3a — height and contour scheduling (preview.104)
+
+One Layout geometry RAF owns dirty height/contour passes. Reuse a pass-local resting row snapshot only if no wrapper-height write intervenes; explicit force preflight remains synchronous. Stable bookmark provider can consume the exact toolbar rectangle. Synchronous centering, active feature animations and native geometry leases remain distinct. Further read/compute/write consolidation and native evidence pending.

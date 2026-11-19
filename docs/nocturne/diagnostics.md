@@ -282,3 +282,8 @@ Existing assembly launch/resume error and cleanup events cover cohort validation
 ### Preview.103 — contour audit
 
 Existing contour.paint/commit.error/provider.error and bookmarks lifecycle traces remain authoritative. Clean stable prehover may skip painting when its committed invalidation revision/provider is unchanged; no new hot-path logging. Native readback, mask paint and performance require evidence.
+
+
+### Preview.104 — geometry coordinator
+
+Existing geometry.height, geometry.workspace.prepare and contour.paint traces are retained. Height/contour share one scheduler; no new sampling or per-frame logs. Native matched profiling remains required to quantify avoided reads and paint timing.

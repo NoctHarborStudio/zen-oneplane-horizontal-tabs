@@ -1,3 +1,9 @@
+## 0.3.0-preview.104 — Geometry coordinator, first slice
+
+- Coalesce Layout height and contour invalidations into one lifecycle-owned RAF with explicit dirty bits. Reuse a pass-local row snapshot when height is unchanged; never reuse pre-height-write rectangles for contour.
+- Keep synchronous workspace/startup preflight and native centering paths. Preserve bounded visible-contour follow work through the same scheduler.
+- Reuse calculated collapsed slot widths instead of traversing split members repeatedly within a centering pass. Add coordinator regressions for coalescing, height writes, reentrant invalidation, preflight and teardown.
+
 ## 0.3.0-preview.103 — Contour lifecycle audit
 
 - Fence bookmark registry installation, release and stale generations; retire revision-1 in-package leases before installing revision 2.

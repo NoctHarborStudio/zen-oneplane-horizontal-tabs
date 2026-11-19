@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="bookmarks.script",data={version:"0.3.0-preview.103"};
+  const event="bookmarks.script",data={version:"0.3.0-preview.104"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -111,12 +111,12 @@ function install() {
       list.hasAttribute("data-zr-fold-bookmarks"))return "hold";
     return "ready";
   }
-  function readContourEnvelope(force=false,expectedToolbar=toolbar){
+  function readContourEnvelope(force=false,expectedToolbar=toolbar,restingRect=null){
     const status=contourPolicy(force,expectedToolbar);
     if(status!=="ready")return {status};
     const style=window.getComputedStyle(toolbar);
     if(style.display==="none"||style.visibility!=="visible")return {status:"off"};
-    const bookmark=toolbar.getBoundingClientRect();
+    const bookmark=restingRect??toolbar.getBoundingClientRect();
     if(bookmark.height<1)return {status:"hold"};
     const controls=[];
     const nodes=new Set([...list.children,...toolbar.querySelectorAll("toolbarbutton.bookmark-item, #PlacesChevron, #OtherBookmarks")]);
@@ -789,10 +789,10 @@ function createSharedRegistry(){
   const registry={revision:REVISION,clients,
     syncAddressState(){if(current())controller?.syncAddressState();},
     contourPolicy(force,toolbar){return current()?controller?.contourPolicy?.(force,toolbar)??"off":"off";},
-    readContourEnvelope(force,toolbar){
+    readContourEnvelope(force,toolbar,restingRect=null){
       const exact=controller;
       if(!current()||!exact)return {status:"off"};
-      const envelope=exact.readContourEnvelope(force,toolbar);
+      const envelope=exact.readContourEnvelope(force,toolbar,restingRect);
       return {...envelope,current:()=>current()&&controller===exact};
     },
     acquire(token){if(current()){clients.add(token);ensure();}},

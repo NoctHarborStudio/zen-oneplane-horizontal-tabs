@@ -1,5 +1,5 @@
   const contourPrefPrefix="zen.oneplane.fade-";
-  let contourFrame=0, contourUntil=0, contourKey="",contourMode="",contourPainting=false,contourRevision=0,contourCommittedRevision=-1,contourProvider=null;
+  let contourUntil=0, contourKey="",contourMode="",contourPainting=false,contourRevision=0,contourCommittedRevision=-1,contourProvider=null;
   let contourResize=null, contourObserver=null;
   const contourObserved=new Set();
   function contourSettings(){

@@ -26,12 +26,12 @@
     try{return window.__zenMagneticBookmarksShared?.contourPolicy?.(force,bookmarks)??"off";}
     catch{return "off";}
   }
-  function paintContour(force=false,prehover=false){
+  function paintContour(force=false,prehover=false,rows=null){
     if(contourPainting)return;
     contourPainting=true;
-    try{paintContourNow(force,prehover);}finally{contourPainting=false;}
+    try{paintContourNow(force,prehover,rows);}finally{contourPainting=false;}
   }
-  function paintContourNow(force,prehover){
+  function paintContourNow(force,prehover,rows){
     if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-zr-closing")||root.hasAttribute("data-op-bookmark-wave")||document.getElementById("PlacesToolbarItems")?.hasAttribute("data-zr-fold-bookmarks")||(!force&&(root.hasAttribute("data-zr-workspace-phase")||root.getAttribute("data-zr-startup-phase")==="playing"||root.hasAttribute("data-zr-center-motion"))))return;
     // A switch can briefly hide or resize native bookmark controls.
     // Retain the last valid mask until the native layout settles.
@@ -41,7 +41,7 @@
       bookmarkContourPolicy()==="ready")return;
     let mode="visible",envelope=null;
     if(bookmarks&&provider?.readContourEnvelope){
-      try{envelope=provider.readContourEnvelope(force,bookmarks);}
+      try{envelope=provider.readContourEnvelope(force,bookmarks,rows?.bookmark??null);}
       catch(error){
         window.__nocturneTrace?.("contour.provider.error",{name:error?.name||"Error"},{throttle:500});
         return; // preserve last valid surface on provider failure
@@ -50,20 +50,20 @@
       if(envelope?.status==="ready")mode="stable";
     }
     const wrapper=toolbarWrapper.getBoundingClientRect();
-    const nav=navbar?.getBoundingClientRect();
+    const nav=rows?.nav??navbar?.getBoundingClientRect();
     if(wrapper.width<=0||!nav||nav.height<=0)return;
     // The mask and controls share panel travel. Measure the unshifted
     // geometry, otherwise an in-flight reveal would distort the shelf.
     const container=document.getElementById("zen-appcontent-navbar-container");
     const translation=container?window.getComputedStyle(container).translate:"none";
     const shiftY=translation&&translation!=="none"?(parseFloat(translation.split(/\s+/)[1])||0):0;
-    const settings=contourSettings(),rr=row.getBoundingClientRect();
+    const settings=contourSettings(),rr=rows?.row??row.getBoundingClientRect();
     const compactRows=row.hasAttribute("data-op-overflow-row");
     const trim=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-contour-trim"))||5;
     let bookmark=mode==="stable"?envelope.bookmark:null;
     const controls=mode==="stable"?envelope.controls:[];
     if(mode==="visible"&&bookmarks&&!bookmarks.hidden&&!bookmarks.collapsed){
-      const style=window.getComputedStyle(bookmarks),bm=bookmarks.getBoundingClientRect();
+      const style=window.getComputedStyle(bookmarks),bm=rows?.bookmark??bookmarks.getBoundingClientRect();
       if(style.display!=="none"&&style.visibility==="visible"&&bm.height>1){
         bookmark=bm;
         for(const node of contourCandidates()){
@@ -94,17 +94,16 @@
     window.__nocturneTrace?.("contour.paint",()=>({force,mode,width,height,base,deep,left,right,overflow:compactRows,
       phase:root.getAttribute("data-zr-workspace-phase")}),{throttle:100,sample:1200});
   }
-  function stepContour(now){
-    contourFrame=0;
+  function stepContour(now,rows=null){
     if(dead)return;
-    paintContour();
+    paintContour(false,false,rows);
     if(bookmarkContourPolicy()!=="off"){contourUntil=0;return;}
-    if(now<contourUntil && hoverSupported()&&!root.hasAttribute("data-op-bookmark-wave")&&!root.hasAttribute("data-zr-workspace-phase")&&root.getAttribute("data-zr-startup-phase")!=="playing"&&!root.hasAttribute("data-zr-center-motion"))contourFrame=window.requestAnimationFrame(stepContour);
+    if(now<contourUntil && hoverSupported()&&!root.hasAttribute("data-op-bookmark-wave")&&!root.hasAttribute("data-zr-workspace-phase")&&root.getAttribute("data-zr-startup-phase")!=="playing"&&!root.hasAttribute("data-zr-center-motion"))scheduleContour();
   }
   function scheduleContour(){
     if(dead)return;
     contourRevision++;
-    if(!contourFrame)contourFrame=window.requestAnimationFrame(stepContour);
+    queueGeometry(GEOMETRY_CONTOUR);
   }
   function onContourTransition(event){
     if(root.hasAttribute("data-op-bookmark-wave")||!contourObserved.has(event.target)||bookmarkContourPolicy()!=="off")return;

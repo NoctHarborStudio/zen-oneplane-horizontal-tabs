@@ -20,8 +20,6 @@
     cleanupStep("contourObserver?.disconnect()",()=>{contourObserver?.disconnect();});
     cleanupStep("prefs.removeObserver(contourPrefPrefix,contourPreferenceObserver)",()=>{prefs.removeObserver(contourPrefPrefix,contourPreferenceObserver);});
     cleanupStep("contourObserved.clear()",()=>{contourObserved.clear();});
-    cleanupStep("if(contourFrame)window.cancelAnimationFrame(contourFrame)",()=>{if(contourFrame)window.cancelAnimationFrame(contourFrame);});
-    contourFrame=0;
     if(bookmarks)for(const event of ["transitionrun","transitionend","transitioncancel"])
       cleanupStep("bookmark "+event,()=>bookmarks.removeEventListener(event,onContourTransition,true));
     cleanupStep("hoverObserver?.disconnect()",()=>{hoverObserver?.disconnect();});
@@ -30,7 +28,7 @@
     cleanupStep("if(panelSwitchTimer)window.clearTimeout(panelSwitchTimer)",()=>{if(panelSwitchTimer)window.clearTimeout(panelSwitchTimer);});
     cleanupStep("panelTimer=panelSwitchTimer=0",()=>{panelTimer=panelSwitchTimer=0;});
     cleanupStep("toolbarWrapper?.removeAttribute(\"data-op-panel-open\")",()=>{toolbarWrapper?.removeAttribute("data-op-panel-open");});
-    cleanupStep("if (geometryFrame) window.cancelAnimationFrame(geometryFrame)",()=>{if (geometryFrame) window.cancelAnimationFrame(geometryFrame);});
+    cleanupStep("cancelGeometry()",()=>{cancelGeometry();});
     cleanupStep("clearHover()",()=>{clearHover();});
     cleanupStep("releaseAddressHold()",()=>{releaseAddressHold();});
     cleanupStep("clearTabHover()",()=>{clearTabHover();});

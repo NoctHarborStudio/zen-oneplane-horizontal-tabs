@@ -33,3 +33,6 @@ A4.2: Layout owns the only contour mask and cache. Magnetic Bookmarks is an inte
 
 
 A4.2-R: revision-2 internal bookmark registry fences install/release and old-owner upgrades. Layout keeps one renderer and acknowledges existing invalidation revisions after a valid stable paint; clean prehover can reuse it. A4.3 geometry coordinator next after CI.
+
+
+A4.3a: Layout geometry owns a single height/contour dirty RAF, pass-local row rectangles and synchronous preflight. Existing direct centering/feature motion paths remain; do not cache rectangles across structural writes or frames. Next integrated audit and remaining resting geometry consolidation.

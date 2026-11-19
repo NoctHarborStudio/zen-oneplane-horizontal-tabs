@@ -414,3 +414,8 @@ Baseline documentation CI PASS. 11 contour + 5 bookmark lifecycle fixture bodies
 ### Preview.103 — independent contour audit
 
 Preview.102 CI PASS (646 Node, 15 Python). 13 contour + 8 bookmark lifecycle fixture bodies PASS in isolated V8; five new cases. Runtime parser and generated substitutions PASS. Canonical CI pending. Native mask serialization/appearance, reload ordering and matched performance remain open.
+
+
+### Preview.104 — geometry coordinator first slice
+
+Preview.103 CI PASS. Six new coordinator fixtures; 19 contour/coordinator fixture bodies PASS in isolated V8. Runtime parser/generated substitutions verified. Canonical CI pending. Native initial and height-change paint, reload and performance remain open.

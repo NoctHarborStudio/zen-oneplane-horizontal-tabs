@@ -1149,3 +1149,8 @@ NC4-001: single production renderer source cutover, both accepted geometry polic
 ### A4.2-R — preview.103
 
 NC4-001/053 source audit: exact revision-2 bookmark registry and in-flight install cleanup, CSS-hidden shelf fallback, live phase guard and clean prehover reuse. Native mask readback/paint, Sine reload and performance still open. NC4-004/013/018/052 continue in A4.3+.
+
+
+### A4.3a — preview.104
+
+NC4-004/013 partial source consolidation: height/contour dirty scheduler and pass-local row snapshot, reuse collapsed slot widths. Remaining sync/ResizeObserver centering, partition, anchor, indicator and scrolling dependencies need audit. NC4-052/018 remain open. No native performance claim.

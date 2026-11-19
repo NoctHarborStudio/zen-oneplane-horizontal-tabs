@@ -89,7 +89,7 @@ test("one contour writer; no bookmark SVG, override, contour RAF or fade prefere
  assert.ok(!css.includes("data-zr-bm-stable-contour"));
  assert.ok(c.includes('if(envelope?.status==="hold")return;'));
  assert.ok(c.includes('if(bookmarkContourPolicy()!=="off"){contourUntil=0;return;}'));
- assert.ok(read("src/layout/geometry.js.part").includes("syncAddressState?.();\n    measureToolbarGeometry(true);paintContour(true);"));
+ assert.ok(read("src/layout/geometry.js.part").includes("syncAddressState?.();\n    const measured=measureToolbarGeometry(true);"));
 });
 function layoutFixture(){
  const f=fakeSurface(),input=fixture(),attrs=new Set(),frames=[],events=[];
@@ -106,7 +106,7 @@ function layoutFixture(){
  const remove=()=>{delete window.__zenMagneticBookmarksShared;provider=null;};
  const c=read("src/layout/contour-controller.js.part");
  const api=new Function("window","document","root","row","navbar","toolbarWrapper","bookmarks","surface","contourGeometry","commitContourMask","defaults",
-  'let dead=false,contourPainting=false,contourKey="",contourMode="",contourFrame=0,contourUntil=0,panelSwitchUntil=0,contourRevision=0,contourCommittedRevision=-1,contourProvider=null;const contourObserved=new Set();function hoverSupported(){return true}function contourSettings(){return defaults}'+c+
+  'let dead=false,contourPainting=false,contourKey="",contourMode="",contourUntil=0,panelSwitchUntil=0,contourRevision=0,contourCommittedRevision=-1,contourProvider=null;const contourObserved=new Set();function hoverSupported(){return true}function contourSettings(){return defaults}const GEOMETRY_CONTOUR=2;function queueGeometry(){window.requestAnimationFrame(()=>{})}'+c+
   'return {paintContour,stepContour,scheduleContour,onContourTransition,mode:()=>contourMode,key:()=>contourKey,setUntil:n=>contourUntil=n};')
   (window,document,root,row,navbar,toolbarWrapper,bookmarks,f,contourGeometry,commitContourMask,defaults);
  return {f,input,attrs,frames,events,api,install,remove,get reads(){return reads;},set envelope(v){envelope=v;},set policy(v){policy=v;}};
