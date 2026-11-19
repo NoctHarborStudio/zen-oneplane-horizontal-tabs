@@ -1,3 +1,9 @@
+## 0.3.0-preview.99 — Fold mounted coordinate and terminal guard
+
+- Correct Fold proxy and portal coordinates against the actual mounted layer origin; validate resting card and Split child rectangles before effect allocation.
+- Fail open for partial scrollport/Island clipping, nontranslation coordinate frames, or mismatched geometry rather than showing a full or displaced clone. Check finished incoming Fold pose before normal handoff.
+- Repair the window-geometry fixture for the preview.98 invalidation dependency. Bloom remains disabled; post-release native painted-pose and performance validation are pending.
+
 ## 0.3.0-preview.98 — Center Motion resting geometry lease
 
 - Validate viewport/DPI, row, lane, Island, slot and Split handle layout metrics, scroll offsets and Fold fractional local rectangles at capture, resume and handoff.

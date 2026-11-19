@@ -216,6 +216,15 @@ function proxyFixture(){
    closest:()=>null,hasAttribute:k=>attrs.has(k),getAttribute:k=>attrs.get(k)??null,
    setAttribute(k,v){attrs.set(k,v);if(fault.mark&&kind==="card"&&k==="data-zr-center-card")throw Error("mark");},removeAttribute:k=>attrs.delete(k),
    getBoundingClientRect(){
+    if(this.hasAttribute("data-zr-magnetic-layer")){
+      const rr=row.getBoundingClientRect(),x=rr.left+(fault.hostX||0),y=rr.top+(fault.hostY||0);
+      return {left:x,top:y,right:x+rr.width,bottom:y+rr.height,width:rr.width,height:rr.height};
+    }
+    if(this.parentNode?.kind==="shadow"){
+      const o=this.parentNode.host.getBoundingClientRect(),x=o.left+parseFloat(this.style.left)+(fault.proxyX||0),y=o.top+parseFloat(this.style.top);
+      const w=parseFloat(this.style.width),h=parseFloat(this.style.height);
+      return {left:x,top:y,right:x+w,bottom:y+h,width:w,height:h};
+    }
     const s=bloomValues(this).scale,dx=(1-s)*r.width/2,dy=(1-s)*r.height/2;
     return {left:r.left+dx,right:r.right-dx,top:r.top+dy,bottom:r.bottom-dy,width:r.width*s,height:r.height*s};
    },getAnimations(){return effects.filter(a=>a.node===this&&!a.cancelled);},querySelector(k){return kind==="row"&&k===".oneplane-tab-list"?list:null;},
@@ -223,7 +232,7 @@ function proxyFixture(){
     if(k==="*")return this.children.flatMap(c=>[c,...c.querySelectorAll("*")]);return [];},
    append(...cs){for(const c of cs){this.children.push(c);c.parentNode=this;}if(kind==="row"&&fault.append)throw Error("append");},
    remove(){if(this.parentNode){const p=this.parentNode;p.children=p.children.filter(x=>x!==this);this.parentNode=null;}},
-   attachShadow(){if(fault.shadow)throw Error("shadow");return node("shadow");},
+   attachShadow(){if(fault.shadow)throw Error("shadow");const shadow=node("shadow");shadow.host=this;return shadow;},
    cloneNode(){const c=node(kind,r);for(const child of this.children)c.append(child.cloneNode());return c;},
    addEventListener(k,fn){listeners.set(k,fn);if(fault.listener&&kind==="img"&&k==="error")throw Error("listener");},
    removeEventListener(k,fn){if(listeners.get(k)===fn)listeners.delete(k);},listeners,
@@ -245,14 +254,14 @@ function proxyFixture(){
  const document={timeline:{currentTime:0},documentElement:root,getElementById:id=>id==="oneplane-tabs"?row:null,createElementNS:(ns,tag)=>node(tag)};
  const window={__nocturneLayoutStartup:{},CSS:{registerProperty(){}},addUnloadListener(){},addEventListener(){},removeEventListener(){},
   matchMedia:()=>({matches:!!fault.reduced}),
-  getComputedStyle:n=>({opacity:String(bloomValues(n).opacity),scale:String(bloomValues(n).scale),visibility:"visible",display:"block",getPropertyValue:()=>""}),
+  getComputedStyle:n=>({opacity:String(bloomValues(n).opacity),scale:String(bloomValues(n).scale),transform:n===row?fault.rowTransform||"none":"none",visibility:"visible",display:"block",getPropertyValue:()=>""}),
   requestAnimationFrame(fn){const id=++nextFrame;frames.set(id,fn);return id;},cancelAnimationFrame(id){frames.delete(id);},
   CustomEvent:class{constructor(type){this.type=type;}},dispatchEvent(event){events.push(event.type);fault.onEnd?.();},
   MutationObserver:class{constructor(fn){this.fn=fn;this.active=false;observers.push(this);}observe(){this.active=true;if(fault.observe)throw Error("observe");}disconnect(){this.active=false;}}
  };
  const mount=()=>{new Function("window","document","Services",runtimeSource)(window,document,{});return window.__nocturneCenterMotion;};
  const addIcon=()=>{const wrap=node("icon"),img=node("img");wrap.append(img);cards[0].append(wrap);return img;};
- return {root,row,cards,nodes,effects,observers,events,frames,fault,window,mount,addIcon};
+ return {root,row,list,cards,nodes,effects,observers,events,frames,fault,window,mount,addIcon};
 }
 const ownerMark="data-zr-center-motion",cardMark="data-zr-center-card";
 function assertProxyClean(f){
@@ -602,4 +611,34 @@ test("existing Layout geometry events use the exact lease and remove the same li
  assert.ok(l.includes('checkCenterGeometry("resize-observer")'));
  assert.ok(l.includes('lane.addEventListener("scroll",onLaneScroll'));assert.ok(l.includes('lane.removeEventListener("scroll",onLaneScroll'));
  assert.ok(read("src/layout/visibility.js.part").includes('checkCenterGeometry("window")'));
+});
+
+test("Fold mounts proxies against the real host origin, including fractional translation",()=>{
+ const f=proxyFixture();f.fault.hostX=3.25;f.fault.hostY=2.5;f.fault.rowTransform="matrix(1, 0, 0, 1, 3, 4)";
+ const h=f.mount().start(f.row,{owner:"startup",paused:true});assert.ok(h);
+ assert.equal(f.effects[0].node.style.left,"16.75px");assert.equal(f.effects[0].node.style.top,"-2.5px");
+ h.release();assertProxyClean(f);
+});
+test("Fold refuses transformed frames and actual mounted coordinate mismatch without leaking",()=>{
+ for(const fault of ["scale","rotate","perspective","mount"]){
+  const f=proxyFixture();
+  if(fault==="scale")f.fault.rowTransform="matrix(2, 0, 0, 2, 0, 0)";
+  if(fault==="rotate")f.fault.rowTransform="matrix(0, 1, -1, 0, 0)";
+  if(fault==="perspective")f.fault.rowTransform="matrix3d(1,0,0,.1,0,1,0,0,0,0,1,0,0,0,0,1)";
+  if(fault==="mount")f.fault.proxyX=.75;
+  assert.equal(f.mount().start(f.row,{owner:"workspace"}),null,fault);
+  assert.equal(f.effects.length,0);assertProxyClean(f);
+ }
+});
+test("Fold does not turn partially scrolled cards into full unscrolled clones",()=>{
+ const f=proxyFixture();Object.assign(f.list,{clientLeft:25,clientTop:0,clientWidth:100,clientHeight:40});
+ assert.equal(f.mount().start(f.row,{owner:"close",direction:"out"}),null);assert.equal(f.effects.length,0);assertProxyClean(f);
+ const g=proxyFixture();Object.assign(g.list,{clientLeft:0,clientTop:0,clientWidth:55,clientHeight:40});
+ const h=g.mount().start(g.row,{owner:"startup"});assert.ok(h);assert.equal(h.count,1);h.release();assertProxyClean(g);
+});
+test("Fold checks terminal incoming pose and invalidates a changed coordinate frame at boundary",()=>{
+ const f=proxyFixture(),h=f.mount().start(f.row,{owner:"startup"});assert.ok(h);
+ h.seal();assert.ok(h.validateTopology());f.fault.proxyX=1;assert.equal(h.validateTopology(),false);h.release();assertProxyClean(f);
+ const g=proxyFixture(),b=g.mount().start(g.row,{owner:"workspace"});assert.ok(b);g.fault.rowTransform="matrix(2,0,0,2,0,0)";
+ assert.equal(b.validateTopology(),false);b.release();assertProxyClean(g);
 });

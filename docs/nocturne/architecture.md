@@ -244,3 +244,8 @@ Native Zen tab order/membership remains authoritative. Strip sync publishes the 
 ### A3.6b1 — resting geometry lease (preview.98)
 
 Layout owns the read-only resting slot metrics and Center Motion holds the lease alongside native topology. Existing resize/scroll callbacks and transaction boundaries validate it; changed geometry releases existing visuals and reconciles through the current handoff. No separate observer, scheduler or owner. Real painted proxy alignment and native evidence remain open.
+
+
+### A3.6b2 — mounted coordinate and terminal guard (preview.99)
+
+Center Motion owns the coordinate mapping and validates the actual mounted Fold layer against Layout's resting projection. Correct host origin; reject unsafe transforms, partial clipping and mismatch; verify the finished incoming pose before the existing handoff. Layout remains the geometry owner. No new scheduler. Post-release phase changes and actual Gecko paint remain pending.

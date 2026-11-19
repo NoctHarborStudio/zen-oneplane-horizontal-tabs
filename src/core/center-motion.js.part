@@ -17,6 +17,39 @@
   function retire(){if(disposed&&!disposing&&!active&&!activeBookmark&&current())delete win[KEY];}
   function drainDispose(){if(!motionBusy&&!disposing&&pendingDispose){const options=pendingDispose;pendingDispose=null;dispose(options);}}
   const {smooth,keyframes,portalClip}=createMagneticFoldMath();
+  const GEOMETRY_EPS=.5;
+  const rectError=(a,b)=>Math.max(...["left","top","width","height"].map(k=>
+    Number.isFinite(a?.[k])&&Number.isFinite(b?.[k])?Math.abs(a[k]-b[k]):Infinity));
+  function translationOnly(n){
+    const s=win.getComputedStyle(n);
+    if(s.perspective&&s.perspective!=="none")return false;
+    if(s.scale&&s.scale!=="none"&&!String(s.scale).trim().split(/\s+/).every(x=>Number(x)===1))return false;
+    if(s.rotate&&s.rotate!=="none"&&!/^0(?:deg|rad|grad|turn)$/.test(s.rotate))return false;
+    const t=s.transform;
+    if(!t||t==="none")return true;
+    const m=/^matrix\(([^)]+)\)$/.exec(t);
+    if(m){const v=m[1].split(",").map(Number);return v.length===6&&v.every(Number.isFinite)&&
+      v[0]===1&&v[1]===0&&v[2]===0&&v[3]===1;}
+    const m3=/^matrix3d\(([^)]+)\)$/.exec(t);
+    if(!m3)return false;
+    const v=m3[1].split(",").map(Number);
+    return v.length===16&&v.every(Number.isFinite)&&v.every((x,i)=>i===12||i===13||x===(i%5===0?1:0));
+  }
+  function foldFrameCurrent(row,cards){
+    // Viewport lengths can only be reused as local CSS lengths in a
+    // translation-only coordinate frame. Check unique ancestors once
+    // at transaction boundaries, not on every ResizeObserver delivery.
+    const seen=new Set();
+    for(const start of [row,...cards.map(c=>c.n)])
+      for(let n=start;n&&!seen.has(n);n=n.parentElement){
+        seen.add(n);if(!translationOnly(n))return false;
+      }
+    return true;
+  }
+  function clipped(r,clip){
+    return r.left<clip.left-GEOMETRY_EPS||r.top<clip.top-GEOMETRY_EPS||
+      r.right>clip.right+GEOMETRY_EPS||r.bottom>clip.bottom+GEOMETRY_EPS;
+  }
   function collect(row){
     const list=row?.querySelector(".oneplane-tab-list");
     if(!list)return [];
@@ -31,7 +64,15 @@
       const lane=n.closest(".oneplane-island-lane")||n.closest("#oneplane-overflow-tabs")||list,lr=lane.getBoundingClientRect();
       const clip=lr.width>1?lr:list.getBoundingClientRect();
       if(r.right<=clip.left||r.left>=clip.right||r.bottom<=clip.top||r.top>=clip.bottom)continue;
-      candidates.push({n,r,opacity:Number(s.opacity)});
+      // A scrollport clips at its client box, not the outer border box.
+      // Do not copy a partial edge card as a full card outside that clip.
+      const client=lane.clientWidth>0&&lane.clientHeight>0&&lr.width>1?
+        {left:lr.left+lane.clientLeft,top:lr.top+lane.clientTop,
+         right:lr.left+lane.clientLeft+lane.clientWidth,bottom:lr.top+lane.clientTop+lane.clientHeight}:clip;
+      if(r.right<=client.left||r.left>=client.right||r.bottom<=client.top||r.top>=client.bottom)continue;
+      const portalOverlap=!!hub&&Math.min(r.right,hub.right)-Math.max(r.left,hub.left)>GEOMETRY_EPS&&
+        Math.min(r.bottom,hub.bottom)-Math.max(r.top,hub.top)>GEOMETRY_EPS;
+      candidates.push({n,r,opacity:Number(s.opacity),partial:clipped(r,client)||portalOverlap});
     }
     const cy=ir?.height>1?ir.top+ir.height/2:Math.min(...candidates.map(c=>c.r.top+c.r.height/2));
     const unit=Math.max(.7,Math.min(2, (Math.min(...candidates.map(c=>c.r.height))||30)/20));
@@ -70,7 +111,7 @@
       width:r.width+"px",height:r.height+"px",boxSizing:"border-box",margin:"0",minWidth:"0",minHeight:"0",
       maxWidth:"none",maxHeight:"none",transform:"none",translate:"none",scale:"none"});
   }
-  function proxy(c,layer,rr,cleanups,stats){
+  function proxy(c,layer,rr,cleanups,stats,geometryPairs){
     const clone=c.n.cloneNode(true);
     const originals=[c.n,...c.n.querySelectorAll("*")],copies=[clone,...clone.querySelectorAll("*")];
     for(let i=0;i<copies.length;i++){
@@ -83,11 +124,11 @@
       const handle=c.n.querySelector(".oneplane-split-handle");
       for(const child of c.n.children){
         const copy=copies[originals.indexOf(child)],r=child.getBoundingClientRect();
-        if(copy)freezeBox(copy,r,c.r);
+        if(copy){freezeBox(copy,r,c.r);geometryPairs.push({source:child,copy});}
       }
       if(handle){
         const hr=handle.getBoundingClientRect();
-        for(const dot of handle.children){const copy=copies[originals.indexOf(dot)];if(copy)freezeBox(copy,dot.getBoundingClientRect(),hr);}
+        for(const dot of handle.children){const copy=copies[originals.indexOf(dot)];if(copy){freezeBox(copy,dot.getBoundingClientRect(),hr);geometryPairs.push({source:dot,copy});}}
         stats.groups++;stats.handles++;
         stats.handleOffset=Math.max(stats.handleOffset,Math.abs(hr.top+hr.height/2-(c.r.top+c.r.height/2)));
       }
@@ -255,9 +296,9 @@
     let topologyInvalid=false,geometryInvalid=false,geometry;
     const geometryCurrent=(stage="checkpoint")=>{
       if(geometryInvalid)return false;
-      if(geometry===undefined)return true; // older Layout owner / not yet captured
       let valid=false;
-      try{valid=win.__oneplaneLayoutController===layout&&geometry()===true;}catch{}
+      try{valid=(bloomStage||stage!=="checkpoint"||foldFrameCurrent(row,cards))&&(geometry===undefined||
+        win.__oneplaneLayoutController===layout&&geometry()===true);}catch{}
       if(!valid){geometryInvalid=true;trace("center.geometry.invalidate",{id,owner,mode:handle.mode,stage,count:cards.length},{flush:true});}
       return valid;
     };
@@ -266,7 +307,22 @@
       if(topology===undefined)return true; // older Layout owner
       try{return win.__oneplaneLayoutController===layout&&topology()===true;}catch{return false;}
     };
-    const projectionCurrent=()=>topologyCurrent()&&geometryCurrent();
+    function terminalCurrent(){
+      if(bloomStage||direction!=="in"||!running.length||!running.every(a=>a.playState==="finished"))return true;
+      let error=0;
+      try{
+        for(const {n,c} of effects){
+          const style=win.getComputedStyle(n),alpha=Number(style.opacity);
+          if(!Number.isFinite(alpha)||Math.abs(alpha-c.opacity)>.005){error=Infinity;break;}
+          error=Math.max(error,rectError(n.getBoundingClientRect(),c.n.getBoundingClientRect()));
+        }
+      }catch{error=Infinity;}
+      if(error<=GEOMETRY_EPS)return true;
+      geometryInvalid=true;
+      trace("center.fold.terminal",{id,owner,count:effects.length,maxError:Number.isFinite(error)?error:null,valid:false},{flush:true});
+      return false;
+    }
+    const projectionCurrent=()=>topologyCurrent()&&geometryCurrent()&&terminalCurrent();
     const preparing=()=>exact()&&eligible()&&!topologyInvalid&&!geometryInvalid;
     const restoreMark=(node,key,value)=>{if(value===null)node.removeAttribute(key);else node.setAttribute(key,value);};
     const handle={owner,row,retainOnDispose,startupOutcomeVersion:1,mode:bloomStage?"magnetic-bloom":"magnetic-fold",count:0,finished:Promise.resolve(),
@@ -303,8 +359,9 @@
       seal(){if(!released)for(const a of running)try{a.finish();}catch{}},
       release(reason="release"){
         if(released)return;
-        const reconcile=committed&&owner!=="close"&&!projectionCurrent();
         released=true;
+        // Claim release before any validation/diagnostic callback can reenter.
+        const reconcile=committed&&owner!=="close"&&!projectionCurrent();
         const wasBusy=motionBusy;motionBusy=true;
         let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
         try{
@@ -343,6 +400,13 @@
       if(typeof layout?.captureCenterGeometry==="function"){
         geometry=layout.captureCenterGeometry(row,bloomStage?"bloom":"fold");
         if(typeof geometry!=="function"){geometryInvalid=true;trace("center.geometry.reject",{owner,stage:"capture"},{flush:true});throw Error("center-geometry-capture");}
+      }
+      if(!bloomStage){
+        const partial=cards.filter(c=>c.partial).length;
+        if(partial||!foldFrameCurrent(row,cards)){
+          trace("center.fold.reject",{id,owner,reason:partial?"partial-clip":"coordinate-frame",count:cards.length,partial},{flush:true});
+          throw Error("fold-resting-admission");
+        }
       }
       if(bloomStage){
         const check=()=>{if(!preparing())throw Error("bloom-stale");};
@@ -408,16 +472,34 @@
       host.setAttribute("data-zr-magnetic-layer","true");host.setAttribute("aria-hidden","true");host.inert=true;
       Object.assign(host.style,{position:"absolute",inset:"0",zIndex:"14",pointerEvents:"none",overflow:"visible"});
       hub=cards[0].hub;
-      if(hub)host.style.clipPath=portalClip(hub,rr,win.innerWidth,win.innerHeight);
       const layer=host.attachShadow({mode:"closed"});
       // Own every resource before acquisition; never hide cards until all
       // detached proxies have been prepared.
-      for(const c of cards){const n=proxy(c,layer,rr,cleanups,stats),frames=keyframes(c,direction==="out");effects.push({n,frames,c});}
+      const geometryPairs=[];
+      for(const c of cards){const n=proxy(c,layer,rr,cleanups,stats,geometryPairs),frames=keyframes(c,direction==="out");effects.push({n,frames,c});}
       if(measuring){restoreMark(root,"data-zr-fold-measuring",measuringMark);measuring=false;}
       if(!preparing()||!projectionCurrent()){handle.release("disposed");return null;}
       ownerMark=root.getAttribute(OWNER);ownerWritten=true;root.setAttribute(OWNER,owner);
       row.append(host);
       for(const c of cards){saved.push({n:c.n,mark:c.n.getAttribute(MARK)});c.n.setAttribute(MARK,"true");}
+      // The absolute containing block can start at a different origin
+      // than the row border box. Correct using the actual mounted host,
+      // then verify every unanimated outer rect before creating effects.
+      const origin=host.getBoundingClientRect();
+      if(![origin.left,origin.top,origin.width,origin.height].every(Number.isFinite)||origin.width<=0||origin.height<=0)
+        throw Error("fold-host-geometry");
+      for(const {n,c} of effects){
+        n.style.left=(c.r.left-origin.left)+"px";
+        n.style.top=(c.r.top-origin.top)+"px";
+      }
+      if(hub)host.style.clipPath=portalClip(hub,origin,win.innerWidth,win.innerHeight);
+      let maxError=0;
+      for(const {n,c} of effects)maxError=Math.max(maxError,rectError(n.getBoundingClientRect(),c.r),
+        rectError(c.n.getBoundingClientRect(),c.r));
+      for(const {source,copy} of geometryPairs)maxError=Math.max(maxError,rectError(copy.getBoundingClientRect(),source.getBoundingClientRect()));
+      trace("center.fold.geometry",{id,owner,count:effects.length,splitParts:geometryPairs.length,maxError:Number.isFinite(maxError)?maxError:null,
+        valid:maxError<=GEOMETRY_EPS},{flush:maxError>GEOMETRY_EPS});
+      if(maxError>GEOMETRY_EPS)throw Error("fold-proxy-geometry");
     // Inspect the mounted proxy in its unanimated coordinate space once.
     // No titles, image URLs, or DOM identifiers are logged.
     let handleError=0,measuredHandles=0;
@@ -428,7 +510,8 @@
       handleError=Math.max(handleError,Math.abs((a.left-c.r.left)-(b.left-o.left)),Math.abs((a.top-c.r.top)-(b.top-o.top)));
       measuredHandles++;
     }
-    if(measuredHandles)trace("center.group.geometry",()=>({owner,count:measuredHandles,maxOffsetError:handleError}),{sample:800});
+    if(measuredHandles)trace("center.group.geometry",()=>({owner,count:measuredHandles,maxOffsetError:handleError}),{sample:800,flush:handleError>GEOMETRY_EPS});
+    if(handleError>GEOMETRY_EPS)throw Error("fold-split-handle-geometry");
     // Inspect the actual mounted shadow copies before WAAPI changes
     // their outer alpha and scale. Ignore the intentional real-card gate.
     trace("center.icon.paint",()=>{

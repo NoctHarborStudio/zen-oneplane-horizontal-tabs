@@ -58,3 +58,8 @@ The strip owner provides a read-only exact topology validator from the last comp
 ### A3.6b1 — resting geometry (preview.98)
 
 The Layout projection lease adds viewport/DPI, row/lane/Island/slot metrics and scroll plus Fold fractional row-local rectangles. Existing geometry events invalidate stale Startup/Workspace motion; native identity sync alone avoids geometry reads for icon-only updates. Close remains exempt. Proxy mount/clip/ancestor transform and final painted pose remain A3.6b2; Bloom disabled.
+
+
+### A3.6b2 — mounted Fold geometry (preview.99)
+
+Correct the absolute host origin for proxies and portal; preflight actual unanimated outer and paired Split part rectangles. Reject partial scrollport/portal clips and nontranslation frames rather than duplicate incorrect pixels. Compare finished incoming Fold geometry and alpha before handoff. Existing native/visual fallback is used when unsupported. No new timer, observer, owner or trajectory loop. Actual post-release native paint and performance remain open; Bloom disabled.

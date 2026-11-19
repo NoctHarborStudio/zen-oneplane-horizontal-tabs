@@ -257,3 +257,8 @@ Existing assembly launch/resume error and cleanup events cover cohort validation
 ### Preview.98 — resting geometry lease
 
 `center.geometry.reject` reports owner and capture stage; `center.geometry.invalidate` reports transaction ID, owner, mode, stage and count once per lease. Existing motion release and Assembly/Workspace cleanup report interruption. No identities, URLs, labels, new recorder or periodic sampling.
+
+
+### Preview.99 — mounted Fold geometry
+
+`center.fold.reject`: transaction ID, owner, count, partial count and static reason (partial-clip/coordinate-frame). `center.fold.geometry`: count, Split part count, maximum rectangle error (null for invalid values), valid. `center.fold.terminal`: count/error and valid=false for finished incoming mismatch; existing geometry invalidation/release report cleanup. No URLs, native identities or new periodic probes. Existing group offset diagnostic retained.

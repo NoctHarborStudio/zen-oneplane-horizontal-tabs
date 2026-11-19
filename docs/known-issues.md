@@ -1117,3 +1117,8 @@ NC4-048 / MB6: source fixes for same-count replacement, reorder, split, selectio
 ### A3.6b1 — preview.98 resting geometry
 
 NC4-048 / MB6: source guard for same-topology viewport, DPI, scrolling, layout-space and fractional Fold geometry changes. Existing motion owner retires stale visuals; no native acceptance. Mounted proxy alignment, ancestor transform/clip and final painted handoff remain open.
+
+
+### A3.6b2 — preview.99 mounted Fold geometry
+
+NC4-048 / MB6: mounted host origin corrected, resting outer/Split-part comparisons and terminal incoming check added. Unsupported partial clipping or nontranslation frame bypasses Fold, not a new full-clipping animation. Preview.98 fixture failure repaired. Actual post-release native painted parity and performance, including fallback frequency in overflow, remain open.

@@ -382,3 +382,8 @@ Six new permanent regressions. 52/52 Center Motion, 29/29 Workspace and 50/50 St
 ### Preview.98 — resting geometry lease
 
 Five new regression cases; 57/57 Center Motion fixture bodies PASS in isolated V8. Test viewport/DPI, lane scroll and overflow, slot/parent/subpixel changes, deliberate Bloom scale/plus translate, capture/setup/resume rejection, once-only invalidation and explicit-close exemption. Canonical CI and native geometry/compositor evidence separate; A3.6b2 and independent review remain open.
+
+
+### Preview.99 — mounted Fold coordinate guard
+
+Preview.98 CI failed only the isolated window-resize fixture due to missing checkCenterGeometry dependency (624/625 Node); updated fixture asserts invalidation order and passes targeted execution. Four new regression cases, 61/61 Center Motion fixture bodies PASS in isolated V8: fractional host origin, translated vs scaled/rotated/perspective frame, mounted mismatch, partial/fully clipped scrollport and finished incoming mismatch. Native split geometry and post-release compositor/phase changes, observer overhead and fallback frequency not certified. Canonical CI pending; A3.6-R remains required.
