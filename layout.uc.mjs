@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.95",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.96",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -2042,7 +2042,7 @@ function acquireZenHome(win, services) {
     const elapsed=timeline.paused?0:timeline.elapsed?.()??Math.max(0,(win.performance?.now?.()??timeline.start)-timeline.start);
     // A stale explicit request must not ungate a successor's Home.
     if(bloom&&win.__nocturneStartupTimeline!==timeline)return null;
-    if(timeline.closed||bloom&&(!timeline.paused||typeof timeline.observeEffect!=="function")||
+    if(timeline.closed||bloom&&(timeline.bloomPrepared||!timeline.paused||typeof timeline.observeEffect!=="function")||
        !timeline.paused&&elapsed>=timeline.home*timeline.scale){finishStartupHome();return null;}
     if(win.matchMedia("(prefers-reduced-motion: reduce)").matches||timeline.homeLease){finishStartupHome();return null;}
     const run={timeline,effects:[],lease:null,dirty:false,epochStarted:false};
@@ -2066,7 +2066,7 @@ function acquireZenHome(win, services) {
     try{
       if(bloom){
         const targets=bloomHomeTargets(timeline);
-        if(!targets)throw Error("home-bloom-structure");
+        if(!targets||targets.length>256)throw Error("home-bloom-structure");
         const check=()=>{if(!exact()||timeline.closed||timeline.paused!==true)throw Error("home-bloom-stale");};
         const prepared=targets.map(({node,kind,timing})=>{
           check();const cs=win.getComputedStyle(node),opacity=Number(cs.opacity),r=node.getBoundingClientRect();

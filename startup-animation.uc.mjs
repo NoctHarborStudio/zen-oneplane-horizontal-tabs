@@ -132,7 +132,8 @@ function createStartupOutcome(onCancel,onProgress=()=>{}){
   const current=record=>{try{return record.isCurrent();}catch{return false;}};
   function observe(effect,surface,isCurrent){
     if(closed||records.has(effect))return;
-    const record={effect,surface,isCurrent,state:"pending"};
+    const promise=effect.finished;
+    const record={effect,promise,surface,isCurrent,state:"pending"};
     records.set(effect,record);
     const done=cancelled=>{
       if(closed||records.get(effect)!==record||record.state!=="pending"&&!(cancelled&&record.state==="finished"))return;
@@ -149,7 +150,7 @@ function createStartupOutcome(onCancel,onProgress=()=>{}){
     };
     // Attach before any pause/seek/startTime mutation. Never convert an
     // unexpected rejection into a normal successful transaction.
-    effect.finished.then(()=>done(false),()=>done(true));
+    promise.then(()=>done(false),()=>done(true));
     // A retained finished animation can be cancelled after its original
     // finished promise already resolved. Observe that event as well.
     if(typeof effect.addEventListener==="function"){
@@ -173,13 +174,34 @@ function createStartupOutcome(onCancel,onProgress=()=>{}){
     }
     return counts;
   }
+  // Freeze the exact active cohort after candidate preparation. Retired
+  // trial effects (e.g. the discarded real-slot attempt) are not members.
+  // Recheck the same cohort immediately before the common epoch; a Boot
+  // hold must not allow a completed, replaced or advanced effect to replay.
+  function capturePrepared(clock){
+    const cohort=[...records.values()].filter(current);
+    const verify=()=>{
+      if(closed||!Number.isFinite(clock?.currentTime))throw Error("startup-prepared-clock");
+      const active=[...records.values()].filter(current);
+      if(active.length!==cohort.length||active.some((r,i)=>r!==cohort[i]))
+        throw Error("startup-prepared-cohort");
+      for(const record of cohort){
+        const a=record.effect;
+        if(record.state!=="pending"||a.timeline!==clock||a.playState!=="paused"||a.pending||
+           a.playbackRate!==1||a.currentTime!==0||a.finished!==record.promise)
+          throw Error("startup-prepared-effect");
+      }
+      return cohort.length;
+    };
+    verify();return verify;
+  }
   function close(){
     closed=true;
     for(const {effect,onCancel} of records.values())if(onCancel)
       try{effect.removeEventListener("cancel",onCancel);}catch{}
     records.clear();
   }
-  return {observe,snapshot,close};
+  return {observe,snapshot,capturePrepared,close};
 }
 
 function startupBoundaryOutcome(counts,legacy=0){
@@ -191,7 +213,7 @@ function startupBoundaryOutcome(counts,legacy=0){
 }
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.95"};
+  const event="assembly.script",data={version:"0.3.0-preview.96"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -464,7 +486,7 @@ try{if(typeof window!=="undefined"){
   function settle(){
     typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.settle",()=>({playing,settling,effects:animations.size}),{sample:1800});
     if(dead||settling)return;
-    if(!playing||bootPreparing||ownedTimeline?.paused||reduced.matches||!animations.size){finish("interrupted");return;}
+    if(ownedTimeline?.mode==="bloom"||!playing||bootPreparing||ownedTimeline?.paused||reduced.matches||!animations.size){finish("interrupted");return;}
     settling=true;
     // Stop further stage admission immediately, including a late Home.
     if(ownedTimeline)ownedTimeline.closed=true;
@@ -530,7 +552,7 @@ try{if(typeof window!=="undefined"){
     let a=null;
     try{
       a=n.animate(frames,{delay,duration:length,easing,fill:"both"});
-      const record={n,frames,complete};
+      const timeline=ownedTimeline,record={n,frames,complete};
       // Observe cancellation and own the effect before pause/currentTime
       // can fail. External cancellation settles this exact record only.
       animations.set(a,record);
@@ -542,7 +564,8 @@ try{if(typeof window!=="undefined"){
         if(cancelled)decision("assembly.effect.cancel",{retained:retain});
       };
       const promise=a.finished;
-      if(!dead)ownedTimeline?.observeEffect?.(a,"direct",()=>!dead&&animations.get(a)===record);
+      if(!dead)timeline?.observeEffect?.(a,"direct",()=>!dead&&animations.get(a)===record&&
+        (timeline.mode!=="bloom"||ownedTimeline===timeline&&window.__nocturneStartupTimeline===timeline));
       promise?.then(()=>done(),()=>done(true));
       if(dead)throw Error("assembly-disposed");
       if(prepare){a.pause();a.currentTime=0;}
@@ -575,11 +598,17 @@ try{if(typeof window!=="undefined"){
     if(dead||ownedTimeline?.closed||!n||seen.has(n)||!bounds(n,true))return false;
     // Remove the pending gate before sampling native opacity. All changes
     // occur synchronously, before the next paint.
+    const candidate=bloomTiming?ownedTimeline:null;
+    const candidateCurrent=()=>!candidate||!dead&&ownedTimeline===candidate&&
+      window.__nocturneStartupTimeline===candidate&&!candidate.closed&&candidate.paused;
+    if(!candidateCurrent())return false;
+    if(candidate)seen.add(n);
     n.setAttribute(MANAGED,"true");
     // Keep transitions disabled while sampling the ungated resting style.
     // Re-enabling them here captures the previous zero-opacity transition.
     const cs=window.getComputedStyle(n),opacity=Number(cs.opacity);
-    if(!Number.isFinite(opacity)||opacity<=0){n.removeAttribute(MANAGED);return false;}
+    if(!candidateCurrent())return false;
+    if(!Number.isFinite(opacity)||opacity<=0){n.removeAttribute(MANAGED);if(candidate)seen.delete(n);return false;}
     seen.add(n);
     if(bloomTiming&&(!registered||baseline.has(n)||opacity>1||n.getAnimations().length||
       bloomShape&&cs.scale!=="none"&&!/^1(?: 1){0,2}$/.test(cs.scale)))return false;
@@ -799,8 +828,10 @@ try{if(typeof window!=="undefined"){
   }
   function scheduleLate(){
     if(dead||!playing||settling||bootPreparing||ownedTimeline?.paused||ownedTimeline?.closed||lateFrame)return;
+    const timeline=ownedTimeline;
     lateFrame=window.requestAnimationFrame(()=>{
       lateFrame=0;if(dead||settling||ownedTimeline?.closed)return;
+      if(timeline?.mode==="bloom"&&(ownedTimeline!==timeline||window.__nocturneStartupTimeline!==timeline)){finish("interrupted");return;}
       try{
       const bar=floatingBar();
       if(bar&&!seen.has(bar)){
@@ -962,6 +993,14 @@ try{if(typeof window!=="undefined"){
       if(bloom&&(window.__nocturneStartupTimeline!==timeline||window.__nocturneCenterMotion!==engine||
          window.__zenSharedHomeV1!==homeRegistry||stagedHome&&!timeline.homeLease))
         throw Error("assembly-bloom-home");
+      const preparedHome=bloom?timeline.homeLease:null;
+      let verifyPrepared=null;
+      if(bloom){
+        // Close candidate admission, not the outcome ledger. Home shown
+        // during the remaining Boot hold must not append a second cohort.
+        timeline.bloomPrepared=true;
+        verifyPrepared=timeline.outcome.capturePrepared(document.timeline);
+      }
       root.setAttribute(PHASE,"playing");
       // Places and Zen's floating input can initialize after chrome-ready.
       // Keep only these late nodes gated until they receive their effect.
@@ -988,8 +1027,15 @@ try{if(typeof window!=="undefined"){
           decision("assembly.skip",{reason:"insufficient-budget",stage:"resume",remaining:deadline-resumedAt,needed:plan.finishLength});finish("insufficient-budget");return;
         }
         const fromBoot=bootPreparing;
-        if(bloom&&(window.__nocturneStartupTimeline!==timeline||window.__nocturneCenterMotion!==engine||
-          window.__zenSharedHomeV1!==homeRegistry))throw Error("assembly-bloom-owner");
+        if(bloom){
+          if(window.__nocturneStartupTimeline!==timeline||window.__nocturneCenterMotion!==engine||
+             window.__zenSharedHomeV1!==homeRegistry||timeline.homeLease!==preparedHome||
+             get("oneplane-tabs")!==row||row.hasAttribute("data-op-dragging")||
+             root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"||
+             root.getAttribute("inFullscreen")==="true"||window.closed)
+            throw Error("assembly-bloom-owner");
+          verifyPrepared();
+        }
         bindStartupEpoch(timeline,document.timeline);
         bootPreparing=false;
         playStart=resumedAt;timeline.start=playStart;timeline.paused=false;

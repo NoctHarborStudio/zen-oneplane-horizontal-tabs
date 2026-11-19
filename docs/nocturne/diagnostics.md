@@ -242,3 +242,8 @@ Existing events retained; invalid timing contracts and competing effects fail op
 ### Preview.95 — coordinated candidate
 
 `assembly.bloom.direct`: count and number of preflight checks; `assembly.bloom.fallback`: budget reason; timeline/epoch/center result now report mode (fold/bloom or exact center handle mode). No new recorder, persistent sampling, identity, titles, URLs or content. Candidate remains disabled.
+
+
+### Preview.96 — prepared-cohort audit
+
+Existing assembly launch/resume error and cleanup events cover cohort validation failure; error classes identify the failing contract. No new recorder, private payload, persistent sampling or timer. Atomic candidate interruption retains existing reason. Native evidence pending.

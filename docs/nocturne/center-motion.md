@@ -43,3 +43,8 @@ The shared timing selector has an explicit Bloom mode (1920*scale visible, +420m
 ### A3.5c2 — dormant Assembly integration (preview.95)
 
 The existing Startup Assembly now contains an explicit coordinated Bloom candidate path with owner-version admission, original tab Fold fallback timings, registered-progress panel/Island/native control/bookmark effects and Home lease. Source switch remains false. Boot removal precedes common epoch; both admission and resume check inherited deadline. Late chrome ungates without replay. Direct effect sampling is batched before resume, max 256 targets. Independent integration and topology audit, native Gecko and approved visual parity remain open.
+
+
+### A3.5c-R — exact prepared cohort (preview.96)
+
+Existing Assembly outcome ledger captures and rechecks the current live effect cohort across Boot hold; retired trial effects excluded. Changed native state, promise, membership, Home lease or row rejects resume. Candidate admission closes at capture, late Home rests, interruption releases atomically. No production Bloom activation. A3.6 owns topology/geometry and final pose.

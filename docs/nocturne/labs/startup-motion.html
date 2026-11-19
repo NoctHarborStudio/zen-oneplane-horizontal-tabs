@@ -65,7 +65,8 @@ function createStartupOutcome(onCancel,onProgress=()=>{}){
   const current=record=>{try{return record.isCurrent();}catch{return false;}};
   function observe(effect,surface,isCurrent){
     if(closed||records.has(effect))return;
-    const record={effect,surface,isCurrent,state:"pending"};
+    const promise=effect.finished;
+    const record={effect,promise,surface,isCurrent,state:"pending"};
     records.set(effect,record);
     const done=cancelled=>{
       if(closed||records.get(effect)!==record||record.state!=="pending"&&!(cancelled&&record.state==="finished"))return;
@@ -82,7 +83,7 @@ function createStartupOutcome(onCancel,onProgress=()=>{}){
     };
     // Attach before any pause/seek/startTime mutation. Never convert an
     // unexpected rejection into a normal successful transaction.
-    effect.finished.then(()=>done(false),()=>done(true));
+    promise.then(()=>done(false),()=>done(true));
     // A retained finished animation can be cancelled after its original
     // finished promise already resolved. Observe that event as well.
     if(typeof effect.addEventListener==="function"){
@@ -106,13 +107,34 @@ function createStartupOutcome(onCancel,onProgress=()=>{}){
     }
     return counts;
   }
+  // Freeze the exact active cohort after candidate preparation. Retired
+  // trial effects (e.g. the discarded real-slot attempt) are not members.
+  // Recheck the same cohort immediately before the common epoch; a Boot
+  // hold must not allow a completed, replaced or advanced effect to replay.
+  function capturePrepared(clock){
+    const cohort=[...records.values()].filter(current);
+    const verify=()=>{
+      if(closed||!Number.isFinite(clock?.currentTime))throw Error("startup-prepared-clock");
+      const active=[...records.values()].filter(current);
+      if(active.length!==cohort.length||active.some((r,i)=>r!==cohort[i]))
+        throw Error("startup-prepared-cohort");
+      for(const record of cohort){
+        const a=record.effect;
+        if(record.state!=="pending"||a.timeline!==clock||a.playState!=="paused"||a.pending||
+           a.playbackRate!==1||a.currentTime!==0||a.finished!==record.promise)
+          throw Error("startup-prepared-effect");
+      }
+      return cohort.length;
+    };
+    verify();return verify;
+  }
   function close(){
     closed=true;
     for(const {effect,onCancel} of records.values())if(onCancel)
       try{effect.removeEventListener("cancel",onCancel);}catch{}
     records.clear();
   }
-  return {observe,snapshot,close};
+  return {observe,snapshot,capturePrepared,close};
 }
 
 function startupBoundaryOutcome(counts,legacy=0){

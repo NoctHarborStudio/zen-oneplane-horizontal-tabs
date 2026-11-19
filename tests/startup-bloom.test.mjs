@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {startupBloomTimeline,startupBloomStagger,startupBloomOrder,startupBloomFrames,startupBloomAssemblyPlan,startupBloomHomeSchedule} from "../src/algorithms/startup-bloom.mjs";
-import {startupTimeline,startupFits,startupLateEffect} from "../src/algorithms/startup-timeline.mjs";
+import {startupTimeline,startupFits,startupLateEffect,createStartupOutcome} from "../src/algorithms/startup-timeline.mjs";
 const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 const near=(a,b)=>Math.abs(a-b)<1e-7;
 
@@ -219,10 +219,10 @@ function assemblyFixture({boot=false,remaining=8000,mode="bloom",failDirect=fals
  homeNode.setAttribute("data-zh-startup","true");
  const root=node("root");root.setAttribute("data-zr-center-pending","true");
  const clock={currentTime:40},document={timeline:clock};
- function effect(name){const a={timeline:clock,playState:"paused",get startTime(){return this.time;},set startTime(t){this.time=t;calls.push(["start",name,t]);}};effects.push(a);return a;}
+ function effect(name){const a={timeline:clock,playState:"paused",pending:false,playbackRate:1,currentTime:0,finished:new Promise(()=>{}),get startTime(){return this.time;},set startTime(t){this.time=t;calls.push(["start",name,t]);}};effects.push(a);return a;}
  let window;
- const engine={startupBloomVersion:oldEngine?undefined:1,start(row,opts){calls.push(["center",opts.bloomTimeline?.mode??"fold",opts.delay,opts.duration]);const a=effect("tabs");return {count:1,mode:"magnetic-bloom",startupOutcomeVersion:1,resumeAt(fn){fn(a);},release(){}};},releasePending(){}};
- const home={startupBloomVersion:1,startupOutcomeVersion:1,startupLeaseVersion:1,playStartup(t){calls.push(["home",t.mode??"fold"]);if(failHome)return;const a=effect("home");t.homeLease={startupOutcomeVersion:1,resumeAt(fn){fn(a);},release(){}};}};
+ const engine={startupBloomVersion:oldEngine?undefined:1,start(row,opts){calls.push(["center",opts.bloomTimeline?.mode??"fold",opts.delay,opts.duration]);const a=effect("tabs");opts.observeEffect(a,"tabs",()=>true);return {count:1,mode:"magnetic-bloom",startupOutcomeVersion:1,resumeAt(fn){fn(a);},release(){}};},releasePending(){}};
+ const home={startupBloomVersion:1,startupOutcomeVersion:1,startupLeaseVersion:1,playStartup(t){calls.push(["home",t.mode??"fold"]);if(failHome)return;const a=effect("home");t.observeEffect(a,"home",()=>true);t.homeLease={startupOutcomeVersion:1,resumeAt(fn){fn(a);},release(){}};}};
  window={innerWidth:1000,__nocturneCenterMotion:engine,__zenSharedHomeV1:home,__nocturneLayoutStartup:{initial:true},__oneplaneLayoutController:{prepareWorkspaceGeometry(){}},__zenMagneticBookmarksShared:{syncAddressState(){}}};
  const run=new Function("window","document","root","nodes","state","calls","effect","startupTimeline","startupFits","createStartupOutcome","codeBoot","mode","failDirect",`
  let dead=false,playing=false,settling=false,bootPreparing=false,boot=codeBoot?{}:null,registered=true,scale=1,duration=1050;
@@ -232,7 +232,7 @@ function assemblyFixture({boot=false,remaining=8000,mode="bloom",failDirect=fals
  function now(){return state.time;}function decision(e,d){calls.push([e,d]);}
  function finish(reason){dead=true;state.reason=reason;}function get(id){return nodes[id]||null;}
  function bounds(n){return n?{left:0,width:100}:null;}function floatingBar(){return null;}
- function direct(n){if(failDirect)throw Error("direct");calls.push(["direct",n.name]);animations.set(effect(n.name),{});}
+ function direct(n){if(failDirect)throw Error("direct");calls.push(["direct",n.name]);const a=effect(n.name);animations.set(a,{});ownedTimeline.observeEffect(a,"direct",()=>animations.has(a));}
  function bloomStage(n){direct(n);}function bloomIsland(n){direct(n);}function reveal(n){direct(n);}function slide(n){direct(n);}function openFromCenter(n){direct(n);}
  function controls(){calls.push(["controls"]);}function revealBookmarks(){calls.push(["bookmarks"]);}function verifyBloomDirect(){calls.push(["verify"]);}
  function acquireStartupBookmarks(){calls.push(["fold-bookmarks"]);return null;}
@@ -241,7 +241,7 @@ function assemblyFixture({boot=false,remaining=8000,mode="bloom",failDirect=fals
  const MutationObserver=class{observe(){}};const ResizeObserver=undefined;const console={warn(){}};
  ${code}
  launch(true);return ()=>({timeline:ownedTimeline,finishAt,dead});
- `)(window,document,root,{"oneplane-tabs":row,"oneplane-toolbar-surface":surface,"urlbar-container":url,"PlacesToolbarItems":items,"zen-shared-home":homeNode},state,calls,effect,startupTimeline,startupFits,()=>({observe(){},snapshot(){return {pending:1};}}),boot,mode,failDirect);
+ `)(window,document,root,{"oneplane-tabs":row,"oneplane-toolbar-surface":surface,"urlbar-container":url,"PlacesToolbarItems":items,"zen-shared-home":homeNode},state,calls,effect,startupTimeline,startupFits,createStartupOutcome,boot,mode,failDirect);
  return {state,calls,effects,clock,window,run};
 }
 test("explicit Assembly Bloom passes exact timeline to Center and Home, resumes once after Boot",()=>{
@@ -333,4 +333,54 @@ test("Bloom direct preflight batches writes before reads and releases its tempor
  entry(0);entry(1);verifyBloomDirect(ownedTimeline);return {calls,index:ownedTimeline.bloomDirect};
  `);
  assert.deepEqual(run(),{calls:Array.from({length:3},()=>["write0","write1","read0","read1"]).flat(),index:null});
+});
+
+test("prepared cohort excludes retired trial effects and rejects changed native state before epoch",()=>{
+ const clock={currentTime:40};
+ const make=()=>({timeline:clock,currentTime:0,playState:"paused",pending:false,playbackRate:1,finished:new Promise(()=>{})});
+ for(const fault of ["advance","running","finished","promise","pending","timeline","rate","retired","added","closed"]){
+  const ledger=createStartupOutcome(()=>{}),retired=make(),a=make();let current=true;
+  ledger.observe(retired,"tabs",()=>false);ledger.observe(a,"tabs",()=>current);
+  const verify=ledger.capturePrepared(clock);assert.equal(verify(),1);
+  if(fault==="advance")a.currentTime=1;
+  if(fault==="running")a.playState="running";
+  if(fault==="finished")a.playState="finished";
+  if(fault==="promise")a.finished=new Promise(()=>{});
+  if(fault==="pending")a.pending=true;
+  if(fault==="timeline")a.timeline={};
+  if(fault==="rate")a.playbackRate=2;
+  if(fault==="retired")current=false;
+  if(fault==="added")ledger.observe(make(),"home",()=>true);
+  if(fault==="closed")ledger.close();
+  assert.throws(verify,/startup-prepared-/);
+ }
+});
+test("Boot handoff fails open before starting any effect if prepared cohort changes",()=>{
+ for(const fault of ["advance","running","promise","home","extra"]){
+  const f=assemblyFixture({boot:true}),t=f.run().timeline;
+  if(fault==="advance")f.effects[0].currentTime=1;
+  if(fault==="running")f.effects[0].playState="running";
+  if(fault==="promise")f.effects[0].finished=new Promise(()=>{});
+  if(fault==="home")delete t.homeLease;
+  if(fault==="extra")t.observeEffect({timeline:f.clock,currentTime:0,playState:"paused",pending:false,playbackRate:1,finished:new Promise(()=>{})},"home",()=>true);
+  f.state.resume();assert.equal(f.state.reason,"setup-failed",fault);
+  assert.ok(f.effects.every(a=>a.startTime===undefined));
+ }
+});
+test("Home shown during Boot after cohort freeze is ungated without appending a lease",()=>{
+ const f=homeFixture();f.timeline.bloomPrepared=true;
+ assert.equal(f.run.play(f.timeline),null);assert.equal(f.effects.length,0);assert.equal(f.marked(),false);
+});
+test("Bloom Home target cap rejects oversized candidate before allocating effects",()=>{
+ const f=homeFixture();f.pinGrid.children=Array.from({length:257},()=>f.pins[0]);
+ assert.equal(f.run.play(f.timeline),null);assert.equal(f.effects.length,0);assert.equal(f.marked(),false);
+});
+test("explicit Bloom interruption exits atomically rather than replaying direct settle effects",()=>{
+ const source=read("startup-animation.uc.mjs"),code=source.slice(source.indexOf("  function settle()"),source.indexOf("  function interrupt("));
+ const run=new Function(`
+ let dead=false,settling=false;const ownedTimeline={mode:"bloom"},events=[],window={};
+ function finish(reason){events.push(reason);dead=true;}
+ ${code}settle();settle();return events;
+ `);
+ assert.deepEqual(run(),["interrupted"]);
 });

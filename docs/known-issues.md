@@ -1102,3 +1102,8 @@ MB3/5: shared candidate full timing plan, isolated native Home leaf effects and 
 ### A3.5c2 — preview.95 coordinated candidate
 
 MB3/5/6: dormant Assembly path now coordinates real strip, chrome surfaces, bookmarks and Home; post-Boot common epoch and bounded fallback. No installed activation, no native proof. Independent integration audit, geometry/topology reconciliation, original approved visual reference and native validation remain required.
+
+
+### A3.5c-R — preview.96 integration audit
+
+Corrected dormant candidate preparation-to-epoch state/identity gap, late Home admission and partial interruption replay; bounded Home allocation. Native CSS/WAAPI and topology/handoff evidence remain open. Default Fold unchanged.

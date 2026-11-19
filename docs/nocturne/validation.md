@@ -367,3 +367,8 @@ Seven new cases; 14/14 Bloom and 50/50 Startup Transparency fixture bodies PASS 
 ### Preview.95 — coordinated Bloom candidate
 
 Seven new cases, 21/21 Bloom and 50/50 Startup Transparency fixture bodies PASS in isolated V8. Verify explicit launch with/without Boot, owner mismatch, direct/Home partial failure, deadline expiry during Boot, computed alpha/shape/promise conflicts, Island label order, late ungate, selector admission and batch read/write. Default source switch remains false. Full CI and native Gecko/visual/performance are distinct.
+
+
+### Preview.96 — independent Bloom Assembly audit
+
+Five new cases; 26/26 Bloom and 50/50 Startup Transparency isolated source-backed fixture bodies PASS. Prepared live cohort identity/state/time/promise, Boot hold replacement, late Home admission, Home cap and atomic interruption. Generated files and parser checks separate from canonical CI. No native Gecko, paint or performance acceptance; candidate disabled.

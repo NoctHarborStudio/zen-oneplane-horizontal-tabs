@@ -229,3 +229,8 @@ The pure timing selector and Home stage schedule now share candidate timing with
 ### A3.5c2 — coordinated dormant Assembly path (preview.95)
 
 One Startup controller, one document epoch, one outcome ledger and existing structural leases. Explicit source switch remains disabled; selector checks cold horizontal startup, versioned owners, registration and inherited budget. Center acquires resting geometry before the Island shape; direct chrome effects use existing registered progress, batch preparation index and cleanup. Provisional post-Boot mapping, no late Bloom replay. Independent integration review and A3.6 geometry before activation.
+
+
+### A3.5c-R — prepared effect cohort (preview.96)
+
+The one Assembly outcome ledger now freezes live candidate membership before Boot hold and validates it immediately before the document epoch. Admission closes independently of the outcome ledger. Late Home rests, changed candidate aborts and interruption retires all surfaces. No new lifecycle owner. Fold remains default; topology/geometry reconciliation follows.

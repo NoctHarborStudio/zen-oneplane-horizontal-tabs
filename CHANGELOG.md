@@ -1,3 +1,9 @@
+## 0.3.0-preview.96 — Independent Bloom Assembly integration audit
+
+- Freeze the exact live WAAPI cohort after candidate preparation; recheck paused state, zero time, document timeline, original finished promise and owner/lease identity immediately before Boot handoff.
+- Reject late Home admission after cohort freeze, bound Home targets and prevent stale candidate direct writes or delayed callbacks.
+- Keep interruption atomic for Bloom rather than replaying partial settle effects. Existing Fold remains the shipped default. Add five regressions; native validation remains pending.
+
 ## 0.3.0-preview.95 — Dormant coordinated Bloom Assembly
 
 - Connect the explicit Bloom plan to the existing Startup Assembly, Center Motion, direct chrome effects and Home lease. Keep the shipped source switch disabled and preserve the default Fold path.
