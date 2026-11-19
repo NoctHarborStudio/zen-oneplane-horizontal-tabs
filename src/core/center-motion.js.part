@@ -211,7 +211,10 @@
       const t=options.bloomTimeline,attempt={safe:false};
       let plan=null;
       try{plan=startupBloomTimeline(t.scale);}catch{}
-      if(plan&&Number.isFinite(t.finishLength)&&t.finishLength>=plan.end){
+      const budget=Number.isFinite(t.finishLength)&&Number.isFinite(t.lateLimit)&&
+        t.finishLength>0&&t.lateLimit>=t.finishLength;
+      if(!plan||!budget)return null;
+      if(t.finishLength>=plan.end){
         const handle=acquireTabs(row,options,plan.tabs,attempt);
         if(handle)return handle;
         if(!attempt.safe)return null;
@@ -219,26 +222,35 @@
       // A failed candidate is fully retired before Fold can collect its
       // resting cards. Never fall back into an expired or foreign Assembly.
       const duration=options.duration??520,delay=options.delay??0;
-      if(!bloomEligible(row,options)||root.hasAttribute(MODE)||![duration,delay,t.finishLength].every(Number.isFinite)||
+      if(!bloomEligible(row,options)||root.hasAttribute(MODE)||![duration,delay].every(Number.isFinite)||
         duration<=0||delay<0||duration+delay>t.finishLength)return null;
-      trace("center.bloom.fallback",{reason:plan&&t.finishLength>=plan.end?"preflight":"budget"},{flush:true});
+      trace("center.bloom.fallback",{reason:t.finishLength>=plan.end?"preflight":"budget"},{flush:true});
       return acquireTabs(row,options);
     }catch(error){trace("center.motion.error",{stage:"prepare",name:error?.name},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
   }
   function acquireTabs(row,{owner,direction="in",duration=520,delay=0,paused=false,retainOnDispose=null,observeEffect=null,bloomTimeline=null}={},bloomStage=null,attempt=null){
+    const explicitOptions={owner,direction,paused,observeEffect,bloomTimeline};
+    const eligible=()=>!bloomTimeline||bloomEligible(row,explicitOptions);
+    if(!eligible())return null;
     stopSelection();active?.release("superseded");finishHandoff();releasePending();
-    if(dead||!current())return null;
+    if(dead||!current()||!eligible())return null;
     if(!row){trace("center.motion.skip",{owner,reason:"no-row"});return null;}
     const id=++tabSequence,effects=[],saved=[],cleanups=[],running=[],stats={groups:0,handles:0,handleOffset:0,icons:0,iconLoads:0,bitmapIcons:0,bitmapFailures:0};
-    let host=null,cards=[],rr,hub,measuring=false,measuringMark=null,ownerMark=null,ownerWritten=false,modeMark=null,modeWritten=false,committed=false,released=false;
+    let host=null,cards=[],rr,hub,measuring=false,measuringMark=null,ownerMark=null,ownerWritten=false,modeMark=null,modeWritten=false,committed=false,released=false,epochStarted=false;
+    const exact=()=>!released&&!dead&&current()&&active===handle&&
+      (!bloomTimeline||win.__nocturneStartupTimeline===bloomTimeline);
+    const preparing=()=>exact()&&eligible();
     const restoreMark=(node,key,value)=>{if(value===null)node.removeAttribute(key);else node.setAttribute(key,value);};
     const handle={owner,retainOnDispose,startupOutcomeVersion:1,mode:bloomStage?"magnetic-bloom":"magnetic-fold",count:0,finished:Promise.resolve(),
-      resume(){if(bloomStage)throw Error("center-bloom-requires-epoch");if(!released)for(const a of running)try{a.play();}catch{}},
+      resume(){if(bloomTimeline)throw Error("center-bloom-requires-epoch");if(!released)for(const a of running)try{a.play();}catch{}},
       resumeAt(start){
+        const ready=()=>exact()&&(!bloomTimeline||!bloomTimeline.closed&&bloomTimeline.paused===false);
+        if(!ready()||bloomTimeline&&epochStarted)throw Error("center-epoch-stale");
+        if(bloomTimeline)epochStarted=true;
         for(const a of running){
-          if(released||dead||!current()||active!==handle||
-            bloomStage&&(win.__nocturneStartupTimeline!==bloomTimeline||bloomTimeline.closed))throw Error("center-epoch-stale");
+          if(!ready())throw Error("center-epoch-stale");
           start(a);
+          if(!ready())throw Error("center-epoch-stale");
         }
       },
       seal(){if(!released)for(const a of running)try{a.finish();}catch{}},
@@ -248,7 +260,12 @@
         let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
         try{
           if(committed&&!dead&&current())step(holdHandoff);
-          for(const a of running)step(()=>a.cancel());
+          for(const a of running){
+            // A failed seek may replace the promise that was observed at
+            // acquisition. Retire the current one too, before cancelling.
+            if(bloomTimeline)step(()=>a.finished.catch(()=>{}));
+            step(()=>a.cancel());
+          }
           for(const off of cleanups)step(off);
           if(host)step(()=>host.remove());
           for(const {n,mark,key=MARK} of saved)step(()=>restoreMark(n,key,mark));
@@ -262,7 +279,7 @@
             }
           }
           retire();
-          if(attempt)attempt.safe=failed===0;
+          if(attempt)attempt.safe=failed===0&&attempt.allowFallback!==false;
           trace("center.motion.release",()=>({id,owner,direction,mode:handle.mode,count:cards.length,...stats,sourceIcons:iconStats(row),failed,reason}),{sample:600,flush:failed>0});
         }finally{motionBusy=wasBusy;drainDispose();}
       }};
@@ -274,9 +291,7 @@
       cards=collect(row);handle.count=cards.length;
       if(!cards.length){handle.release("no-visible-cards");trace("center.motion.skip",{owner,reason:"no-visible-cards"});return null;}
       if(bloomStage){
-        const valid=()=>!released&&!dead&&current()&&active===handle&&
-          bloomEligible(row,{owner,direction,paused,observeEffect,bloomTimeline});
-        const check=()=>{if(!valid())throw Error("bloom-stale");};
+        const check=()=>{if(!preparing())throw Error("bloom-stale");};
         check();
         // Bound the one-time pairwise geometry check; no per-frame layout.
         if(cards.length>256||root.hasAttribute(MODE)||cards.some(c=>c.n.hasAttribute(BLOOM_MARK)))throw Error("bloom-slot-admission");
@@ -302,25 +317,34 @@
             throw Error("bloom-computed-conflict");
         }
         for(const c of ordered){
-          if(c.n.getAnimations().length)throw Error("bloom-competing-effect");
+          if(c.n.getAnimations().length){
+            // A competing animation may also corrupt the Fold snapshot.
+            // Fail open instead of cloning an actively animated card.
+            attempt.allowFallback=false;throw Error("bloom-competing-effect");
+          }
           sample(c,1,c.opacity);
         }
+        const promises=[];
         for(let i=0;i<ordered.length;i++){
           check();const c=ordered[i],t=timing[i],frames=startupBloomFrames("card",c.opacity);
           const a=c.n.animate(frames,{...t,easing:"linear",fill:"both"});
-          running.push(a);a.finished.catch(()=>{});
-          observeEffect?.(a,"tabs",()=>!released&&!dead&&current()&&active===handle);
+          running.push(a);const promise=a.finished;promises.push(promise);promise.catch(()=>{});
+          observeEffect?.(a,"tabs",exact);
           a.pause();a.currentTime=0;check();
+          if(a.playState!=="paused"||a.pending||a.timeline!==document.timeline||a.playbackRate!==1||a.finished!==promise)
+            throw Error("bloom-effect-not-paused");
         }
-        // Batch writes then reads. Do not seek to the exact end, which
-        // could resolve an observed finished promise during preparation.
-        // The exact resting pose was checked before effect acquisition.
-        for(const [fraction,scale] of [[0,.72],[.78,.96],[.999,1],[0,.72]]){
+        // Sample exact interior keyframes, well away from the terminal
+        // boundary. The final pose is the resting pose checked above.
+        // Seeking after pause must not replace the observed finished promise.
+        for(const [fraction,scale] of [[0,.72],[.58,1],[.78,.96],[0,.72]]){
           check();
           running.forEach((a,i)=>{a.currentTime=fraction===0?0:timing[i].delay+timing[i].duration*fraction;});
           ordered.forEach(c=>sample(c,scale,fraction===0?0:c.opacity));
+          if(running.some((a,i)=>a.playState!=="paused"||a.pending||a.finished!==promises[i]))
+            throw Error("bloom-effect-seek-state");
         }
-        check();handle.finished=Promise.all(running.map(a=>a.finished.catch(()=>{})));
+        check();handle.finished=Promise.all(promises.map(p=>p.catch(()=>{})));
         committed=true;
         trace("center.bloom.acquire",()=>({id,owner,count:cards.length,effects:running.length,proxies:0,checks:4,stageEnd:bloomStage.end}),{sample:Math.ceil(bloomStage.end)+250});
         check();return handle;
@@ -335,7 +359,7 @@
       // detached proxies have been prepared.
       for(const c of cards){const n=proxy(c,layer,rr,cleanups,stats),frames=keyframes(c,direction==="out");effects.push({n,frames,c});}
       if(measuring){restoreMark(root,"data-zr-fold-measuring",measuringMark);measuring=false;}
-      if(dead||!current()){handle.release("disposed");return null;}
+      if(!preparing()){handle.release("disposed");return null;}
       ownerMark=root.getAttribute(OWNER);ownerWritten=true;root.setAttribute(OWNER,owner);
       row.append(host);
       for(const c of cards){saved.push({n:c.n,mark:c.n.getAttribute(MARK)});c.n.setAttribute(MARK,"true");}
@@ -368,19 +392,20 @@
       return {owner,total,paintable,zeroAlpha,zeroGeometry,sourceButtonZero,minAlpha};
     },{sample:800});
       for(const {n,frames} of effects){
+        if(!preparing()){handle.release("disposed");return null;}
         n.style.transform=frames[0].transform;n.style.opacity=String(frames[0].opacity);
         const a=n.animate(frames,{duration,delay,easing:"linear",fill:"both"});
         // Install cancellation handling immediately, even when pause or
         // currentTime subsequently throws. Fail open as one surface.
         running.push(a);a.finished.catch(()=>{});
-        if(owner==="startup")observeEffect?.(a,"tabs",()=>!released&&!dead&&current()&&active===handle);
+        if(owner==="startup")observeEffect?.(a,"tabs",exact);
         if(paused){a.pause();a.currentTime=0;}
       }
       handle.finished=Promise.all(running.map(a=>a.finished.catch(()=>{})));
-      if(dead||!current()){handle.release("disposed");return null;}
+      if(!preparing()){handle.release("disposed");return null;}
       committed=true;
       trace("center.motion",()=>({id,owner,direction,count:cards.length,duration,mode:"magnetic-fold",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length,groups:stats.groups,handles:stats.handles,handleOffset:stats.handleOffset,icons:iconStats(row),bitmapIcons:stats.bitmapIcons,bitmapFailures:stats.bitmapFailures,animated:running.length}),{sample:duration+250});
-      if(dead||!current()){handle.release("disposed");return null;}
+      if(!preparing()){handle.release("disposed");return null;}
       return handle;
     }catch(error){
       handle.release("setup-failed");

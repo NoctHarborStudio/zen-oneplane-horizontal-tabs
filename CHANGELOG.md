@@ -1,3 +1,9 @@
+## 0.3.0-preview.93 — Independent Bloom acquisition audit
+
+- Require consistent common completion and late-admission budgets; fence explicit Bloom and its Fold fallback across synchronous owner replacement and exact once-only epoch resume.
+- Verify paused WAAPI effects, the document timeline and stable finished promise at interior samples; retire replacement promises before cancelling. Fail open for competing real-card effects.
+- Preserve original Fold CSS specificity and add five regressions. Production animation selection remains unchanged.
+
 ## 0.3.0-preview.92 — Isolated real-slot Bloom acquisition
 
 - Add an explicit Assembly-owned, paused real-slot Bloom candidate with shared timing admission, computed style/geometry preflight and transactional Fold fallback.

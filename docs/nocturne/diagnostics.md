@@ -227,3 +227,8 @@ Preview.91: no new runtime event or logger; Fold math extraction preserves exist
 ### Preview.92 — isolated Bloom candidate
 
 `center.bloom.acquire` reports count/effects/proxies/checks/stageEnd for an explicitly admitted candidate. `center.bloom.fallback` reports budget/preflight; `center.motion.release` and setup error include visual mode. No node identity, private data or new timer/recorder. No production caller selects Bloom; native diagnostics remain pending.
+
+
+### Preview.93 — Bloom acquisition review
+
+Existing events retained; invalid timing contracts and competing effects fail open, setup failures retain static error class and visual mode. No new payload fields, recorder, timers or private data.

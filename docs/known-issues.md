@@ -1087,3 +1087,8 @@ MB-006/007/010/012/013: pure Fold extraction, bounded Bloom candidate and genera
 ### A3.5b — preview.92 isolated tab candidate
 
 MB-006/007/010/012/013: real-slot tab/split acquisition, sampled computed style/geometry admission and rollback/fallback implemented within current Center Motion; no production activation. Full Bloom timing/Boot/Home mapping, native CSS/WAAPI/paint and geometry handoff remain open; no original Lab parity.
+
+
+### A3.5b-R — preview.93 acquisition audit
+
+Corrected inconsistent candidate budget, stale explicit fallback and epoch reentry, strengthened WAAPI state/finished-promise validation and preserved Fold CSS selector priority. Competing animation fails open. Full common timing, Home/Boot, topology and Gecko/visual acceptance remain open.

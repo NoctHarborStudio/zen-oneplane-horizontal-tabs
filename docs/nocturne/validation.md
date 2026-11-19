@@ -352,3 +352,8 @@ Nine new permanent regressions; 50/50 Startup Transparency, 35/35 Center Motion 
 ### Preview.92 — isolated real-slot candidate
 
 Seven additional Center Motion regression cases; 42/42 Center Motion and 7/7 Bloom isolated source-backed V8 fixture bodies PASS, no native Gecko execution. Verify the exact current Assembly, full timing budget, real card/split geometry and computed scale/opacity, partial rollback, current/stale outcome and reduced motion. Production Fold remains default. Canonical CI pending; no browser performance or approved visual parity claim.
+
+
+### Preview.93 — independent Bloom acquisition audit
+
+Five new regressions, 47/47 Center Motion fixture bodies PASS in isolated V8. Verify inconsistent timing caps, synchronous fallback replacement, paused document effects and stable promise, competing effects, duplicate epoch and last callback replacement. Native Gecko computed style/WAAPI/compositor and full timing integration remain pending; canonical CI separate.

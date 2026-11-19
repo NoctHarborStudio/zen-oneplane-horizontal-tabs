@@ -28,3 +28,8 @@ The exact prior Fold formula now lives in `src/algorithms/magnetic-fold.mjs` and
 ### A3.5b — isolated candidate (preview.92)
 
 Center Motion accepts an explicit paused current Assembly `bloomTimeline` only. Uses the same tab handle and outcome observer, distinct `data-zr-center-mode="bloom"` and exact outer-card markers, no proxies. Checks actual computed geometry/scale/alpha at resting and sampled keyframes; partial acquisition rolls back before bounded Fold fallback. No installed caller requests this mode. The full Bloom plan must fit the common completion budget before promotion; native compositor evidence and A3.6 topology handoff remain required.
+
+
+### A3.5b-R — independent acquisition review (preview.93)
+
+Consistent finishLength/lateLimit, exact paused Assembly admission through fallback, once-only explicit epoch, paused document WAAPI and finished-promise identity checked. Interior samples avoid the terminal boundary. Competing real-card effects bypass fallback; stale transactions retire all acquired resources. Fold CSS guard specificity preserved with :where. Candidate still dormant; no native acceptance.

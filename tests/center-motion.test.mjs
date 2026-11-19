@@ -228,7 +228,8 @@ function proxyFixture(){
    addEventListener(k,fn){listeners.set(k,fn);if(fault.listener&&kind==="img"&&k==="error")throw Error("listener");},
    removeEventListener(k,fn){if(listeners.get(k)===fn)listeners.delete(k);},listeners,
    animate(keyframes,timing){if(fault.animate===effects.length+1||fault.bloomAnimate&&kind==="card"&&effects.some(a=>a.node.kind==="card"))throw Error("animate");
-    const a={node:this,keyframes,timing,currentTime:0,finished:Promise.resolve(),cancelled:0,sealed:0,played:0,cancel(){this.cancelled++;},finish(){this.sealed++;},play(){this.played++;},pause(){if(fault.pause)throw Error("pause");}};
+    const a={node:this,keyframes,timing,currentTime:0,finished:Promise.resolve(),timeline:fault.foreignTimeline?{}:document.timeline,playbackRate:1,playState:"running",pending:false,cancelled:0,sealed:0,played:0,cancel(){this.cancelled++;this.playState="idle";},finish(){this.sealed++;this.playState="finished";},play(){this.played++;this.playState="running";},pause(){if(fault.pause)throw Error("pause");if(!fault.unpaused)this.playState="paused";}};
+    if(fault.seekPromise&&kind==="card"){let value=0;Object.defineProperty(a,"currentTime",{get:()=>value,set(v){value=v;if(v>0)a.finished=Promise.resolve();}});}
     effects.push(a);fault.onAnimate?.();return a;}
   };nodes.push(n);return n;
  }
@@ -238,10 +239,10 @@ function proxyFixture(){
   const a=effects.findLast(a=>a.node===n&&!a.cancelled&&a.keyframes?.[0]?.scale);
   if(!a)return {scale:1,opacity:1};
   const p=(a.currentTime-a.timing.delay)/a.timing.duration;
-  const scale=fault.bloomScale?1:p<=0?.72:p<.99?.96:1;
+  const scale=fault.bloomScale?1:p<=0?.72:p<.65?1:.96;
   return {scale,opacity:p<=0?0:1};
  }
- const document={documentElement:root,getElementById:id=>id==="oneplane-tabs"?row:null,createElementNS:(ns,tag)=>node(tag)};
+ const document={timeline:{currentTime:0},documentElement:root,getElementById:id=>id==="oneplane-tabs"?row:null,createElementNS:(ns,tag)=>node(tag)};
  const window={__nocturneLayoutStartup:{},CSS:{registerProperty(){}},addUnloadListener(){},addEventListener(){},removeEventListener(){},
   matchMedia:()=>({matches:!!fault.reduced}),
   getComputedStyle:n=>({opacity:String(bloomValues(n).opacity),scale:String(bloomValues(n).scale),visibility:"visible",display:"block",getPropertyValue:()=>""}),
@@ -362,7 +363,7 @@ test("only startup tab and bookmark effects join the exact outcome ledger",()=>{
 
 const bloomMode="data-zr-center-mode",bloomCard="data-zr-center-bloom-card";
 function bloomRequest(f,finishLength=1920){
- const observed=[],t={scale:1,finishLength,paused:true,closed:false,observeEffect:(effect,surface,current)=>observed.push({effect,surface,current})};
+ const observed=[],t={scale:1,finishLength,lateLimit:finishLength+280,paused:true,closed:false,observeEffect:(effect,surface,current)=>observed.push({effect,surface,current})};
  f.window.__nocturneStartupTimeline=t;f.root.setAttribute("data-zr-startup-phase","waiting");
  return {t,observed,options:{owner:"startup",direction:"in",paused:true,duration:650,delay:245,bloomTimeline:t,observeEffect:t.observeEffect}};
 }
@@ -424,8 +425,48 @@ test("Bloom exact resume rejects replacement Assembly and supersession restores 
 });
 test("Bloom mode gates only exact card scale and leaves normal Fold startup as the default",()=>{
  const css=read("chrome.css");
- assert.ok(css.includes(':not([data-zr-center-mode="bloom"]) #oneplane-tabs'));
- assert.ok(css.includes('.oneplane-tab:not([data-zr-center-bloom-card])'));
+ assert.ok(css.includes(':where(:not([data-zr-center-motion="startup"][data-zr-center-mode="bloom"])) #oneplane-tabs'));
+ assert.ok(css.includes('.oneplane-tab:where(:not(:root[data-zr-center-motion="startup"][data-zr-center-mode="bloom"] [data-zr-center-bloom-card]))'));
  assert.ok(css.includes('[data-zr-center-motion="startup"][data-zr-center-mode="bloom"]'));
  assert.ok(!read("startup-animation.uc.mjs").includes("bloomTimeline:"));
+});
+
+test("Bloom rejects inconsistent completion cap and nonfinite plan without acquiring anything",()=>{
+ for(const cap of [1470,NaN,Infinity]){
+  const f=proxyFixture(),engine=f.mount(),r=bloomRequest(f);r.t.lateLimit=cap;
+  assert.equal(engine.start(f.row,r.options),null);assert.equal(f.effects.length,0);
+ }
+});
+test("Bloom requires actual paused document effects and unchanged finished promise during sampling",()=>{
+ for(const fault of ["foreignTimeline","unpaused","seekPromise"]){
+  const f=proxyFixture(),engine=f.mount(),r=bloomRequest(f);f.fault[fault]=true;
+  const h=engine.start(f.row,r.options);assert.ok(h,fault);assert.equal(h.mode,"magnetic-fold");
+  assert.ok(f.effects.filter(a=>f.cards.includes(a.node)).every(a=>a.cancelled===1));
+  h.release();assertProxyClean(f);
+ }
+});
+test("Bloom competing existing animation fails open instead of cloning moving geometry",()=>{
+ const f=proxyFixture(),engine=f.mount(),r=bloomRequest(f);
+ const external=f.cards[0].animate([{opacity:0},{opacity:1}],{duration:100});
+ assert.equal(engine.start(f.row,r.options),null);assert.equal(f.effects.length,1);
+ assert.equal(external.cancelled,0);assert.equal(f.root.hasAttribute(bloomMode),false);
+ assert.ok(f.cards.every(n=>!n.hasAttribute(bloomCard)));
+});
+test("explicit Fold fallback rechecks Assembly after synchronous supersession and during setup",()=>{
+ const f=proxyFixture(),engine=f.mount(),r=bloomRequest(f,1190);engine.start(f.row,{owner:"workspace"});
+ f.fault.onEnd=()=>{f.window.__nocturneStartupTimeline={};};
+ assert.equal(engine.start(f.row,r.options),null);assertProxyClean(f);
+ const g=proxyFixture(),e=g.mount(),q=bloomRequest(g,1190);
+ g.fault.onAnimate=()=>{g.window.__nocturneStartupTimeline={};};
+ assert.equal(e.start(g.row,q.options),null);assertProxyClean(g);
+});
+test("explicit Bloom and fallback exact resume is once-only and rejects stale final start callback",()=>{
+ for(const length of [1920,1190]){
+  const f=proxyFixture(),engine=f.mount(),r=bloomRequest(f,length),h=engine.start(f.row,r.options);
+  assert.throws(()=>h.resumeAt(()=>{}),/center-epoch-stale/);
+  r.t.paused=false;h.resumeAt(()=>{});assert.throws(()=>h.resumeAt(()=>{}),/center-epoch-stale/);h.release();assertProxyClean(f);
+  const g=proxyFixture(),e=g.mount(),q=bloomRequest(g,length),a=e.start(g.row,q.options);
+  q.t.paused=false;let count=0;assert.throws(()=>a.resumeAt(()=>{if(++count===a.count)g.window.__nocturneStartupTimeline={};}),/center-epoch-stale/);
+  a.release();assertProxyClean(g);
+ }
 });
