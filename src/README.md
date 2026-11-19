@@ -45,3 +45,6 @@ A4.3c1: synchronous geometry preflight returns a versioned success boolean; acti
 
 
 A4.3c2: `src/algorithms/toolbar-center.mjs` owns pure resting budget and partition metrics (imports existing island-boundary/tab-overflow algorithms; build order already satisfies dependencies). Layout measures/applies; tab-sync projects from its native snapshot. No new runtime entry or persistent geometry cache. A4.3-R next.
+
+
+A4.3-R: Layout force preflight checks the exact native/mirror topology and phase around center/height/contour. Failed force retains pending work; projection sync and lane mounting reject stale callback/owner state. Keep existing physical measurements and feature motion ownership. A4.4 next after CI.

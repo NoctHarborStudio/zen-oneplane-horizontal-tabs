@@ -122,5 +122,5 @@ test("resting toolbar budget and partition dimensions preserve prior policy acro
    islandWidth:layout.title,rowWidth:Math.max(layout.title+6,topWidth),plusOffset,overflowWidth:bottomWidth,
    bottomOpen:Math.max(tabWidth,Math.min(openWidth,bottomWidth-2*(tabWidth+3)-6))});
  }
- assert.ok(source.indexOf("const metrics=toolbarPartitionMetrics(")<source.indexOf("applyStripPartition(layout);"));
+ assert.ok(source.indexOf("const metrics=toolbarPartitionMetrics(")<source.indexOf("applyStripPartition(layout,order,stillCurrent)"));
 });

@@ -302,3 +302,8 @@ Existing geometry.height, geometry.workspace.prepare and contour.paint traces ar
 ### Preview.107 — resting geometry plan
 
 `geometry.center.stale` reports stale order, viewport or live phase detected across centering boundaries (500 ms throttle, empty payload). Existing scheduler reconciles; strict preflight rejects partial active drag/address cascade. Existing geometry.preflight.result/contour.paint/tabs.sync retained. No new sampling or private fields. Native frequency and performance remain unverified.
+
+
+### Preview.108 — geometry transaction audit
+
+Existing `geometry.preflight.reentry` also covers projection sync and contour painting; `geometry.preflight.result` stage adds topology/stale. `geometry.center.stale` remains the throttled empty-payload marker when the lane plan loses its current owner/phase. Existing contour and height traces retained. No new sampling, private fields or timers; native fallback rates remain unverified.

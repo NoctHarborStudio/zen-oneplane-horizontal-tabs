@@ -292,3 +292,6 @@ A4.3c1: Layout geometryPreflightVersion 1 acknowledges only successful synchrono
 
 
 A4.3c2 (preview.107): existing pure toolbar-center module owns pass-local collapsed budget and partition dimensions; Layout applies the plan before fresh actual geometry/anchor reads and rejects stale order/viewport/phase outcomes. Strict preflight rejects partial drag/cascade centering. Tab projection reuses the native topology snapshot for group/selection/pin state; physical Split measurements stay with existing DOM owners. Native convergence remains open.
+
+
+A4.3-R (preview.108): force geometry is fenced against projection/contour reentry, stale native/mirror topology and phase transitions. Rejected force restores queued dirty work; actual height and contour reject stale revision handoffs. Lane moves use a single captured projection plan, with live ownership checks; tab sync uses one exact RAF identity and defers reentry. Existing native animation owners and physical measurements remain separate.

@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.107",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.108",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -3358,8 +3358,9 @@ function installTabStrip() {
     return l;
   }
   let adaptiveHeightDirty=false,overflowRevealAnimation=null;
-  function mountLaneNodes(lane,nodes){
+  function mountLaneNodes(lane,nodes,current=()=>!dead){
     for(let i=0;i<nodes.length;i++){
+      if(!current())return false;
       const node=nodes[i],before=lane.children[i]||null;
       if(before===node)continue;
       if(node.isConnected&&typeof lane.moveBefore==="function"){
@@ -3367,14 +3368,20 @@ function installTabStrip() {
       }
       lane.insertBefore(node,before);
     }
+    return current();
   }
-  function applyStripPartition(plan){
+  function applyStripPartition(plan,order=stripOrderSnapshot,current=()=>!dead&&stripOrderSnapshot===order){
+    // Materialize all three lanes before any native focus/reparent callback.
+    const lanes=[plan.topLeft,plan.topRight,plan.lower].map(indices=>indices.map(i=>order[i]));
+    if(!current())return false;
     if(leftLane.parentElement!==list)list.append(leftLane,rightLane,bottomLane);
     const active=document.activeElement;
     const selected=entries.get(browser.selectedTab)?.item,previousLane=selected?.closest(".oneplane-island-lane");
-    mountLaneNodes(leftLane,plan.topLeft.map(i=>stripOrderSnapshot[i]));
-    mountLaneNodes(rightLane,plan.topRight.map(i=>stripOrderSnapshot[i]));
-    mountLaneNodes(bottomLane,plan.lower.map(i=>stripOrderSnapshot[i]));
+    for(const [lane,nodes] of [[leftLane,lanes[0]],[rightLane,lanes[1]],[bottomLane,lanes[2]]]){
+      if(!current())return false;
+      if(!mountLaneNodes(lane,nodes,current))return false;
+    }
+    if(!current())return false;
     const changed=row.hasAttribute("data-op-overflow-row")!==plan.hasSecondRow;
     row.toggleAttribute("data-op-overflow-row",plan.hasSecondRow);
     row.toggleAttribute("data-op-adaptive-compact",plan.mode!=="wide");
@@ -3390,12 +3397,15 @@ function installTabStrip() {
       // Real layout height changes once. Never repartition on hover.
       scheduleGeometry();scheduleContour();
     }
+    if(!current())return false;
     if(active&&list.contains(active)&&document.activeElement!==active)active.focus?.({preventScroll:true});
+    if(!current())return false;
     if(selected&&previousLane!==selected.closest(".oneplane-island-lane")&&!row.hasAttribute("data-op-home-open"))window.requestAnimationFrame(revealSelectedInStrip);
+    return current();
   }
   function placeStripOrder(order) {
     if(row.hasAttribute("data-op-dragging"))return;
-    stripOrderSnapshot=order.slice();
+    const snapshot=stripOrderSnapshot=order.slice();
     const useLanes=row.hasAttribute("data-op-show-island");
     if(useLanes){
       if(leftLane.parentElement!==list)list.append(leftLane,rightLane,bottomLane);
@@ -3404,11 +3414,11 @@ function installTabStrip() {
       }else{
         const tabWidth=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab"))||36;
         const boundary=islandBoundary(order.map(n=>compactSlotWidth(n,tabWidth)),tabWidth+3);
-        applyStripPartition({topLeft:order.slice(0,boundary).map((_,i)=>i),
-          topRight:order.slice(boundary).map((_,i)=>i+boundary),lower:[],hasSecondRow:false,mode:"wide",topPlus:true});
+        if(!applyStripPartition({topLeft:order.slice(0,boundary).map((_,i)=>i),
+          topRight:order.slice(boundary).map((_,i)=>i+boundary),lower:[],hasSecondRow:false,mode:"wide",topPlus:true},snapshot))scheduleGeometry();
       }
     }else{
-      mountLaneNodes(list,order);
+      if(!mountLaneNodes(list,order,()=>!dead&&stripOrderSnapshot===snapshot))return;
       leftLane.remove();rightLane.remove();bottomLane.remove();if(!bottomLane.hidden)bottomLane.hidden=true;
       if(row.hasAttribute("data-op-overflow-row")){adaptiveHeightDirty=true;contourKey=null;scheduleGeometry();}
       for(const attr of ["data-op-overflow-row","data-op-adaptive-compact","data-op-bottom-plus"])row.removeAttribute(attr);
@@ -6942,14 +6952,21 @@ function installTabStrip() {
     contourPainting=true;
     try{return paintContourNow(force,prehover,rows);}finally{contourPainting=false;}
   }
+  function contourWriteAllowed(force){
+    return !dead&&!!toolbarWrapper&&hoverSupported()&&!root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&!root.hasAttribute("data-op-bookmark-wave")&&!document.getElementById("PlacesToolbarItems")?.hasAttribute("data-zr-fold-bookmarks")&&
+      (force||(!root.hasAttribute("data-zr-workspace-phase")&&root.getAttribute("data-zr-startup-phase")!=="playing"));
+  }
   function paintContourNow(force,prehover,rows){
-    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-zr-closing")||root.hasAttribute("data-op-bookmark-wave")||document.getElementById("PlacesToolbarItems")?.hasAttribute("data-zr-fold-bookmarks")||(!force&&(root.hasAttribute("data-zr-workspace-phase")||root.getAttribute("data-zr-startup-phase")==="playing"||root.hasAttribute("data-zr-center-motion"))))return false;
+    if(!contourWriteAllowed(force))return false;
     // A switch can briefly hide or resize native bookmark controls.
     // Retain the last valid mask until the native layout settles.
     if(!force&&!prehover&&contourKey&&window.performance.now()<panelSwitchUntil)return false;
     const provider=window.__zenMagneticBookmarksShared,revision=contourRevision;
+    const workspacePhase=root.getAttribute("data-zr-workspace-phase"),startupPhase=root.getAttribute("data-zr-startup-phase");
+    const current=()=>contourWriteAllowed(force)&&provider===window.__zenMagneticBookmarksShared&&revision===contourRevision&&
+      root.getAttribute("data-zr-workspace-phase")===workspacePhase&&root.getAttribute("data-zr-startup-phase")===startupPhase;
     if(prehover&&contourMode==="stable"&&contourProvider===provider&&contourCommittedRevision===revision&&
-      bookmarkContourPolicy()==="ready")return true;
+      bookmarkContourPolicy()==="ready")return current();
     let mode="visible",envelope=null;
     if(bookmarks&&provider?.readContourEnvelope){
       try{envelope=provider.readContourEnvelope(force,bookmarks,rows?.bookmark??null);}
@@ -6987,7 +7004,7 @@ function installTabStrip() {
     }
     const geometry=contourGeometry({wrapper,nav,row:rr,bookmark,controls,shiftY,trim,settings,mode,
       availableGrowth:mode==="stable"?envelope.availableGrowth:0});
-    if(dead||provider!==window.__zenMagneticBookmarksShared||envelope?.current?.()===false||!geometry)return false;
+    if(!geometry||!current()||envelope?.current?.()===false||!current())return false;
     if(geometry.key===contourKey&&mode===contourMode){
       contourProvider=provider;contourCommittedRevision=revision;return true;
     }
@@ -7004,7 +7021,7 @@ function installTabStrip() {
     const {width,height,base,deep,left,right}=geometry;
     window.__nocturneTrace?.("contour.paint",()=>({force,mode,width,height,base,deep,left,right,overflow:compactRows,
       phase:root.getAttribute("data-zr-workspace-phase")}),{throttle:100,sample:1200});
-    return !dead&&provider===window.__zenMagneticBookmarksShared;
+    return current();
   }
   function stepContour(now,rows=null){
     if(dead)return;
@@ -7157,6 +7174,8 @@ function installTabStrip() {
       const wantsIsland=row.hasAttribute("data-op-show-island");
       const iconHome=row.hasAttribute("data-op-home-icon");
       const frozen=restingGeometryBlocked();
+      const addressHidden=url.hasAttribute("data-op-empty")||url.hasAttribute("data-op-home");
+      const workspacePhase=root.getAttribute("data-zr-workspace-phase"),startupPhase=root.getAttribute("data-zr-startup-phase");
       if(requireResting&&frozen)return false;
       // Address budgeting and partition use one collapsed input snapshot.
       const widths=order.map(n=>compactSlotWidth(n,tabWidth));
@@ -7164,8 +7183,11 @@ function installTabStrip() {
       const returnReserve=row.hasAttribute("data-op-adaptive-compact")?12:0;
       const {naturalTabsWidth,availableAt,planAt}=restingToolbarBudget({widths,groups,windowWidth,right,tabWidth,dragRoom,iconHome,returnReserve});
       const stillCurrent=()=>!dead&&stripOrderSnapshot===order&&window.innerWidth===windowWidth&&
-        !root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&
-        restingGeometryBlocked()===frozen;
+        hoverSupported()&&!root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&
+        !row.hasAttribute("data-op-magnetic-pull")&&restingGeometryBlocked()===frozen&&
+        row.hasAttribute("data-op-show-island")===wantsIsland&&row.hasAttribute("data-op-home-icon")===iconHome&&
+        (url.hasAttribute("data-op-empty")||url.hasAttribute("data-op-home"))===addressHidden&&
+        root.getAttribute("data-zr-workspace-phase")===workspacePhase&&root.getAttribute("data-zr-startup-phase")===startupPhase;
       const rejectStale=()=>{if(!dead){scheduleGeometry();window.__nocturneTrace?.("geometry.center.stale",{},{throttle:500});}return false;};
       if(!frozen){
         const preferred=prefs.getIntPref("zen.oneplane.address-width",180);
@@ -7178,7 +7200,6 @@ function installTabStrip() {
         const canFit=reserve=>windowWidth/2-right>=reserve&&windowWidth/2-left-36-8>=reserve;
         const reserve=compactAddress?(canFit(pairReserve)?pairReserve:canFit(singleReserve)?singleReserve:16+dragRoom+4):16+dragRoom+4;
         const baseline=adaptiveAddressWidth(preferred,windowWidth,left,reserve,8,compactAddress);
-        const addressHidden=url.hasAttribute("data-op-empty")||url.hasAttribute("data-op-home");
         const readAddressMargins=()=>{const style=window.getComputedStyle(url);return (parseFloat(style.marginLeft)||0)+(parseFloat(style.marginRight)||0);};
         const addressMargins=addressMarginsAtRead??readAddressMargins();
         // Only reclaim actual spare width, including native margins and
@@ -7206,9 +7227,8 @@ function installTabStrip() {
         const layout=planAt(available);
         const metrics=toolbarPartitionMetrics({layout,widths,available,windowWidth,tabWidth,openWidth,iconHome});
         row.removeAttribute("data-op-island-tight");
-        applyStripPartition(layout);
         // Lane reparent/focus may synchronously publish a new topology.
-        if(!stillCurrent())return rejectStale();
+        if(!applyStripPartition(layout,order,stillCurrent)||!stillCurrent())return rejectStale();
         row.toggleAttribute("data-op-island-compact",!iconHome&&layout.title===32);
         setLength(row,"--op-island-width",metrics.islandWidth);
         setLength(row,"--op-island-row-width",metrics.rowWidth);
@@ -7237,13 +7257,17 @@ function installTabStrip() {
     return {nav:navbar?.getBoundingClientRect()??null,row:row.getBoundingClientRect(),
       bookmark:bookmarks&&!bookmarks.collapsed&&!bookmarks.hidden?bookmarks.getBoundingClientRect():null};
   }
+  function geometryWriteAllowed(){
+    return !dead&&hoverSupported()&&!!toolbarWrapper&&!root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion");
+  }
   function measureToolbarGeometry(force=false,center=true){
-    if(dead||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-closing")||(!force&&root.hasAttribute("data-zr-center-motion")))return null;
+    if(!geometryWriteAllowed())return null;
     if(center&&!centerToolbar(force)&&force)return null;
-    if(dead)return null;
+    if(!geometryWriteAllowed())return null;
     if(!force&&!adaptiveHeightDirty&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
        window.performance.now()<panelSwitchUntil)return null;
-    const rows=readToolbarRows();
+    const revision=contourRevision,rows=readToolbarRows();
+    if(!geometryWriteAllowed()||contourRevision!==revision)return null;
     const next=Math.round(Math.max(rows.nav?.height||0,rows.row.height||0)+(rows.bookmark?.height||0))+"px";
     if(![rows.nav?.height??0,rows.row.height,rows.bookmark?.height??0].every(v=>Number.isFinite(v)&&v>=0)||!(parseFloat(next)>0))return null;
     const prior=toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height");
@@ -7254,6 +7278,13 @@ function installTabStrip() {
         window.__nocturneTrace?.("geometry.height.rejected",{force},{throttle:500});return null;
       }
       window.__nocturneTrace?.("geometry.height",()=>({old:prior,next,force,overflow:row.hasAttribute("data-op-overflow-row"),phase:root.getAttribute("data-zr-workspace-phase")}),{sample:1800});
+    }
+    if(!geometryWriteAllowed())return null;
+    if(contourRevision!==revision){
+      // Do not hand a snapshot predating an invalidation to contour.
+      // A changed wrapper still needs the ordinary next-frame boundary.
+      scheduleGeometry();
+      return {rows:null,changed};
     }
     adaptiveHeightDirty=false;
     return {rows,changed};
@@ -7312,30 +7343,44 @@ function installTabStrip() {
   // when a native callback reenters an already running write transaction.
   function prepareWorkspaceGeometry(){
     if(dead)return false;
-    if(geometryRunning||centering){
+    if(geometryRunning||centering||syncing||contourPainting){
       window.__nocturneTrace?.("geometry.preflight.reentry",{},{throttle:500,flush:true});
+      if(syncing)schedule();
       scheduleGeometry();
       return false;
     }
     geometryRunning=true;
+    const priorDirty=geometryDirty;
+    const workspacePhase=root.getAttribute("data-zr-workspace-phase"),startupPhase=root.getAttribute("data-zr-startup-phase");
+    const phaseCurrent=()=>geometryWriteAllowed()&&root.getAttribute("data-zr-workspace-phase")===workspacePhase&&root.getAttribute("data-zr-startup-phase")===startupPhase;
+    let accepted=false;
     try{
       const queued=!!geometryFrame;
       // Cancel only work predating this transaction; callbacks can
       // publish fresh invalidations that must survive.
       cancelGeometry();
       window.__nocturneTrace?.("geometry.workspace.prepare",()=>({frame:!!frame,geometryFrame:queued}),{sample:1800});
-      if(dead)return false;
-      if(frame){window.cancelAnimationFrame(frame);frame=0;sync();}
-      if(dead)return false;
+      if(!phaseCurrent())return false;
+      // Native changes can precede observer delivery; a zero RAF id does
+      // not prove that the last projected topology is still current.
+      if(frame||!sameStripTopology(syncedTopology,readStripTopology()))sync();
+      if(!phaseCurrent())return false;
       window.__zenMagneticBookmarksShared?.syncAddressState?.();
-      if(dead)return false;
+      if(!phaseCurrent())return false;
       const measured=measureToolbarGeometry(true);
-      if(dead)return false;
-      const painted=!!measured&&paintContour(true,false,measured.changed?null:measured.rows)===true;
-      if(measured&&!dead)refreshIndicator();
-      window.__nocturneTrace?.("geometry.preflight.result",{ready:painted&&!dead,stage:!measured?"height":!painted?"contour":"ready"},{throttle:500,flush:true});
-      return painted&&!dead;
+      if(!phaseCurrent())return false;
+      const topology=measured?.rows?captureCenterTopology(row):null;
+      const current=()=>phaseCurrent()&&!restingGeometryBlocked()&&!row.hasAttribute("data-op-magnetic-pull")&&topology?.()===true;
+      const painted=!!measured&&!!topology&&paintContour(true,false,measured.changed?null:measured.rows)===true;
+      if(painted&&current())refreshIndicator();
+      const ready=painted&&current();
+      window.__nocturneTrace?.("geometry.preflight.result",{ready,stage:!measured?"height":!topology?"topology":!painted?"contour":!ready?"stale":"ready"},{throttle:500,flush:true});
+      accepted=ready&&current();
+      if(!accepted&&measured&&(!topology||!topology()))schedule();
+      return accepted;
     }finally{
+      // A rejected force pass must not swallow preexisting invalidations.
+      if(!accepted&&!dead)geometryDirty|=priorDirty;
       geometryRunning=false;
       armGeometry();
     }
@@ -9512,7 +9557,7 @@ function installTabStrip() {
       a.tabs.every((x,i)=>{const y=b.tabs[i];return x.tab===y.tab&&x.group===y.group&&x.split===y.split&&x.pinned===y.pinned;});
   }
   function captureCenterTopology(expectedRow){
-    if(dead||expectedRow!==row||!row.isConnected||row.hasAttribute("data-op-dragging")||
+    if(dead||syncing||expectedRow!==row||!row.isConnected||row.hasAttribute("data-op-dragging")||
        !sameStripTopology(syncedTopology,readStripTopology()))return null;
     const native=syncedTopology;
     const selector=".oneplane-tab,.oneplane-split-group";
@@ -9535,7 +9580,8 @@ function installTabStrip() {
     };
   }
   function onCenterMotionEnd(event){
-    if(dead||syncing)return;
+    if(dead)return;
+    if(syncing){schedule();return;}
     // A changed native signature must reconcile in this task, before a
     // stale proxy/real-card handoff can reach the next paint.
     if(event?.detail?.owner!=="close"&&(event?.detail?.reconcile||!sameStripTopology(syncedTopology,readStripTopology()))){
@@ -9544,8 +9590,10 @@ function installTabStrip() {
     }else schedule();
   }
   function sync() {
+    if(dead)return;
+    if(syncing){schedule();return;}
+    if(frame)window.cancelAnimationFrame(frame);
     frame=0;
-    if(dead||syncing)return;
     syncing=true;
     try{syncNow();}finally{syncing=false;}
   }
@@ -9676,7 +9724,12 @@ function installTabStrip() {
   }
 
   function schedule() {
-    if (!dead && !frame) frame = window.requestAnimationFrame(sync);
+    if(dead||frame)return;
+    const id=window.requestAnimationFrame(()=>{
+      if(frame!==id)return;
+      frame=0;sync();
+    });
+    frame=id;
   }
   function revealSelectedInStrip(){
     if(dead||cascadeState!=="idle"||root.hasAttribute("data-zr-center-motion"))return;

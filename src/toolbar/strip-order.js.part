@@ -1,6 +1,7 @@
   let adaptiveHeightDirty=false,overflowRevealAnimation=null;
-  function mountLaneNodes(lane,nodes){
+  function mountLaneNodes(lane,nodes,current=()=>!dead){
     for(let i=0;i<nodes.length;i++){
+      if(!current())return false;
       const node=nodes[i],before=lane.children[i]||null;
       if(before===node)continue;
       if(node.isConnected&&typeof lane.moveBefore==="function"){
@@ -8,14 +9,20 @@
       }
       lane.insertBefore(node,before);
     }
+    return current();
   }
-  function applyStripPartition(plan){
+  function applyStripPartition(plan,order=stripOrderSnapshot,current=()=>!dead&&stripOrderSnapshot===order){
+    // Materialize all three lanes before any native focus/reparent callback.
+    const lanes=[plan.topLeft,plan.topRight,plan.lower].map(indices=>indices.map(i=>order[i]));
+    if(!current())return false;
     if(leftLane.parentElement!==list)list.append(leftLane,rightLane,bottomLane);
     const active=document.activeElement;
     const selected=entries.get(browser.selectedTab)?.item,previousLane=selected?.closest(".oneplane-island-lane");
-    mountLaneNodes(leftLane,plan.topLeft.map(i=>stripOrderSnapshot[i]));
-    mountLaneNodes(rightLane,plan.topRight.map(i=>stripOrderSnapshot[i]));
-    mountLaneNodes(bottomLane,plan.lower.map(i=>stripOrderSnapshot[i]));
+    for(const [lane,nodes] of [[leftLane,lanes[0]],[rightLane,lanes[1]],[bottomLane,lanes[2]]]){
+      if(!current())return false;
+      if(!mountLaneNodes(lane,nodes,current))return false;
+    }
+    if(!current())return false;
     const changed=row.hasAttribute("data-op-overflow-row")!==plan.hasSecondRow;
     row.toggleAttribute("data-op-overflow-row",plan.hasSecondRow);
     row.toggleAttribute("data-op-adaptive-compact",plan.mode!=="wide");
@@ -31,12 +38,15 @@
       // Real layout height changes once. Never repartition on hover.
       scheduleGeometry();scheduleContour();
     }
+    if(!current())return false;
     if(active&&list.contains(active)&&document.activeElement!==active)active.focus?.({preventScroll:true});
+    if(!current())return false;
     if(selected&&previousLane!==selected.closest(".oneplane-island-lane")&&!row.hasAttribute("data-op-home-open"))window.requestAnimationFrame(revealSelectedInStrip);
+    return current();
   }
   function placeStripOrder(order) {
     if(row.hasAttribute("data-op-dragging"))return;
-    stripOrderSnapshot=order.slice();
+    const snapshot=stripOrderSnapshot=order.slice();
     const useLanes=row.hasAttribute("data-op-show-island");
     if(useLanes){
       if(leftLane.parentElement!==list)list.append(leftLane,rightLane,bottomLane);
@@ -45,11 +55,11 @@
       }else{
         const tabWidth=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab"))||36;
         const boundary=islandBoundary(order.map(n=>compactSlotWidth(n,tabWidth)),tabWidth+3);
-        applyStripPartition({topLeft:order.slice(0,boundary).map((_,i)=>i),
-          topRight:order.slice(boundary).map((_,i)=>i+boundary),lower:[],hasSecondRow:false,mode:"wide",topPlus:true});
+        if(!applyStripPartition({topLeft:order.slice(0,boundary).map((_,i)=>i),
+          topRight:order.slice(boundary).map((_,i)=>i+boundary),lower:[],hasSecondRow:false,mode:"wide",topPlus:true},snapshot))scheduleGeometry();
       }
     }else{
-      mountLaneNodes(list,order);
+      if(!mountLaneNodes(list,order,()=>!dead&&stripOrderSnapshot===snapshot))return;
       leftLane.remove();rightLane.remove();bottomLane.remove();if(!bottomLane.hidden)bottomLane.hidden=true;
       if(row.hasAttribute("data-op-overflow-row")){adaptiveHeightDirty=true;contourKey=null;scheduleGeometry();}
       for(const attr of ["data-op-overflow-row","data-op-adaptive-compact","data-op-bottom-plus"])row.removeAttribute(attr);

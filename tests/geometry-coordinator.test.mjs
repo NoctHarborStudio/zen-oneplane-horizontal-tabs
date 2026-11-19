@@ -5,7 +5,7 @@ const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 const source=read("src/layout/geometry.js.part");
 function setup(){
  const jobs=new Map(),calls=[],reads={nav:0,row:0,bookmark:0};
- let serial=0,height="90px",nextHeight=90,phase=null,callback=null,reject=false,painted=true,centered=true;
+ let serial=0,height="90px",nextHeight=90,phase=null,callback=null,reject=false,painted=true,centered=true,topology=true,matched=true;
  const mk=(key,h)=>({getBoundingClientRect(){reads[key]++;return {height:h()};}});
  const navbar=mk("nav",()=>50),row=mk("row",()=>nextHeight-20),bookmarks=mk("bookmark",()=>20);
  row.hasAttribute=()=>false;
@@ -14,10 +14,10 @@ function setup(){
  const window={performance:{now:()=>1000},requestAnimationFrame(fn){jobs.set(++serial,fn);return serial;},cancelAnimationFrame(id){jobs.delete(id);},__zenMagneticBookmarksShared:{syncAddressState(){calls.push("suspend");}}};
  const body=source.slice(source.indexOf("  function readToolbarRows("),source.indexOf("  function observeGeometry("));
  const api=new Function("window","root","navbar","row","bookmarks","toolbarWrapper","calls","callback","outcome",
-  'let dead=false,geometryFrame=0,geometryDirty=0,geometryRunning=false,geometryTicket=0,centering=false,contourRevision=0,adaptiveHeightDirty=false,panelSwitchUntil=0,frame=0;const GEOMETRY_HEIGHT=1,GEOMETRY_CONTOUR=2,GEOMETRY_CENTER=4;function hoverSupported(){return true}function centerToolbar(){calls.push("center");callback();return outcome.centered()}function refreshIndicator(){calls.push("indicator")}function stepContour(now,rows){calls.push(rows?"contour:shared":"contour:fresh")}function paintContour(force,prehover,rows){calls.push(rows?"force:shared":"force:fresh");return outcome.painted()}function sync(){calls.push("sync")}'+body+
-  'return {scheduleGeometry,scheduleMeasuredGeometry,queueGeometry,cancelGeometry,prepareWorkspaceGeometry,kill(){dead=true;cancelGeometry()},pending:()=>geometryDirty,revision:()=>contourRevision};')
-  (window,root,navbar,row,bookmarks,toolbarWrapper,calls,()=>callback?.(),{centered:()=>centered,painted:()=>painted});
- return {api,jobs,calls,reads,set height(v){nextHeight=v;},set phase(v){phase=v;},set callback(v){callback=v;},set reject(v){reject=v;},set painted(v){painted=v;},set centered(v){centered=v;},
+  'let dead=false,geometryFrame=0,geometryDirty=0,geometryRunning=false,geometryTicket=0,centering=false,contourRevision=0,adaptiveHeightDirty=false,panelSwitchUntil=0,frame=0;const GEOMETRY_HEIGHT=1,GEOMETRY_CONTOUR=2,GEOMETRY_CENTER=4;let syncing=false,contourPainting=false;function hoverSupported(){return true}function centerToolbar(){calls.push("center");callback();return outcome.centered()}function refreshIndicator(){calls.push("indicator")}function stepContour(now,rows){calls.push(rows?"contour:shared":"contour:fresh")}function paintContour(force,prehover,rows){calls.push(rows?"force:shared":"force:fresh");return outcome.painted()}function sync(){calls.push("sync");outcome.match()}function schedule(){calls.push("schedule-sync")}let syncedTopology={};function readStripTopology(){return {}}function sameStripTopology(){return outcome.matched()}function captureCenterTopology(){return outcome.topology()?()=>outcome.topology():null}function restingGeometryBlocked(){return false}'+body+
+  'return {scheduleGeometry,scheduleMeasuredGeometry,queueGeometry,cancelGeometry,prepareWorkspaceGeometry,kill(){dead=true;cancelGeometry()},pending:()=>geometryDirty,revision:()=>contourRevision,setBusy(s,c){syncing=s;contourPainting=c}};')
+  (window,root,navbar,row,bookmarks,toolbarWrapper,calls,()=>callback?.(),{centered:()=>centered,painted:()=>typeof painted==="function"?painted():painted,matched:()=>matched,match:()=>{matched=true},topology:()=>topology});
+ return {api,jobs,calls,reads,set height(v){nextHeight=v;},set phase(v){phase=v;},set callback(v){callback=v;},set reject(v){reject=v;},set painted(v){painted=v;},set centered(v){centered=v;},set matched(v){matched=v;},set topology(v){topology=v;},
   tick(){const batch=[...jobs];for(const [id,fn] of batch){jobs.delete(id);fn(1000);}}};
 }
 test("height and contour requests coalesce into one pass with shared row snapshot",()=>{
@@ -128,4 +128,50 @@ test("native topology snapshot resolves each Split group once before projection"
  assert.deepEqual(run(),{reads:1,group:true,split:true,pinned:true});
  assert.ok(sync.includes("const {tab,group,split,pinned}=nativeTopology.tabs[index];"));
  assert.ok(sync.includes("const groups = [...new Set(nativeTopology.tabs.map(x=>x.group).filter(Boolean))];"));
+});
+
+test("rejected force restores old geometry requests; stale native projection is synced even with no frame",()=>{
+ const x=setup();x.api.scheduleGeometry();x.centered=false;
+ assert.equal(x.api.prepareWorkspaceGeometry(),false);assert.equal(x.jobs.size,1);assert.equal(x.api.pending(),7);
+ x.centered=true;x.tick();assert.equal(x.jobs.size,0);
+ const y=setup();y.matched=false;assert.equal(y.api.prepareWorkspaceGeometry(),true);
+ assert.deepEqual(y.calls,["sync","suspend","center","force:shared","indicator"]);
+});
+test("preflight refuses reentry from projection or contour and rejects invalidated mirror after paint",()=>{
+ for(const [s,c] of [[true,false],[false,true]]){
+  const x=setup();x.api.setBusy(s,c);assert.equal(x.api.prepareWorkspaceGeometry(),false);
+  assert.ok(!x.calls.includes("center"));assert.equal(x.jobs.size,1);
+ }
+ const y=setup();y.painted=()=>{y.topology=false;return true;};
+ assert.equal(y.api.prepareWorkspaceGeometry(),false);assert.ok(y.calls.includes("schedule-sync"));assert.ok(!y.calls.includes("indicator"));
+});
+test("height cannot write under a newly acquired center owner",()=>{
+ const x=setup();x.height=130;x.callback=()=>{x.phase="data-zr-center-motion";};
+ x.api.scheduleGeometry();x.tick();assert.ok(!x.calls.includes("height:130px"));
+ assert.deepEqual(x.reads,{nav:0,row:0,bookmark:0});
+});
+test("projection sync reentry preserves pending work and cancelled callbacks cannot consume a successor",()=>{
+ const s=read("src/toolbar/tab-sync.js.part"),sync=s.slice(s.indexOf("  function sync() {"),s.indexOf("  function syncNow("));
+ const schedule=s.slice(s.indexOf("  function schedule() {"),s.indexOf("  function revealSelectedInStrip("));
+ const api=new Function(`let dead=false,syncing=false,frame=0,serial=0,calls=0,reenter=true;
+ const jobs=new Map(),window={requestAnimationFrame(fn){jobs.set(++serial,fn);return serial},cancelAnimationFrame(id){jobs.delete(id)}};
+ function syncNow(){calls++;if(reenter){reenter=false;sync();}}
+ ${sync}${schedule}return {sync,schedule,jobs,count:()=>calls,frame:()=>frame};`)();
+ api.schedule();const stale=[...api.jobs.values()][0];api.sync();
+ assert.equal(api.count(),1);assert.equal(api.jobs.size,1);
+ stale();assert.equal(api.count(),1);assert.equal(api.jobs.size,1);
+ const [id,fn]=[...api.jobs][0];api.jobs.delete(id);fn();assert.equal(api.count(),2);assert.equal(api.frame(),0);
+});
+
+test("lane mounting stops after a synchronous owner change within the same lane",()=>{
+ const s=read("src/toolbar/strip-order.js.part"),code=s.slice(s.indexOf("  function mountLaneNodes("),s.indexOf("  function applyStripPartition("));
+ const run=new Function(`let dead=false;const inserted=[],nodes=[{},{},{}];let valid=true;
+ const lane={children:[],insertBefore(n){inserted.push(n);valid=false;}};
+ ${code}return {result:mountLaneNodes(lane,nodes,()=>valid),count:inserted.length};`);
+ assert.deepEqual(run(),{result:false,count:1});
+});
+
+test("preflight cannot acknowledge a contour after startup or workspace phase changed",()=>{
+ const x=setup();x.painted=()=>{x.phase="in";return true;};
+ assert.equal(x.api.prepareWorkspaceGeometry(),false);assert.ok(!x.calls.includes("indicator"));
 });

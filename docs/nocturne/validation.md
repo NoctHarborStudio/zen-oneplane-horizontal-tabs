@@ -430,3 +430,6 @@ A4.3c1 (preview.106): focused source-backed preflight outcome, contour failure a
 
 
 A4.3c2 (preview.107): corrected preview.106 CI PASS. 26 window geometry/coordinator fixture bodies PASS in isolated V8 including pure parity matrix (120 combinations), strict freeze guard and one native Split group read per visible snapshot tab. Runtime parser and exact generated substitutions checked; canonical CI pending. Native Split width/hover, first resting paint, startup/workspace fallback and actual performance remain open; A4.3-R integrated audit next.
+
+
+A4.3-R (preview.108): corrected preview.107 CI PASS (671 Node). Seven new regressions, 114 fixture bodies PASS in isolated V8 (37 coordinator/contour, 10 window geometry, 67 Center Motion), including projection reentry, rejected force dirty retention, phase/owner changes and stale lane move. Canonical CI pending; native first resting paint, handoff, split/hover behavior and matched performance open. A4.4 freeze/hit regions follows after source gate.

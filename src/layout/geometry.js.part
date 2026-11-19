@@ -94,6 +94,8 @@
       const wantsIsland=row.hasAttribute("data-op-show-island");
       const iconHome=row.hasAttribute("data-op-home-icon");
       const frozen=restingGeometryBlocked();
+      const addressHidden=url.hasAttribute("data-op-empty")||url.hasAttribute("data-op-home");
+      const workspacePhase=root.getAttribute("data-zr-workspace-phase"),startupPhase=root.getAttribute("data-zr-startup-phase");
       if(requireResting&&frozen)return false;
       // Address budgeting and partition use one collapsed input snapshot.
       const widths=order.map(n=>compactSlotWidth(n,tabWidth));
@@ -101,8 +103,11 @@
       const returnReserve=row.hasAttribute("data-op-adaptive-compact")?12:0;
       const {naturalTabsWidth,availableAt,planAt}=restingToolbarBudget({widths,groups,windowWidth,right,tabWidth,dragRoom,iconHome,returnReserve});
       const stillCurrent=()=>!dead&&stripOrderSnapshot===order&&window.innerWidth===windowWidth&&
-        !root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&
-        restingGeometryBlocked()===frozen;
+        hoverSupported()&&!root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&
+        !row.hasAttribute("data-op-magnetic-pull")&&restingGeometryBlocked()===frozen&&
+        row.hasAttribute("data-op-show-island")===wantsIsland&&row.hasAttribute("data-op-home-icon")===iconHome&&
+        (url.hasAttribute("data-op-empty")||url.hasAttribute("data-op-home"))===addressHidden&&
+        root.getAttribute("data-zr-workspace-phase")===workspacePhase&&root.getAttribute("data-zr-startup-phase")===startupPhase;
       const rejectStale=()=>{if(!dead){scheduleGeometry();window.__nocturneTrace?.("geometry.center.stale",{},{throttle:500});}return false;};
       if(!frozen){
         const preferred=prefs.getIntPref("zen.oneplane.address-width",180);
@@ -115,7 +120,6 @@
         const canFit=reserve=>windowWidth/2-right>=reserve&&windowWidth/2-left-36-8>=reserve;
         const reserve=compactAddress?(canFit(pairReserve)?pairReserve:canFit(singleReserve)?singleReserve:16+dragRoom+4):16+dragRoom+4;
         const baseline=adaptiveAddressWidth(preferred,windowWidth,left,reserve,8,compactAddress);
-        const addressHidden=url.hasAttribute("data-op-empty")||url.hasAttribute("data-op-home");
         const readAddressMargins=()=>{const style=window.getComputedStyle(url);return (parseFloat(style.marginLeft)||0)+(parseFloat(style.marginRight)||0);};
         const addressMargins=addressMarginsAtRead??readAddressMargins();
         // Only reclaim actual spare width, including native margins and
@@ -143,9 +147,8 @@
         const layout=planAt(available);
         const metrics=toolbarPartitionMetrics({layout,widths,available,windowWidth,tabWidth,openWidth,iconHome});
         row.removeAttribute("data-op-island-tight");
-        applyStripPartition(layout);
         // Lane reparent/focus may synchronously publish a new topology.
-        if(!stillCurrent())return rejectStale();
+        if(!applyStripPartition(layout,order,stillCurrent)||!stillCurrent())return rejectStale();
         row.toggleAttribute("data-op-island-compact",!iconHome&&layout.title===32);
         setLength(row,"--op-island-width",metrics.islandWidth);
         setLength(row,"--op-island-row-width",metrics.rowWidth);
@@ -174,13 +177,17 @@
     return {nav:navbar?.getBoundingClientRect()??null,row:row.getBoundingClientRect(),
       bookmark:bookmarks&&!bookmarks.collapsed&&!bookmarks.hidden?bookmarks.getBoundingClientRect():null};
   }
+  function geometryWriteAllowed(){
+    return !dead&&hoverSupported()&&!!toolbarWrapper&&!root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion");
+  }
   function measureToolbarGeometry(force=false,center=true){
-    if(dead||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-closing")||(!force&&root.hasAttribute("data-zr-center-motion")))return null;
+    if(!geometryWriteAllowed())return null;
     if(center&&!centerToolbar(force)&&force)return null;
-    if(dead)return null;
+    if(!geometryWriteAllowed())return null;
     if(!force&&!adaptiveHeightDirty&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
        window.performance.now()<panelSwitchUntil)return null;
-    const rows=readToolbarRows();
+    const revision=contourRevision,rows=readToolbarRows();
+    if(!geometryWriteAllowed()||contourRevision!==revision)return null;
     const next=Math.round(Math.max(rows.nav?.height||0,rows.row.height||0)+(rows.bookmark?.height||0))+"px";
     if(![rows.nav?.height??0,rows.row.height,rows.bookmark?.height??0].every(v=>Number.isFinite(v)&&v>=0)||!(parseFloat(next)>0))return null;
     const prior=toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height");
@@ -191,6 +198,13 @@
         window.__nocturneTrace?.("geometry.height.rejected",{force},{throttle:500});return null;
       }
       window.__nocturneTrace?.("geometry.height",()=>({old:prior,next,force,overflow:row.hasAttribute("data-op-overflow-row"),phase:root.getAttribute("data-zr-workspace-phase")}),{sample:1800});
+    }
+    if(!geometryWriteAllowed())return null;
+    if(contourRevision!==revision){
+      // Do not hand a snapshot predating an invalidation to contour.
+      // A changed wrapper still needs the ordinary next-frame boundary.
+      scheduleGeometry();
+      return {rows:null,changed};
     }
     adaptiveHeightDirty=false;
     return {rows,changed};
@@ -249,30 +263,44 @@
   // when a native callback reenters an already running write transaction.
   function prepareWorkspaceGeometry(){
     if(dead)return false;
-    if(geometryRunning||centering){
+    if(geometryRunning||centering||syncing||contourPainting){
       window.__nocturneTrace?.("geometry.preflight.reentry",{},{throttle:500,flush:true});
+      if(syncing)schedule();
       scheduleGeometry();
       return false;
     }
     geometryRunning=true;
+    const priorDirty=geometryDirty;
+    const workspacePhase=root.getAttribute("data-zr-workspace-phase"),startupPhase=root.getAttribute("data-zr-startup-phase");
+    const phaseCurrent=()=>geometryWriteAllowed()&&root.getAttribute("data-zr-workspace-phase")===workspacePhase&&root.getAttribute("data-zr-startup-phase")===startupPhase;
+    let accepted=false;
     try{
       const queued=!!geometryFrame;
       // Cancel only work predating this transaction; callbacks can
       // publish fresh invalidations that must survive.
       cancelGeometry();
       window.__nocturneTrace?.("geometry.workspace.prepare",()=>({frame:!!frame,geometryFrame:queued}),{sample:1800});
-      if(dead)return false;
-      if(frame){window.cancelAnimationFrame(frame);frame=0;sync();}
-      if(dead)return false;
+      if(!phaseCurrent())return false;
+      // Native changes can precede observer delivery; a zero RAF id does
+      // not prove that the last projected topology is still current.
+      if(frame||!sameStripTopology(syncedTopology,readStripTopology()))sync();
+      if(!phaseCurrent())return false;
       window.__zenMagneticBookmarksShared?.syncAddressState?.();
-      if(dead)return false;
+      if(!phaseCurrent())return false;
       const measured=measureToolbarGeometry(true);
-      if(dead)return false;
-      const painted=!!measured&&paintContour(true,false,measured.changed?null:measured.rows)===true;
-      if(measured&&!dead)refreshIndicator();
-      window.__nocturneTrace?.("geometry.preflight.result",{ready:painted&&!dead,stage:!measured?"height":!painted?"contour":"ready"},{throttle:500,flush:true});
-      return painted&&!dead;
+      if(!phaseCurrent())return false;
+      const topology=measured?.rows?captureCenterTopology(row):null;
+      const current=()=>phaseCurrent()&&!restingGeometryBlocked()&&!row.hasAttribute("data-op-magnetic-pull")&&topology?.()===true;
+      const painted=!!measured&&!!topology&&paintContour(true,false,measured.changed?null:measured.rows)===true;
+      if(painted&&current())refreshIndicator();
+      const ready=painted&&current();
+      window.__nocturneTrace?.("geometry.preflight.result",{ready,stage:!measured?"height":!topology?"topology":!painted?"contour":!ready?"stale":"ready"},{throttle:500,flush:true});
+      accepted=ready&&current();
+      if(!accepted&&measured&&(!topology||!topology()))schedule();
+      return accepted;
     }finally{
+      // A rejected force pass must not swallow preexisting invalidations.
+      if(!accepted&&!dead)geometryDirty|=priorDirty;
       geometryRunning=false;
       armGeometry();
     }

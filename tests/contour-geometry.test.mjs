@@ -174,3 +174,13 @@ test("contour reports success only for committed or valid unchanged geometry",()
  assert.equal(x.api.paintContour(true),true);
  x.attrs.add("data-zr-closing");assert.equal(x.api.paintContour(true),false);
 });
+
+test("forced contour cannot acquire a center-owned surface or commit a provider invalidated mid-read",()=>{
+ const x=layoutFixture();x.api.paintContour();const writes=x.f.writes,reads=x.reads;
+ x.attrs.add("data-zr-center-motion");assert.equal(x.api.paintContour(true),false);assert.equal(x.reads,reads);
+ x.attrs.clear();x.install();x.envelope={status:"ready",bookmark:x.input.bookmark,controls:x.input.controls,availableGrowth:25,
+ current:()=>{x.attrs.add("data-zr-center-motion");return true;}};
+ assert.equal(x.api.paintContour(true),false);assert.equal(x.f.writes,writes);
+ x.attrs.clear();x.envelope={...x.envelope,current:()=>{x.api.scheduleContour();return true;}};
+ assert.equal(x.api.paintContour(true),false);assert.equal(x.f.writes,writes);
+});

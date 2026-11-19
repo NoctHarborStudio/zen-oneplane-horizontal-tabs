@@ -19,7 +19,7 @@
       a.tabs.every((x,i)=>{const y=b.tabs[i];return x.tab===y.tab&&x.group===y.group&&x.split===y.split&&x.pinned===y.pinned;});
   }
   function captureCenterTopology(expectedRow){
-    if(dead||expectedRow!==row||!row.isConnected||row.hasAttribute("data-op-dragging")||
+    if(dead||syncing||expectedRow!==row||!row.isConnected||row.hasAttribute("data-op-dragging")||
        !sameStripTopology(syncedTopology,readStripTopology()))return null;
     const native=syncedTopology;
     const selector=".oneplane-tab,.oneplane-split-group";
@@ -42,7 +42,8 @@
     };
   }
   function onCenterMotionEnd(event){
-    if(dead||syncing)return;
+    if(dead)return;
+    if(syncing){schedule();return;}
     // A changed native signature must reconcile in this task, before a
     // stale proxy/real-card handoff can reach the next paint.
     if(event?.detail?.owner!=="close"&&(event?.detail?.reconcile||!sameStripTopology(syncedTopology,readStripTopology()))){
@@ -51,8 +52,10 @@
     }else schedule();
   }
   function sync() {
+    if(dead)return;
+    if(syncing){schedule();return;}
+    if(frame)window.cancelAnimationFrame(frame);
     frame=0;
-    if(dead||syncing)return;
     syncing=true;
     try{syncNow();}finally{syncing=false;}
   }
@@ -183,7 +186,12 @@
   }
 
   function schedule() {
-    if (!dead && !frame) frame = window.requestAnimationFrame(sync);
+    if(dead||frame)return;
+    const id=window.requestAnimationFrame(()=>{
+      if(frame!==id)return;
+      frame=0;sync();
+    });
+    frame=id;
   }
   function revealSelectedInStrip(){
     if(dead||cascadeState!=="idle"||root.hasAttribute("data-zr-center-motion"))return;

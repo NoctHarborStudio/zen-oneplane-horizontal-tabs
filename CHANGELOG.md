@@ -1,3 +1,9 @@
+## 0.3.0-preview.108 — Geometry transaction audit
+
+- Reject geometry preflight during projection/contour reentry and reconcile native topology before capture, even before observer delivery. Preserve pending geometry work on rejection.
+- Guard height, partition and contour against phase, ownership and invalidation changes. Stop stale lane reparenting, retain exact projection frame ownership and revalidate the mirrored topology around force paint.
+- Preserve existing native animation and hit-region policies; add regression tests for reentry, stale callbacks, freeze and rejected preflight.
+
 ## 0.3.0-preview.107 — Resting toolbar geometry plan
 
 - Extract a pass-local collapsed budget and pure partition dimensions, calculated before lane moves and focus callbacks. Preserve the current widths, address reserve and overflow policy.

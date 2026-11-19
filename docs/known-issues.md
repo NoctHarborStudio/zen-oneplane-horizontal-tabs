@@ -1165,3 +1165,6 @@ A4.3c1 (preview.106): source-level preflight outcome propagation addressed; nati
 
 
 A4.3c2 (preview.107): NC4-004/013 partial source consolidation: pass-local pure budget/partition, stale plan rejection, native snapshot reuse, strict preflight freeze guard. Actual Split width measurement/post-placement centering retained pending native evidence. NC4-018/052 and all A4 native paint/performance gates remain open.
+
+
+A4.3-R (preview.108): NC4-004/013 integrated source audit adds strict topology/phase/revision fences, preserves rejected-force invalidations, exact sync RAF and stale lane guards. No native performance/paint claim. NC4-052/018 remain active A4.4; do not close native evidence gates.
