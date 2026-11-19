@@ -22,7 +22,7 @@ test("hover progress is registered once and controls equal-axis zoom and exact r
 
 test("Island zoom reserves the exact painted width without descending or revealing titles",async()=>{
  const css=await readFile(new URL("../src/styles/drag.css.part",import.meta.url),"utf8");
- const geometry=await readFile(new URL("../src/layout/geometry.js.part",import.meta.url),"utf8");
+ const geometry=await readFile(new URL("../src/algorithms/toolbar-center.mjs",import.meta.url),"utf8");
  const island=css.slice(css.indexOf("/* Island: grow"),css.indexOf("/* Keep the combined"));
  assert.ok(island.includes("--op-hover-slot:calc(var(--op-tab) * var(--op-hover-zoom))"));
  assert.ok(island.includes("scale:var(--op-hover-zoom);translate:0 0;"));
