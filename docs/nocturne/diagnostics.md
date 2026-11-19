@@ -212,3 +212,5 @@ Existing `disassembly.bypass` now also records `bookmark-preflight-failed` and `
 `assembly.watchdog` reports age and active phase flags on hard timeout; `assembly.skip` with insufficient-budget reports remaining/required milliseconds; `assembly.settle.error` and `assembly.late.error` report error class and terminal fail-open. No separate logger or private fields. Prelude orphan expiry prevents replay; the existing Center Motion gate timeout remains an orphan safety fallback.
 
 Preview.86: `assembly.skip` can include `stage: launch` or `resume`, `remaining` and `needed` for insufficient full-sequence budget; `assembly.late.skip` records insufficient late-effect budget without target identity. No additional sampling or timer.
+
+Preview.87: `assembly.epoch` reports `prepared`, `legacy` and `fromBoot`; nonzero legacy identifies owners without exact epoch support. `assembly.launch.error` / existing `assembly.resume.error` report failures before fail-open cleanup. No new sampling loop or payload.

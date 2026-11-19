@@ -1062,3 +1062,7 @@ A3.3 source checkpoint subject to canonical CI; native acceptance remains explic
 ### A3.4a — preview.86 timing budget
 
 MB-007/008/012: pure startup offsets and completion budgets extracted; late Boot handoff and late reveal are rejected when the full effect cannot fit the remaining budget. Shared document epoch, exact completion outcome, Address Cascade integration, Lab parity and native acceptance remain open. Do not mark MB3 complete.
+
+### A3.4b — preview.87 document epoch
+
+MB-007/008/012: current startup owners share one document epoch, including boot-disabled paths and late Home/chrome. Mixed legacy owners still use legacy play; native compositor behavior, unified finished/cancel outcome, Address Cascade and Lab parity remain open. No broad MB3 closure.

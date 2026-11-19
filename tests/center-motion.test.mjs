@@ -314,3 +314,18 @@ test("close consumer uses actual native commit predicate for both handles",()=>{
  const code=read("closing-animation.uc.mjs");
  assert.equal((code.match(/retainOnDispose:\(\)=>controller\.committing/g)||[]).length,2);
 });
+
+test("startup proxy epoch uses exact owned effects, rejects stale handle and does not call play",()=>{
+ const f=proxyFixture(),engine=f.mount(),handle=engine.start(f.row,{owner:"startup",paused:true});
+ const starts=[];handle.resumeAt(a=>starts.push(a));
+ assert.deepEqual(starts,f.effects);assert.ok(f.effects.every(a=>a.played===0));
+ handle.release();let stale=false;try{handle.resumeAt(()=>{throw Error("unexpected start");});}catch(e){stale=e.message==="center-epoch-stale";}
+ assert.equal(stale,true);assertProxyClean(f);
+});
+test("startup bookmark epoch is exact and setter errors reach Assembly",()=>{
+ const f=bookmarkFixture(),engine=f.mount(),handle=engine.bookmarks({owner:"startup",paused:true});
+ let failed=false;try{handle.resumeAt(()=>{throw Error("setter");});}catch(e){failed=e.message==="setter";}
+ assert.equal(failed,true);assert.equal(f.effects[0].played,0);
+ handle.release();let stale=false;try{handle.resumeAt(()=>{});}catch(e){stale=e.message==="bookmark-epoch-stale";}
+ assert.equal(stale,true);
+});

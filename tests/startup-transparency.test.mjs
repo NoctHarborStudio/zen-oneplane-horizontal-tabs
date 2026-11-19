@@ -23,7 +23,7 @@ test("startup uses only the explicit optional chrome boot layer, never a page la
 test("interruption samples current progress and settles before cleanup",()=>{
  const segment=source.slice(source.indexOf("function settle()"),source.indexOf("function interrupt("));
  const run=new Function(segment+
- 'let dead=false,playing=true,settling=false,bootPreparing=false,lateObserver=null,lateResize=null,lateFrame=0,timer=0;const reduced={matches:false},PHASE="phase",FADE="ease",root={setAttribute(){}},log=[];const a={cancel(){log.push("cancel");}},n={},complete=()=>{};const animations=new Map([[a,{n,frames:[{"--p":"0"},{"--p":"1"}],complete}]]);const window={getComputedStyle(){return {getPropertyValue(){return ".37"}}},setTimeout(fn,t){log.push(t);return 1},clearTimeout(){}};function play(n,f,d,t){log.push(f[0]["--p"],f[1]["--p"],t);return true}function finish(){log.push("finish")}function now(){return 0}function armFinish(t){log.push(t)}settle();settle();return log;');
+ 'let dead=false,playing=true,settling=false,bootPreparing=false,ownedTimeline=null,lateObserver=null,lateResize=null,lateFrame=0,timer=0;const reduced={matches:false},PHASE="phase",FADE="ease",root={setAttribute(){}},log=[];const a={cancel(){log.push("cancel");}},n={},complete=()=>{};const animations=new Map([[a,{n,frames:[{"--p":"0"},{"--p":"1"}],complete}]]);const window={getComputedStyle(){return {getPropertyValue(){return ".37"}}},setTimeout(fn,t){log.push(t);return 1},clearTimeout(){}};function play(n,f,d,t){log.push(f[0]["--p"],f[1]["--p"],t);return true}function finish(){log.push("finish")}function now(){return 0}function armFinish(t){log.push(t)}settle();settle();return log;');
  assert.deepEqual(run(),["cancel",".37","1",120,155]);
 });
 
@@ -107,12 +107,12 @@ test("boot waits for minimum visibility and a quiet readiness window, with hard 
 });
 test("all prepared effects remain paused until the boot handoff",()=>{
  const launch=source.slice(source.indexOf("function launch("),source.indexOf("function schedule(){"));
- assert.ok(launch.includes('timeline.paused=bootPreparing'));
- assert.ok(launch.includes('paused:bootPreparing'));
+ assert.ok(launch.includes('timeline.paused=true'));
+ assert.ok(launch.includes('paused:timeline.paused'));
  assert.ok(launch.includes('exitBoot(resume)'));
  assert.ok(launch.includes('armFinish()'));
- assert.ok(launch.includes('centerHandle?.resume?.();bookmarkHandle?.resume?.()'));
- assert.ok(source.includes('if(bootPreparing){a.pause();a.currentTime=0;}'));
+ assert.ok(launch.includes('resumePrepared(timeline)'));
+ assert.ok(source.includes('if(prepare){a.pause();a.currentTime=0;}'));
  assert.ok(source.includes('if(dead||boot!==overlay)return;'));
  const center=readFileSync(new URL("../src/core/center-motion.js.part",import.meta.url),"utf8");
  assert.ok(center.includes('if(paused){a.pause();a.currentTime=0;}'));
@@ -195,7 +195,7 @@ function foldFixture({mode="null"}={}){
  return new Function("mode",`
  let dead=false,centerHandle={},seen=new Set(),bootPreparing=true,scale=1;const MANAGED="managed",events=[];
  const attrs=new Map(),n={getAttribute:k=>attrs.get(k)??null,setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k)};
- const items={children:[n]},timeline={bookmarks:470};
+ const items={children:[n]},timeline={bookmarks:470,paused:true};
  const h={release(){events.push("release");}},engine={bookmarks(){events.push("fold");if(mode==="throw")throw Error("fold");if(mode==="replace")window.__nocturneCenterMotion={};return mode==="null"?null:h;}};
  const window={__nocturneCenterMotion:engine};function decision(e){events.push(e);}
  ${code}
@@ -378,4 +378,79 @@ test("late reveal uses one bounded completion plan or leaves the target ungated"
  assert.deepEqual(capped,{delay:0,length:240,finishAt:1105});
  assert.ok(source.includes('if(late&&!lateEffect)'));
  assert.ok(source.includes('extendFinish(lateEffect.finishAt)'));
+});
+
+test("initial effects use a single document epoch even when prepared at different times",()=>{
+ const code=source.slice(source.indexOf("  function bindStartupEpoch("),source.indexOf("  function launch("));
+ const run=new Function(`
+ let dead=false;const clock={currentTime:500},timeline={paused:true},ownedTimeline=timeline,starts=[],window={};
+ const effect=label=>({timeline:clock,playState:"paused",set startTime(value){starts.push([label,value]);}});
+ const direct=effect("direct"),tab=effect("tab"),bookmark=effect("bookmark"),home=effect("home");
+ const animations=new Map([[direct,{}]]);
+ const centerHandle={resumeAt(fn){clock.currentTime+=7;fn(tab);}},bookmarkHandle={resumeAt(fn){clock.currentTime+=9;fn(bookmark);}};
+ timeline.homeLease={resumeAt(fn){clock.currentTime+=13;fn(home);}};
+ const homeRegistry=null;
+ ${code}
+ bindStartupEpoch(timeline,clock);timeline.paused=false;
+ const legacy=resumePrepared(timeline);const elapsed=timeline.elapsed();
+ timeline.startEffect(effect("late"),elapsed);
+ return {starts,legacy,elapsed,epoch:timeline.epoch};
+ `);
+ assert.deepEqual(run(),{starts:[["direct",500],["tab",500],["bookmark",500],["home",500],["late",529]],legacy:0,elapsed:29,epoch:500});
+ assert.ok(source.includes("timeline.paused=true"));
+ assert.ok(source.includes("}else resume();"));
+});
+test("document epoch rejects inactive, foreign, cancelled and stale effects",()=>{
+ const code=source.slice(source.indexOf("  function bindStartupEpoch("),source.indexOf("  function resumePrepared("));
+ const run=new Function(`
+ let dead=false,ownedTimeline={paused:false},timeline=ownedTimeline,errors=[],writes=0;
+ const clock={currentTime:null};const effect={timeline:clock,playState:"paused",set startTime(v){writes++;}};
+ ${code}
+ const check=fn=>{try{fn();}catch(e){errors.push(e.message);}};
+ check(()=>bindStartupEpoch(timeline,clock));clock.currentTime=10;bindStartupEpoch(timeline,clock);
+ check(()=>timeline.startEffect({...effect,timeline:{}}));
+ check(()=>timeline.startEffect({...effect,playState:"idle"}));
+ check(()=>timeline.startEffect(effect,Infinity));
+ timeline.paused=true;check(()=>timeline.startEffect(effect));timeline.paused=false;
+ clock.currentTime=null;check(()=>timeline.startEffect(effect));clock.currentTime=20;
+ timeline.closed=true;check(()=>timeline.startEffect(effect));timeline.closed=false;
+ ownedTimeline={};check(()=>timeline.startEffect(effect));
+ return {errors,writes};
+ `);
+ assert.deepEqual(run(),{errors:["startup-timeline-inactive","startup-effect-timeline","startup-effect-timeline","startup-effect-timeline","startup-epoch-stale","startup-effect-timeline","startup-epoch-stale","startup-epoch-stale"],writes:0});
+});
+test("epoch resume stops after synchronous disposal and retains explicit legacy fallback",()=>{
+ const code=source.slice(source.indexOf("  function resumePrepared("),source.indexOf("  function launch("));
+ const run=new Function(`
+ let dead=false,ownedTimeline={paused:false},timeline=ownedTimeline,legacyCalls=0,homeCalls=0;
+ const animations=new Map(),homeRegistry={resumeStartup(){homeCalls++;}},window={__zenSharedHomeV1:homeRegistry};
+ const centerHandle={resume(){legacyCalls++;}},bookmarkHandle={resumeAt(){dead=true;}};
+ ${code}
+ let reason;try{resumePrepared(timeline);}catch(e){reason=e.message;}
+ return {reason,legacyCalls,homeCalls};
+ `);
+ assert.deepEqual(run(),{reason:"startup-epoch-stale",legacyCalls:1,homeCalls:0});
+});
+test("late Home uses its absolute delay against document epoch and never replays",()=>{
+ const home=readFileSync(new URL("../src/home/shared-home.js.part",import.meta.url),"utf8");
+ const code=home.slice(home.indexOf("  let startupRun="),home.indexOf("  function stopMotion()"));
+ const run=new Function(`
+ let open=true,dead=false,searchToken=null,mark=true,elapsed=300,delays=[],starts=0;
+ const panel={hasAttribute:()=>mark,removeAttribute(){mark=false;}};
+ const content={children:[0,1].map(()=>({animate(f,o){delays.push(o.delay);return {finished:new Promise(()=>{}),cancel(){}};}}))};
+ const win={performance:{now:()=>9999},matchMedia:()=>({matches:false})};function render(){}
+ ${code}
+ const timeline={start:0,scale:1,home:650,homeLength:330,paused:false,elapsed:()=>elapsed,startEffect(){starts++;}};
+ const lease=playStartupHome(timeline);lease.release();mark=true;elapsed=650;
+ const late=playStartupHome(timeline);
+ return {delays,starts,late,mark};
+ `);
+ assert.deepEqual(run(),{delays:[650,715],starts:2,late:null,mark:false});
+});
+
+test("late reveal uses document elapsed for its stage but performance time for the cap",()=>{
+ const p=startupTimeline(0,1);
+ const effect=startupLateEffect(p,0,1190,8000,400,590,440,300);
+ assert.deepEqual(effect,{delay:290,length:440,finishAt:1195});
+ assert.equal(startupLateEffect(p,0,1190,8000,400,590,440,Infinity),null);
 });

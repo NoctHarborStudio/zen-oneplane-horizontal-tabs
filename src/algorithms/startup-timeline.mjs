@@ -17,8 +17,9 @@ export function startupFits(plan,now,deadline,overhead=0){
 
 // A late target either has enough time to reach its resting frame or is
 // left ungated. Never schedule a minimum-length effect past the hard cap.
-export function startupLateEffect(plan,start,finishAt,deadline,now,delay,length){
-  const wait=Math.max(0,start+delay*plan.scale-now);
+export function startupLateEffect(plan,start,finishAt,deadline,now,delay,length,elapsed=now-start){
+  if(!Number.isFinite(elapsed))return null;
+  const wait=Math.max(0,delay*plan.scale-elapsed);
   const cap=Math.min(deadline,start+plan.lateLimit);
   const available=cap-now-wait-65;
   if(!Number.isFinite(available)||available<240)return null;

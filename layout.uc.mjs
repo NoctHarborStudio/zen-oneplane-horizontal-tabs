@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.86",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.87",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -671,6 +671,12 @@
     const restoreMark=(node,key,value)=>{if(value===null)node.removeAttribute(key);else node.setAttribute(key,value);};
     const handle={owner,retainOnDispose,count:0,finished:Promise.resolve(),
       resume(){if(!released)for(const a of running)try{a.play();}catch{}},
+      resumeAt(start){
+        for(const a of running){
+          if(released||dead||!current()||active!==handle)throw Error("center-epoch-stale");
+          start(a);
+        }
+      },
       seal(){if(!released)for(const a of running)try{a.finish();}catch{}},
       release(reason="release"){
         if(released)return;released=true;
@@ -778,6 +784,10 @@
     let a=null,released=false;
     const handle={owner,retainOnDispose,finished:Promise.resolve(),
       resume(){if(!released)try{a?.play();}catch{}},
+      resumeAt(start){
+        if(released||dead||!current()||activeBookmark!==handle||!a)throw Error("bookmark-epoch-stale");
+        start(a);
+      },
       seal(){if(!released)try{a?.finish();}catch{}},
       release(reason="release"){
         if(released)return;released=true;
@@ -1782,21 +1792,33 @@ function acquireZenHome(win, services) {
     if(startupRun)return startupRun.timeline===timeline?startupRun.lease:null;
     // A late native placeholder may still display Home normally, but
     // must not replay the startup wave after its scheduled stage began.
-    const elapsed=timeline.paused?0:Math.max(0,(win.performance?.now?.()??timeline.start)-timeline.start);
+    const elapsed=timeline.paused?0:timeline.elapsed?.()??Math.max(0,(win.performance?.now?.()??timeline.start)-timeline.start);
     if(timeline.closed||!timeline.paused&&elapsed>=timeline.home*timeline.scale){finishStartupHome();return null;}
     if(win.matchMedia("(prefers-reduced-motion: reduce)").matches||timeline.homeLease){finishStartupHome();return null;}
     const run={timeline,effects:[],lease:null,dirty:false};
-    const lease={resume(){if(startupRun===run)for(const a of run.effects)try{a.play();}catch{}},release(){finishStartupHome(run);}};
+    const lease={
+      resume(){if(startupRun===run)for(const a of run.effects)try{a.play();}catch{}},
+      resumeAt(start){
+        for(const a of run.effects){
+          if(startupRun!==run||timeline.closed)throw Error("home-epoch-stale");
+          start(a);
+        }
+      },
+      release(){finishStartupHome(run);}
+    };
     run.lease=lease;startupRun=run;timeline.homeLease=lease;
     try{
       const nodes=[...content.children];
       for(const [i,node] of nodes.entries()){
-        const delay=Math.max(0,(timeline.home+Math.min(i*65,195))*timeline.scale-elapsed);
+        // Current owners use the original absolute delay against the
+        // shared epoch. Legacy timelines retain their relative delay.
+        const delay=Math.max(0,(timeline.home+Math.min(i*65,195))*timeline.scale-(timeline.startEffect?0:elapsed));
         const a=node.animate([{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}],{delay,duration:timeline.homeLength*timeline.scale,easing:"cubic-bezier(.2,.75,.25,1)",fill:"both"});
         run.effects.push(a);a.finished.catch(()=>{});
         if(startupRun!==run){try{a.cancel();}catch{}return null;}
         if(timeline.closed){finishStartupHome(run);return null;}
         if(timeline.paused){a.pause();a.currentTime=0;}
+        else if(timeline.startEffect)timeline.startEffect(a);
         if(startupRun!==run)return null;
         if(timeline.closed){finishStartupHome(run);return null;}
       }

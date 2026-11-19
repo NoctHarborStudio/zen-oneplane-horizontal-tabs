@@ -251,6 +251,12 @@
     const restoreMark=(node,key,value)=>{if(value===null)node.removeAttribute(key);else node.setAttribute(key,value);};
     const handle={owner,retainOnDispose,count:0,finished:Promise.resolve(),
       resume(){if(!released)for(const a of running)try{a.play();}catch{}},
+      resumeAt(start){
+        for(const a of running){
+          if(released||dead||!current()||active!==handle)throw Error("center-epoch-stale");
+          start(a);
+        }
+      },
       seal(){if(!released)for(const a of running)try{a.finish();}catch{}},
       release(reason="release"){
         if(released)return;released=true;
@@ -358,6 +364,10 @@
     let a=null,released=false;
     const handle={owner,retainOnDispose,finished:Promise.resolve(),
       resume(){if(!released)try{a?.play();}catch{}},
+      resumeAt(start){
+        if(released||dead||!current()||activeBookmark!==handle||!a)throw Error("bookmark-epoch-stale");
+        start(a);
+      },
       seal(){if(!released)try{a?.finish();}catch{}},
       release(reason="release"){
         if(released)return;released=true;

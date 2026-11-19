@@ -1,3 +1,9 @@
+## 0.3.0-preview.87 — Startup document timeline epoch
+
+- Prepare initial Assembly, tab proxy, bookmark and Home effects paused, including boot-disabled startup; start exact acquired effects on one document timeline epoch.
+- Late Home and late chrome reveals use the shared document elapsed time; retain absolute watchdog and explicit legacy owner fallback.
+- Reject inactive/foreign timeline, cancelled/stale effects and duplicate resume; fail open on acquisition or epoch failure. Existing Fold trajectories and native commands unchanged.
+
 ## 0.3.0-preview.86 — Shared startup timing plan
 
 - Generate the existing Startup Animation entrypoint from a pure timing plan and the controller source.

@@ -327,3 +327,7 @@ Preview.84 canonical CI reported one outdated Home source assertion (540/541 pas
 Pure plan checks cover all 1,101 supported integer durations, strict launch/resume deadline and minimum late reveal budget. Generated Startup Animation identity checked by source contract. Full canonical CI and native Zen/Gecko remain separate gates; no shared document epoch or Lab parity claim.
 
 Candidate checks: 33/33 Startup Transparency fixture bodies PASS in isolated V8 with actual sources and mocked Node file/assert adapters; all eleven changed runtime scripts parse in V8. Existing generated Layout/Library/Library Services outputs match exact versioned source-fragment substitution and Startup output matches pure inline + controller. This is not full Node CI or native evidence.
+
+### Preview.87 document epoch
+
+Seven new regressions; 38/38 Startup Transparency and 34/34 Center Motion actual fixture bodies PASS in isolated V8. Verify equal initial startTime across direct/Tab/Bookmark/Home, distinct clock domains for late admission, inactive/foreign/idle/stale rejection, legacy path fencing and exact handles. Full Node CI, actual Gecko timeline/paint and mixed legacy order remain separate pending gates.

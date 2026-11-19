@@ -194,3 +194,7 @@ Prelude owns the initial cover and absolute expiry until adoption, then Assembly
 ### A3.4a — startup timing plan
 
 The generated Startup Animation entrypoint consumes the pure startup timing plan; admission and late reveal use one bounded completion budget. The controller still owns its mutable runtime epoch, effects and exact Home lease. Document timeline synchronization, completion outcome, Address Cascade and Lab parity remain open.
+
+### A3.4b — document epoch
+
+Assembly owns one finite document timeline epoch and supplies an exact startEffect callback to prepared direct, tab, bookmark and Home effects. Legacy handles without resumeAt retain their previous resume behavior; all native data owners and Fold geometry remain unchanged. Performance time bounds the watchdog; document time selects effect stage. The terminal outcome and Address Cascade remain A3.4c.
