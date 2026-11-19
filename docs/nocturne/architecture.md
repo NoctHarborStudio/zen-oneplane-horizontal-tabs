@@ -249,3 +249,8 @@ Layout owns the read-only resting slot metrics and Center Motion holds the lease
 ### A3.6b2 — mounted coordinate and terminal guard (preview.99)
 
 Center Motion owns the coordinate mapping and validates the actual mounted Fold layer against Layout's resting projection. Correct host origin; reject unsafe transforms, partial clipping and mismatch; verify the finished incoming pose before the existing handoff. Layout remains the geometry owner. No new scheduler. Post-release phase changes and actual Gecko paint remain pending.
+
+
+### A3.6-R — audited ownership and handoff (preview.100)
+
+Claim the existing Center Motion lock before any release validation and guard recursive invalidation. Layout owns geometry, including mode flags and existing split-slot/compact callbacks. The existing two-frame handoff supplies one lazy post-cleanup resting geometry sample; no new owner, observer or frame loop. Native visual/performance acceptance stays open; A4 will consolidate resting geometry and contour ownership.

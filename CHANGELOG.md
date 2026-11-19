@@ -1,3 +1,10 @@
+## 0.3.0-preview.100 — Center Motion handoff audit
+
+- Lock Center Motion before release validation and reject recursive invalidation/owner callbacks; retain native close and exact cleanup boundaries.
+- Extend the existing resting geometry lease to layout mode flags and existing slot-resize/mode callbacks.
+- Measure finished incoming Fold resting geometry after phase cleanup inside the existing two-frame handoff when diagnostics are enabled; cancel stale samples without touching successor marks.
+- Native paint/performance acceptance remains pending. Magnetic Bloom is still disabled.
+
 ## 0.3.0-preview.99 — Fold mounted coordinate and terminal guard
 
 - Correct Fold proxy and portal coordinates against the actual mounted layer origin; validate resting card and Split child rectangles before effect allocation.

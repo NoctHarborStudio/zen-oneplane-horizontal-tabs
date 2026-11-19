@@ -31,7 +31,9 @@
         const local=r?[r.left-rr.left,r.top-rr.top,r.width,r.height]:[];
         return {connected,parent:n.parentElement,offsetParent:n.offsetParent,metrics,scroll,local};
       });
-      return {view:viewport(),outer:[rr.width,rr.height],slots};
+      const flags=["data-op-show-island","data-op-island-tight","data-op-home-icon","data-op-overflow-row",
+        "data-op-adaptive-compact","data-op-bottom-plus"].map(k=>row.hasAttribute(k));
+      return {view:viewport(),outer:[rr.width,rr.height],slots,flags};
     };
     const finite=a=>a.every(Number.isFinite);
     const sane=s=>finite(s.view)&&s.view.every(v=>v>0)&&finite(s.outer)&&s.outer.every(v=>v>0)&&
@@ -43,6 +45,7 @@
       if(dead||!row.isConnected)return false;
       const after=measure();
       return sane(after)&&same(before.view,after.view)&&same(before.outer,after.outer,.5)&&
+        before.flags.every((v,i)=>v===after.flags[i])&&
         before.slots.every((a,i)=>{
           const b=after.slots[i];
           return a.connected===b.connected&&a.parent===b.parent&&(!a.connected||

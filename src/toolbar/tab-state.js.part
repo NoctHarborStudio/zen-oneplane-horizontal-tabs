@@ -23,6 +23,9 @@
       if (group) groups.add(group);
     }
     for (const group of groups) measureSplitGroup(group);
+    // Existing observer sees slot size changes missed by the toolbar
+    // observer. Validate once per delivery, only while Center owns motion.
+    checkCenterGeometry("slots");
   });
   const splitColors = new WeakMap();
   const splitPalette = ["#8eafff", "#74d6b6", "#d6a5ff", "#efba78", "#ed8fa9"];

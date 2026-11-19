@@ -387,3 +387,8 @@ Five new regression cases; 57/57 Center Motion fixture bodies PASS in isolated V
 ### Preview.99 — mounted Fold coordinate guard
 
 Preview.98 CI failed only the isolated window-resize fixture due to missing checkCenterGeometry dependency (624/625 Node); updated fixture asserts invalidation order and passes targeted execution. Four new regression cases, 61/61 Center Motion fixture bodies PASS in isolated V8: fractional host origin, translated vs scaled/rotated/perspective frame, mounted mismatch, partial/fully clipped scrollport and finished incoming mismatch. Native split geometry and post-release compositor/phase changes, observer overhead and fallback frequency not certified. Canonical CI pending; A3.6-R remains required.
+
+
+### Preview.100 — integrated Center Motion audit
+
+Preview.99 canonical CI PASS (629 Node, 15 Python and release/archive checks). Six new regressions; 67/67 Center Motion fixture bodies PASS in isolated V8: nested invalidation and start, release-validation/dispose reentry, stable/changed post-phase sample, stale/active-phase skip, mode flags and observer wiring, successor marks under second-RAF reentry. Canonical CI for preview.100 pending. This is source/fixture evidence only: native Gecko first painted frame, clipping, interaction, mixed Sine ownership and matched observer/performance remain open. No Bloom activation or native acceptance.

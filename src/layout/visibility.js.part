@@ -149,6 +149,7 @@
     if (!hoverSupported()) { clearHover(); clearTabHover(); releaseAddressHold(); clearAddressAnimation(); addressWasOpen = false; }
     else if (nativeInlineOpen(addressBar()) && !addressTransition && !addressSettling) addressWidths();
     reconcilePanel();
+    checkCenterGeometry("mode");
     scheduleGeometry();
   }
 

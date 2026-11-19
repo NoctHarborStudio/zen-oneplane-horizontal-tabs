@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.99",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.100",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -788,7 +788,7 @@ function startupBloomAssemblyPlan(start,scale){
     try{if(b)win.cancelAnimationFrame(b);}catch{}
     if(handoffOwned){handoffOwned=false;if(current())root.removeAttribute("data-zr-center-handoff");}
   }
-  function holdHandoff(){
+  function holdHandoff(sample=null){
     finishHandoff();if(dead||!current())return;
     const generation=handoffGeneration;
     handoffOwned=true;root.setAttribute("data-zr-center-handoff","true");
@@ -796,7 +796,11 @@ function startupBloomAssemblyPlan(start,scale){
     try{
       handoffFrame=win.requestAnimationFrame(()=>{
         if(!valid())return;handoffFrame=0;
-        try{handoffFrame2=win.requestAnimationFrame(()=>{if(valid())finishHandoff();});}catch{finishHandoff();}
+        try{handoffFrame2=win.requestAnimationFrame(()=>{
+          if(!valid())return;
+          handoffFrame2=0;
+          try{sample?.();}finally{if(valid())finishHandoff();}
+        });}catch{if(valid())finishHandoff();}
       });
     }catch{finishHandoff();}
   }
@@ -841,12 +845,12 @@ function startupBloomAssemblyPlan(start,scale){
   function invalidateTopology(row){
     const handle=active;
     if(!handle||handle.row!==row||handle.owner==="close"||handle.validateNativeTopology())return false;
-    handle.invalidateTopology();return true;
+    return handle.invalidateTopology();
   }
   function invalidateGeometry(row,stage){
     const handle=active;
     if(!handle||handle.row!==row||handle.owner==="close"||handle.validateGeometry(stage))return false;
-    handle.invalidateTopology("geometry");return true;
+    return handle.invalidateTopology("geometry");
   }
   function acquireTabs(row,{owner,direction="in",duration=520,delay=0,paused=false,retainOnDispose=null,observeEffect=null,bloomTimeline=null,onTopologyInvalidated=null}={},bloomStage=null,attempt=null){
     const explicitOptions={owner,direction,paused,observeEffect,bloomTimeline};
@@ -862,7 +866,7 @@ function startupBloomAssemblyPlan(start,scale){
     let host=null,cards=[],rr,hub,measuring=false,measuringMark=null,ownerMark=null,ownerWritten=false,modeMark=null,modeWritten=false,committed=false,released=false,epochStarted=false;
     const exact=()=>!released&&!dead&&current()&&active===handle&&
       (!bloomTimeline||win.__nocturneStartupTimeline===bloomTimeline);
-    let topologyInvalid=false,geometryInvalid=false,geometry;
+    let topologyInvalid=false,geometryInvalid=false,invalidating=false,geometry;
     const geometryCurrent=(stage="checkpoint")=>{
       if(geometryInvalid)return false;
       let valid=false;
@@ -891,6 +895,31 @@ function startupBloomAssemblyPlan(start,scale){
       trace("center.fold.terminal",{id,owner,count:effects.length,maxError:Number.isFinite(error)?error:null,valid:false},{flush:true});
       return false;
     }
+    function sampleRestingHandoff(){
+      // The existing second RAF runs after the caller removes its phase
+      // markers and Layout has had a frame to reconcile. Diagnostic only:
+      // never freeze or change the authoritative layout to fit a proxy.
+      trace("center.fold.handoff",()=>{
+        const phase=["data-zr-startup-phase","data-zr-workspace-phase","data-zr-closing",
+          OWNER,"customizing"].some(k=>root.hasAttribute(k))||
+          root.getAttribute("inDOMFullscreen")==="true"||root.getAttribute("inFullscreen")==="true";
+        if(phase||document.getElementById("oneplane-tabs")!==row||!row.isConnected||
+          layout&&win.__oneplaneLayoutController!==layout)
+          return {id,owner,count:cards.length,status:"not-comparable"};
+        const after=row.getBoundingClientRect();
+        if(!(after.width>0&&after.height>0))return {id,owner,count:cards.length,status:"not-comparable"};
+        let error=0;
+        for(const c of cards){
+          if(!c.n.isConnected||!row.contains(c.n))return {id,owner,count:cards.length,status:"membership-changed"};
+          const r=c.n.getBoundingClientRect();
+          error=Math.max(error,rectError({left:r.left-after.left,top:r.top-after.top,width:r.width,height:r.height},
+            {left:c.r.left-rr.left,top:c.r.top-rr.top,width:c.r.width,height:c.r.height}));
+        }
+        const rowShift=Math.hypot(after.left-rr.left,after.top-rr.top);
+        return {id,owner,count:cards.length,status:error<=GEOMETRY_EPS?"local-stable":"geometry-changed",
+          maxError:Number.isFinite(error)?error:null,rowShift:Number.isFinite(rowShift)?rowShift:null};
+      });
+    }
     const projectionCurrent=()=>topologyCurrent()&&geometryCurrent()&&terminalCurrent();
     const preparing=()=>exact()&&eligible()&&!topologyInvalid&&!geometryInvalid;
     const restoreMark=(node,key,value)=>{if(value===null)node.removeAttribute(key);else node.setAttribute(key,value);};
@@ -901,17 +930,20 @@ function startupBloomAssemblyPlan(start,scale){
       validateNativeTopology(){return !released&&topologyCurrent();},
       validateGeometry(stage){return !released&&geometryCurrent(stage);},
       invalidateTopology(reason="topology"){
-        if(released)return;
-        if(!topologyInvalid){
-          topologyInvalid=true;
-          if(reason==="topology")trace("center.topology.invalidate",{id,owner,mode:handle.mode,count:cards.length},{flush:true});
-        }
-        // During acquisition the caller has not yet received this handle.
-        // Let the existing setup rollback retire it, without reentering
-        // an Assembly or Workspace that has not published ownership.
-        if(!committed||motionBusy)return;
-        try{onTopologyInvalidated?.();}catch(error){trace("center.topology.error",{owner,name:error?.name},{flush:true});}
-        finally{if(!released)handle.release(reason==="geometry"?"geometry-changed":"topology-changed");}
+        if(released||invalidating||active!==handle||!current())return false;
+        const first=!topologyInvalid;
+        topologyInvalid=true;
+        const wasBusy=motionBusy;motionBusy=true;invalidating=true;
+        try{
+          if(first&&reason==="topology")trace("center.topology.invalidate",{id,owner,mode:handle.mode,count:cards.length},{flush:true});
+          // Setup invalidation is sticky; the acquisition will roll back.
+          // A busy sibling surface may defer notification until the next
+          // checkpoint. Never call the owner twice under nested callbacks.
+          if(!committed||wasBusy)return true;
+          try{if(exact())onTopologyInvalidated?.();}catch(error){trace("center.topology.error",{owner,name:error?.name},{flush:true});}
+          finally{if(!released)handle.release(reason==="geometry"?"geometry-changed":"topology-changed");}
+          return true;
+        }finally{invalidating=false;motionBusy=wasBusy;drainDispose();}
       },
       resume(){if(bloomTimeline)throw Error("center-bloom-requires-epoch");if(!released)for(const a of running)try{a.play();}catch{}},
       resumeAt(start){
@@ -929,12 +961,22 @@ function startupBloomAssemblyPlan(start,scale){
       release(reason="release"){
         if(released)return;
         released=true;
-        // Claim release before any validation/diagnostic callback can reenter.
-        const reconcile=committed&&owner!=="close"&&!projectionCurrent();
+        // Claim both the handle and engine before validation/trace can
+        // reenter start/dispose. No successor may acquire our live marks.
         const wasBusy=motionBusy;motionBusy=true;
-        let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
+        let failed=0,reconcile=false;const step=fn=>{try{fn();}catch{failed++;}};
         try{
-          if(committed&&!dead&&current())step(holdHandoff);
+          if(committed&&owner!=="close"){
+            reconcile=true;
+            step(()=>{reconcile=!projectionCurrent();});
+          }
+          if(committed&&!dead&&current()){
+            step(()=>{
+              const sample=!reconcile&&!bloomStage&&direction==="in"&&running.length&&
+                running.every(a=>a.playState==="finished")?sampleRestingHandoff:null;
+              holdHandoff(sample);
+            });
+          }
           for(const a of running){
             // A failed seek may replace the promise that was observed at
             // acquisition. Retire the current one too, before cancelling.
@@ -6941,7 +6983,9 @@ function installTabStrip() {
         const local=r?[r.left-rr.left,r.top-rr.top,r.width,r.height]:[];
         return {connected,parent:n.parentElement,offsetParent:n.offsetParent,metrics,scroll,local};
       });
-      return {view:viewport(),outer:[rr.width,rr.height],slots};
+      const flags=["data-op-show-island","data-op-island-tight","data-op-home-icon","data-op-overflow-row",
+        "data-op-adaptive-compact","data-op-bottom-plus"].map(k=>row.hasAttribute(k));
+      return {view:viewport(),outer:[rr.width,rr.height],slots,flags};
     };
     const finite=a=>a.every(Number.isFinite);
     const sane=s=>finite(s.view)&&s.view.every(v=>v>0)&&finite(s.outer)&&s.outer.every(v=>v>0)&&
@@ -6953,6 +6997,7 @@ function installTabStrip() {
       if(dead||!row.isConnected)return false;
       const after=measure();
       return sane(after)&&same(before.view,after.view)&&same(before.outer,after.outer,.5)&&
+        before.flags.every((v,i)=>v===after.flags[i])&&
         before.slots.every((a,i)=>{
           const b=after.slots[i];
           return a.connected===b.connected&&a.parent===b.parent&&(!a.connected||
@@ -7285,6 +7330,7 @@ function installTabStrip() {
     if (!hoverSupported()) { clearHover(); clearTabHover(); releaseAddressHold(); clearAddressAnimation(); addressWasOpen = false; }
     else if (nativeInlineOpen(addressBar()) && !addressTransition && !addressSettling) addressWidths();
     reconcilePanel();
+    checkCenterGeometry("mode");
     scheduleGeometry();
   }
 
@@ -7313,6 +7359,9 @@ function installTabStrip() {
       if (group) groups.add(group);
     }
     for (const group of groups) measureSplitGroup(group);
+    // Existing observer sees slot size changes missed by the toolbar
+    // observer. Validate once per delivery, only while Center owns motion.
+    checkCenterGeometry("slots");
   });
   const splitColors = new WeakMap();
   const splitPalette = ["#8eafff", "#74d6b6", "#d6a5ff", "#efba78", "#ed8fa9"];

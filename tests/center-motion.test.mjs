@@ -36,7 +36,7 @@ test("proxies isolate chrome mirrors from scroll clips and native selectors",()=
  assert.ok(source.includes('host.inert=true'));
  assert.ok(source.includes('cloneNode(true)'));
  assert.ok(source.includes('host.remove()'));
- assert.ok(source.includes('holdHandoff()'));
+ assert.ok(source.includes('holdHandoff(sample)'));
  assert.ok(read("chrome.css").includes("data-zr-center-handoff"));
 });
 test("all three lifecycle controllers use the same window engine",()=>{
@@ -211,6 +211,8 @@ function proxyFixture(){
  function node(kind="div",r=rect){
   const attrs=new Map(),listeners=new Map();
   const n={kind,style:{setProperty(){}},children:[],parentNode:null,hidden:false,complete:false,naturalWidth:0,
+   get parentElement(){return this.parentNode;},get isConnected(){return this===row||!!this.parentNode;},
+   contains(n){return this===n||this.children.some(c=>c.contains(n));},
    get attributes(){return [...attrs.keys()].map(name=>({name}));},
    classList:{contains:k=>kind==="card"&&k==="oneplane-tab"},matches:k=>kind==="img"&&k===".oneplane-tab-icon img",
    closest:()=>null,hasAttribute:k=>attrs.has(k),getAttribute:k=>attrs.get(k)??null,
@@ -226,7 +228,8 @@ function proxyFixture(){
       return {left:x,top:y,right:x+w,bottom:y+h,width:w,height:h};
     }
     const s=bloomValues(this).scale,dx=(1-s)*r.width/2,dy=(1-s)*r.height/2;
-    return {left:r.left+dx,right:r.right-dx,top:r.top+dy,bottom:r.bottom-dy,width:r.width*s,height:r.height*s};
+    const shift=kind==="card"&&this.parentNode===list?fault.cardShift||0:0;
+    return {left:r.left+dx+shift,right:r.right-dx+shift,top:r.top+dy,bottom:r.bottom-dy,width:r.width*s,height:r.height*s};
    },getAnimations(){return effects.filter(a=>a.node===this&&!a.cancelled);},querySelector(k){return kind==="row"&&k===".oneplane-tab-list"?list:null;},
    querySelectorAll(k){if(kind==="list"&&k===".oneplane-tab,.oneplane-split-group")return this.children;
     if(k==="*")return this.children.flatMap(c=>[c,...c.querySelectorAll("*")]);return [];},
@@ -558,10 +561,11 @@ function geometryFixture(mode="fold"){
    offsetWidth:w,offsetHeight:30,clientWidth:w,clientHeight:30,scrollLeft:0,scrollTop:0,scrollWidth:w,scrollHeight:30,
    dx:0,scale:1,getBoundingClientRect(){return {left:this.offsetLeft+this.dx,top:this.offsetTop,width:this.offsetWidth*this.scale,height:30};}});
  const row=node(0,500),list=node(),leftLane=node(),rightLane=node(),bottomLane=node(),island=node(),plus=node(),a=node(10,30),b=node(50,30);
+ const flags=new Set();row.hasAttribute=k=>flags.has(k);
  for(const n of [list,leftLane,rightLane,bottomLane,island,plus,a,b]){n.parentElement=row;n.offsetParent=row;}
  bottomLane.isConnected=false;list.querySelectorAll=()=>[a,b];
  function captureCenterGeometry${code}
- return {row,list,leftLane,rightLane,bottomLane,island,plus,a,b,window,capture:mode=>captureCenterGeometry(row,mode)};
+ return {row,list,leftLane,rightLane,bottomLane,island,plus,a,b,window,flags,capture:mode=>captureCenterGeometry(row,mode)};
  `);
  const f=run();return {...f,valid:f.capture(mode)};
 }
@@ -641,4 +645,54 @@ test("Fold checks terminal incoming pose and invalidates a changed coordinate fr
  h.seal();assert.ok(h.validateTopology());f.fault.proxyX=1;assert.equal(h.validateTopology(),false);h.release();assertProxyClean(f);
  const g=proxyFixture(),b=g.mount().start(g.row,{owner:"workspace"});assert.ok(b);g.fault.rowTransform="matrix(2,0,0,2,0,0)";
  assert.equal(b.validateTopology(),false);b.release();assertProxyClean(g);
+});
+
+test("Center invalidation notifies once under diagnostic and owner callback reentry",()=>{
+ const f=proxyFixture();let valid=true,calls=0,nested=[],successor="unset";
+ f.window.__oneplaneLayoutController={captureCenterTopology:()=>()=>valid};
+ const engine=f.mount();
+ f.window.__nocturneTrace=(event)=>{if(event==="center.topology.invalidate"){
+  nested.push(engine.invalidateTopology(f.row));successor=engine.start(f.row,{owner:"workspace"});
+ }};
+ const h=engine.start(f.row,{owner:"startup",onTopologyInvalidated:()=>{calls++;nested.push(engine.invalidateTopology(f.row));}});
+ assert.ok(h);valid=false;assert.equal(engine.invalidateTopology(f.row),true);
+ assert.equal(calls,1);assert.deepEqual(nested,[false,false]);assert.equal(successor,null);assertProxyClean(f);
+});
+test("Center release locks engine before geometry diagnostics and defers disposal",()=>{
+ const f=proxyFixture();let valid=true,nested="unset";
+ f.window.__oneplaneLayoutController={captureCenterGeometry:()=>()=>valid};
+ const engine=f.mount(),h=engine.start(f.row,{owner:"startup"});assert.ok(h);
+ f.window.__nocturneTrace=event=>{if(event==="center.geometry.invalidate"){nested=engine.start(f.row,{owner:"workspace"});engine.dispose();}};
+ valid=false;h.release();assert.equal(nested,null);assert.equal(f.window.__nocturneCenterMotion,undefined);assertProxyClean(f);
+});
+test("finished Fold handoff samples actual resting layout after phase cleanup in existing frames",()=>{
+ for(const changed of [false,true]){
+  const f=proxyFixture(),logs=[];f.window.__nocturneTrace=(event,data)=>{if(event==="center.fold.handoff")logs.push(data());};
+  const h=f.mount().start(f.row,{owner:"startup"});assert.ok(h);h.seal();h.release();
+  assert.equal(logs.length,0);assert.equal(f.frames.size,1);
+  if(changed)f.fault.cardShift=2;
+  for(let i=0;i<2;i++){const [key,fn]=[...f.frames][0];f.frames.delete(key);fn();}
+  assert.equal(logs.length,1);assert.equal(logs[0].status,changed?"geometry-changed":"local-stable");
+  assert.equal(logs[0].maxError,changed?2:0);assert.equal(f.frames.size,0);assertProxyClean(f);
+ }
+});
+test("post-release diagnostic never samples a superseded or still phased handoff",()=>{
+ const f=proxyFixture(),logs=[];f.window.__nocturneTrace=(event,data)=>{if(event==="center.fold.handoff")logs.push(data());};
+ const engine=f.mount(),h=engine.start(f.row,{owner:"startup"});h.seal();h.release();
+ const stale=[...f.frames.values()][0];const next=engine.start(f.row,{owner:"workspace"});next.seal();next.release();
+ stale();assert.equal(logs.length,0);f.root.setAttribute("data-zr-workspace-phase","in");
+ for(let i=0;i<2;i++){const [key,fn]=[...f.frames][0];f.frames.delete(key);fn();}
+ assert.equal(logs.length,1);assert.equal(logs[0].status,"not-comparable");assertProxyClean(f);
+});
+test("resting lease detects layout mode flags and existing slot observer validates geometry",()=>{
+ const f=geometryFixture();assert.ok(f.valid());f.flags.add("data-op-overflow-row");assert.equal(f.valid(),false);
+ assert.ok(read("src/toolbar/tab-state.js.part").includes('checkCenterGeometry("slots")'));
+ assert.ok(read("src/layout/visibility.js.part").includes('checkCenterGeometry("mode")'));
+});
+test("diagnostic reentry during second handoff frame cannot remove successor marks",()=>{
+ const f=proxyFixture(),engine=f.mount();let b;
+ f.window.__nocturneTrace=(event,data)=>{if(event==="center.fold.handoff"){data();b=engine.start(f.row,{owner:"workspace"});}};
+ const a=engine.start(f.row,{owner:"startup"});a.seal();a.release();
+ for(let i=0;i<2;i++){const [key,fn]=[...f.frames][0];f.frames.delete(key);fn();}
+ assert.ok(b);assert.equal(f.root.getAttribute(ownerMark),"workspace");assert.equal(f.row.children.length,2);b.release();assertProxyClean(f);
 });

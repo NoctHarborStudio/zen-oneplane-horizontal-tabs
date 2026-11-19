@@ -1122,3 +1122,8 @@ NC4-048 / MB6: source guard for same-topology viewport, DPI, scrolling, layout-s
 ### A3.6b2 — preview.99 mounted Fold geometry
 
 NC4-048 / MB6: mounted host origin corrected, resting outer/Split-part comparisons and terminal incoming check added. Unsupported partial clipping or nontranslation frame bypasses Fold, not a new full-clipping animation. Preview.98 fixture failure repaired. Actual post-release native painted parity and performance, including fallback frequency in overflow, remain open.
+
+
+### A3.6-R — preview.100 handoff audit
+
+NC4-048: source reentry protection and existing handoff post-phase geometry diagnostic added; not proof of compositor equivalence. Geometry lease now observes strip mode flags and existing split-slot/mode callbacks. Actual first paint, fallback frequency for partial clips, observer overhead and native interactions remain open. NC4-054 mixed bookmark-owner ordering and NC4-060 Address topology remain open native/A4/A6 dependencies. Proceed to A4 source work only after CI; Bloom stays disabled.

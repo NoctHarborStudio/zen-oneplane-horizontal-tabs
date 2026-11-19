@@ -63,3 +63,8 @@ The Layout projection lease adds viewport/DPI, row/lane/Island/slot metrics and 
 ### A3.6b2 — mounted Fold geometry (preview.99)
 
 Correct the absolute host origin for proxies and portal; preflight actual unanimated outer and paired Split part rectangles. Reject partial scrollport/portal clips and nontranslation frames rather than duplicate incorrect pixels. Compare finished incoming Fold geometry and alpha before handoff. Existing native/visual fallback is used when unsupported. No new timer, observer, owner or trajectory loop. Actual post-release native paint and performance remain open; Bloom disabled.
+
+
+### A3.6-R — handoff source audit (preview.100)
+
+The engine lock is claimed before release validation; nested invalidation/notification and diagnostic reentry cannot start a successor or release it. Existing slot/mode callbacks check the extended strip mode geometry lease. A lazy `center.fold.handoff` sample in the existing second RAF compares finished incoming Fold's captured row-local geometry with surviving real cards after external phase cleanup. It records row displacement separately, cancels on supersession, and is not a compositor measurement. Partial clipping fallback retained. Actual native paint, overhead and mixed ownership remain open; Bloom disabled.
