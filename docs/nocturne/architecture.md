@@ -259,3 +259,10 @@ Claim the existing Center Motion lock before any release validation and guard re
 ### A4.1 — Shared contour geometry (preview.101)
 
 Existing contour algorithm now owns pure preferences, visible and stable envelope geometry, deterministic cache key and SVG generation. Layout consumes visible policy and commits its cache after successful render/write, rolling back partial CSS values. Magnetic Bookmarks still owns its legacy stable override until an exact provider lease and explicit selection policy are implemented. Distinct envelope policies are preserved; one renderer is the target, not yet the production state. Native geometry/hit-region and performance gates remain open.
+
+
+## Active scope correction — 2026-11-19
+
+Nocturne is the only supported installed package. The separate legacy Zen Refined mod has been removed from the development setup; concurrent installation, Refined-first registry ownership, and maintaining standalone Refined runtime compatibility are no longer development or acceptance requirements. Earlier references to coexistence gates are historical and superseded. Preserve imported features, existing preference keys and native data, source provenance and safe lifecycle ownership within Nocturne. Sine entrypoint order, hot reload, disable/unload, missing/partial entrypoints, and multi-window remain mandatory. Do not silently remove another installed mod or claim coexistence support.
+
+For A4.2, use a single Layout-owned renderer with Magnetic Bookmarks as an internal geometry provider. Remove Refined-only coexistence obligations, not imported functionality or Nocturne lifecycle/visual acceptance. Previous migration and audit records remain historical evidence.

@@ -19,7 +19,7 @@ A unified UI modification for [Zen Browser](https://zen-browser.app/), combining
 
 ## Upgrade from OnePlane + Zen Refined
 
-Keep OnePlane installed; disable the separate Zen Refined mod in Sine **before** updating. Restart Zen after disabling to release legacy controllers and preference ownership. Update OnePlane through Sine; the same entry becomes Nocturne. Restart and verify. Existing preference names and native data remain unchanged by the migration. Do not run legacy Refined alongside Nocturne: coexistence is not validated. Prefer disable rather than delete until rollback has been tested.
+Keep OnePlane installed; disable the separate Zen Refined mod in Sine **before** updating. Restart Zen after disabling to release legacy controllers and preference ownership. Update OnePlane through Sine; the same entry becomes Nocturne. Restart and verify. Existing preference names and native data remain unchanged by the migration. Nocturne is the supported standalone package; the separate Zen Refined mod is not required and concurrent installation is unsupported. Users migrating from the old package must disable it and restart first. Preserve the old package only if needed for an explicitly tested rollback.
 
 Install in a disposable profile first. Sine unpublished GitHub source:
 

@@ -4,6 +4,8 @@
 
 ## 1. Контекст
 
+- Nocturne — единственный поддерживаемый установленный пакет. Отдельный Zen Refined больше не используется и удалён из рабочей среды. Не проектируй совместную установку, Refined-first fallback или standalone Refined как обязательные сценарии. Исторические требования coexistence в документах отменены этим правилом. Сохраняй встроенные функции, существующие ключи prefs, native data, provenance и защиту от произвольного порядка Sine-скриптов самого Nocturne, hot reload, disable/unload, частичной загрузки и multi-window. Не удаляй чужие моды автоматически.
+
 - Repo: NoctHarborStudio/zen-oneplane-horizontal-tabs; branch: preview, если пользователь не указал другую. В начале нового чата установи актуальные repo/branch/HEAD, версию из package.json/theme.json и целевые Zen/Sine из README.md.
 - Полностью прочитай этот AGENTS.md, применимые вложенные AGENTS.md и ForAI/Instructions/ при наличии. Изучи актуальный контекст: [Architecture](docs/nocturne/architecture.md), [Migration Pipeline](docs/nocturne/migration.md), [Known Issues](docs/known-issues.md), [Validation](docs/nocturne/validation.md), [Roadmap](docs/roadmap.md), [Source Layout](src/README.md), [Diagnostics](docs/nocturne/diagnostics.md). По задаче прочитай профильный owner-документ и активный код.
 - Через каждые пять содержательных рабочих ответов перечитывай инструкции и актуальный контекст, при смене задачи, потере контекста или существенном изменении HEAD — сразу. Текущий код важнее архивов и отчётов; RFC/план не является доказательством реализации.

@@ -1132,3 +1132,10 @@ NC4-048: source reentry protection and existing handoff post-phase geometry diag
 ### A4.1 — preview.101 contour contract
 
 NC4-001: shared pure contour geometry/prefs/key now consumed by Layout's visible mode; stable policy prepared with parity fixtures, legacy bookmark override still active. NC4-053: ordinary cache commit after rendering and both style writes, best-effort rollback on partial failure. Legacy stable cache defect remains until A4.2. NC4-004/013/018/052 remain A4 geometry and hit-region work; no native performance/visual acceptance claimed.
+
+
+## Active scope correction — 2026-11-19
+
+Nocturne is the only supported installed package. The separate legacy Zen Refined mod has been removed from the development setup; concurrent installation, Refined-first registry ownership, and maintaining standalone Refined runtime compatibility are no longer development or acceptance requirements. Earlier references to coexistence gates are historical and superseded. Preserve imported features, existing preference keys and native data, source provenance and safe lifecycle ownership within Nocturne. Sine entrypoint order, hot reload, disable/unload, missing/partial entrypoints, and multi-window remain mandatory. Do not silently remove another installed mod or claim coexistence support.
+
+For A4.2, use a single Layout-owned renderer with Magnetic Bookmarks as an internal geometry provider. Remove Refined-only coexistence obligations, not imported functionality or Nocturne lifecycle/visual acceptance. Previous migration and audit records remain historical evidence.

@@ -141,3 +141,10 @@ Docs and infrastructure-only commits do not change runtime version. Every instal
 ## 0.4.0 cross-feature stabilization
 
 See the [0.4.0 architecture audit and pipeline](pipeline-0.4.0.md) for the active cross-feature risk register, ownership inventory, sequencing and exit gates. This is planning, not a runtime release; preserve existing MB/Library/Downloads and native validation contracts. Recheck current preview HEAD before implementation.
+
+
+## Active scope correction — 2026-11-19
+
+Nocturne is the only supported installed package. The separate legacy Zen Refined mod has been removed from the development setup; concurrent installation, Refined-first registry ownership, and maintaining standalone Refined runtime compatibility are no longer development or acceptance requirements. Earlier references to coexistence gates are historical and superseded. Preserve imported features, existing preference keys and native data, source provenance and safe lifecycle ownership within Nocturne. Sine entrypoint order, hot reload, disable/unload, missing/partial entrypoints, and multi-window remain mandatory. Do not silently remove another installed mod or claim coexistence support.
+
+For A4.2, use a single Layout-owned renderer with Magnetic Bookmarks as an internal geometry provider. Remove Refined-only coexistence obligations, not imported functionality or Nocturne lifecycle/visual acceptance. Previous migration and audit records remain historical evidence.

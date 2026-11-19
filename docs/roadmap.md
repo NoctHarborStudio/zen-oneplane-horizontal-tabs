@@ -186,3 +186,10 @@ Native moz-icon artwork refreshes on completion. Shared toolbar/latest and recen
 ## Nocturne — approved Magnetic Bloom startup workstream
 
 Current baseline: 0.3.0-preview.40. User chose Startup Motion Lab option 01. Startup lifecycle and readiness stabilization must precede visual implementation: MB0 baseline -> MB1 ownership -> MB2 readiness -> MB3 shared timing -> MB4 visual engine -> MB5 Home choreography -> MB6 atomic handoff -> MB7 native validation. MB8 (pre-Sine/native flash) is a separate investigation. See [authoritative migration pipeline B.7](nocturne/migration.md#b7-magnetic-bloom-startup-stabilization-approved), [known issues](known-issues.md#nocturne--magnetic-bloom-startup-audit-2026-11-17) and [validation gates](nocturne/validation.md#magnetic-bloom-startup-gates). Do not duplicate the detailed task plan here. No implementation or new release in this planning update; preserve existing Library, Downloads and horizontal feature workstreams.
+
+
+## Active scope correction — 2026-11-19
+
+Nocturne is the only supported installed package. The separate legacy Zen Refined mod has been removed from the development setup; concurrent installation, Refined-first registry ownership, and maintaining standalone Refined runtime compatibility are no longer development or acceptance requirements. Earlier references to coexistence gates are historical and superseded. Preserve imported features, existing preference keys and native data, source provenance and safe lifecycle ownership within Nocturne. Sine entrypoint order, hot reload, disable/unload, missing/partial entrypoints, and multi-window remain mandatory. Do not silently remove another installed mod or claim coexistence support.
+
+For A4.2, use a single Layout-owned renderer with Magnetic Bookmarks as an internal geometry provider. Remove Refined-only coexistence obligations, not imported functionality or Nocturne lifecycle/visual acceptance. Previous migration and audit records remain historical evidence.
