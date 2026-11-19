@@ -39,7 +39,7 @@
     const group = tab?.group;
     return group?.hasAttribute("split-view-group") ? group : null;
   }
-  function isSplit(tab) { return Boolean(tab?.splitView || tab?.hasAttribute("split-view") || splitGroup(tab)); }
+  function isSplit(tab, group=undefined) { return Boolean(tab?.splitView || tab?.hasAttribute("split-view") || (group===undefined?splitGroup(tab):group)); }
   function unsplitTab(tab) {
     const owner = tabOwner(tab);
     if (!isSplit(tab)) return true;

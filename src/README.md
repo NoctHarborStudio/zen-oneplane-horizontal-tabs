@@ -42,3 +42,6 @@ A4.3b: geometry coordinator uses CENTER/HEIGHT/CONTOUR bits and exact callback t
 
 
 A4.3c1: synchronous geometry preflight returns a versioned success boolean; active Startup/Workspace consume rejection and release their existing visual gates. Resting partition extraction remains A4.3c2.
+
+
+A4.3c2: `src/algorithms/toolbar-center.mjs` owns pure resting budget and partition metrics (imports existing island-boundary/tab-overflow algorithms; build order already satisfies dependencies). Layout measures/applies; tab-sync projects from its native snapshot. No new runtime entry or persistent geometry cache. A4.3-R next.

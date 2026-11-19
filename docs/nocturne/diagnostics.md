@@ -297,3 +297,8 @@ Existing geometry.height, geometry.workspace.prepare and contour.paint traces ar
 ### Preview.106 geometry preflight
 
 `geometry.preflight.result` reports ready and stage (height/contour/ready); `assembly.preflight` and `workspace.preflight.geometry` report ready/legacy, with existing elapsed/sequence. Startup can finish with geometry-unready; Workspace retains the native result and releases the swap gate without incoming motion. No private fields or added timers. Native acceptance pending.
+
+
+### Preview.107 — resting geometry plan
+
+`geometry.center.stale` reports stale order, viewport or live phase detected across centering boundaries (500 ms throttle, empty payload). Existing scheduler reconciles; strict preflight rejects partial active drag/address cascade. Existing geometry.preflight.result/contour.paint/tabs.sync retained. No new sampling or private fields. Native frequency and performance remain unverified.

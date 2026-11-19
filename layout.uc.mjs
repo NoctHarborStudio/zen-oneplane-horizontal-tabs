@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.106",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.107",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -7029,6 +7029,38 @@ function installTabStrip() {
     const bias=right-left+(centered?0:trailingReserve);
     return {left:Math.max(0,Math.round(bias)),right:Math.max(0,Math.round(-bias))};
   }
+
+  // One pass-local collapsed-slot budget; no live DOM or painted widths.
+  function restingToolbarBudget({widths,groups,windowWidth,right,tabWidth,dragRoom,iconHome,returnReserve}){
+    const naturalTabsWidth=widths.reduce((n,w)=>n+w+3,0);
+    const boundary=islandBoundary(widths,tabWidth+3);
+    const availableAt=leftEdge=>Math.max(0,2*Math.min(windowWidth/2-leftEdge,windowWidth/2-right)-4-2*dragRoom);
+    const planAt=available=>{
+      const title=iconHome?32:Math.max(100,Math.min(180,available-2*(tabWidth+9)));
+      return planAdaptiveTabRows(widths,groups,boundary,available,title,tabWidth,3,returnReserve);
+    };
+    return {naturalTabsWidth,availableAt,planAt};
+  }
+  // The plus follows the occupied right lane, not the symmetric row's
+  // far edge. Keep the existing expansion reserve in Expand mode.
+  function rightPlusOffset(widths, expansion=0){
+    return 3+widths.reduce((sum,w)=>sum+Math.max(0,w)+3,0)+Math.max(0,expansion);
+  }
+
+  // Compute every CSS length before partition moves or focus callbacks.
+  function toolbarPartitionMetrics({layout,widths,available,windowWidth,tabWidth,openWidth,iconHome}){
+    const widthOf=indices=>indices.reduce((n,i)=>n+widths[i]+3,6);
+    const hoverReserve=Math.ceil(tabWidth*.20);
+    const expandReserve=layout.mode==="wide"?(iconHome?Math.max(0,openWidth-tabWidth):hoverReserve):0;
+    const half=Math.max(widthOf(layout.topLeft),widthOf(layout.topRight)+(layout.topPlus?tabWidth+3:0),tabWidth+9)+expandReserve;
+    const topWidth=layout.mode==="wide"?Math.min(available,layout.title+6+2*half):Math.max(layout.title+6,available);
+    const bottomBudget=Math.max(tabWidth+6,windowWidth-24);
+    const lowerNatural=widthOf(layout.lower)+2*(tabWidth+3)+(iconHome?Math.max(0,openWidth-tabWidth):hoverReserve);
+    const bottomWidth=Math.min(bottomBudget,Math.max(3*tabWidth+12,lowerNatural));
+    return {islandWidth:layout.title,rowWidth:Math.max(layout.title+6,topWidth),
+      plusOffset:rightPlusOffset(layout.topRight.map(i=>widths[i]),expandReserve),
+      overflowWidth:bottomWidth,bottomOpen:Math.max(tabWidth,Math.min(openWidth,bottomWidth-2*(tabWidth+3)-6))};
+  }
   const leftIds = new Set(["oneplane-hub-button", "oneplane-download-indicator-slot", "sidebar-button", "sidebar-toggle-button", "back-button",
     "forward-button", "stop-reload-button", "reload-button", "home-button", "urlbar-container"]);
   const centerIds = new Set(["oneplane-tabs", "oneplane-center-start", "oneplane-center-end"]);
@@ -7037,11 +7069,6 @@ function installTabStrip() {
   let geometryObserver = null;
   let centering=false;
   const adaptiveGeometryPrefs={observe(){schedule();scheduleGeometry();}};
-  // The plus follows the occupied right lane, not the symmetric row's
-  // far edge. Keep the existing expansion reserve in Expand mode.
-  function rightPlusOffset(widths, expansion=0){
-    return 3+widths.reduce((sum,w)=>sum+Math.max(0,w)+3,0)+Math.max(0,expansion);
-  }
   // Center Motion consumes actual resting strip geometry, not a second
   // layout plan. Offset metrics ignore owned WAAPI scale and translate.
   function captureCenterGeometry(expectedRow,mode){
@@ -7093,15 +7120,19 @@ function installTabStrip() {
     checkCenterGeometry("scroll");
     refreshIndicator();
   }
-  function centerToolbar(){
-    if(centering||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-closing")||root.hasAttribute("data-zr-center-motion")||row.hasAttribute("data-op-magnetic-pull"))return false;
+  function restingGeometryBlocked(){
+    return row.hasAttribute("data-op-dragging")||row.hasAttribute("data-op-island-incoming")||row.hasAttribute("data-op-lane-drag")||cascadeState==="hiding"||cascadeState==="showing";
+  }
+  function centerToolbar(requireResting=false){
+    if(centering||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-closing")||root.hasAttribute("data-zr-center-motion")||row.hasAttribute("data-op-magnetic-pull")||(requireResting&&restingGeometryBlocked()))return false;
     centering=true;
     try {
+      const windowWidth=window.innerWidth,order=stripOrderSnapshot;
       const targetRect = target.getBoundingClientRect();
       // Center the collapsed tabs against the WINDOW, not the remaining toolbar.
       // Native window buttons and all left/right controls consume edge space.
       let left = Math.max(0, targetRect.left);
-      let right = Math.max(0, window.innerWidth - targetRect.right);
+      let right = Math.max(0, windowWidth - targetRect.right);
       let addressExtent=0,addressMarginsAtRead=null;
       for (const child of target.children) {
         if (centerIds.has(child.id) || child.localName === "toolbarspring") continue;
@@ -7125,30 +7156,28 @@ function installTabStrip() {
       const dragRoom=parseFloat(style.getPropertyValue("--op-window-drag-room"))||4;
       const wantsIsland=row.hasAttribute("data-op-show-island");
       const iconHome=row.hasAttribute("data-op-home-icon");
-      const frozen=row.hasAttribute("data-op-dragging")||row.hasAttribute("data-op-island-incoming")||row.hasAttribute("data-op-lane-drag")||cascadeState==="hiding"||cascadeState==="showing";
-      // Use the very same collapsed geometry for address budgeting and
-      // the final partition; painted hover widths never enter the plan.
-      const widths=stripOrderSnapshot.map(n=>compactSlotWidth(n,tabWidth));
-      const naturalTabsWidth=widths.reduce((n,w)=>n+w+3,0);
-      const groups=stripOrderSnapshot.map(n=>n.classList.contains("oneplane-split-group"));
-      const boundary=islandBoundary(widths,tabWidth+3);
+      const frozen=restingGeometryBlocked();
+      if(requireResting&&frozen)return false;
+      // Address budgeting and partition use one collapsed input snapshot.
+      const widths=order.map(n=>compactSlotWidth(n,tabWidth));
+      const groups=order.map(n=>n.classList.contains("oneplane-split-group"));
       const returnReserve=row.hasAttribute("data-op-adaptive-compact")?12:0;
-      const availableAt=leftEdge=>Math.max(0,2*Math.min(window.innerWidth/2-leftEdge,window.innerWidth/2-right)-4-2*dragRoom);
-      const planAt=available=>{
-        const title=iconHome?32:Math.max(100,Math.min(180,available-2*(tabWidth+9)));
-        return planAdaptiveTabRows(widths,groups,boundary,available,title,tabWidth,3,returnReserve);
-      };
+      const {naturalTabsWidth,availableAt,planAt}=restingToolbarBudget({widths,groups,windowWidth,right,tabWidth,dragRoom,iconHome,returnReserve});
+      const stillCurrent=()=>!dead&&stripOrderSnapshot===order&&window.innerWidth===windowWidth&&
+        !root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&
+        restingGeometryBlocked()===frozen;
+      const rejectStale=()=>{if(!dead){scheduleGeometry();window.__nocturneTrace?.("geometry.center.stale",{},{throttle:500});}return false;};
       if(!frozen){
         const preferred=prefs.getIntPref("zen.oneplane.address-width",180);
         const natural=naturalTabsWidth+(iconHome?32:180)+tabWidth+18;
-        const fullBudget=2*Math.min(window.innerWidth/2-left-preferred-8,window.innerWidth/2-right)-8-2*dragRoom;
-        const compactAddress=window.innerWidth<900||(fullBudget<natural&&left+preferred+8>=right);
+        const fullBudget=2*Math.min(windowWidth/2-left-preferred-8,windowWidth/2-right)-8-2*dragRoom;
+        const compactAddress=windowWidth<900||(fullBudget<natural&&left+preferred+8>=right);
         // Budget for up to two collapsed cards on each side of Home.
         const pairReserve=16+3+2*tabWidth+3+2+dragRoom+4;
         const singleReserve=16+3+tabWidth+2+dragRoom+4;
-        const canFit=reserve=>window.innerWidth/2-right>=reserve&&window.innerWidth/2-left-36-8>=reserve;
+        const canFit=reserve=>windowWidth/2-right>=reserve&&windowWidth/2-left-36-8>=reserve;
         const reserve=compactAddress?(canFit(pairReserve)?pairReserve:canFit(singleReserve)?singleReserve:16+dragRoom+4):16+dragRoom+4;
-        const baseline=adaptiveAddressWidth(preferred,window.innerWidth,left,reserve,8,compactAddress);
+        const baseline=adaptiveAddressWidth(preferred,windowWidth,left,reserve,8,compactAddress);
         const addressHidden=url.hasAttribute("data-op-empty")||url.hasAttribute("data-op-home");
         const readAddressMargins=()=>{const style=window.getComputedStyle(url);return (parseFloat(style.marginLeft)||0)+(parseFloat(style.marginRight)||0);};
         const addressMargins=addressMarginsAtRead??readAddressMargins();
@@ -7167,43 +7196,39 @@ function installTabStrip() {
         else if(iconChanged||widthChanged||addressMarginsAtRead===null)
           addressExtent=url.getBoundingClientRect().width+readAddressMargins();
       }
+      if(!stillCurrent())return rejectStale();
       left+=addressExtent;
       const collapsedTabsWidth=Math.min(naturalTabsWidth,Math.max(0,rowWidth-tabWidth-3));
       const trailingReserve=Math.max(0,rowWidth-collapsedTabsWidth);
       const available=availableAt(left);
       const centered=wantsIsland;
       if(centered&&!frozen){
-        row.removeAttribute("data-op-island-tight");
         const layout=planAt(available);
+        const metrics=toolbarPartitionMetrics({layout,widths,available,windowWidth,tabWidth,openWidth,iconHome});
+        row.removeAttribute("data-op-island-tight");
         applyStripPartition(layout);
+        // Lane reparent/focus may synchronously publish a new topology.
+        if(!stillCurrent())return rejectStale();
         row.toggleAttribute("data-op-island-compact",!iconHome&&layout.title===32);
-        const widthOf=indices=>indices.reduce((n,i)=>n+widths[i]+3,6);
-        const hoverReserve=Math.ceil(tabWidth*.20);
-        const expandReserve=layout.mode==="wide"?(iconHome?Math.max(0,openWidth-tabWidth):hoverReserve):0;
-        const half=Math.max(widthOf(layout.topLeft),widthOf(layout.topRight)+(layout.topPlus?tabWidth+3:0),tabWidth+9)+expandReserve;
-        const topWidth=layout.mode==="wide"?Math.min(available,layout.title+6+2*half):Math.max(layout.title+6,available);
-        const bottomBudget=Math.max(tabWidth+6,window.innerWidth-24);
-        const lowerNatural=widthOf(layout.lower)+2*(tabWidth+3)+(iconHome?Math.max(0,openWidth-tabWidth):hoverReserve);
-        const bottomWidth=Math.min(bottomBudget,Math.max(3*tabWidth+12,lowerNatural));
-        setLength(row,"--op-island-width",layout.title);
-        setLength(row,"--op-island-row-width",Math.max(layout.title+6,topWidth));
-        setLength(row,"--op-right-plus-offset",rightPlusOffset(layout.topRight.map(i=>widths[i]),expandReserve));
-        setLength(row,"--op-overflow-width",bottomWidth);
-        setLength(row,"--op-bottom-open",Math.max(tabWidth,Math.min(openWidth,bottomWidth-2*(tabWidth+3)-6)));
+        setLength(row,"--op-island-width",metrics.islandWidth);
+        setLength(row,"--op-island-row-width",metrics.rowWidth);
+        setLength(row,"--op-right-plus-offset",metrics.plusOffset);
+        setLength(row,"--op-overflow-width",metrics.overflowWidth);
+        setLength(row,"--op-bottom-open",metrics.bottomOpen);
       }else if(!centered)row.style.removeProperty("--op-right-plus-offset");
       const bias=toolbarCenterBias(left,right,trailingReserve,centered);
       setLength(leftSpacer,"--op-center-bias",bias.left);
       setLength(rightSpacer,"--op-center-bias",bias.right);
       if(centered&&!frozen){
         const rect=row.getBoundingClientRect(),previous=parseFloat(row.style.getPropertyValue("--op-center-correction"))||0;
-        const correction=centeredRowCorrection(window.innerWidth,left,right,rect.left+rect.width/2-previous,rect.width);
+        const correction=centeredRowCorrection(windowWidth,left,right,rect.left+rect.width/2-previous,rect.width);
         if(previous!==correction)row.style.setProperty("--op-center-correction",correction+"px");
       }else if(!centered)row.style.removeProperty("--op-center-correction");
       // Cap leftward expansion at actual free space next to navigation.
       setLength(row, "--op-left-room", leftSpacer.getBoundingClientRect().width - 4);
       syncLaneScroll();
       refreshOverflowSlider();
-      return !dead;
+      return stillCurrent()||rejectStale();
     } finally {centering=false;}
   }
   // Read actual resting rows only after centering/partition writes.
@@ -7214,7 +7239,7 @@ function installTabStrip() {
   }
   function measureToolbarGeometry(force=false,center=true){
     if(dead||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-closing")||(!force&&root.hasAttribute("data-zr-center-motion")))return null;
-    if(center&&!centerToolbar()&&force)return null;
+    if(center&&!centerToolbar(force)&&force)return null;
     if(dead)return null;
     if(!force&&!adaptiveHeightDirty&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
        window.performance.now()<panelSwitchUntil)return null;
@@ -7610,7 +7635,7 @@ function installTabStrip() {
     const group = tab?.group;
     return group?.hasAttribute("split-view-group") ? group : null;
   }
-  function isSplit(tab) { return Boolean(tab?.splitView || tab?.hasAttribute("split-view") || splitGroup(tab)); }
+  function isSplit(tab, group=undefined) { return Boolean(tab?.splitView || tab?.hasAttribute("split-view") || (group===undefined?splitGroup(tab):group)); }
   function unsplitTab(tab) {
     const owner = tabOwner(tab);
     if (!isSplit(tab)) return true;
@@ -9480,7 +9505,7 @@ function installTabStrip() {
     const tabs=Array.from(browser.visibleTabs||browser.tabs||[]).filter(
       tab=>!tab.closing&&!tab.hidden&&!tab.hasAttribute("zen-empty-tab"));
     return {selected:browser.selectedTab,home:row.hasAttribute("data-op-home-open"),
-      tabs:tabs.map(tab=>({tab,group:splitGroup(tab),split:isSplit(tab),pinned:!!tab.pinned}))};
+      tabs:tabs.map(tab=>{const group=splitGroup(tab);return {tab,group,split:isSplit(tab,group),pinned:!!tab.pinned};})};
   }
   function sameStripTopology(a,b){
     return !!a&&!!b&&a.selected===b.selected&&a.home===b.home&&a.tabs.length===b.tabs.length&&
@@ -9542,6 +9567,9 @@ function installTabStrip() {
     const homeOpen=nativeTopology.home;
     // Respect the current workspace and native visibility.
     const tabs=nativeTopology.tabs.map(x=>x.tab);
+    const selected=nativeTopology.selected;
+    const selectedSlot=nativeTopology.tabs.find(x=>x.tab===selected);
+    const selectedGroup=selectedSlot?selectedSlot.group:splitGroup(selected);
     const count = String(tabs.length);
     if (row.style.getPropertyValue("--op-tab-count") !== count) {
       row.style.setProperty("--op-tab-count", count);
@@ -9556,7 +9584,7 @@ function installTabStrip() {
         entry.item.remove(); entries.delete(tab);
       }
     }
-    const groups = [...new Set(tabs.map(splitGroup).filter(Boolean))];
+    const groups = [...new Set(nativeTopology.tabs.map(x=>x.group).filter(Boolean))];
     const groupCount = String(groups.length);
     if (row.style.getPropertyValue("--op-split-count") !== groupCount) {
       row.style.setProperty("--op-split-count", groupCount);
@@ -9569,11 +9597,11 @@ function installTabStrip() {
       if (!splitColors.has(group)) splitColors.set(group, splitPalette[nextSplitColor++ % splitPalette.length]);
       const entry = splitEntries.get(group);
       entry.box.style.setProperty("--op-split-color", splitColors.get(group));
-      entry.box.toggleAttribute("data-op-split-active", !homeOpen && group === splitGroup(browser.selectedTab));
+      entry.box.toggleAttribute("data-op-split-active", !homeOpen && group === selectedGroup);
       groupItems.set(group, []);
     }
     for (let index = 0; index < tabs.length; index++) {
-      const tab = tabs[index];
+      const {tab,group,split,pinned}=nativeTopology.tabs[index];
       let entry = entries.get(tab);
       if (!entry) {
         entry = createEntry(tab);
@@ -9581,19 +9609,17 @@ function installTabStrip() {
         splitMeasureObserver.observe(entry.item);
       }
       const label = tab.label || tab.getAttribute("label") || "New tab";
-      const nativeSelected = tab === browser.selectedTab;
+      const nativeSelected = tab === nativeTopology.selected;
       const selected = !homeOpen && nativeSelected;
       entry.item.toggleAttribute("data-selected", selected);
-      const group = splitGroup(tab);
-      const split = isSplit(tab);
       entry.item.toggleAttribute("data-op-split", split);
-      entry.item.toggleAttribute("data-op-split-active", !homeOpen && split && Boolean(group && group === splitGroup(browser.selectedTab)));
+      entry.item.toggleAttribute("data-op-split-active", !homeOpen && split && Boolean(group && group === selectedGroup));
       // First/last flags are assigned after groups are laid out in visual order.
       entry.item.removeAttribute("data-op-split-prev");
       entry.item.removeAttribute("data-op-split-next");
       if (split) entry.item.style.setProperty("--op-split-color", splitColors.get(group) || splitPalette[0]);
       else entry.item.style.removeProperty("--op-split-color");
-      entry.item.toggleAttribute("data-pinned", Boolean(tab.pinned));
+      entry.item.toggleAttribute("data-pinned", pinned);
       entry.item.toggleAttribute("data-busy", tab.hasAttribute("busy"));
       entry.item.toggleAttribute("data-unloaded", !nativeSelected && (tab.hasAttribute("pending") || tab.hasAttribute("discarded")));
       const muted = tab.hasAttribute("muted");

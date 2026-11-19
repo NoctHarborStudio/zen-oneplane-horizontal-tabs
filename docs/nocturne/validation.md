@@ -427,3 +427,6 @@ Preview.104 CI PASS (657 Node, 15 Python). Six new coordinator cases; 25 contour
 
 
 A4.3c1 (preview.106): focused source-backed preflight outcome, contour failure and Startup/Workspace native-result regressions pass in isolated V8. Verify canonical CI; native startup and workspace, rejected preflight cleanup and actual first resting paint remain open. A4.3c2 partition/anchor consolidation next.
+
+
+A4.3c2 (preview.107): corrected preview.106 CI PASS. 26 window geometry/coordinator fixture bodies PASS in isolated V8 including pure parity matrix (120 combinations), strict freeze guard and one native Split group read per visible snapshot tab. Runtime parser and exact generated substitutions checked; canonical CI pending. Native Split width/hover, first resting paint, startup/workspace fallback and actual performance remain open; A4.3-R integrated audit next.

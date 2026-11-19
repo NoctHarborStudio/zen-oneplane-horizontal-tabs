@@ -1,13 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
+import {rightPlusOffset,restingToolbarBudget,toolbarPartitionMetrics} from "../src/algorithms/toolbar-center.mjs";
+import {planAdaptiveTabRows} from "../src/algorithms/tab-overflow.mjs";
+import {islandBoundary} from "../src/algorithms/island-boundary.mjs";
 const source=readFileSync(new URL("../src/layout/geometry.js.part",import.meta.url),"utf8");
 const home=readFileSync(new URL("../src/home/shared-home.js.part",import.meta.url),"utf8");
 const base=readFileSync(new URL("../src/styles/base.css.part",import.meta.url),"utf8");
 const tabs=readFileSync(new URL("../src/styles/tabs.css.part",import.meta.url),"utf8");
 const visibility=readFileSync(new URL("../src/layout/visibility.js.part",import.meta.url),"utf8");
 const lifecycle=readFileSync(new URL("../src/core/window-lifecycle.js.part",import.meta.url),"utf8");
-const calc=new Function(source.slice(source.indexOf("function rightPlusOffset("),source.indexOf("function centerToolbar("))+"return rightPlusOffset")();
+const calc=rightPlusOffset;
 test("plus follows actual right slots and preserves expansion room",()=>{
  assert.equal(calc([]),3);assert.equal(calc([36,36]),81);
  assert.equal(calc([36,100]),145);assert.equal(calc([36,36],144),225);
@@ -25,7 +28,7 @@ test("toolbar drag spaces have nonzero dimensions, controls stay non-draggable",
  assert.ok(base.includes("height: var(--op-height);"));
  assert.ok(base.includes("-moz-window-dragging: drag !important"));
  assert.ok(base.includes(":not(#oneplane-center-start,#oneplane-center-end)"));
- assert.ok(source.includes("-4-2*dragRoom"));
+ assert.equal(restingToolbarBudget({widths:[],groups:[],windowWidth:1000,right:100,tabWidth:36,dragRoom:16,iconHome:false,returnReserve:0}).availableAt(100),764);
 });
 test("window resize and native size mode reflow are lifecycle-owned",()=>{
  for(const event of ["resize","sizemodechange"]){
@@ -94,4 +97,30 @@ test("address uses shared actual partition budget and retains native margins",()
  assert.ok(source.includes("const layout=planAt(available);"));
  assert.ok(source.includes("const addressMargins="));
  assert.ok(source.includes("wantsIsland&&!addressHidden?"));
+});
+
+test("resting toolbar budget and partition dimensions preserve prior policy across widths and groups",()=>{
+ for(const windowWidth of [280,540,899,900,1200,1920])for(const count of [0,1,2,8,100])
+ for(const iconHome of [false,true])for(const returnReserve of [0,12]){
+  const tabWidth=36,openWidth=180,dragRoom=16,right=96,left=128;
+  const groups=Array.from({length:count},(_,i)=>i%7===3),widths=groups.map(group=>group?100:tabWidth);
+  const budget=restingToolbarBudget({widths,groups,windowWidth,right,tabWidth,dragRoom,iconHome,returnReserve});
+  const available=Math.max(0,2*Math.min(windowWidth/2-left,windowWidth/2-right)-4-2*dragRoom);
+  assert.equal(budget.availableAt(left),available);
+  assert.equal(budget.naturalTabsWidth,widths.reduce((n,w)=>n+w+3,0));
+  const title=iconHome?32:Math.max(100,Math.min(180,available-2*(tabWidth+9)));
+  const layout=planAdaptiveTabRows(widths,groups,islandBoundary(widths,tabWidth+3),available,title,tabWidth,3,returnReserve);
+  assert.deepEqual(budget.planAt(available),layout);
+  const widthOf=indices=>indices.reduce((n,i)=>n+widths[i]+3,6);
+  const hoverReserve=Math.ceil(tabWidth*.20),expandReserve=layout.mode==="wide"?(iconHome?Math.max(0,openWidth-tabWidth):hoverReserve):0;
+  const half=Math.max(widthOf(layout.topLeft),widthOf(layout.topRight)+(layout.topPlus?tabWidth+3:0),tabWidth+9)+expandReserve;
+  const topWidth=layout.mode==="wide"?Math.min(available,layout.title+6+2*half):Math.max(layout.title+6,available);
+  const lowerNatural=widthOf(layout.lower)+2*(tabWidth+3)+(iconHome?Math.max(0,openWidth-tabWidth):hoverReserve);
+  const bottomWidth=Math.min(Math.max(tabWidth+6,windowWidth-24),Math.max(3*tabWidth+12,lowerNatural));
+  const plusOffset=3+layout.topRight.reduce((sum,i)=>sum+Math.max(0,widths[i])+3,0)+Math.max(0,expandReserve);
+  assert.deepEqual(toolbarPartitionMetrics({layout,widths,available,windowWidth,tabWidth,openWidth,iconHome}),{
+   islandWidth:layout.title,rowWidth:Math.max(layout.title+6,topWidth),plusOffset,overflowWidth:bottomWidth,
+   bottomOpen:Math.max(tabWidth,Math.min(openWidth,bottomWidth-2*(tabWidth+3)-6))});
+ }
+ assert.ok(source.indexOf("const metrics=toolbarPartitionMetrics(")<source.indexOf("applyStripPartition(layout);"));
 });

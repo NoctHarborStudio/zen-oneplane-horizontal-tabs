@@ -1,3 +1,10 @@
+## 0.3.0-preview.107 — Resting toolbar geometry plan
+
+- Extract a pass-local collapsed budget and pure partition dimensions, calculated before lane moves and focus callbacks. Preserve the current widths, address reserve and overflow policy.
+- Reject strict preflight during partial drag/address cascade centering. Retire stale viewport/order plans and request reconciliation through the existing scheduler.
+- Reuse the authoritative native topology snapshot for Split View membership, selection and pin projection instead of rereading native group state during each mirror update.
+- Preserve post-partition physical Split measurements, native hit regions and existing motion owners. Native validation pending.
+
 ## 0.3.0-preview.106 — Explicit geometry preflight outcomes
 
 - Acknowledge only completed center/height/contour preflight and preserve fresh invalidations raised by synchronous callbacks.

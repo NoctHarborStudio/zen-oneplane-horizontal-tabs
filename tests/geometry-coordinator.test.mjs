@@ -103,3 +103,29 @@ test("preflight cancels old work before diagnostics and preserves new invalidati
  x.callback=()=>{x.callback=null;x.api.scheduleGeometry();};
  assert.equal(x.api.prepareWorkspaceGeometry(),true);assert.equal(x.jobs.size,1);x.tick();assert.equal(x.jobs.size,0);
 });
+
+test("strict resting preflight refuses partial drag and address cascade before any geometry reads",()=>{
+ const code=source.slice(source.indexOf("  function restingGeometryBlocked("),source.indexOf("  // Read actual resting rows"));
+ const run=new Function("marker","cascadeState","requireResting",`
+ let centering=false,dead=false,stripOrderSnapshot=[];const toolbarWrapper={},root={hasAttribute:()=>false};
+ const row={hasAttribute:k=>k===marker},hoverSupported=()=>true;
+ const window={innerWidth:1200},target={getBoundingClientRect(){throw Error("read");}};
+ ${code}
+ return centerToolbar(requireResting);`);
+ for(const marker of ["data-op-dragging","data-op-island-incoming","data-op-lane-drag"])
+  assert.equal(run(marker,"idle",true),false);
+ for(const phase of ["hiding","showing"])assert.equal(run(null,phase,true),false);
+ assert.throws(()=>run("data-op-dragging","idle",false),/read/);
+ assert.throws(()=>run(null,"idle",true),/read/);
+});
+test("native topology snapshot resolves each Split group once before projection",()=>{
+ const sync=read("src/toolbar/tab-sync.js.part"),adapter=read("src/native/tab-adapter.js.part");
+ const functions=adapter.slice(adapter.indexOf("  function splitGroup("),adapter.indexOf("  function unsplitTab("));
+ const code=sync.slice(sync.indexOf("  function readStripTopology("),sync.indexOf("  function sameStripTopology("));
+ const run=new Function(`let reads=0;const group={hasAttribute:k=>k==="split-view-group"};
+ const tab={get group(){reads++;return group;},hasAttribute:()=>false,pinned:true},browser={visibleTabs:[tab],selectedTab:tab},row={hasAttribute:()=>false};
+ ${functions}${code}const state=readStripTopology();return {reads,group:state.tabs[0].group===group,split:state.tabs[0].split,pinned:state.tabs[0].pinned};`);
+ assert.deepEqual(run(),{reads:1,group:true,split:true,pinned:true});
+ assert.ok(sync.includes("const {tab,group,split,pinned}=nativeTopology.tabs[index];"));
+ assert.ok(sync.includes("const groups = [...new Set(nativeTopology.tabs.map(x=>x.group).filter(Boolean))];"));
+});

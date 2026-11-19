@@ -12,7 +12,7 @@
     const tabs=Array.from(browser.visibleTabs||browser.tabs||[]).filter(
       tab=>!tab.closing&&!tab.hidden&&!tab.hasAttribute("zen-empty-tab"));
     return {selected:browser.selectedTab,home:row.hasAttribute("data-op-home-open"),
-      tabs:tabs.map(tab=>({tab,group:splitGroup(tab),split:isSplit(tab),pinned:!!tab.pinned}))};
+      tabs:tabs.map(tab=>{const group=splitGroup(tab);return {tab,group,split:isSplit(tab,group),pinned:!!tab.pinned};})};
   }
   function sameStripTopology(a,b){
     return !!a&&!!b&&a.selected===b.selected&&a.home===b.home&&a.tabs.length===b.tabs.length&&
@@ -74,6 +74,9 @@
     const homeOpen=nativeTopology.home;
     // Respect the current workspace and native visibility.
     const tabs=nativeTopology.tabs.map(x=>x.tab);
+    const selected=nativeTopology.selected;
+    const selectedSlot=nativeTopology.tabs.find(x=>x.tab===selected);
+    const selectedGroup=selectedSlot?selectedSlot.group:splitGroup(selected);
     const count = String(tabs.length);
     if (row.style.getPropertyValue("--op-tab-count") !== count) {
       row.style.setProperty("--op-tab-count", count);
@@ -88,7 +91,7 @@
         entry.item.remove(); entries.delete(tab);
       }
     }
-    const groups = [...new Set(tabs.map(splitGroup).filter(Boolean))];
+    const groups = [...new Set(nativeTopology.tabs.map(x=>x.group).filter(Boolean))];
     const groupCount = String(groups.length);
     if (row.style.getPropertyValue("--op-split-count") !== groupCount) {
       row.style.setProperty("--op-split-count", groupCount);
@@ -101,11 +104,11 @@
       if (!splitColors.has(group)) splitColors.set(group, splitPalette[nextSplitColor++ % splitPalette.length]);
       const entry = splitEntries.get(group);
       entry.box.style.setProperty("--op-split-color", splitColors.get(group));
-      entry.box.toggleAttribute("data-op-split-active", !homeOpen && group === splitGroup(browser.selectedTab));
+      entry.box.toggleAttribute("data-op-split-active", !homeOpen && group === selectedGroup);
       groupItems.set(group, []);
     }
     for (let index = 0; index < tabs.length; index++) {
-      const tab = tabs[index];
+      const {tab,group,split,pinned}=nativeTopology.tabs[index];
       let entry = entries.get(tab);
       if (!entry) {
         entry = createEntry(tab);
@@ -113,19 +116,17 @@
         splitMeasureObserver.observe(entry.item);
       }
       const label = tab.label || tab.getAttribute("label") || "New tab";
-      const nativeSelected = tab === browser.selectedTab;
+      const nativeSelected = tab === nativeTopology.selected;
       const selected = !homeOpen && nativeSelected;
       entry.item.toggleAttribute("data-selected", selected);
-      const group = splitGroup(tab);
-      const split = isSplit(tab);
       entry.item.toggleAttribute("data-op-split", split);
-      entry.item.toggleAttribute("data-op-split-active", !homeOpen && split && Boolean(group && group === splitGroup(browser.selectedTab)));
+      entry.item.toggleAttribute("data-op-split-active", !homeOpen && split && Boolean(group && group === selectedGroup));
       // First/last flags are assigned after groups are laid out in visual order.
       entry.item.removeAttribute("data-op-split-prev");
       entry.item.removeAttribute("data-op-split-next");
       if (split) entry.item.style.setProperty("--op-split-color", splitColors.get(group) || splitPalette[0]);
       else entry.item.style.removeProperty("--op-split-color");
-      entry.item.toggleAttribute("data-pinned", Boolean(tab.pinned));
+      entry.item.toggleAttribute("data-pinned", pinned);
       entry.item.toggleAttribute("data-busy", tab.hasAttribute("busy"));
       entry.item.toggleAttribute("data-unloaded", !nativeSelected && (tab.hasAttribute("pending") || tab.hasAttribute("discarded")));
       const muted = tab.hasAttribute("muted");

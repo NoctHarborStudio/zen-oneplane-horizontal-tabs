@@ -6,11 +6,6 @@
   let geometryObserver = null;
   let centering=false;
   const adaptiveGeometryPrefs={observe(){schedule();scheduleGeometry();}};
-  // The plus follows the occupied right lane, not the symmetric row's
-  // far edge. Keep the existing expansion reserve in Expand mode.
-  function rightPlusOffset(widths, expansion=0){
-    return 3+widths.reduce((sum,w)=>sum+Math.max(0,w)+3,0)+Math.max(0,expansion);
-  }
   // Center Motion consumes actual resting strip geometry, not a second
   // layout plan. Offset metrics ignore owned WAAPI scale and translate.
   function captureCenterGeometry(expectedRow,mode){
@@ -62,15 +57,19 @@
     checkCenterGeometry("scroll");
     refreshIndicator();
   }
-  function centerToolbar(){
-    if(centering||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-closing")||root.hasAttribute("data-zr-center-motion")||row.hasAttribute("data-op-magnetic-pull"))return false;
+  function restingGeometryBlocked(){
+    return row.hasAttribute("data-op-dragging")||row.hasAttribute("data-op-island-incoming")||row.hasAttribute("data-op-lane-drag")||cascadeState==="hiding"||cascadeState==="showing";
+  }
+  function centerToolbar(requireResting=false){
+    if(centering||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-closing")||root.hasAttribute("data-zr-center-motion")||row.hasAttribute("data-op-magnetic-pull")||(requireResting&&restingGeometryBlocked()))return false;
     centering=true;
     try {
+      const windowWidth=window.innerWidth,order=stripOrderSnapshot;
       const targetRect = target.getBoundingClientRect();
       // Center the collapsed tabs against the WINDOW, not the remaining toolbar.
       // Native window buttons and all left/right controls consume edge space.
       let left = Math.max(0, targetRect.left);
-      let right = Math.max(0, window.innerWidth - targetRect.right);
+      let right = Math.max(0, windowWidth - targetRect.right);
       let addressExtent=0,addressMarginsAtRead=null;
       for (const child of target.children) {
         if (centerIds.has(child.id) || child.localName === "toolbarspring") continue;
@@ -94,30 +93,28 @@
       const dragRoom=parseFloat(style.getPropertyValue("--op-window-drag-room"))||4;
       const wantsIsland=row.hasAttribute("data-op-show-island");
       const iconHome=row.hasAttribute("data-op-home-icon");
-      const frozen=row.hasAttribute("data-op-dragging")||row.hasAttribute("data-op-island-incoming")||row.hasAttribute("data-op-lane-drag")||cascadeState==="hiding"||cascadeState==="showing";
-      // Use the very same collapsed geometry for address budgeting and
-      // the final partition; painted hover widths never enter the plan.
-      const widths=stripOrderSnapshot.map(n=>compactSlotWidth(n,tabWidth));
-      const naturalTabsWidth=widths.reduce((n,w)=>n+w+3,0);
-      const groups=stripOrderSnapshot.map(n=>n.classList.contains("oneplane-split-group"));
-      const boundary=islandBoundary(widths,tabWidth+3);
+      const frozen=restingGeometryBlocked();
+      if(requireResting&&frozen)return false;
+      // Address budgeting and partition use one collapsed input snapshot.
+      const widths=order.map(n=>compactSlotWidth(n,tabWidth));
+      const groups=order.map(n=>n.classList.contains("oneplane-split-group"));
       const returnReserve=row.hasAttribute("data-op-adaptive-compact")?12:0;
-      const availableAt=leftEdge=>Math.max(0,2*Math.min(window.innerWidth/2-leftEdge,window.innerWidth/2-right)-4-2*dragRoom);
-      const planAt=available=>{
-        const title=iconHome?32:Math.max(100,Math.min(180,available-2*(tabWidth+9)));
-        return planAdaptiveTabRows(widths,groups,boundary,available,title,tabWidth,3,returnReserve);
-      };
+      const {naturalTabsWidth,availableAt,planAt}=restingToolbarBudget({widths,groups,windowWidth,right,tabWidth,dragRoom,iconHome,returnReserve});
+      const stillCurrent=()=>!dead&&stripOrderSnapshot===order&&window.innerWidth===windowWidth&&
+        !root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&
+        restingGeometryBlocked()===frozen;
+      const rejectStale=()=>{if(!dead){scheduleGeometry();window.__nocturneTrace?.("geometry.center.stale",{},{throttle:500});}return false;};
       if(!frozen){
         const preferred=prefs.getIntPref("zen.oneplane.address-width",180);
         const natural=naturalTabsWidth+(iconHome?32:180)+tabWidth+18;
-        const fullBudget=2*Math.min(window.innerWidth/2-left-preferred-8,window.innerWidth/2-right)-8-2*dragRoom;
-        const compactAddress=window.innerWidth<900||(fullBudget<natural&&left+preferred+8>=right);
+        const fullBudget=2*Math.min(windowWidth/2-left-preferred-8,windowWidth/2-right)-8-2*dragRoom;
+        const compactAddress=windowWidth<900||(fullBudget<natural&&left+preferred+8>=right);
         // Budget for up to two collapsed cards on each side of Home.
         const pairReserve=16+3+2*tabWidth+3+2+dragRoom+4;
         const singleReserve=16+3+tabWidth+2+dragRoom+4;
-        const canFit=reserve=>window.innerWidth/2-right>=reserve&&window.innerWidth/2-left-36-8>=reserve;
+        const canFit=reserve=>windowWidth/2-right>=reserve&&windowWidth/2-left-36-8>=reserve;
         const reserve=compactAddress?(canFit(pairReserve)?pairReserve:canFit(singleReserve)?singleReserve:16+dragRoom+4):16+dragRoom+4;
-        const baseline=adaptiveAddressWidth(preferred,window.innerWidth,left,reserve,8,compactAddress);
+        const baseline=adaptiveAddressWidth(preferred,windowWidth,left,reserve,8,compactAddress);
         const addressHidden=url.hasAttribute("data-op-empty")||url.hasAttribute("data-op-home");
         const readAddressMargins=()=>{const style=window.getComputedStyle(url);return (parseFloat(style.marginLeft)||0)+(parseFloat(style.marginRight)||0);};
         const addressMargins=addressMarginsAtRead??readAddressMargins();
@@ -136,43 +133,39 @@
         else if(iconChanged||widthChanged||addressMarginsAtRead===null)
           addressExtent=url.getBoundingClientRect().width+readAddressMargins();
       }
+      if(!stillCurrent())return rejectStale();
       left+=addressExtent;
       const collapsedTabsWidth=Math.min(naturalTabsWidth,Math.max(0,rowWidth-tabWidth-3));
       const trailingReserve=Math.max(0,rowWidth-collapsedTabsWidth);
       const available=availableAt(left);
       const centered=wantsIsland;
       if(centered&&!frozen){
-        row.removeAttribute("data-op-island-tight");
         const layout=planAt(available);
+        const metrics=toolbarPartitionMetrics({layout,widths,available,windowWidth,tabWidth,openWidth,iconHome});
+        row.removeAttribute("data-op-island-tight");
         applyStripPartition(layout);
+        // Lane reparent/focus may synchronously publish a new topology.
+        if(!stillCurrent())return rejectStale();
         row.toggleAttribute("data-op-island-compact",!iconHome&&layout.title===32);
-        const widthOf=indices=>indices.reduce((n,i)=>n+widths[i]+3,6);
-        const hoverReserve=Math.ceil(tabWidth*.20);
-        const expandReserve=layout.mode==="wide"?(iconHome?Math.max(0,openWidth-tabWidth):hoverReserve):0;
-        const half=Math.max(widthOf(layout.topLeft),widthOf(layout.topRight)+(layout.topPlus?tabWidth+3:0),tabWidth+9)+expandReserve;
-        const topWidth=layout.mode==="wide"?Math.min(available,layout.title+6+2*half):Math.max(layout.title+6,available);
-        const bottomBudget=Math.max(tabWidth+6,window.innerWidth-24);
-        const lowerNatural=widthOf(layout.lower)+2*(tabWidth+3)+(iconHome?Math.max(0,openWidth-tabWidth):hoverReserve);
-        const bottomWidth=Math.min(bottomBudget,Math.max(3*tabWidth+12,lowerNatural));
-        setLength(row,"--op-island-width",layout.title);
-        setLength(row,"--op-island-row-width",Math.max(layout.title+6,topWidth));
-        setLength(row,"--op-right-plus-offset",rightPlusOffset(layout.topRight.map(i=>widths[i]),expandReserve));
-        setLength(row,"--op-overflow-width",bottomWidth);
-        setLength(row,"--op-bottom-open",Math.max(tabWidth,Math.min(openWidth,bottomWidth-2*(tabWidth+3)-6)));
+        setLength(row,"--op-island-width",metrics.islandWidth);
+        setLength(row,"--op-island-row-width",metrics.rowWidth);
+        setLength(row,"--op-right-plus-offset",metrics.plusOffset);
+        setLength(row,"--op-overflow-width",metrics.overflowWidth);
+        setLength(row,"--op-bottom-open",metrics.bottomOpen);
       }else if(!centered)row.style.removeProperty("--op-right-plus-offset");
       const bias=toolbarCenterBias(left,right,trailingReserve,centered);
       setLength(leftSpacer,"--op-center-bias",bias.left);
       setLength(rightSpacer,"--op-center-bias",bias.right);
       if(centered&&!frozen){
         const rect=row.getBoundingClientRect(),previous=parseFloat(row.style.getPropertyValue("--op-center-correction"))||0;
-        const correction=centeredRowCorrection(window.innerWidth,left,right,rect.left+rect.width/2-previous,rect.width);
+        const correction=centeredRowCorrection(windowWidth,left,right,rect.left+rect.width/2-previous,rect.width);
         if(previous!==correction)row.style.setProperty("--op-center-correction",correction+"px");
       }else if(!centered)row.style.removeProperty("--op-center-correction");
       // Cap leftward expansion at actual free space next to navigation.
       setLength(row, "--op-left-room", leftSpacer.getBoundingClientRect().width - 4);
       syncLaneScroll();
       refreshOverflowSlider();
-      return !dead;
+      return stillCurrent()||rejectStale();
     } finally {centering=false;}
   }
   // Read actual resting rows only after centering/partition writes.
@@ -183,7 +176,7 @@
   }
   function measureToolbarGeometry(force=false,center=true){
     if(dead||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-closing")||(!force&&root.hasAttribute("data-zr-center-motion")))return null;
-    if(center&&!centerToolbar()&&force)return null;
+    if(center&&!centerToolbar(force)&&force)return null;
     if(dead)return null;
     if(!force&&!adaptiveHeightDirty&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
        window.performance.now()<panelSwitchUntil)return null;

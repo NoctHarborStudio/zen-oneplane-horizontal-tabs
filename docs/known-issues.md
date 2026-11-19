@@ -1162,3 +1162,6 @@ NC4-004/013 partial: exact RAF tickets, reentry fence, height validation/readbac
 
 
 A4.3c1 (preview.106): source-level preflight outcome propagation addressed; native behavior/fallback frequency and A4.3c2 resting partition/anchor consolidation remain open. Do not close A4 native evidence gates.
+
+
+A4.3c2 (preview.107): NC4-004/013 partial source consolidation: pass-local pure budget/partition, stale plan rejection, native snapshot reuse, strict preflight freeze guard. Actual Split width measurement/post-placement centering retained pending native evidence. NC4-018/052 and all A4 native paint/performance gates remain open.

@@ -289,3 +289,6 @@ CENTER/HEIGHT/CONTOUR requests share one ticketed scheduler. Successful direct n
 
 
 A4.3c1: Layout geometryPreflightVersion 1 acknowledges only successful synchronous center/height/contour preparation. Startup and Workspace consume that result and fail open through their own cleanup, retaining native command ownership. Older entrypoints with a callable preflight may return undefined; this is legacy compatibility, not verified geometry.
+
+
+A4.3c2 (preview.107): existing pure toolbar-center module owns pass-local collapsed budget and partition dimensions; Layout applies the plan before fresh actual geometry/anchor reads and rejects stale order/viewport/phase outcomes. Strict preflight rejects partial drag/cascade centering. Tab projection reuses the native topology snapshot for group/selection/pin state; physical Split measurements stay with existing DOM owners. Native convergence remains open.
