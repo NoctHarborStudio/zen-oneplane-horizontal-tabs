@@ -202,3 +202,7 @@ Assembly owns one finite document timeline epoch and supplies an exact startEffe
 ### A3.4c1 — Address completion ownership
 
 Address phase captures the native bar and document epoch; cascade belongs to the phase generation, not direction alone. Exact phase and cascade watchdogs bound pending WAAPI and handoff, cancellation clears references before releasing resources, and replaced bars cannot be dismissed by stale callbacks. Startup terminal outcome is a separate pending checkpoint.
+
+### A3.4c2 — common Startup outcome
+
+Assembly's existing timeline owns the exact effect ledger and single completion timer. Current direct, tab, bookmark and Home effects distinguish completion, retirement and unexpected cancellation. The nominal boundary closes admission; at most one capped 120ms grace interval can wait for remaining effects, with no extra scheduler. Current Home retains the lease until common release, except explicit native action or interruption. Workspace/Close and legacy contracts are unchanged. Integrated review and native acceptance pending.

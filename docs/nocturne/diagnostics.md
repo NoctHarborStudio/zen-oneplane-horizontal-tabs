@@ -216,3 +216,5 @@ Preview.86: `assembly.skip` can include `stage: launch` or `resume`, `remaining`
 Preview.87: `assembly.epoch` reports `prepared`, `legacy` and `fromBoot`; nonzero legacy identifies owners without exact epoch support. `assembly.launch.error` / existing `assembly.resume.error` report failures before fail-open cleanup. No new sampling loop or payload.
 
 Preview.88: `address.finish` includes `reason` (finished/cancelled/watchdog/setup-failed/fallback-failed). `address.cascade.finish` records generation, opening and reason. `address.cleanup.error`, `address.cascade.cleanup`, `address.cascade.error`, `address.cascade.bookmarks.error`, `address.phase.error` and `address.dismiss.error` report bounded failure metadata. No URL or input contents.
+
+Preview.89: `assembly.finish` reports bounded `reason`, `counts` (pending/finished/cancelled/retired) and `legacy`; `assembly.outcome.cancel` reports fixed surface name; `assembly.boundary.wait` reports pending count and remaining bounded grace. These are transaction events, no added polling or private payload.

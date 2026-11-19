@@ -381,6 +381,7 @@ function acquireZenHome(win, services) {
         const delay=Math.max(0,(timeline.home+Math.min(i*65,195))*timeline.scale-(timeline.startEffect?0:elapsed));
         const a=node.animate([{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}],{delay,duration:timeline.homeLength*timeline.scale,easing:"cubic-bezier(.2,.75,.25,1)",fill:"both"});
         run.effects.push(a);a.finished.catch(()=>{});
+        timeline.observeEffect?.(a,"home",()=>startupRun===run&&!dead&&open);
         if(startupRun!==run){try{a.cancel();}catch{}return null;}
         if(timeline.closed){finishStartupHome(run);return null;}
         if(timeline.paused){a.pause();a.currentTime=0;}
@@ -389,7 +390,9 @@ function acquireZenHome(win, services) {
         if(timeline.closed){finishStartupHome(run);return null;}
       }
       if(run.effects.length){
-        Promise.all(run.effects.map(a=>a.finished.catch(()=>{}))).then(()=>{if(startupRun===run)finishStartupHome(run);});
+        // New Assembly owns the common boundary, including deferred
+        // structural refresh. Legacy Assembly retains its local completion.
+        if(!timeline.observeEffect)Promise.all(run.effects.map(a=>a.finished.catch(()=>{}))).then(()=>{if(startupRun===run)finishStartupHome(run);});
         return lease;
       }
     }catch(error){try{win.__nocturneTrace?.("home.startup.error",{name:error?.name},{flush:true});}catch{}}

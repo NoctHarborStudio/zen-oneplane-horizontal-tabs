@@ -26,3 +26,54 @@ export function startupLateEffect(plan,start,finishAt,deadline,now,delay,length,
   const time=Math.min(available,Math.max(240,Math.min(length*plan.scale,finishAt-now-wait-60)));
   return {delay:wait,length:time,finishAt:now+wait+time+65};
 }
+
+// One Assembly-owned outcome ledger. Consumers supply exact ownership
+// predicates; intentional retirement is not a successful WAAPI finish.
+export function createStartupOutcome(onCancel,onProgress=()=>{}){
+  const records=new Map();
+  let closed=false;
+  const current=record=>{try{return record.isCurrent();}catch{return false;}};
+  function observe(effect,surface,isCurrent){
+    if(closed||records.has(effect))return;
+    const record={effect,surface,isCurrent,state:"pending"};
+    records.set(effect,record);
+    const done=cancelled=>{
+      if(closed||records.get(effect)!==record||record.state!=="pending")return;
+      if(!current(record))record.state="retired";
+      else{
+        record.state=cancelled?"cancelled":"finished";
+        if(cancelled){onCancel(surface);return;}
+      }
+      onProgress();
+    };
+    // Attach before any pause/seek/startTime mutation. Never convert an
+    // unexpected rejection into a normal successful transaction.
+    effect.finished.then(()=>done(false),()=>done(true));
+  }
+  function snapshot(){
+    const counts={pending:0,finished:0,cancelled:0,retired:0};
+    for(const record of records.values()){
+      let state=record.state;
+      if(state==="pending"){
+        if(!current(record))state="retired";
+        else try{
+          const playState=record.effect.playState;
+          if(playState==="finished")state="finished";
+          else if(playState==="idle")state="cancelled";
+        }catch{}
+      }
+      counts[state]++;
+    }
+    return counts;
+  }
+  function close(){closed=true;records.clear();}
+  return {observe,snapshot,close};
+}
+
+export function startupBoundaryOutcome(counts,legacy=0){
+  if(counts?.cancelled)return "effect-cancelled";
+  if(counts?.pending)return "boundary-incomplete";
+  if(legacy)return "completed-unverified";
+  if(counts?.retired)return "completed-with-retired";
+  return "completed";
+}

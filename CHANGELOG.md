@@ -1,3 +1,9 @@
+## 0.3.0-preview.89 — Startup completion ownership
+
+- Track exact direct, tab, bookmark and Home animation outcomes in Assembly, distinguishing completion, cancellation and intentional retirement.
+- Keep the existing single completion timer and bounded watchdog; allow one capped grace interval when the planned boundary arrives before effect completion. Stop late admission at that boundary.
+- Retain Home's structural lease until common completion, retire it on interruption, and fail open without sealing cancelled proxy effects. Workspace, Close and legacy owner contracts are preserved.
+
 ## 0.3.0-preview.88 — Address phase and cascade completion
 
 - Bind the address wave to its exact phase and finite document timeline epoch; same-direction replacement retimes the cascade from current visuals.

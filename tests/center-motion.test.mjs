@@ -329,3 +329,19 @@ test("startup bookmark epoch is exact and setter errors reach Assembly",()=>{
  handle.release();let stale=false;try{handle.resumeAt(()=>{});}catch(e){stale=e.message==="bookmark-epoch-stale";}
  assert.equal(stale,true);
 });
+
+test("only startup tab and bookmark effects join the exact outcome ledger",()=>{
+ const f=proxyFixture(),engine=f.mount(),observed=[];
+ const observeEffect=(effect,surface,current)=>observed.push({effect,surface,current});
+ const a=engine.start(f.row,{owner:"startup",paused:true,observeEffect});
+ assert.equal(observed.length,f.effects.length);
+ assert.ok(observed.every((o,i)=>o.effect===f.effects[i]&&o.surface==="tabs"&&o.current()));
+ a.release();assert.ok(observed.every(o=>!o.current()));
+ const n=observed.length,b=engine.start(f.row,{owner:"workspace",observeEffect});
+ assert.equal(observed.length,n);b.release();
+ const bm=bookmarkFixture(),other=bm.mount(),h=other.bookmarks({owner:"startup",paused:true,observeEffect});
+ assert.equal(observed.length,n+1);assert.equal(observed[n].surface,"bookmarks");assert.equal(observed[n].current(),true);
+ h.release();assert.equal(observed[n].current(),false);
+ const close=other.bookmarks({owner:"close",observeEffect});
+ assert.equal(observed.length,n+1);close.release();
+});

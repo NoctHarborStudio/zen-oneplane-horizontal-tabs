@@ -26,9 +26,60 @@ function startupLateEffect(plan,start,finishAt,deadline,now,delay,length,elapsed
   const time=Math.min(available,Math.max(240,Math.min(length*plan.scale,finishAt-now-wait-60)));
   return {delay:wait,length:time,finishAt:now+wait+time+65};
 }
+
+// One Assembly-owned outcome ledger. Consumers supply exact ownership
+// predicates; intentional retirement is not a successful WAAPI finish.
+function createStartupOutcome(onCancel,onProgress=()=>{}){
+  const records=new Map();
+  let closed=false;
+  const current=record=>{try{return record.isCurrent();}catch{return false;}};
+  function observe(effect,surface,isCurrent){
+    if(closed||records.has(effect))return;
+    const record={effect,surface,isCurrent,state:"pending"};
+    records.set(effect,record);
+    const done=cancelled=>{
+      if(closed||records.get(effect)!==record||record.state!=="pending")return;
+      if(!current(record))record.state="retired";
+      else{
+        record.state=cancelled?"cancelled":"finished";
+        if(cancelled){onCancel(surface);return;}
+      }
+      onProgress();
+    };
+    // Attach before any pause/seek/startTime mutation. Never convert an
+    // unexpected rejection into a normal successful transaction.
+    effect.finished.then(()=>done(false),()=>done(true));
+  }
+  function snapshot(){
+    const counts={pending:0,finished:0,cancelled:0,retired:0};
+    for(const record of records.values()){
+      let state=record.state;
+      if(state==="pending"){
+        if(!current(record))state="retired";
+        else try{
+          const playState=record.effect.playState;
+          if(playState==="finished")state="finished";
+          else if(playState==="idle")state="cancelled";
+        }catch{}
+      }
+      counts[state]++;
+    }
+    return counts;
+  }
+  function close(){closed=true;records.clear();}
+  return {observe,snapshot,close};
+}
+
+function startupBoundaryOutcome(counts,legacy=0){
+  if(counts?.cancelled)return "effect-cancelled";
+  if(counts?.pending)return "boundary-incomplete";
+  if(legacy)return "completed-unverified";
+  if(counts?.retired)return "completed-with-retired";
+  return "completed";
+}
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.88"};
+  const event="assembly.script",data={version:"0.3.0-preview.89"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -118,12 +169,25 @@ try{if(typeof window!=="undefined"){
     const epoch=++timerEpoch,old=timer;timer=0;
     if(old)try{window.clearTimeout(old);}catch{}
     const end=Math.min(deadline,until);
-    if(now()>=end){finish();return;}
+    const complete=()=>{
+      const watchdog=end===deadline||now()>=deadline;
+      if(watchdog)decision("assembly.watchdog",{age:now()-started,playing,settling,bootPreparing});
+      if(watchdog||settling){finish(watchdog?"watchdog":"interrupted");return;}
+      const timeline=ownedTimeline,counts=timeline?.outcome?.snapshot();
+      if(counts?.pending&&!counts.cancelled&&!timeline.boundaryReached){
+        // One bounded grace interval, on the same timer. No new targets
+        // may join after the nominal end; a finished promise can end it.
+        timeline.boundaryReached=true;timeline.closed=true;
+        const cap=Math.min(deadline,playStart+plan.lateLimit,now()+120);
+        decision("assembly.boundary.wait",{pending:counts.pending,remaining:Math.max(0,cap-now())});
+        if(cap>now()){armFinish(cap);return;}
+      }
+      finish("boundary");
+    };
+    if(now()>=end){complete();return;}
     timer=window.setTimeout(()=>{
       if(dead||epoch!==timerEpoch)return;
-      timer=0;
-      if(end===deadline)decision("assembly.watchdog",{age:now()-started,playing,settling,bootPreparing});
-      finish();
+      timer=0;complete();
     },Math.max(0,end-now()));
   }
   function mountBoot(){
@@ -177,7 +241,7 @@ try{if(typeof window!=="undefined"){
     const done=()=>{
       if(dead||boot!==overlay)return;
       removeBoot();decision("boot.handoff",{elapsed:now()-bootAt});
-      try{resume();}catch(error){decision("assembly.resume.error",{name:error?.name});finish();}
+      try{resume();}catch(error){decision("assembly.resume.error",{name:error?.name});finish("setup-failed");}
     };
     // Allow the frozen proxy tree to receive a paint before the exit.
     bootFrame=window.requestAnimationFrame(()=>{
@@ -188,7 +252,9 @@ try{if(typeof window!=="undefined"){
         bootEffects.push(logo);logo.finished.catch(()=>{});
         const fade=overlay.animate([{opacity:1},{opacity:0}],{delay:110,duration:BOOT_EXIT-110,easing:"ease-in-out",fill:"both"});
         if(dead||boot!==overlay){try{fade.finished.catch(()=>{});}catch{}try{fade.cancel();}catch{}return;}
-        bootEffects.push(fade);fade.finished.then(done,done);
+        bootEffects.push(fade);fade.finished.then(done,()=>{
+          if(!dead&&boot===overlay)finish("boot-cancelled");
+        });
         bootTimer=window.setTimeout(done,BOOT_EXIT+150);
       }catch{done();}
     });
@@ -201,13 +267,18 @@ try{if(typeof window!=="undefined"){
       w.setAttribute(HOLD,"true");
     }
   }
-  function finish(){
+  function finish(reason="disposed"){
     if(dead)return;dead=true;
+    if(!["disposed","boundary","completed","watchdog","interrupted","effect-cancelled","boot-cancelled","setup-failed","insufficient-budget"].includes(reason))reason="disposed";
+    const outcome=ownedTimeline?.outcome;
+    const counts=outcome?.snapshot();
+    if(reason==="boundary")reason=startupBoundaryOutcome(counts,ownedTimeline?.legacy);
     if(ownedTimeline)ownedTimeline.closed=true;
+    outcome?.close();
     let failed=0;
     const step=fn=>{try{fn();}catch{failed++;}};
     const owns=window[KEY]===finish;
-    step(()=>window.__nocturneTrace?.("assembly.finish",()=>({playing,settling,seen:seen.size,effects:animations.size,age:now()-started}),{flush:true}));
+    step(()=>window.__nocturneTrace?.("assembly.finish",()=>({playing,settling,seen:seen.size,effects:animations.size,age:now()-started,reason,counts,legacy:ownedTimeline?.legacy??0}),{flush:true}));
     step(()=>{if(raf)window.cancelAnimationFrame(raf);});
     step(()=>{if(timer)window.clearTimeout(timer);});timer=0;
     step(()=>{if(nativeTimer)window.clearTimeout(nativeTimer);});nativeTimer=0;
@@ -220,8 +291,13 @@ try{if(typeof window!=="undefined"){
     nativeObserver=null;
     for(const a of animations.keys())step(()=>a.cancel());
     animations.clear();
-    step(()=>centerHandle?.seal());step(()=>centerHandle?.release());centerHandle=null;
-    step(()=>bookmarkHandle?.seal());step(()=>bookmarkHandle?.release());bookmarkHandle=null;
+    // Only a normal boundary seals a still-owned surface. Abort must
+    // not resurrect an externally cancelled animation via finish().
+    const seal=reason.startsWith("completed");
+    if(seal)step(()=>centerHandle?.seal());
+    step(()=>centerHandle?.release());centerHandle=null;
+    if(seal)step(()=>bookmarkHandle?.seal());
+    step(()=>bookmarkHandle?.release());bookmarkHandle=null;
     if(owns)step(()=>{if(!pendingEngine)pendingEngine=window.__nocturneCenterMotion;pendingEngine?.releasePending();});
     for(const n of [...owned.keys()])step(()=>restore(n));
     for(const n of seen)step(()=>n.removeAttribute(MANAGED));
@@ -258,14 +334,20 @@ try{if(typeof window!=="undefined"){
   function settle(){
     typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.settle",()=>({playing,settling,effects:animations.size}),{sample:1800});
     if(dead||settling)return;
-    if(!playing||bootPreparing||ownedTimeline?.paused||reduced.matches||!animations.size){finish();return;}
+    if(!playing||bootPreparing||ownedTimeline?.paused||reduced.matches||!animations.size){finish("interrupted");return;}
     settling=true;
+    // Stop further stage admission immediately, including a late Home.
+    if(ownedTimeline)ownedTimeline.closed=true;
     try{
     // The native background and page have never been touched.
     // Finish active effects from current values, not a different frame.
     root.setAttribute(PHASE,"settling");
+    const homeLease=ownedTimeline?.homeLease;
+    if(homeLease)homeLease.release();
+    if(dead)return;
     if(typeof centerHandle!=="undefined"){centerHandle?.seal();centerHandle?.release();centerHandle=null;}
     if(typeof bookmarkHandle!=="undefined"){bookmarkHandle?.seal();bookmarkHandle?.release();bookmarkHandle=null;}
+    if(dead)return;
     lateObserver?.disconnect();lateObserver=null;lateResize?.disconnect();lateResize=null;
     if(lateFrame)window.cancelAnimationFrame(lateFrame);lateFrame=0;
     const pending=[];
@@ -284,7 +366,7 @@ try{if(typeof window!=="undefined"){
       if(!from||!play(record.n,[from,to],0,120,false,FADE,record.complete))record.complete?.();
     }
     armFinish(now()+155);
-    }catch(error){decision("assembly.settle.error",{name:error?.name});finish();}
+    }catch(error){decision("assembly.settle.error",{name:error?.name});finish("setup-failed");}
   }
   function interrupt(event){
     // Typing in Home or a web page must not terminate a chrome animation.
@@ -293,7 +375,7 @@ try{if(typeof window!=="undefined"){
     const accepted=event?.isTrusted!==false&&(event?.type==="beforecustomization"||event?.type==="dragstart"||event?.type==="pointerdown"&&toolbar);
     decision("assembly.interrupt",{type:event?.type,trusted:event?.isTrusted,playing,toolbar,accepted});
     if(event?.isTrusted!==false&&boot&&["pointerdown","keydown","wheel","dragstart","beforecustomization"].includes(event?.type)){
-      decision("boot.skip",{type:event.type});finish();return;
+      decision("boot.skip",{type:event.type});finish("interrupted");return;
     }
     if(accepted)settle();
   }
@@ -302,9 +384,9 @@ try{if(typeof window!=="undefined"){
     const next=[window.innerWidth,window.innerHeight];
     const changed=Math.abs(next[0]-viewport[0])>1||Math.abs(next[1]-viewport[1])>1;
     typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.resize",()=>({changed,playing,size:next}),{throttle:100,sample:1500});
-    viewport=next;if(playing&&changed){if(bootPreparing)finish();else settle();}
+    viewport=next;if(playing&&changed){if(bootPreparing)finish("interrupted");else settle();}
   }
-  function preferenceChanged(){if(reduced.matches||bootPreparing&&!prefs.getBoolPref(ENABLE,true))finish();else if(!prefs.getBoolPref(ENABLE,true))settle();}
+  function preferenceChanged(){if(reduced.matches||bootPreparing&&!prefs.getBoolPref(ENABLE,true))finish("interrupted");else if(!prefs.getBoolPref(ENABLE,true))settle();}
   function bounds(n,ignoreOpacity=false){
     if(!n||n.hidden||n.collapsed)return null;
     const s=window.getComputedStyle(n),r=n.getBoundingClientRect();
@@ -327,6 +409,7 @@ try{if(typeof window!=="undefined"){
         try{complete?.();}catch(error){decision("assembly.effect.cleanup-error",{name:error?.name});}
         if(cancelled)decision("assembly.effect.cancel",{retained:retain});
       };
+      if(!dead)ownedTimeline?.observeEffect?.(a,"direct",()=>!dead&&animations.get(a)===record);
       a.finished?.then(()=>done(),()=>done(true));
       if(dead)throw Error("assembly-disposed");
       if(prepare){a.pause();a.currentTime=0;}
@@ -473,7 +556,7 @@ try{if(typeof window!=="undefined"){
         prepared.push({n,mark:n.getAttribute(MANAGED)});
         seen.add(n);n.setAttribute(MANAGED,"true");
       }
-      handle=engine.bookmarks?.({owner:"startup",direction:"in",duration:Math.round(420*scale),delay:Math.round(timeline.bookmarks*scale),paused:timeline.paused})||null;
+      handle=engine.bookmarks?.({owner:"startup",direction:"in",duration:Math.round(420*scale),delay:Math.round(timeline.bookmarks*scale),paused:timeline.paused,observeEffect:timeline.observeEffect})||null;
       if(dead||window.__nocturneCenterMotion!==engine){handle?.release();handle=null;}
       return handle;
     }catch(error){
@@ -490,9 +573,9 @@ try{if(typeof window!=="undefined"){
     }
   }
   function scheduleLate(){
-    if(dead||!playing||settling||bootPreparing||ownedTimeline?.paused||lateFrame)return;
+    if(dead||!playing||settling||bootPreparing||ownedTimeline?.paused||ownedTimeline?.closed||lateFrame)return;
     lateFrame=window.requestAnimationFrame(()=>{
-      lateFrame=0;if(dead||settling)return;
+      lateFrame=0;if(dead||settling||ownedTimeline?.closed)return;
       try{
       const bar=floatingBar();
       if(bar&&!seen.has(bar))openFromCenter(bar,590,440,true);
@@ -502,7 +585,7 @@ try{if(typeof window!=="undefined"){
       controls(row,url,center,true);
       // Cards inserted after the snapshot appear in their real slots.
       // Never restart an already-playing train for late mirror mutations.
-      }catch(error){decision("assembly.late.error",{name:error?.name});finish();}
+      }catch(error){decision("assembly.late.error",{name:error?.name});finish("setup-failed");}
     });
   }
   // WAAPI startTime is a document-timeline time, not performance.now().
@@ -562,10 +645,19 @@ try{if(typeof window!=="undefined"){
       playStart=now();
       const overhead=bootPreparing?BOOT_EXIT+150:0;
       if(!startupFits(plan,playStart,deadline,overhead)){
-        decision("assembly.skip",{reason:"insufficient-budget",stage:"launch",remaining:deadline-playStart,needed:plan.finishLength+overhead});finish();return;
+        decision("assembly.skip",{reason:"insufficient-budget",stage:"launch",remaining:deadline-playStart,needed:plan.finishLength+overhead});finish("insufficient-budget");return;
       }
       const timeline={...plan,start:playStart};
       timeline.paused=true;
+      timeline.outcome=createStartupOutcome(surface=>{
+        if(dead||ownedTimeline!==timeline)return;
+        decision("assembly.outcome.cancel",{surface});
+        finish("effect-cancelled");
+      },()=>{
+        if(dead||ownedTimeline!==timeline||!timeline.boundaryReached||settling)return;
+        if(!timeline.outcome.snapshot().pending)finish("boundary");
+      });
+      timeline.observeEffect=timeline.outcome.observe;
       finishAt=playStart+timeline.finishLength;
       ownedTimeline=timeline;window.__nocturneStartupTimeline=timeline;
       homeRegistry=window.__zenSharedHomeV1;
@@ -585,7 +677,7 @@ try{if(typeof window!=="undefined"){
         // Remove per-card startup gates together, including split members.
         for(const n of cards){n.setAttribute(MANAGED,"true");seen.add(n);}
         if(!painted){
-          const handle=engine?.start(row,{owner:"startup",direction:"in",duration:Math.round(timeline.cardsLength*scale),delay:Math.round(timeline.cards*scale),paused:timeline.paused});
+          const handle=engine?.start(row,{owner:"startup",direction:"in",duration:Math.round(timeline.cardsLength*scale),delay:Math.round(timeline.cards*scale),paused:timeline.paused,observeEffect:timeline.observeEffect});
           if(dead||window.__nocturneCenterMotion!==engine){handle?.release();finish();return;}
           centerHandle=handle;
         }else engine?.releasePending();
@@ -635,7 +727,7 @@ try{if(typeof window!=="undefined"){
         if(dead||timeline.closed||ownedTimeline!==timeline||!timeline.paused)return;
         const resumedAt=now();
         if(!startupFits(plan,resumedAt,deadline)){
-          decision("assembly.skip",{reason:"insufficient-budget",stage:"resume",remaining:deadline-resumedAt,needed:plan.finishLength});finish();return;
+          decision("assembly.skip",{reason:"insufficient-budget",stage:"resume",remaining:deadline-resumedAt,needed:plan.finishLength});finish("insufficient-budget");return;
         }
         const fromBoot=bootPreparing;
         bindStartupEpoch(timeline,document.timeline);
@@ -644,6 +736,7 @@ try{if(typeof window!=="undefined"){
         finishAt=playStart+timeline.finishLength;
         const legacy=resumePrepared(timeline);
         if(dead)return;
+        timeline.legacy=legacy;
         decision("assembly.epoch",{prepared:animations.size,legacy,fromBoot});
         if(fromBoot)decision("boot.assembly.start",{age:playStart-started,prepared:animations.size});
         scheduleLate();
@@ -655,11 +748,11 @@ try{if(typeof window!=="undefined"){
         armFinish();
         if(!dead)exitBoot(resume);
       }else resume();
-    }catch(error){decision("assembly.launch.error",{name:error?.name});console.warn("[Zen Refined] Startup reveal failed:",error);finish();}
+    }catch(error){decision("assembly.launch.error",{name:error?.name});console.warn("[Zen Refined] Startup reveal failed:",error);finish("setup-failed");}
   }
   function schedule(){
     if(dead||playing||settling||raf)return;
-    try{raf=window.requestAnimationFrame(tick);}catch(error){decision("assembly.readiness.error",{name:error?.name});finish();}
+    try{raf=window.requestAnimationFrame(tick);}catch(error){decision("assembly.readiness.error",{name:error?.name});finish("setup-failed");}
   }
   let readinessKey="",quietSince=started,resourceRevision=0,resourceOwners=null,resourceNodes=[];
   function sampleStartupResources(row,force=false){
@@ -678,10 +771,10 @@ try{if(typeof window!=="undefined"){
   }
   function tick(){
     raf=0;if(dead||playing)return;
-    try{checkReadiness();}catch(error){decision("assembly.readiness.error",{name:error?.name});finish();}
+    try{checkReadiness();}catch(error){decision("assembly.readiness.error",{name:error?.name});finish("setup-failed");}
   }
   function checkReadiness(){
-    if(now()>=deadline){decision("assembly.skip",{reason:"deadline",nativeReady,settled,state:root.getAttribute(READY)});finish();return;}
+    if(now()>=deadline){decision("assembly.skip",{reason:"deadline",nativeReady,settled,state:root.getAttribute(READY)});finish("watchdog");return;}
     if(window.closed||root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"){finish();return;}
     hold();pendingEngine=window.__nocturneCenterMotion;
     // Warm icons while native restore is still running, not only after it.
@@ -722,7 +815,7 @@ try{if(typeof window!=="undefined"){
     if(dead)return;
     // Do not start a full sequence which cannot fit the remaining budget.
     const overhead=boot?BOOT_EXIT+150:0,needed=plan.finishLength+overhead;
-    if(!startupFits(plan,now(),deadline,overhead)){decision("assembly.skip",{reason:"insufficient-budget",remaining:deadline-now(),needed});finish();return;}
+    if(!startupFits(plan,now(),deadline,overhead)){decision("assembly.skip",{reason:"insufficient-budget",remaining:deadline-now(),needed});finish("insufficient-budget");return;}
     console.info("[Zen Refined] Center Assembly launch: "+(one?"OnePlane":"native"));
     launch(one);
   }
@@ -824,5 +917,5 @@ try{if(typeof window!=="undefined"){
     else{nativeObserver=subject=>{if(subject!==window)return;Services.obs.removeObserver(nativeObserver,"browser-delayed-startup-finished");nativeObserver=null;onNativeReady();};
       Services.obs.addObserver(nativeObserver,"browser-delayed-startup-finished");}
     schedule();
-  }catch(error){console.warn("[Zen Refined] Startup controller:",error);finish();}
+  }catch(error){console.warn("[Zen Refined] Startup controller:",error);finish("setup-failed");}
 })();

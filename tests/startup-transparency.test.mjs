@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
-import {startupTimeline,startupFits,startupLateEffect} from "../src/algorithms/startup-timeline.mjs";
+import {startupTimeline,startupFits,startupLateEffect,createStartupOutcome,startupBoundaryOutcome} from "../src/algorithms/startup-timeline.mjs";
 const source=readFileSync(new URL("../startup-animation.uc.mjs",import.meta.url),"utf8");
 const css=readFileSync(new URL("../chrome.css",import.meta.url),"utf8");
 const first=source.slice(source.indexOf("function canStartBeforePaint("),source.indexOf("// No replay on Sine"));
@@ -48,7 +48,7 @@ test("late startup allowed only during initial chrome setup; established windows
 test("startup waits for horizontal readiness and ignores duplicate resize",()=>{
  assert.ok(source.includes("if(active&&!one){schedule();return;}"));
  assert.ok(source.includes("window.__nocturneLayoutStartup"));
- assert.ok(source.includes("if(playing&&changed){if(bootPreparing)finish();else settle();}"));
+ assert.ok(source.includes('if(playing&&changed){if(bootPreparing)finish("interrupted");else settle();}'));
 });
 
 test("startup keeps the waiting gate until targets own their resting styles",()=>{
@@ -141,7 +141,7 @@ test("startup animation preserves explicit 760 ms and does not migrate saved cho
  assert.ok(!block.includes("setIntPref"));assert.ok(!block.includes("setBoolPref"));
 });
 test("Assembly cleanup continues after Center Motion and Home failures",()=>{
- const code=source.slice(source.indexOf("  function finish(){"),source.indexOf("  function settle(){"));
+ const code=source.slice(source.indexOf("  function finish(reason="),source.indexOf("  function settle(){"));
  const run=new Function(`
  let dead=false,playing=true,settling=false,raf=1,timer=2,nativeTimer=3,nativeFrame=0,nativeFrame2=0,lateFrame=4,lateObserver={disconnect(){throw Error("observer");}},lateResize=null,nativeObserver=null,centerHandle={seal(){throw Error("seal");},release(){log.push("center");}},bookmarkHandle={seal(){},release(){log.push("bookmarks");}},sheetURI=null,style=null,holdNode=null,bootPreparing=true;
  const log=[],KEY="assembly",PHASE="phase",HOLD="hold",MANAGED="managed",EXISTING="existing",ENABLE="enable",started=0,now=()=>1;
@@ -151,7 +151,7 @@ test("Assembly cleanup continues after Center Motion and Home failures",()=>{
  let pendingEngine=window.__nocturneCenterMotion,homeRegistry=window.__zenSharedHomeV1,ownedTimeline={},phaseOwned=true,phaseBaseline=null,holdBaseline=null;
  function restoreMark(n,k,v){n.removeAttribute(k);}
  function restore(){}function removeBoot(){log.push("boot");}function interrupt(){}function onResize(){}function schedule(){}function preferenceChanged(){}
- ${code}window[KEY]=finish;finish();finish();return {log,registered:!!window[KEY]};`);
+ ${code}window[KEY]=finish;finish("completed");finish();return {log,registered:!!window[KEY]};`);
  assert.deepEqual(run(),{log:["center","bookmarks","pending","phase","boot",3],registered:false});
 });
 
@@ -168,7 +168,7 @@ test("Boot teardown continues after timer failure and preserves replacement mark
 function directEffectFixture({paused=true,pauseFails=false,cancelDuringAnimate=false}={}){
  const code=source.slice(source.indexOf("  function play(n,"),source.indexOf("  function save("));
  return new Function("paused","pauseFails","cancelDuringAnimate",`
-  let dead=false,bootPreparing=paused,animations=new Map(),events=[],callbacks=[],EASE="ease";
+  let dead=false,bootPreparing=paused,ownedTimeline=null,animations=new Map(),events=[],callbacks=[],EASE="ease";
   const a={cancelled:0,finished:{then(ok,fail){callbacks.push({ok,fail});}},pause(){if(pauseFails)throw Error("pause");},cancel(){this.cancelled++;}};
   const n={animate(){if(cancelDuringAnimate)dead=true;return a;}};
   function decision(e){events.push(e);}
@@ -334,7 +334,7 @@ test("late native Home remains visible without replaying its startup stage",()=>
 test("Assembly completion cannot extend the inherited deadline or execute stale timers",()=>{
  const code=source.slice(source.indexOf("  function armFinish("),source.indexOf("  function mountBoot("));
  const run=new Function(`
- let dead=false,deadline=8000,timerEpoch=0,timer=0,time=7000,calls=0;
+ let dead=false,settling=false,ownedTimeline=null,deadline=8000,timerEpoch=0,timer=0,time=7000,calls=0;
  const timers=[],window={setTimeout(fn,delay){timers.push({fn,delay});return timers.length;},clearTimeout(){throw Error("clear");}};
  const now=()=>time;function finish(){dead=true;calls++;}function decision(){}
  ${code}
@@ -453,4 +453,93 @@ test("late reveal uses document elapsed for its stage but performance time for t
  const effect=startupLateEffect(p,0,1190,8000,400,590,440,300);
  assert.deepEqual(effect,{delay:290,length:440,finishAt:1195});
  assert.equal(startupLateEffect(p,0,1190,8000,400,590,440,Infinity),null);
+});
+
+test("startup outcome separates exact completion, external cancellation and retired effects",async()=>{
+ const cancelled=[],progress=[];
+ const ledger=createStartupOutcome(s=>cancelled.push(s),()=>progress.push(true));
+ const make=()=>{let resolve,reject;const finished=new Promise((a,b)=>{resolve=a;reject=b;});return {finished,resolve,reject,playState:"running"};};
+ const a=make(),b=make(),c=make(),d=make();let bCurrent=true;
+ ledger.observe(a,"direct",()=>true);ledger.observe(b,"home",()=>bCurrent);
+ ledger.observe(c,"tabs",()=>true);ledger.observe(d,"bookmarks",()=>true);
+ ledger.observe(a,"direct",()=>true);
+ a.resolve();bCurrent=false;b.reject(Error("own release"));c.reject(Error("external"));d.playState="finished";
+ await Promise.resolve();
+ assert.deepEqual(ledger.snapshot(),{pending:0,finished:2,cancelled:1,retired:1});
+ assert.deepEqual(cancelled,["tabs"]);assert.equal(progress.length,2);
+ assert.equal(startupBoundaryOutcome(ledger.snapshot()),"effect-cancelled");
+ ledger.close();d.reject(Error("stale"));await Promise.resolve();
+ assert.deepEqual(cancelled,["tabs"]);assert.deepEqual(ledger.snapshot(),{pending:0,finished:0,cancelled:0,retired:0});
+});
+test("boundary distinguishes incomplete, retired and legacy completion",()=>{
+ assert.equal(startupBoundaryOutcome({pending:1,finished:2}),"boundary-incomplete");
+ assert.equal(startupBoundaryOutcome({retired:1,finished:2}),"completed-with-retired");
+ assert.equal(startupBoundaryOutcome({finished:2},1),"completed-unverified");
+ assert.equal(startupBoundaryOutcome({finished:2}),"completed");
+ const ledger=createStartupOutcome(()=>{throw Error("unexpected cancellation");});
+ const effect={finished:new Promise(()=>{}),playState:"idle"};
+ ledger.observe(effect,"tabs",()=>true);
+ assert.equal(startupBoundaryOutcome(ledger.snapshot()),"effect-cancelled");
+ ledger.close();
+});
+test("normal boundary allows one capped grace period and no stale timer completion",()=>{
+ const code=source.slice(source.indexOf("  function armFinish("),source.indexOf("  function mountBoot("));
+ const run=new Function(`
+ let dead=false,settling=false,deadline=8000,timerEpoch=0,timer=0,time=1000,playStart=0;
+ const plan={lateLimit:1100},ownedTimeline={outcome:{snapshot:()=>({pending:1,cancelled:0})}},timers=[],events=[];
+ const now=()=>time,window={setTimeout(fn,delay){timers.push({fn,delay});return timers.length;},clearTimeout(){}};
+ function finish(reason){events.push(reason);dead=true;}function decision(){}
+ ${code}
+ armFinish(1010);time=1010;timers[0].fn();timers[0].fn();
+ const before={closed:ownedTimeline.closed,reached:ownedTimeline.boundaryReached,events:[...events],delays:timers.map(t=>t.delay)};
+ time=1100;timers[1].fn();timers[1].fn();return {before,events};
+ `);
+ assert.deepEqual(run(),{before:{closed:true,reached:true,events:[],delays:[10,90]},events:["boundary"]});
+});
+test("current Home keeps the exact lease through normal effect completion until Assembly releases it",async()=>{
+ const home=readFileSync(new URL("../src/home/shared-home.js.part",import.meta.url),"utf8");
+ const code=home.slice(home.indexOf("  let startupRun="),home.indexOf("  function stopMotion()"));
+ const run=new Function("createStartupOutcome",`
+ let open=true,dead=false,searchToken=null,mark=true,dirty=0,cancelled=0,resolve;
+ const panel={hasAttribute:()=>mark,removeAttribute(){mark=false;}};
+ const a={finished:new Promise(r=>resolve=r),pause(){},cancel(){cancelled++;}};
+ const content={children:[{animate(){return a;}}]},win={matchMedia:()=>({matches:false})};
+ function render(){dirty++;}
+ ${code}
+ const ledger=createStartupOutcome(()=>{throw Error("unexpected");});
+ const timeline={start:0,scale:1,home:650,homeLength:330,paused:true,observeEffect:ledger.observe};
+ const lease=playStartupHome(timeline);refreshHomeStructure();resolve();
+ return Promise.resolve().then(()=>{
+   const before={owned:timeline.homeLease===lease,mark,dirty,counts:ledger.snapshot()};
+   timeline.closed=true;ledger.close();lease.release();
+   return {before,owned:!!timeline.homeLease,mark,dirty,cancelled};
+ });
+ `);
+ assert.deepEqual(await run(createStartupOutcome),{before:{owned:true,mark:true,dirty:0,counts:{pending:0,finished:1,cancelled:0,retired:0}},owned:false,mark:false,dirty:1,cancelled:1});
+});
+test("Assembly abort does not seal cancelled proxy effects",()=>{
+ const code=source.slice(source.indexOf("  function finish(reason="),source.indexOf("  function settle(){"));
+ const run=new Function(`
+ let dead=false,playing=true,settling=false,raf=0,timer=0,nativeTimer=0,nativeFrame=0,nativeFrame2=0,lateFrame=0,lateObserver=null,lateResize=null,nativeObserver=null,centerHandle={seal(){log.push("seal");},release(){log.push("release");}},bookmarkHandle=null,sheetURI=null,style=null,holdNode=null,bootPreparing=false;
+ const log=[],KEY="assembly",PHASE="phase",HOLD="hold",MANAGED="managed",EXISTING="existing",ENABLE="enable",started=0,now=()=>1;
+ const window={removeEventListener(){},__nocturneTrace(){}};const root={},reduced={removeEventListener(){}},prefs={removeObserver(){}},Services={};
+ const animations=new Map(),owned=new Map(),seen=new Set(),baseline=new Set(),inputs=[];
+ let pendingEngine=null,homeRegistry=null,ownedTimeline={outcome:{snapshot:()=>({cancelled:1}),close(){log.push("close");}}},phaseOwned=false,phaseBaseline=null,holdBaseline=null;
+ function restoreMark(){}function restore(){}function removeBoot(){}function interrupt(){}function onResize(){}function schedule(){}function preferenceChanged(){}
+ ${code}window[KEY]=finish;finish("effect-cancelled");finish("completed");return log;
+ `);
+ assert.deepEqual(run(),["close","release"]);
+});
+
+test("settlement retires Home before direct replacement and prevents late admission",()=>{
+ const code=source.slice(source.indexOf("  function settle(){"),source.indexOf("  function interrupt("));
+ const run=new Function(`
+ let dead=false,playing=true,settling=false,bootPreparing=false,lateObserver=null,lateResize=null,lateFrame=0,log=[];
+ const a={cancel(){log.push("cancel");}},animations=new Map([[a,{n:{},frames:[{opacity:0},{opacity:1}]}]]);
+ const ownedTimeline={paused:false,homeLease:{release(){log.push(ownedTimeline.closed?"home-closed":"home-open");}}};
+ const reduced={matches:false},root={setAttribute(){}},PHASE="phase",FADE="ease",window={getComputedStyle(){return {opacity:".5"};}};
+ function play(){log.push("settle");return true;}function armFinish(){log.push("timer");}function now(){return 0;}function finish(){dead=true;}function decision(){}
+ ${code}settle();return {log,closed:ownedTimeline.closed};
+ `);
+ assert.deepEqual(run(),{log:["home-closed","cancel","settle","timer"],closed:true});
 });

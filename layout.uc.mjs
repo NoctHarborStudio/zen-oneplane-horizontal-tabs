@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.88",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.89",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -662,7 +662,7 @@
     motionBusy=true;
     try{return acquireTabs(row,options);}catch(error){trace("center.motion.error",{stage:"prepare",name:error?.name},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
   }
-  function acquireTabs(row,{owner,direction="in",duration=520,delay=0,paused=false,retainOnDispose=null}={}){
+  function acquireTabs(row,{owner,direction="in",duration=520,delay=0,paused=false,retainOnDispose=null,observeEffect=null}={}){
     stopSelection();active?.release("superseded");finishHandoff();releasePending();
     if(dead||!current())return null;
     if(!row){trace("center.motion.skip",{owner,reason:"no-row"});return null;}
@@ -755,6 +755,7 @@
         // Install cancellation handling immediately, even when pause or
         // currentTime subsequently throws. Fail open as one surface.
         running.push(a);a.finished.catch(()=>{});
+        if(owner==="startup")observeEffect?.(a,"tabs",()=>!released&&!dead&&current()&&active===handle);
         if(paused){a.pause();a.currentTime=0;}
       }
       handle.finished=Promise.all(running.map(a=>a.finished.catch(()=>{})));
@@ -774,7 +775,7 @@
     motionBusy=true;
     try{return acquireBookmark(options);}catch(error){trace("center.bookmarks.error",{stage:"prepare",name:error?.name},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
   }
-  function acquireBookmark({owner="unknown",direction="in",duration=520,delay=0,paused=false,retainOnDispose=null}={}){
+  function acquireBookmark({owner="unknown",direction="in",duration=520,delay=0,paused=false,retainOnDispose=null,observeEffect=null}={}){
     activeBookmark?.release("superseded");
     if(dead||!current())return null;
     const n=document.getElementById("PlacesToolbarItems"),markKey="data-zr-fold-bookmarks";
@@ -813,6 +814,7 @@
       if(dead||!current()){handle.release("disposed");return null;}
       a=n.animate(frames,{duration,delay,easing:"linear",fill:"both"});
       handle.finished=a.finished.catch(()=>{});
+      if(owner==="startup")observeEffect?.(a,"bookmarks",()=>!released&&!dead&&current()&&activeBookmark===handle);
       if(paused){a.pause();a.currentTime=0;}
       trace("center.bookmarks.acquire",{id,owner,direction,duration},{sample:duration+250});
       if(dead||released||!current()){handle.release("disposed");return null;}
@@ -1815,6 +1817,7 @@ function acquireZenHome(win, services) {
         const delay=Math.max(0,(timeline.home+Math.min(i*65,195))*timeline.scale-(timeline.startEffect?0:elapsed));
         const a=node.animate([{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}],{delay,duration:timeline.homeLength*timeline.scale,easing:"cubic-bezier(.2,.75,.25,1)",fill:"both"});
         run.effects.push(a);a.finished.catch(()=>{});
+        timeline.observeEffect?.(a,"home",()=>startupRun===run&&!dead&&open);
         if(startupRun!==run){try{a.cancel();}catch{}return null;}
         if(timeline.closed){finishStartupHome(run);return null;}
         if(timeline.paused){a.pause();a.currentTime=0;}
@@ -1823,7 +1826,9 @@ function acquireZenHome(win, services) {
         if(timeline.closed){finishStartupHome(run);return null;}
       }
       if(run.effects.length){
-        Promise.all(run.effects.map(a=>a.finished.catch(()=>{}))).then(()=>{if(startupRun===run)finishStartupHome(run);});
+        // New Assembly owns the common boundary, including deferred
+        // structural refresh. Legacy Assembly retains its local completion.
+        if(!timeline.observeEffect)Promise.all(run.effects.map(a=>a.finished.catch(()=>{}))).then(()=>{if(startupRun===run)finishStartupHome(run);});
         return lease;
       }
     }catch(error){try{win.__nocturneTrace?.("home.startup.error",{name:error?.name},{flush:true});}catch{}}

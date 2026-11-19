@@ -1070,3 +1070,7 @@ MB-007/008/012: current startup owners share one document epoch, including boot-
 ### A3.4c1 — preview.88 Address lifecycle
 
 NC4-050/051: exact phase/bar/epoch, current cancellation recovery, bounded wave/phase/handoff completion and isolated cleanup implemented in source. Native reproduction/acceptance remains open. Startup outcome and full A3.4 review remain pending.
+
+### A3.4c2 — preview.89 Startup terminal outcome
+
+MB3: common effect outcome and bounded completion implemented for current Startup owners. Legacy owners are explicitly unverified; no claim of native frame continuity or Lab parity. A3.4-R integrated review, MB6 geometry/topology handoff and native acceptance remain open.
