@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nocturne — Startup Motion Lab / reconstructed candidate</title>
+<style>
+:root{color-scheme:dark;font:14px/1.5 system-ui,sans-serif;background:#111219;color:#e4e5ef}
+*{box-sizing:border-box}body{margin:0}main{max-width:1500px;margin:auto;padding:24px}h1{font-size:24px;margin:0}p{color:#aeb1c3;margin:8px 0 16px}label{display:inline-flex;gap:6px;align-items:center}select,button{font:inherit;background:#292c39;color:inherit;border:1px solid #4a5065;padding:7px 10px;border-radius:7px}button{cursor:pointer}.controls{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:16px 0}.viewport{overflow:auto;border:1px solid #444858;border-radius:12px}.scene{position:relative;min-height:470px;background:#181a22;overflow:hidden;isolation:isolate}.panel{position:absolute;inset:0 0 auto;height:132px;background:#303441;border-radius:0 0 15px 15px}.strip{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 132px minmax(0,1fr);gap:7px;align-items:center;padding:9px 12px;height:49px}.lane{min-width:0;display:flex;gap:4px;overflow:hidden;align-items:center;height:36px}.lane.left{justify-content:flex-end}.lane.right{justify-content:flex-start}.card{flex:0 0 40px;height:30px;border-radius:7px;background:#434858;color:#e8ebf5;display:flex;align-items:center;justify-content:center;gap:4px;font-size:11px;transform-origin:center center}.card.split{flex-basis:80px;background:#424a61}.dot{width:9px;height:9px;border-radius:50%;background:#a5b9e8}.island{position:relative;height:30px;display:grid;place-items:center}.islandShape{position:absolute;inset:0;border-radius:9px;background:#4e5367;transform-origin:center}.islandLabel{position:relative;font-weight:600;white-space:nowrap}.overflowLane{position:relative;height:36px;display:flex;gap:4px;overflow:hidden;align-items:center;justify-content:center;padding:0 12px}.bookmarks{position:relative;display:flex;justify-content:center;gap:8px;height:37px;align-items:center}.bookmark{height:20px;padding:1px 8px;border-radius:5px;background:#3e4253;color:#e8eaf4;font-size:11px}.home{position:relative;width:min(460px,92%);margin:44px auto 0}.search{height:42px;border-radius:10px;background:#303441;padding:10px 15px;color:#afb6cd;transform-origin:center}.section{margin-top:17px}.sectionTitle{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#959db5;margin:0 0 6px}.tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.tile{height:45px;background:#303441;border-radius:9px;display:grid;place-items:center;font-size:12px;transform-origin:center}.workspaces{grid-template-columns:repeat(3,minmax(0,1fr))}.footer{margin-top:19px;text-align:center;color:#a3aac2;font-size:12px}.proxyLayer{position:absolute;inset:0;pointer-events:none;z-index:8}.proxyLayer .card{position:absolute;margin:0}.stats{margin-top:12px;color:#aeb1c3;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.note{font-size:12px;color:#aeb1c3}button:focus-visible,select:focus-visible{outline:2px solid #a5b9e8;outline-offset:2px}
+</style>
+</head>
+<body><main>
+<h1>Nocturne · Startup Motion Lab</h1>
+<p>Сравнительный стенд: текущая математика Fold и реконструированный кандидат Magnetic Bloom. Не оригинальный утверждённый Lab и не нативный Zen.</p>
+<div class="controls">
+<label>Движок <select id="mode"><option value="bloom">Bloom candidate</option><option value="fold">Fold baseline</option></select></label>
+<label>Вкладки <select id="count"><option>0</option><option>1</option><option selected>12</option><option>30</option><option>100</option></select></label>
+<label>Ширина <select id="width"><option>640</option><option selected>1000</option><option>1440</option></select></label>
+<label>Длительность <select id="duration"><option>400</option><option>760</option><option selected>1050</option><option>1500</option></select> мс (pref)</label>
+<label><input id="split" type="checkbox" checked> Split View</label>
+<label><input id="reduced" type="checkbox"> Reduced motion</label>
+<button id="replay" type="button">Повторить</button>
+</div>
+<div class="viewport"><div class="scene" id="scene" style="width:1000px"></div></div>
+<div id="stats" class="stats" role="status" aria-live="polite"></div>
+<p class="note">Без Boot, реальных страниц, пользовательских данных и сетевых ресурсов. Фиксированные слоты; только видимые карточки участвуют. Fold использует ту же кривую, что runtime, но упрощённые копии DOM. Время подготовки и число effects/keyframes — показатели этого стенда, не FPS Gecko.</p>
+</main>
+<script>

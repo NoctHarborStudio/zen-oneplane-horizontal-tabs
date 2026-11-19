@@ -1,0 +1,114 @@
+(() => {
+  const byId=id=>document.getElementById(id),scene=byId("scene"),stats=byId("stats");
+  const fold=createMagneticFoldMath();
+  let generation=0,active=null;
+  function element(tag,cls,text,parent){
+    const n=document.createElement(tag);n.className=cls;if(text)n.textContent=text;if(parent)parent.append(n);return n;
+  }
+  function retire(){
+    const run=active;active=null;
+    if(!run)return;
+    for(const a of run.effects)try{a.cancel();}catch{}
+    for(const n of run.hidden)n.style.visibility="";
+    run.layer?.remove();
+  }
+  function render(){
+    scene.replaceChildren();scene.style.width=byId("width").value+"px";
+    const panel=element("div","panel","",scene),row=element("div","strip","",scene);
+    const left=element("div","lane left","",row),island=element("div","island","",row),right=element("div","lane right","",row);
+    const shape=element("div","islandShape","",island),label=element("div","islandLabel","Home",island);
+    const overflow=element("div","overflowLane","",scene),bookmarks=element("div","bookmarks","",scene);
+    const count=Number(byId("count").value),split=byId("split").checked&&count>=2;
+    let cards=[];
+    for(let i=0;i<count;i++){
+      const group=split&&i===1;if(group)i++;
+      const card=element("div",group?"card split":"card","",null);
+      element("span","dot","",card);if(group)element("span","dot","",card);
+      element("span","",String(i+1),card);cards.push(card);
+    }
+    const capacity=Math.max(1,Math.floor((Number(byId("width").value)-170)/88));
+    const first=cards.slice(0,capacity*2);
+    first.slice(0,capacity).forEach(n=>left.append(n));
+    first.slice(capacity).forEach(n=>right.append(n));
+    cards.slice(capacity*2).forEach(n=>overflow.append(n));
+    for(const name of ["Docs","Code","Design","Music","Mail"])element("span","bookmark",name,bookmarks);
+    const home=element("div","home","",scene),search=element("div","search","Поиск или адрес",home);
+    const pins=element("div","section","",home);element("div","sectionTitle","Pinned",pins);
+    const pinTiles=element("div","tiles","",pins);
+    for(let i=1;i<=5;i++)element("div","tile","Pin "+i,pinTiles);
+    const work=element("div","section","",home);element("div","sectionTitle","Workspaces",work);
+    const wsTiles=element("div","tiles workspaces","",work);
+    for(const name of ["Free","Work","Study"])element("div","tile",name,wsTiles);
+    const footer=element("div","footer","Customize",home);
+    return {panel,row,island,shape,label,cards,bookmarks,search,pins,pinTiles,work,wsTiles,footer};
+  }
+  function play(){
+    retire();const id=++generation,ui=render(),mode=byId("mode").value,scale=Number(byId("duration").value)/1050;
+    if(byId("reduced").checked||matchMedia("(prefers-reduced-motion: reduce)").matches){stats.textContent="Reduced motion · resting pose";return;}
+    const run={effects:[],hidden:[],layer:null};active=run;
+    const started=performance.now(),rr=scene.getBoundingClientRect(),hr=ui.island.getBoundingClientRect();
+    const hub={left:hr.left,right:hr.right,top:hr.top,bottom:hr.bottom};
+    const center={x:hr.left+hr.width/2,y:hr.top+hr.height/2};
+    const slots=ui.cards.flatMap(n=>{
+      const r=n.getBoundingClientRect(),clip=n.parentElement.getBoundingClientRect();
+      if(r.width<=0||r.height<=0||r.right<=clip.left||r.left>=clip.right||r.bottom<=clip.top||r.top>=clip.bottom)return [];
+      return [{n,r,x:r.left+r.width/2,y:r.top+r.height/2}];
+    });
+    let keyCount=0;
+    function effect(node,frames,timing){
+      const a=node.animate(frames,{...timing,fill:"both",easing:"linear"});
+      run.effects.push(a);a.finished.catch(()=>{});a.pause();a.currentTime=0;keyCount+=frames.length;
+    }
+    function stage(node,frames,w){effect(node,frames,{delay:w.start,duration:w.end-w.start});}
+    function wave(nodes,w,kind){startupBloomStagger(nodes.length,w).forEach((t,i)=>effect(nodes[i],startupBloomFrames(kind),t));}
+    try{
+      if(mode==="bloom"){
+        const plan=startupBloomTimeline(scale);
+        stage(ui.panel,startupBloomFrames("fade"),plan.panel);
+        stage(ui.shape,startupBloomFrames("islandShape"),plan.islandShape);
+        stage(ui.label,startupBloomFrames("fade"),plan.islandLabel);
+        wave(startupBloomOrder(slots,center).map(s=>s.n),plan.tabs,"card");
+        wave([...ui.bookmarks.children],plan.bookmarks,"fade");
+        stage(ui.search,startupBloomFrames("search"),plan.search);
+        // Labels have independent fade, not a second alpha on child tiles.
+        stage(ui.pins.firstElementChild,startupBloomFrames("fade"),plan.pins);
+        wave([...ui.pinTiles.children],plan.pins,"card");
+        stage(ui.work.firstElementChild,startupBloomFrames("fade"),plan.workspaces);
+        wave([...ui.wsTiles.children],plan.workspaces,"card");
+        stage(ui.footer,startupBloomFrames("fade"),plan.footer);
+      }else{
+        const plan=startupTimeline(0,scale);
+        stage(ui.panel,startupBloomFrames("fade"),{start:0,end:plan.panelLength*scale});
+        effect(ui.island,startupBloomFrames("fade"),{delay:150*scale,duration:190*scale});
+        run.layer=element("div","proxyLayer","",scene);run.layer.style.clipPath=fold.portalClip(hub,rr,rr.width,rr.height);
+        for(const s of slots){
+          const proxy=s.n.cloneNode(true);run.layer.append(proxy);
+          Object.assign(proxy.style,{left:(s.r.left-rr.left)+"px",top:(s.r.top-rr.top)+"px",width:s.r.width+"px",height:s.r.height+"px"});
+          run.hidden.push(s.n);s.n.style.visibility="hidden";
+          const card={...s,cx:center.x,cy:center.y,unit:1.5,opacity:1,hub,lower:s.y>center.y+18};
+          effect(proxy,fold.keyframes(card),{delay:plan.cards*scale,duration:plan.cardsLength*scale});
+        }
+        effect(ui.bookmarks,[{scale:"0.08 1",opacity:0},{scale:"1 1",opacity:1}],{delay:plan.bookmarks*scale,duration:420*scale});
+        [ui.search,ui.pins,ui.work,ui.footer].forEach((n,i)=>effect(n,[{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}],{delay:(plan.home+Math.min(i*65,195))*scale,duration:plan.homeLength*scale}));
+      }
+      const epoch=document.timeline.currentTime;
+      if(!Number.isFinite(epoch))throw Error("inactive timeline");
+      for(const a of run.effects){
+        if(a.timeline!==document.timeline||a.playState==="idle")throw Error("foreign animation timeline");
+        a.startTime=epoch;
+      }
+      const detail=mode+" · slots "+slots.length+"/"+ui.cards.length+" · effects "+run.effects.length+" · keyframes "+keyCount+" · proxies "+(run.layer?.children.length??0)+" · prepare "+(performance.now()-started).toFixed(1)+" ms";
+      stats.textContent=detail;
+      Promise.allSettled(run.effects.map(a=>a.finished)).then(results=>{
+        if(id!==generation||active!==run)return;
+        retire();stats.textContent=detail+" · "+(results.every(r=>r.status==="fulfilled")?"finished":"cancelled");
+      });
+    }catch(error){retire();stats.textContent="Fallback to resting pose: "+error.name;}
+  }
+  byId("replay").addEventListener("click",play);
+  for(const id of ["mode","count","width","duration","split","reduced"])byId(id).addEventListener("change",play);
+  play();
+})();
+</script>
+</body>
+</html>

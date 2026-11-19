@@ -343,3 +343,7 @@ Seven new regressions; 44/44 Startup Transparency and 35/35 Center Motion source
 ### Preview.90 independent A3.4 audit
 
 Nine new permanent regressions; 50/50 Startup Transparency, 35/35 Center Motion and 11/11 Address Motion Runtime fixture bodies PASS in isolated V8. Full Node CI, native Gecko, Lab parity and mixed-install acceptance remain separate. Check terminal pending classification, retained cancel, legacy capability, timer failure, synchronous late cleanup, sampled scale and old bar replacement during geometry changes.
+
+### Preview.91 — A3.5a comparison foundation
+
+7/7 Bloom and 35/35 Center Motion fixture bodies PASS in isolated V8; 336 Fold trajectories (13,776 keyframes) exactly match prior source. 1101 supported durations × stage/count cases up to 1000 validate bounded stagger. Deterministic Lab generated identity and parser checked; no real browser Lab playback, native Gecko performance, approved original parity or promotion claim. Canonical CI pending.

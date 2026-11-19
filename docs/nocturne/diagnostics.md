@@ -220,3 +220,5 @@ Preview.88: `address.finish` includes `reason` (finished/cancelled/watchdog/setu
 Preview.89: `assembly.finish` reports bounded `reason`, `counts` (pending/finished/cancelled/retired) and `legacy`; `assembly.outcome.cancel` reports fixed surface name; `assembly.boundary.wait` reports pending count and remaining bounded grace. These are transaction events, no added polling or private payload.
 
 Preview.90: `assembly.finish` snapshots counts before invalidation and reports legacy outcome capability conservatively, including a late legacy Home registry; `assembly.timer.error` reports failure to allocate the existing finish timer. No new sensitive data or sampling loop.
+
+Preview.91: no new runtime event or logger; Fold math extraction preserves existing Center Motion diagnostics. Offline Lab counters are local synthetic preparation/effect/keyframe/proxy metrics, not native diagnostic FPS. Native candidate telemetry belongs to A3.5b.

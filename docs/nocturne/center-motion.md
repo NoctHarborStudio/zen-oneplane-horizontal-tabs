@@ -19,3 +19,7 @@ Preview 18: generic toolbar startup gates exclude descendants of `#oneplane-tabs
 ### Independent close acquisition review — preview.80
 
 Preview 80: close controller treats failure to acquire required visible tab proxies or bookmark Fold as a transaction failure, rolls back acquired effects and uses the original native close command. Missing horizontal engine and partial direct control acquisition likewise bypass. Normal Fold geometry, close dwell and existing native-sidebar bookmark fallback retained. Native validation pending.
+
+### A3.5a — preview.91 shared Fold math and reconstructed Bloom candidate
+
+The exact prior Fold formula now lives in `src/algorithms/magnetic-fold.mjs` and is consumed by Center Motion and [the generated comparison Lab](labs/startup-motion.html). Fold is still the production trajectory for Startup, Workspace and Close. The Bloom candidate stays within fixed resting slots and compresses stagger for large collections. It is Lab-only; no runtime enablement, no exact original Lab parity, and no native performance claim. See A3.5a in [the pipeline](pipeline-0.4.0.md) for property ownership and next acquisition gate.

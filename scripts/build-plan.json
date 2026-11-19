@@ -10,6 +10,10 @@
       "kind": "section"
     },
     {
+      "path": "src/algorithms/magnetic-fold.mjs",
+      "kind": "esm-inline"
+    },
+    {
       "path": "src/core/center-motion.js.part",
       "kind": "section"
     },
@@ -393,6 +397,28 @@
     },
     {
       "path": "src/core/startup-animation.js.part",
+      "kind": "section"
+    }
+  ],
+  "startupMotionLab": [
+    {
+      "path": "src/labs/startup-motion-head.html.part",
+      "kind": "section"
+    },
+    {
+      "path": "src/algorithms/startup-timeline.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/algorithms/magnetic-fold.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/algorithms/startup-bloom.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/labs/startup-motion.js.part",
       "kind": "section"
     }
   ]

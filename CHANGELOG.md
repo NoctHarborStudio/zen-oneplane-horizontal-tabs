@@ -1,3 +1,9 @@
+## 0.3.0-preview.91 — Magnetic Bloom comparison foundation
+
+- Extract the existing Magnetic Fold math into a shared pure module without changing any trajectory or runtime owner.
+- Add a deterministic, generated offline comparison Lab and bounded real-slot Bloom candidate algorithm; production Startup, Workspace and Close still use Fold.
+- Cover documented stage windows, large collection stagger, fixed-slot scale bounds and generated source identity with regression tests.
+
 ## 0.3.0-preview.90 — A3.4 independent motion audit
 
 - Capture terminal Startup outcomes before invalidating ownership; distinguish mixed epoch-only legacy handles, and detect cancellation of retained finished animations.

@@ -1078,3 +1078,7 @@ MB3: common effect outcome and bounded completion implemented for current Startu
 ### A3.4-R — preview.90 integrated audit
 
 Fixed source-confirmed false terminal success, retained cancel blind spot, mixed epoch/outcome capability, late admission after synchronous cleanup, interruption reseal and stale Address geometry/bar cleanup. NC4-050/051 and MB3 native verification remain open; MB4/5 real-slot visual comparison, MB6 topology handoff and approved Lab parity are not yet implemented/verified.
+
+### A3.5a — preview.91 visual comparison
+
+MB-006/007/010/012/013: pure Fold extraction, bounded Bloom candidate and generated comparison Lab implemented. Current runtime remains Fold; original approved Magnetic Bloom HTML not recovered. Real-slot acquisition/fallback, CSS property ownership, Home choreography, Boot mapping, topology and native performance remain open.

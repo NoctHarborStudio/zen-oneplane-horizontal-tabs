@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.90",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.91",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -418,23 +418,9 @@
     for(const item of early)record(item.event,()=>({earlyAt:item.t,...item.data}),{sample:2000});
   }catch(error){record("diagnostics.setup-error",{name:error?.name});dispose();}
 })();
-/* Nocturne Center Motion — shared deterministic card choreography.
- * One geometry snapshot, inert chrome copies, no per-frame trajectory JS. */
-(()=>{
-  const win=window,root=document.documentElement,KEY="__nocturneCenterMotion";
-  if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
-  if(win[KEY]?.dispose?.({replacement:true})===false)return;
-  const MARK="data-zr-center-card",OWNER="data-zr-center-motion",PENDING="data-zr-center-pending";
-  const B="--zr-fold-bookmark-progress";
-  try{win.CSS.registerProperty({name:B,syntax:"<number>",inherits:false,initialValue:"1"});}catch{}
-  // Gecko user sheets may not register @property. The JS registration
-  // guarantees smooth interpolation of the shared hover slot.
-  try{win.CSS.registerProperty({name:"--op-hover-progress",syntax:"<number>",inherits:false,initialValue:"0"});}catch{}
-  let active=null,activeBookmark=null,pendingTimer=0,dead=false,motionBusy=false,disposing=false,disposed=false,pendingDispose=null,bookmarkSequence=0,tabSequence=0;
-  const current=()=>win[KEY]===api;
-  function trace(event,data,options){try{win.__nocturneTrace?.(event,data,options);}catch{}}
-  function retire(){if(disposed&&!disposing&&!active&&!activeBookmark&&current())delete win[KEY];}
-  function drainDispose(){if(!motionBusy&&!disposing&&pendingDispose){const options=pendingDispose;pendingDispose=null;dispose(options);}}
+// Existing Magnetic Fold math; shared by Center Motion and the comparison Lab.
+// Preserve the original sampled curve and portal clipping exactly.
+function createMagneticFoldMath(){
   // Magnetic Fold, ported from Motion Lab B. p=0 docked, p=1 resting.
   const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
   const smooth=p=>{p=clamp(p);return p*p*(3-2*p);};
@@ -484,6 +470,26 @@
       return {offset,transform:"translate("+f.x+"px,"+f.y+"px) scale("+f.s+")",opacity:f.a};
     });
   }
+  return {smooth,magnetState,keyframes,portalGap,portalClip};
+}
+/* Nocturne Center Motion — shared deterministic card choreography.
+ * One geometry snapshot, inert chrome copies, no per-frame trajectory JS. */
+(()=>{
+  const win=window,root=document.documentElement,KEY="__nocturneCenterMotion";
+  if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
+  if(win[KEY]?.dispose?.({replacement:true})===false)return;
+  const MARK="data-zr-center-card",OWNER="data-zr-center-motion",PENDING="data-zr-center-pending";
+  const B="--zr-fold-bookmark-progress";
+  try{win.CSS.registerProperty({name:B,syntax:"<number>",inherits:false,initialValue:"1"});}catch{}
+  // Gecko user sheets may not register @property. The JS registration
+  // guarantees smooth interpolation of the shared hover slot.
+  try{win.CSS.registerProperty({name:"--op-hover-progress",syntax:"<number>",inherits:false,initialValue:"0"});}catch{}
+  let active=null,activeBookmark=null,pendingTimer=0,dead=false,motionBusy=false,disposing=false,disposed=false,pendingDispose=null,bookmarkSequence=0,tabSequence=0;
+  const current=()=>win[KEY]===api;
+  function trace(event,data,options){try{win.__nocturneTrace?.(event,data,options);}catch{}}
+  function retire(){if(disposed&&!disposing&&!active&&!activeBookmark&&current())delete win[KEY];}
+  function drainDispose(){if(!motionBusy&&!disposing&&pendingDispose){const options=pendingDispose;pendingDispose=null;dispose(options);}}
+  const {smooth,keyframes,portalClip}=createMagneticFoldMath();
   function collect(row){
     const list=row?.querySelector(".oneplane-tab-list");
     if(!list)return [];

@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 const source=read("src/core/center-motion.js.part");
-const a=source.indexOf("const clamp="),b=source.indexOf("function collect(",a);
-const {magnetState,keyframes,portalGap,portalClip}=new Function(source.slice(a,b)+"return {magnetState,keyframes,portalGap,portalClip};")();
+const foldSource=read("src/algorithms/magnetic-fold.mjs").replace(/^export function /gm,"function ");
+const {magnetState,keyframes,portalGap,portalClip}=new Function(foldSource+"return createMagneticFoldMath();")();
+const runtimeSource=foldSource+source;
 const card=(x,y,lower=false)=>({x,y,cx:500,cy:26,unit:1,opacity:1,lower});
 test("Magnetic Fold reaches the real two-dimensional hub and reverses exactly",()=>{
  for(const c of [card(200,26),card(770,26),card(340,61,true),card(500,61,true)]){
@@ -134,7 +135,7 @@ test("disposed Center Motion cannot mutate the replacement generation's markers"
  const attrs=new Map(),root={hasAttribute:k=>attrs.has(k),getAttribute:k=>attrs.get(k)??null,setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k)};
  const document={documentElement:root,getElementById(){throw Error("stale bookmarks");}};
  let unload,boot=0,diag=0;const window={__nocturneLayoutStartup:{},__nocturneEarlyBoot:{cleanup(){boot++;}},__nocturneDiagnostics:{requestDispose(){diag++;}},CSS:{registerProperty(){}},addUnloadListener(fn){unload=fn;},addEventListener(){},removeEventListener(){}};
- const run=new Function("window","document","Services",source);
+ const run=new Function("window","document","Services",runtimeSource);
  run(window,document,{});const old=window.__nocturneCenterMotion;unload();assert.equal(boot,1);assert.equal(diag,1);
  run(window,document,{});const next=window.__nocturneCenterMotion;
  for(const k of ["data-zr-center-pending","data-zr-center-handoff","data-zr-center-motion"])attrs.set(k,"replacement");
@@ -157,7 +158,7 @@ function bookmarkFixture({width=200}={}){
    animate(){const a={finished:Promise.resolve(),cancelled:0,played:0,sealed:0,cancel(){this.cancelled++;},play(){this.played++;},finish(){this.sealed++;},pause(){}};effects.push(a);return a;}};
  const document={documentElement:root,getElementById:()=>node};
  const window={__nocturneLayoutStartup:{},CSS:{registerProperty(){}},addUnloadListener(){},addEventListener(){},removeEventListener(){}};
- const mount=()=>{new Function("window","document","Services",source)(window,document,{});return window.__nocturneCenterMotion;};
+ const mount=()=>{new Function("window","document","Services",runtimeSource)(window,document,{});return window.__nocturneCenterMotion;};
  return {root,node,window,document,mount,effects};
 }
 const foldProp="--zr-fold-bookmark-progress",foldMark="data-zr-fold-bookmarks";
@@ -236,7 +237,7 @@ function proxyFixture(){
   CustomEvent:class{constructor(type){this.type=type;}},dispatchEvent(event){events.push(event.type);fault.onEnd?.();},
   MutationObserver:class{constructor(fn){this.fn=fn;this.active=false;observers.push(this);}observe(){this.active=true;if(fault.observe)throw Error("observe");}disconnect(){this.active=false;}}
  };
- const mount=()=>{new Function("window","document","Services",source)(window,document,{});return window.__nocturneCenterMotion;};
+ const mount=()=>{new Function("window","document","Services",runtimeSource)(window,document,{});return window.__nocturneCenterMotion;};
  const addIcon=()=>{const wrap=node("icon"),img=node("img");wrap.append(img);cards[0].append(wrap);return img;};
  return {root,row,cards,nodes,effects,observers,events,frames,fault,window,mount,addIcon};
 }

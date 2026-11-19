@@ -210,3 +210,7 @@ Assembly's existing timeline owns the exact effect ledger and single completion 
 ### A3.4-R — audited completion and replacement boundaries
 
 Capture terminal ledger before invalidating ownership. Retained effects observe cancel events as well as the initial finished promise; exact owner capability distinguishes legacy epoch-only consumers. Interruptions release instead of resealing; late admission stops after synchronous cleanup. Address geometry interruption and cleanup retain exact bar identity. No added polling or parallel Startup timer.
+
+### A3.5a — shared visual math and candidate comparison
+
+Fold math moved intact to a pure factory shared by Layout and the generated offline Lab. Bloom candidate is a separate pure algorithm in the Lab only; the existing startup timing/outcome remains production authority. Real-slot Bloom must use the same Center Motion/Assembly owner, not a second controller. Existing important scale/translate and opacity gates need an exact visual-mode property contract and native computed-style preflight before promotion.

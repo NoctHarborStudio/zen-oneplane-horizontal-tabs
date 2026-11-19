@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nocturne — Startup Motion Lab / reconstructed candidate</title>
+<style>
+:root{color-scheme:dark;font:14px/1.5 system-ui,sans-serif;background:#111219;color:#e4e5ef}
+*{box-sizing:border-box}body{margin:0}main{max-width:1500px;margin:auto;padding:24px}h1{font-size:24px;margin:0}p{color:#aeb1c3;margin:8px 0 16px}label{display:inline-flex;gap:6px;align-items:center}select,button{font:inherit;background:#292c39;color:inherit;border:1px solid #4a5065;padding:7px 10px;border-radius:7px}button{cursor:pointer}.controls{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:16px 0}.viewport{overflow:auto;border:1px solid #444858;border-radius:12px}.scene{position:relative;min-height:470px;background:#181a22;overflow:hidden;isolation:isolate}.panel{position:absolute;inset:0 0 auto;height:132px;background:#303441;border-radius:0 0 15px 15px}.strip{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 132px minmax(0,1fr);gap:7px;align-items:center;padding:9px 12px;height:49px}.lane{min-width:0;display:flex;gap:4px;overflow:hidden;align-items:center;height:36px}.lane.left{justify-content:flex-end}.lane.right{justify-content:flex-start}.card{flex:0 0 40px;height:30px;border-radius:7px;background:#434858;color:#e8ebf5;display:flex;align-items:center;justify-content:center;gap:4px;font-size:11px;transform-origin:center center}.card.split{flex-basis:80px;background:#424a61}.dot{width:9px;height:9px;border-radius:50%;background:#a5b9e8}.island{position:relative;height:30px;display:grid;place-items:center}.islandShape{position:absolute;inset:0;border-radius:9px;background:#4e5367;transform-origin:center}.islandLabel{position:relative;font-weight:600;white-space:nowrap}.overflowLane{position:relative;height:36px;display:flex;gap:4px;overflow:hidden;align-items:center;justify-content:center;padding:0 12px}.bookmarks{position:relative;display:flex;justify-content:center;gap:8px;height:37px;align-items:center}.bookmark{height:20px;padding:1px 8px;border-radius:5px;background:#3e4253;color:#e8eaf4;font-size:11px}.home{position:relative;width:min(460px,92%);margin:44px auto 0}.search{height:42px;border-radius:10px;background:#303441;padding:10px 15px;color:#afb6cd;transform-origin:center}.section{margin-top:17px}.sectionTitle{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#959db5;margin:0 0 6px}.tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.tile{height:45px;background:#303441;border-radius:9px;display:grid;place-items:center;font-size:12px;transform-origin:center}.workspaces{grid-template-columns:repeat(3,minmax(0,1fr))}.footer{margin-top:19px;text-align:center;color:#a3aac2;font-size:12px}.proxyLayer{position:absolute;inset:0;pointer-events:none;z-index:8}.proxyLayer .card{position:absolute;margin:0}.stats{margin-top:12px;color:#aeb1c3;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.note{font-size:12px;color:#aeb1c3}button:focus-visible,select:focus-visible{outline:2px solid #a5b9e8;outline-offset:2px}
+</style>
+</head>
+<body><main>
+<h1>Nocturne · Startup Motion Lab</h1>
+<p>Сравнительный стенд: текущая математика Fold и реконструированный кандидат Magnetic Bloom. Не оригинальный утверждённый Lab и не нативный Zen.</p>
+<div class="controls">
+<label>Движок <select id="mode"><option value="bloom">Bloom candidate</option><option value="fold">Fold baseline</option></select></label>
+<label>Вкладки <select id="count"><option>0</option><option>1</option><option selected>12</option><option>30</option><option>100</option></select></label>
+<label>Ширина <select id="width"><option>640</option><option selected>1000</option><option>1440</option></select></label>
+<label>Длительность <select id="duration"><option>400</option><option>760</option><option selected>1050</option><option>1500</option></select> мс (pref)</label>
+<label><input id="split" type="checkbox" checked> Split View</label>
+<label><input id="reduced" type="checkbox"> Reduced motion</label>
+<button id="replay" type="button">Повторить</button>
+</div>
+<div class="viewport"><div class="scene" id="scene" style="width:1000px"></div></div>
+<div id="stats" class="stats" role="status" aria-live="polite"></div>
+<p class="note">Без Boot, реальных страниц, пользовательских данных и сетевых ресурсов. Фиксированные слоты; только видимые карточки участвуют. Fold использует ту же кривую, что runtime, но упрощённые копии DOM. Время подготовки и число effects/keyframes — показатели этого стенда, не FPS Gecko.</p>
+</main>
+<script>
+// Pure timing plan for Center Assembly; base offsets are unscaled milliseconds.
+// The runtime owns the epoch and lifecycle; this module owns no DOM or timers.
+function startupTimeline(start,scale){
+  const duration=Math.round(scale*1050);
+  return {
+    start,scale,panel:0,panelLength:220,cards:245,cardsLength:650,
+    bookmarks:470,home:650,homeLength:330,end:1190,
+    finishLength:Math.max(duration+80,1190*scale),
+    lateLimit:duration+420
+  };
+}
+
+function startupFits(plan,now,deadline,overhead=0){
+  return Number.isFinite(now)&&Number.isFinite(deadline)&&Number.isFinite(overhead)&&
+    overhead>=0&&now+plan.finishLength+overhead<deadline;
+}
+
+// A late target either has enough time to reach its resting frame or is
+// left ungated. Never schedule a minimum-length effect past the hard cap.
+function startupLateEffect(plan,start,finishAt,deadline,now,delay,length,elapsed=now-start){
+  if(!Number.isFinite(elapsed))return null;
+  const wait=Math.max(0,delay*plan.scale-elapsed);
+  const cap=Math.min(deadline,start+plan.lateLimit);
+  const available=cap-now-wait-65;
+  if(!Number.isFinite(available)||available<240)return null;
+  const time=Math.min(available,Math.max(240,Math.min(length*plan.scale,finishAt-now-wait-60)));
+  return {delay:wait,length:time,finishAt:now+wait+time+65};
+}
+
+// One Assembly-owned outcome ledger. Consumers supply exact ownership
+// predicates; intentional retirement is not a successful WAAPI finish.
+function createStartupOutcome(onCancel,onProgress=()=>{}){
+  const records=new Map();
+  let closed=false;
+  const current=record=>{try{return record.isCurrent();}catch{return false;}};
+  function observe(effect,surface,isCurrent){
+    if(closed||records.has(effect))return;
+    const record={effect,surface,isCurrent,state:"pending"};
+    records.set(effect,record);
+    const done=cancelled=>{
+      if(closed||records.get(effect)!==record||record.state!=="pending"&&!(cancelled&&record.state==="finished"))return;
+      if(!current(record)){
+        // Direct effects intentionally release their completed fill.
+        // Keep their successful outcome instead of counting retirement.
+        if(record.state==="finished")return;
+        record.state="retired";
+      }else{
+        record.state=cancelled?"cancelled":"finished";
+        if(cancelled){onCancel(surface);return;}
+      }
+      onProgress();
+    };
+    // Attach before any pause/seek/startTime mutation. Never convert an
+    // unexpected rejection into a normal successful transaction.
+    effect.finished.then(()=>done(false),()=>done(true));
+    // A retained finished animation can be cancelled after its original
+    // finished promise already resolved. Observe that event as well.
+    if(typeof effect.addEventListener==="function"){
+      record.onCancel=()=>done(true);
+      effect.addEventListener("cancel",record.onCancel);
+    }
+  }
+  function snapshot(){
+    const counts={pending:0,finished:0,cancelled:0,retired:0};
+    for(const record of records.values()){
+      let state=record.state;
+      if(state==="pending"||state==="finished"){
+        if(!current(record)){if(state==="pending")state="retired";}
+        else try{
+          const playState=record.effect.playState;
+          if(playState==="finished")state="finished";
+          else if(playState==="idle")state="cancelled";
+        }catch{}
+      }
+      counts[state]++;
+    }
+    return counts;
+  }
+  function close(){
+    closed=true;
+    for(const {effect,onCancel} of records.values())if(onCancel)
+      try{effect.removeEventListener("cancel",onCancel);}catch{}
+    records.clear();
+  }
+  return {observe,snapshot,close};
+}
+
+function startupBoundaryOutcome(counts,legacy=0){
+  if(counts?.cancelled)return "effect-cancelled";
+  if(counts?.pending)return "boundary-incomplete";
+  if(legacy)return "completed-unverified";
+  if(counts?.retired)return "completed-with-retired";
+  return "completed";
+}
+// Existing Magnetic Fold math; shared by Center Motion and the comparison Lab.
+// Preserve the original sampled curve and portal clipping exactly.
+function createMagneticFoldMath(){
+  // Magnetic Fold, ported from Motion Lab B. p=0 docked, p=1 resting.
+  const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+  const smooth=p=>{p=clamp(p);return p*p*(3-2*p);};
+  function rawMagnetState(c,p){
+    const q=1-p,d=Math.abs(c.x-c.cx),unit=c.unit,lower=c.lower;
+    if(lower&&d<12*unit){
+      const f=1-smooth(q/.12);
+      return {x:(c.cx-c.x)*(1-f),y:(c.cy-c.y)*(1-f),s:Math.max(.02,f),a:f*c.opacity};
+    }
+    const f=1-smooth((q-(lower?.12:0))/(lower?.88:1));
+    const remaining=d*f,threshold=Math.min(d,(lower?26:65)*unit);
+    const dock=smooth(remaining/Math.max(.001,threshold));
+    const alpha=d<.001?f:smooth(remaining/Math.max(.001,Math.min(d,20*unit)));
+    const shrink=d<.001?f:Math.min(1,remaining/Math.max(.001,Math.min(d,(lower?26:48)*unit)));
+    return {x:(c.cx-c.x)*(1-f),y:lower?(c.cy-c.y)*(1-dock):0,s:clamp(f*shrink,.02,1),a:alpha*c.opacity};
+  }
+  // The portal has real dimensions, not just a mathematical center.
+  // Fade outside its edge; a transparent Home must never reveal a card
+  // traveling behind its title or icon.
+  function portalGap(c,f){
+    const h=c.hub;
+    if(!h)return Infinity;
+    const x=c.x+f.x,y=c.y+f.y,w=c.r.width*f.s/2,z=c.r.height*f.s/2;
+    return Math.max(h.left-x-w,x-w-h.right,h.top-y-z,y-z-h.bottom);
+  }
+  function magnetState(c,p){
+    const f=rawMagnetState(c,p);
+    if(!c.hub)return f;
+    const resting=portalGap(c,{x:0,y:0,s:1});
+    // A preexisting intersection belongs to native layout, not this effect.
+    if(resting<=0)return f;
+    const fade=Math.min(resting,24*c.unit);
+    return {...f,a:f.a*smooth(portalGap(c,f)/fade)};
+  }
+  function portalClip(h,rr,width,height){
+    // Even-odd hole: final safety net for between-keyframe interpolation
+    // and the translucent Home background. Do not clip the overflow lane.
+    const extent=Math.ceil(Math.max(width,height,rr.width,rr.height)+32);
+    const l=h.left-rr.left,t=h.top-rr.top,r=h.right-rr.left,b=h.bottom-rr.top;
+    return 'path(evenodd, "M '+(-extent)+' '+(-extent)+' H '+extent+' V '+extent+' H '+(-extent)+' Z M '+l+' '+t+' H '+r+' V '+b+' H '+l+' Z")';
+  }
+  function keyframes(c,reverse=false){
+    // Sample the shared continuous curve once, not during playback. Linear
+    // interpolation between samples preserves the Lab timing and reversal.
+    return Array.from({length:41},(_,i)=>{
+      const offset=i/40,p=(reverse?40-i:i)/40,f=magnetState(c,p);
+      return {offset,transform:"translate("+f.x+"px,"+f.y+"px) scale("+f.s+")",opacity:f.a};
+    });
+  }
+  return {smooth,magnetState,keyframes,portalGap,portalClip};
+}
+// Reconstructed Magnetic Bloom candidate, not the lost approved HTML.
+// All windows are relative to the first panel stage (reference 940ms).
+// Boot is deliberately outside this visible choreography; no production
+// timing or native geometry changes are implied by this comparison.
+function startupBloomTimeline(scale=1){
+  if(!Number.isFinite(scale)||scale<400/1050||scale>1500/1050)throw RangeError("invalid bloom scale");
+  const window=(start,end,min,step)=>Object.freeze({
+    start:(start-940)*scale,end:(end-940)*scale,min:min*scale,step:step*scale
+  });
+  return Object.freeze({
+    scale, panel:window(940,1160,220,0),
+    islandShape:window(1080,1450,370,0),islandLabel:window(1450,1640,190,0),
+    tabs:window(1330,1940,280,42),bookmarks:window(1600,2060,220,28),
+    search:window(1710,2230,520,0),pins:window(1930,2500,260,55),
+    workspaces:window(2220,2690,240,45),footer:window(2480,2790,310,0),
+    end:(2860-940)*scale
+  });
+}
+
+// A larger collection compresses stagger, never the minimum item duration.
+// Input order is already the desired visual order. Every item has one effect.
+function startupBloomStagger(count,stage){
+  if(!Number.isSafeInteger(count)||count<0)throw RangeError("invalid bloom count");
+  const {start,end,min,step}=stage;
+  if(![start,end,min,step].every(Number.isFinite)||start<0||end<=start||min<=0||step<0||min>end-start+1e-7)
+    throw RangeError("invalid bloom stage");
+  if(!count)return [];
+  const span=end-start;
+  const spread=Math.max(0,Math.min(span-min,(count-1)*step));
+  const duration=span-spread;
+  return Array.from({length:count},(_,i)=>({delay:start+(count>1?spread*i/(count-1):0),duration}));
+}
+
+// Visible, already-measured slots only; split groups arrive as one slot.
+// Distance is from the resting Home center, not the previous moving card.
+function startupBloomOrder(slots,center){
+  if(!Number.isFinite(center?.x)||!Number.isFinite(center?.y))throw RangeError("invalid bloom center");
+  if(!Array.isArray(slots)||slots.some(slot=>!Number.isFinite(slot?.x)||!Number.isFinite(slot?.y)))
+    throw RangeError("invalid bloom slot");
+  return slots.map((slot,index)=>({slot,index})).sort((a,b)=>
+    Math.abs(a.slot.x-center.x)-Math.abs(b.slot.x-center.x)||
+    Math.abs(a.slot.y-center.y)-Math.abs(b.slot.y-center.y)||a.index-b.index
+  ).map(x=>x.slot);
+}
+
+// Individual scale about the slot center stays in [0,1]. With disjoint
+// resting rectangles, every interpolated card rectangle is contained
+// in its own slot. No travel through Home, no overshoot outside a slot.
+function startupBloomFrames(kind="card",opacity=1){
+  if(!Number.isFinite(opacity)||opacity<0||opacity>1)throw RangeError("invalid resting opacity");
+  if(kind==="card")return [
+    {offset:0,scale:"0.72",opacity:0,easing:"cubic-bezier(.2,.75,.25,1)"},
+    {offset:.58,scale:"1",opacity,easing:"ease-in-out"},
+    {offset:.78,scale:"0.96",opacity,easing:"ease-out"},
+    {offset:1,scale:"1",opacity}
+  ];
+  if(kind==="search")return [
+    {offset:0,scale:"0.86",opacity:0,easing:"cubic-bezier(.2,.75,.25,1)"},
+    {offset:1,scale:"1",opacity}
+  ];
+  if(kind==="islandShape")return [
+    {offset:0,scale:"0.45 1",opacity:0,easing:"cubic-bezier(.2,.75,.25,1)"},
+    {offset:1,scale:"1 1",opacity}
+  ];
+  if(kind==="fade")return [{offset:0,opacity:0},{offset:1,opacity}];
+  throw RangeError("unknown bloom surface");
+}
+(() => {
+  const byId=id=>document.getElementById(id),scene=byId("scene"),stats=byId("stats");
+  const fold=createMagneticFoldMath();
+  let generation=0,active=null;
+  function element(tag,cls,text,parent){
+    const n=document.createElement(tag);n.className=cls;if(text)n.textContent=text;if(parent)parent.append(n);return n;
+  }
+  function retire(){
+    const run=active;active=null;
+    if(!run)return;
+    for(const a of run.effects)try{a.cancel();}catch{}
+    for(const n of run.hidden)n.style.visibility="";
+    run.layer?.remove();
+  }
+  function render(){
+    scene.replaceChildren();scene.style.width=byId("width").value+"px";
+    const panel=element("div","panel","",scene),row=element("div","strip","",scene);
+    const left=element("div","lane left","",row),island=element("div","island","",row),right=element("div","lane right","",row);
+    const shape=element("div","islandShape","",island),label=element("div","islandLabel","Home",island);
+    const overflow=element("div","overflowLane","",scene),bookmarks=element("div","bookmarks","",scene);
+    const count=Number(byId("count").value),split=byId("split").checked&&count>=2;
+    let cards=[];
+    for(let i=0;i<count;i++){
+      const group=split&&i===1;if(group)i++;
+      const card=element("div",group?"card split":"card","",null);
+      element("span","dot","",card);if(group)element("span","dot","",card);
+      element("span","",String(i+1),card);cards.push(card);
+    }
+    const capacity=Math.max(1,Math.floor((Number(byId("width").value)-170)/88));
+    const first=cards.slice(0,capacity*2);
+    first.slice(0,capacity).forEach(n=>left.append(n));
+    first.slice(capacity).forEach(n=>right.append(n));
+    cards.slice(capacity*2).forEach(n=>overflow.append(n));
+    for(const name of ["Docs","Code","Design","Music","Mail"])element("span","bookmark",name,bookmarks);
+    const home=element("div","home","",scene),search=element("div","search","Поиск или адрес",home);
+    const pins=element("div","section","",home);element("div","sectionTitle","Pinned",pins);
+    const pinTiles=element("div","tiles","",pins);
+    for(let i=1;i<=5;i++)element("div","tile","Pin "+i,pinTiles);
+    const work=element("div","section","",home);element("div","sectionTitle","Workspaces",work);
+    const wsTiles=element("div","tiles workspaces","",work);
+    for(const name of ["Free","Work","Study"])element("div","tile",name,wsTiles);
+    const footer=element("div","footer","Customize",home);
+    return {panel,row,island,shape,label,cards,bookmarks,search,pins,pinTiles,work,wsTiles,footer};
+  }
+  function play(){
+    retire();const id=++generation,ui=render(),mode=byId("mode").value,scale=Number(byId("duration").value)/1050;
+    if(byId("reduced").checked||matchMedia("(prefers-reduced-motion: reduce)").matches){stats.textContent="Reduced motion · resting pose";return;}
+    const run={effects:[],hidden:[],layer:null};active=run;
+    const started=performance.now(),rr=scene.getBoundingClientRect(),hr=ui.island.getBoundingClientRect();
+    const hub={left:hr.left,right:hr.right,top:hr.top,bottom:hr.bottom};
+    const center={x:hr.left+hr.width/2,y:hr.top+hr.height/2};
+    const slots=ui.cards.flatMap(n=>{
+      const r=n.getBoundingClientRect(),clip=n.parentElement.getBoundingClientRect();
+      if(r.width<=0||r.height<=0||r.right<=clip.left||r.left>=clip.right||r.bottom<=clip.top||r.top>=clip.bottom)return [];
+      return [{n,r,x:r.left+r.width/2,y:r.top+r.height/2}];
+    });
+    let keyCount=0;
+    function effect(node,frames,timing){
+      const a=node.animate(frames,{...timing,fill:"both",easing:"linear"});
+      run.effects.push(a);a.finished.catch(()=>{});a.pause();a.currentTime=0;keyCount+=frames.length;
+    }
+    function stage(node,frames,w){effect(node,frames,{delay:w.start,duration:w.end-w.start});}
+    function wave(nodes,w,kind){startupBloomStagger(nodes.length,w).forEach((t,i)=>effect(nodes[i],startupBloomFrames(kind),t));}
+    try{
+      if(mode==="bloom"){
+        const plan=startupBloomTimeline(scale);
+        stage(ui.panel,startupBloomFrames("fade"),plan.panel);
+        stage(ui.shape,startupBloomFrames("islandShape"),plan.islandShape);
+        stage(ui.label,startupBloomFrames("fade"),plan.islandLabel);
+        wave(startupBloomOrder(slots,center).map(s=>s.n),plan.tabs,"card");
+        wave([...ui.bookmarks.children],plan.bookmarks,"fade");
+        stage(ui.search,startupBloomFrames("search"),plan.search);
+        // Labels have independent fade, not a second alpha on child tiles.
+        stage(ui.pins.firstElementChild,startupBloomFrames("fade"),plan.pins);
+        wave([...ui.pinTiles.children],plan.pins,"card");
+        stage(ui.work.firstElementChild,startupBloomFrames("fade"),plan.workspaces);
+        wave([...ui.wsTiles.children],plan.workspaces,"card");
+        stage(ui.footer,startupBloomFrames("fade"),plan.footer);
+      }else{
+        const plan=startupTimeline(0,scale);
+        stage(ui.panel,startupBloomFrames("fade"),{start:0,end:plan.panelLength*scale});
+        effect(ui.island,startupBloomFrames("fade"),{delay:150*scale,duration:190*scale});
+        run.layer=element("div","proxyLayer","",scene);run.layer.style.clipPath=fold.portalClip(hub,rr,rr.width,rr.height);
+        for(const s of slots){
+          const proxy=s.n.cloneNode(true);run.layer.append(proxy);
+          Object.assign(proxy.style,{left:(s.r.left-rr.left)+"px",top:(s.r.top-rr.top)+"px",width:s.r.width+"px",height:s.r.height+"px"});
+          run.hidden.push(s.n);s.n.style.visibility="hidden";
+          const card={...s,cx:center.x,cy:center.y,unit:1.5,opacity:1,hub,lower:s.y>center.y+18};
+          effect(proxy,fold.keyframes(card),{delay:plan.cards*scale,duration:plan.cardsLength*scale});
+        }
+        effect(ui.bookmarks,[{scale:"0.08 1",opacity:0},{scale:"1 1",opacity:1}],{delay:plan.bookmarks*scale,duration:420*scale});
+        [ui.search,ui.pins,ui.work,ui.footer].forEach((n,i)=>effect(n,[{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}],{delay:(plan.home+Math.min(i*65,195))*scale,duration:plan.homeLength*scale}));
+      }
+      const epoch=document.timeline.currentTime;
+      if(!Number.isFinite(epoch))throw Error("inactive timeline");
+      for(const a of run.effects){
+        if(a.timeline!==document.timeline||a.playState==="idle")throw Error("foreign animation timeline");
+        a.startTime=epoch;
+      }
+      const detail=mode+" · slots "+slots.length+"/"+ui.cards.length+" · effects "+run.effects.length+" · keyframes "+keyCount+" · proxies "+(run.layer?.children.length??0)+" · prepare "+(performance.now()-started).toFixed(1)+" ms";
+      stats.textContent=detail;
+      Promise.allSettled(run.effects.map(a=>a.finished)).then(results=>{
+        if(id!==generation||active!==run)return;
+        retire();stats.textContent=detail+" · "+(results.every(r=>r.status==="fulfilled")?"finished":"cancelled");
+      });
+    }catch(error){retire();stats.textContent="Fallback to resting pose: "+error.name;}
+  }
+  byId("replay").addEventListener("click",play);
+  for(const id of ["mode","count","width","duration","split","reduced"])byId(id).addEventListener("change",play);
+  play();
+})();
+</script>
+</body>
+</html>
