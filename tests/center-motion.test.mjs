@@ -334,6 +334,7 @@ test("only startup tab and bookmark effects join the exact outcome ledger",()=>{
  const f=proxyFixture(),engine=f.mount(),observed=[];
  const observeEffect=(effect,surface,current)=>observed.push({effect,surface,current});
  const a=engine.start(f.row,{owner:"startup",paused:true,observeEffect});
+ assert.equal(a.startupOutcomeVersion,1);
  assert.equal(observed.length,f.effects.length);
  assert.ok(observed.every((o,i)=>o.effect===f.effects[i]&&o.surface==="tabs"&&o.current()));
  a.release();assert.ok(observed.every(o=>!o.current()));

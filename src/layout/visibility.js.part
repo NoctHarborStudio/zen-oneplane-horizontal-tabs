@@ -125,8 +125,9 @@
     if(dead)return;
     if(!row.hasAttribute("data-op-dragging")&&hoverTab)clearTabHover();
     if(addressTransition){
-      const closing=addressTransition.name==="closing-wave";clearAddressAnimation();
-      if(closing)finishDismissUrl();
+      const phase=addressTransition,closing=phase.name==="closing-wave";
+      clearAddressAnimation();
+      if(closing&&phase.bar===addressBar()&&!addressTransition&&!addressSettling)finishDismissUrl();
     }
     if(cascadeState==="hiding"||cascadeState==="showing"||!nativeInlineOpen(addressBar())&&cascadeState!=="idle"){
       resetTabCascade();

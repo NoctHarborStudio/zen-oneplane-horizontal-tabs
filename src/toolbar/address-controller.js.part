@@ -41,15 +41,17 @@
     // dismissal settle. The layout changes once, at the end of motion.
     addressTransition=null;
     addressSettling=true;addressSettleOwner=a;
+    try{
     url.setAttribute("data-op-url-phase","settling");
-    const bar=addressBar();
+    const bar=a.bar;
     stopAddressAnimations();
     if(bar){
       bar.style.setProperty("--op-url-live-width",Math.max(1,a.to.width).toFixed(3)+"px");
       bar.style.setProperty("--op-url-live-clip","inset(0 0 max(0px, calc(100% - var(--op-url-header-height))) 0 round var(--op-url-radius))");
       bar.style.setProperty("--op-url-selection-alpha","0%");
     }
-    try{
+      if(dead||addressSettleOwner!==a)return;
+      if(addressBar()!==bar){clearAddressAnimation();addressWasOpen=nativeInlineOpen(addressBar());return;}
       finishDismissUrl();
       if(!addressSettling||addressSettleOwner!==a)return;
       if(!inlinePopoverPresent(addressBar())){
@@ -187,7 +189,7 @@
       if (addressTransition) {
         const closing = addressTransition.name.startsWith("closing");
         clearAddressAnimation();
-        if (closing && open) finishDismissUrl();
+        if(closing&&open&&bar===addressBar()&&!addressTransition&&!addressSettling)finishDismissUrl();
       }
       addressWasOpen = open;
       url.toggleAttribute("data-op-url-ready", open);

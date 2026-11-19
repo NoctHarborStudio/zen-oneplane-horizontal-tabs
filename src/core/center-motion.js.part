@@ -249,7 +249,7 @@
     const id=++tabSequence,effects=[],saved=[],cleanups=[],running=[],stats={groups:0,handles:0,handleOffset:0,icons:0,iconLoads:0,bitmapIcons:0,bitmapFailures:0};
     let host=null,cards=[],rr,hub,measuring=false,measuringMark=null,ownerMark=null,ownerWritten=false,committed=false,released=false;
     const restoreMark=(node,key,value)=>{if(value===null)node.removeAttribute(key);else node.setAttribute(key,value);};
-    const handle={owner,retainOnDispose,count:0,finished:Promise.resolve(),
+    const handle={owner,retainOnDispose,startupOutcomeVersion:1,count:0,finished:Promise.resolve(),
       resume(){if(!released)for(const a of running)try{a.play();}catch{}},
       resumeAt(start){
         for(const a of running){
@@ -363,7 +363,7 @@
     const id=++bookmarkSequence,frames=Array.from({length:21},(_,i)=>{const p=smooth(direction==="out"?1-i/20:i/20);return {offset:i/20,[B]:String(p)};});
     const old=n.style.getPropertyValue(B),priority=n.style.getPropertyPriority(B),mark=n.getAttribute(markKey);
     let a=null,released=false;
-    const handle={owner,retainOnDispose,finished:Promise.resolve(),
+    const handle={owner,retainOnDispose,startupOutcomeVersion:1,finished:Promise.resolve(),
       resume(){if(!released)try{a?.play();}catch{}},
       resumeAt(start){
         if(released||dead||!current()||activeBookmark!==handle||!a)throw Error("bookmark-epoch-stale");

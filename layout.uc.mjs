@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.89",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.90",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -669,7 +669,7 @@
     const id=++tabSequence,effects=[],saved=[],cleanups=[],running=[],stats={groups:0,handles:0,handleOffset:0,icons:0,iconLoads:0,bitmapIcons:0,bitmapFailures:0};
     let host=null,cards=[],rr,hub,measuring=false,measuringMark=null,ownerMark=null,ownerWritten=false,committed=false,released=false;
     const restoreMark=(node,key,value)=>{if(value===null)node.removeAttribute(key);else node.setAttribute(key,value);};
-    const handle={owner,retainOnDispose,count:0,finished:Promise.resolve(),
+    const handle={owner,retainOnDispose,startupOutcomeVersion:1,count:0,finished:Promise.resolve(),
       resume(){if(!released)for(const a of running)try{a.play();}catch{}},
       resumeAt(start){
         for(const a of running){
@@ -783,7 +783,7 @@
     const id=++bookmarkSequence,frames=Array.from({length:21},(_,i)=>{const p=smooth(direction==="out"?1-i/20:i/20);return {offset:i/20,[B]:String(p)};});
     const old=n.style.getPropertyValue(B),priority=n.style.getPropertyPriority(B),mark=n.getAttribute(markKey);
     let a=null,released=false;
-    const handle={owner,retainOnDispose,finished:Promise.resolve(),
+    const handle={owner,retainOnDispose,startupOutcomeVersion:1,finished:Promise.resolve(),
       resume(){if(!released)try{a?.play();}catch{}},
       resumeAt(start){
         if(released||dead||!current()||activeBookmark!==handle||!a)throw Error("bookmark-epoch-stale");
@@ -1799,6 +1799,7 @@ function acquireZenHome(win, services) {
     if(win.matchMedia("(prefers-reduced-motion: reduce)").matches||timeline.homeLease){finishStartupHome();return null;}
     const run={timeline,effects:[],lease:null,dirty:false};
     const lease={
+      startupOutcomeVersion:1,
       resume(){if(startupRun===run)for(const a of run.effects)try{a.play();}catch{}},
       resumeAt(start){
         for(const a of run.effects){
@@ -2476,7 +2477,7 @@ function acquireZenHome(win, services) {
     if(dead)return;close();dead=true;for(const fn of cleanups.splice(0))try{fn();}catch{}
     panel.remove();style.remove();if(win[KEY]===registry)delete win[KEY];
   }
-  const registry={apiVersion:1,startupLeaseVersion:1,warmStartupIcons,playStartup:playStartupHome,resumeStartup:resumeStartupHome,finishStartup:finishStartupHome,acquire(){
+  const registry={apiVersion:1,startupLeaseVersion:1,startupOutcomeVersion:1,warmStartupIcons,playStartup:playStartupHome,resumeStartup:resumeStartupHome,finishStartup:finishStartupHome,acquire(){
     if(dead)return null;const lease={listeners:new Set()};leases.add(lease);let released=false;
     return {get open(){return !released&&open;},show:()=>!released&&show(),close:(focus=false)=>{if(!released)leaveHome(focus);},
       showOnStartup(){
@@ -3135,9 +3136,8 @@ function installTabStrip() {
     url.removeAttribute("data-op-url-phase");
     url.toggleAttribute("data-op-url-ready", nativeInlineOpen(addressBar()));
     root.removeAttribute("oneplane-address-unblur");
-    const bar = addressBar();
-    clearAddressBarMarks(previous);
-    if(bar!==previous)clearAddressBarMarks(bar);
+    // A replaced bar has no ownership relationship to the old phase.
+    clearAddressBarMarks(previous||addressBar());
     reconcileTabCascade();
   }
   function addressWaveDepth(progress,x){
@@ -3511,9 +3511,9 @@ function installTabStrip() {
       for(let i=0;i<ordered.length;i++){
         const v=ordered[i],timing=timings[i];
         let frames=opening||bookmark?cascadeFadeFrames(v.opacity,opening):cascadeRevealFrames(v);
-        // On reopening during a return, hold the card's current scale
-        // during its fade rather than snapping back to full size.
-        if(opening&&!bookmark&&previous==="showing")
+        // Preserve the sampled scale on every interrupted hide, including
+        // a same-direction phase replacing an earlier reversed wave.
+        if(opening&&!bookmark&&previous!=="idle")
           frames=frames.map(k=>({...k,scale:v.x+" "+v.y}));
         play(v.node,frames,timing,bookmark?"data-op-bookmark-wave-member":"data-op-cascade-member");
         if(v.group){
@@ -3625,15 +3625,17 @@ function installTabStrip() {
     // dismissal settle. The layout changes once, at the end of motion.
     addressTransition=null;
     addressSettling=true;addressSettleOwner=a;
+    try{
     url.setAttribute("data-op-url-phase","settling");
-    const bar=addressBar();
+    const bar=a.bar;
     stopAddressAnimations();
     if(bar){
       bar.style.setProperty("--op-url-live-width",Math.max(1,a.to.width).toFixed(3)+"px");
       bar.style.setProperty("--op-url-live-clip","inset(0 0 max(0px, calc(100% - var(--op-url-header-height))) 0 round var(--op-url-radius))");
       bar.style.setProperty("--op-url-selection-alpha","0%");
     }
-    try{
+      if(dead||addressSettleOwner!==a)return;
+      if(addressBar()!==bar){clearAddressAnimation();addressWasOpen=nativeInlineOpen(addressBar());return;}
       finishDismissUrl();
       if(!addressSettling||addressSettleOwner!==a)return;
       if(!inlinePopoverPresent(addressBar())){
@@ -3771,7 +3773,7 @@ function installTabStrip() {
       if (addressTransition) {
         const closing = addressTransition.name.startsWith("closing");
         clearAddressAnimation();
-        if (closing && open) finishDismissUrl();
+        if(closing&&open&&bar===addressBar()&&!addressTransition&&!addressSettling)finishDismissUrl();
       }
       addressWasOpen = open;
       url.toggleAttribute("data-op-url-ready", open);
@@ -6765,8 +6767,9 @@ function installTabStrip() {
     if(dead)return;
     if(!row.hasAttribute("data-op-dragging")&&hoverTab)clearTabHover();
     if(addressTransition){
-      const closing=addressTransition.name==="closing-wave";clearAddressAnimation();
-      if(closing)finishDismissUrl();
+      const phase=addressTransition,closing=phase.name==="closing-wave";
+      clearAddressAnimation();
+      if(closing&&phase.bar===addressBar()&&!addressTransition&&!addressSettling)finishDismissUrl();
     }
     if(cascadeState==="hiding"||cascadeState==="showing"||!nativeInlineOpen(addressBar())&&cascadeState!=="idle"){
       resetTabCascade();

@@ -1,3 +1,9 @@
+## 0.3.0-preview.90 — A3.4 independent motion audit
+
+- Capture terminal Startup outcomes before invalidating ownership; distinguish mixed epoch-only legacy handles, and detect cancellation of retained finished animations.
+- Fence late admission after synchronous cleanup, bound timer acquisition failure and release interrupted surfaces without resealing them.
+- Preserve sampled scale across repeated address phases and prevent stale cleanup or geometry interruption from altering a replacement URLbar.
+
 ## 0.3.0-preview.89 — Startup completion ownership
 
 - Track exact direct, tab, bookmark and Home animation outcomes in Assembly, distinguishing completion, cancellation and intentional retirement.

@@ -339,3 +339,7 @@ Seven new regressions; 38/38 Startup Transparency and 34/34 Center Motion actual
 ### Preview.89 Startup common completion
 
 Seven new regressions; 44/44 Startup Transparency and 35/35 Center Motion source-backed fixture bodies PASS in isolated V8. Full Home suite not reproducible in adapter due to URL/Node dependency limitations; canonical Node CI required. Syntax and changed generated source identities verified. Native Gecko frame continuity, cancellation, mixed legacy order and actual performance remain pending.
+
+### Preview.90 independent A3.4 audit
+
+Nine new permanent regressions; 50/50 Startup Transparency, 35/35 Center Motion and 11/11 Address Motion Runtime fixture bodies PASS in isolated V8. Full Node CI, native Gecko, Lab parity and mixed-install acceptance remain separate. Check terminal pending classification, retained cancel, legacy capability, timer failure, synchronous late cleanup, sampled scale and old bar replacement during geometry changes.

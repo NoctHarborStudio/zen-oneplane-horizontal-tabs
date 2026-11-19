@@ -363,6 +363,7 @@ function acquireZenHome(win, services) {
     if(win.matchMedia("(prefers-reduced-motion: reduce)").matches||timeline.homeLease){finishStartupHome();return null;}
     const run={timeline,effects:[],lease:null,dirty:false};
     const lease={
+      startupOutcomeVersion:1,
       resume(){if(startupRun===run)for(const a of run.effects)try{a.play();}catch{}},
       resumeAt(start){
         for(const a of run.effects){
@@ -1040,7 +1041,7 @@ function acquireZenHome(win, services) {
     if(dead)return;close();dead=true;for(const fn of cleanups.splice(0))try{fn();}catch{}
     panel.remove();style.remove();if(win[KEY]===registry)delete win[KEY];
   }
-  const registry={apiVersion:1,startupLeaseVersion:1,warmStartupIcons,playStartup:playStartupHome,resumeStartup:resumeStartupHome,finishStartup:finishStartupHome,acquire(){
+  const registry={apiVersion:1,startupLeaseVersion:1,startupOutcomeVersion:1,warmStartupIcons,playStartup:playStartupHome,resumeStartup:resumeStartupHome,finishStartup:finishStartupHome,acquire(){
     if(dead)return null;const lease={listeners:new Set()};leases.add(lease);let released=false;
     return {get open(){return !released&&open;},show:()=>!released&&show(),close:(focus=false)=>{if(!released)leaveHome(focus);},
       showOnStartup(){

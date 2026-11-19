@@ -111,3 +111,36 @@ test("cascade cancellation and timeout converge once, with a new handoff generat
  `);
  assert.deepEqual(run(),{events:[["handoff",2],["hidden",3]],generation:3});
 });
+
+test("address cleanup only clears the exact old bar after replacement",()=>{
+ const code=head.slice(head.indexOf("  function clearAddressAnimation()"),head.length);
+ const run=new Function(`
+ const old={},replacement={},log=[],url={removeAttribute(){},toggleAttribute(){}},root={removeAttribute(){}};
+ let addressTransition={bar:old},addressSettleOwner=null;
+ function stopAddressAnimations(){}function cancelAddressSettle(){}function addressBar(){return replacement;}function nativeInlineOpen(){return true;}
+ function clearAddressBarMarks(bar){log.push(bar===old?"old":"replacement");}function reconcileTabCascade(){}
+ ${code}clearAddressAnimation();return log;
+ `);
+ assert.deepEqual(run(),["old"]);
+});
+test("same-direction replacement preserves sampled scale after prior reversal",()=>{
+ const code=cascade.slice(cascade.indexOf("        let frames=opening||bookmark"),cascade.indexOf("        play(v.node,frames,timing"));
+ const run=new Function(`
+ const opening=true,bookmark=false,previous="hiding",v={opacity:.3,x:.6,y:.7};
+ function cascadeFadeFrames(){return [{opacity:.3},{opacity:0}];}function cascadeRevealFrames(){throw Error("unexpected");}
+ ${code}return frames;
+ `);
+ assert.deepEqual(run(),[{opacity:.3,scale:"0.6 0.7"},{opacity:0,scale:"0.6 0.7"}]);
+});
+
+test("geometry interruption does not dismiss a replacement URLbar",()=>{
+ const visibility=read("src/layout/visibility.js.part");
+ const code=visibility.slice(visibility.indexOf("    if(addressTransition){",visibility.indexOf("  function onWindowGeometryChanged()")),visibility.indexOf("    if(cascadeState===",visibility.indexOf("  function onWindowGeometryChanged()")));
+ const run=new Function(`
+ const old={},replacement={};let addressTransition={name:"closing-wave",bar:old},addressSettling=false,dismissals=0,clears=0,current=replacement;
+ function addressBar(){return current;}function clearAddressAnimation(){clears++;addressTransition=null;}function finishDismissUrl(){dismissals++;}
+ function resize(){${code}}
+ resize();current=old;addressTransition={name:"closing-wave",bar:old};resize();return {dismissals,clears};
+ `);
+ assert.deepEqual(run(),{dismissals:1,clears:2});
+});

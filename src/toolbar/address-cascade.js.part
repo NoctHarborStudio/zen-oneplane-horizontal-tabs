@@ -216,9 +216,9 @@
       for(let i=0;i<ordered.length;i++){
         const v=ordered[i],timing=timings[i];
         let frames=opening||bookmark?cascadeFadeFrames(v.opacity,opening):cascadeRevealFrames(v);
-        // On reopening during a return, hold the card's current scale
-        // during its fade rather than snapping back to full size.
-        if(opening&&!bookmark&&previous==="showing")
+        // Preserve the sampled scale on every interrupted hide, including
+        // a same-direction phase replacing an earlier reversed wave.
+        if(opening&&!bookmark&&previous!=="idle")
           frames=frames.map(k=>({...k,scale:v.x+" "+v.y}));
         play(v.node,frames,timing,bookmark?"data-op-bookmark-wave-member":"data-op-cascade-member");
         if(v.group){

@@ -218,3 +218,5 @@ Preview.87: `assembly.epoch` reports `prepared`, `legacy` and `fromBoot`; nonzer
 Preview.88: `address.finish` includes `reason` (finished/cancelled/watchdog/setup-failed/fallback-failed). `address.cascade.finish` records generation, opening and reason. `address.cleanup.error`, `address.cascade.cleanup`, `address.cascade.error`, `address.cascade.bookmarks.error`, `address.phase.error` and `address.dismiss.error` report bounded failure metadata. No URL or input contents.
 
 Preview.89: `assembly.finish` reports bounded `reason`, `counts` (pending/finished/cancelled/retired) and `legacy`; `assembly.outcome.cancel` reports fixed surface name; `assembly.boundary.wait` reports pending count and remaining bounded grace. These are transaction events, no added polling or private payload.
+
+Preview.90: `assembly.finish` snapshots counts before invalidation and reports legacy outcome capability conservatively, including a late legacy Home registry; `assembly.timer.error` reports failure to allocate the existing finish timer. No new sensitive data or sampling loop.

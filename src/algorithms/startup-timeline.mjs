@@ -38,9 +38,13 @@ export function createStartupOutcome(onCancel,onProgress=()=>{}){
     const record={effect,surface,isCurrent,state:"pending"};
     records.set(effect,record);
     const done=cancelled=>{
-      if(closed||records.get(effect)!==record||record.state!=="pending")return;
-      if(!current(record))record.state="retired";
-      else{
+      if(closed||records.get(effect)!==record||record.state!=="pending"&&!(cancelled&&record.state==="finished"))return;
+      if(!current(record)){
+        // Direct effects intentionally release their completed fill.
+        // Keep their successful outcome instead of counting retirement.
+        if(record.state==="finished")return;
+        record.state="retired";
+      }else{
         record.state=cancelled?"cancelled":"finished";
         if(cancelled){onCancel(surface);return;}
       }
@@ -49,13 +53,19 @@ export function createStartupOutcome(onCancel,onProgress=()=>{}){
     // Attach before any pause/seek/startTime mutation. Never convert an
     // unexpected rejection into a normal successful transaction.
     effect.finished.then(()=>done(false),()=>done(true));
+    // A retained finished animation can be cancelled after its original
+    // finished promise already resolved. Observe that event as well.
+    if(typeof effect.addEventListener==="function"){
+      record.onCancel=()=>done(true);
+      effect.addEventListener("cancel",record.onCancel);
+    }
   }
   function snapshot(){
     const counts={pending:0,finished:0,cancelled:0,retired:0};
     for(const record of records.values()){
       let state=record.state;
-      if(state==="pending"){
-        if(!current(record))state="retired";
+      if(state==="pending"||state==="finished"){
+        if(!current(record)){if(state==="pending")state="retired";}
         else try{
           const playState=record.effect.playState;
           if(playState==="finished")state="finished";
@@ -66,7 +76,12 @@ export function createStartupOutcome(onCancel,onProgress=()=>{}){
     }
     return counts;
   }
-  function close(){closed=true;records.clear();}
+  function close(){
+    closed=true;
+    for(const {effect,onCancel} of records.values())if(onCancel)
+      try{effect.removeEventListener("cancel",onCancel);}catch{}
+    records.clear();
+  }
   return {observe,snapshot,close};
 }
 

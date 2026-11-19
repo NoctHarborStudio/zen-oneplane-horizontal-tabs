@@ -38,9 +38,13 @@ function createStartupOutcome(onCancel,onProgress=()=>{}){
     const record={effect,surface,isCurrent,state:"pending"};
     records.set(effect,record);
     const done=cancelled=>{
-      if(closed||records.get(effect)!==record||record.state!=="pending")return;
-      if(!current(record))record.state="retired";
-      else{
+      if(closed||records.get(effect)!==record||record.state!=="pending"&&!(cancelled&&record.state==="finished"))return;
+      if(!current(record)){
+        // Direct effects intentionally release their completed fill.
+        // Keep their successful outcome instead of counting retirement.
+        if(record.state==="finished")return;
+        record.state="retired";
+      }else{
         record.state=cancelled?"cancelled":"finished";
         if(cancelled){onCancel(surface);return;}
       }
@@ -49,13 +53,19 @@ function createStartupOutcome(onCancel,onProgress=()=>{}){
     // Attach before any pause/seek/startTime mutation. Never convert an
     // unexpected rejection into a normal successful transaction.
     effect.finished.then(()=>done(false),()=>done(true));
+    // A retained finished animation can be cancelled after its original
+    // finished promise already resolved. Observe that event as well.
+    if(typeof effect.addEventListener==="function"){
+      record.onCancel=()=>done(true);
+      effect.addEventListener("cancel",record.onCancel);
+    }
   }
   function snapshot(){
     const counts={pending:0,finished:0,cancelled:0,retired:0};
     for(const record of records.values()){
       let state=record.state;
-      if(state==="pending"){
-        if(!current(record))state="retired";
+      if(state==="pending"||state==="finished"){
+        if(!current(record)){if(state==="pending")state="retired";}
         else try{
           const playState=record.effect.playState;
           if(playState==="finished")state="finished";
@@ -66,7 +76,12 @@ function createStartupOutcome(onCancel,onProgress=()=>{}){
     }
     return counts;
   }
-  function close(){closed=true;records.clear();}
+  function close(){
+    closed=true;
+    for(const {effect,onCancel} of records.values())if(onCancel)
+      try{effect.removeEventListener("cancel",onCancel);}catch{}
+    records.clear();
+  }
   return {observe,snapshot,close};
 }
 
@@ -79,7 +94,7 @@ function startupBoundaryOutcome(counts,legacy=0){
 }
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.89"};
+  const event="assembly.script",data={version:"0.3.0-preview.90"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -185,10 +200,12 @@ try{if(typeof window!=="undefined"){
       finish("boundary");
     };
     if(now()>=end){complete();return;}
-    timer=window.setTimeout(()=>{
-      if(dead||epoch!==timerEpoch)return;
-      timer=0;complete();
-    },Math.max(0,end-now()));
+    try{
+      timer=window.setTimeout(()=>{
+        if(dead||epoch!==timerEpoch)return;
+        timer=0;complete();
+      },Math.max(0,end-now()));
+    }catch(error){decision("assembly.timer.error",{name:error?.name});finish("setup-failed");}
   }
   function mountBoot(){
     if(!prefs.getBoolPref(BOOT_PREF,true)){removeBoot();return;}
@@ -268,17 +285,24 @@ try{if(typeof window!=="undefined"){
     }
   }
   function finish(reason="disposed"){
-    if(dead)return;dead=true;
+    if(dead||finish.finalizing)return;
+    finish.finalizing=true;
     if(!["disposed","boundary","completed","watchdog","interrupted","effect-cancelled","boot-cancelled","setup-failed","insufficient-budget"].includes(reason))reason="disposed";
     const outcome=ownedTimeline?.outcome;
-    const counts=outcome?.snapshot();
-    if(reason==="boundary")reason=startupBoundaryOutcome(counts,ownedTimeline?.legacy);
-    if(ownedTimeline)ownedTimeline.closed=true;
-    outcome?.close();
-    let failed=0;
+    // Snapshot while exact ownership predicates still see live effects.
+    // Setting dead first misclassifies every pending effect as retired.
+    let counts,failed=0;
     const step=fn=>{try{fn();}catch{failed++;}};
+    step(()=>{counts=outcome?.snapshot();});
+    const currentHome=window.__zenSharedHomeV1;
+    const lateLegacy=ownedTimeline&&currentHome&&currentHome!==homeRegistry&&currentHome.startupOutcomeVersion!==1?1:0;
+    const legacy=(ownedTimeline?.legacy??0)+lateLegacy;
+    if(reason==="boundary")reason=outcome&&!counts?"boundary-incomplete":startupBoundaryOutcome(counts,legacy);
+    dead=true;
+    if(ownedTimeline)ownedTimeline.closed=true;
+    step(()=>outcome?.close());
     const owns=window[KEY]===finish;
-    step(()=>window.__nocturneTrace?.("assembly.finish",()=>({playing,settling,seen:seen.size,effects:animations.size,age:now()-started,reason,counts,legacy:ownedTimeline?.legacy??0}),{flush:true}));
+    step(()=>window.__nocturneTrace?.("assembly.finish",()=>({playing,settling,seen:seen.size,effects:animations.size,age:now()-started,reason,counts,legacy}),{flush:true}));
     step(()=>{if(raf)window.cancelAnimationFrame(raf);});
     step(()=>{if(timer)window.clearTimeout(timer);});timer=0;
     step(()=>{if(nativeTimer)window.clearTimeout(nativeTimer);});nativeTimer=0;
@@ -345,8 +369,10 @@ try{if(typeof window!=="undefined"){
     const homeLease=ownedTimeline?.homeLease;
     if(homeLease)homeLease.release();
     if(dead)return;
-    if(typeof centerHandle!=="undefined"){centerHandle?.seal();centerHandle?.release();centerHandle=null;}
-    if(typeof bookmarkHandle!=="undefined"){bookmarkHandle?.seal();bookmarkHandle?.release();bookmarkHandle=null;}
+    // Interruption releases surfaces; do not finish() a potentially
+    // cancelled proxy before its queued cancellation has been delivered.
+    if(typeof centerHandle!=="undefined"){centerHandle?.release();centerHandle=null;}
+    if(typeof bookmarkHandle!=="undefined"){bookmarkHandle?.release();bookmarkHandle=null;}
     if(dead)return;
     lateObserver?.disconnect();lateObserver=null;lateResize?.disconnect();lateResize=null;
     if(lateFrame)window.cancelAnimationFrame(lateFrame);lateFrame=0;
@@ -437,7 +463,7 @@ try{if(typeof window!=="undefined"){
     if(failed)decision("assembly.effect.cleanup",{failed});
   }
   function reveal(n,{x=0,y=0,clip=false,delay=0,length=350,easing=EASE,late=false}={}){
-    if(dead||!n||seen.has(n)||!bounds(n,true))return false;
+    if(dead||ownedTimeline?.closed||!n||seen.has(n)||!bounds(n,true))return false;
     // Remove the pending gate before sampling native opacity. All changes
     // occur synchronously, before the next paint.
     n.setAttribute(MANAGED,"true");
@@ -465,6 +491,7 @@ try{if(typeof window!=="undefined"){
     const start=lateEffect?.delay??Math.max(0,delay*scale);
     const time=lateEffect?.length??length*scale;
     if(lateEffect)extendFinish(lateEffect.finishAt);
+    if(dead||timeline?.closed)return false;
     const startLate=late&&timeline?.startEffect? a=>timeline.startEffect(a,offset):null;
     let acquired=false;
     if(registered){
@@ -614,12 +641,15 @@ try{if(typeof window!=="undefined"){
     for(const handle of [centerHandle,bookmarkHandle,timeline.homeLease]){
       if(!handle)continue;
       check();
-      if(typeof handle.resumeAt==="function")handle.resumeAt(timeline.startEffect);
-      else{legacy++;handle.resume?.();}
+      const exactEpoch=typeof handle.resumeAt==="function";
+      if(!exactEpoch||handle.startupOutcomeVersion!==1)legacy++;
+      if(exactEpoch)handle.resumeAt(timeline.startEffect);
+      else handle.resume?.();
     }
     check();
-    if(!timeline.homeLease&&homeRegistry&&homeRegistry.startupLeaseVersion!==1&&window.__zenSharedHomeV1===homeRegistry){
-      legacy++;homeRegistry.resumeStartup?.();
+    if(!timeline.homeLease&&homeRegistry&&window.__zenSharedHomeV1===homeRegistry){
+      if(homeRegistry.startupOutcomeVersion!==1)legacy++;
+      if(homeRegistry.startupLeaseVersion!==1)homeRegistry.resumeStartup?.();
     }
     check();return legacy;
   }
@@ -655,6 +685,7 @@ try{if(typeof window!=="undefined"){
         finish("effect-cancelled");
       },()=>{
         if(dead||ownedTimeline!==timeline||!timeline.boundaryReached||settling)return;
+        if(now()>=deadline){finish("watchdog");return;}
         if(!timeline.outcome.snapshot().pending)finish("boundary");
       });
       timeline.observeEffect=timeline.outcome.observe;

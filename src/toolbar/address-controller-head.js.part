@@ -97,8 +97,7 @@
     url.removeAttribute("data-op-url-phase");
     url.toggleAttribute("data-op-url-ready", nativeInlineOpen(addressBar()));
     root.removeAttribute("oneplane-address-unblur");
-    const bar = addressBar();
-    clearAddressBarMarks(previous);
-    if(bar!==previous)clearAddressBarMarks(bar);
+    // A replaced bar has no ownership relationship to the old phase.
+    clearAddressBarMarks(previous||addressBar());
     reconcileTabCascade();
   }

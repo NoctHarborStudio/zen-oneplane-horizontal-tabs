@@ -206,3 +206,7 @@ Address phase captures the native bar and document epoch; cascade belongs to the
 ### A3.4c2 — common Startup outcome
 
 Assembly's existing timeline owns the exact effect ledger and single completion timer. Current direct, tab, bookmark and Home effects distinguish completion, retirement and unexpected cancellation. The nominal boundary closes admission; at most one capped 120ms grace interval can wait for remaining effects, with no extra scheduler. Current Home retains the lease until common release, except explicit native action or interruption. Workspace/Close and legacy contracts are unchanged. Integrated review and native acceptance pending.
+
+### A3.4-R — audited completion and replacement boundaries
+
+Capture terminal ledger before invalidating ownership. Retained effects observe cancel events as well as the initial finished promise; exact owner capability distinguishes legacy epoch-only consumers. Interruptions release instead of resealing; late admission stops after synchronous cleanup. Address geometry interruption and cleanup retain exact bar identity. No added polling or parallel Startup timer.

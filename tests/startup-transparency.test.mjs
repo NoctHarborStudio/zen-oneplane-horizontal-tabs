@@ -387,8 +387,8 @@ test("initial effects use a single document epoch even when prepared at differen
  const effect=label=>({timeline:clock,playState:"paused",set startTime(value){starts.push([label,value]);}});
  const direct=effect("direct"),tab=effect("tab"),bookmark=effect("bookmark"),home=effect("home");
  const animations=new Map([[direct,{}]]);
- const centerHandle={resumeAt(fn){clock.currentTime+=7;fn(tab);}},bookmarkHandle={resumeAt(fn){clock.currentTime+=9;fn(bookmark);}};
- timeline.homeLease={resumeAt(fn){clock.currentTime+=13;fn(home);}};
+ const centerHandle={startupOutcomeVersion:1,resumeAt(fn){clock.currentTime+=7;fn(tab);}},bookmarkHandle={startupOutcomeVersion:1,resumeAt(fn){clock.currentTime+=9;fn(bookmark);}};
+ timeline.homeLease={startupOutcomeVersion:1,resumeAt(fn){clock.currentTime+=13;fn(home);}};
  const homeRegistry=null;
  ${code}
  bindStartupEpoch(timeline,clock);timeline.paused=false;
@@ -537,9 +537,75 @@ test("settlement retires Home before direct replacement and prevents late admiss
  let dead=false,playing=true,settling=false,bootPreparing=false,lateObserver=null,lateResize=null,lateFrame=0,log=[];
  const a={cancel(){log.push("cancel");}},animations=new Map([[a,{n:{},frames:[{opacity:0},{opacity:1}]}]]);
  const ownedTimeline={paused:false,homeLease:{release(){log.push(ownedTimeline.closed?"home-closed":"home-open");}}};
+ let centerHandle={seal(){log.push("unexpected-seal");},release(){log.push("tabs-release");}},bookmarkHandle={seal(){log.push("unexpected-seal");},release(){log.push("bookmarks-release");}};
  const reduced={matches:false},root={setAttribute(){}},PHASE="phase",FADE="ease",window={getComputedStyle(){return {opacity:".5"};}};
  function play(){log.push("settle");return true;}function armFinish(){log.push("timer");}function now(){return 0;}function finish(){dead=true;}function decision(){}
  ${code}settle();return {log,closed:ownedTimeline.closed};
  `);
- assert.deepEqual(run(),{log:["home-closed","cancel","settle","timer"],closed:true});
+ assert.deepEqual(run(),{log:["home-closed","tabs-release","bookmarks-release","cancel","settle","timer"],closed:true});
+});
+
+test("terminal snapshot sees active ownership before dead flag and classifies incomplete",()=>{
+ const code=source.slice(source.indexOf("  function finish(reason="),source.indexOf("  function settle(){"));
+ const run=new Function("createStartupOutcome","startupBoundaryOutcome",`
+ let dead=false,playing=true,settling=false,raf=0,timer=0,nativeTimer=0,nativeFrame=0,nativeFrame2=0,lateFrame=0,lateObserver=null,lateResize=null,nativeObserver=null,centerHandle={seal(){log.push("seal");},release(){log.push("release");}},bookmarkHandle=null,sheetURI=null,style=null,holdNode=null,bootPreparing=false;
+ const log=[],KEY="assembly",PHASE="phase",HOLD="hold",MANAGED="managed",EXISTING="existing",ENABLE="enable",started=0,now=()=>1;
+ const window={removeEventListener(){},__nocturneTrace(e,fn){if(e==="assembly.finish"){const d=fn();log.push(d.reason,d.counts);}}};
+ const root={},reduced={removeEventListener(){}},prefs={removeObserver(){}},Services={};
+ const animations=new Map(),owned=new Map(),seen=new Set(),baseline=new Set(),inputs=[];
+ const outcome=createStartupOutcome(()=>{throw Error("unexpected");});
+ outcome.observe({finished:new Promise(()=>{}),playState:"running"},"tabs",()=>!dead);
+ let pendingEngine=null,homeRegistry=null,ownedTimeline={outcome},phaseOwned=false,phaseBaseline=null,holdBaseline=null;
+ function restoreMark(){}function restore(){}function removeBoot(){}function interrupt(){}function onResize(){}function schedule(){}function preferenceChanged(){}
+ ${code}window[KEY]=finish;finish("boundary");return log;
+ `);
+ assert.deepEqual(run(createStartupOutcome,startupBoundaryOutcome),["boundary-incomplete",{pending:1,finished:0,cancelled:0,retired:0},"release"]);
+});
+test("retained finished WAAPI cancellation reaches ledger and detaches listener on close",async()=>{
+ const cancelled=[],listeners=new Map();
+ const ledger=createStartupOutcome(s=>cancelled.push(s));
+ let resolve;const effect={finished:new Promise(r=>resolve=r),playState:"running",addEventListener(k,f){listeners.set(k,f);},removeEventListener(k,f){if(listeners.get(k)===f)listeners.delete(k);}};
+ ledger.observe(effect,"home",()=>true);effect.playState="finished";resolve();await Promise.resolve();
+ assert.equal(ledger.snapshot().finished,1);
+ effect.playState="idle";assert.equal(ledger.snapshot().cancelled,1);listeners.get("cancel")();
+ assert.deepEqual(cancelled,["home"]);assert.equal(ledger.snapshot().cancelled,1);
+ ledger.close();assert.equal(listeners.size,0);
+});
+test("intentional direct fill removal preserves successful outcome",async()=>{
+ const ledger=createStartupOutcome(()=>{throw Error("unexpected");});let current=true,resolve,listener;
+ const effect={finished:new Promise(r=>resolve=r),playState:"running",addEventListener(k,f){listener=f;},removeEventListener(){}};
+ ledger.observe(effect,"direct",()=>current);effect.playState="finished";resolve();await Promise.resolve();
+ current=false;effect.playState="idle";listener();
+ assert.equal(ledger.snapshot().finished,1);assert.equal(ledger.snapshot().cancelled,0);ledger.close();
+});
+test("epoch-capable legacy handles without outcome capability remain unverified",()=>{
+ const code=source.slice(source.indexOf("  function resumePrepared("),source.indexOf("  function launch("));
+ const run=new Function(`
+ let dead=false,ownedTimeline={paused:false,startEffect(){}},timeline=ownedTimeline,starts=0;
+ const animations=new Map(),homeRegistry={startupLeaseVersion:1,startupOutcomeVersion:1},window={__zenSharedHomeV1:homeRegistry};
+ const centerHandle={resumeAt(){starts++;}},bookmarkHandle={startupOutcomeVersion:1,resumeAt(){starts++;}};
+ ${code}return {legacy:resumePrepared(timeline),starts};
+ `);
+ assert.deepEqual(run(),{legacy:1,starts:2});
+});
+test("finish timer acquisition failure cannot strand Assembly",()=>{
+ const code=source.slice(source.indexOf("  function armFinish("),source.indexOf("  function mountBoot("));
+ const run=new Function(`
+ let dead=false,deadline=8000,timerEpoch=0,timer=0,time=1000,log=[];
+ const window={setTimeout(){throw Error("timer");}},now=()=>time;
+ function finish(reason){log.push(reason);dead=true;}function decision(){}
+ ${code}armFinish(1200);return log;
+ `);
+ assert.deepEqual(run(),["setup-failed"]);
+});
+
+test("late reveal cannot write styles after synchronous boundary cleanup",()=>{
+ const code=source.slice(source.indexOf("    if(lateEffect)extendFinish("),source.indexOf("    let acquired=false;",source.indexOf("    if(lateEffect)extendFinish(")));
+ const run=new Function(`
+ let dead=false;const timeline={},lateEffect={finishAt:100};let effects=0;
+ function extendFinish(){dead=true;timeline.closed=true;}
+ function reveal(){${code}effects++;return true;}
+ return {value:reveal(),effects};
+ `);
+ assert.deepEqual(run(),{value:false,effects:0});
 });
