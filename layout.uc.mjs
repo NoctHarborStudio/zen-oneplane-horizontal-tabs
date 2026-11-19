@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.100",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.101",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -6795,18 +6795,12 @@ function installTabStrip() {
     try{popup.openPopupAtScreen(x,y,true,event);}
     catch(error){cleanup();console.warn("[OnePlane] Native tab menu:",error);}
   }
-  const contourDefaults={transparency:4,strength:100,length:69,hold:30,curve:65,radius:24,padding:0};
   const contourPrefPrefix="zen.oneplane.fade-";
   let contourFrame=0, contourUntil=0, contourKey="";
   let contourResize=null, contourObserver=null;
   const contourObserved=new Set();
   function contourSettings(){
-    const read=(name,min,max)=>Math.max(min,Math.min(max,
-      prefs.getIntPref(contourPrefPrefix+name,contourDefaults[name])));
-    const length=read("length",10,160);
-    return {transparency:read("transparency",0,40),strength:read("strength",0,100),
-      length,hold:Math.min(length-1,read("hold",0,45)),curve:read("curve",25,300),
-      radius:read("radius",4,24),padding:read("padding",0,20)};
+    return readContourSettings((name,def)=>prefs.getIntPref(contourPrefPrefix+name,def));
   }
   const contourPreferenceObserver={observe(){scheduleContour();}};
   function contourPath(width,base,deep,left,right,radius){
@@ -6845,6 +6839,75 @@ function installTabStrip() {
       '<path fill="black" d="'+edge+'V-100H'+startX+'Z"/></g></svg>';
     return 'url("data:image/svg+xml,'+encodeURIComponent(svg)+'")';
   }
+
+  // Geometry policy is independent of SVG rendering and of DOM ownership.
+  // "visible" follows the clipped native shelf; "stable" reserves the
+  // accepted maximum bookmark hover envelope. Do not merge these policies.
+  function readContourSettings(read){
+    const bounded=(name,def,min,max)=>{
+      const v=read(name,def);
+      return Math.max(min,Math.min(max,Number.isFinite(v)?v:def));
+    };
+    const length=bounded("length",69,10,160);
+    return {transparency:bounded("transparency",4,0,40),strength:bounded("strength",100,0,100),
+      length,hold:Math.min(length-1,bounded("hold",30,0,45)),curve:bounded("curve",65,25,300),
+      radius:bounded("radius",24,4,24),padding:bounded("padding",0,0,20)};
+  }
+  function contourGeometry({wrapper,nav,row,bookmark=null,controls=[],shiftY=0,trim=5,settings,mode="visible",availableGrowth=0}){
+    const finiteRect=r=>r&&["left","top","right","bottom","width","height"].every(k=>Number.isFinite(r[k]));
+    if(!["visible","stable"].includes(mode)||!finiteRect(wrapper)||!finiteRect(nav)||!finiteRect(row)||
+      !(wrapper.width>0&&nav.height>0)||![shiftY,trim,availableGrowth].every(Number.isFinite)||
+      !settings||!["transparency","strength","length","hold","curve","radius","padding"].every(k=>Number.isFinite(settings[k]))||
+      settings.length<=settings.hold||settings.length<=0)return null;
+    const width=Math.max(1,Math.round(wrapper.width));
+    const base=Math.max(1,Math.round(Math.max(nav.bottom,row.bottom)-wrapper.top-shiftY-trim));
+    let left=null,right=null,deep=base,largest=0;
+    if(finiteRect(bookmark)&&(mode==="stable"?bookmark.height>=1:bookmark.height>1)){
+      for(const c of controls){
+        const r=c.rect;
+        if(!finiteRect(r)||r.width<1||r.height<1||r.right<=bookmark.left||r.left>=bookmark.right||
+          r.bottom<=bookmark.top||r.top>=bookmark.bottom)continue;
+        const stable=mode==="stable";
+        const l=stable?r.left-wrapper.left:Math.max(0,r.left-wrapper.left,bookmark.left-wrapper.left);
+        const h=stable?r.right-wrapper.left:Math.min(width,r.right-wrapper.left,bookmark.right-wrapper.left);
+        if(h<=l)continue;
+        const growth=stable?c.growthY??0:0,extra=stable?c.growthX??0:0;
+        if(![growth,extra].every(Number.isFinite)||growth<0||extra<0)return null;
+        left=left===null?l:Math.min(left,l);right=right===null?h:Math.max(right,h);
+        deep=Math.max(deep,r.bottom-wrapper.top-shiftY+growth+settings.padding);
+        largest=Math.max(largest,extra);
+      }
+    }
+    if(left!==null){
+      if(mode==="stable"){
+        const extra=Math.min(largest,Math.max(0,availableGrowth));
+        left=Math.max(0,left-extra);right=Math.min(width,right+extra);
+      }
+      left=Math.floor(left-settings.padding);right=Math.ceil(right+settings.padding);deep=Math.ceil(deep);
+      if(deep<=base){left=right=null;deep=base;}
+    }
+    const height=Math.max(1,Math.ceil(Math.max(deep,base+settings.length)+1));
+    const key=[width,height,base,deep,left,right,settings.transparency,settings.strength,settings.length,
+      settings.hold,settings.curve,settings.radius,settings.padding].join(":");
+    return {width,height,base,deep,left,right,key};
+  }
+  // A failed generator or inline style write must not publish a new key.
+  // Restore both old values and priorities if a partial commit throws.
+  function commitContourMask(surface,geometry,settings,render=contourImage){
+    const style=surface.style,fields=["--op-contour-height","--op-contour-mask"];
+    const prior=fields.map(k=>[k,style.getPropertyValue(k),style.getPropertyPriority(k)]);
+    const {width,height,base,deep,left,right}=geometry;
+    const mask=render(width,height,base,deep,left,right,settings);
+    if(typeof mask!=="string"||!mask)throw Error("invalid contour mask");
+    try{
+      style.setProperty(fields[0],height+"px");style.setProperty(fields[1],mask);
+      if(style.getPropertyValue(fields[0])!==height+"px"||!style.getPropertyValue(fields[1]))throw Error("contour style rejected");
+    }catch(error){
+      for(const [k,v,p] of prior)try{if(v)style.setProperty(k,v,p);else style.removeProperty(k);}catch{}
+      throw error;
+    }
+    return geometry.key;
+  }
   function contourCandidates(){
     if(!bookmarks)return [];
     const items=document.getElementById("PlacesToolbarItems");
@@ -6881,53 +6944,35 @@ function installTabStrip() {
     const container=document.getElementById("zen-appcontent-navbar-container");
     const translation=container?window.getComputedStyle(container).translate:"none";
     const shiftY=translation&&translation!=="none"?(parseFloat(translation.split(/\s+/)[1])||0):0;
-    const width=Math.max(1,Math.round(wrapper.width));
-    const settings=contourSettings();
-    // Keep the top short. Include the bottom of the actual tab row
-    // (including its reserved hover room), not the bookmarks row.
+    const settings=contourSettings(),rr=row.getBoundingClientRect();
     const compactRows=row.hasAttribute("data-op-overflow-row");
     const trim=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-contour-trim"))||5;
-    const base=Math.max(1,Math.round(Math.max(nav.bottom,row.getBoundingClientRect().bottom)-wrapper.top-shiftY-trim));
-    let left=null,right=null,deep=base;
-    if(bookmarks && !bookmarks.hidden && !bookmarks.collapsed){
-      const style=window.getComputedStyle(bookmarks);
-      const bm=bookmarks.getBoundingClientRect();
-      if(style.display!=="none" && style.visibility==="visible" && bm.height>1){
+    let bookmark=null;
+    const controls=[];
+    if(bookmarks&&!bookmarks.hidden&&!bookmarks.collapsed){
+      const style=window.getComputedStyle(bookmarks),bm=bookmarks.getBoundingClientRect();
+      if(style.display!=="none"&&style.visibility==="visible"&&bm.height>1){
+        bookmark=bm;
         for(const node of contourCandidates()){
-          if(node.hidden||node.collapsed||node.getAttribute("hidden")==="true"||
-            node.getAttribute("collapsed")==="true")continue;
-          const s=window.getComputedStyle(node);
-          if(s.display==="none"||s.visibility!=="visible"||(!force&&Number(s.opacity)===0))continue;
-          const b=node.getBoundingClientRect();
-          if(b.width<1||b.height<1||b.right<=bm.left||b.left>=bm.right||
-            b.bottom<=bm.top||b.top>=bm.bottom)continue;
-          const l=Math.max(0,b.left-wrapper.left,bm.left-wrapper.left);
-          const r=Math.min(width,b.right-wrapper.left,bm.right-wrapper.left);
-          if(r<=l)continue;
-          left=left===null?l:Math.min(left,l);
-          right=right===null?r:Math.max(right,r);
-          deep=Math.max(deep,b.bottom-wrapper.top-shiftY+settings.padding);
+          if(node.hidden||node.collapsed||node.getAttribute("hidden")==="true"||node.getAttribute("collapsed")==="true")continue;
+          const cs=window.getComputedStyle(node);
+          if(cs.display==="none"||cs.visibility!=="visible"||(!force&&Number(cs.opacity)===0))continue;
+          controls.push({rect:node.getBoundingClientRect()});
         }
       }
     }
-    // Only visible items contribute. A full bookmark row naturally
-    // extends its lower contour beyond the window instead of folding
-    // the shoulders back through the edge bookmarks.
-    if(left!==null){
-      left=Math.floor(left-settings.padding);
-      right=Math.ceil(right+settings.padding);
-      deep=Math.ceil(deep);
-      if(deep<=base){left=right=null;deep=base;}
+    const geometry=contourGeometry({wrapper,nav,row:rr,bookmark,controls,shiftY,trim,settings});
+    if(!geometry||geometry.key===contourKey)return;
+    try{contourKey=commitContourMask(surface,geometry,settings);}
+    catch(error){
+      // Preserve the last committed key and retry on the next existing
+      // invalidation. No independent retry timer or RAF.
+      window.__nocturneTrace?.("contour.commit.error",{name:error?.name||"Error"},{throttle:500,flush:true});
+      return;
     }
-    // The fade begins at the bottom of the TOP row, not the window
-    // top or bookmark shelf. Only the rear ramp extends below that row.
-    const height=Math.max(1,Math.ceil(Math.max(deep,base+settings.length)+1));
-    const key=[width,height,base,deep,left,right,...Object.values(settings)].join(":");
-    if(key===contourKey)return;
-    contourKey=key;
-    typeof window!=="undefined"&&window.__nocturneTrace?.("contour.paint",()=>({force,width,height,base,deep,left,right,overflow:compactRows,phase:root.getAttribute('data-zr-workspace-phase')}),{throttle:100,sample:1200});
-    surface.style.setProperty("--op-contour-height",height+"px");
-    surface.style.setProperty("--op-contour-mask",contourImage(width,height,base,deep,left,right,settings));
+    const {width,height,base,deep,left,right}=geometry;
+    window.__nocturneTrace?.("contour.paint",()=>({force,width,height,base,deep,left,right,overflow:compactRows,
+      phase:root.getAttribute("data-zr-workspace-phase")}),{throttle:100,sample:1200});
   }
   function stepContour(now){
     contourFrame=0;

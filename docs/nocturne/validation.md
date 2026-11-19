@@ -392,3 +392,8 @@ Preview.98 CI failed only the isolated window-resize fixture due to missing chec
 ### Preview.100 — integrated Center Motion audit
 
 Preview.99 canonical CI PASS (629 Node, 15 Python and release/archive checks). Six new regressions; 67/67 Center Motion fixture bodies PASS in isolated V8: nested invalidation and start, release-validation/dispose reentry, stable/changed post-phase sample, stale/active-phase skip, mode flags and observer wiring, successor marks under second-RAF reentry. Canonical CI for preview.100 pending. This is source/fixture evidence only: native Gecko first painted frame, clipping, interaction, mixed Sine ownership and matched observer/performance remain open. No Bloom activation or native acceptance.
+
+
+### Preview.101 — contour contract
+
+Preview.100 CI PASS (635 Node, 15 Python, release/archive). Six focused permanent contour regression fixtures PASS in isolated V8: visible and stable envelopes, translated/two-row/empty/invalid geometry, normalized settings and deterministic key, rollback/retry, legacy stable SVG byte parity and Layout integration. Runtime parser and generated fragment substitutions verified; canonical CI pending. Native mask appearance, actual hit region and matched performance remain open. Stable production override not migrated.

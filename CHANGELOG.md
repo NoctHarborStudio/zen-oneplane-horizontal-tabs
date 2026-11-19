@@ -1,3 +1,9 @@
+## 0.3.0-preview.101 — Shared contour geometry contract
+
+- Extract pure contour preferences and distinct visible/stable envelope calculations into the existing contour algorithm; Layout consumes the visible policy with unchanged SVG rendering.
+- Commit the ordinary contour cache only after successful mask generation and both style writes, preserving the prior values on partial failure.
+- Add parity and fault-injection fixtures. Magnetic Bookmarks retains its existing stable override until the provider migration; no CSS, native hit region or animation changes.
+
 ## 0.3.0-preview.100 — Center Motion handoff audit
 
 - Lock Center Motion before release validation and reject recursive invalidation/owner callbacks; retain native close and exact cleanup boundaries.

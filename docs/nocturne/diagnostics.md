@@ -267,3 +267,8 @@ Existing assembly launch/resume error and cleanup events cover cohort validation
 ### Preview.100 — resting handoff audit
 
 `center.fold.handoff` is a lazy one-shot diagnostic on an eligible finished incoming Fold in the existing second handoff RAF. Fields: transaction ID, owner, card count, status (`local-stable`, `geometry-changed`, `membership-changed`, `not-comparable`); maximum row-local rectangle delta and absolute row displacement when comparable (null on invalid numeric values). Phase, row, engine generation and Layout owner guards reject stale samples. This is not exact first painted-frame/compositor evidence; a real user interaction can change the resting geometry before sampling. No new timer, observer or RAF chain and no measurement callback when recording is disabled. Existing `center.geometry.invalidate` includes `slots`/`mode` stages.
+
+
+### Preview.101 — contour commit failure
+
+`contour.commit.error`: static error name only, throttled 500 ms, flush. The last ordinary contour cache key is unchanged on render/style failure; next existing invalidation may retry. Existing `contour.paint` is recorded after successful commit. Stable bookmark legacy diagnostic/renderer remains unchanged. No new sampling loop.

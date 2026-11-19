@@ -254,3 +254,8 @@ Center Motion owns the coordinate mapping and validates the actual mounted Fold 
 ### A3.6-R — audited ownership and handoff (preview.100)
 
 Claim the existing Center Motion lock before any release validation and guard recursive invalidation. Layout owns geometry, including mode flags and existing split-slot/compact callbacks. The existing two-frame handoff supplies one lazy post-cleanup resting geometry sample; no new owner, observer or frame loop. Native visual/performance acceptance stays open; A4 will consolidate resting geometry and contour ownership.
+
+
+### A4.1 — Shared contour geometry (preview.101)
+
+Existing contour algorithm now owns pure preferences, visible and stable envelope geometry, deterministic cache key and SVG generation. Layout consumes visible policy and commits its cache after successful render/write, rolling back partial CSS values. Magnetic Bookmarks still owns its legacy stable override until an exact provider lease and explicit selection policy are implemented. Distinct envelope policies are preserved; one renderer is the target, not yet the production state. Native geometry/hit-region and performance gates remain open.

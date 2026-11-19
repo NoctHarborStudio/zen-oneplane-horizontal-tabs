@@ -1127,3 +1127,8 @@ NC4-048 / MB6: mounted host origin corrected, resting outer/Split-part compariso
 ### A3.6-R — preview.100 handoff audit
 
 NC4-048: source reentry protection and existing handoff post-phase geometry diagnostic added; not proof of compositor equivalence. Geometry lease now observes strip mode flags and existing split-slot/mode callbacks. Actual first paint, fallback frequency for partial clips, observer overhead and native interactions remain open. NC4-054 mixed bookmark-owner ordering and NC4-060 Address topology remain open native/A4/A6 dependencies. Proceed to A4 source work only after CI; Bloom stays disabled.
+
+
+### A4.1 — preview.101 contour contract
+
+NC4-001: shared pure contour geometry/prefs/key now consumed by Layout's visible mode; stable policy prepared with parity fixtures, legacy bookmark override still active. NC4-053: ordinary cache commit after rendering and both style writes, best-effort rollback on partial failure. Legacy stable cache defect remains until A4.2. NC4-004/013/018/052 remain A4 geometry and hit-region work; no native performance/visual acceptance claimed.
