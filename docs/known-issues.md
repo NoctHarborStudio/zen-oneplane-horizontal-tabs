@@ -1174,3 +1174,8 @@ A4.4a (preview.109): NC4-052 partial source fix: hold ordinary geometry/projecti
 
 
 A4.4b (preview.110): NC4-018 source partial: bound Home non-client region to toolbar wrapper, leave contour visual-only, suppress hidden/motion handles and make active content shield/split no-drag; guard split input phase and finite inside coordinates. NC4-052 source partial: retire local tab drag/tail on viewport size/DPI/window mode change; external edge-control/foreign destination changes and actual OS hit-test behavior remain A4.4-R/A5/A6. No native evidence yet.
+
+
+### A4.4-R1 — Incoming drag viewport (preview.111)
+
+NC4-018/052 partial source correction: destination preview no longer authorizes a drop after viewport or phase invalidation without fresh trusted dragover. Exact source controller/token guards rejection and completion cleanup. Mixed-DPI Gecko behavior, missing native drop dispatch, native event identity and external layout changes remain open; see pipeline.

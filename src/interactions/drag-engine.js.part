@@ -26,23 +26,27 @@
     };
     dragWatchTimer=window.setTimeout(check,250);
   }
+  function clearSourceIncoming(token,exceptWindow=null){
+    if(token===null)return;
+    try{
+      const wins=Services.wm.getEnumerator("navigator:browser");
+      while(wins.hasMoreElements()){
+        const win=wins.getNext();
+        if(win!==window&&win!==exceptWindow&&!win.closed){
+          try{win[DRAG_CONTROLLER]?.clearIncoming?.(dragController,token);}catch{}
+        }
+      }
+    }catch{}
+  }
   function cancelNativeDrag(reason){
+    const cancelledToken=nativeDragToken;
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.lifecycle.cancel",()=>({reason,token:nativeDragToken,mode:dragImageMode}),{sample:1800});
     nativeDragToken=null;nativeDragIdentity=null;stopNativeDragWatch();
     dragHandled=true;dragStartPoint=null;draggedTab=null;draggedGroup=null;
     // Do not reopen the start-page search after an interrupted OS gesture.
     dragSearch=null;pointerSearch=null;
     if(restoreSearchTimer)window.clearTimeout(restoreSearchTimer);restoreSearchTimer=0;
-    try{endDragVisual();}finally{
-      // Remove the source's temporary shifts in other participating windows.
-      try{
-        const wins=Services.wm.getEnumerator("navigator:browser");
-        while(wins.hasMoreElements()){
-          const win=wins.getNext();
-          if(win!==window&&!win.closed)win[DRAG_CONTROLLER]?.clearIncoming?.();
-        }
-      }catch{}
-    }
+    try{endDragVisual();}finally{clearSourceIncoming(cancelledToken);}
   }
   function startNativeDragLifecycle(event,tab){
     if(dragLifecycle.current())dragLifecycle.cancel("superseded");

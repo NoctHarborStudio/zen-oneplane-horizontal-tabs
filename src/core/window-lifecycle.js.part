@@ -33,6 +33,7 @@
     cleanupStep("releaseAddressHold()",()=>{releaseAddressHold();});
     cleanupStep("clearTabHover()",()=>{clearTabHover();});
     cleanupStep("releaseDragEngine()",()=>{releaseDragEngine();});
+    cleanupStep("incoming preview lease",()=>{incomingDrag=null;});
     cleanupStep("endDragVisual()",()=>{endDragVisual();});
     cleanupStep("cancelInsertion()",()=>{cancelInsertion();});
     draggedTab = null;

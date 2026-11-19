@@ -5,6 +5,7 @@
     const placement=placementAt(event,true);
     const returned=!placement&&pointInSourceWindow(event)&&(dragDetachedOnce||dragBunnyLayout)&&toolbarDragReturnZone(event);
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.end",()=>({returned,placement:!!placement,detached:dragDetachedOnce,handled:dragHandled,drop:dt?.dropEffect,cancelled:!!dt?.mozUserCancelled}),{sample:1800});
+    const finishedToken=nativeDragToken;
     if(!finishNativeDragLifecycle(event,tab))return;
     const handled = dragHandled;
     const wasGroup = Boolean(draggedGroup);
@@ -12,7 +13,8 @@
     if(returned&&!dt?.mozUserCancelled)prepareBunnyDrop(event);
     const keep=returned&&!dt?.mozUserCancelled&&dragImageMode==="inline"&&!!dragInsertAnimation;
     draggedTab = null; draggedGroup = null; dragHandled = false; dragStartPoint = null;
-    if(keep)finishInsertionAfterDrop();else endDragVisual(returned&&!dt?.mozUserCancelled);
+    try{if(keep)finishInsertionAfterDrop();else endDragVisual(returned&&!dt?.mozUserCancelled);}
+    finally{clearSourceIncoming(finishedToken);}
     if (returned || wasGroup || !start || handled || dt?.mozUserCancelled || dt?.dropEffect !== "none" ||
         !validNativeTab(tab) || tabOwner(tab) !== window) return;
     // A cancelled drag or a drop within this window must never create
@@ -39,24 +41,30 @@
   }
   const dragController = {
     source: () => draggedTab,
+    sourceToken: () => nativeDragToken,
     group: () => draggedGroup,
     outside: event => setDragImageMode("outside",event),
     preview: event => {if(draggedTab&&!draggedGroup)showPlacementPreview(event,"Tab");},
-    clearIncoming: () => {
-      if(draggedTab||dragInsertPending||dead)return;
-      clearLiveDrag();clearDropMarker();releaseDragReveal();refreshIndicator();
+    clearIncoming: (source,token) => {
+      const lease=incomingDrag;
+      if(dead||!lease||lease.source!==source||lease.token!==token)return;
+      clearIncomingDrag("source-ended",lease);
     },
-    markHandled: (finishReturn=false) => {
+    markHandled: (finishReturn=false,expectedToken=null,destination=null) => {
+      if(expectedToken!==null&&expectedToken!==nativeDragToken)return;
+      const finishedToken=nativeDragToken;
       if(!finishNativeDragLifecycle())return;
       dragHandled = true;
       const keep=finishReturn&&dragImageMode==="inline"&&!!dragInsertAnimation;
-      if(!keep)endDragVisual(finishReturn);
-      draggedTab = null;
-      draggedGroup = null;
-      dragStartPoint=null;
-      // Native drop is committed now. Only the isolated visual remains
-      // until the return animation completes; no native session is held.
-      if(keep)finishInsertionAfterDrop();
+      try{
+        if(!keep)endDragVisual(finishReturn);
+        draggedTab = null;
+        draggedGroup = null;
+        dragStartPoint=null;
+        // Native drop is committed now. Only the isolated visual remains
+        // until the return animation completes; no native session is held.
+        if(keep)finishInsertionAfterDrop();
+      }finally{clearSourceIncoming(finishedToken,destination);}
     }
   };
 

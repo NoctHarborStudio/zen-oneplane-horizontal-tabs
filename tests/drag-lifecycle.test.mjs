@@ -100,7 +100,7 @@ test("early toolbar return drop finishes native ownership but retains the visual
   const read=p=>readFile(new URL("../src/interactions/"+p,import.meta.url),"utf8");
   const [end,img,ctrl,strip,engine]=await Promise.all([read("drag-end.js.part"),read("native-drag-image.js.part"),read("drag-controller.js.part"),read("strip-drag.js.part"),read("drag-engine.js.part")]);
   const a=end.indexOf("markHandled: "),b=end.indexOf("\n  };",a);
-  const setup=new Function("let dragHandled=false,draggedTab={},draggedGroup={},dragStartPoint={},dragImageMode='inline',dragInsertAnimation={currentTime:250},dragInsertPending=false,ended=0,finished=0,held=0;const finishNativeDragLifecycle=()=>++finished===1,endDragVisual=()=>ended++,finishInsertionAfterDrop=()=>{dragInsertPending=true;held++;};const controller={"+end.slice(a,b)+"};return {mark:controller.markHandled,read:()=>({dragHandled,draggedTab,draggedGroup,dragStartPoint,dragInsertPending,ended,finished,held})}")();
+  const setup=new Function("let dragHandled=false,draggedTab={},draggedGroup={},dragStartPoint={},dragImageMode='inline',dragInsertAnimation={currentTime:250},dragInsertPending=false,nativeDragToken=1,ended=0,finished=0,held=0;const clearSourceIncoming=()=>{},finishNativeDragLifecycle=()=>++finished===1,endDragVisual=()=>ended++,finishInsertionAfterDrop=()=>{dragInsertPending=true;held++;};const controller={"+end.slice(a,b)+"};return {mark:controller.markHandled,read:()=>({dragHandled,draggedTab,draggedGroup,dragStartPoint,dragInsertPending,ended,finished,held})}")();
   setup.mark(true);
   assert.deepEqual(setup.read(),{dragHandled:true,draggedTab:null,draggedGroup:null,dragStartPoint:null,dragInsertPending:true,ended:0,finished:1,held:1});
   setup.mark(true);assert.equal(setup.read().ended,0);

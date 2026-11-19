@@ -1,3 +1,63 @@
+  // Destination-local preview lease. Source token is not proof of a
+  // native DataTransfer session; A5 owns that identity contract.
+  let incomingDrag=null,incomingReleasing=false;
+  function incomingMotionAllowed(){
+    return !incomingReleasing&&hoverSupported()&&cascadeState==="idle"&&!draggedTab&&!dragInsertPending&&!dragLifecycle.current()&&
+      !root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&
+      !root.hasAttribute("data-zr-workspace-phase")&&!root.hasAttribute("data-zr-startup-phase");
+  }
+  function incomingSourceCurrent(lease,tab=lease?.tab,owner=lease?.owner){
+    try{return !!lease&&lease.tab===tab&&lease.owner===owner&&owner!==window&&!owner.closed&&
+      owner[DRAG_CONTROLLER]===lease.source&&lease.source.source()===tab&&lease.source.sourceToken()===lease.token;}
+    catch{return false;}
+  }
+  function incomingDropAllowed(tab,owner,lease=incomingDrag){
+    if(!lease||incomingDrag!==lease||lease.invalid||!incomingSourceCurrent(lease,tab,owner)||!incomingMotionAllowed())return false;
+    const viewport=dragViewportState();
+    return lease.viewport.every((value,i)=>Object.is(value,viewport[i]));
+  }
+  function releaseIncomingVisual(lease,reason,retain=false){
+    if(!lease||incomingDrag!==lease)return false;
+    if(!retain)incomingDrag=null;
+    if(lease.invalid)return true;
+    lease.invalid=true;incomingReleasing=true;
+    try{
+      clearLiveDrag();clearDropMarker();releaseDragReveal();refreshIndicator();
+      window.__nocturneTrace?.("drag.incoming.release",{reason,retained:retain},{throttle:250});
+    }finally{incomingReleasing=false;}
+    return true;
+  }
+  function clearIncomingDrag(reason,lease=incomingDrag){
+    return releaseIncomingVisual(lease,reason);
+  }
+  function retireIncomingDrag(){
+    const lease=incomingDrag;
+    if(!lease)return false;
+    if(!incomingSourceCurrent(lease))return clearIncomingDrag("source-gone",lease);
+    if(lease.invalid)return true;
+    if(!incomingDropAllowed(lease.tab,lease.owner,lease))return releaseIncomingVisual(lease,"geometry-or-phase",true);
+    return false;
+  }
+  function admitIncomingDrag(event,tab,owner){
+    if(owner===window)return true;
+    if(!event.isTrusted)return false;
+    if(event.type!=="dragover")return incomingDropAllowed(tab,owner);
+    if(!incomingMotionAllowed()){retireIncomingDrag();return false;}
+    if(incomingDropAllowed(tab,owner))return true;
+    clearIncomingDrag("new-preview");
+    const source=owner?.[DRAG_CONTROLLER],token=source?.sourceToken?.();
+    if(!incomingMotionAllowed()||!Number.isSafeInteger(token)||source?.source()!==tab)return false;
+    incomingDrag={tab,owner,source,token,viewport:dragViewportState(),invalid:false};
+    return true;
+  }
+  function rejectIncomingDrop(event,tab,owner,lease){
+    // Consume the rejected custom drop without native mutation. Only the
+    // exact captured source lease may suppress its detach fallback.
+    event.preventDefault();event.stopPropagation();
+    const current=incomingSourceCurrent(lease,tab,owner);
+    clearIncomingDrag("drop-rejected",lease);
+    if(current&&incomingSourceCurrent(lease,tab,owner))lease.source.markHandled(false,lease.token,window);
+  }
   // Use painted lane rectangles, not offscreen native-order slots.
   function useLaneDrop(){
     return row.hasAttribute("data-op-overflow-row")||row.hasAttribute("data-op-lane-drag")||
@@ -39,6 +99,7 @@
   }
   function laneAutoStep(now){
     laneDragFrame=0;
+    if(retireChangedDragViewport()||retireIncomingDrag())return;
     const lane=laneDragViewport,point=laneDragPoint;
     if(dead||!lane||!point||!row.hasAttribute("data-op-lane-drag"))return;
     const clip=lane.getBoundingClientRect(),edge=Math.min(42,clip.width/3);
@@ -97,6 +158,7 @@
   }
   function previewStripDrag(event, tab) {
     const owner = tabOwner(tab);
+    if(owner!==window&&!incomingDropAllowed(tab,owner))return null;
     const group = owner?.[DRAG_CONTROLLER]?.group();
     const entry = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
     if(useLaneDrop())return previewLaneDrag(event,tab,entry);
@@ -198,6 +260,7 @@
   function onStripDragLeave(event) {
     if (event.relatedTarget instanceof Node && row.contains(event.relatedTarget)) return;
     if (toolbarContainsPoint(event.clientX,event.clientY)) return;
+    if(clearIncomingDrag("leave-strip"))return;
     stopLaneAutoscroll();
     // The window capture listener owns pull and image transitions.
     // Do not erase a group's visual position mid-extraction.
@@ -244,11 +307,18 @@
     const tab = readDraggedTab(event);
     if (!hoverSupported() || !tab || !toolbarWrapper) return;
     if(dragInsertPending)endDragVisual();
-    const within = toolbarDragReturnZone(event);
+    const within = toolbarDragReturnZone(event),owner=tabOwner(tab);
+    const local=owner===window;
+    if(!local){
+      // Source's OS ghost/placement remains independent of destination
+      // admission. Reject only the destination preview, not source motion.
+      owner?.[DRAG_CONTROLLER]?.preview?.(event);
+      owner?.[DRAG_CONTROLLER]?.outside(event);
+      if(!within){clearIncomingDrag("outside-toolbar");return;}
+      if(!admitIncomingDrag(event,tab,owner))return;
+    }
     if(within)holdToolbarForReturn();
-    if(tabOwner(tab)===window)clearPlacementPreview();
-    else tabOwner(tab)?.[DRAG_CONTROLLER]?.preview?.(event);
-    const local = tabOwner(tab) === window;
+    if(local)clearPlacementPreview();
     // A return still runs the visual state machine. Native cancellation
     // remains owned by onToolbarDrop; do not reorder after detachment.
     if (local && dragNode) {
@@ -291,7 +361,7 @@
         dragNode.setAttribute("data-op-drag-follow","true");
         refreshIndicator();return;
       }
-    } else if (!local) tabOwner(tab)?.[DRAG_CONTROLLER]?.outside(event);
+    }
     if (!within) {
       clearLiveDrag(); releaseDragReveal(); return;
     }

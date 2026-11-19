@@ -58,12 +58,13 @@
     source?.markHandled(finishReturn);
   }
   function onDragStart(event, tab, group = null) {
-    if (!hoverSupported() || !validNativeTab(tab) || !event.dataTransfer) {
+    if (incomingReleasing || !hoverSupported() || !validNativeTab(tab) || !event.dataTransfer) {
       event.preventDefault();
       return;
     }
     const image = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
     if (!image) { event.preventDefault(); return; }
+    clearIncomingDrag("local-start");
     if(dragInsertPending)endDragVisual();
     cancelInsertion();
     cancelOverflowMotion();
@@ -118,9 +119,10 @@
     }
   }
   function onStripDragOver(event) {
-    if(cascadeState!=="idle")return;
+    if(retireChangedDragViewport())return;
+    if(cascadeState!=="idle"){retireIncomingDrag();return;}
     const tab = readDraggedTab(event);
-    if (!tab) return;
+    if (!tab||!admitIncomingDrag(event,tab,tabOwner(tab))) return;
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = "move";
@@ -143,20 +145,30 @@
     return true;
   }
   function onStripDrop(event) {
-    if(cascadeState!=="idle")return;
+    if(retireChangedDragViewport())return;
     const tab = readDraggedTab(event);
     if (!tab) return;
+    const owner = tabOwner(tab),incoming=owner!==window?incomingDrag:null;
+    if(owner!==window&&(!event.isTrusted||!toolbarDragReturnZone(event)||!incomingDropAllowed(tab,owner,incoming))){
+      if(event.isTrusted)rejectIncomingDrop(event,tab,owner,incoming);
+      return;
+    }
+    if(cascadeState!=="idle")return;
     event.preventDefault();
     event.stopPropagation();
-    const owner = tabOwner(tab);
     const source = owner?.[DRAG_CONTROLLER];
+    const markSourceHandled=()=>owner===window?source?.markHandled():source?.markHandled(false,incoming.token,window);
     const group = source?.group();
     if (owner === window && dragNode) { setDragImageMode("inline",event); setPull(0); }
     const dest = previewStripDrag(event, tab) || dropTarget(event);
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.drop",()=>({local:owner===window,group:!!group,dest:!!dest?.native,before:dest?.before,mode:dragImageMode}),{sample:1800});
+    if(owner!==window&&!incomingDropAllowed(tab,owner,incoming)){
+      rejectIncomingDrop(event,tab,owner,incoming);return;
+    }
     if(!validStripDropTarget(dest)){
-      if(owner===window)source?.markHandled();
-      clearLiveDrag();clearDropMarker();return;
+      markSourceHandled();
+      if(!clearIncomingDrag("target-rejected",incoming)){clearLiveDrag();clearDropMarker();}
+      return;
     }
     row.setAttribute("data-op-drag-commit", "true");
     try {
@@ -166,34 +178,38 @@
         if (owner === window && splitGroup(tab) === group && dest?.native !== group) {
           moveNativeNextTo(group, dest);
         }
-        source?.markHandled();
+        markSourceHandled();
         schedule();
         return;
       }
       if (dest?.tab === tab || (owner === window && dest?.group && splitGroup(tab) === dest.group)) {
-        source?.markHandled();
+        markSourceHandled();
         return;
       }
-      if (isSplit(tab) && !unsplitTab(tab)) { source?.markHandled(); return; }
-      if(!validStripDropTarget(dest)){source?.markHandled();return;}
+      if(owner!==window&&!incomingDropAllowed(tab,owner,incoming)){rejectIncomingDrop(event,tab,owner,incoming);return;}
+      if (isSplit(tab) && !unsplitTab(tab)) { markSourceHandled(); return; }
+      if(!validStripDropTarget(dest)){markSourceHandled();return;}
+      if(owner!==window&&!incomingDropAllowed(tab,owner,incoming)){rejectIncomingDrop(event,tab,owner,incoming);return;}
       if (owner === window) {
         // Dropping a member beyond its original group detaches only that
         // member. Never insert an ordinary tab inside another split group.
         moveNativeNextTo(tab, dest);
-        source?.markHandled();
+        markSourceHandled();
       } else {
         const all = Array.from(browser.tabs);
         const boundary = dest?.group ? groupMembers(dest.group) : dest?.tab ? [dest.tab] : [];
         const boundaryIndex=all.indexOf(dest.before ? boundary[0] : boundary.at(-1));
         if(!boundary.length||boundaryIndex<0)return;
         const index=boundaryIndex+(dest.before?0:1);
+        if(!incomingDropAllowed(tab,owner,incoming)){rejectIncomingDrop(event,tab,owner,incoming);return;}
         const adopted = browser.adoptTab(tab, { tabIndex: index, selectTab: true });
-        if (adopted) source?.markHandled();
+        if (adopted) markSourceHandled();
       }
       schedule();
     } catch (error) {
       console.error("[OnePlane] Tab or split group move:", error);
     } finally {
+      if(incoming&&incomingDrag===incoming){incomingDrag=null;releaseDragReveal();}
       clearDropMarker();
       finishStripCommit();
     }

@@ -232,10 +232,13 @@
     shiftDragNode(node, event.clientX - rect.width * dragGrabRatio - rect.left, true);
   }
   function onWindowDragLeave(event) {
-    if (!draggedTab || !dragNode || event.relatedTarget instanceof Node) return;
-    // Internal strip -> page crossings must not turn on the OS ghost.
+    if (event.relatedTarget instanceof Node) return;
+    // Internal strip -> page crossings must not turn on the OS ghost
+    // or retire a foreign preview. Actual destination leave releases it.
     const x = event.clientX, y = event.clientY;
     const atEdge = x <= 1 || y <= 1 || x >= window.innerWidth-1 || y >= window.innerHeight-1;
-    if (atEdge || event.target === window || event.target === document || event.target === root)
-      setDragImageMode("outside",event);
+    if (atEdge || event.target === window || event.target === document || event.target === root){
+      if(clearIncomingDrag("leave-window"))return;
+      if(draggedTab&&dragNode)setDragImageMode("outside",event);
+    }
   }

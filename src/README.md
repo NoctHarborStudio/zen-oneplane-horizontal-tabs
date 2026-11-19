@@ -54,3 +54,6 @@ A4.4a: Layout resting gate is shared by center/height/contour, projection and or
 
 
 A4.4b: contour is visual-only; actual Home wrapper, spacer and resting strip own native window drag, control/no-drag exclusions and phase gates apply. Split Drop and address shield are active content owners, not window handles. Local tab drag viewport capture belongs to existing Drag Engine lifecycle; cancellation never synthesizes drop. A4.4-R next.
+
+
+A4.4-R1: foreign-window strip preview is a destination-local lease within existing drag fragments, not a new owner/scheduler. The exact source controller/token and viewport are required at drop; resize/phase invalidation releases preview, fresh trusted dragover re-admits. Source completion clears only matching previews. Native event identity remains A5.

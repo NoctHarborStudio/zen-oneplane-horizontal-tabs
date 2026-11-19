@@ -317,3 +317,8 @@ No new trace stream. Existing drag, address.cascade, tabs.sync, geometry.preflig
 ### Preview.110 — native hit-region boundary
 
 `drag.viewport.changed` reports new width/height/scale only, throttled and flushed, then existing `drag.lifecycle.cancel` reason viewport-changed owns cleanup. Rejected local split event uses reason split-hit-rejected; no raw pointer payload, title or URL. Use existing phase and geometry snapshots to compare real toolbar/spacer/control/Fade/content coordinates; DOM pointer hit and OS native non-client hit are distinct. Native region probes remain deferred.
+
+
+### Preview.111 — incoming viewport lease
+
+`drag.incoming.release` records static reason and whether rejection evidence is retained. No source tab, token, URL or window identity is emitted. Source detach fallback may be suppressed only for the captured current token on a delivered rejected drop.

@@ -439,3 +439,6 @@ A4.4a (preview.109): preview.108 canonical CI PASS. 128 focused fixture bodies p
 
 
 A4.4b (preview.110): 15/15 Window Geometry and 9/9 drag lifecycle fixture bodies PASS isolated V8; five new regressions (bounded collapsed handles, shield/split region, exact viewport interruption, finite half-open hit/current owner, rejected native split drop). Canonical CI pending. Native test matrix: drag Home measured blank toolbar/spacers and gap; actual buttons/address/bookmarks remain clickable; rear Fade and content do not move the window; collapsed compact top edge still reveals; active shield consumes complete pointer sequence; Split Drop does not accept stale/outside/other phase; normal local/foreign drag and visual tail, resize/maximize/DPI during Bunny, canceled gesture cannot detach or mutate native tabs. No native PASS yet.
+
+
+A4.4-R1 native gate: drag a tab into a second window; resize/maximize or change DPI while hovering its strip, release before a fresh dragover, then repeat with fresh dragover. Check stale adoption/accidental detach and destination preview/autoscroll release. Verify source cancellation and completion, leave/reentry, workspace motion and same-package reload. Native evidence pending; source fixtures are not Gecko hit-test proof. Missing native drop dispatch and old-controller fallback remain unverified.

@@ -1,3 +1,8 @@
+## 0.3.0-preview.111 — Incoming drag geometry lease
+
+- Fence foreign-window previews and drops by exact source controller/token and destination size, DPI, mode and motion phase. Require fresh trusted dragover after invalidation; reject stale custom drops without native mutation.
+- Retire incoming lane autoscroll and preview on geometry/phase changes, leave, local takeover and source completion/cancellation. Source OS ghost remains independent. No new scheduler or animation engine.
+
 ## 0.3.0-preview.110 — Bounded native hit regions
 
 - Make the decorative toolbar contour input-neutral; preserve the Home native handle on the existing bounded toolbar wrapper instead of the alpha-mask rear fade. Suppress hidden compact and motion-owned native drag regions.

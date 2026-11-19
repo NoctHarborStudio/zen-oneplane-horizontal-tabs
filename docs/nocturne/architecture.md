@@ -301,3 +301,6 @@ A4.4a (preview.109): shared live resting gate holds center/height/contour, mirro
 
 
 A4.4b (preview.110): native drag region is independent of the contour mask. The resting Home toolbar wrapper and existing spacers/lane gaps own bounded native drag; actual controls subtract, decorative contour stays default/pointer-none. Gecko 160 display-list region union/subtraction is based on conservatively clipped frame border boxes, not alpha. Compact hidden handles are default; motion suppresses non-client drag on owned slots. Address shield and Split Drop own content input only in their active phase; split rejects stale/outside points before native commands. Local drag captures viewport coordinates and retires on size/DPI/mode change. Rear fade is visual only, not a native handle. No native movement synthesis or new hit layer. Point-level native validation and A4.4-R remain open.
+
+
+A4.4-R1 (preview.111): incoming tab preview holds one destination-local lease over exact source controller/token and viewport. Invalidating releases existing visual state; a fresh trusted dragover must re-admit before drop. Source completion/cancel clears only matching previews, excluding the destination currently committing. Native DataTransfer identity and actual commit remain A5, not inferred from the preview token.
