@@ -192,8 +192,8 @@
     if(dead)return;
     if(frame){window.cancelAnimationFrame(frame);frame=0;sync();}
     if(geometryFrame){window.cancelAnimationFrame(geometryFrame);geometryFrame=0;}
+    window.__zenMagneticBookmarksShared?.syncAddressState?.();
     measureToolbarGeometry(true);paintContour(true);
-    window.__zenMagneticBookmarksShared?.prepareWorkspaceContour?.();
   }
   function observeGeometry() {
     if (!geometryObserver) return;

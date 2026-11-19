@@ -21,11 +21,32 @@
       contourResize.observe(node);contourObserved.add(node);
     }
   }
-  function paintContour(force=false){
+  function bookmarkContourPolicy(force=false){
+    if(!bookmarks)return "off";
+    try{return window.__zenMagneticBookmarksShared?.contourPolicy?.(force,bookmarks)??"off";}
+    catch{return "off";}
+  }
+  function paintContour(force=false,prehover=false){
+    if(contourPainting)return;
+    contourPainting=true;
+    try{paintContourNow(force,prehover);}finally{contourPainting=false;}
+  }
+  function paintContourNow(force,prehover){
     if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-op-bookmark-wave")||document.getElementById("PlacesToolbarItems")?.hasAttribute("data-zr-fold-bookmarks")||(!force&&(root.hasAttribute("data-zr-workspace-phase")||root.getAttribute("data-zr-startup-phase")==="playing"||root.hasAttribute("data-zr-center-motion"))))return;
     // A switch can briefly hide or resize native bookmark controls.
     // Retain the last valid mask until the native layout settles.
-    if(!force&&contourKey && window.performance.now()<panelSwitchUntil)return;
+    if(!force&&!prehover&&contourKey&&window.performance.now()<panelSwitchUntil)return;
+    const provider=window.__zenMagneticBookmarksShared;
+    let mode="visible",envelope=null;
+    if(bookmarks&&provider?.readContourEnvelope){
+      try{envelope=provider.readContourEnvelope(force,bookmarks);}
+      catch(error){
+        window.__nocturneTrace?.("contour.provider.error",{name:error?.name||"Error"},{throttle:500});
+        return; // preserve last valid surface on provider failure
+      }
+      if(envelope?.status==="hold")return;
+      if(envelope?.status==="ready")mode="stable";
+    }
     const wrapper=toolbarWrapper.getBoundingClientRect();
     const nav=navbar?.getBoundingClientRect();
     if(wrapper.width<=0||!nav||nav.height<=0)return;
@@ -37,9 +58,9 @@
     const settings=contourSettings(),rr=row.getBoundingClientRect();
     const compactRows=row.hasAttribute("data-op-overflow-row");
     const trim=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-contour-trim"))||5;
-    let bookmark=null;
-    const controls=[];
-    if(bookmarks&&!bookmarks.hidden&&!bookmarks.collapsed){
+    let bookmark=mode==="stable"?envelope.bookmark:null;
+    const controls=mode==="stable"?envelope.controls:[];
+    if(mode==="visible"&&bookmarks&&!bookmarks.hidden&&!bookmarks.collapsed){
       const style=window.getComputedStyle(bookmarks),bm=bookmarks.getBoundingClientRect();
       if(style.display!=="none"&&style.visibility==="visible"&&bm.height>1){
         bookmark=bm;
@@ -51,9 +72,14 @@
         }
       }
     }
-    const geometry=contourGeometry({wrapper,nav,row:rr,bookmark,controls,shiftY,trim,settings});
-    if(!geometry||geometry.key===contourKey)return;
-    try{contourKey=commitContourMask(surface,geometry,settings);}
+    const geometry=contourGeometry({wrapper,nav,row:rr,bookmark,controls,shiftY,trim,settings,mode,
+      availableGrowth:mode==="stable"?envelope.availableGrowth:0});
+    if(dead||provider!==window.__zenMagneticBookmarksShared||envelope?.current?.()===false||!geometry)return;
+    if(geometry.key===contourKey&&mode===contourMode)return;
+    try{
+      if(geometry.key!==contourKey)contourKey=commitContourMask(surface,geometry,settings);
+      contourMode=mode;
+    }
     catch(error){
       // Preserve the last committed key and retry on the next existing
       // invalidation. No independent retry timer or RAF.
@@ -61,20 +87,21 @@
       return;
     }
     const {width,height,base,deep,left,right}=geometry;
-    window.__nocturneTrace?.("contour.paint",()=>({force,width,height,base,deep,left,right,overflow:compactRows,
+    window.__nocturneTrace?.("contour.paint",()=>({force,mode,width,height,base,deep,left,right,overflow:compactRows,
       phase:root.getAttribute("data-zr-workspace-phase")}),{throttle:100,sample:1200});
   }
   function stepContour(now){
     contourFrame=0;
     if(dead)return;
     paintContour();
+    if(bookmarkContourPolicy()!=="off"){contourUntil=0;return;}
     if(now<contourUntil && hoverSupported()&&!root.hasAttribute("data-op-bookmark-wave")&&!root.hasAttribute("data-zr-workspace-phase")&&root.getAttribute("data-zr-startup-phase")!=="playing"&&!root.hasAttribute("data-zr-center-motion"))contourFrame=window.requestAnimationFrame(stepContour);
   }
   function scheduleContour(){
     if(!dead&&!contourFrame)contourFrame=window.requestAnimationFrame(stepContour);
   }
   function onContourTransition(event){
-    if(root.hasAttribute("data-op-bookmark-wave")||!contourObserved.has(event.target))return;
+    if(root.hasAttribute("data-op-bookmark-wave")||!contourObserved.has(event.target)||bookmarkContourPolicy()!=="off")return;
     if(!/^(margin|width|height|scale|translate|transform|padding)/.test(event.propertyName||""))return;
     // Magnetic Bookmarks can move through CSS transforms without a
     // resize notification. Follow only while its short transition runs.

@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="bookmarks.script",data={version:"0.3.0-preview.101"};
+  const event="bookmarks.script",data={version:"0.3.0-preview.102"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -37,14 +37,12 @@ function install() {
   const openPopups = new Set();
   let raf = 0, last = 0, until = 0, cx = 0, cy = 0, w = 14, h = 3, vx = 0;
   let shown = false, toolbarWidth = 0, refreshFrame = 0;
-  let leaveTimer=0, flipTimer=0, flipEpoch=0, motionPlan=null, contourFrame=0, contourSurface=null, contourKey="";
+  let leaveTimer=0, flipTimer=0, flipEpoch=0, motionPlan=null;
   const flips=new Map(),flipNodes=new Set(),cards=new Map(),contentLocks=new Map();
   let pointerFrame=0,pendingPointer=null,lastIndicatorTransform="",lastPointer=null;
   const FLIP_EASE="cubic-bezier(.333333,0,.666667,1)";
   let baseHeight=0,basePadding=0,reserve=0;
   const busy=()=>state.size>0||flips.size>0||cards.size>0&&!active;
-  const wrapper = document.getElementById("zen-appcontent-navbar-wrapper");
-  const contourPrefix = "zen.oneplane.fade-";
   const GAP_GRACE_MS = 180;
   let settings = {};
   let addressSuspended=false, addressPointer=null, settingsPending=false;
@@ -103,102 +101,39 @@ function install() {
     toolbar.style.setProperty("--zr-bm-base-pad-bottom",basePadding+"px");
     toolbar.style.setProperty("--zr-bm-reserve",reserve+"px");
   }
-  function contourSettings(){
-    const read=(name,min,max,def)=>clamp(prefs.getIntPref(contourPrefix+name,def),min,max);
-    const length=read("length",10,160,69);
-    return {transparency:read("transparency",0,40,4),strength:read("strength",0,100,100),
-      length,hold:Math.min(length-1,read("hold",0,45,30)),curve:read("curve",25,300,65),
-      radius:read("radius",4,24,24),padding:read("padding",0,20,0)};
+  // Nocturne Layout is the only mask renderer. Bookmarks owns the
+  // resting expansion budget, never the toolbar surface or its cache.
+  function contourPolicy(force=false,expectedToolbar=toolbar){
+    if(dead||expectedToolbar!==toolbar||!toolbar.isConnected||!list.isConnected||
+      !settings.enabled||!settings.stableBackground||root.getAttribute("zen-compact-mode")!=="true"||
+      toolbar.hidden||toolbar.collapsed)return "off";
+    if(busy()||!force&&addressSuspended||root.hasAttribute("data-op-bookmark-wave")||
+      list.hasAttribute("data-zr-fold-bookmarks"))return "hold";
+    return "ready";
   }
-  // Same contour geometry as OnePlane preview.34. The input is a fixed
-  // envelope of the RESTING bookmarks plus the maximum expansion budget,
-  // not the animated getBoundingClientRect() values.
-  function contourPath(width,base,deep,left,right,radius){
-    const r=Math.max(0,Math.min(radius,(deep-base)/2)),outside=radius+4;
-    if(!r||left===null||right===null)return "M"+(-outside)+" "+base+"H"+(width+outside);
-    const start=Math.min(-outside,left-2*r-outside),end=Math.max(width+outside,right+2*r+outside);
-    return "M"+start+" "+base+"H"+(left-2*r)+" A"+r+" "+r+" 0 0 1 "+(left-r)+" "+(base+r)+
-      " V"+(deep-r)+" A"+r+" "+r+" 0 0 0 "+left+" "+deep+" H"+right+
-      " A"+r+" "+r+" 0 0 0 "+(right+r)+" "+(deep-r)+" V"+(base+r)+
-      " A"+r+" "+r+" 0 0 1 "+(right+2*r)+" "+base+" H"+end;
-  }
-  function contourImage(width,height,base,deep,left,right,opt){
-    const edge=contourPath(width,base,deep,left,right,opt.radius),start=Number(edge.match(/^M(-?[\d.]+)/)[1]);
-    const positions=Array.from({length:65},(_,i)=>opt.length*i/64);positions.push(opt.hold);positions.sort((a,b)=>a-b);
-    const stops=positions.map(y=>{
-      const t=clamp((y-opt.hold)/(opt.length-opt.hold),0,1);
-      const alpha=opt.strength/100*Math.pow(Math.max(0,1-t*t*(3-2*t)),opt.curve/100);
-      return '<stop offset="'+(y/opt.length).toFixed(6)+'" stop-color="black" stop-opacity="'+alpha.toFixed(6)+'"/>';
-    }).join("");
-    const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+width+'" height="'+height+'" viewBox="0 0 '+width+' '+height+'">'+
-      '<defs><linearGradient id="fade" gradientUnits="userSpaceOnUse" x1="0" y1="'+base+'" x2="0" y2="'+(base+opt.length)+'">'+stops+'</linearGradient></defs>'+
-      '<g opacity="'+(1-opt.transparency/100)+'"><rect x="0" y="'+base+'" width="'+width+'" height="'+opt.length+'" fill="url(#fade)"/>'+
-      '<path fill="black" d="'+edge+'V-100H'+start+'Z"/></g></svg>';
-    return 'url("data:image/svg+xml,'+encodeURIComponent(svg)+'")';
-  }
-  function releaseContour(){
-    if(contourSurface){
-      contourSurface.removeAttribute("data-zr-bm-stable-contour");
-      contourSurface.style.removeProperty("--zr-bm-contour-mask");
-      contourSurface.style.removeProperty("--zr-bm-contour-height");
-    }
-    contourSurface=null;contourKey="";
-  }
-  function updateContour(force=false){
-    if(dead||(!force&&addressSuspended)||root.hasAttribute("data-op-bookmark-wave")||list.hasAttribute("data-zr-fold-bookmarks"))return;
-    const surface=document.getElementById("oneplane-toolbar-surface"),row=document.getElementById("oneplane-tabs");
-    if(!settings.enabled||!settings.stableBackground||!root.hasAttribute("oneplane-active")||
-      root.getAttribute("zen-compact-mode")!=="true"||row?.getAttribute("data-ready")!=="true"||
-      !wrapper||!surface||!row||toolbar.hidden||toolbar.collapsed||root.hasAttribute("customizing")||
-      root.hasAttribute("inDOMFullscreen")){
-      releaseContour();return;
-    }
-    if(contourSurface!==surface)releaseContour();
-    // Never recalculate the mask from an animated card, even if a resize or
-    // mutation notification arrives during a transition.
-    if(busy())return;
-    const wr=wrapper.getBoundingClientRect(),nav=navbar?.getBoundingClientRect(),rr=row.getBoundingClientRect(),bm=toolbar.getBoundingClientRect();
-    if(wr.width<1||!nav||nav.height<1||bm.height<1)return;
-    const container=document.getElementById("zen-appcontent-navbar-container");
-    const tr=container?window.getComputedStyle(container).translate:"none";
-    const shift=tr&&tr!=="none"?(parseFloat(tr.split(/\s+/)[1])||0):0;
-    const width=Math.max(1,Math.round(wr.width)),opt=contourSettings();
-    const trim=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-contour-trim"))||5;
-    const base=Math.max(1,Math.round(Math.max(nav.bottom,rr.bottom)-wr.top-shift-trim));
-    let left=null,right=null,deep=base,largest=0;
-    const controls=new Set([...list.children,...toolbar.querySelectorAll("toolbarbutton.bookmark-item, #PlacesChevron, #OtherBookmarks")]);
-    for(const node of controls){
+  function readContourEnvelope(force=false,expectedToolbar=toolbar){
+    const status=contourPolicy(force,expectedToolbar);
+    if(status!=="ready")return {status};
+    const bookmark=toolbar.getBoundingClientRect();
+    if(bookmark.height<1)return {status:"hold"};
+    const controls=[];
+    const nodes=new Set([...list.children,...toolbar.querySelectorAll("toolbarbutton.bookmark-item, #PlacesChevron, #OtherBookmarks")]);
+    const scale=settings.scale,sy=desiredY();
+    for(const node of nodes){
       if(node.hidden||node.collapsed||node.getAttribute("hidden")==="true"||node.getAttribute("collapsed")==="true")continue;
       const style=window.getComputedStyle(node),r=node.getBoundingClientRect();
       if(style.display==="none"||style.visibility!=="visible"||(!force&&Number(style.opacity)===0)||r.width<1||r.height<1||
-        r.right<=bm.left||r.left>=bm.right||r.bottom<=bm.top||r.top>=bm.bottom)continue;
-      left=left===null?r.left-wr.left:Math.min(left,r.left-wr.left);
-      right=right===null?r.right-wr.left:Math.max(right,r.right-wr.left);
-      const growth=eligible(node)?r.height*(desiredY()-1)+7:0;
-      deep=Math.max(deep,r.bottom-wr.top-shift+growth+opt.padding);
-      if(eligible(node))largest=Math.max(largest,r.width*(settings.scale-1));
+        r.right<=bookmark.left||r.left>=bookmark.right||r.bottom<=bookmark.top||r.top>=bookmark.bottom)continue;
+      const magnetic=node.parentElement===list&&node.matches("toolbarbutton.bookmark-item");
+      controls.push({rect:r,growthY:magnetic?r.height*(sy-1)+7:0,growthX:magnetic?r.width*(scale-1):0});
     }
-    if(left!==null){
-      // Centered OnePlane rows shift both ends. A full budget on each side
-      // is conservative for native alignment changes and moving neighbors.
-      const extra=Math.min(largest,availableGrowth());
-      left=Math.floor(Math.max(0,left-extra)-opt.padding);
-      right=Math.ceil(Math.min(width,right+extra)+opt.padding);
-      deep=Math.ceil(deep);
-      if(deep<=base){left=right=null;deep=base;}
-    }
-    const height=Math.max(1,Math.ceil(Math.max(deep,base+opt.length)+1));
-    const key=[width,height,base,deep,left,right,...Object.values(opt)].join(":");
-    if(contourSurface===surface&&contourKey===key)return;
-    contourSurface=surface;contourKey=key;
-    typeof window!=="undefined"&&window.__nocturneTrace?.("bookmarks.contour",()=>({force,width,height,base,deep,left,right,phase:root.getAttribute('data-zr-workspace-phase')}),{throttle:100,sample:1200});
-    surface.style.setProperty("--zr-bm-contour-height",height+"px");
-    surface.style.setProperty("--zr-bm-contour-mask",contourImage(width,height,base,deep,left,right,opt));
-    surface.setAttribute("data-zr-bm-stable-contour","true");
+    return {status:"ready",bookmark,controls,availableGrowth:controls.length?availableGrowth():0};
   }
   function scheduleContour(){
-    if(dead||contourFrame)return;
-    contourFrame=window.requestAnimationFrame(()=>{contourFrame=0;updateContour();});
+    if(!dead)window.__oneplaneLayoutController?.invalidateBookmarkContour?.();
+  }
+  function prepareContour(){
+    if(contourPolicy()==="ready")window.__oneplaneLayoutController?.prepareBookmarkContour?.();
   }
   function readSettings() {
     settings = {
@@ -210,7 +145,7 @@ function install() {
       glow: bool("glow", true)
     };
     toolbar.style.setProperty("--zr-bm-duration", (motion.matches ? 0 : settings.duration) + "ms");
-    if(!settings.enabled){clear(true);toolbar.removeAttribute("data-zr-magnetic-enabled");releaseContour();}
+    if(!settings.enabled){clear(true);toolbar.removeAttribute("data-zr-magnetic-enabled");scheduleContour();}
     else{
       toolbar.toggleAttribute("data-zr-magnetic-enabled",true);
       updateReserve();scheduleContour();
@@ -220,7 +155,7 @@ function install() {
       const saved = pointerX;
       const item = active;
       clear(true);
-      updateReserve();updateContour();
+      updateReserve();prepareContour();
       select(item, saved);
     }
   }
@@ -643,7 +578,7 @@ function install() {
     cancelPendingLeave();
     pointerX = x;
     if (active === item) { schedule(); return; }
-    if(!busy()&&!contourKey)updateContour();
+    if(!busy())prepareContour();
     active=item;
     if(!retarget()){clear(true);return;}
     if (settings.indicator) {
@@ -782,8 +717,6 @@ function install() {
     if(Math.abs(next-toolbarWidth)>2){toolbarWidth=next;clear(true);}
     if(!busy()){updateReserve();scheduleContour();}
   });
-  const contourObserver=()=>scheduleContour();
-  const panelObserver=new MutationObserver(()=>{if(!busy())scheduleContour();});
   const prefsObserver = () => {
     if (!refreshFrame) refreshFrame = window.requestAnimationFrame(() => {
       refreshFrame = 0;
@@ -802,8 +735,7 @@ function install() {
     [toolbar, "popuphidden", onPopupHidden, true],
     [window, "deactivate", onPointerLeave, false],
     [window, "keydown", onKey, true],
-    [window, "beforecustomization", onPointerLeave, false],
-    [window,"resize",scheduleContour,false]
+    [window, "beforecustomization", onPointerLeave, false]
   ];
   function destroy() {
     typeof window!=="undefined"&&window.__nocturneTrace?.("bookmarks.destroy",()=>(null),{flush:true});
@@ -812,9 +744,7 @@ function install() {
     clear(true);
     if(refreshFrame)window.cancelAnimationFrame(refreshFrame);
     if(pointerFrame)window.cancelAnimationFrame(pointerFrame);pendingPointer=null;
-    observer.disconnect();resize.disconnect();panelObserver.disconnect();
-    if(contourFrame)window.cancelAnimationFrame(contourFrame);
-    releaseContour();try{prefs.removeObserver(contourPrefix,contourObserver);}catch{}
+    observer.disconnect();resize.disconnect();
     openPopups.clear();
     for (const [target, type, listener, capture] of listeners) target.removeEventListener(type, listener, capture);
     try { prefs.removeObserver(PREFIX, prefsObserver); } catch {}
@@ -835,17 +765,15 @@ function install() {
     observer.observe(toolbar, { attributes: true, attributeFilter: ["hidden", "collapsed"] });
     observer.observe(root,{attributes:true,attributeFilter:["customizing","inDOMFullscreen","oneplane-active","zen-compact-mode","data-op-bookmark-wave","data-zr-workspace-phase","data-zr-startup-phase","data-zr-closing","data-zr-center-motion"]});
     syncAddressState();
-    if(wrapper)panelObserver.observe(wrapper,{childList:true,subtree:false,attributes:true,attributeFilter:["data-op-panel-open"]});
     resize.observe(toolbar);
     if(navbar)resize.observe(navbar);
     prefs.addObserver(PREFIX,prefsObserver);
-    prefs.addObserver(contourPrefix,contourObserver);
     motion.addEventListener("change", prefsObserver);
   } catch (error) {
     destroy();
     throw error;
   }
-  return {destroy,syncAddressState,prepareWorkspaceContour(){syncAddressState();updateContour(true);}};
+  return {destroy,syncAddressState,contourPolicy,readContourEnvelope};
 }
 
 // One shared native controller per browser window, regardless of which
@@ -856,16 +784,23 @@ function createSharedRegistry(){
   let controller=null,scheduled=false;
   const registry={revision:REVISION,clients,
     syncAddressState(){controller?.syncAddressState();},
-    prepareWorkspaceContour(){controller?.prepareWorkspaceContour?.();},
+    contourPolicy(force,toolbar){return window[SHARED]===registry?controller?.contourPolicy?.(force,toolbar)??"off":"off";},
+    readContourEnvelope(force,toolbar){
+      const exact=controller;
+      if(window[SHARED]!==registry||!exact)return {status:"off"};
+      const envelope=exact.readContourEnvelope(force,toolbar);
+      return {...envelope,current:()=>window[SHARED]===registry&&controller===exact};
+    },
     acquire(token){clients.add(token);ensure();},
     release(token){
       clients.delete(token);
       if(clients.size)return;
       stop();
-      if(window[SHARED]===registry)delete window[SHARED];
+      if(window[SHARED]===registry){delete window[SHARED];window.__oneplaneLayoutController?.invalidateBookmarkContour?.();}
     }};
   function stop(){
-    controller?.destroy();controller=null;
+    const previous=controller;controller=null;previous?.destroy();
+    if(window[SHARED]===registry)window.__oneplaneLayoutController?.invalidateBookmarkContour?.();
     if(window[CONTROLLER]===legacyLease)delete window[CONTROLLER];
   }
   function legacyLease(){
@@ -887,6 +822,7 @@ function createSharedRegistry(){
     try{controller=install();}
     catch(error){stop();throw error;}
     if(!controller&&window[CONTROLLER]===legacyLease)delete window[CONTROLLER];
+    if(controller&&window[SHARED]===registry)window.__oneplaneLayoutController?.invalidateBookmarkContour?.();
   }
   return registry;
 }

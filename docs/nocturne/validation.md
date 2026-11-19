@@ -404,3 +404,8 @@ Preview.100 CI PASS (635 Node, 15 Python, release/archive). Six focused permanen
 Nocturne is the only supported installed package. The separate legacy Zen Refined mod has been removed from the development setup; concurrent installation, Refined-first registry ownership, and maintaining standalone Refined runtime compatibility are no longer development or acceptance requirements. Earlier references to coexistence gates are historical and superseded. Preserve imported features, existing preference keys and native data, source provenance and safe lifecycle ownership within Nocturne. Sine entrypoint order, hot reload, disable/unload, missing/partial entrypoints, and multi-window remain mandatory. Do not silently remove another installed mod or claim coexistence support.
 
 For A4.2, use a single Layout-owned renderer with Magnetic Bookmarks as an internal geometry provider. Remove Refined-only coexistence obligations, not imported functionality or Nocturne lifecycle/visual acceptance. Previous migration and audit records remain historical evidence.
+
+
+### Preview.102 — contour cutover
+
+Baseline documentation CI PASS. 11 contour + 5 bookmark lifecycle fixture bodies PASS in isolated V8, including golden stable SVG hashes, provider off/hold/ready, stale envelope, partial and silently rejected write, and no secondary renderer. Runtime parser and generated fragment/CSS checks pass. Canonical CI and native visual/runtime/performance verification remain separate. A4.2-R required before A4.3.

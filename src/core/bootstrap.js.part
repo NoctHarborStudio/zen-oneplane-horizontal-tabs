@@ -60,6 +60,8 @@ function finishCleanup(){
 const controller = { get active() { return applied && !disposed; },
   get ownsPreferences(){return ownsPreferences;}, cleanup,
   prepareWorkspaceGeometry(){return removeTabStrip?.prepareWorkspaceGeometry?.();},
+  invalidateBookmarkContour(){if(!disposed)removeTabStrip?.invalidateBookmarkContour?.();},
+  prepareBookmarkContour(){if(!disposed)removeTabStrip?.prepareBookmarkContour?.();},
   captureCenterTopology(row){return removeTabStrip?.captureCenterTopology?.(row)??null;},
   captureCenterGeometry(row,mode){return removeTabStrip?.captureCenterGeometry?.(row,mode)??null;} };
 

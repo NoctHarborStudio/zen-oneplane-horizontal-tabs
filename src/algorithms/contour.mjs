@@ -78,7 +78,8 @@
         const extra=Math.min(largest,Math.max(0,availableGrowth));
         left=Math.max(0,left-extra);right=Math.min(width,right+extra);
       }
-      left=Math.floor(left-settings.padding);right=Math.ceil(right+settings.padding);deep=Math.ceil(deep);
+      if(right<=left){left=right=null;deep=base;}
+      else{left=Math.floor(left-settings.padding);right=Math.ceil(right+settings.padding);deep=Math.ceil(deep);}
       if(deep<=base){left=right=null;deep=base;}
     }
     const height=Math.max(1,Math.ceil(Math.max(deep,base+settings.length)+1));
@@ -96,7 +97,7 @@
     if(typeof mask!=="string"||!mask)throw Error("invalid contour mask");
     try{
       style.setProperty(fields[0],height+"px");style.setProperty(fields[1],mask);
-      if(style.getPropertyValue(fields[0])!==height+"px"||!style.getPropertyValue(fields[1]))throw Error("contour style rejected");
+      if(style.getPropertyValue(fields[0])!==height+"px"||style.getPropertyValue(fields[1])!==mask)throw Error("contour style rejected");
     }catch(error){
       for(const [k,v,p] of prior)try{if(v)style.setProperty(k,v,p);else style.removeProperty(k);}catch{}
       throw error;

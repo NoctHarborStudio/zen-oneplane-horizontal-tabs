@@ -54,9 +54,9 @@ test("one and two rows share the same card center, padding and final-row reserve
  assert.equal(center,21);
  for(const rows of [1,2])assert.equal(rows*pitch-((rows-1)*pitch+center+card/2),16);
 });
-test("both contour owners use a fixed row-independent trim",()=>{
+test("single contour owner uses a fixed row-independent trim",()=>{
  const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
- for(const s of [read("src/layout/contour-controller.js.part"),read("bookmarks.uc.mjs")]){
+ for(const s of [read("src/layout/contour-controller.js.part")]){
   assert.ok(s.includes('getPropertyValue("--op-contour-trim")'));
   assert.ok(!s.includes("compactRows?0:5"));
   assert.ok(!s.includes('hasAttribute("data-op-overflow-row")?0:5'));

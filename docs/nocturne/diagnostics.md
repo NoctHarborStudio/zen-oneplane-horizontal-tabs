@@ -272,3 +272,8 @@ Existing assembly launch/resume error and cleanup events cover cohort validation
 ### Preview.101 — contour commit failure
 
 `contour.commit.error`: static error name only, throttled 500 ms, flush. The last ordinary contour cache key is unchanged on render/style failure; next existing invalidation may retry. Existing `contour.paint` is recorded after successful commit. Stable bookmark legacy diagnostic/renderer remains unchanged. No new sampling loop.
+
+
+### Preview.102 — single contour renderer
+
+`contour.paint` includes `mode` (visible/stable). `contour.provider.error` is throttled and records only error name; failed reads retain the last mask. `contour.commit.error` retains previous cache on rejected CSS writes. Legacy bmMask/bmContour diagnostic fields can remain null; retired stable marker is no longer observed. No new observer or RAF.

@@ -261,6 +261,8 @@
     throw error;
   }
   destroy.prepareWorkspaceGeometry=prepareWorkspaceGeometry;
+  destroy.invalidateBookmarkContour=scheduleContour;
+  destroy.prepareBookmarkContour=()=>paintContour(false,true);
   destroy.captureCenterTopology=captureCenterTopology;
   destroy.captureCenterGeometry=captureCenterGeometry;
   return destroy;

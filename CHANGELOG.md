@@ -1,3 +1,9 @@
+## 0.3.0-preview.102 — One contour renderer
+
+- Cut over Magnetic Bookmarks from an independent SVG renderer and CSS override to a resting envelope provider. Layout alone selects visible/stable geometry, renders and commits the mask.
+- Remove the bookmark contour RAF, fade preference observer, panel observer and redundant resize listener; hold the last mask during active stable hover and reuse existing Layout invalidation.
+- Preserve accepted stable SVG reference hashes; handle provider unload/stale snapshots, silently rejected CSS writes and reversed off-surface shelves. No standalone Refined coexistence requirement; Nocturne lifecycle and native visual/performance validation remain.
+
 ## 0.3.0-preview.101 — Shared contour geometry contract
 
 - Extract pure contour preferences and distinct visible/stable envelope calculations into the existing contour algorithm; Layout consumes the visible policy with unchanged SVG rendering.
