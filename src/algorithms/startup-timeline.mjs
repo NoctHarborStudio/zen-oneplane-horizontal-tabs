@@ -1,6 +1,9 @@
 // Pure timing plan for Center Assembly; base offsets are unscaled milliseconds.
 // The runtime owns the epoch and lifecycle; this module owns no DOM or timers.
-export function startupTimeline(start,scale){
+import {startupBloomAssemblyPlan} from "./startup-bloom.mjs";
+export function startupTimeline(start,scale,mode="fold"){
+  if(mode==="bloom")return startupBloomAssemblyPlan(start,scale);
+  if(mode!=="fold")throw RangeError("unknown startup motion mode");
   const duration=Math.round(scale*1050);
   return {
     start,scale,panel:0,panelLength:220,cards:245,cardsLength:650,

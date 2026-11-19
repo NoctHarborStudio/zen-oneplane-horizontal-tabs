@@ -219,3 +219,8 @@ Fold math moved intact to a pure factory shared by Layout and the generated offl
 ### A3.5b — real-slot candidate boundary (preview.92)
 
 The current Center Motion owner now contains a dormant real-slot tab acquisition mode. The same handle owns cancellation, outcome and release, with explicit paused Assembly identity and full-plan budget admission. The Fold gate and Bloom visual marker are distinct; default production callers remain Fold. No second controller or new Sine entrypoint. Full Startup timing, Home/Boot integration, native compositing and geometry reconciliation remain subsequent gates.
+
+
+### A3.5c1 — common Bloom timing and Home lease (preview.94)
+
+The pure timing selector and Home stage schedule now share candidate timing with Lab; Home's existing exact lease owns real leaf effects. Fold remains default. Bloom uses a visible post-Boot epoch with a consistent normal/late budget, subject to inherited watchdog; actual full candidate Assembly admission and Boot handoff remain subsequent work. Provisional mapping does not reproduce the lost Lab's splash overlap.

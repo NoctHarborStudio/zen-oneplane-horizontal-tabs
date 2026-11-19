@@ -65,3 +65,31 @@ export function startupBloomFrames(kind="card",opacity=1){
   if(kind==="fade")return [{offset:0,opacity:0},{offset:1,opacity}];
   throw RangeError("unknown bloom surface");
 }
+
+/* Shared Home schedule for native slots and the comparison Lab. Labels
+ * never multiply their children's alpha; the empty Pins state is a fade. */
+export function startupBloomHomeSchedule(plan,pinCount,workspaceCount){
+  const stage=w=>({delay:w.start,duration:w.end-w.start});
+  return {
+    search:stage(plan.search),pinLabel:stage(plan.pins),
+    pins:startupBloomStagger(pinCount,plan.pins),
+    workspaceLabel:stage(plan.workspaces),
+    workspaces:startupBloomStagger(workspaceCount,plan.workspaces),
+    footer:stage(plan.footer)
+  };
+}
+
+// The common Assembly epoch is the first visible panel frame, after any
+// Boot exit. Boot remains outside the visible clock and is charged as
+// pre-resume overhead against the same inherited absolute watchdog.
+export function startupBloomAssemblyPlan(start,scale){
+  const bloom=startupBloomTimeline(scale);
+  if(!Number.isFinite(start))throw RangeError("invalid bloom epoch");
+  const base=w=>w.start/scale,length=w=>(w.end-w.start)/scale;
+  return {
+    start,scale,mode:"bloom",bloom,panel:base(bloom.panel),panelLength:length(bloom.panel),
+    cards:base(bloom.tabs),cardsLength:length(bloom.tabs),bookmarks:base(bloom.bookmarks),
+    home:base(bloom.search),homeLength:length(bloom.search),end:bloom.end/scale,
+    finishLength:bloom.end,lateLimit:bloom.end+420
+  };
+}

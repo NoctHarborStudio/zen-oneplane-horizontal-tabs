@@ -357,3 +357,8 @@ Seven additional Center Motion regression cases; 42/42 Center Motion and 7/7 Blo
 ### Preview.93 — independent Bloom acquisition audit
 
 Five new regressions, 47/47 Center Motion fixture bodies PASS in isolated V8. Verify inconsistent timing caps, synchronous fallback replacement, paused document effects and stable promise, competing effects, duplicate epoch and last callback replacement. Native Gecko computed style/WAAPI/compositor and full timing integration remain pending; canonical CI separate.
+
+
+### Preview.94 — shared Bloom plan and isolated Home
+
+Seven new cases; 14/14 Bloom and 50/50 Startup Transparency fixture bodies PASS in isolated V8. Verify all supported durations, Boot overhead, common stage windows, real Home leaves, empty/no-workspace structure, CSS/WAAPI conflicts, stale/late admission, rollback and exact epoch. Canonical CI and native Gecko execution/visual comparison separate. Candidate selection is not enabled.

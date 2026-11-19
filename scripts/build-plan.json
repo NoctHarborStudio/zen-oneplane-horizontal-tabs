@@ -396,6 +396,10 @@
   ],
   "startupAnimation": [
     {
+      "path": "src/algorithms/startup-bloom.mjs",
+      "kind": "esm-inline"
+    },
+    {
       "path": "src/algorithms/startup-timeline.mjs",
       "kind": "esm-inline"
     },

@@ -77,7 +77,9 @@ test("startup gate excludes nested OnePlane buttons from the generic toolbar gat
 test("cold assembly stages panel, cards, bookmarks and Home on one bounded timeline",()=>{
  const plan=startupTimeline;
  const pure=readFileSync(new URL("../src/algorithms/startup-timeline.mjs",import.meta.url),"utf8");
- assert.ok(source.startsWith(pure.replace(/^export (function|const) /gm,"$1 ")));
+ const bloom=readFileSync(new URL("../src/algorithms/startup-bloom.mjs",import.meta.url),"utf8");
+ const inline=s=>s.replace(/^import [^\n]+\n/gm,"").replace(/^export (function|const) /gm,"$1 ");
+ assert.ok(source.startsWith(inline(bloom)+inline(pure)));
  for(const scale of [.4,1,1.4]){
    const t=plan(123,scale);
    assert.ok(t.panel+t.panelLength<t.cards);

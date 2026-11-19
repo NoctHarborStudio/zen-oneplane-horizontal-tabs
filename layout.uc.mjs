@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.93",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.94",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -538,6 +538,34 @@ function startupBloomFrames(kind="card",opacity=1){
   ];
   if(kind==="fade")return [{offset:0,opacity:0},{offset:1,opacity}];
   throw RangeError("unknown bloom surface");
+}
+
+/* Shared Home schedule for native slots and the comparison Lab. Labels
+ * never multiply their children's alpha; the empty Pins state is a fade. */
+function startupBloomHomeSchedule(plan,pinCount,workspaceCount){
+  const stage=w=>({delay:w.start,duration:w.end-w.start});
+  return {
+    search:stage(plan.search),pinLabel:stage(plan.pins),
+    pins:startupBloomStagger(pinCount,plan.pins),
+    workspaceLabel:stage(plan.workspaces),
+    workspaces:startupBloomStagger(workspaceCount,plan.workspaces),
+    footer:stage(plan.footer)
+  };
+}
+
+// The common Assembly epoch is the first visible panel frame, after any
+// Boot exit. Boot remains outside the visible clock and is charged as
+// pre-resume overhead against the same inherited absolute watchdog.
+function startupBloomAssemblyPlan(start,scale){
+  const bloom=startupBloomTimeline(scale);
+  if(!Number.isFinite(start))throw RangeError("invalid bloom epoch");
+  const base=w=>w.start/scale,length=w=>(w.end-w.start)/scale;
+  return {
+    start,scale,mode:"bloom",bloom,panel:base(bloom.panel),panelLength:length(bloom.panel),
+    cards:base(bloom.tabs),cardsLength:length(bloom.tabs),bookmarks:base(bloom.bookmarks),
+    home:base(bloom.search),homeLength:length(bloom.search),end:bloom.end/scale,
+    finishLength:bloom.end,lateLimit:bloom.end+420
+  };
 }
 /* Nocturne Center Motion — shared deterministic card choreography.
  * One geometry snapshot, inert chrome copies, no per-frame trajectory JS. */
@@ -1950,7 +1978,10 @@ function acquireZenHome(win, services) {
     if(expected&&startupRun!==expected)return;
     const run=startupRun;startupRun=null;
     if(run&&run.timeline.homeLease===run.lease)delete run.timeline.homeLease;
-    for(const a of run?.effects||[])try{a.cancel();}catch{}
+    for(const a of run?.effects||[]){
+      if(run.timeline.mode==="bloom")try{a.finished.catch(()=>{});}catch{}
+      try{a.cancel();}catch{}
+    }
     if(startupRun)return;
     panel.removeAttribute("data-zh-startup");
     if(flush&&run?.dirty&&open&&!dead&&!searchToken)render();
@@ -1973,28 +2004,121 @@ function acquireZenHome(win, services) {
     }
     return {total,pending};
   }
+  function bloomHomeTargets(timeline){
+    const plan=timeline.bloom;
+    if(!plan||plan.scale!==timeline.scale||!Number.isFinite(timeline.finishLength)||
+       !Number.isFinite(timeline.lateLimit)||timeline.finishLength<plan.end||
+       timeline.lateLimit<timeline.finishLength||editing||adding)return null;
+    // The actual rendered structure owns target identity. Reject an
+    // unrecognized structure rather than fading a parent and child twice.
+    const nodes=[...content.children],search=nodes.shift(),footer=nodes.pop(),pins=nodes.shift(),spaces=nodes.shift();
+    if(nodes.length||!search?.matches(".zh-search")||!footer?.matches(".zh-footer")||
+       !pins?.matches(".zh-section")||spaces&&!spaces.matches(".zh-section"))return null;
+    const [pinLabel,pinGrid,...extraPins]=pins.children;
+    const [spaceLabel,spaceGrid,...extraSpaces]=spaces?[...spaces.children]:[];
+    if(!pinLabel?.matches("h3")||!pinGrid?.matches(".zh-pins")||extraPins.length||
+       spaces&&(!spaceLabel?.matches("h3")||!spaceGrid?.matches(".zh-spaces")||
+       extraSpaces.some(n=>!n.matches(".zh-workspace-pending")||!n.hidden)))return null;
+    const pinNodes=[...pinGrid.children],spaceNodes=spaces?[...spaceGrid.children]:[];
+    if(pinNodes.some(n=>!n.matches(".zh-pin,.zh-empty"))||
+       pinNodes.some(n=>n.matches(".zh-empty"))&&pinNodes.length!==1||
+       spaceNodes.some(n=>!n.matches(".zh-space")))return null;
+    const s=startupBloomHomeSchedule(plan,pinNodes.length,spaceNodes.length);
+    const targets=[{node:search,kind:"search",timing:s.search},{node:pinLabel,kind:"fade",timing:s.pinLabel}];
+    pinNodes.forEach((node,i)=>targets.push({node,kind:node.matches(".zh-empty")?"fade":"card",timing:s.pins[i]}));
+    if(spaces){
+      targets.push({node:spaceLabel,kind:"fade",timing:s.workspaceLabel});
+      spaceNodes.forEach((node,i)=>targets.push({node,kind:"card",timing:s.workspaces[i]}));
+    }
+    targets.push({node:footer,kind:"fade",timing:s.footer});
+    return targets;
+  }
   function playStartupHome(timeline){
     if(!open||dead||!panel.hasAttribute("data-zh-startup")||searchToken||!timeline)return null;
     if(startupRun)return startupRun.timeline===timeline?startupRun.lease:null;
     // A late native placeholder may still display Home normally, but
     // must not replay the startup wave after its scheduled stage began.
+    const bloom=timeline.mode==="bloom";
     const elapsed=timeline.paused?0:timeline.elapsed?.()??Math.max(0,(win.performance?.now?.()??timeline.start)-timeline.start);
-    if(timeline.closed||!timeline.paused&&elapsed>=timeline.home*timeline.scale){finishStartupHome();return null;}
+    // A stale explicit request must not ungate a successor's Home.
+    if(bloom&&win.__nocturneStartupTimeline!==timeline)return null;
+    if(timeline.closed||bloom&&(!timeline.paused||typeof timeline.observeEffect!=="function")||
+       !timeline.paused&&elapsed>=timeline.home*timeline.scale){finishStartupHome();return null;}
     if(win.matchMedia("(prefers-reduced-motion: reduce)").matches||timeline.homeLease){finishStartupHome();return null;}
-    const run={timeline,effects:[],lease:null,dirty:false};
+    const run={timeline,effects:[],lease:null,dirty:false,epochStarted:false};
+    const exact=()=>startupRun===run&&!dead&&open&&(!bloom||win.__nocturneStartupTimeline===timeline);
     const lease={
       startupOutcomeVersion:1,
-      resume(){if(startupRun===run)for(const a of run.effects)try{a.play();}catch{}},
+      resume(){if(bloom)throw Error("home-bloom-requires-epoch");if(startupRun===run)for(const a of run.effects)try{a.play();}catch{}},
       resumeAt(start){
+        const ready=()=>startupRun===run&&!timeline.closed&&(!bloom||exact()&&timeline.paused===false);
+        if(bloom&&(!ready()||run.epochStarted))throw Error("home-epoch-stale");
+        if(bloom)run.epochStarted=true;
         for(const a of run.effects){
-          if(startupRun!==run||timeline.closed)throw Error("home-epoch-stale");
+          if(!ready())throw Error("home-epoch-stale");
           start(a);
+          if(bloom&&!ready())throw Error("home-epoch-stale");
         }
       },
       release(){finishStartupHome(run);}
     };
     run.lease=lease;startupRun=run;timeline.homeLease=lease;
     try{
+      if(bloom){
+        const targets=bloomHomeTargets(timeline);
+        if(!targets)throw Error("home-bloom-structure");
+        const check=()=>{if(!exact()||timeline.closed||timeline.paused!==true)throw Error("home-bloom-stale");};
+        const prepared=targets.map(({node,kind,timing})=>{
+          check();const cs=win.getComputedStyle(node),opacity=Number(cs.opacity),r=node.getBoundingClientRect();
+          const scale=cs.scale==="none"||/^1(?: 1){0,2}$/.test(cs.scale);
+          if(node.getAnimations().length||cs.visibility!=="visible"||cs.display==="none"||
+             !Number.isFinite(opacity)||opacity<=0||opacity>1||!r.width||!r.height||kind!=="fade"&&!scale||
+             !Number.isFinite(timing.delay)||!Number.isFinite(timing.duration)||
+             timing.delay<0||timing.duration<=0||timing.delay+timing.duration>timeline.finishLength+1e-7)
+            throw Error("home-bloom-target");
+          return {node,kind,timing,opacity,r,frames:startupBloomFrames(kind,opacity)};
+        });
+        const promises=[];
+        for(const {node,frames,timing} of prepared){
+          check();const a=node.animate(frames,{...timing,easing:"linear",fill:"both"});
+          // animate() can synchronously retire this lease before returning.
+          if(!exact()){try{a.finished.catch(()=>{});a.cancel();}catch{}throw Error("home-bloom-stale");}
+          run.effects.push(a);const promise=a.finished;promises.push(promise);promise.catch(()=>{});
+          timeline.observeEffect(a,"home",exact);
+          check();a.pause();a.currentTime=0;check();
+          if(a.timeline!==doc.timeline||a.playState!=="paused"||a.pending||a.playbackRate!==1||a.finished!==promise)
+            throw Error("home-bloom-effect");
+        }
+        // Check the effective cascade at the initial pose and an interior
+        // keyframe; never seek to finished during preparation.
+        const near=(a,b,eps)=>Number.isFinite(a)&&Math.abs(a-b)<=eps;
+        for(const fraction of [0,.58,0]){
+          check();
+          run.effects.forEach((a,i)=>{const t=prepared[i].timing;a.currentTime=fraction?t.delay+t.duration*fraction:0;});
+          prepared.forEach(({node,kind,opacity,r,frames},i)=>{
+            const a=run.effects[i],cs=win.getComputedStyle(node),box=node.getBoundingClientRect();
+            // Search has an eased continuous scale; verify its start
+            // exactly, and bound its interior geometry instead of assuming linear easing.
+            const initial=Number(frames[0].scale??1);
+            const scales=cs.scale==="none"?[1]:String(cs.scale).trim().split(/\s+/).map(Number);
+            const effective=scales[0],alpha=Number(cs.opacity);
+            const expectedAlpha=fraction===0?0:kind==="card"?opacity:kind==="fade"?opacity*fraction:null;
+            const expectedScale=kind==="fade"?1:fraction===0?initial:kind==="card"?1:null;
+            if(a.playState!=="paused"||a.pending||a.finished!==promises[i]||
+               !Number.isFinite(alpha)||expectedAlpha!==null&&!near(alpha,expectedAlpha,.005)||
+               expectedAlpha===null&&(alpha<=0||alpha>=opacity)||
+               !scales.length||scales.length>2||scales.some(v=>!near(v,effective,.005))||
+               expectedScale!==null&&!near(effective,expectedScale,.005)||
+               expectedScale===null&&(effective<=initial||effective>=1)||
+               !near(box.width,r.width*effective,.75)||!near(box.height,r.height*effective,.75)||
+               !near(box.left+box.width/2,r.left+r.width/2,.75)||!near(box.top+box.height/2,r.top+r.height/2,.75))
+              throw Error("home-bloom-computed-conflict");
+          });
+        }
+        check();
+        try{win.__nocturneTrace?.("home.bloom.acquire",{effects:run.effects.length,stageEnd:timeline.bloom.footer.end},{sample:Math.ceil(timeline.finishLength)+250});}catch{}
+        check();return lease;
+      }
       const nodes=[...content.children];
       for(const [i,node] of nodes.entries()){
         // Current owners use the original absolute delay against the

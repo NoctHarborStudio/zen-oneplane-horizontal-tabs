@@ -63,19 +63,20 @@
     function wave(nodes,w,kind){startupBloomStagger(nodes.length,w).forEach((t,i)=>effect(nodes[i],startupBloomFrames(kind),t));}
     try{
       if(mode==="bloom"){
-        const plan=startupBloomTimeline(scale);
+        const plan=startupTimeline(0,scale,"bloom").bloom;
         stage(ui.panel,startupBloomFrames("fade"),plan.panel);
         stage(ui.shape,startupBloomFrames("islandShape"),plan.islandShape);
         stage(ui.label,startupBloomFrames("fade"),plan.islandLabel);
         wave(startupBloomOrder(slots,center).map(s=>s.n),plan.tabs,"card");
         wave([...ui.bookmarks.children],plan.bookmarks,"fade");
-        stage(ui.search,startupBloomFrames("search"),plan.search);
+        const home=startupBloomHomeSchedule(plan,ui.pinTiles.children.length,ui.wsTiles.children.length);
+        effect(ui.search,startupBloomFrames("search"),home.search);
         // Labels have independent fade, not a second alpha on child tiles.
-        stage(ui.pins.firstElementChild,startupBloomFrames("fade"),plan.pins);
-        wave([...ui.pinTiles.children],plan.pins,"card");
-        stage(ui.work.firstElementChild,startupBloomFrames("fade"),plan.workspaces);
-        wave([...ui.wsTiles.children],plan.workspaces,"card");
-        stage(ui.footer,startupBloomFrames("fade"),plan.footer);
+        effect(ui.pins.firstElementChild,startupBloomFrames("fade"),home.pinLabel);
+        [...ui.pinTiles.children].forEach((n,i)=>effect(n,startupBloomFrames("card"),home.pins[i]));
+        effect(ui.work.firstElementChild,startupBloomFrames("fade"),home.workspaceLabel);
+        [...ui.wsTiles.children].forEach((n,i)=>effect(n,startupBloomFrames("card"),home.workspaces[i]));
+        effect(ui.footer,startupBloomFrames("fade"),home.footer);
       }else{
         const plan=startupTimeline(0,scale);
         stage(ui.panel,startupBloomFrames("fade"),{start:0,end:plan.panelLength*scale});

@@ -1,3 +1,9 @@
+## 0.3.0-preview.94 — Shared Bloom timing and isolated Home
+
+- Define the common full Bloom Assembly timing budget and share the Home stage schedule between the real Home owner and the generated comparison Lab.
+- Prepare individual native Home UI leaves on the existing structural lease and exact outcome/epoch contract. Validate computed style, paused effects and cleanup; preserve normal Fold startup and late Home behavior.
+- Keep Bloom dormant until remaining surface/Boot integration, native geometry and visual acceptance. Add seven permanent regression cases.
+
 ## 0.3.0-preview.93 — Independent Bloom acquisition audit
 
 - Require consistent common completion and late-admission budgets; fence explicit Bloom and its Fold fallback across synchronous owner replacement and exact once-only epoch resume.

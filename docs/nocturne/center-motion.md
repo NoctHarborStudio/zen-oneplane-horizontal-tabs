@@ -33,3 +33,8 @@ Center Motion accepts an explicit paused current Assembly `bloomTimeline` only. 
 ### A3.5b-R — independent acquisition review (preview.93)
 
 Consistent finishLength/lateLimit, exact paused Assembly admission through fallback, once-only explicit epoch, paused document WAAPI and finished-promise identity checked. Interior samples avoid the terminal boundary. Competing real-card effects bypass fallback; stale transactions retire all acquired resources. Fold CSS guard specificity preserved with :where. Candidate still dormant; no native acceptance.
+
+
+### A3.5c1 — common Assembly plan (preview.94)
+
+The shared timing selector has an explicit Bloom mode (1920*scale visible, +420ms late cap, inherited watchdog). Home uses the same stage schedule as the Lab under the existing lease. No production caller selects Bloom. Boot epoch mapping is provisional after-exit; remaining Assembly surfaces and actual handoff are A3.5c2.

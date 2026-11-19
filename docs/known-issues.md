@@ -1092,3 +1092,8 @@ MB-006/007/010/012/013: real-slot tab/split acquisition, sampled computed style/
 ### A3.5b-R — preview.93 acquisition audit
 
 Corrected inconsistent candidate budget, stale explicit fallback and epoch reentry, strengthened WAAPI state/finished-promise validation and preserved Fold CSS selector priority. Competing animation fails open. Full common timing, Home/Boot, topology and Gecko/visual acceptance remain open.
+
+
+### A3.5c1 — preview.94 timing and Home
+
+MB3/5: shared candidate full timing plan, isolated native Home leaf effects and generated Lab schedule implemented. Default Fold unchanged. Actual Assembly candidate surface orchestration/Boot handoff, full topology and native acceptance remain open; no exact original Lab parity.

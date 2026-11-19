@@ -232,3 +232,8 @@ Preview.91: no new runtime event or logger; Fold math extraction preserves exist
 ### Preview.93 — Bloom acquisition review
 
 Existing events retained; invalid timing contracts and competing effects fail open, setup failures retain static error class and visual mode. No new payload fields, recorder, timers or private data.
+
+
+### Preview.94 — Home Bloom candidate
+
+`home.bloom.acquire` reports effects and stageEnd only, existing `home.startup.error` reports error class. No new recorder, timing loop, content, titles, workspace identity or URL fields. Dormant explicit candidate; actual native evidence pending.
