@@ -48,3 +48,8 @@ The existing Startup Assembly now contains an explicit coordinated Bloom candida
 ### A3.5c-R — exact prepared cohort (preview.96)
 
 Existing Assembly outcome ledger captures and rechecks the current live effect cohort across Boot hold; retired trial effects excluded. Changed native state, promise, membership, Home lease or row rejects resume. Candidate admission closes at capture, late Home rests, interruption releases atomically. No production Bloom activation. A3.6 owns topology/geometry and final pose.
+
+
+### A3.6a — native topology and mirror lease (preview.97)
+
+The strip owner provides a read-only exact topology validator from the last completed sync. Center Motion rejects stale capture and checks preparation/resume/boundaries; scheduled sync invalidates Startup/Workspace visuals and reconciles the changed projection before the next paint using the existing release event. Close preserves its native commit lifecycle. Geometry/scroll/overflow/final-pose checks remain A3.6b. Bloom disabled.

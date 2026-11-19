@@ -27,7 +27,7 @@ test("native switch stays single-owned and chrome-only",()=>{
  assert.ok(source.includes('phase("in");'));
 });
 
-function lifecycleFixture(){
+function lifecycleFixture({withRow=false}={}){
  const attrs=()=>new Map(),events=[],timers=new Map(),listeners=new Map(),prefs={getBoolPref:()=>true,addObserver(){},removeObserver(){}};
  let clock=0,id=0;
  const node=()=>{const a=attrs(),styles=new Map();return {isConnected:true,children:[],hidden:false,collapsed:false,
@@ -35,18 +35,19 @@ function lifecycleFixture(){
    style:{getPropertyValue:k=>styles.get(k)?.[0]||"",getPropertyPriority:k=>styles.get(k)?.[1]||"",setProperty:(k,v,p)=>styles.set(k,[v,p]),removeProperty:k=>styles.delete(k)},
    getBoundingClientRect:()=>({left:30,right:100,top:30,bottom:50,width:70,height:20}),
    animate(){return {finished:Promise.resolve(),cancel(){}};},append(){},remove(){}};};
- const root=node(),bookmarks=node(),old=node(),fresh=node();bookmarks.children=[old];
+ const root=node(),bookmarks=node(),old=node(),fresh=node(),row=withRow?node():null;bookmarks.children=[old];
+ if(row){root.setAttribute("oneplane-active","true");row.setAttribute("data-ready","true");}
  const win={innerWidth:1200,innerHeight:800,performance:{now:()=>clock},matchMedia:()=>({matches:false,addEventListener(){},removeEventListener(){}}),
    addUnloadListener(){},addEventListener(k,f){listeners.set(k,f);},removeEventListener(k,f){if(listeners.get(k)===f)listeners.delete(k);},CSS:{registerProperty(){}},
    windowUtils:{USER_SHEET:1,loadSheet(){},removeSheet(){}},getComputedStyle:()=>({display:"block",visibility:"visible",opacity:"1"}),
    CustomEvent:class{constructor(type,o){this.type=type;this.detail=o.detail;}},dispatchEvent:e=>events.push(e.detail.phase),
    MutationObserver:class{observe(){} disconnect(){}},setTimeout(fn,ms){const n=++id;timers.set(n,{fn,at:clock+ms});return n;},clearTimeout:n=>timers.delete(n)};
- const doc={documentElement:root,getElementById:k=>k==="PlacesToolbarItems"?bookmarks:null};
+ const doc={documentElement:root,getElementById:k=>k==="PlacesToolbarItems"?bookmarks:k==="oneplane-tabs"?row:null};
  const reinstall=()=>new Function("window","document","Services","console",source)(win,doc,{prefs,io:{newURI:x=>x}},{warn(){}});
  reinstall();
  async function flush(){for(let j=0;j<12;j++)await Promise.resolve();}
  async function advance(){await flush();const next=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];if(next){timers.delete(next[0]);clock=next[1].at;next[1].fn();}await flush();}
- return {win,root,bookmarks,old,fresh,events,timers,listeners,prefs,advance,flush,reinstall,escape:()=>listeners.get("keydown")?.({key:"Escape"})};
+ return {win,root,bookmarks,old,fresh,row,events,timers,listeners,prefs,advance,flush,reinstall,escape:()=>listeners.get("keydown")?.({key:"Escape"})};
 }
 test("workspace transition keeps native callback single, phases ordered and styles restored",async()=>{
  const f=lifecycleFixture();let calls=0;
@@ -270,4 +271,26 @@ test("unowned compatibility transition cannot invoke native while source is rese
  let called=0;await f.win.__zenRefinedWorkspaceTransition.run(()=>{called++;});
  assert.equal(called,0);assert.equal(gate.reservation,token);assert.equal(gate.pending,null);
  f.win.__zenRefinedWorkspaceTransition.dispose();
+});
+
+test("workspace topology invalidation retires visuals but preserves the native command exactly once",async()=>{
+ for(const during of ["out","in"]){
+  const f=lifecycleFixture({withRow:true});let calls=0,invalidated=null,releases=0;
+  f.win.__nocturneCenterMotion={start(row,options){
+    if(options.direction!==during)return null;
+    let resolve;const finished=new Promise(r=>resolve=r);
+    invalidated=options.onTopologyInvalidated;
+    return {finished,validateTopology:()=>true,release(){releases++;resolve();}};
+  }};
+  const result=f.win.__zenRefinedWorkspaceTransition.run(()=>{calls++;return "native";});
+  await f.flush();
+  for(let i=0;i<8&&!invalidated&&f.timers.size;i++)await f.advance();
+  assert.equal(typeof invalidated,"function",during);
+  assert.equal(f.root.getAttribute("data-zr-workspace-phase"),during);
+  invalidated();invalidated();
+  await f.flush();assert.equal(await result,"native");
+  assert.equal(calls,1);assert.equal(releases,1);assert.equal(f.timers.size,0);
+  assert.equal(f.root.hasAttribute("data-zr-workspace-phase"),false);
+  f.win.__zenRefinedWorkspaceTransition.dispose();
+ }
 });

@@ -228,24 +228,52 @@
       return acquireTabs(row,options);
     }catch(error){trace("center.motion.error",{stage:"prepare",name:error?.name},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
   }
-  function acquireTabs(row,{owner,direction="in",duration=520,delay=0,paused=false,retainOnDispose=null,observeEffect=null,bloomTimeline=null}={},bloomStage=null,attempt=null){
+  function invalidateTopology(row){
+    const handle=active;
+    if(!handle||handle.row!==row||handle.owner==="close"||handle.validateTopology())return false;
+    handle.invalidateTopology();return true;
+  }
+  function acquireTabs(row,{owner,direction="in",duration=520,delay=0,paused=false,retainOnDispose=null,observeEffect=null,bloomTimeline=null,onTopologyInvalidated=null}={},bloomStage=null,attempt=null){
     const explicitOptions={owner,direction,paused,observeEffect,bloomTimeline};
     const eligible=()=>!bloomTimeline||bloomEligible(row,explicitOptions);
     if(!eligible())return null;
     stopSelection();active?.release("superseded");finishHandoff();releasePending();
     if(dead||!current()||!eligible())return null;
     if(!row){trace("center.motion.skip",{owner,reason:"no-row"});return null;}
+    const layout=win.__oneplaneLayoutController;
+    const topology=typeof layout?.captureCenterTopology==="function"?layout.captureCenterTopology(row):undefined;
+    if(topology===null){trace("center.topology.reject",{owner,stage:"capture"},{flush:true});return null;}
     const id=++tabSequence,effects=[],saved=[],cleanups=[],running=[],stats={groups:0,handles:0,handleOffset:0,icons:0,iconLoads:0,bitmapIcons:0,bitmapFailures:0};
     let host=null,cards=[],rr,hub,measuring=false,measuringMark=null,ownerMark=null,ownerWritten=false,modeMark=null,modeWritten=false,committed=false,released=false,epochStarted=false;
     const exact=()=>!released&&!dead&&current()&&active===handle&&
       (!bloomTimeline||win.__nocturneStartupTimeline===bloomTimeline);
-    const preparing=()=>exact()&&eligible();
+    let topologyInvalid=false;
+    const topologyCurrent=()=>{
+      if(topologyInvalid)return false;
+      if(topology===undefined)return true; // older Layout owner
+      try{return win.__oneplaneLayoutController===layout&&topology()===true;}catch{return false;}
+    };
+    const preparing=()=>exact()&&eligible()&&!topologyInvalid;
     const restoreMark=(node,key,value)=>{if(value===null)node.removeAttribute(key);else node.setAttribute(key,value);};
-    const handle={owner,retainOnDispose,startupOutcomeVersion:1,mode:bloomStage?"magnetic-bloom":"magnetic-fold",count:0,finished:Promise.resolve(),
+    const handle={owner,row,retainOnDispose,startupOutcomeVersion:1,mode:bloomStage?"magnetic-bloom":"magnetic-fold",count:0,finished:Promise.resolve(),
+      validateTopology(){return !released&&topologyCurrent();},
+      invalidateTopology(){
+        if(released)return;
+        if(!topologyInvalid){
+          topologyInvalid=true;
+          trace("center.topology.invalidate",{id,owner,mode:handle.mode,count:cards.length},{flush:true});
+        }
+        // During acquisition the caller has not yet received this handle.
+        // Let the existing setup rollback retire it, without reentering
+        // an Assembly or Workspace that has not published ownership.
+        if(!committed||motionBusy)return;
+        try{onTopologyInvalidated?.();}catch(error){trace("center.topology.error",{owner,name:error?.name},{flush:true});}
+        finally{if(!released)handle.release("topology-changed");}
+      },
       resume(){if(bloomTimeline)throw Error("center-bloom-requires-epoch");if(!released)for(const a of running)try{a.play();}catch{}},
       resumeAt(start){
         const ready=()=>exact()&&(!bloomTimeline||!bloomTimeline.closed&&bloomTimeline.paused===false);
-        if(!ready()||bloomTimeline&&epochStarted)throw Error("center-epoch-stale");
+        if(!ready()||!topologyCurrent()||bloomTimeline&&epochStarted)throw Error("center-epoch-stale");
         if(bloomTimeline)epochStarted=true;
         for(const a of running){
           if(!ready())throw Error("center-epoch-stale");
@@ -255,7 +283,9 @@
       },
       seal(){if(!released)for(const a of running)try{a.finish();}catch{}},
       release(reason="release"){
-        if(released)return;released=true;
+        if(released)return;
+        const reconcile=committed&&owner!=="close"&&!topologyCurrent();
+        released=true;
         const wasBusy=motionBusy;motionBusy=true;
         let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
         try{
@@ -275,7 +305,7 @@
               if(measuring)step(()=>restoreMark(root,"data-zr-fold-measuring",measuringMark));
               if(ownerWritten)step(()=>restoreMark(root,OWNER,ownerMark));
               if(modeWritten)step(()=>restoreMark(root,MODE,modeMark));
-              if(ownerWritten&&!dead&&!win.closed)step(()=>win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd")));
+              if(ownerWritten&&!dead&&!win.closed)step(()=>win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd",{detail:{owner,reconcile}})));
             }
           }
           retire();
@@ -288,6 +318,7 @@
       if(root.getAttribute("data-zr-workspace-phase")==="swap"){
         measuringMark=root.getAttribute("data-zr-fold-measuring");measuring=true;root.setAttribute("data-zr-fold-measuring","true");
       }
+      if(!topologyCurrent())throw Error("center-topology-stale");
       cards=collect(row);handle.count=cards.length;
       if(!cards.length){handle.release("no-visible-cards");trace("center.motion.skip",{owner,reason:"no-visible-cards"});return null;}
       if(bloomStage){
@@ -344,10 +375,11 @@
           if(running.some((a,i)=>a.playState!=="paused"||a.pending||a.finished!==promises[i]))
             throw Error("bloom-effect-seek-state");
         }
-        check();handle.finished=Promise.all(promises.map(p=>p.catch(()=>{})));
+        check();if(!topologyCurrent())throw Error("center-topology-stale");
+        handle.finished=Promise.all(promises.map(p=>p.catch(()=>{})));
         committed=true;
         trace("center.bloom.acquire",()=>({id,owner,count:cards.length,effects:running.length,proxies:0,checks:4,stageEnd:bloomStage.end}),{sample:Math.ceil(bloomStage.end)+250});
-        check();return handle;
+        check();if(!topologyCurrent())throw Error("center-topology-stale");return handle;
       }
       rr=row.getBoundingClientRect();host=document.createElementNS("http://www.w3.org/1999/xhtml","div");
       host.setAttribute("data-zr-magnetic-layer","true");host.setAttribute("aria-hidden","true");host.inert=true;
@@ -359,7 +391,7 @@
       // detached proxies have been prepared.
       for(const c of cards){const n=proxy(c,layer,rr,cleanups,stats),frames=keyframes(c,direction==="out");effects.push({n,frames,c});}
       if(measuring){restoreMark(root,"data-zr-fold-measuring",measuringMark);measuring=false;}
-      if(!preparing()){handle.release("disposed");return null;}
+      if(!preparing()||!topologyCurrent()){handle.release("disposed");return null;}
       ownerMark=root.getAttribute(OWNER);ownerWritten=true;root.setAttribute(OWNER,owner);
       row.append(host);
       for(const c of cards){saved.push({n:c.n,mark:c.n.getAttribute(MARK)});c.n.setAttribute(MARK,"true");}
@@ -402,10 +434,10 @@
         if(paused){a.pause();a.currentTime=0;}
       }
       handle.finished=Promise.all(running.map(a=>a.finished.catch(()=>{})));
-      if(!preparing()){handle.release("disposed");return null;}
+      if(!preparing()||!topologyCurrent()){handle.release("disposed");return null;}
       committed=true;
       trace("center.motion",()=>({id,owner,direction,count:cards.length,duration,mode:"magnetic-fold",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length,groups:stats.groups,handles:stats.handles,handleOffset:stats.handleOffset,icons:iconStats(row),bitmapIcons:stats.bitmapIcons,bitmapFailures:stats.bitmapFailures,animated:running.length}),{sample:duration+250});
-      if(!preparing()){handle.release("disposed");return null;}
+      if(!preparing()||!topologyCurrent()){handle.release("disposed");return null;}
       return handle;
     }catch(error){
       handle.release("setup-failed");
@@ -518,7 +550,7 @@
     selectionContainer?.removeEventListener("TabSelect",onSelect);
     selectionContainer=tc;lastTab=win.gBrowser.selectedTab;tc.addEventListener("TabSelect",onSelect);
   }
-  const api={startupBloomVersion:1,start,bookmarks,iconStats,warmIcons,releasePending,dispose};win[KEY]=api;
+  const api={startupBloomVersion:1,start,bookmarks,iconStats,warmIcons,releasePending,invalidateTopology,dispose};win[KEY]=api;
   const earlyBoot=win.__nocturneEarlyBoot,diagnostics=win.__nocturneDiagnostics;
   // This is the last Sine slot if subsequent Layout fragments fail.
   win.addUnloadListener(()=>{

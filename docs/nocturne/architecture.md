@@ -234,3 +234,8 @@ One Startup controller, one document epoch, one outcome ledger and existing stru
 ### A3.5c-R — prepared effect cohort (preview.96)
 
 The one Assembly outcome ledger now freezes live candidate membership before Boot hold and validates it immediately before the document epoch. Admission closes independently of the outcome ledger. Late Home rests, changed candidate aborts and interruption retires all surfaces. No new lifecycle owner. Fold remains default; topology/geometry reconciliation follows.
+
+
+### A3.6a — topology contract (preview.97)
+
+Native Zen tab order/membership remains authoritative. Strip sync publishes the last completed projection signature and exposes an exact read-only validator for the row and mirrored nodes/parents. Center Motion verifies the contract at acquisition and resume; scheduled sync invalidates stale Startup/Workspace visuals and reconciles changed topology at release. Workspace native commands remain single-owned. Explicit close keeps its native lifecycle. Geometry, lane scroll and terminal visual parity are separate next gates; Bloom disabled.

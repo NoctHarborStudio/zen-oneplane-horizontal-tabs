@@ -1107,3 +1107,8 @@ MB3/5/6: dormant Assembly path now coordinates real strip, chrome surfaces, book
 ### A3.5c-R — preview.96 integration audit
 
 Corrected dormant candidate preparation-to-epoch state/identity gap, late Home admission and partial interruption replay; bounded Home allocation. Native CSS/WAAPI and topology/handoff evidence remain open. Default Fold unchanged.
+
+
+### A3.6a — preview.97 topology contract
+
+NC4-048 / MB6: source fixes for same-count replacement, reorder, split, selection, pinned state and mirror node/parent changes across Center Motion. Known-stale acquisition rejected, Startup/Workspace visuals released, existing native Workspace command preserved, changed topology reconciled at handoff. Native geometry/paint/scroll/overflow/final-pose evidence remains open. No claim of full NC4-048 closure or Bloom activation.

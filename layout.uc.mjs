@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.96",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.97",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -797,24 +797,52 @@ function startupBloomAssemblyPlan(start,scale){
       return acquireTabs(row,options);
     }catch(error){trace("center.motion.error",{stage:"prepare",name:error?.name},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
   }
-  function acquireTabs(row,{owner,direction="in",duration=520,delay=0,paused=false,retainOnDispose=null,observeEffect=null,bloomTimeline=null}={},bloomStage=null,attempt=null){
+  function invalidateTopology(row){
+    const handle=active;
+    if(!handle||handle.row!==row||handle.owner==="close"||handle.validateTopology())return false;
+    handle.invalidateTopology();return true;
+  }
+  function acquireTabs(row,{owner,direction="in",duration=520,delay=0,paused=false,retainOnDispose=null,observeEffect=null,bloomTimeline=null,onTopologyInvalidated=null}={},bloomStage=null,attempt=null){
     const explicitOptions={owner,direction,paused,observeEffect,bloomTimeline};
     const eligible=()=>!bloomTimeline||bloomEligible(row,explicitOptions);
     if(!eligible())return null;
     stopSelection();active?.release("superseded");finishHandoff();releasePending();
     if(dead||!current()||!eligible())return null;
     if(!row){trace("center.motion.skip",{owner,reason:"no-row"});return null;}
+    const layout=win.__oneplaneLayoutController;
+    const topology=typeof layout?.captureCenterTopology==="function"?layout.captureCenterTopology(row):undefined;
+    if(topology===null){trace("center.topology.reject",{owner,stage:"capture"},{flush:true});return null;}
     const id=++tabSequence,effects=[],saved=[],cleanups=[],running=[],stats={groups:0,handles:0,handleOffset:0,icons:0,iconLoads:0,bitmapIcons:0,bitmapFailures:0};
     let host=null,cards=[],rr,hub,measuring=false,measuringMark=null,ownerMark=null,ownerWritten=false,modeMark=null,modeWritten=false,committed=false,released=false,epochStarted=false;
     const exact=()=>!released&&!dead&&current()&&active===handle&&
       (!bloomTimeline||win.__nocturneStartupTimeline===bloomTimeline);
-    const preparing=()=>exact()&&eligible();
+    let topologyInvalid=false;
+    const topologyCurrent=()=>{
+      if(topologyInvalid)return false;
+      if(topology===undefined)return true; // older Layout owner
+      try{return win.__oneplaneLayoutController===layout&&topology()===true;}catch{return false;}
+    };
+    const preparing=()=>exact()&&eligible()&&!topologyInvalid;
     const restoreMark=(node,key,value)=>{if(value===null)node.removeAttribute(key);else node.setAttribute(key,value);};
-    const handle={owner,retainOnDispose,startupOutcomeVersion:1,mode:bloomStage?"magnetic-bloom":"magnetic-fold",count:0,finished:Promise.resolve(),
+    const handle={owner,row,retainOnDispose,startupOutcomeVersion:1,mode:bloomStage?"magnetic-bloom":"magnetic-fold",count:0,finished:Promise.resolve(),
+      validateTopology(){return !released&&topologyCurrent();},
+      invalidateTopology(){
+        if(released)return;
+        if(!topologyInvalid){
+          topologyInvalid=true;
+          trace("center.topology.invalidate",{id,owner,mode:handle.mode,count:cards.length},{flush:true});
+        }
+        // During acquisition the caller has not yet received this handle.
+        // Let the existing setup rollback retire it, without reentering
+        // an Assembly or Workspace that has not published ownership.
+        if(!committed||motionBusy)return;
+        try{onTopologyInvalidated?.();}catch(error){trace("center.topology.error",{owner,name:error?.name},{flush:true});}
+        finally{if(!released)handle.release("topology-changed");}
+      },
       resume(){if(bloomTimeline)throw Error("center-bloom-requires-epoch");if(!released)for(const a of running)try{a.play();}catch{}},
       resumeAt(start){
         const ready=()=>exact()&&(!bloomTimeline||!bloomTimeline.closed&&bloomTimeline.paused===false);
-        if(!ready()||bloomTimeline&&epochStarted)throw Error("center-epoch-stale");
+        if(!ready()||!topologyCurrent()||bloomTimeline&&epochStarted)throw Error("center-epoch-stale");
         if(bloomTimeline)epochStarted=true;
         for(const a of running){
           if(!ready())throw Error("center-epoch-stale");
@@ -824,7 +852,9 @@ function startupBloomAssemblyPlan(start,scale){
       },
       seal(){if(!released)for(const a of running)try{a.finish();}catch{}},
       release(reason="release"){
-        if(released)return;released=true;
+        if(released)return;
+        const reconcile=committed&&owner!=="close"&&!topologyCurrent();
+        released=true;
         const wasBusy=motionBusy;motionBusy=true;
         let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
         try{
@@ -844,7 +874,7 @@ function startupBloomAssemblyPlan(start,scale){
               if(measuring)step(()=>restoreMark(root,"data-zr-fold-measuring",measuringMark));
               if(ownerWritten)step(()=>restoreMark(root,OWNER,ownerMark));
               if(modeWritten)step(()=>restoreMark(root,MODE,modeMark));
-              if(ownerWritten&&!dead&&!win.closed)step(()=>win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd")));
+              if(ownerWritten&&!dead&&!win.closed)step(()=>win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd",{detail:{owner,reconcile}})));
             }
           }
           retire();
@@ -857,6 +887,7 @@ function startupBloomAssemblyPlan(start,scale){
       if(root.getAttribute("data-zr-workspace-phase")==="swap"){
         measuringMark=root.getAttribute("data-zr-fold-measuring");measuring=true;root.setAttribute("data-zr-fold-measuring","true");
       }
+      if(!topologyCurrent())throw Error("center-topology-stale");
       cards=collect(row);handle.count=cards.length;
       if(!cards.length){handle.release("no-visible-cards");trace("center.motion.skip",{owner,reason:"no-visible-cards"});return null;}
       if(bloomStage){
@@ -913,10 +944,11 @@ function startupBloomAssemblyPlan(start,scale){
           if(running.some((a,i)=>a.playState!=="paused"||a.pending||a.finished!==promises[i]))
             throw Error("bloom-effect-seek-state");
         }
-        check();handle.finished=Promise.all(promises.map(p=>p.catch(()=>{})));
+        check();if(!topologyCurrent())throw Error("center-topology-stale");
+        handle.finished=Promise.all(promises.map(p=>p.catch(()=>{})));
         committed=true;
         trace("center.bloom.acquire",()=>({id,owner,count:cards.length,effects:running.length,proxies:0,checks:4,stageEnd:bloomStage.end}),{sample:Math.ceil(bloomStage.end)+250});
-        check();return handle;
+        check();if(!topologyCurrent())throw Error("center-topology-stale");return handle;
       }
       rr=row.getBoundingClientRect();host=document.createElementNS("http://www.w3.org/1999/xhtml","div");
       host.setAttribute("data-zr-magnetic-layer","true");host.setAttribute("aria-hidden","true");host.inert=true;
@@ -928,7 +960,7 @@ function startupBloomAssemblyPlan(start,scale){
       // detached proxies have been prepared.
       for(const c of cards){const n=proxy(c,layer,rr,cleanups,stats),frames=keyframes(c,direction==="out");effects.push({n,frames,c});}
       if(measuring){restoreMark(root,"data-zr-fold-measuring",measuringMark);measuring=false;}
-      if(!preparing()){handle.release("disposed");return null;}
+      if(!preparing()||!topologyCurrent()){handle.release("disposed");return null;}
       ownerMark=root.getAttribute(OWNER);ownerWritten=true;root.setAttribute(OWNER,owner);
       row.append(host);
       for(const c of cards){saved.push({n:c.n,mark:c.n.getAttribute(MARK)});c.n.setAttribute(MARK,"true");}
@@ -971,10 +1003,10 @@ function startupBloomAssemblyPlan(start,scale){
         if(paused){a.pause();a.currentTime=0;}
       }
       handle.finished=Promise.all(running.map(a=>a.finished.catch(()=>{})));
-      if(!preparing()){handle.release("disposed");return null;}
+      if(!preparing()||!topologyCurrent()){handle.release("disposed");return null;}
       committed=true;
       trace("center.motion",()=>({id,owner,direction,count:cards.length,duration,mode:"magnetic-fold",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length,groups:stats.groups,handles:stats.handles,handleOffset:stats.handleOffset,icons:iconStats(row),bitmapIcons:stats.bitmapIcons,bitmapFailures:stats.bitmapFailures,animated:running.length}),{sample:duration+250});
-      if(!preparing()){handle.release("disposed");return null;}
+      if(!preparing()||!topologyCurrent()){handle.release("disposed");return null;}
       return handle;
     }catch(error){
       handle.release("setup-failed");
@@ -1087,7 +1119,7 @@ function startupBloomAssemblyPlan(start,scale){
     selectionContainer?.removeEventListener("TabSelect",onSelect);
     selectionContainer=tc;lastTab=win.gBrowser.selectedTab;tc.addEventListener("TabSelect",onSelect);
   }
-  const api={startupBloomVersion:1,start,bookmarks,iconStats,warmIcons,releasePending,dispose};win[KEY]=api;
+  const api={startupBloomVersion:1,start,bookmarks,iconStats,warmIcons,releasePending,invalidateTopology,dispose};win[KEY]=api;
   const earlyBoot=win.__nocturneEarlyBoot,diagnostics=win.__nocturneDiagnostics;
   // This is the last Sine slot if subsequent Layout fragments fail.
   win.addUnloadListener(()=>{
@@ -9068,20 +9100,75 @@ function installTabStrip() {
     if(src)entry.img.setAttribute("src",src);else entry.img.removeAttribute("src");
     return true;
   }
+  // Native order and group identity are authoritative. Keep only the
+  // last committed projection signature, never a second tab data store.
+  let syncedTopology=null,syncing=false;
+  function readStripTopology(){
+    const tabs=Array.from(browser.visibleTabs||browser.tabs||[]).filter(
+      tab=>!tab.closing&&!tab.hidden&&!tab.hasAttribute("zen-empty-tab"));
+    return {selected:browser.selectedTab,home:row.hasAttribute("data-op-home-open"),
+      tabs:tabs.map(tab=>({tab,group:splitGroup(tab),split:isSplit(tab),pinned:!!tab.pinned}))};
+  }
+  function sameStripTopology(a,b){
+    return !!a&&!!b&&a.selected===b.selected&&a.home===b.home&&a.tabs.length===b.tabs.length&&
+      a.tabs.every((x,i)=>{const y=b.tabs[i];return x.tab===y.tab&&x.group===y.group&&x.split===y.split&&x.pinned===y.pinned;});
+  }
+  function captureCenterTopology(expectedRow){
+    if(dead||expectedRow!==row||!row.isConnected||row.hasAttribute("data-op-dragging")||
+       !sameStripTopology(syncedTopology,readStripTopology()))return null;
+    const native=syncedTopology;
+    const selector=".oneplane-tab,.oneplane-split-group";
+    const mirrors=[...list.querySelectorAll(selector)].map(node=>({node,parent:node.parentElement}));
+    // The native signature alone is insufficient if the projection was
+    // interrupted or a wrapper was detached/replaced at equal count.
+    const groups=new Set(native.tabs.map(x=>x.group).filter(Boolean));
+    const expected=new Set([...native.tabs.map(({tab})=>entries.get(tab)?.item),...Array.from(groups,g=>splitEntries.get(g)?.box)]);
+    if(expected.has(undefined)||mirrors.length!==expected.size||mirrors.some(({node})=>!expected.has(node))||
+       entries.size!==native.tabs.length||native.tabs.some(({tab,group})=>{
+      const n=entries.get(tab)?.item;
+      return !n||!list.contains(n)||group&&n.parentElement!==splitEntries.get(group)?.box||
+        !group&&n.closest(".oneplane-split-group");
+    }))return null;
+    return ()=>{
+      if(dead||!row.isConnected||row.hasAttribute("data-op-dragging")||syncedTopology!==native||
+         !sameStripTopology(native,readStripTopology()))return false;
+      const current=[...list.querySelectorAll(selector)];
+      return current.length===mirrors.length&&mirrors.every(({node,parent},i)=>current[i]===node&&node.parentElement===parent);
+    };
+  }
+  function onCenterMotionEnd(event){
+    if(dead||syncing)return;
+    // A changed native signature must reconcile in this task, before a
+    // stale proxy/real-card handoff can reach the next paint.
+    if(event?.detail?.owner!=="close"&&(event?.detail?.reconcile||!sameStripTopology(syncedTopology,readStripTopology()))){
+      if(frame)window.cancelAnimationFrame(frame);
+      sync();
+    }else schedule();
+  }
   function sync() {
-    frame = 0;
-    if(dead)return;
+    frame=0;
+    if(dead||syncing)return;
+    syncing=true;
+    try{syncNow();}finally{syncing=false;}
+  }
+  function syncNow(){
+    if(root.hasAttribute("data-zr-center-motion")){
+      // Native changes are handled by the exact motion owner. Reconcile
+      // only once the owner has released its freeze, never under it.
+      const invalidated=window.__nocturneCenterMotion?.invalidateTopology?.(row);
+      if(dead)return;
+      if(invalidated&&root.hasAttribute("data-zr-center-motion"))schedule();
+    }
     if(root.hasAttribute("data-zr-center-motion")){
       // Icon-only updates are safe while chrome geometry is frozen.
       let changed=0;for(const [tab,entry] of entries)if(!tab.closing&&refreshEntryIcon(tab,entry))changed++;
       if(changed)window.__nocturneTrace?.("center.icons.sync",{changed,owner:root.getAttribute("data-zr-center-motion")},{throttle:100});
       return;
     }
-    const homeOpen=row.hasAttribute("data-op-home-open");
+    const nativeTopology=readStripTopology();
+    const homeOpen=nativeTopology.home;
     // Respect the current workspace and native visibility.
-    const tabs = Array.from(browser.visibleTabs || browser.tabs || []).filter(
-      tab => !tab.closing && !tab.hidden && !tab.hasAttribute("zen-empty-tab")
-    );
+    const tabs=nativeTopology.tabs.map(x=>x.tab);
     const count = String(tabs.length);
     if (row.style.getPropertyValue("--op-tab-count") !== count) {
       row.style.setProperty("--op-tab-count", count);
@@ -9182,6 +9269,9 @@ function installTabStrip() {
     centerToolbar();
     refreshIndicator();
     refreshIslandTitle();
+    // Only publish after the complete structural sync. A drag owns its
+    // temporary order and cannot authorize a Center Motion snapshot.
+    syncedTopology=row.hasAttribute("data-op-dragging")?null:nativeTopology;
     typeof window!=="undefined"&&window.__nocturneTrace?.("tabs.sync",()=>({native:tabs.length,mirror:visualTabs.length,groups:groups.length,entries:entries.size,overflow:row.hasAttribute('data-op-overflow-row'),homeOpen,phase:root.getAttribute('data-zr-workspace-phase')}),{throttle:120,sample:1200});
     scheduleGeometry();
   }
@@ -9359,7 +9449,7 @@ function installTabStrip() {
     for(const event of ["TabOpen","TabClose"]) cleanupStep("browser.tabContainer.removeEventListener(event,onTabOpenOrClose,true)",()=>{browser.tabContainer.removeEventListener(event,onTabOpenOrClose,true);});
     cleanupStep("window.removeEventListener(\"ZenWorkspaceDataChanged\", schedule)",()=>{window.removeEventListener("ZenWorkspaceDataChanged", schedule);});
     cleanupStep("window.removeEventListener(\"ZenRefined:WorkspaceTransition\",onWorkspaceMotion)",()=>{window.removeEventListener("ZenRefined:WorkspaceTransition",onWorkspaceMotion);});
-    cleanupStep("center motion listener",()=>window.removeEventListener("Nocturne:CenterMotionEnd",schedule));
+    cleanupStep("center motion listener",()=>window.removeEventListener("Nocturne:CenterMotionEnd",onCenterMotionEnd));
     cleanupStep("toolbarWrapper?.removeAttribute(\"oneplane-workspace-hold\")",()=>{toolbarWrapper?.removeAttribute("oneplane-workspace-hold");});
     cleanupStep("window.removeEventListener(\"ZenTabIconChanged\",onNativeIconChanged,true)",()=>{window.removeEventListener("ZenTabIconChanged",onNativeIconChanged,true);});
     cleanupStep("window.removeEventListener(\"OnePlane:SyncedIconChanged\",schedule)",()=>{window.removeEventListener("OnePlane:SyncedIconChanged",schedule);});
@@ -9442,7 +9532,7 @@ function installTabStrip() {
     for(const event of ["TabOpen","TabClose"])browser.tabContainer.addEventListener(event,onTabOpenOrClose,true);
     window.addEventListener("ZenWorkspaceDataChanged", schedule);
     window.addEventListener("ZenRefined:WorkspaceTransition",onWorkspaceMotion);
-    window.addEventListener("Nocturne:CenterMotionEnd",schedule);
+    window.addEventListener("Nocturne:CenterMotionEnd",onCenterMotionEnd);
     onWorkspaceMotion();
     window.addEventListener("ZenTabIconChanged",onNativeIconChanged,true);
     window.addEventListener("OnePlane:SyncedIconChanged",schedule);
@@ -9503,6 +9593,7 @@ function installTabStrip() {
     throw error;
   }
   destroy.prepareWorkspaceGeometry=prepareWorkspaceGeometry;
+  destroy.captureCenterTopology=captureCenterTopology;
   return destroy;
 }
 
@@ -9567,7 +9658,8 @@ function finishCleanup(){
 
 const controller = { get active() { return applied && !disposed; },
   get ownsPreferences(){return ownsPreferences;}, cleanup,
-  prepareWorkspaceGeometry(){return removeTabStrip?.prepareWorkspaceGeometry?.();} };
+  prepareWorkspaceGeometry(){return removeTabStrip?.prepareWorkspaceGeometry?.();},
+  captureCenterTopology(row){return removeTabStrip?.captureCenterTopology?.(row)??null;} };
 
 // One startup selection per browser process. Never redirect a projected
 // child, a private/unsynced window or a live reload of this mod.

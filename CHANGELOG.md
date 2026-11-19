@@ -1,3 +1,9 @@
+## 0.3.0-preview.97 — Native strip topology contract
+
+- Bind Center Motion to the last committed native strip topology and exact mirror nodes/parents; detect order, membership, split, selection and pin changes, including equal-count replacements.
+- Invalidate stale Startup/Workspace visuals through their existing owners and reconcile changed mirror topology at handoff. Keep the native Workspace command single-owned and preserve the explicit-close lifecycle.
+- Add six permanent regressions. Geometry, scroll/overflow and final-pose validation remain the next A3.6 substage; Bloom remains disabled.
+
 ## 0.3.0-preview.96 — Independent Bloom Assembly integration audit
 
 - Freeze the exact live WAAPI cohort after candidate preparation; recheck paused state, zero time, document timeline, original finished promise and owner/lease identity immediately before Boot handoff.

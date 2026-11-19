@@ -372,3 +372,8 @@ Seven new cases, 21/21 Bloom and 50/50 Startup Transparency fixture bodies PASS 
 ### Preview.96 — independent Bloom Assembly audit
 
 Five new cases; 26/26 Bloom and 50/50 Startup Transparency isolated source-backed fixture bodies PASS. Prepared live cohort identity/state/time/promise, Boot hold replacement, late Home admission, Home cap and atomic interruption. Generated files and parser checks separate from canonical CI. No native Gecko, paint or performance acceptance; candidate disabled.
+
+
+### Preview.97 — native strip topology
+
+Six new permanent regressions. 52/52 Center Motion, 29/29 Workspace and 50/50 Startup Transparency isolated source-backed fixtures PASS. Bloom fixture bodies 25/26; the remaining generated Lab assertion was blocked by the temporary harness, not a demonstrated product failure. Verify canonical CI separately. Test equal-count replacements, order, group identity, selection, pin state, mirror parent changes, stale acquisition/resume, exact release and native Workspace command once in both phases. Native geometry/scroll/overflow and final pose remain open; no native acceptance.

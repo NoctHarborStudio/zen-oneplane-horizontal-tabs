@@ -471,3 +471,71 @@ test("explicit Bloom and fallback exact resume is once-only and rejects stale fi
   a.release();assertProxyClean(g);
  }
 });
+
+test("Center topology capture rejection never allocates proxy effects",()=>{
+ const f=proxyFixture();f.window.__oneplaneLayoutController={captureCenterTopology:()=>null};
+ const engine=f.mount();assert.equal(engine.start(f.row,{owner:"startup"}),null);
+ assert.equal(f.effects.length,0);assertProxyClean(f);
+});
+test("Center exact topology invalidation releases once and never interrupts explicit close",()=>{
+ for(const owner of ["startup","workspace","close"]){
+  const f=proxyFixture();let valid=true,invalidations=0;
+  f.window.__oneplaneLayoutController={captureCenterTopology:r=>r===f.row?()=>valid:null};
+  const engine=f.mount(),h=engine.start(f.row,{owner,onTopologyInvalidated:()=>{invalidations++;h.release();}});
+  assert.ok(h);assert.equal(engine.invalidateTopology(f.row),false);
+  valid=false;assert.equal(h.validateTopology(),false);
+  assert.equal(engine.invalidateTopology(f.row),owner!=="close");
+  assert.equal(invalidations,owner==="close"?0:1);
+  assert.equal(engine.invalidateTopology(f.row),false);
+  h.release();assertProxyClean(f);
+ }
+});
+test("Center rejects native topology changes during acquisition and before paused epoch",()=>{
+ const f=proxyFixture();let valid=true;
+ f.window.__oneplaneLayoutController={captureCenterTopology:()=>()=>valid};
+ const engine=f.mount();f.fault.onAnimate=()=>{valid=false;};
+ assert.equal(engine.start(f.row,{owner:"startup",paused:true}),null);assertProxyClean(f);
+ const g=proxyFixture();valid=true;g.window.__oneplaneLayoutController={captureCenterTopology:()=>()=>valid};
+ const e=g.mount(),h=e.start(g.row,{owner:"startup",paused:true});valid=false;
+ assert.throws(()=>h.resumeAt(()=>{}),/center-epoch-stale/);h.release();assertProxyClean(g);
+});
+function topologyFixture(){
+ const code=read("src/toolbar/tab-sync.js.part").split("  function sync() {")[0];
+ const run=new Function(`
+ const tab=(group=null)=>({group,pinned:false,hidden:false,closing:false,hasAttribute:()=>false});
+ const a=tab(),b=tab(),browser={visibleTabs:[a,b],selectedTab:a};
+ const row={isConnected:true,hasAttribute:()=>false};
+ const list={nodes:[],contains:n=>list.nodes.includes(n),querySelectorAll:()=>list.nodes};
+ const node=()=>({parentElement:list,closest:()=>null});
+ const na=node(),nb=node();list.nodes=[na,nb];
+ const entries=new Map([[a,{item:na}],[b,{item:nb}]]),splitEntries=new Map();
+ let dead=false,frame=0,scheduled=0,synced=0;const window={};
+ const splitGroup=t=>t.group,isSplit=t=>!!t.group;
+ function schedule(){scheduled++;}function sync(){synced++;}
+ ${code}
+ syncedTopology=readStripTopology();
+ return {a,b,browser,row,list,na,nb,entries,splitEntries,capture:()=>captureCenterTopology(row),end:onCenterMotionEnd,counts:()=>[scheduled,synced],tab};
+ `);
+ return run();
+}
+test("projection topology lease detects equal-count reorder, replacement, split, pin, selection and mirror reparent",()=>{
+ for(const fault of ["order","replace","split","pin","selection","mirror","parent","disconnect"]){
+  const f=topologyFixture(),valid=f.capture();assert.ok(valid);assert.ok(valid());
+  if(fault==="order")f.browser.visibleTabs.reverse();
+  if(fault==="replace")f.browser.visibleTabs[1]=f.tab();
+  if(fault==="split")f.b.group={};
+  if(fault==="pin")f.b.pinned=true;
+  if(fault==="selection")f.browser.selectedTab=f.b;
+  if(fault==="mirror")f.list.nodes.reverse();
+  if(fault==="parent")f.nb.parentElement={};
+  if(fault==="disconnect")f.row.isConnected=false;
+  assert.equal(valid(),false,fault);
+ }
+});
+test("projection rejects unsynced native signatures and reconciles changed topology synchronously on handoff",()=>{
+ const f=topologyFixture();f.end();assert.deepEqual(f.counts(),[1,0]);
+ f.browser.visibleTabs.reverse();assert.equal(f.capture(),null);
+ f.end();assert.deepEqual(f.counts(),[1,1]);
+ const g=topologyFixture();g.end({detail:{owner:"startup",reconcile:true}});assert.deepEqual(g.counts(),[0,1]);
+ g.end({detail:{owner:"close",reconcile:true}});assert.deepEqual(g.counts(),[1,1]);
+});

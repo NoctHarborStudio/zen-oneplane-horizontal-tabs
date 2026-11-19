@@ -5,20 +5,75 @@
     if(src)entry.img.setAttribute("src",src);else entry.img.removeAttribute("src");
     return true;
   }
+  // Native order and group identity are authoritative. Keep only the
+  // last committed projection signature, never a second tab data store.
+  let syncedTopology=null,syncing=false;
+  function readStripTopology(){
+    const tabs=Array.from(browser.visibleTabs||browser.tabs||[]).filter(
+      tab=>!tab.closing&&!tab.hidden&&!tab.hasAttribute("zen-empty-tab"));
+    return {selected:browser.selectedTab,home:row.hasAttribute("data-op-home-open"),
+      tabs:tabs.map(tab=>({tab,group:splitGroup(tab),split:isSplit(tab),pinned:!!tab.pinned}))};
+  }
+  function sameStripTopology(a,b){
+    return !!a&&!!b&&a.selected===b.selected&&a.home===b.home&&a.tabs.length===b.tabs.length&&
+      a.tabs.every((x,i)=>{const y=b.tabs[i];return x.tab===y.tab&&x.group===y.group&&x.split===y.split&&x.pinned===y.pinned;});
+  }
+  function captureCenterTopology(expectedRow){
+    if(dead||expectedRow!==row||!row.isConnected||row.hasAttribute("data-op-dragging")||
+       !sameStripTopology(syncedTopology,readStripTopology()))return null;
+    const native=syncedTopology;
+    const selector=".oneplane-tab,.oneplane-split-group";
+    const mirrors=[...list.querySelectorAll(selector)].map(node=>({node,parent:node.parentElement}));
+    // The native signature alone is insufficient if the projection was
+    // interrupted or a wrapper was detached/replaced at equal count.
+    const groups=new Set(native.tabs.map(x=>x.group).filter(Boolean));
+    const expected=new Set([...native.tabs.map(({tab})=>entries.get(tab)?.item),...Array.from(groups,g=>splitEntries.get(g)?.box)]);
+    if(expected.has(undefined)||mirrors.length!==expected.size||mirrors.some(({node})=>!expected.has(node))||
+       entries.size!==native.tabs.length||native.tabs.some(({tab,group})=>{
+      const n=entries.get(tab)?.item;
+      return !n||!list.contains(n)||group&&n.parentElement!==splitEntries.get(group)?.box||
+        !group&&n.closest(".oneplane-split-group");
+    }))return null;
+    return ()=>{
+      if(dead||!row.isConnected||row.hasAttribute("data-op-dragging")||syncedTopology!==native||
+         !sameStripTopology(native,readStripTopology()))return false;
+      const current=[...list.querySelectorAll(selector)];
+      return current.length===mirrors.length&&mirrors.every(({node,parent},i)=>current[i]===node&&node.parentElement===parent);
+    };
+  }
+  function onCenterMotionEnd(event){
+    if(dead||syncing)return;
+    // A changed native signature must reconcile in this task, before a
+    // stale proxy/real-card handoff can reach the next paint.
+    if(event?.detail?.owner!=="close"&&(event?.detail?.reconcile||!sameStripTopology(syncedTopology,readStripTopology()))){
+      if(frame)window.cancelAnimationFrame(frame);
+      sync();
+    }else schedule();
+  }
   function sync() {
-    frame = 0;
-    if(dead)return;
+    frame=0;
+    if(dead||syncing)return;
+    syncing=true;
+    try{syncNow();}finally{syncing=false;}
+  }
+  function syncNow(){
+    if(root.hasAttribute("data-zr-center-motion")){
+      // Native changes are handled by the exact motion owner. Reconcile
+      // only once the owner has released its freeze, never under it.
+      const invalidated=window.__nocturneCenterMotion?.invalidateTopology?.(row);
+      if(dead)return;
+      if(invalidated&&root.hasAttribute("data-zr-center-motion"))schedule();
+    }
     if(root.hasAttribute("data-zr-center-motion")){
       // Icon-only updates are safe while chrome geometry is frozen.
       let changed=0;for(const [tab,entry] of entries)if(!tab.closing&&refreshEntryIcon(tab,entry))changed++;
       if(changed)window.__nocturneTrace?.("center.icons.sync",{changed,owner:root.getAttribute("data-zr-center-motion")},{throttle:100});
       return;
     }
-    const homeOpen=row.hasAttribute("data-op-home-open");
+    const nativeTopology=readStripTopology();
+    const homeOpen=nativeTopology.home;
     // Respect the current workspace and native visibility.
-    const tabs = Array.from(browser.visibleTabs || browser.tabs || []).filter(
-      tab => !tab.closing && !tab.hidden && !tab.hasAttribute("zen-empty-tab")
-    );
+    const tabs=nativeTopology.tabs.map(x=>x.tab);
     const count = String(tabs.length);
     if (row.style.getPropertyValue("--op-tab-count") !== count) {
       row.style.setProperty("--op-tab-count", count);
@@ -119,6 +174,9 @@
     centerToolbar();
     refreshIndicator();
     refreshIslandTitle();
+    // Only publish after the complete structural sync. A drag owns its
+    // temporary order and cannot authorize a Center Motion snapshot.
+    syncedTopology=row.hasAttribute("data-op-dragging")?null:nativeTopology;
     typeof window!=="undefined"&&window.__nocturneTrace?.("tabs.sync",()=>({native:tabs.length,mirror:visualTabs.length,groups:groups.length,entries:entries.size,overflow:row.hasAttribute('data-op-overflow-row'),homeOpen,phase:root.getAttribute('data-zr-workspace-phase')}),{throttle:120,sample:1200});
     scheduleGeometry();
   }

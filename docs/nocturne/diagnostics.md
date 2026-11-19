@@ -247,3 +247,8 @@ Existing events retained; invalid timing contracts and competing effects fail op
 ### Preview.96 — prepared-cohort audit
 
 Existing assembly launch/resume error and cleanup events cover cohort validation failure; error classes identify the failing contract. No new recorder, private payload, persistent sampling or timer. Atomic candidate interruption retains existing reason. Native evidence pending.
+
+
+### Preview.97 — topology invalidation
+
+`center.topology.reject` records owner and capture stage; `center.topology.invalidate` records transaction ID, owner, visual mode and count; `center.topology.error` records owner and error class. No tab identities, URLs, labels, persistent sampling, new observer or timer. Native evidence remains pending.

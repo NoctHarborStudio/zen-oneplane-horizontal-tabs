@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="workspace.script",data={version:"0.3.0-preview.96"};
+  const event="workspace.script",data={version:"0.3.0-preview.97"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -163,7 +163,8 @@ try{if(typeof window!=="undefined"){
     const finalSurfaceHeight=surface?Number(surface.offsetHeight)||sr?.height:0;
     const page=get("tabbrowser-tabpanels"),pr=rect(page);
     if(row&&items.includes(row)){
-      tx.center=win.__nocturneCenterMotion?.start(row,{owner:"workspace",direction:outgoing?"out":"in",duration:length});
+      tx.center=win.__nocturneCenterMotion?.start(row,{owner:"workspace",direction:outgoing?"out":"in",duration:length,
+        onTopologyInvalidated:()=>{if(active===tx&&!tx.cancelled)cleanup(tx);}});
       if(tx.center)effects.push(tx.center.finished);
     }
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.animate",()=>({outgoing,length,targets:items.length,locked:!!old}),{sample:1800});
@@ -261,6 +262,7 @@ try{if(typeof window!=="undefined"){
       const old=units();
       if(!old.length&&!req.carrySwap){cleanup(tx);called=true;return await invoke();}
       if(!req.carrySwap){phase("out");if(!tx.cancelled&&!dead&&!req.superseded)await visualStep(()=>animate(tx,old,true));}
+      if(!tx.cancelled&&tx.center?.validateTopology?.()===false)cleanup(tx);
       if(tx.superseded||req.superseded||dead||win.closed)return;
       if(!tx.cancelled){phase("swap");if(!tx.cancelled&&!dead&&!req.superseded)visualStep(()=>cancelEffects(tx));}
       if(req.superseded||dead||win.closed)return;
@@ -283,6 +285,7 @@ try{if(typeof window!=="undefined"){
       }),{sample:1000});
       await motion;
       if(tx.cancelled||dead||req.superseded)return result;
+      if(tx.center?.validateTopology?.()===false){cleanup(tx);return result;}
       tx.center?.seal();
       // Commit terminal styles while native CSS transitions are still disabled.
       for(const a of tx.animations)try{a.finish();}catch{}

@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.96"};
+  const event="assembly.script",data={version:"0.3.0-preview.97"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -197,6 +197,7 @@ try{if(typeof window!=="undefined"){
     if(dead||finish.finalizing)return;
     finish.finalizing=true;
     if(!["disposed","boundary","completed","watchdog","interrupted","effect-cancelled","boot-cancelled","setup-failed","insufficient-budget"].includes(reason))reason="disposed";
+    if(reason==="boundary"&&centerHandle?.validateTopology?.()===false)reason="interrupted";
     const outcome=ownedTimeline?.outcome;
     // Snapshot while exact ownership predicates still see live effects.
     // Setting dead first misclassifies every pending effect as retired.
@@ -732,7 +733,8 @@ try{if(typeof window!=="undefined"){
         // Remove per-card startup gates together, including split members.
         for(const n of cards){n.setAttribute(MANAGED,"true");seen.add(n);}
         if(!painted){
-          const options={owner:"startup",direction:"in",duration:Math.round(timeline.cardsLength*scale),delay:Math.round(timeline.cards*scale),paused:timeline.paused,observeEffect:timeline.observeEffect};
+          const options={owner:"startup",direction:"in",duration:Math.round(timeline.cardsLength*scale),delay:Math.round(timeline.cards*scale),paused:timeline.paused,observeEffect:timeline.observeEffect,
+            onTopologyInvalidated:()=>{if(!dead&&ownedTimeline===timeline)finish("interrupted");}};
           if(bloom){
             const fold=startupTimeline(0,scale);
             options.duration=Math.round(fold.cardsLength*scale);options.delay=Math.round(fold.cards*scale);

@@ -59,7 +59,8 @@ function finishCleanup(){
 
 const controller = { get active() { return applied && !disposed; },
   get ownsPreferences(){return ownsPreferences;}, cleanup,
-  prepareWorkspaceGeometry(){return removeTabStrip?.prepareWorkspaceGeometry?.();} };
+  prepareWorkspaceGeometry(){return removeTabStrip?.prepareWorkspaceGeometry?.();},
+  captureCenterTopology(row){return removeTabStrip?.captureCenterTopology?.(row)??null;} };
 
 // One startup selection per browser process. Never redirect a projected
 // child, a private/unsynced window or a live reload of this mod.
