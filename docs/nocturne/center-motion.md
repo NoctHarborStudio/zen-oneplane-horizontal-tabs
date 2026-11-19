@@ -53,3 +53,8 @@ Existing Assembly outcome ledger captures and rechecks the current live effect c
 ### A3.6a — native topology and mirror lease (preview.97)
 
 The strip owner provides a read-only exact topology validator from the last completed sync. Center Motion rejects stale capture and checks preparation/resume/boundaries; scheduled sync invalidates Startup/Workspace visuals and reconciles the changed projection before the next paint using the existing release event. Close preserves its native commit lifecycle. Geometry/scroll/overflow/final-pose checks remain A3.6b. Bloom disabled.
+
+
+### A3.6b1 — resting geometry (preview.98)
+
+The Layout projection lease adds viewport/DPI, row/lane/Island/slot metrics and scroll plus Fold fractional row-local rectangles. Existing geometry events invalidate stale Startup/Workspace motion; native identity sync alone avoids geometry reads for icon-only updates. Close remains exempt. Proxy mount/clip/ancestor transform and final painted pose remain A3.6b2; Bloom disabled.

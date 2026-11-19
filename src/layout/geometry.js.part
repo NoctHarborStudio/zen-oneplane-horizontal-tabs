@@ -10,6 +10,54 @@
   function rightPlusOffset(widths, expansion=0){
     return 3+widths.reduce((sum,w)=>sum+Math.max(0,w)+3,0)+Math.max(0,expansion);
   }
+  // Center Motion consumes actual resting strip geometry, not a second
+  // layout plan. Offset metrics ignore owned WAAPI scale and translate.
+  function captureCenterGeometry(expectedRow,mode){
+    if(dead||expectedRow!==row||!row.isConnected)return null;
+    const nodes=[row,list,leftLane,rightLane,bottomLane,island,plus,
+      ...list.querySelectorAll(".oneplane-tab,.oneplane-split-group,.oneplane-split-handle")];
+    const viewport=()=>[window.innerWidth,window.innerHeight,window.devicePixelRatio];
+    const measure=()=>{
+      const rr=row.getBoundingClientRect();
+      const slots=nodes.map(n=>{
+        const connected=n.isConnected;
+        if(!connected)return {connected,parent:n.parentElement}; // unused lanes
+        const metrics=[n.offsetLeft,n.offsetTop,n.offsetWidth,n.offsetHeight,n.clientWidth,n.clientHeight];
+        const scroll=n===list||n===leftLane||n===rightLane||n===bottomLane?
+          [n.scrollLeft,n.scrollTop,n.scrollWidth,n.scrollHeight]:[];
+        // Fold needs fractional row-local rectangles too. Assembly moves
+        // the plus independently; Bloom intentionally scales real cards.
+        const r=mode==="fold"&&n!==plus&&n!==row?n.getBoundingClientRect():null;
+        const local=r?[r.left-rr.left,r.top-rr.top,r.width,r.height]:[];
+        return {connected,parent:n.parentElement,offsetParent:n.offsetParent,metrics,scroll,local};
+      });
+      return {view:viewport(),outer:[rr.width,rr.height],slots};
+    };
+    const finite=a=>a.every(Number.isFinite);
+    const sane=s=>finite(s.view)&&s.view.every(v=>v>0)&&finite(s.outer)&&s.outer.every(v=>v>0)&&
+      s.slots.every(x=>!x.connected||finite(x.metrics)&&finite(x.scroll)&&finite(x.local));
+    const same=(a,b,epsilon=0)=>a.length===b.length&&a.every((v,i)=>Math.abs(v-b[i])<=epsilon);
+    const before=measure();
+    if(!sane(before))return null;
+    return ()=>{
+      if(dead||!row.isConnected)return false;
+      const after=measure();
+      return sane(after)&&same(before.view,after.view)&&same(before.outer,after.outer,.5)&&
+        before.slots.every((a,i)=>{
+          const b=after.slots[i];
+          return a.connected===b.connected&&a.parent===b.parent&&(!a.connected||
+            a.offsetParent===b.offsetParent&&same(a.metrics,b.metrics)&&same(a.scroll,b.scroll,.25)&&same(a.local,b.local,.5));
+        });
+    };
+  }
+  function checkCenterGeometry(stage){
+    if(!dead&&root.hasAttribute("data-zr-center-motion"))
+      window.__nocturneCenterMotion?.invalidateGeometry?.(row,stage);
+  }
+  function onLaneScroll(){
+    checkCenterGeometry("scroll");
+    refreshIndicator();
+  }
   function centerToolbar(){
     if(centering||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-center-motion")||row.hasAttribute("data-op-magnetic-pull"))return;
     centering=true;

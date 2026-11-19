@@ -1,3 +1,9 @@
+## 0.3.0-preview.98 — Center Motion resting geometry lease
+
+- Validate viewport/DPI, row, lane, Island, slot and Split handle layout metrics, scroll offsets and Fold fractional local rectangles at capture, resume and handoff.
+- Reuse existing Layout resize and scroll events to retire stale Startup/Workspace visuals; preserve the native Workspace command and explicit-close lifecycle. No new observer or animation scheduler.
+- Bloom remains disabled; actual mounted proxy alignment and native final-pose validation are separate.
+
 ## 0.3.0-preview.97 — Native strip topology contract
 
 - Bind Center Motion to the last committed native strip topology and exact mirror nodes/parents; detect order, membership, split, selection and pin changes, including equal-count replacements.

@@ -1112,3 +1112,8 @@ Corrected dormant candidate preparation-to-epoch state/identity gap, late Home a
 ### A3.6a — preview.97 topology contract
 
 NC4-048 / MB6: source fixes for same-count replacement, reorder, split, selection, pinned state and mirror node/parent changes across Center Motion. Known-stale acquisition rejected, Startup/Workspace visuals released, existing native Workspace command preserved, changed topology reconciled at handoff. Native geometry/paint/scroll/overflow/final-pose evidence remains open. No claim of full NC4-048 closure or Bloom activation.
+
+
+### A3.6b1 — preview.98 resting geometry
+
+NC4-048 / MB6: source guard for same-topology viewport, DPI, scrolling, layout-space and fractional Fold geometry changes. Existing motion owner retires stale visuals; no native acceptance. Mounted proxy alignment, ancestor transform/clip and final painted handoff remain open.

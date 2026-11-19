@@ -56,7 +56,7 @@
     cleanupStep("splitZone.removeEventListener(\"drop\", onSplitDrop)",()=>{splitZone.removeEventListener("drop", onSplitDrop);});
     cleanupStep("splitZone.remove()",()=>{splitZone.remove();});
     for(const lane of [list,leftLane,rightLane,bottomLane]){
-      cleanupStep("lane.removeEventListener(\"scroll\",refreshIndicator)",()=>{lane.removeEventListener("scroll",refreshIndicator);});
+      cleanupStep("lane.removeEventListener(\"scroll\",onLaneScroll)",()=>{lane.removeEventListener("scroll",onLaneScroll);});
       cleanupStep("lane.removeEventListener(\"wheel\",onLaneWheel)",()=>{lane.removeEventListener("wheel",onLaneWheel);});
     }
     cleanupStep("islandTextAnimation?.cancel()",()=>{islandTextAnimation?.cancel();});
@@ -178,7 +178,7 @@
     sync();checkMount();
     try { browser.addProgressListener(progressListener); } catch {}
     for(const lane of [list,leftLane,rightLane,bottomLane]){
-      lane.addEventListener("scroll",refreshIndicator,{passive:true});
+      lane.addEventListener("scroll",onLaneScroll,{passive:true});
       lane.addEventListener("wheel",onLaneWheel,{passive:false});
     }
     prefs.addObserver("zen.oneplane.hover-mode",hoverModePreferenceObserver);
@@ -215,6 +215,8 @@
     }
     toolbarObserver.observe(target, { childList: true });
     geometryObserver = new ResizeObserver(()=>{
+      checkCenterGeometry("resize-observer");
+      if(dead)return;
       // ResizeObserver delivery occurs before paint. Compensate edge
       // width changes now rather than a frame later.
       centerToolbar();
@@ -260,6 +262,7 @@
   }
   destroy.prepareWorkspaceGeometry=prepareWorkspaceGeometry;
   destroy.captureCenterTopology=captureCenterTopology;
+  destroy.captureCenterGeometry=captureCenterGeometry;
   return destroy;
 }
 

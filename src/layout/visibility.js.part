@@ -123,6 +123,8 @@
   // and stale visual state, never synthesize a window move.
   function onWindowGeometryChanged(){
     if(dead)return;
+    checkCenterGeometry("window");
+    if(dead)return;
     if(!row.hasAttribute("data-op-dragging")&&hoverTab)clearTabHover();
     if(addressTransition){
       const phase=addressTransition,closing=phase.name==="closing-wave";

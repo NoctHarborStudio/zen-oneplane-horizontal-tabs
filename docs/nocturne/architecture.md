@@ -239,3 +239,8 @@ The one Assembly outcome ledger now freezes live candidate membership before Boo
 ### A3.6a — topology contract (preview.97)
 
 Native Zen tab order/membership remains authoritative. Strip sync publishes the last completed projection signature and exposes an exact read-only validator for the row and mirrored nodes/parents. Center Motion verifies the contract at acquisition and resume; scheduled sync invalidates stale Startup/Workspace visuals and reconciles changed topology at release. Workspace native commands remain single-owned. Explicit close keeps its native lifecycle. Geometry, lane scroll and terminal visual parity are separate next gates; Bloom disabled.
+
+
+### A3.6b1 — resting geometry lease (preview.98)
+
+Layout owns the read-only resting slot metrics and Center Motion holds the lease alongside native topology. Existing resize/scroll callbacks and transaction boundaries validate it; changed geometry releases existing visuals and reconciles through the current handoff. No separate observer, scheduler or owner. Real painted proxy alignment and native evidence remain open.

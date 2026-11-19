@@ -539,3 +539,67 @@ test("projection rejects unsynced native signatures and reconciles changed topol
  const g=topologyFixture();g.end({detail:{owner:"startup",reconcile:true}});assert.deepEqual(g.counts(),[0,1]);
  g.end({detail:{owner:"close",reconcile:true}});assert.deepEqual(g.counts(),[1,1]);
 });
+
+function geometryFixture(mode="fold"){
+ const code=read("src/layout/geometry.js.part").split("  function captureCenterGeometry")[1].split("  function checkCenterGeometry")[0];
+ const run=new Function(`
+ const window={innerWidth:1200,innerHeight:800,devicePixelRatio:1};
+ let dead=false;
+ const node=(x=0,w=100)=>({isConnected:true,parentElement:null,offsetParent:null,offsetLeft:x,offsetTop:0,
+   offsetWidth:w,offsetHeight:30,clientWidth:w,clientHeight:30,scrollLeft:0,scrollTop:0,scrollWidth:w,scrollHeight:30,
+   dx:0,scale:1,getBoundingClientRect(){return {left:this.offsetLeft+this.dx,top:this.offsetTop,width:this.offsetWidth*this.scale,height:30};}});
+ const row=node(0,500),list=node(),leftLane=node(),rightLane=node(),bottomLane=node(),island=node(),plus=node(),a=node(10,30),b=node(50,30);
+ for(const n of [list,leftLane,rightLane,bottomLane,island,plus,a,b]){n.parentElement=row;n.offsetParent=row;}
+ bottomLane.isConnected=false;list.querySelectorAll=()=>[a,b];
+ function captureCenterGeometry${code}
+ return {row,list,leftLane,rightLane,bottomLane,island,plus,a,b,window,capture:mode=>captureCenterGeometry(row,mode)};
+ `);
+ const f=run();return {...f,valid:f.capture(mode)};
+}
+test("resting geometry detects viewport, DPI, lane scroll, slot sizes, fractional positions and reparenting",()=>{
+ for(const fault of ["viewport","dpi","scroll","overflow","slot","fraction","parent","row"]){
+  const f=geometryFixture();assert.ok(f.valid);assert.ok(f.valid());
+  if(fault==="viewport")f.window.innerWidth--;
+  if(fault==="dpi")f.window.devicePixelRatio=1.25;
+  if(fault==="scroll")f.leftLane.scrollLeft=2;
+  if(fault==="overflow")f.bottomLane.isConnected=true;
+  if(fault==="slot")f.a.offsetWidth++;
+  if(fault==="fraction")f.b.dx=.75;
+  if(fault==="parent")f.b.offsetParent=f.list;
+  if(fault==="row")f.row.offsetWidth--;
+  assert.equal(f.valid(),false,fault);
+ }
+});
+test("geometry lease excludes intentional Bloom scale and Fold plus translate, but not changed slots",()=>{
+ const b=geometryFixture("bloom");b.a.scale=.72;b.island.scale=.45;
+ assert.ok(b.valid());b.a.offsetLeft++;assert.equal(b.valid(),false);
+ const f=geometryFixture();f.plus.dx=-26;assert.ok(f.valid());
+ f.a.dx=.2;assert.ok(f.valid());f.a.dx=1;assert.equal(f.valid(),false);
+});
+test("geometry invalidation retires Startup and Workspace once and leaves explicit close native",()=>{
+ for(const owner of ["startup","workspace","close"]){
+  const f=proxyFixture();let valid=true,invalidations=0,checks=0;
+  f.window.__oneplaneLayoutController={captureCenterTopology:()=>()=>true,captureCenterGeometry:()=>()=>{checks++;return valid;}};
+  const engine=f.mount(),h=engine.start(f.row,{owner,onTopologyInvalidated:()=>{invalidations++;h.release();}});
+  assert.ok(h);const before=checks;assert.equal(engine.invalidateTopology(f.row),false);assert.equal(checks,before);
+  valid=false;assert.equal(engine.invalidateGeometry(f.row,"scroll"),owner!=="close");
+  assert.equal(invalidations,owner==="close"?0:1);assert.equal(engine.invalidateGeometry(f.row,"window"),false);
+  h.release();assertProxyClean(f);
+ }
+});
+test("geometry rejection at capture, during setup and before paused epoch fails open",()=>{
+ const f=proxyFixture();f.window.__oneplaneLayoutController={captureCenterGeometry:()=>null};
+ assert.equal(f.mount().start(f.row,{owner:"startup"}),null);assert.equal(f.effects.length,0);assertProxyClean(f);
+ const g=proxyFixture();let valid=true;g.window.__oneplaneLayoutController={captureCenterGeometry:()=>()=>valid};
+ g.fault.onAnimate=()=>{valid=false;};assert.equal(g.mount().start(g.row,{owner:"startup"}),null);assertProxyClean(g);
+ const k=proxyFixture();valid=true;k.window.__oneplaneLayoutController={captureCenterGeometry:()=>()=>valid};
+ const h=k.mount().start(k.row,{owner:"startup",paused:true});assert.ok(h);valid=false;
+ assert.throws(()=>h.resumeAt(()=>{}),/center-epoch-stale/);h.release();assertProxyClean(k);
+});
+test("existing Layout geometry events use the exact lease and remove the same listener",()=>{
+ const g=read("src/layout/geometry.js.part"),l=read("src/core/window-lifecycle.js.part");
+ assert.ok(g.includes('invalidateGeometry?.(row,stage)'));assert.ok(g.includes('checkCenterGeometry("scroll")'));
+ assert.ok(l.includes('checkCenterGeometry("resize-observer")'));
+ assert.ok(l.includes('lane.addEventListener("scroll",onLaneScroll'));assert.ok(l.includes('lane.removeEventListener("scroll",onLaneScroll'));
+ assert.ok(read("src/layout/visibility.js.part").includes('checkCenterGeometry("window")'));
+});

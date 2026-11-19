@@ -252,3 +252,8 @@ Existing assembly launch/resume error and cleanup events cover cohort validation
 ### Preview.97 — topology invalidation
 
 `center.topology.reject` records owner and capture stage; `center.topology.invalidate` records transaction ID, owner, visual mode and count; `center.topology.error` records owner and error class. No tab identities, URLs, labels, persistent sampling, new observer or timer. Native evidence remains pending.
+
+
+### Preview.98 — resting geometry lease
+
+`center.geometry.reject` reports owner and capture stage; `center.geometry.invalidate` reports transaction ID, owner, mode, stage and count once per lease. Existing motion release and Assembly/Workspace cleanup report interruption. No identities, URLs, labels, new recorder or periodic sampling.

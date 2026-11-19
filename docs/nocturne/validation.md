@@ -377,3 +377,8 @@ Five new cases; 26/26 Bloom and 50/50 Startup Transparency isolated source-backe
 ### Preview.97 — native strip topology
 
 Six new permanent regressions. 52/52 Center Motion, 29/29 Workspace and 50/50 Startup Transparency isolated source-backed fixtures PASS. Bloom fixture bodies 25/26; the remaining generated Lab assertion was blocked by the temporary harness, not a demonstrated product failure. Verify canonical CI separately. Test equal-count replacements, order, group identity, selection, pin state, mirror parent changes, stale acquisition/resume, exact release and native Workspace command once in both phases. Native geometry/scroll/overflow and final pose remain open; no native acceptance.
+
+
+### Preview.98 — resting geometry lease
+
+Five new regression cases; 57/57 Center Motion fixture bodies PASS in isolated V8. Test viewport/DPI, lane scroll and overflow, slot/parent/subpixel changes, deliberate Bloom scale/plus translate, capture/setup/resume rejection, once-only invalidation and explicit-close exemption. Canonical CI and native geometry/compositor evidence separate; A3.6b2 and independent review remain open.

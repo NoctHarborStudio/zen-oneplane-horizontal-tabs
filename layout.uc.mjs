@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.97",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.98",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -799,8 +799,13 @@ function startupBloomAssemblyPlan(start,scale){
   }
   function invalidateTopology(row){
     const handle=active;
-    if(!handle||handle.row!==row||handle.owner==="close"||handle.validateTopology())return false;
+    if(!handle||handle.row!==row||handle.owner==="close"||handle.validateNativeTopology())return false;
     handle.invalidateTopology();return true;
+  }
+  function invalidateGeometry(row,stage){
+    const handle=active;
+    if(!handle||handle.row!==row||handle.owner==="close"||handle.validateGeometry(stage))return false;
+    handle.invalidateTopology("geometry");return true;
   }
   function acquireTabs(row,{owner,direction="in",duration=520,delay=0,paused=false,retainOnDispose=null,observeEffect=null,bloomTimeline=null,onTopologyInvalidated=null}={},bloomStage=null,attempt=null){
     const explicitOptions={owner,direction,paused,observeEffect,bloomTimeline};
@@ -816,44 +821,58 @@ function startupBloomAssemblyPlan(start,scale){
     let host=null,cards=[],rr,hub,measuring=false,measuringMark=null,ownerMark=null,ownerWritten=false,modeMark=null,modeWritten=false,committed=false,released=false,epochStarted=false;
     const exact=()=>!released&&!dead&&current()&&active===handle&&
       (!bloomTimeline||win.__nocturneStartupTimeline===bloomTimeline);
-    let topologyInvalid=false;
+    let topologyInvalid=false,geometryInvalid=false,geometry;
+    const geometryCurrent=(stage="checkpoint")=>{
+      if(geometryInvalid)return false;
+      if(geometry===undefined)return true; // older Layout owner / not yet captured
+      let valid=false;
+      try{valid=win.__oneplaneLayoutController===layout&&geometry()===true;}catch{}
+      if(!valid){geometryInvalid=true;trace("center.geometry.invalidate",{id,owner,mode:handle.mode,stage,count:cards.length},{flush:true});}
+      return valid;
+    };
     const topologyCurrent=()=>{
       if(topologyInvalid)return false;
       if(topology===undefined)return true; // older Layout owner
       try{return win.__oneplaneLayoutController===layout&&topology()===true;}catch{return false;}
     };
-    const preparing=()=>exact()&&eligible()&&!topologyInvalid;
+    const projectionCurrent=()=>topologyCurrent()&&geometryCurrent();
+    const preparing=()=>exact()&&eligible()&&!topologyInvalid&&!geometryInvalid;
     const restoreMark=(node,key,value)=>{if(value===null)node.removeAttribute(key);else node.setAttribute(key,value);};
     const handle={owner,row,retainOnDispose,startupOutcomeVersion:1,mode:bloomStage?"magnetic-bloom":"magnetic-fold",count:0,finished:Promise.resolve(),
-      validateTopology(){return !released&&topologyCurrent();},
-      invalidateTopology(){
+      // Historical boundary API also checks geometry. Icon-only sync
+      // validates native identity without forcing layout reads.
+      validateTopology(){return !released&&projectionCurrent();},
+      validateNativeTopology(){return !released&&topologyCurrent();},
+      validateGeometry(stage){return !released&&geometryCurrent(stage);},
+      invalidateTopology(reason="topology"){
         if(released)return;
         if(!topologyInvalid){
           topologyInvalid=true;
-          trace("center.topology.invalidate",{id,owner,mode:handle.mode,count:cards.length},{flush:true});
+          if(reason==="topology")trace("center.topology.invalidate",{id,owner,mode:handle.mode,count:cards.length},{flush:true});
         }
         // During acquisition the caller has not yet received this handle.
         // Let the existing setup rollback retire it, without reentering
         // an Assembly or Workspace that has not published ownership.
         if(!committed||motionBusy)return;
         try{onTopologyInvalidated?.();}catch(error){trace("center.topology.error",{owner,name:error?.name},{flush:true});}
-        finally{if(!released)handle.release("topology-changed");}
+        finally{if(!released)handle.release(reason==="geometry"?"geometry-changed":"topology-changed");}
       },
       resume(){if(bloomTimeline)throw Error("center-bloom-requires-epoch");if(!released)for(const a of running)try{a.play();}catch{}},
       resumeAt(start){
         const ready=()=>exact()&&(!bloomTimeline||!bloomTimeline.closed&&bloomTimeline.paused===false);
-        if(!ready()||!topologyCurrent()||bloomTimeline&&epochStarted)throw Error("center-epoch-stale");
+        if(!ready()||!projectionCurrent()||bloomTimeline&&epochStarted)throw Error("center-epoch-stale");
         if(bloomTimeline)epochStarted=true;
         for(const a of running){
           if(!ready())throw Error("center-epoch-stale");
           start(a);
           if(!ready())throw Error("center-epoch-stale");
         }
+        if(!projectionCurrent())throw Error("center-epoch-stale");
       },
       seal(){if(!released)for(const a of running)try{a.finish();}catch{}},
       release(reason="release"){
         if(released)return;
-        const reconcile=committed&&owner!=="close"&&!topologyCurrent();
+        const reconcile=committed&&owner!=="close"&&!projectionCurrent();
         released=true;
         const wasBusy=motionBusy;motionBusy=true;
         let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
@@ -890,6 +909,10 @@ function startupBloomAssemblyPlan(start,scale){
       if(!topologyCurrent())throw Error("center-topology-stale");
       cards=collect(row);handle.count=cards.length;
       if(!cards.length){handle.release("no-visible-cards");trace("center.motion.skip",{owner,reason:"no-visible-cards"});return null;}
+      if(typeof layout?.captureCenterGeometry==="function"){
+        geometry=layout.captureCenterGeometry(row,bloomStage?"bloom":"fold");
+        if(typeof geometry!=="function"){geometryInvalid=true;trace("center.geometry.reject",{owner,stage:"capture"},{flush:true});throw Error("center-geometry-capture");}
+      }
       if(bloomStage){
         const check=()=>{if(!preparing())throw Error("bloom-stale");};
         check();
@@ -944,11 +967,11 @@ function startupBloomAssemblyPlan(start,scale){
           if(running.some((a,i)=>a.playState!=="paused"||a.pending||a.finished!==promises[i]))
             throw Error("bloom-effect-seek-state");
         }
-        check();if(!topologyCurrent())throw Error("center-topology-stale");
+        check();if(!projectionCurrent())throw Error("center-projection-stale");
         handle.finished=Promise.all(promises.map(p=>p.catch(()=>{})));
         committed=true;
         trace("center.bloom.acquire",()=>({id,owner,count:cards.length,effects:running.length,proxies:0,checks:4,stageEnd:bloomStage.end}),{sample:Math.ceil(bloomStage.end)+250});
-        check();if(!topologyCurrent())throw Error("center-topology-stale");return handle;
+        check();if(!projectionCurrent())throw Error("center-projection-stale");return handle;
       }
       rr=row.getBoundingClientRect();host=document.createElementNS("http://www.w3.org/1999/xhtml","div");
       host.setAttribute("data-zr-magnetic-layer","true");host.setAttribute("aria-hidden","true");host.inert=true;
@@ -960,7 +983,7 @@ function startupBloomAssemblyPlan(start,scale){
       // detached proxies have been prepared.
       for(const c of cards){const n=proxy(c,layer,rr,cleanups,stats),frames=keyframes(c,direction==="out");effects.push({n,frames,c});}
       if(measuring){restoreMark(root,"data-zr-fold-measuring",measuringMark);measuring=false;}
-      if(!preparing()||!topologyCurrent()){handle.release("disposed");return null;}
+      if(!preparing()||!projectionCurrent()){handle.release("disposed");return null;}
       ownerMark=root.getAttribute(OWNER);ownerWritten=true;root.setAttribute(OWNER,owner);
       row.append(host);
       for(const c of cards){saved.push({n:c.n,mark:c.n.getAttribute(MARK)});c.n.setAttribute(MARK,"true");}
@@ -1003,10 +1026,10 @@ function startupBloomAssemblyPlan(start,scale){
         if(paused){a.pause();a.currentTime=0;}
       }
       handle.finished=Promise.all(running.map(a=>a.finished.catch(()=>{})));
-      if(!preparing()||!topologyCurrent()){handle.release("disposed");return null;}
+      if(!preparing()||!projectionCurrent()){handle.release("disposed");return null;}
       committed=true;
       trace("center.motion",()=>({id,owner,direction,count:cards.length,duration,mode:"magnetic-fold",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length,groups:stats.groups,handles:stats.handles,handleOffset:stats.handleOffset,icons:iconStats(row),bitmapIcons:stats.bitmapIcons,bitmapFailures:stats.bitmapFailures,animated:running.length}),{sample:duration+250});
-      if(!preparing()||!topologyCurrent()){handle.release("disposed");return null;}
+      if(!preparing()||!projectionCurrent()){handle.release("disposed");return null;}
       return handle;
     }catch(error){
       handle.release("setup-failed");
@@ -1119,7 +1142,7 @@ function startupBloomAssemblyPlan(start,scale){
     selectionContainer?.removeEventListener("TabSelect",onSelect);
     selectionContainer=tc;lastTab=win.gBrowser.selectedTab;tc.addEventListener("TabSelect",onSelect);
   }
-  const api={startupBloomVersion:1,start,bookmarks,iconStats,warmIcons,releasePending,invalidateTopology,dispose};win[KEY]=api;
+  const api={startupBloomVersion:1,start,bookmarks,iconStats,warmIcons,releasePending,invalidateTopology,invalidateGeometry,dispose};win[KEY]=api;
   const earlyBoot=win.__nocturneEarlyBoot,diagnostics=win.__nocturneDiagnostics;
   // This is the last Sine slot if subsequent Layout fragments fail.
   win.addUnloadListener(()=>{
@@ -6814,6 +6837,54 @@ function installTabStrip() {
   function rightPlusOffset(widths, expansion=0){
     return 3+widths.reduce((sum,w)=>sum+Math.max(0,w)+3,0)+Math.max(0,expansion);
   }
+  // Center Motion consumes actual resting strip geometry, not a second
+  // layout plan. Offset metrics ignore owned WAAPI scale and translate.
+  function captureCenterGeometry(expectedRow,mode){
+    if(dead||expectedRow!==row||!row.isConnected)return null;
+    const nodes=[row,list,leftLane,rightLane,bottomLane,island,plus,
+      ...list.querySelectorAll(".oneplane-tab,.oneplane-split-group,.oneplane-split-handle")];
+    const viewport=()=>[window.innerWidth,window.innerHeight,window.devicePixelRatio];
+    const measure=()=>{
+      const rr=row.getBoundingClientRect();
+      const slots=nodes.map(n=>{
+        const connected=n.isConnected;
+        if(!connected)return {connected,parent:n.parentElement}; // unused lanes
+        const metrics=[n.offsetLeft,n.offsetTop,n.offsetWidth,n.offsetHeight,n.clientWidth,n.clientHeight];
+        const scroll=n===list||n===leftLane||n===rightLane||n===bottomLane?
+          [n.scrollLeft,n.scrollTop,n.scrollWidth,n.scrollHeight]:[];
+        // Fold needs fractional row-local rectangles too. Assembly moves
+        // the plus independently; Bloom intentionally scales real cards.
+        const r=mode==="fold"&&n!==plus&&n!==row?n.getBoundingClientRect():null;
+        const local=r?[r.left-rr.left,r.top-rr.top,r.width,r.height]:[];
+        return {connected,parent:n.parentElement,offsetParent:n.offsetParent,metrics,scroll,local};
+      });
+      return {view:viewport(),outer:[rr.width,rr.height],slots};
+    };
+    const finite=a=>a.every(Number.isFinite);
+    const sane=s=>finite(s.view)&&s.view.every(v=>v>0)&&finite(s.outer)&&s.outer.every(v=>v>0)&&
+      s.slots.every(x=>!x.connected||finite(x.metrics)&&finite(x.scroll)&&finite(x.local));
+    const same=(a,b,epsilon=0)=>a.length===b.length&&a.every((v,i)=>Math.abs(v-b[i])<=epsilon);
+    const before=measure();
+    if(!sane(before))return null;
+    return ()=>{
+      if(dead||!row.isConnected)return false;
+      const after=measure();
+      return sane(after)&&same(before.view,after.view)&&same(before.outer,after.outer,.5)&&
+        before.slots.every((a,i)=>{
+          const b=after.slots[i];
+          return a.connected===b.connected&&a.parent===b.parent&&(!a.connected||
+            a.offsetParent===b.offsetParent&&same(a.metrics,b.metrics)&&same(a.scroll,b.scroll,.25)&&same(a.local,b.local,.5));
+        });
+    };
+  }
+  function checkCenterGeometry(stage){
+    if(!dead&&root.hasAttribute("data-zr-center-motion"))
+      window.__nocturneCenterMotion?.invalidateGeometry?.(row,stage);
+  }
+  function onLaneScroll(){
+    checkCenterGeometry("scroll");
+    refreshIndicator();
+  }
   function centerToolbar(){
     if(centering||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-center-motion")||row.hasAttribute("data-op-magnetic-pull"))return;
     centering=true;
@@ -7104,6 +7175,8 @@ function installTabStrip() {
   // toolbar without a new pointer movement. Reconcile the current layout
   // and stale visual state, never synthesize a window move.
   function onWindowGeometryChanged(){
+    if(dead)return;
+    checkCenterGeometry("window");
     if(dead)return;
     if(!row.hasAttribute("data-op-dragging")&&hoverTab)clearTabHover();
     if(addressTransition){
@@ -9390,7 +9463,7 @@ function installTabStrip() {
     cleanupStep("splitZone.removeEventListener(\"drop\", onSplitDrop)",()=>{splitZone.removeEventListener("drop", onSplitDrop);});
     cleanupStep("splitZone.remove()",()=>{splitZone.remove();});
     for(const lane of [list,leftLane,rightLane,bottomLane]){
-      cleanupStep("lane.removeEventListener(\"scroll\",refreshIndicator)",()=>{lane.removeEventListener("scroll",refreshIndicator);});
+      cleanupStep("lane.removeEventListener(\"scroll\",onLaneScroll)",()=>{lane.removeEventListener("scroll",onLaneScroll);});
       cleanupStep("lane.removeEventListener(\"wheel\",onLaneWheel)",()=>{lane.removeEventListener("wheel",onLaneWheel);});
     }
     cleanupStep("islandTextAnimation?.cancel()",()=>{islandTextAnimation?.cancel();});
@@ -9512,7 +9585,7 @@ function installTabStrip() {
     sync();checkMount();
     try { browser.addProgressListener(progressListener); } catch {}
     for(const lane of [list,leftLane,rightLane,bottomLane]){
-      lane.addEventListener("scroll",refreshIndicator,{passive:true});
+      lane.addEventListener("scroll",onLaneScroll,{passive:true});
       lane.addEventListener("wheel",onLaneWheel,{passive:false});
     }
     prefs.addObserver("zen.oneplane.hover-mode",hoverModePreferenceObserver);
@@ -9549,6 +9622,8 @@ function installTabStrip() {
     }
     toolbarObserver.observe(target, { childList: true });
     geometryObserver = new ResizeObserver(()=>{
+      checkCenterGeometry("resize-observer");
+      if(dead)return;
       // ResizeObserver delivery occurs before paint. Compensate edge
       // width changes now rather than a frame later.
       centerToolbar();
@@ -9594,6 +9669,7 @@ function installTabStrip() {
   }
   destroy.prepareWorkspaceGeometry=prepareWorkspaceGeometry;
   destroy.captureCenterTopology=captureCenterTopology;
+  destroy.captureCenterGeometry=captureCenterGeometry;
   return destroy;
 }
 
@@ -9659,7 +9735,8 @@ function finishCleanup(){
 const controller = { get active() { return applied && !disposed; },
   get ownsPreferences(){return ownsPreferences;}, cleanup,
   prepareWorkspaceGeometry(){return removeTabStrip?.prepareWorkspaceGeometry?.();},
-  captureCenterTopology(row){return removeTabStrip?.captureCenterTopology?.(row)??null;} };
+  captureCenterTopology(row){return removeTabStrip?.captureCenterTopology?.(row)??null;},
+  captureCenterGeometry(row,mode){return removeTabStrip?.captureCenterGeometry?.(row,mode)??null;} };
 
 // One startup selection per browser process. Never redirect a projected
 // child, a private/unsynced window or a live reload of this mod.
