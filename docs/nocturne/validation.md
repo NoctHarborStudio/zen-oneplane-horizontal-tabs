@@ -331,3 +331,7 @@ Candidate checks: 33/33 Startup Transparency fixture bodies PASS in isolated V8 
 ### Preview.87 document epoch
 
 Seven new regressions; 38/38 Startup Transparency and 34/34 Center Motion actual fixture bodies PASS in isolated V8. Verify equal initial startTime across direct/Tab/Bookmark/Home, distinct clock domains for late admission, inactive/foreign/idle/stale rejection, legacy path fencing and exact handles. Full Node CI, actual Gecko timeline/paint and mixed legacy order remain separate pending gates.
+
+### Preview.88 address motion completion
+
+8/8 new source-backed address phase/cascade runtime fixture bodies PASS in isolated V8. Full Node CI and native Gecko rapid reversal, theme fallback, replacement and disable acceptance pending. Syntax and changed generated output identities checked; no native PASS claim.

@@ -1,3 +1,9 @@
+## 0.3.0-preview.88 — Address phase and cascade completion
+
+- Bind the address wave to its exact phase and finite document timeline epoch; same-direction replacement retimes the cascade from current visuals.
+- Observe WAAPI cancellation immediately; use bounded phase, wave and handoff recovery, fence stale callbacks and clean replaced URLbar markers without dismissing the replacement.
+- Roll back partial wave acquisition and isolate cancellation failures. Existing native address commands, visual curves and preference IDs remain unchanged.
+
 ## 0.3.0-preview.87 — Startup document timeline epoch
 
 - Prepare initial Assembly, tab proxy, bookmark and Home effects paused, including boot-disabled startup; start exact acquired effects on one document timeline epoch.

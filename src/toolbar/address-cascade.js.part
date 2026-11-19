@@ -2,7 +2,7 @@
   // small set of keyframes; all measurement is batched before writes.
   const TAB_WAVE_SELECTOR=".oneplane-tab,.oneplane-split-handle,.oneplane-title-island,.oneplane-new-tab";
   const BOOKMARK_WAVE_SELECTOR="#PlacesToolbarItems > :is(toolbarbutton,toolbaritem,toolbarseparator),#PlacesChevron,#OtherBookmarks";
-  let cascadeState="idle",cascadeGeneration=0,cascadeHandoffFrame=0;
+  let cascadeState="idle",cascadeGeneration=0,cascadeHandoffFrame=0,cascadeTimer=0,cascadePhase=null;
   const cascadeAnimations=new Map(),cascadeDecorations=new Set();
   let cascadePointer=null,bookmarkInertHome=null;
   function setBookmarkWave(state){
@@ -21,30 +21,35 @@
       }
       bookmarkInertHome=null;
     }
-    window.__zenMagneticBookmarksShared?.syncAddressState?.();
+    try{window.__zenMagneticBookmarksShared?.syncAddressState?.();}catch(error){
+      try{window.__nocturneTrace?.("address.cascade.bookmarks.error",{name:error?.name},{flush:true});}catch{}
+    }
   }
   function cancelCascadeAnimations(){
-    for(const [node,anim] of cascadeAnimations){
-      anim.cancel();
-      node.removeAttribute("data-op-cascade-member");
-      node.removeAttribute("data-op-cascade-frame");
-      node.removeAttribute("data-op-bookmark-wave-member");
+    const animations=[...cascadeAnimations],decorations=[...cascadeDecorations];
+    cascadeAnimations.clear();cascadeDecorations.clear();
+    let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
+    for(const [node,anim] of animations){
+      step(()=>anim.cancel());
+      for(const key of ["data-op-cascade-member","data-op-cascade-frame","data-op-bookmark-wave-member"])
+        step(()=>node.removeAttribute(key));
     }
-    cascadeAnimations.clear();
-    for(const {node,anim} of cascadeDecorations){
-      anim.cancel();node.removeAttribute("data-op-bookmark-wave-card");
+    for(const {node,anim} of decorations){
+      step(()=>anim.cancel());step(()=>node.removeAttribute("data-op-bookmark-wave-card"));
     }
-    cascadeDecorations.clear();
+    if(failed)try{window.__nocturneTrace?.("address.cascade.cleanup",{failed},{flush:true});}catch{}
   }
   function cancelCascadeHandoff(){
-    if(cascadeHandoffFrame)window.cancelAnimationFrame(cascadeHandoffFrame);
-    cascadeHandoffFrame=0;
+    const frame=cascadeHandoffFrame,timer=cascadeTimer;
+    cascadeHandoffFrame=cascadeTimer=0;
+    if(frame)try{window.cancelAnimationFrame(frame);}catch{}
+    if(timer)try{window.clearTimeout(timer);}catch{}
   }
   function resetTabCascade(){
     cascadeGeneration++;
     cancelCascadeHandoff();
     row.removeAttribute("data-op-cascade");
-    cascadeState="idle";
+    cascadeState="idle";cascadePhase=null;
     row.inert=false;
     cancelCascadeAnimations();
     setBookmarkWave(null);
@@ -52,20 +57,32 @@
   }
   function settleHidden(generation){
     if(dead||generation!==cascadeGeneration)return;
+    cancelCascadeHandoff();cascadePhase=null;
     cascadeState="hidden";
     row.setAttribute("data-op-cascade","hidden");
-    setBookmarkWave("hidden");
     cancelCascadeAnimations();
+    setBookmarkWave("hidden");
     clearTabHover();hideIndicator();islandTextAnimation?.cancel();
   }
   function finishCascadeHandoff(generation){
     if(dead||generation!==cascadeGeneration)return;
-    cascadeHandoffFrame=window.requestAnimationFrame(()=>{
-      cascadeHandoffFrame=0;
+    cancelCascadeHandoff();
+    const done=()=>{
       if(dead||generation!==cascadeGeneration)return;
-      resetTabCascade();
-      clearTabHover();
-    });
+      resetTabCascade();clearTabHover();
+    };
+    try{
+      const frame=window.requestAnimationFrame(()=>{
+        if(dead||generation!==cascadeGeneration||cascadeHandoffFrame!==frame)return;
+        done();
+      });
+      cascadeHandoffFrame=frame;
+      const timer=window.setTimeout(()=>{
+        if(dead||generation!==cascadeGeneration||cascadeTimer!==timer)return;
+        done();
+      },150);
+      cascadeTimer=timer;
+    }catch{done();}
   }
   function collectCascadeSlots(previous){
     const viewport=row.getBoundingClientRect(),cache=new Map();
@@ -106,19 +123,30 @@
     }
     return result;
   }
+  function completeCascade(generation,opening,reason){
+    if(dead||generation!==cascadeGeneration)return;
+    if(cascadeState!==(opening?"hiding":"showing"))return;
+    // Invalidate every queued completion from this wave before releasing
+    // its effects. A closing handoff gets its own exact generation.
+    const next=++cascadeGeneration;
+    try{window.__nocturneTrace?.("address.cascade.finish",{generation,opening,reason},{sample:1800});}catch{}
+    if(opening)settleHidden(next);else finishCascadeHandoff(next);
+  }
   function animateTabCascade(opening,phase=null){
     if(dead||!hoverSupported()){resetTabCascade();return;}
     const previous=cascadeState;
-    if(opening&&(previous==="hidden"||previous==="hiding")||!opening&&(previous==="idle"||previous==="showing"))return;
+    if(opening&&previous==="hidden"||!opening&&previous==="idle")return;
+    if(previous===(opening?"hiding":"showing")&&(!phase||cascadePhase===phase))return;
     if(row.hasAttribute("data-op-dragging"))return;
     cancelCascadeHandoff();
     if(panelLastPointer)cascadePointer={...panelLastPointer};
     cancelHoverTimer();
-    const generation=++cascadeGeneration;
+    const generation=++cascadeGeneration;cascadePhase=phase;
     if(!addressMotionEnabled()){
       if(opening){row.inert=true;settleHidden(generation);}else resetTabCascade();
       return;
     }
+    try{
     // Suspend Magnetic Hover synchronously, before reading resting slots.
     // Preserve the tab hover geometry until the opening fade is invisible.
     if(bookmarks){
@@ -151,17 +179,28 @@
     if(indicatorFrame)window.cancelAnimationFrame(indicatorFrame);
     indicatorFrame=0;iv=0;last=0;
     islandTextAnimation?.cancel();
-    const start=phase&&addressAnimation?.startTime;
+    const start=phase?.epoch;
     const jobs=[],groupTiming=new Map();
+    let failed=false,end=0;
+    const watch=(anim,timing,required=true)=>{
+      const job=anim.finished.then(()=>true,()=>!required);
+      jobs.push(job);
+      end=Math.max(end,timing.delay+timing.duration);
+      if(required)job.then(ok=>{if(!ok)completeCascade(generation,opening,"cancelled");});
+    };
     const play=(node,frames,timing,attr)=>{
+      let anim=null;
       try{
         node.setAttribute(attr,"true");
-        const anim=node.animate(frames,{...timing,fill:"both",easing:"linear"});
+        anim=node.animate(frames,{...timing,fill:"both",easing:"linear"});
         cascadeAnimations.set(node,anim);
-        if(start!==null&&start!==undefined&&Number.isFinite(start))anim.startTime=start;
-        jobs.push(anim.finished);return true;
+        watch(anim,timing);
+        if(Number.isFinite(start))anim.startTime=start;
+        return true;
       }catch(error){
-        node.removeAttribute(attr);
+        failed=true;
+        if(anim){cascadeAnimations.delete(node);try{anim.cancel();}catch{}}
+        try{node.removeAttribute(attr);}catch{}
         window.console.warn("[OnePlane] Wave animation fallback:",error);
         return false;
       }
@@ -189,6 +228,7 @@
         if(!opening&&bookmark&&v.node.matches("toolbarbutton.bookmark-item")){
           // Native XUL labels/icons only fade. The decorative card alone
           // has a bounded spring; it never alters the native text metrics.
+          let decoration=null;
           try{
             v.node.setAttribute("data-op-bookmark-wave-card","true");
             const effect=new window.KeyframeEffect(v.node,[
@@ -199,10 +239,13 @@
             ],{...timing,fill:"both",easing:"ease-out",pseudoElement:"::before"});
             if(effect.pseudoElement!=="::before")throw Error("pseudo unsupported");
             const anim=new window.Animation(effect,document.timeline);
-            cascadeDecorations.add({node:v.node,anim});anim.play();
-            if(start!==null&&start!==undefined&&Number.isFinite(start))anim.startTime=start;
-            jobs.push(anim.finished);
-          }catch{v.node.removeAttribute("data-op-bookmark-wave-card");}
+            decoration={node:v.node,anim};cascadeDecorations.add(decoration);
+            watch(anim,timing,false);anim.play();
+            if(Number.isFinite(start))anim.startTime=start;
+          }catch{
+            if(decoration){cascadeDecorations.delete(decoration);try{decoration.anim.cancel();}catch{}}
+            v.node.removeAttribute("data-op-bookmark-wave-card");
+          }
         }
         if(v.node===indicatorItem&&(opening?hadIndicator:indicatorShown)){
           indicatorPlayed=play(indicator,cascadeFadeFrames(indicatorOpacity,opening),
@@ -214,7 +257,24 @@
     for(const [group,timing] of groupTiming)
       play(group,cascadeFadeFrames(groupAlpha.get(group)??0,opening),
         {delay:timing.delay,duration:opening?timing.duration:85},"data-op-cascade-frame");
-    Promise.allSettled(jobs).then(()=>opening?settleHidden(generation):finishCascadeHandoff(generation));
+    if(failed){completeCascade(generation,opening,"setup-failed");return;}
+    Promise.all(jobs).then(results=>completeCascade(generation,opening,results.every(Boolean)?"finished":"cancelled"));
+    try{
+      const timer=window.setTimeout(()=>{
+        if(dead||generation!==cascadeGeneration||cascadeTimer!==timer)return;
+        cascadeTimer=0;completeCascade(generation,opening,"watchdog");
+      },end+150);
+      cascadeTimer=timer;
+    }catch{completeCascade(generation,opening,"watchdog-unavailable");}
+    }catch(error){
+      // If even preparation fails, converge to the intended native-facing
+      // state instead of leaving old effects or a stale inert strip.
+      if(dead||generation!==cascadeGeneration)return;
+      cascadeState=opening?"hiding":"showing";
+      if(opening){row.inert=true;settleHidden(generation);}
+      else resetTabCascade();
+      try{window.__nocturneTrace?.("address.cascade.error",{name:error?.name},{flush:true});}catch{}
+    }
   }
   function reconcileTabCascade(){
     if(dead||!hoverSupported()){if(cascadeState!=="idle")resetTabCascade();return;}

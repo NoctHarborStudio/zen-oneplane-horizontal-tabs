@@ -198,3 +198,7 @@ The generated Startup Animation entrypoint consumes the pure startup timing plan
 ### A3.4b — document epoch
 
 Assembly owns one finite document timeline epoch and supplies an exact startEffect callback to prepared direct, tab, bookmark and Home effects. Legacy handles without resumeAt retain their previous resume behavior; all native data owners and Fold geometry remain unchanged. Performance time bounds the watchdog; document time selects effect stage. The terminal outcome and Address Cascade remain A3.4c.
+
+### A3.4c1 — Address completion ownership
+
+Address phase captures the native bar and document epoch; cascade belongs to the phase generation, not direction alone. Exact phase and cascade watchdogs bound pending WAAPI and handoff, cancellation clears references before releasing resources, and replaced bars cannot be dismissed by stale callbacks. Startup terminal outcome is a separate pending checkpoint.

@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.87",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.88",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -3033,20 +3033,34 @@ function installTabStrip() {
   const ADDRESS_WAVE_SPREAD = .24;
   let addressSettling = false;
   let addressSettleTimer = 0;
-  let addressFallbackFrame=0, addressClipHome=null;
+  let addressFallbackFrame=0, addressClipHome=null,addressPhaseTimer=0,addressSettleOwner=null;
   function stopAddressAnimations(){
-    if(addressDiagnosticsFrame)window.cancelAnimationFrame(addressDiagnosticsFrame);
-    if(addressFallbackFrame)window.cancelAnimationFrame(addressFallbackFrame);
-    addressDiagnosticsFrame=addressFallbackFrame=0;
+    const diagnostic=addressDiagnosticsFrame,fallback=addressFallbackFrame,timer=addressPhaseTimer;
+    addressDiagnosticsFrame=addressFallbackFrame=addressPhaseTimer=0;
     const animations=[addressAnimation,addressIdentityAnimation,addressSelectionAnimation];
     addressAnimation=addressIdentityAnimation=addressSelectionAnimation=null;
-    for(const animation of animations)animation?.cancel();
-    if(addressClipHome){
-      const {bar,value,priority}=addressClipHome;
-      if(value)bar.style.setProperty("clip-path",value,priority);
-      else bar.style.removeProperty("clip-path");
-      addressClipHome=null;
+    const clip=addressClipHome;addressClipHome=null;
+    let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
+    if(diagnostic)step(()=>window.cancelAnimationFrame(diagnostic));
+    if(fallback)step(()=>window.cancelAnimationFrame(fallback));
+    if(timer)step(()=>window.clearTimeout(timer));
+    for(const animation of animations)step(()=>animation?.cancel());
+    if(clip){
+      const {bar,value,priority}=clip;
+      step(()=>{if(value)bar.style.setProperty("clip-path",value,priority);else bar.style.removeProperty("clip-path");});
     }
+    if(failed)try{window.__nocturneTrace?.("address.cleanup.error",{failed},{flush:true});}catch{}
+  }
+  function cancelAddressSettle(){
+    const timer=addressSettleTimer;addressSettleTimer=0;addressSettleOwner=null;addressSettling=false;
+    if(timer)try{window.clearTimeout(timer);}catch{}
+  }
+  function clearAddressBarMarks(bar){
+    if(!bar)return;
+    for(const key of ["data-op-url-animating","data-op-url-selection-fade","data-op-url-fluid"])
+      try{bar.removeAttribute(key);}catch{}
+    for(const key of ["--op-url-live-width","--op-url-live-clip","--op-url-selection-alpha"])
+      try{bar.style.removeProperty(key);}catch{}
   }
 
   function addressBar() { return document.getElementById("urlbar"); }
@@ -3109,21 +3123,16 @@ function installTabStrip() {
     }
   }
   function clearAddressAnimation() {
+    const previous=addressTransition?.bar||addressSettleOwner?.bar;
     addressTransition = null;
     stopAddressAnimations();
-    addressSettling = false;
-    if (addressSettleTimer) window.clearTimeout(addressSettleTimer);
-    addressSettleTimer = 0;
+    cancelAddressSettle();
     url.removeAttribute("data-op-url-phase");
     url.toggleAttribute("data-op-url-ready", nativeInlineOpen(addressBar()));
     root.removeAttribute("oneplane-address-unblur");
     const bar = addressBar();
-    bar?.removeAttribute("data-op-url-animating");
-    bar?.removeAttribute("data-op-url-selection-fade");
-    bar?.style.removeProperty("--op-url-live-width");
-    bar?.style.removeProperty("--op-url-live-clip");
-    bar?.style.removeProperty("--op-url-selection-alpha");
-    bar?.removeAttribute("data-op-url-fluid");
+    clearAddressBarMarks(previous);
+    if(bar!==previous)clearAddressBarMarks(bar);
     reconcileTabCascade();
   }
   function addressWaveDepth(progress,x){
@@ -3283,7 +3292,7 @@ function installTabStrip() {
   // small set of keyframes; all measurement is batched before writes.
   const TAB_WAVE_SELECTOR=".oneplane-tab,.oneplane-split-handle,.oneplane-title-island,.oneplane-new-tab";
   const BOOKMARK_WAVE_SELECTOR="#PlacesToolbarItems > :is(toolbarbutton,toolbaritem,toolbarseparator),#PlacesChevron,#OtherBookmarks";
-  let cascadeState="idle",cascadeGeneration=0,cascadeHandoffFrame=0;
+  let cascadeState="idle",cascadeGeneration=0,cascadeHandoffFrame=0,cascadeTimer=0,cascadePhase=null;
   const cascadeAnimations=new Map(),cascadeDecorations=new Set();
   let cascadePointer=null,bookmarkInertHome=null;
   function setBookmarkWave(state){
@@ -3302,30 +3311,35 @@ function installTabStrip() {
       }
       bookmarkInertHome=null;
     }
-    window.__zenMagneticBookmarksShared?.syncAddressState?.();
+    try{window.__zenMagneticBookmarksShared?.syncAddressState?.();}catch(error){
+      try{window.__nocturneTrace?.("address.cascade.bookmarks.error",{name:error?.name},{flush:true});}catch{}
+    }
   }
   function cancelCascadeAnimations(){
-    for(const [node,anim] of cascadeAnimations){
-      anim.cancel();
-      node.removeAttribute("data-op-cascade-member");
-      node.removeAttribute("data-op-cascade-frame");
-      node.removeAttribute("data-op-bookmark-wave-member");
+    const animations=[...cascadeAnimations],decorations=[...cascadeDecorations];
+    cascadeAnimations.clear();cascadeDecorations.clear();
+    let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
+    for(const [node,anim] of animations){
+      step(()=>anim.cancel());
+      for(const key of ["data-op-cascade-member","data-op-cascade-frame","data-op-bookmark-wave-member"])
+        step(()=>node.removeAttribute(key));
     }
-    cascadeAnimations.clear();
-    for(const {node,anim} of cascadeDecorations){
-      anim.cancel();node.removeAttribute("data-op-bookmark-wave-card");
+    for(const {node,anim} of decorations){
+      step(()=>anim.cancel());step(()=>node.removeAttribute("data-op-bookmark-wave-card"));
     }
-    cascadeDecorations.clear();
+    if(failed)try{window.__nocturneTrace?.("address.cascade.cleanup",{failed},{flush:true});}catch{}
   }
   function cancelCascadeHandoff(){
-    if(cascadeHandoffFrame)window.cancelAnimationFrame(cascadeHandoffFrame);
-    cascadeHandoffFrame=0;
+    const frame=cascadeHandoffFrame,timer=cascadeTimer;
+    cascadeHandoffFrame=cascadeTimer=0;
+    if(frame)try{window.cancelAnimationFrame(frame);}catch{}
+    if(timer)try{window.clearTimeout(timer);}catch{}
   }
   function resetTabCascade(){
     cascadeGeneration++;
     cancelCascadeHandoff();
     row.removeAttribute("data-op-cascade");
-    cascadeState="idle";
+    cascadeState="idle";cascadePhase=null;
     row.inert=false;
     cancelCascadeAnimations();
     setBookmarkWave(null);
@@ -3333,20 +3347,32 @@ function installTabStrip() {
   }
   function settleHidden(generation){
     if(dead||generation!==cascadeGeneration)return;
+    cancelCascadeHandoff();cascadePhase=null;
     cascadeState="hidden";
     row.setAttribute("data-op-cascade","hidden");
-    setBookmarkWave("hidden");
     cancelCascadeAnimations();
+    setBookmarkWave("hidden");
     clearTabHover();hideIndicator();islandTextAnimation?.cancel();
   }
   function finishCascadeHandoff(generation){
     if(dead||generation!==cascadeGeneration)return;
-    cascadeHandoffFrame=window.requestAnimationFrame(()=>{
-      cascadeHandoffFrame=0;
+    cancelCascadeHandoff();
+    const done=()=>{
       if(dead||generation!==cascadeGeneration)return;
-      resetTabCascade();
-      clearTabHover();
-    });
+      resetTabCascade();clearTabHover();
+    };
+    try{
+      const frame=window.requestAnimationFrame(()=>{
+        if(dead||generation!==cascadeGeneration||cascadeHandoffFrame!==frame)return;
+        done();
+      });
+      cascadeHandoffFrame=frame;
+      const timer=window.setTimeout(()=>{
+        if(dead||generation!==cascadeGeneration||cascadeTimer!==timer)return;
+        done();
+      },150);
+      cascadeTimer=timer;
+    }catch{done();}
   }
   function collectCascadeSlots(previous){
     const viewport=row.getBoundingClientRect(),cache=new Map();
@@ -3387,19 +3413,30 @@ function installTabStrip() {
     }
     return result;
   }
+  function completeCascade(generation,opening,reason){
+    if(dead||generation!==cascadeGeneration)return;
+    if(cascadeState!==(opening?"hiding":"showing"))return;
+    // Invalidate every queued completion from this wave before releasing
+    // its effects. A closing handoff gets its own exact generation.
+    const next=++cascadeGeneration;
+    try{window.__nocturneTrace?.("address.cascade.finish",{generation,opening,reason},{sample:1800});}catch{}
+    if(opening)settleHidden(next);else finishCascadeHandoff(next);
+  }
   function animateTabCascade(opening,phase=null){
     if(dead||!hoverSupported()){resetTabCascade();return;}
     const previous=cascadeState;
-    if(opening&&(previous==="hidden"||previous==="hiding")||!opening&&(previous==="idle"||previous==="showing"))return;
+    if(opening&&previous==="hidden"||!opening&&previous==="idle")return;
+    if(previous===(opening?"hiding":"showing")&&(!phase||cascadePhase===phase))return;
     if(row.hasAttribute("data-op-dragging"))return;
     cancelCascadeHandoff();
     if(panelLastPointer)cascadePointer={...panelLastPointer};
     cancelHoverTimer();
-    const generation=++cascadeGeneration;
+    const generation=++cascadeGeneration;cascadePhase=phase;
     if(!addressMotionEnabled()){
       if(opening){row.inert=true;settleHidden(generation);}else resetTabCascade();
       return;
     }
+    try{
     // Suspend Magnetic Hover synchronously, before reading resting slots.
     // Preserve the tab hover geometry until the opening fade is invisible.
     if(bookmarks){
@@ -3432,17 +3469,28 @@ function installTabStrip() {
     if(indicatorFrame)window.cancelAnimationFrame(indicatorFrame);
     indicatorFrame=0;iv=0;last=0;
     islandTextAnimation?.cancel();
-    const start=phase&&addressAnimation?.startTime;
+    const start=phase?.epoch;
     const jobs=[],groupTiming=new Map();
+    let failed=false,end=0;
+    const watch=(anim,timing,required=true)=>{
+      const job=anim.finished.then(()=>true,()=>!required);
+      jobs.push(job);
+      end=Math.max(end,timing.delay+timing.duration);
+      if(required)job.then(ok=>{if(!ok)completeCascade(generation,opening,"cancelled");});
+    };
     const play=(node,frames,timing,attr)=>{
+      let anim=null;
       try{
         node.setAttribute(attr,"true");
-        const anim=node.animate(frames,{...timing,fill:"both",easing:"linear"});
+        anim=node.animate(frames,{...timing,fill:"both",easing:"linear"});
         cascadeAnimations.set(node,anim);
-        if(start!==null&&start!==undefined&&Number.isFinite(start))anim.startTime=start;
-        jobs.push(anim.finished);return true;
+        watch(anim,timing);
+        if(Number.isFinite(start))anim.startTime=start;
+        return true;
       }catch(error){
-        node.removeAttribute(attr);
+        failed=true;
+        if(anim){cascadeAnimations.delete(node);try{anim.cancel();}catch{}}
+        try{node.removeAttribute(attr);}catch{}
         window.console.warn("[OnePlane] Wave animation fallback:",error);
         return false;
       }
@@ -3470,6 +3518,7 @@ function installTabStrip() {
         if(!opening&&bookmark&&v.node.matches("toolbarbutton.bookmark-item")){
           // Native XUL labels/icons only fade. The decorative card alone
           // has a bounded spring; it never alters the native text metrics.
+          let decoration=null;
           try{
             v.node.setAttribute("data-op-bookmark-wave-card","true");
             const effect=new window.KeyframeEffect(v.node,[
@@ -3480,10 +3529,13 @@ function installTabStrip() {
             ],{...timing,fill:"both",easing:"ease-out",pseudoElement:"::before"});
             if(effect.pseudoElement!=="::before")throw Error("pseudo unsupported");
             const anim=new window.Animation(effect,document.timeline);
-            cascadeDecorations.add({node:v.node,anim});anim.play();
-            if(start!==null&&start!==undefined&&Number.isFinite(start))anim.startTime=start;
-            jobs.push(anim.finished);
-          }catch{v.node.removeAttribute("data-op-bookmark-wave-card");}
+            decoration={node:v.node,anim};cascadeDecorations.add(decoration);
+            watch(anim,timing,false);anim.play();
+            if(Number.isFinite(start))anim.startTime=start;
+          }catch{
+            if(decoration){cascadeDecorations.delete(decoration);try{decoration.anim.cancel();}catch{}}
+            v.node.removeAttribute("data-op-bookmark-wave-card");
+          }
         }
         if(v.node===indicatorItem&&(opening?hadIndicator:indicatorShown)){
           indicatorPlayed=play(indicator,cascadeFadeFrames(indicatorOpacity,opening),
@@ -3495,7 +3547,24 @@ function installTabStrip() {
     for(const [group,timing] of groupTiming)
       play(group,cascadeFadeFrames(groupAlpha.get(group)??0,opening),
         {delay:timing.delay,duration:opening?timing.duration:85},"data-op-cascade-frame");
-    Promise.allSettled(jobs).then(()=>opening?settleHidden(generation):finishCascadeHandoff(generation));
+    if(failed){completeCascade(generation,opening,"setup-failed");return;}
+    Promise.all(jobs).then(results=>completeCascade(generation,opening,results.every(Boolean)?"finished":"cancelled"));
+    try{
+      const timer=window.setTimeout(()=>{
+        if(dead||generation!==cascadeGeneration||cascadeTimer!==timer)return;
+        cascadeTimer=0;completeCascade(generation,opening,"watchdog");
+      },end+150);
+      cascadeTimer=timer;
+    }catch{completeCascade(generation,opening,"watchdog-unavailable");}
+    }catch(error){
+      // If even preparation fails, converge to the intended native-facing
+      // state instead of leaving old effects or a stale inert strip.
+      if(dead||generation!==cascadeGeneration)return;
+      cascadeState=opening?"hiding":"showing";
+      if(opening){row.inert=true;settleHidden(generation);}
+      else resetTabCascade();
+      try{window.__nocturneTrace?.("address.cascade.error",{name:error?.name},{flush:true});}catch{}
+    }
   }
   function reconcileTabCascade(){
     if(dead||!hoverSupported()){if(cascadeState!=="idle")resetTabCascade();return;}
@@ -3536,10 +3605,13 @@ function installTabStrip() {
     };
     addressDiagnosticsFrame=window.requestAnimationFrame(sample);
   }
-  function finishAddressPhase(a){
-    typeof window!=="undefined"&&window.__nocturneTrace?.("address.finish",()=>({phase:a.name,engine:a.engine}),{sample:1800});
+  function finishAddressPhase(a,reason="finished"){
     if(dead||addressTransition!==a)return;
-    a.report?.();
+    try{window.__nocturneTrace?.("address.finish",{phase:a.name,engine:a.engine,reason},{sample:1800});}catch{}
+    if(a.bar!==addressBar()){
+      clearAddressAnimation();addressWasOpen=nativeInlineOpen(addressBar());return;
+    }
+    try{a.report?.();}catch{}
     if(a.name!=="closing-wave"){
       clearAddressAnimation();
       return;
@@ -3547,7 +3619,7 @@ function installTabStrip() {
     // Keep the last compact silhouette while native focus and popover
     // dismissal settle. The layout changes once, at the end of motion.
     addressTransition=null;
-    addressSettling=true;
+    addressSettling=true;addressSettleOwner=a;
     url.setAttribute("data-op-url-phase","settling");
     const bar=addressBar();
     stopAddressAnimations();
@@ -3556,32 +3628,56 @@ function installTabStrip() {
       bar.style.setProperty("--op-url-live-clip","inset(0 0 max(0px, calc(100% - var(--op-url-header-height))) 0 round var(--op-url-radius))");
       bar.style.setProperty("--op-url-selection-alpha","0%");
     }
-    finishDismissUrl();
-    if(!addressSettling)return;
-    if(!inlinePopoverPresent(addressBar())){
-      clearAddressAnimation();
-      addressWasOpen=false;
-    }else{
-      addressSettleTimer=window.setTimeout(()=>{
-        if(dead||!addressSettling)return;
+    try{
+      finishDismissUrl();
+      if(!addressSettling||addressSettleOwner!==a)return;
+      if(!inlinePopoverPresent(addressBar())){
         clearAddressAnimation();
-        addressWasOpen=nativeInlineOpen(addressBar());
-      },600);
+        addressWasOpen=false;
+      }else{
+        addressSettleTimer=window.setTimeout(()=>{
+          if(dead||!addressSettling||addressSettleOwner!==a)return;
+          clearAddressAnimation();
+          addressWasOpen=nativeInlineOpen(addressBar());
+        },600);
+      }
+    }catch(error){
+      if(addressSettleOwner!==a)return;
+      clearAddressAnimation();addressWasOpen=nativeInlineOpen(addressBar());
+      try{window.__nocturneTrace?.("address.dismiss.error",{name:error?.name},{flush:true});}catch{}
     }
+  }
+  function watchAddressEffect(a,animation,isCurrent,primary=false){
+    // Attach rejection handling immediately, before pause, seek or startTime.
+    // stopAddressAnimations clears identity before intentional cancellation.
+    animation.finished.then(()=>{
+      if(primary&&!dead&&addressTransition===a&&isCurrent())finishAddressPhase(a);
+    },()=>{
+      if(!dead&&addressTransition===a&&isCurrent())finishAddressPhase(a,"cancelled");
+    });
+  }
+  function armAddressPhase(a){
+    const timer=window.setTimeout(()=>{
+      if(dead||addressTransition!==a||addressPhaseTimer!==timer)return;
+      addressPhaseTimer=0;finishAddressPhase(a,"watchdog");
+    },Math.max(0,a.duration)+150);
+    addressPhaseTimer=timer;
   }
   function beginAddressPhase(name,from,to,duration,layoutWidth=Math.max(from.width,to.width)){
     typeof window!=="undefined"&&window.__nocturneTrace?.("address.begin",()=>({name,fromWidth:from.width,toWidth:to.width,duration,layoutWidth}),{sample:1800});
     // Cancel only after sampling the previous visual position. Keep
     // the native editor, selection, results and popup anchors intact.
-    stopAddressAnimations();
+    const previous=addressTransition?.bar||addressSettleOwner?.bar;
+    stopAddressAnimations();cancelAddressSettle();
     const bar=addressBar();
+    if(previous&&previous!==bar)clearAddressBarMarks(previous);
     if(!bar){clearAddressAnimation();return;}
     const full=Math.max(1,layoutWidth);
     const header=Math.max(1,parseFloat(url.style.getPropertyValue("--op-url-header-height"))||addressAnchor?.height||30);
     const radius=parseFloat(window.getComputedStyle(bar).getPropertyValue("--op-url-radius"))||8;
     const shape=window.CSS?.supports("clip-path",addressFluidClip(Math.max(1,from.width),header,from.reveal,radius,true))??false;
     const frames=addressFluidFrames(name,from,to,full,header,radius,shape);
-    const a={name,from,to,duration,start:window.performance.now(),engine:shape?"waapi-shape":"waapi-polygon"};
+    const a={name,from,to,duration,bar,start:window.performance.now(),engine:shape?"waapi-shape":"waapi-polygon"};
     addressTransition=a;
     url.setAttribute("data-op-url-phase",name);
     root.toggleAttribute("oneplane-address-unblur",name.startsWith("closing"));
@@ -3594,7 +3690,9 @@ function installTabStrip() {
     const timing={duration,easing:"linear",fill:"both"};
     const identity=bar.querySelector("#identity-box");
     try{
-      addressAnimation=bar.animate(frames.map(({offset,clipPath})=>({offset,clipPath})),timing);
+      const primary=bar.animate(frames.map(({offset,clipPath})=>({offset,clipPath})),timing);
+      addressAnimation=primary;
+      watchAddressEffect(a,primary,()=>addressAnimation===primary,true);
       // Verify the cascade, not just support for Element.animate().
       // A user theme can still override clip-path with !important.
       addressAnimation.pause();
@@ -3603,42 +3701,60 @@ function installTabStrip() {
       addressAnimation.currentTime=0;
       const first=window.getComputedStyle(bar).clipPath;
       if(mid===first)throw new Error("Native clip animation overridden");
-      addressAnimation.play();
-      const start=addressAnimation.startTime;
+      const epoch=document.timeline?.currentTime;
+      if(!Number.isFinite(epoch)||primary.timeline!==document.timeline)throw Error("Address timeline unavailable");
+      primary.startTime=epoch;
+      a.epoch=epoch;
+      const start=epoch;
       if(identity){
-        addressIdentityAnimation=identity.animate(frames.map(({offset,translate})=>({offset,translate})),timing);
-        if(start!==null)addressIdentityAnimation.startTime=start;
+        const effect=identity.animate(frames.map(({offset,translate})=>({offset,translate})),timing);
+        addressIdentityAnimation=effect;
+        watchAddressEffect(a,effect,()=>addressIdentityAnimation===effect);
+        effect.startTime=start;
       }
       if(bar.hasAttribute("data-op-url-selection-fade")){
-        addressSelectionAnimation=bar.animate(frames.map(({offset,selection})=>({offset,"--op-url-selection-alpha":selection})),timing);
-        if(start!==null)addressSelectionAnimation.startTime=start;
+        const effect=bar.animate(frames.map(({offset,selection})=>({offset,"--op-url-selection-alpha":selection})),timing);
+        addressSelectionAnimation=effect;
+        watchAddressEffect(a,effect,()=>addressSelectionAnimation===effect);
+        effect.startTime=start;
       }
-      addressAnimation.onfinish=()=>finishAddressPhase(a);
     }catch(error){
       // Compatibility fallback for a conflicting user theme or old Gecko.
       // Normally unused. Preserve a functional native editor.
       stopAddressAnimations();
-      a.engine="fallback";
+      a.engine="fallback";delete a.epoch;
       window.console.warn("[OnePlane] Native address animation unavailable:",error);
       addressClipHome={bar,value:bar.style.getPropertyValue("clip-path"),priority:bar.style.getPropertyPriority("clip-path")};
       a.start=window.performance.now();
       const draw=now=>{
         if(dead||addressTransition!==a)return;
-        const t=Math.max(0,Math.min(1,(now-a.start)/duration));
-        const v=addressMotionSample(name,from,to,t);
-        bar.style.setProperty("clip-path",addressFluidClip(v.width,header,v.reveal,radius,shape),"important");
-        bar.style.setProperty("--op-url-selection-alpha",(v.selection*100).toFixed(3)+"%");
-        if(t<1)addressFallbackFrame=window.requestAnimationFrame(draw);
-        else finishAddressPhase(a);
+        try{
+          const t=Math.max(0,Math.min(1,(now-a.start)/duration));
+          const v=addressMotionSample(name,from,to,t);
+          bar.style.setProperty("clip-path",addressFluidClip(v.width,header,v.reveal,radius,shape),"important");
+          bar.style.setProperty("--op-url-selection-alpha",(v.selection*100).toFixed(3)+"%");
+          if(t<1)addressFallbackFrame=window.requestAnimationFrame(draw);
+          else finishAddressPhase(a);
+        }catch{finishAddressPhase(a,"fallback-failed");}
       };
       draw(a.start);
     }
-    startAddressDiagnostics(a);
-    animateTabCascade(name==="opening",a);
+    if(dead||addressTransition!==a)return;
+    try{
+      armAddressPhase(a);
+      startAddressDiagnostics(a);
+      animateTabCascade(name==="opening",a);
+    }catch(error){
+      try{window.__nocturneTrace?.("address.phase.error",{name:error?.name},{flush:true});}catch{}
+      finishAddressPhase(a,"setup-failed");
+    }
   }
   function updateAddressAnimation() {
     const bar = addressBar();
     const open = nativeInlineOpen(bar);
+    if(addressTransition&&addressTransition.bar!==bar||addressSettleOwner&&addressSettleOwner.bar!==bar){
+      clearAddressAnimation();addressWasOpen=open;return;
+    }
     if (addressSettling) {
       if (!inlinePopoverPresent(bar)) {
         clearAddressAnimation();
@@ -3692,9 +3808,7 @@ function installTabStrip() {
       return;
     }
     const from = currentAddressVisual() || { width: addressWidths().compact, reveal: 0, selection:0 };
-    addressSettling = false;
-    if (addressSettleTimer) window.clearTimeout(addressSettleTimer);
-    addressSettleTimer = 0;
+    // beginAddressPhase retires the exact old settling owner.
     const widths=addressWidths(),to={width:widths.expanded,reveal:1};
     beginAddressPhase("opening",from,to,addressWaveDuration(from,to,widths,ADDRESS_WAVE_OPEN));
   }

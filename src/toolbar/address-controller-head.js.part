@@ -1,19 +1,33 @@
   let addressSettling = false;
   let addressSettleTimer = 0;
-  let addressFallbackFrame=0, addressClipHome=null;
+  let addressFallbackFrame=0, addressClipHome=null,addressPhaseTimer=0,addressSettleOwner=null;
   function stopAddressAnimations(){
-    if(addressDiagnosticsFrame)window.cancelAnimationFrame(addressDiagnosticsFrame);
-    if(addressFallbackFrame)window.cancelAnimationFrame(addressFallbackFrame);
-    addressDiagnosticsFrame=addressFallbackFrame=0;
+    const diagnostic=addressDiagnosticsFrame,fallback=addressFallbackFrame,timer=addressPhaseTimer;
+    addressDiagnosticsFrame=addressFallbackFrame=addressPhaseTimer=0;
     const animations=[addressAnimation,addressIdentityAnimation,addressSelectionAnimation];
     addressAnimation=addressIdentityAnimation=addressSelectionAnimation=null;
-    for(const animation of animations)animation?.cancel();
-    if(addressClipHome){
-      const {bar,value,priority}=addressClipHome;
-      if(value)bar.style.setProperty("clip-path",value,priority);
-      else bar.style.removeProperty("clip-path");
-      addressClipHome=null;
+    const clip=addressClipHome;addressClipHome=null;
+    let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
+    if(diagnostic)step(()=>window.cancelAnimationFrame(diagnostic));
+    if(fallback)step(()=>window.cancelAnimationFrame(fallback));
+    if(timer)step(()=>window.clearTimeout(timer));
+    for(const animation of animations)step(()=>animation?.cancel());
+    if(clip){
+      const {bar,value,priority}=clip;
+      step(()=>{if(value)bar.style.setProperty("clip-path",value,priority);else bar.style.removeProperty("clip-path");});
     }
+    if(failed)try{window.__nocturneTrace?.("address.cleanup.error",{failed},{flush:true});}catch{}
+  }
+  function cancelAddressSettle(){
+    const timer=addressSettleTimer;addressSettleTimer=0;addressSettleOwner=null;addressSettling=false;
+    if(timer)try{window.clearTimeout(timer);}catch{}
+  }
+  function clearAddressBarMarks(bar){
+    if(!bar)return;
+    for(const key of ["data-op-url-animating","data-op-url-selection-fade","data-op-url-fluid"])
+      try{bar.removeAttribute(key);}catch{}
+    for(const key of ["--op-url-live-width","--op-url-live-clip","--op-url-selection-alpha"])
+      try{bar.style.removeProperty(key);}catch{}
   }
 
   function addressBar() { return document.getElementById("urlbar"); }
@@ -76,20 +90,15 @@
     }
   }
   function clearAddressAnimation() {
+    const previous=addressTransition?.bar||addressSettleOwner?.bar;
     addressTransition = null;
     stopAddressAnimations();
-    addressSettling = false;
-    if (addressSettleTimer) window.clearTimeout(addressSettleTimer);
-    addressSettleTimer = 0;
+    cancelAddressSettle();
     url.removeAttribute("data-op-url-phase");
     url.toggleAttribute("data-op-url-ready", nativeInlineOpen(addressBar()));
     root.removeAttribute("oneplane-address-unblur");
     const bar = addressBar();
-    bar?.removeAttribute("data-op-url-animating");
-    bar?.removeAttribute("data-op-url-selection-fade");
-    bar?.style.removeProperty("--op-url-live-width");
-    bar?.style.removeProperty("--op-url-live-clip");
-    bar?.style.removeProperty("--op-url-selection-alpha");
-    bar?.removeAttribute("data-op-url-fluid");
+    clearAddressBarMarks(previous);
+    if(bar!==previous)clearAddressBarMarks(bar);
     reconcileTabCascade();
   }

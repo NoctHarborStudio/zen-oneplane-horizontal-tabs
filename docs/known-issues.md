@@ -1066,3 +1066,7 @@ MB-007/008/012: pure startup offsets and completion budgets extracted; late Boot
 ### A3.4b — preview.87 document epoch
 
 MB-007/008/012: current startup owners share one document epoch, including boot-disabled paths and late Home/chrome. Mixed legacy owners still use legacy play; native compositor behavior, unified finished/cancel outcome, Address Cascade and Lab parity remain open. No broad MB3 closure.
+
+### A3.4c1 — preview.88 Address lifecycle
+
+NC4-050/051: exact phase/bar/epoch, current cancellation recovery, bounded wave/phase/handoff completion and isolated cleanup implemented in source. Native reproduction/acceptance remains open. Startup outcome and full A3.4 review remain pending.
