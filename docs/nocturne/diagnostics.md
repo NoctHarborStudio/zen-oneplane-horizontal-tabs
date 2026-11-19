@@ -222,3 +222,8 @@ Preview.89: `assembly.finish` reports bounded `reason`, `counts` (pending/finish
 Preview.90: `assembly.finish` snapshots counts before invalidation and reports legacy outcome capability conservatively, including a late legacy Home registry; `assembly.timer.error` reports failure to allocate the existing finish timer. No new sensitive data or sampling loop.
 
 Preview.91: no new runtime event or logger; Fold math extraction preserves existing Center Motion diagnostics. Offline Lab counters are local synthetic preparation/effect/keyframe/proxy metrics, not native diagnostic FPS. Native candidate telemetry belongs to A3.5b.
+
+
+### Preview.92 — isolated Bloom candidate
+
+`center.bloom.acquire` reports count/effects/proxies/checks/stageEnd for an explicitly admitted candidate. `center.bloom.fallback` reports budget/preflight; `center.motion.release` and setup error include visual mode. No node identity, private data or new timer/recorder. No production caller selects Bloom; native diagnostics remain pending.

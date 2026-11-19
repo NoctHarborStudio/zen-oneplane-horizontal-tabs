@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.91",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.92",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -472,6 +472,73 @@ function createMagneticFoldMath(){
   }
   return {smooth,magnetState,keyframes,portalGap,portalClip};
 }
+// Reconstructed Magnetic Bloom candidate, not the lost approved HTML.
+// All windows are relative to the first panel stage (reference 940ms).
+// Boot is deliberately outside this visible choreography; no production
+// timing or native geometry changes are implied by this comparison.
+function startupBloomTimeline(scale=1){
+  if(!Number.isFinite(scale)||scale<400/1050||scale>1500/1050)throw RangeError("invalid bloom scale");
+  const window=(start,end,min,step)=>Object.freeze({
+    start:(start-940)*scale,end:(end-940)*scale,min:min*scale,step:step*scale
+  });
+  return Object.freeze({
+    scale, panel:window(940,1160,220,0),
+    islandShape:window(1080,1450,370,0),islandLabel:window(1450,1640,190,0),
+    tabs:window(1330,1940,280,42),bookmarks:window(1600,2060,220,28),
+    search:window(1710,2230,520,0),pins:window(1930,2500,260,55),
+    workspaces:window(2220,2690,240,45),footer:window(2480,2790,310,0),
+    end:(2860-940)*scale
+  });
+}
+
+// A larger collection compresses stagger, never the minimum item duration.
+// Input order is already the desired visual order. Every item has one effect.
+function startupBloomStagger(count,stage){
+  if(!Number.isSafeInteger(count)||count<0)throw RangeError("invalid bloom count");
+  const {start,end,min,step}=stage;
+  if(![start,end,min,step].every(Number.isFinite)||start<0||end<=start||min<=0||step<0||min>end-start+1e-7)
+    throw RangeError("invalid bloom stage");
+  if(!count)return [];
+  const span=end-start;
+  const spread=Math.max(0,Math.min(span-min,(count-1)*step));
+  const duration=span-spread;
+  return Array.from({length:count},(_,i)=>({delay:start+(count>1?spread*i/(count-1):0),duration}));
+}
+
+// Visible, already-measured slots only; split groups arrive as one slot.
+// Distance is from the resting Home center, not the previous moving card.
+function startupBloomOrder(slots,center){
+  if(!Number.isFinite(center?.x)||!Number.isFinite(center?.y))throw RangeError("invalid bloom center");
+  if(!Array.isArray(slots)||slots.some(slot=>!Number.isFinite(slot?.x)||!Number.isFinite(slot?.y)))
+    throw RangeError("invalid bloom slot");
+  return slots.map((slot,index)=>({slot,index})).sort((a,b)=>
+    Math.abs(a.slot.x-center.x)-Math.abs(b.slot.x-center.x)||
+    Math.abs(a.slot.y-center.y)-Math.abs(b.slot.y-center.y)||a.index-b.index
+  ).map(x=>x.slot);
+}
+
+// Individual scale about the slot center stays in [0,1]. With disjoint
+// resting rectangles, every interpolated card rectangle is contained
+// in its own slot. No travel through Home, no overshoot outside a slot.
+function startupBloomFrames(kind="card",opacity=1){
+  if(!Number.isFinite(opacity)||opacity<0||opacity>1)throw RangeError("invalid resting opacity");
+  if(kind==="card")return [
+    {offset:0,scale:"0.72",opacity:0,easing:"cubic-bezier(.2,.75,.25,1)"},
+    {offset:.58,scale:"1",opacity,easing:"ease-in-out"},
+    {offset:.78,scale:"0.96",opacity,easing:"ease-out"},
+    {offset:1,scale:"1",opacity}
+  ];
+  if(kind==="search")return [
+    {offset:0,scale:"0.86",opacity:0,easing:"cubic-bezier(.2,.75,.25,1)"},
+    {offset:1,scale:"1",opacity}
+  ];
+  if(kind==="islandShape")return [
+    {offset:0,scale:"0.45 1",opacity:0,easing:"cubic-bezier(.2,.75,.25,1)"},
+    {offset:1,scale:"1 1",opacity}
+  ];
+  if(kind==="fade")return [{offset:0,opacity:0},{offset:1,opacity}];
+  throw RangeError("unknown bloom surface");
+}
 /* Nocturne Center Motion — shared deterministic card choreography.
  * One geometry snapshot, inert chrome copies, no per-frame trajectory JS. */
 (()=>{
@@ -480,6 +547,7 @@ function createMagneticFoldMath(){
   if(win[KEY]?.dispose?.({replacement:true})===false)return;
   const MARK="data-zr-center-card",OWNER="data-zr-center-motion",PENDING="data-zr-center-pending";
   const B="--zr-fold-bookmark-progress";
+  const MODE="data-zr-center-mode",BLOOM_MARK="data-zr-center-bloom-card";
   try{win.CSS.registerProperty({name:B,syntax:"<number>",inherits:false,initialValue:"1"});}catch{}
   // Gecko user sheets may not register @property. The JS registration
   // guarantees smooth interpolation of the shared hover slot.
@@ -663,23 +731,54 @@ function createMagneticFoldMath(){
       });
     }catch{finishHandoff();}
   }
+  // Explicit, dormant candidate contract. Only the exact current paused
+  // Assembly may request it; production callers still request Fold.
+  function bloomEligible(row,options){
+    const t=options.bloomTimeline;
+    return !dead&&current()&&t&&win.__nocturneStartupTimeline===t&&!t.closed&&t.paused===true&&
+      options.owner==="startup"&&(options.direction??"in")==="in"&&options.paused===true&&
+      typeof t.observeEffect==="function"&&options.observeEffect===t.observeEffect&&
+      root.getAttribute("data-zr-startup-phase")==="waiting"&&
+      !["data-zr-closing","data-zr-workspace-phase","customizing","inDOMFullscreen","inFullscreen"].some(k=>root.hasAttribute(k))&&
+      row&&document.getElementById("oneplane-tabs")===row&&!row.hasAttribute("data-op-dragging")&&
+      !win.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
   function start(row,options={}){
     if(dead||motionBusy||disposing||!current())return null;
     motionBusy=true;
-    try{return acquireTabs(row,options);}catch(error){trace("center.motion.error",{stage:"prepare",name:error?.name},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
+    try{
+      if(options.bloomTimeline===undefined)return acquireTabs(row,options);
+      if(!bloomEligible(row,options))return null;
+      const t=options.bloomTimeline,attempt={safe:false};
+      let plan=null;
+      try{plan=startupBloomTimeline(t.scale);}catch{}
+      if(plan&&Number.isFinite(t.finishLength)&&t.finishLength>=plan.end){
+        const handle=acquireTabs(row,options,plan.tabs,attempt);
+        if(handle)return handle;
+        if(!attempt.safe)return null;
+      }
+      // A failed candidate is fully retired before Fold can collect its
+      // resting cards. Never fall back into an expired or foreign Assembly.
+      const duration=options.duration??520,delay=options.delay??0;
+      if(!bloomEligible(row,options)||root.hasAttribute(MODE)||![duration,delay,t.finishLength].every(Number.isFinite)||
+        duration<=0||delay<0||duration+delay>t.finishLength)return null;
+      trace("center.bloom.fallback",{reason:plan&&t.finishLength>=plan.end?"preflight":"budget"},{flush:true});
+      return acquireTabs(row,options);
+    }catch(error){trace("center.motion.error",{stage:"prepare",name:error?.name},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
   }
-  function acquireTabs(row,{owner,direction="in",duration=520,delay=0,paused=false,retainOnDispose=null,observeEffect=null}={}){
+  function acquireTabs(row,{owner,direction="in",duration=520,delay=0,paused=false,retainOnDispose=null,observeEffect=null,bloomTimeline=null}={},bloomStage=null,attempt=null){
     stopSelection();active?.release("superseded");finishHandoff();releasePending();
     if(dead||!current())return null;
     if(!row){trace("center.motion.skip",{owner,reason:"no-row"});return null;}
     const id=++tabSequence,effects=[],saved=[],cleanups=[],running=[],stats={groups:0,handles:0,handleOffset:0,icons:0,iconLoads:0,bitmapIcons:0,bitmapFailures:0};
-    let host=null,cards=[],rr,hub,measuring=false,measuringMark=null,ownerMark=null,ownerWritten=false,committed=false,released=false;
+    let host=null,cards=[],rr,hub,measuring=false,measuringMark=null,ownerMark=null,ownerWritten=false,modeMark=null,modeWritten=false,committed=false,released=false;
     const restoreMark=(node,key,value)=>{if(value===null)node.removeAttribute(key);else node.setAttribute(key,value);};
-    const handle={owner,retainOnDispose,startupOutcomeVersion:1,count:0,finished:Promise.resolve(),
-      resume(){if(!released)for(const a of running)try{a.play();}catch{}},
+    const handle={owner,retainOnDispose,startupOutcomeVersion:1,mode:bloomStage?"magnetic-bloom":"magnetic-fold",count:0,finished:Promise.resolve(),
+      resume(){if(bloomStage)throw Error("center-bloom-requires-epoch");if(!released)for(const a of running)try{a.play();}catch{}},
       resumeAt(start){
         for(const a of running){
-          if(released||dead||!current()||active!==handle)throw Error("center-epoch-stale");
+          if(released||dead||!current()||active!==handle||
+            bloomStage&&(win.__nocturneStartupTimeline!==bloomTimeline||bloomTimeline.closed))throw Error("center-epoch-stale");
           start(a);
         }
       },
@@ -693,17 +792,19 @@ function createMagneticFoldMath(){
           for(const a of running)step(()=>a.cancel());
           for(const off of cleanups)step(off);
           if(host)step(()=>host.remove());
-          for(const {n,mark} of saved)step(()=>restoreMark(n,MARK,mark));
+          for(const {n,mark,key=MARK} of saved)step(()=>restoreMark(n,key,mark));
           if(active===handle){
             active=null;
             if(current()){
               if(measuring)step(()=>restoreMark(root,"data-zr-fold-measuring",measuringMark));
               if(ownerWritten)step(()=>restoreMark(root,OWNER,ownerMark));
+              if(modeWritten)step(()=>restoreMark(root,MODE,modeMark));
               if(ownerWritten&&!dead&&!win.closed)step(()=>win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd")));
             }
           }
           retire();
-          trace("center.motion.release",()=>({id,owner,direction,count:cards.length,...stats,sourceIcons:iconStats(row),failed,reason}),{sample:600,flush:failed>0});
+          if(attempt)attempt.safe=failed===0;
+          trace("center.motion.release",()=>({id,owner,direction,mode:handle.mode,count:cards.length,...stats,sourceIcons:iconStats(row),failed,reason}),{sample:600,flush:failed>0});
         }finally{motionBusy=wasBusy;drainDispose();}
       }};
     active=handle;
@@ -713,6 +814,58 @@ function createMagneticFoldMath(){
       }
       cards=collect(row);handle.count=cards.length;
       if(!cards.length){handle.release("no-visible-cards");trace("center.motion.skip",{owner,reason:"no-visible-cards"});return null;}
+      if(bloomStage){
+        const valid=()=>!released&&!dead&&current()&&active===handle&&
+          bloomEligible(row,{owner,direction,paused,observeEffect,bloomTimeline});
+        const check=()=>{if(!valid())throw Error("bloom-stale");};
+        check();
+        // Bound the one-time pairwise geometry check; no per-frame layout.
+        if(cards.length>256||root.hasAttribute(MODE)||cards.some(c=>c.n.hasAttribute(BLOOM_MARK)))throw Error("bloom-slot-admission");
+        for(let i=0;i<cards.length;i++)for(let j=0;j<i;j++){
+          const a=cards[i].r,b=cards[j].r;
+          if(Math.min(a.right,b.right)-Math.max(a.left,b.left)>.5&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>.5)
+            throw Error("bloom-slot-overlap");
+        }
+        const ordered=startupBloomOrder(cards,{x:cards[0].cx,y:cards[0].cy});
+        const timing=startupBloomStagger(ordered.length,bloomStage);
+        // Existing ownership/freeze marker; distinct visual mode.
+        modeMark=root.getAttribute(MODE);modeWritten=true;root.setAttribute(MODE,"bloom");
+        ownerMark=root.getAttribute(OWNER);ownerWritten=true;root.setAttribute(OWNER,owner);
+        for(const c of ordered){saved.push({n:c.n,key:BLOOM_MARK,mark:c.n.getAttribute(BLOOM_MARK)});c.n.setAttribute(BLOOM_MARK,"true");}
+        const near=(a,b,epsilon)=>Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)<=epsilon;
+        function sample(c,scale,opacity){
+          const s=win.getComputedStyle(c.n),r=c.n.getBoundingClientRect();
+          const scales=s.scale==="none"?[1]:String(s.scale).trim().split(/\s+/).map(Number);
+          if(!scales.length||scales.length>2||scales.some(v=>!near(v,scale,.005))||
+            !near(Number(s.opacity),opacity,.005)||s.visibility!=="visible"||s.display==="none"||
+            !near(r.width,c.r.width*scale,.75)||!near(r.height,c.r.height*scale,.75)||
+            !near(r.left+r.width/2,c.x,.75)||!near(r.top+r.height/2,c.y,.75))
+            throw Error("bloom-computed-conflict");
+        }
+        for(const c of ordered){
+          if(c.n.getAnimations().length)throw Error("bloom-competing-effect");
+          sample(c,1,c.opacity);
+        }
+        for(let i=0;i<ordered.length;i++){
+          check();const c=ordered[i],t=timing[i],frames=startupBloomFrames("card",c.opacity);
+          const a=c.n.animate(frames,{...t,easing:"linear",fill:"both"});
+          running.push(a);a.finished.catch(()=>{});
+          observeEffect?.(a,"tabs",()=>!released&&!dead&&current()&&active===handle);
+          a.pause();a.currentTime=0;check();
+        }
+        // Batch writes then reads. Do not seek to the exact end, which
+        // could resolve an observed finished promise during preparation.
+        // The exact resting pose was checked before effect acquisition.
+        for(const [fraction,scale] of [[0,.72],[.78,.96],[.999,1],[0,.72]]){
+          check();
+          running.forEach((a,i)=>{a.currentTime=fraction===0?0:timing[i].delay+timing[i].duration*fraction;});
+          ordered.forEach(c=>sample(c,scale,fraction===0?0:c.opacity));
+        }
+        check();handle.finished=Promise.all(running.map(a=>a.finished.catch(()=>{})));
+        committed=true;
+        trace("center.bloom.acquire",()=>({id,owner,count:cards.length,effects:running.length,proxies:0,checks:4,stageEnd:bloomStage.end}),{sample:Math.ceil(bloomStage.end)+250});
+        check();return handle;
+      }
       rr=row.getBoundingClientRect();host=document.createElementNS("http://www.w3.org/1999/xhtml","div");
       host.setAttribute("data-zr-magnetic-layer","true");host.setAttribute("aria-hidden","true");host.inert=true;
       Object.assign(host.style,{position:"absolute",inset:"0",zIndex:"14",pointerEvents:"none",overflow:"visible"});
@@ -772,7 +925,7 @@ function createMagneticFoldMath(){
       return handle;
     }catch(error){
       handle.release("setup-failed");
-      trace("center.motion.error",{id,owner,stage:"setup",name:error?.name},{flush:true});return null;
+      trace("center.motion.error",{id,owner,mode:handle.mode,stage:"setup",name:error?.name},{flush:true});return null;
     }
   }
   // Bookmarks use the Lab's center squeeze, not individual vertical slides.

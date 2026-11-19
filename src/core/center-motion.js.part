@@ -6,6 +6,7 @@
   if(win[KEY]?.dispose?.({replacement:true})===false)return;
   const MARK="data-zr-center-card",OWNER="data-zr-center-motion",PENDING="data-zr-center-pending";
   const B="--zr-fold-bookmark-progress";
+  const MODE="data-zr-center-mode",BLOOM_MARK="data-zr-center-bloom-card";
   try{win.CSS.registerProperty({name:B,syntax:"<number>",inherits:false,initialValue:"1"});}catch{}
   // Gecko user sheets may not register @property. The JS registration
   // guarantees smooth interpolation of the shared hover slot.
@@ -189,23 +190,54 @@
       });
     }catch{finishHandoff();}
   }
+  // Explicit, dormant candidate contract. Only the exact current paused
+  // Assembly may request it; production callers still request Fold.
+  function bloomEligible(row,options){
+    const t=options.bloomTimeline;
+    return !dead&&current()&&t&&win.__nocturneStartupTimeline===t&&!t.closed&&t.paused===true&&
+      options.owner==="startup"&&(options.direction??"in")==="in"&&options.paused===true&&
+      typeof t.observeEffect==="function"&&options.observeEffect===t.observeEffect&&
+      root.getAttribute("data-zr-startup-phase")==="waiting"&&
+      !["data-zr-closing","data-zr-workspace-phase","customizing","inDOMFullscreen","inFullscreen"].some(k=>root.hasAttribute(k))&&
+      row&&document.getElementById("oneplane-tabs")===row&&!row.hasAttribute("data-op-dragging")&&
+      !win.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
   function start(row,options={}){
     if(dead||motionBusy||disposing||!current())return null;
     motionBusy=true;
-    try{return acquireTabs(row,options);}catch(error){trace("center.motion.error",{stage:"prepare",name:error?.name},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
+    try{
+      if(options.bloomTimeline===undefined)return acquireTabs(row,options);
+      if(!bloomEligible(row,options))return null;
+      const t=options.bloomTimeline,attempt={safe:false};
+      let plan=null;
+      try{plan=startupBloomTimeline(t.scale);}catch{}
+      if(plan&&Number.isFinite(t.finishLength)&&t.finishLength>=plan.end){
+        const handle=acquireTabs(row,options,plan.tabs,attempt);
+        if(handle)return handle;
+        if(!attempt.safe)return null;
+      }
+      // A failed candidate is fully retired before Fold can collect its
+      // resting cards. Never fall back into an expired or foreign Assembly.
+      const duration=options.duration??520,delay=options.delay??0;
+      if(!bloomEligible(row,options)||root.hasAttribute(MODE)||![duration,delay,t.finishLength].every(Number.isFinite)||
+        duration<=0||delay<0||duration+delay>t.finishLength)return null;
+      trace("center.bloom.fallback",{reason:plan&&t.finishLength>=plan.end?"preflight":"budget"},{flush:true});
+      return acquireTabs(row,options);
+    }catch(error){trace("center.motion.error",{stage:"prepare",name:error?.name},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
   }
-  function acquireTabs(row,{owner,direction="in",duration=520,delay=0,paused=false,retainOnDispose=null,observeEffect=null}={}){
+  function acquireTabs(row,{owner,direction="in",duration=520,delay=0,paused=false,retainOnDispose=null,observeEffect=null,bloomTimeline=null}={},bloomStage=null,attempt=null){
     stopSelection();active?.release("superseded");finishHandoff();releasePending();
     if(dead||!current())return null;
     if(!row){trace("center.motion.skip",{owner,reason:"no-row"});return null;}
     const id=++tabSequence,effects=[],saved=[],cleanups=[],running=[],stats={groups:0,handles:0,handleOffset:0,icons:0,iconLoads:0,bitmapIcons:0,bitmapFailures:0};
-    let host=null,cards=[],rr,hub,measuring=false,measuringMark=null,ownerMark=null,ownerWritten=false,committed=false,released=false;
+    let host=null,cards=[],rr,hub,measuring=false,measuringMark=null,ownerMark=null,ownerWritten=false,modeMark=null,modeWritten=false,committed=false,released=false;
     const restoreMark=(node,key,value)=>{if(value===null)node.removeAttribute(key);else node.setAttribute(key,value);};
-    const handle={owner,retainOnDispose,startupOutcomeVersion:1,count:0,finished:Promise.resolve(),
-      resume(){if(!released)for(const a of running)try{a.play();}catch{}},
+    const handle={owner,retainOnDispose,startupOutcomeVersion:1,mode:bloomStage?"magnetic-bloom":"magnetic-fold",count:0,finished:Promise.resolve(),
+      resume(){if(bloomStage)throw Error("center-bloom-requires-epoch");if(!released)for(const a of running)try{a.play();}catch{}},
       resumeAt(start){
         for(const a of running){
-          if(released||dead||!current()||active!==handle)throw Error("center-epoch-stale");
+          if(released||dead||!current()||active!==handle||
+            bloomStage&&(win.__nocturneStartupTimeline!==bloomTimeline||bloomTimeline.closed))throw Error("center-epoch-stale");
           start(a);
         }
       },
@@ -219,17 +251,19 @@
           for(const a of running)step(()=>a.cancel());
           for(const off of cleanups)step(off);
           if(host)step(()=>host.remove());
-          for(const {n,mark} of saved)step(()=>restoreMark(n,MARK,mark));
+          for(const {n,mark,key=MARK} of saved)step(()=>restoreMark(n,key,mark));
           if(active===handle){
             active=null;
             if(current()){
               if(measuring)step(()=>restoreMark(root,"data-zr-fold-measuring",measuringMark));
               if(ownerWritten)step(()=>restoreMark(root,OWNER,ownerMark));
+              if(modeWritten)step(()=>restoreMark(root,MODE,modeMark));
               if(ownerWritten&&!dead&&!win.closed)step(()=>win.dispatchEvent(new win.CustomEvent("Nocturne:CenterMotionEnd")));
             }
           }
           retire();
-          trace("center.motion.release",()=>({id,owner,direction,count:cards.length,...stats,sourceIcons:iconStats(row),failed,reason}),{sample:600,flush:failed>0});
+          if(attempt)attempt.safe=failed===0;
+          trace("center.motion.release",()=>({id,owner,direction,mode:handle.mode,count:cards.length,...stats,sourceIcons:iconStats(row),failed,reason}),{sample:600,flush:failed>0});
         }finally{motionBusy=wasBusy;drainDispose();}
       }};
     active=handle;
@@ -239,6 +273,58 @@
       }
       cards=collect(row);handle.count=cards.length;
       if(!cards.length){handle.release("no-visible-cards");trace("center.motion.skip",{owner,reason:"no-visible-cards"});return null;}
+      if(bloomStage){
+        const valid=()=>!released&&!dead&&current()&&active===handle&&
+          bloomEligible(row,{owner,direction,paused,observeEffect,bloomTimeline});
+        const check=()=>{if(!valid())throw Error("bloom-stale");};
+        check();
+        // Bound the one-time pairwise geometry check; no per-frame layout.
+        if(cards.length>256||root.hasAttribute(MODE)||cards.some(c=>c.n.hasAttribute(BLOOM_MARK)))throw Error("bloom-slot-admission");
+        for(let i=0;i<cards.length;i++)for(let j=0;j<i;j++){
+          const a=cards[i].r,b=cards[j].r;
+          if(Math.min(a.right,b.right)-Math.max(a.left,b.left)>.5&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>.5)
+            throw Error("bloom-slot-overlap");
+        }
+        const ordered=startupBloomOrder(cards,{x:cards[0].cx,y:cards[0].cy});
+        const timing=startupBloomStagger(ordered.length,bloomStage);
+        // Existing ownership/freeze marker; distinct visual mode.
+        modeMark=root.getAttribute(MODE);modeWritten=true;root.setAttribute(MODE,"bloom");
+        ownerMark=root.getAttribute(OWNER);ownerWritten=true;root.setAttribute(OWNER,owner);
+        for(const c of ordered){saved.push({n:c.n,key:BLOOM_MARK,mark:c.n.getAttribute(BLOOM_MARK)});c.n.setAttribute(BLOOM_MARK,"true");}
+        const near=(a,b,epsilon)=>Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)<=epsilon;
+        function sample(c,scale,opacity){
+          const s=win.getComputedStyle(c.n),r=c.n.getBoundingClientRect();
+          const scales=s.scale==="none"?[1]:String(s.scale).trim().split(/\s+/).map(Number);
+          if(!scales.length||scales.length>2||scales.some(v=>!near(v,scale,.005))||
+            !near(Number(s.opacity),opacity,.005)||s.visibility!=="visible"||s.display==="none"||
+            !near(r.width,c.r.width*scale,.75)||!near(r.height,c.r.height*scale,.75)||
+            !near(r.left+r.width/2,c.x,.75)||!near(r.top+r.height/2,c.y,.75))
+            throw Error("bloom-computed-conflict");
+        }
+        for(const c of ordered){
+          if(c.n.getAnimations().length)throw Error("bloom-competing-effect");
+          sample(c,1,c.opacity);
+        }
+        for(let i=0;i<ordered.length;i++){
+          check();const c=ordered[i],t=timing[i],frames=startupBloomFrames("card",c.opacity);
+          const a=c.n.animate(frames,{...t,easing:"linear",fill:"both"});
+          running.push(a);a.finished.catch(()=>{});
+          observeEffect?.(a,"tabs",()=>!released&&!dead&&current()&&active===handle);
+          a.pause();a.currentTime=0;check();
+        }
+        // Batch writes then reads. Do not seek to the exact end, which
+        // could resolve an observed finished promise during preparation.
+        // The exact resting pose was checked before effect acquisition.
+        for(const [fraction,scale] of [[0,.72],[.78,.96],[.999,1],[0,.72]]){
+          check();
+          running.forEach((a,i)=>{a.currentTime=fraction===0?0:timing[i].delay+timing[i].duration*fraction;});
+          ordered.forEach(c=>sample(c,scale,fraction===0?0:c.opacity));
+        }
+        check();handle.finished=Promise.all(running.map(a=>a.finished.catch(()=>{})));
+        committed=true;
+        trace("center.bloom.acquire",()=>({id,owner,count:cards.length,effects:running.length,proxies:0,checks:4,stageEnd:bloomStage.end}),{sample:Math.ceil(bloomStage.end)+250});
+        check();return handle;
+      }
       rr=row.getBoundingClientRect();host=document.createElementNS("http://www.w3.org/1999/xhtml","div");
       host.setAttribute("data-zr-magnetic-layer","true");host.setAttribute("aria-hidden","true");host.inert=true;
       Object.assign(host.style,{position:"absolute",inset:"0",zIndex:"14",pointerEvents:"none",overflow:"visible"});
@@ -298,7 +384,7 @@
       return handle;
     }catch(error){
       handle.release("setup-failed");
-      trace("center.motion.error",{id,owner,stage:"setup",name:error?.name},{flush:true});return null;
+      trace("center.motion.error",{id,owner,mode:handle.mode,stage:"setup",name:error?.name},{flush:true});return null;
     }
   }
   // Bookmarks use the Lab's center squeeze, not individual vertical slides.

@@ -23,3 +23,8 @@ Preview 80: close controller treats failure to acquire required visible tab prox
 ### A3.5a — preview.91 shared Fold math and reconstructed Bloom candidate
 
 The exact prior Fold formula now lives in `src/algorithms/magnetic-fold.mjs` and is consumed by Center Motion and [the generated comparison Lab](labs/startup-motion.html). Fold is still the production trajectory for Startup, Workspace and Close. The Bloom candidate stays within fixed resting slots and compresses stagger for large collections. It is Lab-only; no runtime enablement, no exact original Lab parity, and no native performance claim. See A3.5a in [the pipeline](pipeline-0.4.0.md) for property ownership and next acquisition gate.
+
+
+### A3.5b — isolated candidate (preview.92)
+
+Center Motion accepts an explicit paused current Assembly `bloomTimeline` only. Uses the same tab handle and outcome observer, distinct `data-zr-center-mode="bloom"` and exact outer-card markers, no proxies. Checks actual computed geometry/scale/alpha at resting and sampled keyframes; partial acquisition rolls back before bounded Fold fallback. No installed caller requests this mode. The full Bloom plan must fit the common completion budget before promotion; native compositor evidence and A3.6 topology handoff remain required.

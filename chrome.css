@@ -2547,7 +2547,7 @@
 }
 
 /* One shared card effect, independent of lifecycle controller. */
-:root[data-zr-center-motion] #oneplane-tabs#oneplane-tabs#oneplane-tabs#oneplane-tabs [data-zr-center-card] {
+:root[data-zr-center-motion]:not([data-zr-center-mode="bloom"]) #oneplane-tabs#oneplane-tabs#oneplane-tabs#oneplane-tabs [data-zr-center-card] {
   opacity: 0 !important;
   transition: none !important;
   pointer-events: none !important;
@@ -2580,7 +2580,7 @@
 
 /* Magnetic Fold: the isolated shadow layer is painted outside scroll clips.
  * Keep unowned/late real cards hidden until atomic handoff. */
-:root[data-zr-center-motion] #oneplane-tabs#oneplane-tabs#oneplane-tabs#oneplane-tabs .oneplane-tab-list :is(.oneplane-tab,.oneplane-split-group) {
+:root[data-zr-center-motion]:not([data-zr-center-mode="bloom"]) #oneplane-tabs#oneplane-tabs#oneplane-tabs#oneplane-tabs .oneplane-tab-list :is(.oneplane-tab,.oneplane-split-group) {
   opacity:0!important;transition:none!important;pointer-events:none!important;
 }
 :root[data-zr-center-motion] #oneplane-tabs [data-zr-magnetic-layer] {
@@ -2633,5 +2633,16 @@
  * reserved slot and painted scale before the shared engine measures. */
 :root:is([data-zr-startup-phase],[data-zr-closing],[data-zr-workspace-phase],[data-zr-center-motion]) #oneplane-tabs#oneplane-tabs#oneplane-tabs .oneplane-tab {
   --op-hover-progress:0!important;
-  scale:1!important;translate:0 0!important;
+  translate:0 0!important;
+}
+:root:is([data-zr-startup-phase],[data-zr-closing],[data-zr-workspace-phase],[data-zr-center-motion]) #oneplane-tabs#oneplane-tabs#oneplane-tabs .oneplane-tab:not([data-zr-center-bloom-card]),
+:root:not([data-zr-center-mode="bloom"]):is([data-zr-startup-phase],[data-zr-closing],[data-zr-workspace-phase],[data-zr-center-motion]) #oneplane-tabs#oneplane-tabs#oneplane-tabs .oneplane-tab {
+  scale:1!important;
+}
+/* Dormant real-slot candidate: only outer cards/groups own scale and alpha. */
+:root[data-zr-center-motion="startup"][data-zr-center-mode="bloom"] #oneplane-tabs#oneplane-tabs#oneplane-tabs#oneplane-tabs .oneplane-tab-list :is(.oneplane-tab,.oneplane-split-group) {
+  transition:none!important;pointer-events:none!important;
+}
+:root[data-zr-center-motion="startup"][data-zr-center-mode="bloom"] #oneplane-tabs#oneplane-tabs#oneplane-tabs [data-zr-center-bloom-card] {
+  transform-origin:center center!important;
 }

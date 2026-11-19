@@ -347,3 +347,8 @@ Nine new permanent regressions; 50/50 Startup Transparency, 35/35 Center Motion 
 ### Preview.91 — A3.5a comparison foundation
 
 7/7 Bloom and 35/35 Center Motion fixture bodies PASS in isolated V8; 336 Fold trajectories (13,776 keyframes) exactly match prior source. 1101 supported durations × stage/count cases up to 1000 validate bounded stagger. Deterministic Lab generated identity and parser checked; no real browser Lab playback, native Gecko performance, approved original parity or promotion claim. Canonical CI pending.
+
+
+### Preview.92 — isolated real-slot candidate
+
+Seven additional Center Motion regression cases; 42/42 Center Motion and 7/7 Bloom isolated source-backed V8 fixture bodies PASS, no native Gecko execution. Verify the exact current Assembly, full timing budget, real card/split geometry and computed scale/opacity, partial rollback, current/stale outcome and reduced motion. Production Fold remains default. Canonical CI pending; no browser performance or approved visual parity claim.

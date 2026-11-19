@@ -214,3 +214,8 @@ Capture terminal ledger before invalidating ownership. Retained effects observe 
 ### A3.5a — shared visual math and candidate comparison
 
 Fold math moved intact to a pure factory shared by Layout and the generated offline Lab. Bloom candidate is a separate pure algorithm in the Lab only; the existing startup timing/outcome remains production authority. Real-slot Bloom must use the same Center Motion/Assembly owner, not a second controller. Existing important scale/translate and opacity gates need an exact visual-mode property contract and native computed-style preflight before promotion.
+
+
+### A3.5b — real-slot candidate boundary (preview.92)
+
+The current Center Motion owner now contains a dormant real-slot tab acquisition mode. The same handle owns cancellation, outcome and release, with explicit paused Assembly identity and full-plan budget admission. The Fold gate and Bloom visual marker are distinct; default production callers remain Fold. No second controller or new Sine entrypoint. Full Startup timing, Home/Boot integration, native compositing and geometry reconciliation remain subsequent gates.

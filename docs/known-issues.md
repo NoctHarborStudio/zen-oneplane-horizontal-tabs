@@ -1082,3 +1082,8 @@ Fixed source-confirmed false terminal success, retained cancel blind spot, mixed
 ### A3.5a — preview.91 visual comparison
 
 MB-006/007/010/012/013: pure Fold extraction, bounded Bloom candidate and generated comparison Lab implemented. Current runtime remains Fold; original approved Magnetic Bloom HTML not recovered. Real-slot acquisition/fallback, CSS property ownership, Home choreography, Boot mapping, topology and native performance remain open.
+
+
+### A3.5b — preview.92 isolated tab candidate
+
+MB-006/007/010/012/013: real-slot tab/split acquisition, sampled computed style/geometry admission and rollback/fallback implemented within current Center Motion; no production activation. Full Bloom timing/Boot/Home mapping, native CSS/WAAPI/paint and geometry handoff remain open; no original Lab parity.

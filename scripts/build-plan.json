@@ -14,6 +14,10 @@
       "kind": "esm-inline"
     },
     {
+      "path": "src/algorithms/startup-bloom.mjs",
+      "kind": "esm-inline"
+    },
+    {
       "path": "src/core/center-motion.js.part",
       "kind": "section"
     },

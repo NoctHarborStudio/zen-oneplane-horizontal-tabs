@@ -86,7 +86,8 @@ test("generated comparison Lab uses shared Fold, startup timeline and candidate 
  assert.ok(html.includes("a.startTime=epoch;"));
  const layout=read("layout.uc.mjs");
  assert.ok(layout.includes(assemble([{path:"src/algorithms/magnetic-fold.mjs",kind:"esm-inline"}])));
- assert.ok(!layout.includes("function startupBloomTimeline("));
+ assert.ok(layout.includes(assemble([{path:"src/algorithms/startup-bloom.mjs",kind:"esm-inline"}])));
+ assert.ok(!read("startup-animation.uc.mjs").includes("bloomTimeline:"));
  assert.ok(!read("theme.json").includes("startup-motion.html"));
  assert.ok(!read("startup-animation.uc.mjs").includes("startupBloomTimeline("));
  assert.doesNotThrow(()=>new Function(html.split("<script>")[1].split("</script>")[0]));

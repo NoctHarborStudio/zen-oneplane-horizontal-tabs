@@ -1,3 +1,9 @@
+## 0.3.0-preview.92 — Isolated real-slot Bloom acquisition
+
+- Add an explicit Assembly-owned, paused real-slot Bloom candidate with shared timing admission, computed style/geometry preflight and transactional Fold fallback.
+- Reuse Center Motion's exact handle, lifecycle, outcome ledger and existing freeze marker. No production caller selects Bloom; normal Startup, Workspace and Close remain Fold.
+- Reject stale/reduced-motion/competing effects and partial acquisition; retain source-backed regressions. Native visual/compositor verification pending.
+
 ## 0.3.0-preview.91 — Magnetic Bloom comparison foundation
 
 - Extract the existing Magnetic Fold math into a shared pure module without changing any trajectory or runtime owner.
