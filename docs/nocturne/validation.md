@@ -362,3 +362,8 @@ Five new regressions, 47/47 Center Motion fixture bodies PASS in isolated V8. Ve
 ### Preview.94 — shared Bloom plan and isolated Home
 
 Seven new cases; 14/14 Bloom and 50/50 Startup Transparency fixture bodies PASS in isolated V8. Verify all supported durations, Boot overhead, common stage windows, real Home leaves, empty/no-workspace structure, CSS/WAAPI conflicts, stale/late admission, rollback and exact epoch. Canonical CI and native Gecko execution/visual comparison separate. Candidate selection is not enabled.
+
+
+### Preview.95 — coordinated Bloom candidate
+
+Seven new cases, 21/21 Bloom and 50/50 Startup Transparency fixture bodies PASS in isolated V8. Verify explicit launch with/without Boot, owner mismatch, direct/Home partial failure, deadline expiry during Boot, computed alpha/shape/promise conflicts, Island label order, late ungate, selector admission and batch read/write. Default source switch remains false. Full CI and native Gecko/visual/performance are distinct.

@@ -224,3 +224,8 @@ The current Center Motion owner now contains a dormant real-slot tab acquisition
 ### A3.5c1 — common Bloom timing and Home lease (preview.94)
 
 The pure timing selector and Home stage schedule now share candidate timing with Lab; Home's existing exact lease owns real leaf effects. Fold remains default. Bloom uses a visible post-Boot epoch with a consistent normal/late budget, subject to inherited watchdog; actual full candidate Assembly admission and Boot handoff remain subsequent work. Provisional mapping does not reproduce the lost Lab's splash overlap.
+
+
+### A3.5c2 — coordinated dormant Assembly path (preview.95)
+
+One Startup controller, one document epoch, one outcome ledger and existing structural leases. Explicit source switch remains disabled; selector checks cold horizontal startup, versioned owners, registration and inherited budget. Center acquires resting geometry before the Island shape; direct chrome effects use existing registered progress, batch preparation index and cleanup. Provisional post-Boot mapping, no late Bloom replay. Independent integration review and A3.6 geometry before activation.

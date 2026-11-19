@@ -428,7 +428,8 @@ test("Bloom mode gates only exact card scale and leaves normal Fold startup as t
  assert.ok(css.includes(':where(:not([data-zr-center-motion="startup"][data-zr-center-mode="bloom"])) #oneplane-tabs'));
  assert.ok(css.includes('.oneplane-tab:where(:not(:root[data-zr-center-motion="startup"][data-zr-center-mode="bloom"] [data-zr-center-bloom-card]))'));
  assert.ok(css.includes('[data-zr-center-motion="startup"][data-zr-center-mode="bloom"]'));
- assert.ok(!read("startup-animation.uc.mjs").includes("bloomTimeline:"));
+ assert.ok(read("startup-animation.uc.mjs").includes("const BLOOM_CANDIDATE=false;"));
+ assert.ok(read("startup-animation.uc.mjs").includes("options.bloomTimeline=timeline;"));
 });
 
 test("Bloom rejects inconsistent completion cap and nonfinite plan without acquiring anything",()=>{

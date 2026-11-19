@@ -38,3 +38,8 @@ Consistent finishLength/lateLimit, exact paused Assembly admission through fallb
 ### A3.5c1 — common Assembly plan (preview.94)
 
 The shared timing selector has an explicit Bloom mode (1920*scale visible, +420ms late cap, inherited watchdog). Home uses the same stage schedule as the Lab under the existing lease. No production caller selects Bloom. Boot epoch mapping is provisional after-exit; remaining Assembly surfaces and actual handoff are A3.5c2.
+
+
+### A3.5c2 — dormant Assembly integration (preview.95)
+
+The existing Startup Assembly now contains an explicit coordinated Bloom candidate path with owner-version admission, original tab Fold fallback timings, registered-progress panel/Island/native control/bookmark effects and Home lease. Source switch remains false. Boot removal precedes common epoch; both admission and resume check inherited deadline. Late chrome ungates without replay. Direct effect sampling is batched before resume, max 256 targets. Independent integration and topology audit, native Gecko and approved visual parity remain open.

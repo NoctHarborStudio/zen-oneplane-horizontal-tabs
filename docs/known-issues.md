@@ -1097,3 +1097,8 @@ Corrected inconsistent candidate budget, stale explicit fallback and epoch reent
 ### A3.5c1 — preview.94 timing and Home
 
 MB3/5: shared candidate full timing plan, isolated native Home leaf effects and generated Lab schedule implemented. Default Fold unchanged. Actual Assembly candidate surface orchestration/Boot handoff, full topology and native acceptance remain open; no exact original Lab parity.
+
+
+### A3.5c2 — preview.95 coordinated candidate
+
+MB3/5/6: dormant Assembly path now coordinates real strip, chrome surfaces, bookmarks and Home; post-Boot common epoch and bounded fallback. No installed activation, no native proof. Independent integration audit, geometry/topology reconciliation, original approved visual reference and native validation remain required.

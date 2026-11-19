@@ -1,3 +1,9 @@
+## 0.3.0-preview.95 — Dormant coordinated Bloom Assembly
+
+- Connect the explicit Bloom plan to the existing Startup Assembly, Center Motion, direct chrome effects and Home lease. Keep the shipped source switch disabled and preserve the default Fold path.
+- Prepare panel, Island shape/label, native address controls and bookmark leaves on the common visible clock. Batch computed-style checks without adding per-frame work; bound direct preparation and fail open on incompatible effects.
+- Require compatible owners and recheck the inherited deadline before and after Boot. Late chrome is ungated without replaying Bloom. Add seven regressions; native verification remains pending.
+
 ## 0.3.0-preview.94 — Shared Bloom timing and isolated Home
 
 - Define the common full Bloom Assembly timing budget and share the Home stage schedule between the real Home owner and the generated comparison Lab.

@@ -518,7 +518,7 @@
     selectionContainer?.removeEventListener("TabSelect",onSelect);
     selectionContainer=tc;lastTab=win.gBrowser.selectedTab;tc.addEventListener("TabSelect",onSelect);
   }
-  const api={start,bookmarks,iconStats,warmIcons,releasePending,dispose};win[KEY]=api;
+  const api={startupBloomVersion:1,start,bookmarks,iconStats,warmIcons,releasePending,dispose};win[KEY]=api;
   const earlyBoot=win.__nocturneEarlyBoot,diagnostics=win.__nocturneDiagnostics;
   // This is the last Sine slot if subsequent Layout fragments fail.
   win.addUnloadListener(()=>{

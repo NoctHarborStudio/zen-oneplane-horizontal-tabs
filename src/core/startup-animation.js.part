@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.94"};
+  const event="assembly.script",data={version:"0.3.0-preview.95"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -51,7 +51,10 @@ try{if(typeof window!=="undefined"){
   // New installs retain the manifest default (1050 ms).
   const duration=Math.max(400,Math.min(1500,prefs.getIntPref(DURATION,1050)));
   const scale=duration/1050;
-  const plan=startupTimeline(0,scale);
+  // Source-only candidate switch. Do not expose a new preference or
+  // enable Bloom before native comparison and the topology gate.
+  const BLOOM_CANDIDATE=false;
+  let plan=startupTimeline(0,scale);
   const started=now();let deadline=started+8000,timerEpoch=0;
   let dead=false,playing=false,settling=false,raf=0,timer=0,settled=false,nativeReady=false,readyAt=0,holdNode=null;
   let nativeObserver=null,style=null,lateObserver=null,lateResize=null,lateFrame=0,playStart=0,finishAt=0,sheetURI=null,nativeTimer=0;
@@ -219,8 +222,14 @@ try{if(typeof window!=="undefined"){
     step(()=>lateResize?.disconnect());lateResize=null;
     step(()=>{if(nativeObserver)Services.obs.removeObserver(nativeObserver,"browser-delayed-startup-finished");});
     nativeObserver=null;
-    for(const a of animations.keys())step(()=>a.cancel());
+    for(const a of animations.keys()){
+      // A rejected candidate seek may have replaced the originally
+      // observed promise. Retire it before cancelling the current effect.
+      if(ownedTimeline?.mode==="bloom")step(()=>a.finished.catch(()=>{}));
+      step(()=>a.cancel());
+    }
     animations.clear();
+    if(ownedTimeline?.mode==="bloom")ownedTimeline.bloomDirect=null;
     // Only a normal boundary seals a still-owned surface. Abort must
     // not resurrect an externally cancelled animation via finish().
     const seal=reason.startsWith("completed");
@@ -325,7 +334,7 @@ try{if(typeof window!=="undefined"){
     return s.display!=="none"&&s.visibility!=="hidden"&&(ignoreOpacity||Number(s.opacity)!==0)&&r.width>1&&r.height>1&&
       r.right>0&&r.left<window.innerWidth&&r.bottom>0&&r.top<window.innerHeight?r:null;
   }
-  function play(n,frames,delay,length,retain=false,easing=EASE,complete=null,prepare=bootPreparing,startEffect=null){
+  function play(n,frames,delay,length,retain=false,easing=EASE,complete=null,prepare=bootPreparing,startEffect=null,verify=null){
     if(!n||dead)return false;
     let a=null;
     try{
@@ -341,15 +350,17 @@ try{if(typeof window!=="undefined"){
         try{complete?.();}catch(error){decision("assembly.effect.cleanup-error",{name:error?.name});}
         if(cancelled)decision("assembly.effect.cancel",{retained:retain});
       };
+      const promise=a.finished;
       if(!dead)ownedTimeline?.observeEffect?.(a,"direct",()=>!dead&&animations.get(a)===record);
-      a.finished?.then(()=>done(),()=>done(true));
+      promise?.then(()=>done(),()=>done(true));
       if(dead)throw Error("assembly-disposed");
       if(prepare){a.pause();a.currentTime=0;}
       else if(startEffect)startEffect(a);
+      if(verify)verify(a,promise);
       if(dead||animations.get(a)!==record)throw Error("assembly-disposed");
       return true;
     }catch(error){
-      if(a){animations.delete(a);try{a.cancel();}catch{}}
+      if(a){animations.delete(a);if(verify)try{a.finished.catch(()=>{});}catch{}try{a.cancel();}catch{}}
       decision("assembly.effect.error",{name:error?.name,paused:bootPreparing});
       return false;
     }
@@ -366,9 +377,10 @@ try{if(typeof window!=="undefined"){
     let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
     for(const [k,v] of record)step(()=>{if(v.value)n.style.setProperty(k,v.value,v.priority);else n.style.removeProperty(k);});
     for(const mark of [EFFECT,MOVE,CLIP])step(()=>n.removeAttribute(mark));
+    step(()=>{if(n.hasAttribute?.("data-zr-startup-bloom-shape"))n.removeAttribute("data-zr-startup-bloom-shape");});
     if(failed)decision("assembly.effect.cleanup",{failed});
   }
-  function reveal(n,{x=0,y=0,clip=false,delay=0,length=350,easing=EASE,late=false}={}){
+  function reveal(n,{x=0,y=0,clip=false,delay=0,length=350,easing=EASE,late=false,bloomTiming=null,bloomShape=false}={}){
     if(dead||ownedTimeline?.closed||!n||seen.has(n)||!bounds(n,true))return false;
     // Remove the pending gate before sampling native opacity. All changes
     // occur synchronously, before the next paint.
@@ -378,9 +390,11 @@ try{if(typeof window!=="undefined"){
     const cs=window.getComputedStyle(n),opacity=Number(cs.opacity);
     if(!Number.isFinite(opacity)||opacity<=0){n.removeAttribute(MANAGED);return false;}
     seen.add(n);
+    if(bloomTiming&&(!registered||baseline.has(n)||opacity>1||n.getAnimations().length||
+      bloomShape&&cs.scale!=="none"&&!/^1(?: 1){0,2}$/.test(cs.scale)))return false;
     if(n.matches?.(".oneplane-tab,.oneplane-split-group"))window.__nocturneTrace?.("assembly.card.rest",()=>({opacity,x,y}),{throttle:80});
     const alreadyPainted=baseline.has(n)||late&&!clip&&!n.matches?.("#PlacesToolbarItems > *");
-    const initial=alreadyPainted ? .72 : 0;
+    const initial=bloomTiming?0:alreadyPainted ? .72 : 0;
     if(alreadyPainted)clip=false;
     const nativeTranslate=cs.translate||"none";
     const canMove=nativeTranslate==="none"||/^0(?:px|%)?(?: 0(?:px|%)?){0,2}$/.test(nativeTranslate);
@@ -394,8 +408,8 @@ try{if(typeof window!=="undefined"){
       decision("assembly.late.skip",{reason:"insufficient-budget"});
       return false;
     }
-    const start=lateEffect?.delay??Math.max(0,delay*scale);
-    const time=lateEffect?.length??length*scale;
+    const start=bloomTiming?.delay??lateEffect?.delay??Math.max(0,delay*scale);
+    const time=bloomTiming?.duration??lateEffect?.length??length*scale;
     if(lateEffect)extendFinish(lateEffect.finishAt);
     if(dead||timeline?.closed)return false;
     const startLate=late&&timeline?.startEffect? a=>timeline.startEffect(a,offset):null;
@@ -412,7 +426,10 @@ try{if(typeof window!=="undefined"){
       n.setAttribute(EFFECT,"true");
       if(x||y){save(n,"--zr-startup-dx",x+"px");save(n,"--zr-startup-dy",y+"px");n.setAttribute(MOVE,"true");}
       if(clip)n.setAttribute(CLIP,"true");
-      acquired=play(n,[{[PROGRESS]:String(initial)},{[PROGRESS]:"1"}],start,time,false,easing,()=>restore(n),!late,startLate);
+      if(bloomShape)n.setAttribute("data-zr-startup-bloom-shape","true");
+      const resting=bloomTiming&&bloomShape?n.getBoundingClientRect():null;
+      const verify=bloomTiming?(a,promise)=>prepareBloomDirect(n,a,promise,timeline,start,time,opacity,resting):null;
+      acquired=play(n,[{[PROGRESS]:String(initial)},{[PROGRESS]:"1"}],start,time,false,easing,()=>restore(n),!late,startLate,verify);
       if(!acquired)restore(n);
     }else{
       const from={opacity:opacity*initial},to={opacity};
@@ -422,6 +439,77 @@ try{if(typeof window!=="undefined"){
     }
     // Keep a failed direct target ungated and at its resting style.
     return acquired;
+  }
+  // The direct effects stay in Assembly's existing animations Map.
+  // Batch sampled writes before reads across all direct targets. The
+  // temporary list is only a preparation index, not a second owner.
+  function bloomEffectCurrent(entry,timeline){
+    const {a,promise}=entry;
+    if(dead||ownedTimeline!==timeline||window.__nocturneStartupTimeline!==timeline||
+       timeline.closed||!timeline.paused||!animations.has(a)||a.timeline!==document.timeline||
+       a.playState!=="paused"||a.pending||a.playbackRate!==1||a.finished!==promise)
+      throw Error("assembly-bloom-effect");
+  }
+  function prepareBloomDirect(n,a,promise,timeline,delay,duration,opacity,resting){
+    const entry={n,a,promise,delay,duration,opacity,resting};
+    bloomEffectCurrent(entry,timeline);
+    const list=timeline.bloomDirect??(timeline.bloomDirect=[]);
+    if(list.length>=256)throw Error("assembly-bloom-direct-limit");
+    list.push(entry);
+  }
+  function verifyBloomDirect(timeline){
+    const list=timeline.bloomDirect||[];
+    const near=(a,b,eps)=>Number.isFinite(a)&&Math.abs(a-b)<=eps;
+    for(const fraction of [0,.5,0]){
+      for(const entry of list){
+        bloomEffectCurrent(entry,timeline);
+        const {a,delay,duration}=entry;
+        a.currentTime=fraction?delay+duration*fraction:0;
+        bloomEffectCurrent(entry,timeline);
+      }
+      for(const entry of list){
+        bloomEffectCurrent(entry,timeline);
+        const {n,opacity,resting}=entry;
+        const cs=window.getComputedStyle(n),progress=Number(cs.getPropertyValue(PROGRESS)),alpha=Number(cs.opacity);
+        if(!Number.isFinite(progress)||fraction===0&&!near(progress,0,.005)||
+           fraction!==0&&(progress<=0||progress>=1)||!near(alpha,opacity*progress,.005))
+          throw Error("assembly-bloom-alpha");
+        if(resting){
+          const r=n.getBoundingClientRect(),parts=String(cs.scale).trim().split(/\s+/).map(Number),sx=.45+.55*progress;
+          if(parts.length!==2||!near(parts[0],sx,.005)||!near(parts[1],1,.005)||
+             !near(r.width,resting.width*sx,.75)||!near(r.height,resting.height,.75)||
+             !near(r.left+r.width/2,resting.left+resting.width/2,.75)||!near(r.top+r.height/2,resting.top+resting.height/2,.75))
+            throw Error("assembly-bloom-shape");
+        }
+      }
+    }
+    timeline.bloomDirect=null;
+    decision("assembly.bloom.direct",{count:list.length,checks:3});
+  }
+  function bloomDirect(n,timing,kind="fade"){
+    if(!n||!bounds(n,true))return false;
+    const timeline=ownedTimeline;
+    if(dead||timeline?.mode!=="bloom"||timeline.closed||!timeline.paused||
+       window.__nocturneStartupTimeline!==timeline||!Number.isFinite(timing.delay)||
+       !Number.isFinite(timing.duration)||timing.delay<0||timing.duration<=0||
+       timing.delay+timing.duration>timeline.finishLength+1e-7)throw Error("assembly-bloom-admission");
+    if(baseline.has(n)){seen.add(n);n.setAttribute(MANAGED,"true");return false;}
+    const shape=kind==="islandShape",frames=startupBloomFrames(kind);
+    if(!reveal(n,{bloomTiming:timing,bloomShape:shape,easing:frames[0].easing||"linear"}))
+      throw Error("assembly-bloom-direct");
+    return true;
+  }
+  function bloomStage(n,stage,kind="fade"){
+    return bloomDirect(n,{delay:stage.start,duration:stage.end-stage.start},kind);
+  }
+  function bloomIsland(island,stages){
+    if(!island||!bounds(island,true))return;
+    // Measure the visible label before the parent is scaled. Its delay
+    // starts exactly at the end of the shape stage, so alpha never doubles.
+    const labels=[...island.children].filter(n=>n.matches(".oneplane-island-title,svg")&&bounds(n,true));
+    if(labels.length!==1)throw Error("assembly-bloom-island-structure");
+    bloomStage(labels[0],stages.islandLabel);
+    bloomStage(island,stages.islandShape,"islandShape");
   }
   function extendFinish(until){
     // Late chrome may get a short reveal but cannot keep the startup hold
@@ -462,6 +550,12 @@ try{if(typeof window!=="undefined"){
       (r.left+r.width/2<center?left:right).push({n,r});
     }
     left.sort((a,b)=>b.r.left-a.r.left);right.sort((a,b)=>a.r.left-b.r.left);
+    if(ownedTimeline?.mode==="bloom"){
+      const group=[...left,...right].filter(({n})=>!seen.has(n)&&![...seen].some(other=>other.contains(n)||n.contains(other)));
+      if(late){for(const {n} of group){seen.add(n);n.setAttribute(MANAGED,"true");}return;}
+      const timing=startupBloomStagger(group.length,ownedTimeline.bloom.tabs);
+      group.forEach(({n},i)=>bloomDirect(n,timing[i]));return;
+    }
     for(const [side,group] of [[-1,left],[1,right]])for(let i=0;i<group.length;i++){
       const {n}=group[i];
       if(seen.has(n)||[...seen].some(other=>other.contains(n)||n.contains(other)))continue;
@@ -471,6 +565,13 @@ try{if(typeof window!=="undefined"){
   function revealBookmarks(center,late=false){
     const items=get("PlacesToolbarItems");
     const visible=Array.from(items?.children||[]).map(n=>({n,r:bounds(n,true)})).filter(x=>x.r);
+    if(ownedTimeline?.mode==="bloom"){
+      // Ungate all new children (including hidden ones) without replaying
+      // an already-started wave. Existing direct effects keep ownership.
+      if(late){for(const n of items?.children||[])if(!seen.has(n)){seen.add(n);n.setAttribute(MANAGED,"true");}return;}
+      const group=visible.filter(({n})=>!seen.has(n)),timing=startupBloomStagger(group.length,ownedTimeline.bloom.bookmarks);
+      group.forEach(({n},i)=>bloomDirect(n,timing[i]));return;
+    }
     if(!visible.length)return;
     const bmCenter=(Math.min(...visible.map(x=>x.r.left))+Math.max(...visible.map(x=>x.r.right)))/2;
     const max=Math.max(1,...visible.map(x=>Math.abs(x.r.left+x.r.width/2-bmCenter)));
@@ -511,7 +612,10 @@ try{if(typeof window!=="undefined"){
       lateFrame=0;if(dead||settling||ownedTimeline?.closed)return;
       try{
       const bar=floatingBar();
-      if(bar&&!seen.has(bar))openFromCenter(bar,590,440,true);
+      if(bar&&!seen.has(bar)){
+        if(ownedTimeline?.mode==="bloom"){seen.add(bar);bar.setAttribute(MANAGED,"true");}
+        else openFromCenter(bar,590,440,true);
+      }
       if(!bookmarkHandle)revealBookmarks(window.innerWidth/2,true);
       else for(const n of get("PlacesToolbarItems")?.children||[]){n.setAttribute(MANAGED,"true");seen.add(n);}
       const row=get("oneplane-tabs"),url=get("urlbar-container"),center=window.innerWidth/2;
@@ -533,11 +637,13 @@ try{if(typeof window!=="undefined"){
       return Number.isFinite(value)?Math.max(0,value-epoch):Infinity;
     };
     timeline.startEffect=(a,offset=0)=>{
-      if(dead||ownedTimeline!==timeline||timeline.closed||timeline.paused)throw Error("startup-epoch-stale");
+      if(dead||ownedTimeline!==timeline||timeline.closed||timeline.paused||
+         timeline.mode==="bloom"&&window.__nocturneStartupTimeline!==timeline)throw Error("startup-epoch-stale");
       if(!Number.isFinite(offset)||offset<0||!Number.isFinite(clock.currentTime)||a.timeline!==clock||a.playState==="idle")
         throw Error("startup-effect-timeline");
       a.startTime=epoch+offset;
-      if(dead||ownedTimeline!==timeline||timeline.closed)throw Error("startup-epoch-stale");
+      if(dead||ownedTimeline!==timeline||timeline.closed||
+         timeline.mode==="bloom"&&window.__nocturneStartupTimeline!==timeline)throw Error("startup-epoch-stale");
     };
   }
   function resumePrepared(timeline){
@@ -598,13 +704,16 @@ try{if(typeof window!=="undefined"){
       finishAt=playStart+timeline.finishLength;
       ownedTimeline=timeline;window.__nocturneStartupTimeline=timeline;
       homeRegistry=window.__zenSharedHomeV1;
-      const surface=one?get("oneplane-toolbar-surface"):null;
-      // Animate the actual decorative surface, not a full-window cover.
-      if(surface)reveal(surface,{y:-18,delay:timeline.panel,length:timeline.panelLength});
-      decision("assembly.timeline",{panel:!!surface,cardsAt:timeline.cards*scale,homeAt:timeline.home*scale});
+      const surface=one?get("oneplane-toolbar-surface"):null,bloom=timeline.mode==="bloom";
+      if(bloom&&(!one||!rr||!registered||engine?.startupBloomVersion!==1||homeRegistry?.startupBloomVersion!==1))
+        throw Error("assembly-bloom-owner");
+      // Fold preserves its original order. Bloom measures the resting
+      // strip/Island before any direct shape effects are prepared.
+      if(!bloom&&surface)reveal(surface,{y:-18,delay:timeline.panel,length:timeline.panelLength});
+      decision("assembly.timeline",{mode:bloom?"bloom":"fold",panel:!!surface,cardsAt:timeline.cards*scale,homeAt:timeline.home*scale});
       // The native floating field may be a top-layer popover; never clip
       // its parent during its independent entrance.
-      if(ur&&!floating)openFromCenter(url,45,410);
+      if(!bloom&&ur&&!floating)openFromCenter(url,45,410);
       if(dead)return;
       if(one&&rr){
         const cards=[...row.querySelectorAll(".oneplane-tab,.oneplane-split-group")];
@@ -614,13 +723,28 @@ try{if(typeof window!=="undefined"){
         // Remove per-card startup gates together, including split members.
         for(const n of cards){n.setAttribute(MANAGED,"true");seen.add(n);}
         if(!painted){
-          const handle=engine?.start(row,{owner:"startup",direction:"in",duration:Math.round(timeline.cardsLength*scale),delay:Math.round(timeline.cards*scale),paused:timeline.paused,observeEffect:timeline.observeEffect});
+          const options={owner:"startup",direction:"in",duration:Math.round(timeline.cardsLength*scale),delay:Math.round(timeline.cards*scale),paused:timeline.paused,observeEffect:timeline.observeEffect};
+          if(bloom){
+            const fold=startupTimeline(0,scale);
+            options.duration=Math.round(fold.cardsLength*scale);options.delay=Math.round(fold.cards*scale);
+            options.bloomTimeline=timeline;
+          }
+          const handle=engine?.start(row,options);
           if(dead||window.__nocturneCenterMotion!==engine){handle?.release();finish();return;}
           centerHandle=handle;
         }else engine?.releasePending();
-        decision("assembly.center.result",{painted,gated,cold,engine:!!engine,count:centerHandle?.count||0});
-        const plus=row.querySelector(".oneplane-new-tab");if(bounds(plus,true))slide(plus,-26,0,400,350);
-        if(ir)reveal(island,{delay:150,length:190});
+        decision("assembly.center.result",{painted,gated,cold,engine:!!engine,count:centerHandle?.count||0,mode:centerHandle?.mode||"none"});
+        const plus=row.querySelector(".oneplane-new-tab");
+        if(bloom){
+          if(painted||cards.length&&!centerHandle)throw Error("assembly-bloom-center");
+          if(surface)bloomStage(surface,timeline.bloom.panel);
+          if(ur&&!floating)bloomStage(url,timeline.bloom.search);
+          if(bounds(plus,true))bloomStage(plus,timeline.bloom.tabs);
+          if(ir)bloomIsland(island,timeline.bloom);
+        }else{
+          if(bounds(plus,true))slide(plus,-26,0,400,350);
+          if(ir)reveal(island,{delay:150,length:190});
+        }
       }else{
         // Move actual native tabs instead of fading the acrylic sidebar.
         const sidebar=get("zen-tabs-wrapper")||get("TabsToolbar"),sr=bounds(sidebar,true);
@@ -633,14 +757,20 @@ try{if(typeof window!=="undefined"){
       }
       controls(row,url,center);
       if(dead)return;
-      bookmarkHandle=acquireStartupBookmarks(engine,items,timeline);
+      if(!bloom)bookmarkHandle=acquireStartupBookmarks(engine,items,timeline);
       if(dead)return;
       if(one&&window.__nocturneCenterMotion!==engine){finish();return;}
       if(!bookmarkHandle)revealBookmarks(center);
-      if(floating)openFromCenter(floating,590,440);
+      if(floating){if(bloom)bloomStage(floating,timeline.bloom.search);else openFromCenter(floating,590,440);}
       if(dead)return;
+      if(bloom)verifyBloomDirect(timeline);
+      if(dead)return;
+      const stagedHome=bloom&&get("zen-shared-home")?.hasAttribute("data-zh-startup");
       homeRegistry?.playStartup?.(timeline);
       if(dead)return;
+      if(bloom&&(window.__nocturneStartupTimeline!==timeline||window.__nocturneCenterMotion!==engine||
+         window.__zenSharedHomeV1!==homeRegistry||stagedHome&&!timeline.homeLease))
+        throw Error("assembly-bloom-home");
       root.setAttribute(PHASE,"playing");
       // Places and Zen's floating input can initialize after chrome-ready.
       // Keep only these late nodes gated until they receive their effect.
@@ -667,14 +797,19 @@ try{if(typeof window!=="undefined"){
           decision("assembly.skip",{reason:"insufficient-budget",stage:"resume",remaining:deadline-resumedAt,needed:plan.finishLength});finish("insufficient-budget");return;
         }
         const fromBoot=bootPreparing;
+        if(bloom&&(window.__nocturneStartupTimeline!==timeline||window.__nocturneCenterMotion!==engine||
+          window.__zenSharedHomeV1!==homeRegistry))throw Error("assembly-bloom-owner");
         bindStartupEpoch(timeline,document.timeline);
         bootPreparing=false;
         playStart=resumedAt;timeline.start=playStart;timeline.paused=false;
         finishAt=playStart+timeline.finishLength;
         const legacy=resumePrepared(timeline);
         if(dead)return;
+        if(bloom&&(legacy||window.__nocturneStartupTimeline!==timeline||
+           window.__nocturneCenterMotion!==engine||window.__zenSharedHomeV1!==homeRegistry))
+          throw Error("assembly-bloom-epoch");
         timeline.legacy=legacy;
-        decision("assembly.epoch",{prepared:animations.size,legacy,fromBoot});
+        decision("assembly.epoch",{mode:bloom?"bloom":"fold",prepared:animations.size,legacy,fromBoot});
         if(fromBoot)decision("boot.assembly.start",{age:playStart-started,prepared:animations.size});
         scheduleLate();
         armFinish(finishAt);
@@ -709,6 +844,16 @@ try{if(typeof window!=="undefined"){
   function tick(){
     raf=0;if(dead||playing)return;
     try{checkReadiness();}catch(error){decision("assembly.readiness.error",{name:error?.name});finish("setup-failed");}
+  }
+  function selectStartupPlan(one,overhead){
+    const fold=startupTimeline(0,scale);
+    if(!BLOOM_CANDIDATE||!one||lateStart||!registered||window.__nocturneLayoutStartup?.initial!==true||
+       window.__nocturneCenterMotion?.startupBloomVersion!==1||window.__zenSharedHomeV1?.startupBloomVersion!==1)
+      return fold;
+    const candidate=startupTimeline(0,scale,"bloom");
+    if(startupFits(candidate,now(),deadline,overhead))return candidate;
+    decision("assembly.bloom.fallback",{reason:"budget"});
+    return fold;
   }
   function checkReadiness(){
     if(now()>=deadline){decision("assembly.skip",{reason:"deadline",nativeReady,settled,state:root.getAttribute(READY)});finish("watchdog");return;}
@@ -751,7 +896,9 @@ try{if(typeof window!=="undefined"){
     window.__nocturneTrace?.("assembly.ready",{one,active,state,expected,nativeReady,settled,homeState,resourceTimeout:waiting},{sample:2500});
     if(dead)return;
     // Do not start a full sequence which cannot fit the remaining budget.
-    const overhead=boot?BOOT_EXIT+150:0,needed=plan.finishLength+overhead;
+    const overhead=boot?BOOT_EXIT+150:0;
+    plan=selectStartupPlan(one,overhead);
+    const needed=plan.finishLength+overhead;
     if(!startupFits(plan,now(),deadline,overhead)){decision("assembly.skip",{reason:"insufficient-budget",remaining:deadline-now(),needed});finish("insufficient-budget");return;}
     console.info("[Zen Refined] Center Assembly launch: "+(one?"OnePlane":"native"));
     launch(one);
@@ -832,6 +979,10 @@ try{if(typeof window!=="undefined"){
       }
       ${base}[data-zr-startup-move] {
         translate: calc(var(--zr-startup-dx) * (1 - var(${PROGRESS}))) calc(var(--zr-startup-dy) * (1 - var(${PROGRESS}))) !important;
+      }
+      ${base}[data-zr-startup-bloom-shape] {
+        scale: calc(.45 + .55 * var(${PROGRESS})) 1 !important;
+        transform-origin: center center !important;
       }
       ${base}[data-zr-startup-clip] {
         clip-path: inset(-8px ${edge} -8px ${edge} round 8px) !important;

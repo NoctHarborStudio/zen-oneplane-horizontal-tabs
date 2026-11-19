@@ -237,3 +237,8 @@ Existing events retained; invalid timing contracts and competing effects fail op
 ### Preview.94 — Home Bloom candidate
 
 `home.bloom.acquire` reports effects and stageEnd only, existing `home.startup.error` reports error class. No new recorder, timing loop, content, titles, workspace identity or URL fields. Dormant explicit candidate; actual native evidence pending.
+
+
+### Preview.95 — coordinated candidate
+
+`assembly.bloom.direct`: count and number of preflight checks; `assembly.bloom.fallback`: budget reason; timeline/epoch/center result now report mode (fold/bloom or exact center handle mode). No new recorder, persistent sampling, identity, titles, URLs or content. Candidate remains disabled.
