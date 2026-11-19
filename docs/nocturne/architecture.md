@@ -190,3 +190,7 @@ The existing Layout startup record publishes the Home trigger's readiness outcom
 ### A3.3-R absolute deadline contract
 
 Prelude owns the initial cover and absolute expiry until adoption, then Assembly owns the inherited deadline. Its existing finish timer is rearmed for earlier completion but never beyond that deadline; stale callbacks are fenced. Center Motion's independent orphan guard is bounded to the available deadline. Full timeline/outcome consolidation and topology handoff remain A3.4/A3.6. Native compatibility and paintability are not established by source tests.
+
+### A3.4a — startup timing plan
+
+The generated Startup Animation entrypoint consumes the pure startup timing plan; admission and late reveal use one bounded completion budget. The controller still owns its mutable runtime epoch, effects and exact Home lease. Document timeline synchronization, completion outcome, Address Cascade and Lab parity remain open.

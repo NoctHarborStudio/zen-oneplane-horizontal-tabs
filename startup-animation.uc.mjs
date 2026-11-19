@@ -1,6 +1,33 @@
+// Pure timing plan for Center Assembly; base offsets are unscaled milliseconds.
+// The runtime owns the epoch and lifecycle; this module owns no DOM or timers.
+function startupTimeline(start,scale){
+  const duration=Math.round(scale*1050);
+  return {
+    start,scale,panel:0,panelLength:220,cards:245,cardsLength:650,
+    bookmarks:470,home:650,homeLength:330,end:1190,
+    finishLength:Math.max(duration+80,1190*scale),
+    lateLimit:duration+420
+  };
+}
+
+function startupFits(plan,now,deadline,overhead=0){
+  return Number.isFinite(now)&&Number.isFinite(deadline)&&Number.isFinite(overhead)&&
+    overhead>=0&&now+plan.finishLength+overhead<deadline;
+}
+
+// A late target either has enough time to reach its resting frame or is
+// left ungated. Never schedule a minimum-length effect past the hard cap.
+function startupLateEffect(plan,start,finishAt,deadline,now,delay,length){
+  const wait=Math.max(0,start+delay*plan.scale-now);
+  const cap=Math.min(deadline,start+plan.lateLimit);
+  const available=cap-now-wait-65;
+  if(!Number.isFinite(available)||available<240)return null;
+  const time=Math.min(available,Math.max(240,Math.min(length*plan.scale,finishAt-now-wait-60)));
+  return {delay:wait,length:time,finishAt:now+wait+time+65};
+}
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.85"};
+  const event="assembly.script",data={version:"0.3.0-preview.86"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -51,11 +78,7 @@ try{if(typeof window!=="undefined"){
   // New installs retain the manifest default (1050 ms).
   const duration=Math.max(400,Math.min(1500,prefs.getIntPref(DURATION,1050)));
   const scale=duration/1050;
-  // Absolute offsets on one clock. The surface settles before card motion,
-  // then Home reveals its three sections after the initial card burst.
-  function startupTimeline(start,scale){
-    return {start,scale,panel:0,panelLength:220,cards:245,cardsLength:650,bookmarks:470,home:650,homeLength:330,end:1190};
-  }
+  const plan=startupTimeline(0,scale);
   const started=now();let deadline=started+8000,timerEpoch=0;
   let dead=false,playing=false,settling=false,raf=0,timer=0,settled=false,nativeReady=false,readyAt=0,holdNode=null;
   let nativeObserver=null,style=null,lateObserver=null,lateResize=null,lateFrame=0,playStart=0,finishAt=0,sheetURI=null,nativeTimer=0;
@@ -346,9 +369,14 @@ try{if(typeof window!=="undefined"){
     // Do not replace a nonzero native translation (notably the floating
     // URL bar). Clip and fade the actual popup instead.
     if(!canMove){x=0;y=0;}
-    const start=late?Math.max(0,playStart+delay*scale-now()):Math.max(0,delay*scale);
-    const time=late?Math.max(240,Math.min(length*scale,finishAt-now()-start-60)):length*scale;
-    if(late)extendFinish(now()+start+time+65);
+    const lateEffect=late?startupLateEffect(plan,playStart,finishAt,deadline,now(),delay,length):null;
+    if(late&&!lateEffect){
+      decision("assembly.late.skip",{reason:"insufficient-budget"});
+      return false;
+    }
+    const start=lateEffect?.delay??Math.max(0,delay*scale);
+    const time=lateEffect?.length??length*scale;
+    if(lateEffect)extendFinish(lateEffect.finishAt);
     let acquired=false;
     if(registered){
       // Important theme opacity/translate/clip-path declarations defeat
@@ -376,7 +404,7 @@ try{if(typeof window!=="undefined"){
   function extendFinish(until){
     // Late chrome may get a short reveal but cannot keep the startup hold
     // forever. All cleanup is still guaranteed by the final timer.
-    const end=Math.min(deadline,playStart+duration+420,Math.max(finishAt,until));
+    const end=Math.min(deadline,playStart+plan.lateLimit,Math.max(finishAt,until));
     if(end===finishAt)return;
     finishAt=end;
     armFinish(finishAt);
@@ -491,9 +519,13 @@ try{if(typeof window!=="undefined"){
       const island=one?row?.querySelector(".oneplane-title-island"):null,ir=bounds(island,true);
       const center=ir?ir.left+ir.width/2:one&&rr?rr.left+rr.width/2:ur?ur.left+ur.width/2:window.innerWidth/2;
       playStart=now();
-      const timeline=startupTimeline(playStart,scale);
+      const overhead=bootPreparing?BOOT_EXIT+150:0;
+      if(!startupFits(plan,playStart,deadline,overhead)){
+        decision("assembly.skip",{reason:"insufficient-budget",stage:"launch",remaining:deadline-playStart,needed:plan.finishLength+overhead});finish();return;
+      }
+      const timeline={...plan,start:playStart};
       timeline.paused=bootPreparing;
-      finishAt=playStart+Math.max(duration+80,timeline.end*scale);
+      finishAt=playStart+timeline.finishLength;
       ownedTimeline=timeline;window.__nocturneStartupTimeline=timeline;
       homeRegistry=window.__zenSharedHomeV1;
       const surface=one?get("oneplane-toolbar-surface"):null;
@@ -560,10 +592,13 @@ try{if(typeof window!=="undefined"){
     typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.targets",()=>({seen:seen.size,effects:animations.size,duration,finishAt}),{sample:1800});
       const resume=()=>{
         if(dead||timeline.closed||ownedTimeline!==timeline)return;
-        if(now()>=deadline){finish();return;}
+        const resumedAt=now();
+        if(!startupFits(plan,resumedAt,deadline)){
+          decision("assembly.skip",{reason:"insufficient-budget",stage:"resume",remaining:deadline-resumedAt,needed:plan.finishLength});finish();return;
+        }
         bootPreparing=false;
-        playStart=now();timeline.start=playStart;timeline.paused=false;
-        finishAt=playStart+Math.max(duration+80,timeline.end*scale);
+        playStart=resumedAt;timeline.start=playStart;timeline.paused=false;
+        finishAt=playStart+timeline.finishLength;
         for(const a of animations.keys())try{a.play();}catch{}
         centerHandle?.resume?.();bookmarkHandle?.resume?.();
         if(timeline.homeLease)timeline.homeLease.resume();
@@ -648,8 +683,8 @@ try{if(typeof window!=="undefined"){
     window.__nocturneTrace?.("assembly.ready",{one,active,state,expected,nativeReady,settled,homeState,resourceTimeout:waiting},{sample:2500});
     if(dead)return;
     // Do not start a full sequence which cannot fit the remaining budget.
-    const needed=Math.max(duration+80,1190*scale)+(boot?BOOT_EXIT+150:0);
-    if(now()+needed>=deadline){decision("assembly.skip",{reason:"insufficient-budget",remaining:deadline-now(),needed});finish();return;}
+    const overhead=boot?BOOT_EXIT+150:0,needed=plan.finishLength+overhead;
+    if(!startupFits(plan,now(),deadline,overhead)){decision("assembly.skip",{reason:"insufficient-budget",remaining:deadline-now(),needed});finish();return;}
     console.info("[Zen Refined] Center Assembly launch: "+(one?"OnePlane":"native"));
     launch(one);
   }

@@ -385,5 +385,15 @@
       "path": "src/library/controller.js.part",
       "kind": "section"
     }
+  ],
+  "startupAnimation": [
+    {
+      "path": "src/algorithms/startup-timeline.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/core/startup-animation.js.part",
+      "kind": "section"
+    }
   ]
 }

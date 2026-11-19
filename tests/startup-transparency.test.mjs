@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
+import {startupTimeline,startupFits,startupLateEffect} from "../src/algorithms/startup-timeline.mjs";
 const source=readFileSync(new URL("../startup-animation.uc.mjs",import.meta.url),"utf8");
 const css=readFileSync(new URL("../chrome.css",import.meta.url),"utf8");
 const first=source.slice(source.indexOf("function canStartBeforePaint("),source.indexOf("// No replay on Sine"));
@@ -74,8 +75,9 @@ test("startup gate excludes nested OnePlane buttons from the generic toolbar gat
 });
 
 test("cold assembly stages panel, cards, bookmarks and Home on one bounded timeline",()=>{
- const a=source.indexOf("function startupTimeline("),b=source.indexOf("const started=",a);
- const plan=new Function(source.slice(a,b)+"return startupTimeline")();
+ const plan=startupTimeline;
+ const pure=readFileSync(new URL("../src/algorithms/startup-timeline.mjs",import.meta.url),"utf8");
+ assert.ok(source.startsWith(pure.replace(/^export (function|const) /gm,"$1 ")));
  for(const scale of [.4,1,1.4]){
    const t=plan(123,scale);
    assert.ok(t.panel+t.panelLength<t.cards);
@@ -351,4 +353,29 @@ test("Assembly inherits the original prelude deadline before mounting",()=>{
  ${code}claimBoot();return {deadline,owned:boot===node,phaseOwned,bootOwned};
  `);
  assert.deepEqual(run(),{deadline:8000,owned:true,phaseOwned:true,bootOwned:true});
+});
+
+test("shared timing preserves every supported duration and bounds launch and resume",()=>{
+ for(let duration=400;duration<=1500;duration++){
+   const p=startupTimeline(123,duration/1050);
+   assert.equal(p.finishLength,Math.max(duration+80,1190*(duration/1050)));
+   assert.equal(p.lateLimit,duration+420);
+   assert.equal(startupFits(p,0,p.finishLength),false);
+   assert.equal(startupFits(p,0,p.finishLength+1),true);
+   assert.equal(startupFits(p,0,p.finishLength+470,470),false);
+ }
+ const launch=source.slice(source.indexOf("function launch("),source.indexOf("function schedule(){"));
+ assert.ok(launch.includes("startupFits(plan,playStart,deadline,overhead)"));
+ assert.ok(launch.includes("startupFits(plan,resumedAt,deadline)"));
+ assert.ok(source.includes("startupFits(plan,now(),deadline,overhead)"));
+});
+test("late reveal uses one bounded completion plan or leaves the target ungated",()=>{
+ const p=startupTimeline(0,1);
+ assert.deepEqual(startupLateEffect(p,0,1190,8000,800,590,440),{delay:0,length:330,finishAt:1195});
+ assert.deepEqual(startupLateEffect(p,0,1190,1100,800,590,440),null);
+ assert.deepEqual(startupLateEffect(p,0,1190,8000,1300,590,440),null);
+ const capped=startupLateEffect(p,0,1190,1105,800,590,440);
+ assert.deepEqual(capped,{delay:0,length:240,finishAt:1105});
+ assert.ok(source.includes('if(late&&!lateEffect)'));
+ assert.ok(source.includes('extendFinish(lateEffect.finishAt)'));
 });

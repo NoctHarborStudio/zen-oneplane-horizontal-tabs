@@ -1,3 +1,9 @@
+## 0.3.0-preview.86 — Shared startup timing plan
+
+- Generate the existing Startup Animation entrypoint from a pure timing plan and the controller source.
+- Use a single full-sequence budget at readiness, launch and Boot handoff; fail open when a late target cannot complete before the cap.
+- Preserve normal choreography and preferences; document-epoch synchronization and native verification remain pending.
+
 ## 0.3.0-preview.85 — Startup absolute watchdog and audit
 
 - Correct stale Home source-contract assertion in preview.84 CI; keep captured lease and generation guards.

@@ -321,3 +321,9 @@ Six new permanent regressions: actual async Home trigger tested across launch/ab
 ### Preview.85 integrated Startup deadline audit
 
 Preview.84 canonical CI reported one outdated Home source assertion (540/541 passed); corrected it to require the captured lease and exact Layout record guard. Two new regression cases verify the inherited deadline and stale timer/cap; prelude fixture also verifies expiry prevents replay. Candidate focused fixtures and generated output checks are separate from full canonical CI. All native MB1/2/6/7 validation remains open.
+
+### Preview.86 pure startup timing
+
+Pure plan checks cover all 1,101 supported integer durations, strict launch/resume deadline and minimum late reveal budget. Generated Startup Animation identity checked by source contract. Full canonical CI and native Zen/Gecko remain separate gates; no shared document epoch or Lab parity claim.
+
+Candidate checks: 33/33 Startup Transparency fixture bodies PASS in isolated V8 with actual sources and mocked Node file/assert adapters; all eleven changed runtime scripts parse in V8. Existing generated Layout/Library/Library Services outputs match exact versioned source-fragment substitution and Startup output matches pure inline + controller. This is not full Node CI or native evidence.
