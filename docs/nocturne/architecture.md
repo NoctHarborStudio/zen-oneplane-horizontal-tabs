@@ -281,3 +281,8 @@ Revision-2 bookmark registry fences installation and final release, retires reco
 ### A4.3a — height and contour scheduling (preview.104)
 
 One Layout geometry RAF owns dirty height/contour passes. Reuse a pass-local resting row snapshot only if no wrapper-height write intervenes; explicit force preflight remains synchronous. Stable bookmark provider can consume the exact toolbar rectangle. Synchronous centering, active feature animations and native geometry leases remain distinct. Further read/compute/write consolidation and native evidence pending.
+
+
+### A4.3b — coordinator audit (preview.105)
+
+CENTER/HEIGHT/CONTOUR requests share one ticketed scheduler. Successful direct native centering requests only height/contour unless CENTER is already pending. Reentry is rejected rather than nested; forced pass preserves new dirty bits. Height is validated/read back before acknowledgement. Address extent is reused only within the same read/write pass and reread after actual geometry writes. Native convergence and explicit preflight outcome integration remain open.

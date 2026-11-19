@@ -36,3 +36,6 @@ A4.2-R: revision-2 internal bookmark registry fences install/release and old-own
 
 
 A4.3a: Layout geometry owns a single height/contour dirty RAF, pass-local row rectangles and synchronous preflight. Existing direct centering/feature motion paths remain; do not cache rectangles across structural writes or frames. Next integrated audit and remaining resting geometry consolidation.
+
+
+A4.3b: geometry coordinator uses CENTER/HEIGHT/CONTOUR bits and exact callback tickets. Immediate native centering can request height-only follow-up without erasing pending center; forced preflight rejects reentry and preserves new requests. No persistent rectangle cache. Remaining explicit preflight outcome integration and resting centering/partition consolidation belong to A4.3c.

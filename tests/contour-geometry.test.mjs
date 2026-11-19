@@ -89,7 +89,7 @@ test("one contour writer; no bookmark SVG, override, contour RAF or fade prefere
  assert.ok(!css.includes("data-zr-bm-stable-contour"));
  assert.ok(c.includes('if(envelope?.status==="hold")return;'));
  assert.ok(c.includes('if(bookmarkContourPolicy()!=="off"){contourUntil=0;return;}'));
- assert.ok(read("src/layout/geometry.js.part").includes("syncAddressState?.();\n    const measured=measureToolbarGeometry(true);"));
+ assert.ok(read("src/layout/geometry.js.part").includes("syncAddressState?.();\n      const measured=measureToolbarGeometry(true);"));
 });
 function layoutFixture(){
  const f=fakeSurface(),input=fixture(),attrs=new Set(),frames=[],events=[];

@@ -5,19 +5,19 @@ const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 const source=read("src/layout/geometry.js.part");
 function setup(){
  const jobs=new Map(),calls=[],reads={nav:0,row:0,bookmark:0};
- let serial=0,height="90px",nextHeight=90,phase=null,callback=null;
+ let serial=0,height="90px",nextHeight=90,phase=null,callback=null,reject=false;
  const mk=(key,h)=>({getBoundingClientRect(){reads[key]++;return {height:h()};}});
  const navbar=mk("nav",()=>50),row=mk("row",()=>nextHeight-20),bookmarks=mk("bookmark",()=>20);
  row.hasAttribute=()=>false;
- const toolbarWrapper={style:{getPropertyValue:()=>height,setProperty(k,v){height=v;calls.push("height:"+v);}}};
+ const toolbarWrapper={style:{getPropertyValue:()=>height,setProperty(k,v){if(!reject){height=v;calls.push("height:"+v);}}}};
  const root={hasAttribute:k=>k===phase,getAttribute:()=>phase};
  const window={performance:{now:()=>1000},requestAnimationFrame(fn){jobs.set(++serial,fn);return serial;},cancelAnimationFrame(id){jobs.delete(id);},__zenMagneticBookmarksShared:{syncAddressState(){calls.push("suspend");}}};
  const body=source.slice(source.indexOf("  function readToolbarRows("),source.indexOf("  function observeGeometry("));
  const api=new Function("window","root","navbar","row","bookmarks","toolbarWrapper","calls","callback",
-  'let dead=false,geometryFrame=0,geometryDirty=0,geometryRunning=false,contourRevision=0,adaptiveHeightDirty=false,panelSwitchUntil=0,frame=0;const GEOMETRY_HEIGHT=1,GEOMETRY_CONTOUR=2;function hoverSupported(){return true}function centerToolbar(){calls.push("center");callback()}function refreshIndicator(){calls.push("indicator")}function stepContour(now,rows){calls.push(rows?"contour:shared":"contour:fresh")}function paintContour(force,prehover,rows){calls.push(rows?"force:shared":"force:fresh")}function sync(){calls.push("sync")}'+body+
-  'return {scheduleGeometry,queueGeometry,cancelGeometry,prepareWorkspaceGeometry,kill(){dead=true;cancelGeometry()},pending:()=>geometryDirty,revision:()=>contourRevision};')
+  'let dead=false,geometryFrame=0,geometryDirty=0,geometryRunning=false,geometryTicket=0,centering=false,contourRevision=0,adaptiveHeightDirty=false,panelSwitchUntil=0,frame=0;const GEOMETRY_HEIGHT=1,GEOMETRY_CONTOUR=2,GEOMETRY_CENTER=4;function hoverSupported(){return true}function centerToolbar(){calls.push("center");callback()}function refreshIndicator(){calls.push("indicator")}function stepContour(now,rows){calls.push(rows?"contour:shared":"contour:fresh")}function paintContour(force,prehover,rows){calls.push(rows?"force:shared":"force:fresh")}function sync(){calls.push("sync")}'+body+
+  'return {scheduleGeometry,scheduleMeasuredGeometry,queueGeometry,cancelGeometry,prepareWorkspaceGeometry,kill(){dead=true;cancelGeometry()},pending:()=>geometryDirty,revision:()=>contourRevision};')
   (window,root,navbar,row,bookmarks,toolbarWrapper,calls,()=>callback?.());
- return {api,jobs,calls,reads,set height(v){nextHeight=v;},set phase(v){phase=v;},set callback(v){callback=v;},
+ return {api,jobs,calls,reads,set height(v){nextHeight=v;},set phase(v){phase=v;},set callback(v){callback=v;},set reject(v){reject=v;},
   tick(){const batch=[...jobs];for(const [id,fn] of batch){jobs.delete(id);fn(1000);}}};
 }
 test("height and contour requests coalesce into one pass with shared row snapshot",()=>{
@@ -48,6 +48,42 @@ test("one geometry RAF owner and retained native preflight",()=>{
  const c=read("src/layout/contour-controller.js.part"),s=read("src/layout/contour-settings.js.part"),l=read("src/core/window-lifecycle.js.part");
  assert.ok(!c.includes("requestAnimationFrame"));assert.ok(!s.includes("contourFrame"));
  assert.ok(l.includes('cleanupStep("cancelGeometry()"'));
- assert.ok(source.includes("queueGeometry(GEOMETRY_HEIGHT|GEOMETRY_CONTOUR)"));
+ assert.ok(source.includes("queueGeometry(GEOMETRY_CENTER|GEOMETRY_HEIGHT|GEOMETRY_CONTOUR)"));
  assert.ok(source.includes("paintContour(true,false,measured&&!measured.changed?measured.rows:null)"));
+});
+
+test("completed immediate center queues height only and never clears pending center",()=>{
+ const x=setup();x.api.scheduleMeasuredGeometry(true);x.tick();
+ assert.deepEqual(x.calls,["contour:shared","indicator"]);
+ x.api.scheduleGeometry();x.api.scheduleMeasuredGeometry(true);x.tick();
+ assert.deepEqual(x.calls.slice(-3),["center","contour:shared","indicator"]);
+});
+test("cancelled callback cannot consume a newer geometry request",()=>{
+ const x=setup();x.api.scheduleGeometry();const stale=[...x.jobs.values()][0];
+ x.api.cancelGeometry();x.api.scheduleMeasuredGeometry(true);stale(999);
+ assert.equal(x.jobs.size,1);assert.equal(x.calls.length,0);x.tick();
+ assert.deepEqual(x.calls,["contour:shared","indicator"]);
+});
+test("preflight reentry cannot nest a centering transaction",()=>{
+ const x=setup();x.callback=()=>{x.callback=null;assert.equal(x.api.prepareWorkspaceGeometry(),false);};
+ x.api.scheduleGeometry();x.tick();assert.equal(x.jobs.size,1);
+ x.tick();assert.equal(x.calls.filter(v=>v==="center").length,2);
+ assert.ok(!x.calls.includes("suspend"));
+});
+test("forced pass preserves invalidation raised during centering",()=>{
+ const x=setup();x.callback=()=>{x.callback=null;x.api.scheduleGeometry();};
+ assert.equal(x.api.prepareWorkspaceGeometry(),true);
+ assert.equal(x.jobs.size,1);x.tick();assert.equal(x.jobs.size,0);
+});
+test("invalid or rejected height does not publish shared pre-write geometry",()=>{
+ const x=setup();x.height=NaN;x.api.scheduleGeometry();x.tick();
+ assert.deepEqual(x.calls,["center","contour:fresh"]);
+ x.height=130;x.reject=true;x.api.scheduleGeometry();x.tick();
+ assert.deepEqual(x.calls.slice(-2),["center","contour:fresh"]);
+ x.reject=false;x.api.scheduleGeometry();x.tick();assert.ok(x.calls.includes("height:130px"));
+});
+test("immediate native resize and toolbar reconciliation do not request redundant centering",()=>{
+ assert.ok(read("src/core/window-lifecycle.js.part").includes("scheduleMeasuredGeometry(centerToolbar());"));
+ assert.ok(read("src/toolbar/tab-sync.js.part").includes("const centered=centerToolbar();\n    observeGeometry(centered);"));
+ assert.ok(source.includes("if(iconChanged||widthChanged||addressMarginsAtRead===null)"));
 });

@@ -287,3 +287,8 @@ Existing contour.paint/commit.error/provider.error and bookmarks lifecycle trace
 ### Preview.104 — geometry coordinator
 
 Existing geometry.height, geometry.workspace.prepare and contour.paint traces are retained. Height/contour share one scheduler; no new sampling or per-frame logs. Native matched profiling remains required to quantify avoided reads and paint timing.
+
+
+### Preview.105 — geometry audit
+
+`geometry.preflight.reentry` indicates rejected nested preflight (500 ms throttle, flush); `geometry.height.rejected` reports failed inline readback (force only, 500 ms); `geometry.pass.error` reports error name and dirty mask (500 ms, flush). Existing geometry.height/contour.paint retained. No new sampling loop. CENTER=4, HEIGHT=1, CONTOUR=2.

@@ -1154,3 +1154,8 @@ NC4-001/053 source audit: exact revision-2 bookmark registry and in-flight insta
 ### A4.3a — preview.104
 
 NC4-004/013 partial source consolidation: height/contour dirty scheduler and pass-local row snapshot, reuse collapsed slot widths. Remaining sync/ResizeObserver centering, partition, anchor, indicator and scrolling dependencies need audit. NC4-052/018 remain open. No native performance claim.
+
+
+### A4.3b — preview.105
+
+NC4-004/013 partial: exact RAF tickets, reentry fence, height validation/readback, distinct CENTER vs HEIGHT/CONTOUR requests and pass-local address extent reuse. Preflight callers do not yet handle false outcome; split/topology and remaining read/write paths need audit. NC4-018/052 and native performance/paint remain open.

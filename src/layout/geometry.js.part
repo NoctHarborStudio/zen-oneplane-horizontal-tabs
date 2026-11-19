@@ -1,8 +1,8 @@
   const leftIds = new Set(["oneplane-hub-button", "oneplane-download-indicator-slot", "sidebar-button", "sidebar-toggle-button", "back-button",
     "forward-button", "stop-reload-button", "reload-button", "home-button", "urlbar-container"]);
   const centerIds = new Set(["oneplane-tabs", "oneplane-center-start", "oneplane-center-end"]);
-  const GEOMETRY_HEIGHT=1,GEOMETRY_CONTOUR=2;
-  let geometryFrame=0,geometryDirty=0,geometryRunning=false;
+  const GEOMETRY_HEIGHT=1,GEOMETRY_CONTOUR=2,GEOMETRY_CENTER=4;
+  let geometryFrame=0,geometryDirty=0,geometryRunning=false,geometryTicket=0;
   let geometryObserver = null;
   let centering=false;
   const adaptiveGeometryPrefs={observe(){schedule();scheduleGeometry();}};
@@ -63,7 +63,7 @@
     refreshIndicator();
   }
   function centerToolbar(){
-    if(centering||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-center-motion")||row.hasAttribute("data-op-magnetic-pull"))return;
+    if(centering||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-closing")||root.hasAttribute("data-zr-center-motion")||row.hasAttribute("data-op-magnetic-pull"))return false;
     centering=true;
     try {
       const targetRect = target.getBoundingClientRect();
@@ -71,14 +71,15 @@
       // Native window buttons and all left/right controls consume edge space.
       let left = Math.max(0, targetRect.left);
       let right = Math.max(0, window.innerWidth - targetRect.right);
-      let addressExtent=0;
+      let addressExtent=0,addressMarginsAtRead=null;
       for (const child of target.children) {
         if (centerIds.has(child.id) || child.localName === "toolbarspring") continue;
         const box = child.getBoundingClientRect();
         if (!box.width) continue;
         const style = window.getComputedStyle(child);
-        const extent = box.width + (parseFloat(style.marginLeft) || 0) + (parseFloat(style.marginRight) || 0);
-        if(child===url){addressExtent=extent;continue;}
+        const margins=(parseFloat(style.marginLeft)||0)+(parseFloat(style.marginRight)||0);
+        const extent=box.width+margins;
+        if(child===url){addressExtent=extent;addressMarginsAtRead=margins;continue;}
         if (leftIds.has(child.id)) left += extent;
         else right += extent;
       }
@@ -97,6 +98,7 @@
       // Use the very same collapsed geometry for address budgeting and
       // the final partition; painted hover widths never enter the plan.
       const widths=stripOrderSnapshot.map(n=>compactSlotWidth(n,tabWidth));
+      const naturalTabsWidth=widths.reduce((n,w)=>n+w+3,0);
       const groups=stripOrderSnapshot.map(n=>n.classList.contains("oneplane-split-group"));
       const boundary=islandBoundary(widths,tabWidth+3);
       const returnReserve=row.hasAttribute("data-op-adaptive-compact")?12:0;
@@ -107,7 +109,7 @@
       };
       if(!frozen){
         const preferred=prefs.getIntPref("zen.oneplane.address-width",180);
-        const natural=widths.reduce((n,w)=>n+w+3,0)+(iconHome?32:180)+tabWidth+18;
+        const natural=naturalTabsWidth+(iconHome?32:180)+tabWidth+18;
         const fullBudget=2*Math.min(window.innerWidth/2-left-preferred-8,window.innerWidth/2-right)-8-2*dragRoom;
         const compactAddress=window.innerWidth<900||(fullBudget<natural&&left+preferred+8>=right);
         // Budget for up to two collapsed cards on each side of Home.
@@ -117,22 +119,24 @@
         const reserve=compactAddress?(canFit(pairReserve)?pairReserve:canFit(singleReserve)?singleReserve:16+dragRoom+4):16+dragRoom+4;
         const baseline=adaptiveAddressWidth(preferred,window.innerWidth,left,reserve,8,compactAddress);
         const addressHidden=url.hasAttribute("data-op-empty")||url.hasAttribute("data-op-home");
-        const urlStyle=window.getComputedStyle(url);
-        const addressMargins=(parseFloat(urlStyle.marginLeft)||0)+(parseFloat(urlStyle.marginRight)||0);
+        const readAddressMargins=()=>{const style=window.getComputedStyle(url);return (parseFloat(style.marginLeft)||0)+(parseFloat(style.marginRight)||0);};
+        const addressMargins=addressMarginsAtRead??readAddressMargins();
         // Only reclaim actual spare width, including native margins and
         // drag-room. Do not move Home, remove upper tabs or change rows.
         const desired=wantsIsland&&!addressHidden?
           reclaimAddressWidth(preferred,baseline,w=>planAt(availableAt(left+w+addressMargins))):baseline;
-        url.toggleAttribute("data-op-address-icon",desired<80);
-        if(url.style.getPropertyValue("--op-url")!==desired+"px"){
+        const iconChanged=url.hasAttribute("data-op-address-icon")!==(desired<80);
+        const widthChanged=url.style.getPropertyValue("--op-url")!==desired+"px";
+        if(iconChanged)url.toggleAttribute("data-op-address-icon",desired<80);
+        if(widthChanged){
           setLength(url,"--op-url",desired);
           addressCompactWidth=0;addressAnchor=null;alignAddressStart();
         }
-        addressExtent=url.hasAttribute("data-op-empty")||url.hasAttribute("data-op-home")?0:
-          url.getBoundingClientRect().width+(parseFloat(window.getComputedStyle(url).marginLeft)||0)+(parseFloat(window.getComputedStyle(url).marginRight)||0);
+        if(addressHidden)addressExtent=0;
+        else if(iconChanged||widthChanged||addressMarginsAtRead===null)
+          addressExtent=url.getBoundingClientRect().width+readAddressMargins();
       }
       left+=addressExtent;
-      const naturalTabsWidth=widths.reduce((n,w)=>n+w+3,0);
       const collapsedTabsWidth=Math.min(naturalTabsWidth,Math.max(0,rowWidth-tabWidth-3));
       const trailingReserve=Math.max(0,rowWidth-collapsedTabsWidth);
       const available=availableAt(left);
@@ -168,6 +172,7 @@
       setLength(row, "--op-left-room", leftSpacer.getBoundingClientRect().width - 4);
       syncLaneScroll();
       refreshOverflowSlider();
+      return !dead;
     } finally {centering=false;}
   }
   // Read actual resting rows only after centering/partition writes.
@@ -176,70 +181,105 @@
     return {nav:navbar?.getBoundingClientRect()??null,row:row.getBoundingClientRect(),
       bookmark:bookmarks&&!bookmarks.collapsed&&!bookmarks.hidden?bookmarks.getBoundingClientRect():null};
   }
-  function measureToolbarGeometry(force=false){
+  function measureToolbarGeometry(force=false,center=true){
     if(dead||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-closing")||(!force&&root.hasAttribute("data-zr-center-motion")))return null;
-    centerToolbar();
+    if(center)centerToolbar();
     if(dead)return null;
     if(!force&&!adaptiveHeightDirty&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
        window.performance.now()<panelSwitchUntil)return null;
-    adaptiveHeightDirty=false;
     const rows=readToolbarRows();
     const next=Math.round(Math.max(rows.nav?.height||0,rows.row.height||0)+(rows.bookmark?.height||0))+"px";
+    if(![rows.nav?.height??0,rows.row.height,rows.bookmark?.height??0].every(v=>Number.isFinite(v)&&v>=0)||!(parseFloat(next)>0))return null;
     const prior=toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height");
-    const changed=parseFloat(next)>0&&prior!==next;
+    const changed=prior!==next;
     if(changed){
       toolbarWrapper.style.setProperty("--op-measured-toolbar-height",next);
+      if(toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height")!==next){
+        window.__nocturneTrace?.("geometry.height.rejected",{force},{throttle:500});return null;
+      }
       window.__nocturneTrace?.("geometry.height",()=>({old:prior,next,force,overflow:row.hasAttribute("data-op-overflow-row"),phase:root.getAttribute("data-zr-workspace-phase")}),{sample:1800});
     }
+    adaptiveHeightDirty=false;
     return {rows,changed};
+  }
+  function armGeometry(){
+    if(dead||!geometryDirty||geometryFrame||geometryRunning)return;
+    const ticket=++geometryTicket;
+    geometryFrame=window.requestAnimationFrame(now=>flushGeometry(now,ticket));
   }
   function queueGeometry(bits){
     if(dead)return;
     geometryDirty|=bits;
-    if(!geometryFrame&&!geometryRunning)geometryFrame=window.requestAnimationFrame(flushGeometry);
+    armGeometry();
   }
   function scheduleGeometry(){
     if(dead)return;
     contourRevision++;
+    queueGeometry(GEOMETRY_CENTER|GEOMETRY_HEIGHT|GEOMETRY_CONTOUR);
+  }
+  // An immediate native-boundary center has already executed. Keep any
+  // previously queued CENTER bit, but do not add a redundant one.
+  function scheduleMeasuredGeometry(centered){
+    if(!centered){scheduleGeometry();return;}
+    if(dead)return;
+    contourRevision++;
     queueGeometry(GEOMETRY_HEIGHT|GEOMETRY_CONTOUR);
   }
-  function flushGeometry(now){
+  function flushGeometry(now,ticket){
+    if(ticket!==geometryTicket)return;
     geometryFrame=0;
     if(dead){geometryDirty=0;return;}
     if(geometryRunning)return;
     geometryRunning=true;
     const dirty=geometryDirty;geometryDirty=0;
     try{
-      const measured=dirty&GEOMETRY_HEIGHT?measureToolbarGeometry():null;
+      const measured=dirty&GEOMETRY_HEIGHT?measureToolbarGeometry(false,Boolean(dirty&GEOMETRY_CENTER)):null;
       if(dead)return;
-      // A height write may change the native wrapper/row layout. As
-      // before, follow on the next frame rather than reuse pre-write rects.
       if(measured?.changed)queueGeometry(GEOMETRY_CONTOUR);
       else if(dirty&GEOMETRY_CONTOUR)stepContour(now,measured?.rows??null);
       if(measured&&!dead)refreshIndicator();
+    }catch(error){
+      window.__nocturneTrace?.("geometry.pass.error",{name:error?.name||"Error",dirty},{throttle:500,flush:true});
+      // Do not retry a throwing layout unboundedly; later native
+      // invalidation owns retry. In-pass requests remain queued.
     }finally{
       geometryRunning=false;
-      if(!dead&&geometryDirty&&!geometryFrame)geometryFrame=window.requestAnimationFrame(flushGeometry);
+      armGeometry();
     }
   }
   function cancelGeometry(){
+    geometryTicket++;
     if(geometryFrame)window.cancelAnimationFrame(geometryFrame);
     geometryFrame=0;geometryDirty=0;
   }
-  // Explicit workspace/startup preflight remains synchronous. Never use
-  // the pre-height-write rows if the wrapper height was changed.
+  // Explicit workspace/startup preflight remains synchronous, except
+  // when a native callback reenters an already running write transaction.
   function prepareWorkspaceGeometry(){
-    window.__nocturneTrace?.("geometry.workspace.prepare",()=>({frame:!!frame,geometryFrame:!!geometryFrame}),{sample:1800});
-    if(dead)return;
-    if(frame){window.cancelAnimationFrame(frame);frame=0;sync();}
-    cancelGeometry();
-    window.__zenMagneticBookmarksShared?.syncAddressState?.();
-    const measured=measureToolbarGeometry(true);
-    if(dead)return;
-    paintContour(true,false,measured&&!measured.changed?measured.rows:null);
-    if(measured&&!dead)refreshIndicator();
+    if(dead)return false;
+    if(geometryRunning||centering){
+      window.__nocturneTrace?.("geometry.preflight.reentry",{},{throttle:500,flush:true});
+      scheduleGeometry();
+      return false;
+    }
+    geometryRunning=true;
+    try{
+      window.__nocturneTrace?.("geometry.workspace.prepare",()=>({frame:!!frame,geometryFrame:!!geometryFrame}),{sample:1800});
+      if(dead)return false;
+      if(frame){window.cancelAnimationFrame(frame);frame=0;sync();}
+      if(dead)return false;
+      cancelGeometry();
+      window.__zenMagneticBookmarksShared?.syncAddressState?.();
+      const measured=measureToolbarGeometry(true);
+      if(dead)return false;
+      paintContour(true,false,measured&&!measured.changed?measured.rows:null);
+      if(measured&&!dead)refreshIndicator();
+      return Boolean(measured)&&!dead;
+    }finally{
+      geometryRunning=false;
+      armGeometry();
+    }
   }
-  function observeGeometry() {
+  function observeGeometry(centered=false) {
     if (!geometryObserver) return;
     geometryObserver.disconnect();
     // The wrapper's height is animated; observing it would trigger a
@@ -247,6 +287,6 @@
     for (const element of [target, navbar, bookmarks, ...target.children]) {
       if(element&&!centerIds.has(element.id))geometryObserver.observe(element);
     }
-    scheduleGeometry();
+    scheduleMeasuredGeometry(centered);
   }
 

@@ -1,3 +1,11 @@
+## 0.3.0-preview.105 — Geometry coordinator audit and centering requests
+
+- Distinguish center, height and contour requests; preserve immediate native ResizeObserver/toolbar reconciliation while avoiding an unconditional second centering pass.
+- Fence queued callbacks with exact tickets, reject nested preflight transactions and preserve invalidations raised during forced measurement.
+- Validate height input and CSS readback; report bounded pass errors. Stop the visible contour transition tail during close.
+- Reuse initial address margins/extent when no address geometry write intervenes; reuse the same collapsed width sum for address budgeting and tab centering.
+- Retain existing synchronous topology, motion and native interaction boundaries; native paint/performance validation remains pending.
+
 ## 0.3.0-preview.104 — Geometry coordinator, first slice
 
 - Coalesce Layout height and contour invalidations into one lifecycle-owned RAF with explicit dirty bits. Reuse a pass-local row snapshot when height is unchanged; never reuse pre-height-write rectangles for contour.

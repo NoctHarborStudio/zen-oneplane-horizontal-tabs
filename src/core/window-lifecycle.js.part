@@ -217,8 +217,7 @@
       if(dead)return;
       // ResizeObserver delivery occurs before paint. Compensate edge
       // width changes now rather than a frame later.
-      centerToolbar();
-      scheduleGeometry();
+      scheduleMeasuredGeometry(centerToolbar());
     });
     observeGeometry();
     if(bookmarks){

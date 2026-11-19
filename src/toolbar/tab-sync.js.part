@@ -233,7 +233,7 @@
     if (rightSpacer.parentElement !== target) row.after(rightSpacer);
     hub.ensure();ensureDownloadHost();
     movePageActions();
-    centerToolbar();
-    observeGeometry();
+    const centered=centerToolbar();
+    observeGeometry(centered);
   });
 
