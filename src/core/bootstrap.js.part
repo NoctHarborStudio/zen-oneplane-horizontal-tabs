@@ -59,7 +59,8 @@ function finishCleanup(){
 
 const controller = { get active() { return applied && !disposed; },
   get ownsPreferences(){return ownsPreferences;}, cleanup,
-  prepareWorkspaceGeometry(){return removeTabStrip?.prepareWorkspaceGeometry?.();},
+  geometryPreflightVersion:1,
+  prepareWorkspaceGeometry(){return !disposed&&removeTabStrip?.prepareWorkspaceGeometry?.()===true;},
   invalidateBookmarkContour(){if(!disposed)removeTabStrip?.invalidateBookmarkContour?.();},
   prepareBookmarkContour(){if(!disposed)removeTabStrip?.prepareBookmarkContour?.();},
   captureCenterTopology(row){return removeTabStrip?.captureCenterTopology?.(row)??null;},

@@ -27,31 +27,31 @@
     catch{return "off";}
   }
   function paintContour(force=false,prehover=false,rows=null){
-    if(contourPainting)return;
+    if(contourPainting)return false;
     contourPainting=true;
-    try{paintContourNow(force,prehover,rows);}finally{contourPainting=false;}
+    try{return paintContourNow(force,prehover,rows);}finally{contourPainting=false;}
   }
   function paintContourNow(force,prehover,rows){
-    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-zr-closing")||root.hasAttribute("data-op-bookmark-wave")||document.getElementById("PlacesToolbarItems")?.hasAttribute("data-zr-fold-bookmarks")||(!force&&(root.hasAttribute("data-zr-workspace-phase")||root.getAttribute("data-zr-startup-phase")==="playing"||root.hasAttribute("data-zr-center-motion"))))return;
+    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-zr-closing")||root.hasAttribute("data-op-bookmark-wave")||document.getElementById("PlacesToolbarItems")?.hasAttribute("data-zr-fold-bookmarks")||(!force&&(root.hasAttribute("data-zr-workspace-phase")||root.getAttribute("data-zr-startup-phase")==="playing"||root.hasAttribute("data-zr-center-motion"))))return false;
     // A switch can briefly hide or resize native bookmark controls.
     // Retain the last valid mask until the native layout settles.
-    if(!force&&!prehover&&contourKey&&window.performance.now()<panelSwitchUntil)return;
+    if(!force&&!prehover&&contourKey&&window.performance.now()<panelSwitchUntil)return false;
     const provider=window.__zenMagneticBookmarksShared,revision=contourRevision;
     if(prehover&&contourMode==="stable"&&contourProvider===provider&&contourCommittedRevision===revision&&
-      bookmarkContourPolicy()==="ready")return;
+      bookmarkContourPolicy()==="ready")return true;
     let mode="visible",envelope=null;
     if(bookmarks&&provider?.readContourEnvelope){
       try{envelope=provider.readContourEnvelope(force,bookmarks,rows?.bookmark??null);}
       catch(error){
         window.__nocturneTrace?.("contour.provider.error",{name:error?.name||"Error"},{throttle:500});
-        return; // preserve last valid surface on provider failure
+        return false; // preserve last valid surface on provider failure
       }
-      if(envelope?.status==="hold")return;
+      if(envelope?.status==="hold")return false;
       if(envelope?.status==="ready")mode="stable";
     }
     const wrapper=toolbarWrapper.getBoundingClientRect();
     const nav=rows?.nav??navbar?.getBoundingClientRect();
-    if(wrapper.width<=0||!nav||nav.height<=0)return;
+    if(wrapper.width<=0||!nav||nav.height<=0)return false;
     // The mask and controls share panel travel. Measure the unshifted
     // geometry, otherwise an in-flight reveal would distort the shelf.
     const container=document.getElementById("zen-appcontent-navbar-container");
@@ -76,9 +76,9 @@
     }
     const geometry=contourGeometry({wrapper,nav,row:rr,bookmark,controls,shiftY,trim,settings,mode,
       availableGrowth:mode==="stable"?envelope.availableGrowth:0});
-    if(dead||provider!==window.__zenMagneticBookmarksShared||envelope?.current?.()===false||!geometry)return;
+    if(dead||provider!==window.__zenMagneticBookmarksShared||envelope?.current?.()===false||!geometry)return false;
     if(geometry.key===contourKey&&mode===contourMode){
-      contourProvider=provider;contourCommittedRevision=revision;return;
+      contourProvider=provider;contourCommittedRevision=revision;return true;
     }
     try{
       if(geometry.key!==contourKey)contourKey=commitContourMask(surface,geometry,settings);
@@ -88,11 +88,12 @@
       // Preserve the last committed key and retry on the next existing
       // invalidation. No independent retry timer or RAF.
       window.__nocturneTrace?.("contour.commit.error",{name:error?.name||"Error"},{throttle:500,flush:true});
-      return;
+      return false;
     }
     const {width,height,base,deep,left,right}=geometry;
     window.__nocturneTrace?.("contour.paint",()=>({force,mode,width,height,base,deep,left,right,overflow:compactRows,
       phase:root.getAttribute("data-zr-workspace-phase")}),{throttle:100,sample:1200});
+    return !dead&&provider===window.__zenMagneticBookmarksShared;
   }
   function stepContour(now,rows=null){
     if(dead)return;

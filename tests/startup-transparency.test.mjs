@@ -611,3 +611,26 @@ test("late reveal cannot write styles after synchronous boundary cleanup",()=>{
  `);
  assert.deepEqual(run(),{value:false,effects:0});
 });
+
+test("startup geometry rejection releases startup rather than acquiring effects",()=>{
+ const start=source.indexOf("  function launch(one)"),end=source.indexOf("      const engine=",start);
+ const prefix=source.slice(start,end);
+ const run=new Function("mode",`
+ let dead=false,playing=false,settling=false,boot=null,bootPreparing=false,started=0;
+ const root={getAttribute:()=>null},PHASE="phase",READY="ready",now=()=>0,events=[];
+ const window={__nocturneTrace(){},__oneplaneLayoutController:{geometryPreflightVersion:1,prepareWorkspaceGeometry(){
+   if(mode==="replacement")window.__oneplaneLayoutController={};
+   if(mode==="disposed")dead=true;
+   return mode==="false"?false:mode==="undefined"||mode==="legacy"?undefined:true;
+ }}};
+ if(mode==="missing")delete window.__oneplaneLayoutController;
+ if(mode==="missing-method")delete window.__oneplaneLayoutController.prepareWorkspaceGeometry;
+ if(mode==="legacy")delete window.__oneplaneLayoutController.geometryPreflightVersion;
+ function finish(reason){events.push(reason);dead=true;}
+ ${prefix}events.push("effects");}catch(error){throw error;}}
+ launch(mode!=="native");return events;
+ `);
+ for(const mode of ["false","undefined","missing","replacement","missing-method"])assert.deepEqual(run(mode),["geometry-unready"],mode);
+ for(const mode of ["ready","legacy","native"])assert.deepEqual(run(mode),["effects"],mode);
+ assert.deepEqual(run("disposed"),[]);
+});

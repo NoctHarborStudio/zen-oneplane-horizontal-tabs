@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.105",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.106",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -6938,31 +6938,31 @@ function installTabStrip() {
     catch{return "off";}
   }
   function paintContour(force=false,prehover=false,rows=null){
-    if(contourPainting)return;
+    if(contourPainting)return false;
     contourPainting=true;
-    try{paintContourNow(force,prehover,rows);}finally{contourPainting=false;}
+    try{return paintContourNow(force,prehover,rows);}finally{contourPainting=false;}
   }
   function paintContourNow(force,prehover,rows){
-    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-zr-closing")||root.hasAttribute("data-op-bookmark-wave")||document.getElementById("PlacesToolbarItems")?.hasAttribute("data-zr-fold-bookmarks")||(!force&&(root.hasAttribute("data-zr-workspace-phase")||root.getAttribute("data-zr-startup-phase")==="playing"||root.hasAttribute("data-zr-center-motion"))))return;
+    if(dead||!toolbarWrapper||!hoverSupported()||root.hasAttribute("data-zr-closing")||root.hasAttribute("data-op-bookmark-wave")||document.getElementById("PlacesToolbarItems")?.hasAttribute("data-zr-fold-bookmarks")||(!force&&(root.hasAttribute("data-zr-workspace-phase")||root.getAttribute("data-zr-startup-phase")==="playing"||root.hasAttribute("data-zr-center-motion"))))return false;
     // A switch can briefly hide or resize native bookmark controls.
     // Retain the last valid mask until the native layout settles.
-    if(!force&&!prehover&&contourKey&&window.performance.now()<panelSwitchUntil)return;
+    if(!force&&!prehover&&contourKey&&window.performance.now()<panelSwitchUntil)return false;
     const provider=window.__zenMagneticBookmarksShared,revision=contourRevision;
     if(prehover&&contourMode==="stable"&&contourProvider===provider&&contourCommittedRevision===revision&&
-      bookmarkContourPolicy()==="ready")return;
+      bookmarkContourPolicy()==="ready")return true;
     let mode="visible",envelope=null;
     if(bookmarks&&provider?.readContourEnvelope){
       try{envelope=provider.readContourEnvelope(force,bookmarks,rows?.bookmark??null);}
       catch(error){
         window.__nocturneTrace?.("contour.provider.error",{name:error?.name||"Error"},{throttle:500});
-        return; // preserve last valid surface on provider failure
+        return false; // preserve last valid surface on provider failure
       }
-      if(envelope?.status==="hold")return;
+      if(envelope?.status==="hold")return false;
       if(envelope?.status==="ready")mode="stable";
     }
     const wrapper=toolbarWrapper.getBoundingClientRect();
     const nav=rows?.nav??navbar?.getBoundingClientRect();
-    if(wrapper.width<=0||!nav||nav.height<=0)return;
+    if(wrapper.width<=0||!nav||nav.height<=0)return false;
     // The mask and controls share panel travel. Measure the unshifted
     // geometry, otherwise an in-flight reveal would distort the shelf.
     const container=document.getElementById("zen-appcontent-navbar-container");
@@ -6987,9 +6987,9 @@ function installTabStrip() {
     }
     const geometry=contourGeometry({wrapper,nav,row:rr,bookmark,controls,shiftY,trim,settings,mode,
       availableGrowth:mode==="stable"?envelope.availableGrowth:0});
-    if(dead||provider!==window.__zenMagneticBookmarksShared||envelope?.current?.()===false||!geometry)return;
+    if(dead||provider!==window.__zenMagneticBookmarksShared||envelope?.current?.()===false||!geometry)return false;
     if(geometry.key===contourKey&&mode===contourMode){
-      contourProvider=provider;contourCommittedRevision=revision;return;
+      contourProvider=provider;contourCommittedRevision=revision;return true;
     }
     try{
       if(geometry.key!==contourKey)contourKey=commitContourMask(surface,geometry,settings);
@@ -6999,11 +6999,12 @@ function installTabStrip() {
       // Preserve the last committed key and retry on the next existing
       // invalidation. No independent retry timer or RAF.
       window.__nocturneTrace?.("contour.commit.error",{name:error?.name||"Error"},{throttle:500,flush:true});
-      return;
+      return false;
     }
     const {width,height,base,deep,left,right}=geometry;
     window.__nocturneTrace?.("contour.paint",()=>({force,mode,width,height,base,deep,left,right,overflow:compactRows,
       phase:root.getAttribute("data-zr-workspace-phase")}),{throttle:100,sample:1200});
+    return !dead&&provider===window.__zenMagneticBookmarksShared;
   }
   function stepContour(now,rows=null){
     if(dead)return;
@@ -7213,7 +7214,7 @@ function installTabStrip() {
   }
   function measureToolbarGeometry(force=false,center=true){
     if(dead||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-closing")||(!force&&root.hasAttribute("data-zr-center-motion")))return null;
-    if(center)centerToolbar();
+    if(center&&!centerToolbar()&&force)return null;
     if(dead)return null;
     if(!force&&!adaptiveHeightDirty&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
        window.performance.now()<panelSwitchUntil)return null;
@@ -7293,17 +7294,22 @@ function installTabStrip() {
     }
     geometryRunning=true;
     try{
-      window.__nocturneTrace?.("geometry.workspace.prepare",()=>({frame:!!frame,geometryFrame:!!geometryFrame}),{sample:1800});
+      const queued=!!geometryFrame;
+      // Cancel only work predating this transaction; callbacks can
+      // publish fresh invalidations that must survive.
+      cancelGeometry();
+      window.__nocturneTrace?.("geometry.workspace.prepare",()=>({frame:!!frame,geometryFrame:queued}),{sample:1800});
       if(dead)return false;
       if(frame){window.cancelAnimationFrame(frame);frame=0;sync();}
       if(dead)return false;
-      cancelGeometry();
       window.__zenMagneticBookmarksShared?.syncAddressState?.();
+      if(dead)return false;
       const measured=measureToolbarGeometry(true);
       if(dead)return false;
-      paintContour(true,false,measured&&!measured.changed?measured.rows:null);
+      const painted=!!measured&&paintContour(true,false,measured.changed?null:measured.rows)===true;
       if(measured&&!dead)refreshIndicator();
-      return Boolean(measured)&&!dead;
+      window.__nocturneTrace?.("geometry.preflight.result",{ready:painted&&!dead,stage:!measured?"height":!painted?"contour":"ready"},{throttle:500,flush:true});
+      return painted&&!dead;
     }finally{
       geometryRunning=false;
       armGeometry();
@@ -10027,7 +10033,8 @@ function finishCleanup(){
 
 const controller = { get active() { return applied && !disposed; },
   get ownsPreferences(){return ownsPreferences;}, cleanup,
-  prepareWorkspaceGeometry(){return removeTabStrip?.prepareWorkspaceGeometry?.();},
+  geometryPreflightVersion:1,
+  prepareWorkspaceGeometry(){return !disposed&&removeTabStrip?.prepareWorkspaceGeometry?.()===true;},
   invalidateBookmarkContour(){if(!disposed)removeTabStrip?.invalidateBookmarkContour?.();},
   prepareBookmarkContour(){if(!disposed)removeTabStrip?.prepareBookmarkContour?.();},
   captureCenterTopology(row){return removeTabStrip?.captureCenterTopology?.(row)??null;},

@@ -183,7 +183,7 @@
   }
   function measureToolbarGeometry(force=false,center=true){
     if(dead||!hoverSupported()||!toolbarWrapper||root.hasAttribute("data-zr-closing")||(!force&&root.hasAttribute("data-zr-center-motion")))return null;
-    if(center)centerToolbar();
+    if(center&&!centerToolbar()&&force)return null;
     if(dead)return null;
     if(!force&&!adaptiveHeightDirty&&toolbarWrapper.style.getPropertyValue("--op-measured-toolbar-height") &&
        window.performance.now()<panelSwitchUntil)return null;
@@ -263,17 +263,22 @@
     }
     geometryRunning=true;
     try{
-      window.__nocturneTrace?.("geometry.workspace.prepare",()=>({frame:!!frame,geometryFrame:!!geometryFrame}),{sample:1800});
+      const queued=!!geometryFrame;
+      // Cancel only work predating this transaction; callbacks can
+      // publish fresh invalidations that must survive.
+      cancelGeometry();
+      window.__nocturneTrace?.("geometry.workspace.prepare",()=>({frame:!!frame,geometryFrame:queued}),{sample:1800});
       if(dead)return false;
       if(frame){window.cancelAnimationFrame(frame);frame=0;sync();}
       if(dead)return false;
-      cancelGeometry();
       window.__zenMagneticBookmarksShared?.syncAddressState?.();
+      if(dead)return false;
       const measured=measureToolbarGeometry(true);
       if(dead)return false;
-      paintContour(true,false,measured&&!measured.changed?measured.rows:null);
+      const painted=!!measured&&paintContour(true,false,measured.changed?null:measured.rows)===true;
       if(measured&&!dead)refreshIndicator();
-      return Boolean(measured)&&!dead;
+      window.__nocturneTrace?.("geometry.preflight.result",{ready:painted&&!dead,stage:!measured?"height":!painted?"contour":"ready"},{throttle:500,flush:true});
+      return painted&&!dead;
     }finally{
       geometryRunning=false;
       armGeometry();

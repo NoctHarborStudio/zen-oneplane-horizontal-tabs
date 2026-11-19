@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.105"};
+  const event="assembly.script",data={version:"0.3.0-preview.106"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -196,7 +196,7 @@ try{if(typeof window!=="undefined"){
   function finish(reason="disposed"){
     if(dead||finish.finalizing)return;
     finish.finalizing=true;
-    if(!["disposed","boundary","completed","watchdog","interrupted","effect-cancelled","boot-cancelled","setup-failed","insufficient-budget"].includes(reason))reason="disposed";
+    if(!["disposed","boundary","completed","watchdog","interrupted","effect-cancelled","boot-cancelled","setup-failed","insufficient-budget","geometry-unready"].includes(reason))reason="disposed";
     if(reason==="boundary"&&centerHandle?.validateTopology?.()===false)reason="interrupted";
     const outcome=ownedTimeline?.outcome;
     // Snapshot while exact ownership predicates still see live effects.
@@ -682,9 +682,14 @@ try{if(typeof window!=="undefined"){
       // Prime the resting contour while the startup gate is still held.
       const preflightAt=now();
       window.__zenMagneticBookmarksShared?.syncAddressState?.();
-      if(one)window.__oneplaneLayoutController?.prepareWorkspaceGeometry?.();
+      const layout=window.__oneplaneLayoutController;
+      const prepared=one?layout?.prepareWorkspaceGeometry?.():undefined;
       if(dead)return;
-      window.__nocturneTrace?.("assembly.preflight",{elapsed:now()-preflightAt},{sample:1000});
+      const ready=!one||!!layout&&typeof layout.prepareWorkspaceGeometry==="function"&&window.__oneplaneLayoutController===layout&&prepared!==false&&
+        (layout.geometryPreflightVersion!==1||prepared===true);
+      window.__nocturneTrace?.("assembly.preflight",{elapsed:now()-preflightAt,ready,legacy:!!one&&!!layout&&layout.geometryPreflightVersion!==1},{sample:1000});
+      if(dead)return;
+      if(!ready||one&&window.__oneplaneLayoutController!==layout){finish("geometry-unready");return;}
       const engine=window.__nocturneCenterMotion;pendingEngine=engine;
       const row=get("oneplane-tabs"),url=get("urlbar-container");
       const bookmarks=get("PersonalToolbar"),items=get("PlacesToolbarItems");

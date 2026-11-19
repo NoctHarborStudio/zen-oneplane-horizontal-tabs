@@ -42,6 +42,7 @@ function lifecycleFixture({withRow=false}={}){
    windowUtils:{USER_SHEET:1,loadSheet(){},removeSheet(){}},getComputedStyle:()=>({display:"block",visibility:"visible",opacity:"1"}),
    CustomEvent:class{constructor(type,o){this.type=type;this.detail=o.detail;}},dispatchEvent:e=>events.push(e.detail.phase),
    MutationObserver:class{observe(){} disconnect(){}},setTimeout(fn,ms){const n=++id;timers.set(n,{fn,at:clock+ms});return n;},clearTimeout:n=>timers.delete(n)};
+ if(row)win.__oneplaneLayoutController={prepareWorkspaceGeometry(){}};
  const doc={documentElement:root,getElementById:k=>k==="PlacesToolbarItems"?bookmarks:k==="oneplane-tabs"?row:null};
  const reinstall=()=>new Function("window","document","Services","console",source)(win,doc,{prefs,io:{newURI:x=>x}},{warn(){}});
  reinstall();
@@ -292,5 +293,26 @@ test("workspace topology invalidation retires visuals but preserves the native c
   assert.equal(calls,1);assert.equal(releases,1);assert.equal(f.timers.size,0);
   assert.equal(f.root.hasAttribute("data-zr-workspace-phase"),false);
   f.win.__zenRefinedWorkspaceTransition.dispose();
+ }
+});
+
+test("workspace preflight rejection, missing owner or replacement preserves native result and clears swap",async()=>{
+ for(const mode of ["false","throw","missing","replacement","undefined","ready","legacy","missing-method"]){
+  const f=lifecycleFixture({withRow:true});let calls=0,preflights=0;
+  const layout={geometryPreflightVersion:1,prepareWorkspaceGeometry(){preflights++;
+   if(mode==="throw")throw Error("preflight");
+   if(mode==="replacement")f.win.__oneplaneLayoutController={};
+   return mode==="false"?false:mode==="undefined"||mode==="legacy"?undefined:true;
+  }};
+  if(mode==="legacy")delete layout.geometryPreflightVersion;
+  if(mode==="missing-method")delete layout.prepareWorkspaceGeometry;
+  f.win.__oneplaneLayoutController=mode==="missing"?undefined:layout;
+  const result=f.win.__zenRefinedWorkspaceTransition.run(()=>{calls++;return "native";});
+  await f.flush();for(let i=0;i<10&&f.timers.size;i++)await f.advance();
+  assert.equal(await result,"native",mode);assert.equal(calls,1,mode);
+  assert.equal(preflights,["missing","missing-method"].includes(mode)?0:1,mode);
+  assert.equal(f.events.includes("in"),mode==="ready"||mode==="legacy",mode);
+  assert.equal(f.root.hasAttribute("data-zr-workspace-phase"),false,mode);
+  assert.equal(f.timers.size,0,mode);f.win.__zenRefinedWorkspaceTransition.dispose();
  }
 });

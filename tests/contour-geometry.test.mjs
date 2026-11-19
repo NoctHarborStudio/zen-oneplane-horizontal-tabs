@@ -159,3 +159,15 @@ test("close phase never rewrites a contour even in forced preflight",()=>{
  x.attrs.add("data-zr-closing");x.api.paintContour(true);
  assert.equal(x.reads,reads);assert.equal(x.f.writes,writes);
 });
+
+test("contour reports success only for committed or valid unchanged geometry",()=>{
+ const x=layoutFixture();assert.equal(x.api.paintContour(true),true);
+ assert.equal(x.api.paintContour(true),true);
+ x.install();x.envelope={status:"hold"};assert.equal(x.api.paintContour(true),false);
+ x.envelope={status:"ready",bookmark:x.input.bookmark,controls:x.input.controls,availableGrowth:25,current:()=>false};
+ assert.equal(x.api.paintContour(true),false);
+ x.envelope={status:"ready",bookmark:x.input.bookmark,controls:x.input.controls,availableGrowth:25,current:()=>true};
+ x.f.fail="--op-contour-mask";assert.equal(x.api.paintContour(true),false);
+ assert.equal(x.api.paintContour(true),true);
+ x.attrs.add("data-zr-closing");assert.equal(x.api.paintContour(true),false);
+});

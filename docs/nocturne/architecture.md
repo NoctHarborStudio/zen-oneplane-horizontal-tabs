@@ -286,3 +286,6 @@ One Layout geometry RAF owns dirty height/contour passes. Reuse a pass-local res
 ### A4.3b — coordinator audit (preview.105)
 
 CENTER/HEIGHT/CONTOUR requests share one ticketed scheduler. Successful direct native centering requests only height/contour unless CENTER is already pending. Reentry is rejected rather than nested; forced pass preserves new dirty bits. Height is validated/read back before acknowledgement. Address extent is reused only within the same read/write pass and reread after actual geometry writes. Native convergence and explicit preflight outcome integration remain open.
+
+
+A4.3c1: Layout geometryPreflightVersion 1 acknowledges only successful synchronous center/height/contour preparation. Startup and Workspace consume that result and fail open through their own cleanup, retaining native command ownership. Older entrypoints with a callable preflight may return undefined; this is legacy compatibility, not verified geometry.

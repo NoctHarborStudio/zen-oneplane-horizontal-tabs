@@ -424,3 +424,6 @@ Preview.103 CI PASS. Six new coordinator fixtures; 19 contour/coordinator fixtur
 ### Preview.105 — coordinator audit
 
 Preview.104 CI PASS (657 Node, 15 Python). Six new coordinator cases; 25 contour/coordinator fixture bodies PASS in isolated V8, parser and generated substitutions PASS. Canonical CI pending. Native preflight outcome integration, convergence and performance remain open.
+
+
+A4.3c1 (preview.106): focused source-backed preflight outcome, contour failure and Startup/Workspace native-result regressions pass in isolated V8. Verify canonical CI; native startup and workspace, rejected preflight cleanup and actual first resting paint remain open. A4.3c2 partition/anchor consolidation next.

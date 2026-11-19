@@ -5,7 +5,7 @@ const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 const source=read("src/layout/geometry.js.part");
 function setup(){
  const jobs=new Map(),calls=[],reads={nav:0,row:0,bookmark:0};
- let serial=0,height="90px",nextHeight=90,phase=null,callback=null,reject=false;
+ let serial=0,height="90px",nextHeight=90,phase=null,callback=null,reject=false,painted=true,centered=true;
  const mk=(key,h)=>({getBoundingClientRect(){reads[key]++;return {height:h()};}});
  const navbar=mk("nav",()=>50),row=mk("row",()=>nextHeight-20),bookmarks=mk("bookmark",()=>20);
  row.hasAttribute=()=>false;
@@ -13,11 +13,11 @@ function setup(){
  const root={hasAttribute:k=>k===phase,getAttribute:()=>phase};
  const window={performance:{now:()=>1000},requestAnimationFrame(fn){jobs.set(++serial,fn);return serial;},cancelAnimationFrame(id){jobs.delete(id);},__zenMagneticBookmarksShared:{syncAddressState(){calls.push("suspend");}}};
  const body=source.slice(source.indexOf("  function readToolbarRows("),source.indexOf("  function observeGeometry("));
- const api=new Function("window","root","navbar","row","bookmarks","toolbarWrapper","calls","callback",
-  'let dead=false,geometryFrame=0,geometryDirty=0,geometryRunning=false,geometryTicket=0,centering=false,contourRevision=0,adaptiveHeightDirty=false,panelSwitchUntil=0,frame=0;const GEOMETRY_HEIGHT=1,GEOMETRY_CONTOUR=2,GEOMETRY_CENTER=4;function hoverSupported(){return true}function centerToolbar(){calls.push("center");callback()}function refreshIndicator(){calls.push("indicator")}function stepContour(now,rows){calls.push(rows?"contour:shared":"contour:fresh")}function paintContour(force,prehover,rows){calls.push(rows?"force:shared":"force:fresh")}function sync(){calls.push("sync")}'+body+
+ const api=new Function("window","root","navbar","row","bookmarks","toolbarWrapper","calls","callback","outcome",
+  'let dead=false,geometryFrame=0,geometryDirty=0,geometryRunning=false,geometryTicket=0,centering=false,contourRevision=0,adaptiveHeightDirty=false,panelSwitchUntil=0,frame=0;const GEOMETRY_HEIGHT=1,GEOMETRY_CONTOUR=2,GEOMETRY_CENTER=4;function hoverSupported(){return true}function centerToolbar(){calls.push("center");callback();return outcome.centered()}function refreshIndicator(){calls.push("indicator")}function stepContour(now,rows){calls.push(rows?"contour:shared":"contour:fresh")}function paintContour(force,prehover,rows){calls.push(rows?"force:shared":"force:fresh");return outcome.painted()}function sync(){calls.push("sync")}'+body+
   'return {scheduleGeometry,scheduleMeasuredGeometry,queueGeometry,cancelGeometry,prepareWorkspaceGeometry,kill(){dead=true;cancelGeometry()},pending:()=>geometryDirty,revision:()=>contourRevision};')
-  (window,root,navbar,row,bookmarks,toolbarWrapper,calls,()=>callback?.());
- return {api,jobs,calls,reads,set height(v){nextHeight=v;},set phase(v){phase=v;},set callback(v){callback=v;},set reject(v){reject=v;},
+  (window,root,navbar,row,bookmarks,toolbarWrapper,calls,()=>callback?.(),{centered:()=>centered,painted:()=>painted});
+ return {api,jobs,calls,reads,set height(v){nextHeight=v;},set phase(v){phase=v;},set callback(v){callback=v;},set reject(v){reject=v;},set painted(v){painted=v;},set centered(v){centered=v;},
   tick(){const batch=[...jobs];for(const [id,fn] of batch){jobs.delete(id);fn(1000);}}};
 }
 test("height and contour requests coalesce into one pass with shared row snapshot",()=>{
@@ -49,7 +49,7 @@ test("one geometry RAF owner and retained native preflight",()=>{
  assert.ok(!c.includes("requestAnimationFrame"));assert.ok(!s.includes("contourFrame"));
  assert.ok(l.includes('cleanupStep("cancelGeometry()"'));
  assert.ok(source.includes("queueGeometry(GEOMETRY_CENTER|GEOMETRY_HEIGHT|GEOMETRY_CONTOUR)"));
- assert.ok(source.includes("paintContour(true,false,measured&&!measured.changed?measured.rows:null)"));
+ assert.ok(source.includes("paintContour(true,false,measured.changed?null:measured.rows)===true"));
 });
 
 test("completed immediate center queues height only and never clears pending center",()=>{
@@ -86,4 +86,20 @@ test("immediate native resize and toolbar reconciliation do not request redundan
  assert.ok(read("src/core/window-lifecycle.js.part").includes("scheduleMeasuredGeometry(centerToolbar());"));
  assert.ok(read("src/toolbar/tab-sync.js.part").includes("const centered=centerToolbar();\n    observeGeometry(centered);"));
  assert.ok(source.includes("if(iconChanged||widthChanged||addressMarginsAtRead===null)"));
+});
+
+test("forced preflight rejects blocked center, invalid height and failed contour",()=>{
+ const x=setup();x.centered=false;assert.equal(x.api.prepareWorkspaceGeometry(),false);
+ assert.deepEqual(x.calls,["suspend","center"]);
+ x.centered=true;x.height=NaN;assert.equal(x.api.prepareWorkspaceGeometry(),false);
+ assert.deepEqual(x.calls.slice(-2),["suspend","center"]);
+ x.height=90;x.painted=false;assert.equal(x.api.prepareWorkspaceGeometry(),false);
+ x.painted=true;assert.equal(x.api.prepareWorkspaceGeometry(),true);
+});
+test("preflight cancels old work before diagnostics and preserves new invalidations",()=>{
+ const x=setup();
+ assert.ok(source.indexOf("cancelGeometry();",source.indexOf("function prepareWorkspaceGeometry"))<
+   source.indexOf('("geometry.workspace.prepare"',source.indexOf("function prepareWorkspaceGeometry")));
+ x.callback=()=>{x.callback=null;x.api.scheduleGeometry();};
+ assert.equal(x.api.prepareWorkspaceGeometry(),true);assert.equal(x.jobs.size,1);x.tick();assert.equal(x.jobs.size,0);
 });

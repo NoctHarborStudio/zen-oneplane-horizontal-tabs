@@ -1,3 +1,9 @@
+## 0.3.0-preview.106 — Explicit geometry preflight outcomes
+
+- Acknowledge only completed center/height/contour preflight and preserve fresh invalidations raised by synchronous callbacks.
+- Skip unsafe Startup or Workspace incoming visuals via existing cleanup; preserve the native workspace result without retry.
+- Report bounded preflight outcome diagnostics; add regressions for rejected, stale and legacy providers. Native validation pending.
+
 ## 0.3.0-preview.105 — Geometry coordinator audit and centering requests
 
 - Distinguish center, height and contour requests; preserve immediate native ResizeObserver/toolbar reconciliation while avoiding an unconditional second centering pass.

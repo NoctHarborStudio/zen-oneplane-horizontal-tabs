@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="workspace.script",data={version:"0.3.0-preview.105"};
+  const event="workspace.script",data={version:"0.3.0-preview.106"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -274,8 +274,15 @@ try{if(typeof window!=="undefined"){
       // Release and measure in one task under the hidden swap gate.
       const geometry=releaseGeometry();
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.reveal",()=>({skip:tx.skipMotion,oldHeight:geometry?.height,oldSurface:geometry?.surfaceHeight}),{sample:1800});
-      try{win.__oneplaneLayoutController?.prepareWorkspaceGeometry?.();}catch(error){console.warn("[Nocturne] Workspace geometry:",error);}
-      if(tx.skipMotion||tx.cancelled||dead||req.superseded)return result;
+      const layout=win.__oneplaneLayoutController;
+      const one=root.getAttribute("oneplane-active")==="true";
+      let prepared,failed=false;
+      try{if(one)prepared=visualStep(()=>layout?.prepareWorkspaceGeometry?.());}
+      catch(error){failed=true;console.warn("[Nocturne] Workspace geometry:",error);}
+      const ready=!one||get("oneplane-tabs")?.getAttribute("data-ready")==="true"&&!!layout&&typeof layout.prepareWorkspaceGeometry==="function"&&!failed&&win.__oneplaneLayoutController===layout&&prepared!==false&&
+        (layout.geometryPreflightVersion!==1||prepared===true);
+      win.__nocturneTrace?.("workspace.preflight.geometry",{sequence:tx.sequence,ready,legacy:!!one&&!!layout&&layout.geometryPreflightVersion!==1},{sample:1000});
+      if(!ready||one&&win.__oneplaneLayoutController!==layout||tx.skipMotion||tx.cancelled||dead||req.superseded)return result;
       const incoming=units(),motion=visualStep(()=>animate(tx,incoming,false,geometry));
       if(tx.cancelled||dead||req.superseded)return result;
       phase("in");

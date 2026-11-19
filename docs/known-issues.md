@@ -1159,3 +1159,6 @@ NC4-004/013 partial source consolidation: height/contour dirty scheduler and pas
 ### A4.3b — preview.105
 
 NC4-004/013 partial: exact RAF tickets, reentry fence, height validation/readback, distinct CENTER vs HEIGHT/CONTOUR requests and pass-local address extent reuse. Preflight callers do not yet handle false outcome; split/topology and remaining read/write paths need audit. NC4-018/052 and native performance/paint remain open.
+
+
+A4.3c1 (preview.106): source-level preflight outcome propagation addressed; native behavior/fallback frequency and A4.3c2 resting partition/anchor consolidation remain open. Do not close A4 native evidence gates.
