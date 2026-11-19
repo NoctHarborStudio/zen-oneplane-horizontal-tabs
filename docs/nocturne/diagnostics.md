@@ -312,3 +312,8 @@ Existing `geometry.preflight.reentry` also covers projection sync and contour pa
 ### Preview.109 — resting geometry freeze
 
 No new trace stream. Existing drag, address.cascade, tabs.sync, geometry.preflight.result/geometry.center.stale and contour.paint remain authoritative; correlate live drag/lane/incoming/magnetic/center and cascade phase markers with the absence of ordinary geometry writes and post-release sync. Explicit pull and lane autoscroll remain allowed. Native freeze and hit-test acceptance require live evidence.
+
+
+### Preview.110 — native hit-region boundary
+
+`drag.viewport.changed` reports new width/height/scale only, throttled and flushed, then existing `drag.lifecycle.cancel` reason viewport-changed owns cleanup. Rejected local split event uses reason split-hit-rejected; no raw pointer payload, title or URL. Use existing phase and geometry snapshots to compare real toolbar/spacer/control/Fade/content coordinates; DOM pointer hit and OS native non-client hit are distinct. Native region probes remain deferred.

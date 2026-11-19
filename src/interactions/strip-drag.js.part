@@ -240,6 +240,7 @@
     splitZone.removeAttribute("data-op-side");
   }
   function revealForDrag(event) {
+    if(retireChangedDragViewport())return;
     const tab = readDraggedTab(event);
     if (!hoverSupported() || !tab || !toolbarWrapper) return;
     if(dragInsertPending)endDragVisual();
@@ -306,6 +307,7 @@
     previewStripDrag(event,tab);
   }
   function onToolbarDrop(event) {
+    if(retireChangedDragViewport())return;
     const tab=readDraggedTab(event);
     if(!tab||!toolbarDragReturnZone(event))return;
     if(tabOwner(tab)===window&&(dragDetachedOnce||dragBunnyLayout)){

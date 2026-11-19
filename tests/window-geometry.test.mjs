@@ -37,8 +37,8 @@ test("window resize and native size mode reflow are lifecycle-owned",()=>{
  }
  const code=visibility.slice(visibility.indexOf("function onWindowGeometryChanged("),visibility.indexOf("function onCompactChanged("));
  const calls=[];
- const run=new Function("calls",code+'let dead=false,hoverTab={},addressTransition=null,addressSettling=false,cascadeState="hidden";const row={hasAttribute:()=>false};function checkCenterGeometry(stage){calls.push("geometry:"+stage)}function clearTabHover(){calls.push("hover")}function nativeInlineOpen(){return false}function addressBar(){}function resetTabCascade(){calls.push("cascade")}function movePageActions(){calls.push("actions")}function centerToolbar(){calls.push("center")}function onCompactChanged(){calls.push("layout")}function schedule(){calls.push("sync")}function revealSelectedInStrip(){calls.push("reveal")}const window={requestAnimationFrame(fn){fn()}};onWindowGeometryChanged();')(calls);
- assert.deepEqual(calls,["geometry:window","hover","cascade","actions","center","layout","sync","reveal"]);
+ const run=new Function("calls",code+'let dead=false,hoverTab={},addressTransition=null,addressSettling=false,cascadeState="hidden";const row={hasAttribute:()=>false};function checkCenterGeometry(stage){calls.push("geometry:"+stage)}function retireChangedDragViewport(){calls.push("drag-viewport")}function clearTabHover(){calls.push("hover")}function nativeInlineOpen(){return false}function addressBar(){}function resetTabCascade(){calls.push("cascade")}function movePageActions(){calls.push("actions")}function centerToolbar(){calls.push("center")}function onCompactChanged(){calls.push("layout")}function schedule(){calls.push("sync")}function revealSelectedInStrip(){calls.push("reveal")}const window={requestAnimationFrame(fn){fn()}};onWindowGeometryChanged();')(calls);
+ assert.deepEqual(calls,["geometry:window","drag-viewport","hover","cascade","actions","center","layout","sync","reveal"]);
 });
 
 test("one and two rows share the same card center, padding and final-row reserve",()=>{
@@ -68,11 +68,13 @@ test("single contour owner uses a fixed row-independent trim",()=>{
 });
 
 
-test("Home Fade is a scoped native drag region with no extra DOM hit layer",()=>{
+test("Home handle uses bounded toolbar wrapper, not decorative fade, without extra DOM hit layer",()=>{
  const contour=readFileSync(new URL("../src/styles/contour.css.part",import.meta.url),"utf8");
  const surface=readFileSync(new URL("../src/layout/surface.js.part",import.meta.url),"utf8");
  const css=readFileSync(new URL("../chrome.css",import.meta.url),"utf8");
- assert.match(contour,/&:not\(:has\(#zen-shared-home\[data-zh-search\], #zen-shared-home\[data-zh-return\]\)\) #zen-appcontent-navbar-wrapper\[oneplane-home-hold\]\[data-op-panel-open\]:not\(:has\([^\n]+\)\) > #oneplane-toolbar-surface \{\s*-moz-window-dragging: drag !important;/);
+ assert.match(contour,/#zen-appcontent-navbar-wrapper > #oneplane-toolbar-surface \{\s*-moz-window-dragging: default !important;\s*pointer-events: none !important;/);
+ assert.match(contour,/#zen-appcontent-navbar-wrapper\[oneplane-home-hold\]\[data-op-panel-open\]:not\(:has\(#urlbar\[focused="true"\], #urlbar\[open\]\)\) \{\s*-moz-window-dragging: drag !important;/);
+ assert.doesNotMatch(contour,/> #oneplane-toolbar-surface \{\s*-moz-window-dragging: drag/);
  assert.ok(contour.includes("var(--op-contour-height, 0px)"));
  assert.ok(surface.includes('"pointer-events": "none"'));
  assert.ok(base.includes(":not(#oneplane-center-start,#oneplane-center-end)"));
@@ -82,8 +84,8 @@ test("Home Fade is a scoped native drag region with no extra DOM hit layer",()=>
 
 test("resting strip gaps are native window drag regions without disabling tab drop targets",()=>{
  assert.ok(base.includes(":not(#oneplane-center-start,#oneplane-center-end):not(#oneplane-tabs)"));
- assert.match(tabs,/#oneplane-tabs:not\(\[data-op-dragging\],\[data-op-lane-drag\],\[data-op-island-incoming\],\[data-op-cascade\]\) :is\(\.oneplane-tab-list,\.oneplane-island-lane\) \{\s*-moz-window-dragging:drag!important;/);
- assert.match(tabs,/#oneplane-tabs:is\(\[data-op-dragging\],\[data-op-lane-drag\],\[data-op-island-incoming\],\[data-op-cascade\]\) :is\(\.oneplane-tab-list,\.oneplane-island-lane\) \{\s*-moz-window-dragging:no-drag!important;/);
+ assert.match(tabs,/#oneplane-tabs:not\(\[data-op-dragging\],\[data-op-lane-drag\],\[data-op-island-incoming\],\[data-op-cascade\],\[data-op-live-drag\],\[data-op-magnetic-pull\]\) :is\(\.oneplane-tab-list,\.oneplane-island-lane\) \{\s*-moz-window-dragging:drag!important;/);
+ assert.match(tabs,/#oneplane-tabs:is\(\[data-op-dragging\],\[data-op-lane-drag\],\[data-op-island-incoming\],\[data-op-cascade\],\[data-op-live-drag\],\[data-op-magnetic-pull\]\) :is\(\.oneplane-tab-list,\.oneplane-island-lane\) \{\s*-moz-window-dragging:no-drag!important;/);
  assert.match(tabs,/#oneplane-tabs :is\(\.oneplane-tab,\.oneplane-split-group,\.oneplane-title-island,\.oneplane-new-tab,\.oneplane-overflow-slider,button,input\) \{\s*-moz-window-dragging:no-drag!important;/);
  assert.ok(tabs.includes("height:6px;min-width:0;"));
  assert.ok(tabs.includes("height:1px;border:0;border-radius:999px;"));
@@ -123,4 +125,55 @@ test("resting toolbar budget and partition dimensions preserve prior policy acro
    bottomOpen:Math.max(tabWidth,Math.min(openWidth,bottomWidth-2*(tabWidth+3)-6))});
  }
  assert.ok(source.indexOf("const metrics=toolbarPartitionMetrics(")<source.indexOf("applyStripPartition(layout,order,stillCurrent)"));
+});
+
+test("collapsed compact toolbar contributes no hidden spacer/lane native drag region",()=>{
+ assert.match(base,/&\[zen-compact-mode="true"\] #zen-appcontent-navbar-wrapper:not\(\[data-op-panel-open\]\) :is\(#oneplane-center-start,#oneplane-center-end\) \{\s*-moz-window-dragging: default !important;/);
+ assert.match(tabs,/#zen-appcontent-navbar-wrapper:not\(\[data-op-panel-open\]\) #nav-bar #oneplane-tabs :is\(\.oneplane-tab-list,\.oneplane-island-lane\) \{\s*-moz-window-dragging: default!important;/);
+ assert.ok(tabs.includes("&:is([data-zr-center-motion],[data-zr-startup-phase],[data-zr-workspace-phase],[data-zr-closing]) #nav-bar #oneplane-tabs"));
+});
+test("active content shield and split overlay subtract native drag region only while displayed",()=>{
+ const shield=readFileSync(new URL("../src/styles/address-shield.css.part",import.meta.url),"utf8");
+ const split=readFileSync(new URL("../src/styles/split-drop.css.part",import.meta.url),"utf8");
+ assert.match(shield,/#oneplane-url-dismiss \{[^}]+-moz-window-dragging: no-drag !important;/);
+ assert.match(split,/#oneplane-split-drop\[data-op-dragging\] \{[^}]+-moz-window-dragging: no-drag !important;/);
+ assert.ok(split.includes("#oneplane-url-dismiss[data-pressed], #urlbar[focused], #urlbar[open], #oneplane-tabs[data-op-cascade]"));
+ assert.ok(base.includes("#oneplane-url-dismiss, #oneplane-center-start"));
+});
+test("viewport cancellation is exact to captured size/DPI/window mode; unchanged or retired gesture is inert",()=>{
+ const source=readFileSync(new URL("../src/interactions/drag-state.js.part",import.meta.url),"utf8");
+ const code=source.slice(source.indexOf("  function dragViewportState("),source.indexOf("  let dropMarker"));
+ const run=new Function(`const window={innerWidth:1200,innerHeight:800,devicePixelRatio:1,windowState:0,screenX:10};
+ let dragViewport=null;const cancelled=[];function cancelActiveDrag(reason){cancelled.push(reason);dragViewport=null}
+ ${code}return {window,capture:()=>dragViewport=dragViewportState(),retire:retireChangedDragViewport,cancelled};`)();
+ assert.equal(run.retire(),false);run.capture();run.window.screenX=50;assert.equal(run.retire(),false);
+ for(const [key,value] of [["innerWidth",1100],["innerHeight",700],["devicePixelRatio",1.5],["windowState",1]]){
+  run.capture();run.window[key]=value;assert.equal(run.retire(),true);assert.equal(run.retire(),false);
+ }
+ assert.deepEqual(run.cancelled,Array(4).fill("viewport-changed"));
+});
+test("split hit is half-open, finite and requires the current input owner",()=>{
+ const source=readFileSync(new URL("../src/interactions/split-drop.js.part",import.meta.url),"utf8");
+ const code=source.slice(source.indexOf("  function splitDropPoint("),source.indexOf("  function onSplitDragOver("));
+ const run=new Function(`let cascadeState="idle";const attrs=new Set(),barAttrs=new Set(),shieldAttrs=new Set(),splitAttrs=new Set(["data-op-dragging"]);
+ const root={hasAttribute:k=>attrs.has(k)},shield={hasAttribute:k=>shieldAttrs.has(k)},bar={hasAttribute:k=>barAttrs.has(k)};
+ const splitZone={hasAttribute:k=>splitAttrs.has(k),getBoundingClientRect:()=>({left:10,top:20,width:100,height:100})};
+ const hoverSupported=()=>true,addressBar=()=>bar,toolbarDragReturnZone=()=>false;
+ ${code}return {point:splitDropPoint,side:splitSide,allowed:splitDropAllowed,attrs,barAttrs,shieldAttrs,splitAttrs};`)();
+ for(const [x,y,expected] of [[10,70,"left"],[109,70,"right"],[60,20,"top"],[60,119,"bottom"],[60,70,""],[9,70,""],[110,70,""],[60,120,""],[NaN,70,""],[60,Infinity,""]])assert.equal(run.side({clientX:x,clientY:y}),expected);
+ assert.equal(run.point({clientX:110,clientY:70}),null);assert.equal(run.allowed(),true);
+ for(const attr of ["data-zr-closing","data-zr-center-motion","data-zr-workspace-phase","data-zr-startup-phase"]){run.attrs.add(attr);assert.equal(run.allowed(),false);run.attrs.clear();}
+ run.barAttrs.add("focused");assert.equal(run.allowed(),false);run.barAttrs.clear();run.shieldAttrs.add("data-pressed");assert.equal(run.allowed(),false);run.shieldAttrs.clear();run.splitAttrs.clear();assert.equal(run.allowed(),false);
+});
+
+test("retargeted split drop retires the local gesture before any native command",()=>{
+ const source=readFileSync(new URL("../src/interactions/split-drop.js.part",import.meta.url),"utf8");
+ const code=source.slice(source.indexOf("  function onSplitDrop("));
+ const run=new Function("allowed","point",`const window={},tab={},selected={},browser={selectedTab:selected},draggedGroup=null,calls=[];
+ const retireChangedDragViewport=()=>false,readDraggedTab=()=>tab,tabOwner=()=>window,isSplit=()=>false;
+ const splitDropAllowed=()=>allowed,splitDropPoint=()=>point;
+ function cancelActiveDrag(reason){calls.push(reason)}
+ function toolbarDragReturnZone(){throw Error("native branch")}
+ ${code}onSplitDrop({preventDefault(){calls.push("prevent")},stopPropagation(){calls.push("stop")}});return calls;`);
+ for(const [allowed,point] of [[false,{x:.5,y:.5}],[true,null]])assert.deepEqual(run(allowed,point),["prevent","stop","split-hit-rejected"]);
 });

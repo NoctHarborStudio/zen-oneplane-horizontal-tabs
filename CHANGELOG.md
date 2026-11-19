@@ -1,3 +1,9 @@
+## 0.3.0-preview.110 — Bounded native hit regions
+
+- Make the decorative toolbar contour input-neutral; preserve the Home native handle on the existing bounded toolbar wrapper instead of the alpha-mask rear fade. Suppress hidden compact and motion-owned native drag regions.
+- Give the active address shield and Split Drop explicit no-drag semantics. Reject conflicting owner phases and nonfinite/outside split drop coordinates before native operations.
+- Retire the local tab drag or its visual tail on changed chrome viewport size, DPI or native window mode, without synthesizing a native drop or detach. Preserve ordinary window movement and validate exact dragend identity first.
+
 ## 0.3.0-preview.109 — Resting geometry freeze
 
 - Freeze ordinary center, height, contour and structural projection during local/incoming tab drag, lane drag and Address Cascade transitions; replay deferred native projection when the interaction releases or the cascade is fully hidden.

@@ -1171,3 +1171,6 @@ A4.3-R (preview.108): NC4-004/013 integrated source audit adds strict topology/p
 
 
 A4.4a (preview.109): NC4-052 partial source fix: hold ordinary geometry/projection/scroll during interaction and replay existing release paths; preserve owner-specific pull/autoscroll. Native actual rectangles can still change due to resize/CSS; validate live behavior and audit those boundaries in A4.4b/R. NC4-018 remains open, no hit-region CSS change in this slice.
+
+
+A4.4b (preview.110): NC4-018 source partial: bound Home non-client region to toolbar wrapper, leave contour visual-only, suppress hidden/motion handles and make active content shield/split no-drag; guard split input phase and finite inside coordinates. NC4-052 source partial: retire local tab drag/tail on viewport size/DPI/window mode change; external edge-control/foreign destination changes and actual OS hit-test behavior remain A4.4-R/A5/A6. No native evidence yet.

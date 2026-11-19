@@ -156,6 +156,12 @@
       pointer-events: auto;
       -moz-window-dragging: drag !important;
     }
+    /* Native drag regions do not follow opacity or pointer-events.
+       A collapsed translated toolbar must not contribute hidden handles.
+       Default preserves the native thin reveal/caption region. */
+    &[zen-compact-mode="true"] #zen-appcontent-navbar-wrapper:not([data-op-panel-open]) :is(#oneplane-center-start,#oneplane-center-end) {
+      -moz-window-dragging: default !important;
+    }
     /* Keep controls and native popups out of the non-client hit region. */
     #nav-bar-customization-target > :not(#oneplane-center-start,#oneplane-center-end):not(#oneplane-tabs),
     #nav-bar :is(toolbarbutton,button,input,menupopup,panel,.titlebar-buttonbox) {

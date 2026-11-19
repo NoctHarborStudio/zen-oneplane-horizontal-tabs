@@ -16,7 +16,7 @@
   function endDragVisual(restoreReturn=false) {
     const returnedSource=restoreReturn?dragNode:null,returnedPoint=restoreReturn?dragReturnPoint:null;
     dragReturnPoint=null;
-    dragInsertPending=false;
+    dragInsertPending=false;dragViewport=null;
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.visual.end",()=>({mode:dragImageMode,pull:dragPull,detached:dragDetachedOnce,ghost:!!dragGhost&&!dragGhost.hidden,shifted:dragShifted.size}),{sample:1800});
     clearPlacementPreview();
     cancelInsertion();
@@ -91,6 +91,7 @@
     draggedGroup = group;
     dragHandled = false;dragDetachedOnce=false;
     dragStartPoint = { x: event.screenX, y: event.screenY };
+    dragViewport=dragViewportState();
     try {
       event.dataTransfer.mozSetDataAt(DRAG_TYPE, tab, 0);
       event.dataTransfer.effectAllowed = "move";

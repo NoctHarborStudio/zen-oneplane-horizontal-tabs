@@ -7,6 +7,7 @@
       z-index: 100 !important;
       background: transparent !important;
       pointer-events: auto !important;
+      -moz-window-dragging: no-drag !important;
       touch-action: none;
       user-select: none;
       cursor: default;

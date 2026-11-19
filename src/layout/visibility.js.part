@@ -125,6 +125,8 @@
     if(dead)return;
     checkCenterGeometry("window");
     if(dead)return;
+    retireChangedDragViewport();
+    if(dead)return;
     if(!row.hasAttribute("data-op-dragging")&&hoverTab)clearTabHover();
     if(addressTransition){
       const phase=addressTransition,closing=phase.name==="closing-wave";

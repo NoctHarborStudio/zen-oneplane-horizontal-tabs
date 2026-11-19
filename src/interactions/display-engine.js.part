@@ -340,7 +340,7 @@
     });
   }
   function onSourceDrag(event){
-    if(!draggedTab||draggedGroup||(!event.screenX&&!event.screenY))return;
+    if(retireChangedDragViewport()||!draggedTab||draggedGroup||(!event.screenX&&!event.screenY))return;
     if(!pointInSourceWindow(event)){
       if(dragImageMode!=="outside")setDragImageMode("outside",event);
       showPlacementPreview(event,"Tab");

@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.109",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.110",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -5085,7 +5085,7 @@ function installTabStrip() {
     });
   }
   function onSourceDrag(event){
-    if(!draggedTab||draggedGroup||(!event.screenX&&!event.screenY))return;
+    if(retireChangedDragViewport()||!draggedTab||draggedGroup||(!event.screenX&&!event.screenY))return;
     if(!pointInSourceWindow(event)){
       if(dragImageMode!=="outside")setDragImageMode("outside",event);
       showPlacementPreview(event,"Tab");
@@ -7547,6 +7547,8 @@ function installTabStrip() {
     if(dead)return;
     checkCenterGeometry("window");
     if(dead)return;
+    retireChangedDragViewport();
+    if(dead)return;
     if(!row.hasAttribute("data-op-dragging")&&hoverTab)clearTabHover();
     if(addressTransition){
       const phase=addressTransition,closing=phase.name==="closing-wave";
@@ -7632,7 +7634,21 @@ function installTabStrip() {
   const blankDragImage = html("canvas");
   blankDragImage.width = blankDragImage.height = 1;
   let dragHandled = false,dragDetachedOnce=false;
-  let dragStartPoint = null;
+  let dragStartPoint = null,dragViewport=null;
+  function dragViewportState(){
+    return [window.innerWidth,window.innerHeight,window.devicePixelRatio,window.windowState];
+  }
+  // Do not reinterpret a native pointer in a new chrome coordinate frame.
+  // Cancel only the exact local tab gesture/visual tail, never synthesize
+  // native drop or detach. Moving the window without a resize is allowed.
+  function retireChangedDragViewport(){
+    if(!dragViewport)return false;
+    const next=dragViewportState();
+    if(dragViewport.every((value,i)=>Object.is(value,next[i])))return false;
+    window.__nocturneTrace?.("drag.viewport.changed",{width:next[0],height:next[1],scale:next[2]},{throttle:500,flush:true});
+    cancelActiveDrag("viewport-changed");
+    return true;
+  }
   let dropMarker = null;
   let dragRevealTimer = 0;
   let liveDragTarget = null;
@@ -8447,6 +8463,7 @@ function installTabStrip() {
     splitZone.removeAttribute("data-op-side");
   }
   function revealForDrag(event) {
+    if(retireChangedDragViewport())return;
     const tab = readDraggedTab(event);
     if (!hoverSupported() || !tab || !toolbarWrapper) return;
     if(dragInsertPending)endDragVisual();
@@ -8513,6 +8530,7 @@ function installTabStrip() {
     previewStripDrag(event,tab);
   }
   function onToolbarDrop(event) {
+    if(retireChangedDragViewport())return;
     const tab=readDraggedTab(event);
     if(!tab||!toolbarDragReturnZone(event))return;
     if(tabOwner(tab)===window&&(dragDetachedOnce||dragBunnyLayout)){
@@ -8578,7 +8596,7 @@ function installTabStrip() {
   function endDragVisual(restoreReturn=false) {
     const returnedSource=restoreReturn?dragNode:null,returnedPoint=restoreReturn?dragReturnPoint:null;
     dragReturnPoint=null;
-    dragInsertPending=false;
+    dragInsertPending=false;dragViewport=null;
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.visual.end",()=>({mode:dragImageMode,pull:dragPull,detached:dragDetachedOnce,ghost:!!dragGhost&&!dragGhost.hidden,shifted:dragShifted.size}),{sample:1800});
     clearPlacementPreview();
     cancelInsertion();
@@ -8653,6 +8671,7 @@ function installTabStrip() {
     draggedGroup = group;
     dragHandled = false;dragDetachedOnce=false;
     dragStartPoint = { x: event.screenX, y: event.screenY };
+    dragViewport=dragViewportState();
     try {
       event.dataTransfer.mozSetDataAt(DRAG_TYPE, tab, 0);
       event.dataTransfer.effectAllowed = "move";
@@ -8759,17 +8778,29 @@ function installTabStrip() {
       finishStripCommit();
     }
   }
+  function splitDropPoint(event){
+    const box=splitZone.getBoundingClientRect(),x=event.clientX,y=event.clientY;
+    if(![box.left,box.top,box.width,box.height,x,y].every(Number.isFinite)||box.width<=0||box.height<=0||
+      x<box.left||x>=box.left+box.width||y<box.top||y>=box.top+box.height)return null;
+    return {x:(x-box.left)/box.width,y:(y-box.top)/box.height};
+  }
+  function splitDropAllowed(){
+    const bar=addressBar();
+    return hoverSupported()&&cascadeState==="idle"&&splitZone.hasAttribute("data-op-dragging")&&
+      !root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&!root.hasAttribute("data-zr-workspace-phase")&&!root.hasAttribute("data-zr-startup-phase")&&
+      !shield.hasAttribute("data-pressed")&&!bar?.hasAttribute("focused")&&!bar?.hasAttribute("open");
+  }
   function splitSide(event) {
     if(toolbarDragReturnZone(event))return "";
-    const box = splitZone.getBoundingClientRect();
-    if (box.width <= 0 || box.height <= 0) return "";
-    const x = (event.clientX - box.left) / box.width;
-    const y = (event.clientY - box.top) / box.height;
+    const point=splitDropPoint(event);
+    if(!point)return "";
+    const {x,y}=point;
     const sides = [["left", x], ["right", 1-x], ["top", y], ["bottom", 1-y]];
     sides.sort((a,b) => a[1]-b[1]);
     return sides[0][1] <= .25 ? sides[0][0] : "";
   }
   function onSplitDragOver(event) {
+    if(retireChangedDragViewport()||!splitDropAllowed()||!splitDropPoint(event)){splitZone.removeAttribute("data-op-side");return;}
     const tab = readDraggedTab(event);
     if (!tab || tabOwner(tab) !== window || draggedGroup ||
         (tab === browser.selectedTab && !isSplit(tab))) return;
@@ -8785,10 +8816,16 @@ function installTabStrip() {
     event.dataTransfer.dropEffect = "move";
   }
   function onSplitDrop(event) {
+    if(retireChangedDragViewport())return;
     const tab = readDraggedTab(event);
     const current = browser.selectedTab;
     if (!tab || tabOwner(tab) !== window || draggedGroup ||
         (tab === current && !isSplit(tab))) return;
+    if(!splitDropAllowed()||!splitDropPoint(event)){
+      // A stale/retargeted event must not select, split, unsplit or detach.
+      event.preventDefault();event.stopPropagation();
+      cancelActiveDrag("split-hit-rejected");return;
+    }
     event.preventDefault();
     event.stopPropagation();
     if(toolbarDragReturnZone(event)){sourceHandled(tab);schedule();return;}
@@ -8821,6 +8858,7 @@ function installTabStrip() {
     } finally { endDragVisual(); }
   }
   function onDragEnd(event, tab) {
+    if(!dragEndMatches(nativeDragIdentity,event,tab)||retireChangedDragViewport())return;
     const dt = event.dataTransfer;
     // Ignore late or duplicate dragend after cancel/handled drop.
     const placement=placementAt(event,true);

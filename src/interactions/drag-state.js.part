@@ -19,7 +19,21 @@
   const blankDragImage = html("canvas");
   blankDragImage.width = blankDragImage.height = 1;
   let dragHandled = false,dragDetachedOnce=false;
-  let dragStartPoint = null;
+  let dragStartPoint = null,dragViewport=null;
+  function dragViewportState(){
+    return [window.innerWidth,window.innerHeight,window.devicePixelRatio,window.windowState];
+  }
+  // Do not reinterpret a native pointer in a new chrome coordinate frame.
+  // Cancel only the exact local tab gesture/visual tail, never synthesize
+  // native drop or detach. Moving the window without a resize is allowed.
+  function retireChangedDragViewport(){
+    if(!dragViewport)return false;
+    const next=dragViewportState();
+    if(dragViewport.every((value,i)=>Object.is(value,next[i])))return false;
+    window.__nocturneTrace?.("drag.viewport.changed",{width:next[0],height:next[1],scale:next[2]},{throttle:500,flush:true});
+    cancelActiveDrag("viewport-changed");
+    return true;
+  }
   let dropMarker = null;
   let dragRevealTimer = 0;
   let liveDragTarget = null;

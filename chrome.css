@@ -156,6 +156,12 @@
       pointer-events: auto;
       -moz-window-dragging: drag !important;
     }
+    /* Native drag regions do not follow opacity or pointer-events.
+       A collapsed translated toolbar must not contribute hidden handles.
+       Default preserves the native thin reveal/caption region. */
+    &[zen-compact-mode="true"] #zen-appcontent-navbar-wrapper:not([data-op-panel-open]) :is(#oneplane-center-start,#oneplane-center-end) {
+      -moz-window-dragging: default !important;
+    }
     /* Keep controls and native popups out of the non-client hit region. */
     #nav-bar-customization-target > :not(#oneplane-center-start,#oneplane-center-end):not(#oneplane-tabs),
     #nav-bar :is(toolbarbutton,button,input,menupopup,panel,.titlebar-buttonbox) {
@@ -877,13 +883,25 @@
 
     /* Resting empty strip geometry is native titlebar, not a giant
        no-drag hitbox. Preserve the DOM hit testing for wheel and DnD. */
-    #oneplane-tabs:not([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-cascade]),
-    #oneplane-tabs:not([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-cascade]) :is(.oneplane-tab-list,.oneplane-island-lane) {
+    #oneplane-tabs:not([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-cascade],[data-op-live-drag],[data-op-magnetic-pull]),
+    #oneplane-tabs:not([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-cascade],[data-op-live-drag],[data-op-magnetic-pull]) :is(.oneplane-tab-list,.oneplane-island-lane) {
       -moz-window-dragging:drag!important;
     }
-    #oneplane-tabs:is([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-cascade]),
-    #oneplane-tabs:is([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-cascade]) :is(.oneplane-tab-list,.oneplane-island-lane) {
+    #oneplane-tabs:is([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-cascade],[data-op-live-drag],[data-op-magnetic-pull]),
+    #oneplane-tabs:is([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-cascade],[data-op-live-drag],[data-op-magnetic-pull]) :is(.oneplane-tab-list,.oneplane-island-lane) {
       -moz-window-dragging:no-drag!important;
+    }
+    /* More specific than the resting strip rules; an invisible translated
+       row must not add a non-client rectangle. Keep actual controls no-drag. */
+    &[zen-compact-mode="true"] #zen-appcontent-navbar-wrapper:not([data-op-panel-open]) #nav-bar #oneplane-tabs,
+    &[zen-compact-mode="true"] #zen-appcontent-navbar-wrapper:not([data-op-panel-open]) #nav-bar #oneplane-tabs :is(.oneplane-tab-list,.oneplane-island-lane) {
+      -moz-window-dragging: default!important;
+    }
+    &:is([data-zr-center-motion],[data-zr-startup-phase],[data-zr-workspace-phase],[data-zr-closing]) #nav-bar-customization-target :is(#oneplane-center-start,#oneplane-center-end),
+    &:has(#oneplane-tabs:is([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-live-drag],[data-op-magnetic-pull],[data-op-cascade])) #nav-bar-customization-target :is(#oneplane-center-start,#oneplane-center-end),
+    &:is([data-zr-center-motion],[data-zr-startup-phase],[data-zr-workspace-phase],[data-zr-closing]) #nav-bar #oneplane-tabs,
+    &:is([data-zr-center-motion],[data-zr-startup-phase],[data-zr-workspace-phase],[data-zr-closing]) #nav-bar #oneplane-tabs :is(.oneplane-tab-list,.oneplane-island-lane) {
+      -moz-window-dragging: no-drag!important;
     }
     #oneplane-tabs :is(.oneplane-tab,.oneplane-split-group,.oneplane-title-island,.oneplane-new-tab,.oneplane-overflow-slider,button,input) {
       -moz-window-dragging:no-drag!important;
@@ -1306,12 +1324,13 @@
     }
 
     /* Only active during a chrome tab drag; never intercept ordinary content. */
-    #oneplane-split-drop[data-op-dragging] {
+    &:not([data-zr-closing],[data-zr-center-motion],[data-zr-workspace-phase],[data-zr-startup-phase]):not(:has(#oneplane-url-dismiss[data-pressed], #urlbar[focused], #urlbar[open], #oneplane-tabs[data-op-cascade])) #oneplane-split-drop[data-op-dragging] {
       display: block !important;
       position: absolute !important;
       inset: 0 !important;
       z-index: 101 !important;
       pointer-events: auto !important;
+      -moz-window-dragging: no-drag !important;
       background: transparent !important;
     }
     #oneplane-split-drop .oneplane-split-preview {
@@ -1383,6 +1402,7 @@
       z-index: 100 !important;
       background: transparent !important;
       pointer-events: auto !important;
+      -moz-window-dragging: no-drag !important;
       touch-action: none;
       user-select: none;
       cursor: default;
@@ -1477,15 +1497,19 @@
       opacity: 1 !important;
       translate: 0 0;
     }
-    /* Home has no page-wide drag rectangle. The already measured Fade is
-       the native handle, including its rear ramp. Gecko's native region
-       does not require DOM pointer events on this decorative element.
-       Do not add a new hit layer or change ordinary web-page interaction. */
+    /* Native Gecko unions drag border boxes and subtracts no-drag
+       boxes; an alpha mask or pointer-events:none is not a native
+       hit-region boundary. The existing toolbar wrapper is the bounded
+       Home handle, never the taller decorative rear fade. */
+    #zen-appcontent-navbar-wrapper > #oneplane-toolbar-surface {
+      -moz-window-dragging: default !important;
+      pointer-events: none !important;
+    }
     #zen-appcontent-navbar-wrapper[oneplane-home-hold][data-op-panel-open],
     #zen-appcontent-navbar-wrapper[oneplane-home-hold][data-op-panel-open] :is(#zen-appcontent-navbar-container,#nav-bar,#nav-bar-customization-target,#PersonalToolbar,#personal-bookmarks,#PlacesToolbar,#PlacesToolbarItems) {
       -moz-window-dragging: default !important;
     }
-    &:not(:has(#zen-shared-home[data-zh-search], #zen-shared-home[data-zh-return])) #zen-appcontent-navbar-wrapper[oneplane-home-hold][data-op-panel-open]:not(:has(#urlbar[focused="true"], #urlbar[open], #oneplane-url-dismiss[data-pressed])) > #oneplane-toolbar-surface {
+    &:not([data-zr-center-motion],[data-zr-startup-phase],[data-zr-workspace-phase],[data-zr-closing]):not(:has(#zen-shared-home[data-zh-search], #zen-shared-home[data-zh-return], #oneplane-url-dismiss[data-pressed], #oneplane-tabs:is([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-live-drag],[data-op-magnetic-pull],[data-op-cascade]))) #zen-appcontent-navbar-wrapper[oneplane-home-hold][data-op-panel-open]:not(:has(#urlbar[focused="true"], #urlbar[open])) {
       -moz-window-dragging: drag !important;
     }
     #zen-appcontent-navbar-wrapper[oneplane-home-hold] #PersonalToolbar :is(toolbarbutton,button,input,menupopup,panel) {

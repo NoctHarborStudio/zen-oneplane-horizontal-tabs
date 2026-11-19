@@ -408,13 +408,25 @@
 
     /* Resting empty strip geometry is native titlebar, not a giant
        no-drag hitbox. Preserve the DOM hit testing for wheel and DnD. */
-    #oneplane-tabs:not([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-cascade]),
-    #oneplane-tabs:not([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-cascade]) :is(.oneplane-tab-list,.oneplane-island-lane) {
+    #oneplane-tabs:not([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-cascade],[data-op-live-drag],[data-op-magnetic-pull]),
+    #oneplane-tabs:not([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-cascade],[data-op-live-drag],[data-op-magnetic-pull]) :is(.oneplane-tab-list,.oneplane-island-lane) {
       -moz-window-dragging:drag!important;
     }
-    #oneplane-tabs:is([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-cascade]),
-    #oneplane-tabs:is([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-cascade]) :is(.oneplane-tab-list,.oneplane-island-lane) {
+    #oneplane-tabs:is([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-cascade],[data-op-live-drag],[data-op-magnetic-pull]),
+    #oneplane-tabs:is([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-cascade],[data-op-live-drag],[data-op-magnetic-pull]) :is(.oneplane-tab-list,.oneplane-island-lane) {
       -moz-window-dragging:no-drag!important;
+    }
+    /* More specific than the resting strip rules; an invisible translated
+       row must not add a non-client rectangle. Keep actual controls no-drag. */
+    &[zen-compact-mode="true"] #zen-appcontent-navbar-wrapper:not([data-op-panel-open]) #nav-bar #oneplane-tabs,
+    &[zen-compact-mode="true"] #zen-appcontent-navbar-wrapper:not([data-op-panel-open]) #nav-bar #oneplane-tabs :is(.oneplane-tab-list,.oneplane-island-lane) {
+      -moz-window-dragging: default!important;
+    }
+    &:is([data-zr-center-motion],[data-zr-startup-phase],[data-zr-workspace-phase],[data-zr-closing]) #nav-bar-customization-target :is(#oneplane-center-start,#oneplane-center-end),
+    &:has(#oneplane-tabs:is([data-op-dragging],[data-op-lane-drag],[data-op-island-incoming],[data-op-live-drag],[data-op-magnetic-pull],[data-op-cascade])) #nav-bar-customization-target :is(#oneplane-center-start,#oneplane-center-end),
+    &:is([data-zr-center-motion],[data-zr-startup-phase],[data-zr-workspace-phase],[data-zr-closing]) #nav-bar #oneplane-tabs,
+    &:is([data-zr-center-motion],[data-zr-startup-phase],[data-zr-workspace-phase],[data-zr-closing]) #nav-bar #oneplane-tabs :is(.oneplane-tab-list,.oneplane-island-lane) {
+      -moz-window-dragging: no-drag!important;
     }
     #oneplane-tabs :is(.oneplane-tab,.oneplane-split-group,.oneplane-title-island,.oneplane-new-tab,.oneplane-overflow-slider,button,input) {
       -moz-window-dragging:no-drag!important;
