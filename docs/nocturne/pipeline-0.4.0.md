@@ -4,7 +4,7 @@ Status: primary static audit checkpoints completed; A0.3 release infrastructure 
 
 ## Active checkpoint — source vs native evidence
 
-Current source checkpoint: 0.3.0-preview.118 (A5.4a display coordinate/preview source/CI PASS; A5.1b2 Gecko OS identity and A5.2b2 Split native acceptance OPEN). Last confirmed canonical CI: preview.118. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
+Current source checkpoint: 0.3.0-preview.119 (A5.5a bounded native drag session watchdog source changes staged; canonical CI pending; A5.1b2 Gecko OS identity and A5.2b2 Split native acceptance OPEN). Last confirmed canonical CI: preview.118. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
 
 | Stage | Source implementation/review | Native acceptance |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ Current source checkpoint: 0.3.0-preview.118 (A5.4a display coordinate/preview s
 | A2 | Implemented and reviewed | Explicitly deferred |
 | A3 | Core Fold ownership/handoff implemented; Bloom candidate dormant | Pending |
 | A4 | A4.4-R2 source/CI complete; native hit-region, visual and profiler gates still open | Pending |
-| A5–A7 | A5.1a–A5.2b1, A5.3a and A5.4a source/CI PASS; A5.1b2 OS identity, A5.2b2 Split, A5.3b file OS and A5.4b display native acceptance remain OPEN | Pending |
+| A5–A7 | A5.1a–A5.2b1, A5.3a and A5.4a source/CI PASS; A5.5a source staged/CI pending, A5.1b2 OS identity and A5.2b2/A5.3b/A5.4b native acceptance OPEN | Pending |
 | A8 | Integrated validation pending | Pending |
 | A9 | Optional vertical scope, separate approval | Pending |
 
@@ -1091,3 +1091,16 @@ Before publication, 15/15 focused display algorithm and extracted-runtime popup 
 ### A5.4a-R — Canonical CI closure and independent readback (docs-only)
 
 Production `c38b66c1efe1e41e1b615a4a965907693aaa2fa3` via [PR #6](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/pull/6); [CI 45055890065](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45055890065) **SUCCESS** (728/728 Node tests, 15/15 Python release tests, 12/12 runtime syntax checks, reproducible build, version/timestamp/history/provenance lock and immutable/public Raw/codeload Sine package). Independent readback confirmed `preview.118`, the single `displaySnapTarget` production policy and no `hubSnapRect`/`hubOtherDisplay` legacy definitions in generated Layout; all four modified Layout fragment transformations match the exact prior generated bundle section and current source. Same-monitor work-area reflow and popup anchor/no-anchor fixtures PASS. No new native command, watcher, state owner or RAF, and native Snap behavior was not redefined. **A5.4a source/CI PASS only**; actual Gecko `MouseEvent.screen`, XUL popup placement, real monitor/DPI taskbar changes, OS drag handoff, animation frame profiling and no-phantom-detach acceptance remain OPEN under A5.4b/A5.1b2/A8. Next independent A5 source work may proceed without assuming native validation.
+
+
+### A5.5a — Bounded native DragSession recovery for tab/Dock/Library (preview.119, source checkpoint)
+
+Baseline `preview.118` `e07c68fbabcff3f6aee338b9a05bc316d77f43ca`, [canonical CI 45056014472](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45056014472) PASS. NC4-067/068/069/070 source audit showed that the tab Drag Engine silently reset missing counts after a thrown/unsupported `getCurrentSession`; file Bunny started its session watchdog **after** optional card/XUL popup creation, so an early graphic exception could leave a successfully populated native file DataTransfer with its source locked but no watchdog; Library's unanimated Dock-free service fallback had no lost-`dragend` recovery; an unexpected native popup hide did not stop its 16ms visual tick. These are source-confirmed control-path risks, **not** proven native event-loss or filesystem bugs.
+
+The existing `src/interactions/drag-engine.js.part` owner now distinguishes active, absent (`null`) and unavailable (unsupported/throws/`undefined`) Gecko session probes. Three consecutive absent samples or six consecutive unavailable samples (250ms interval) retire **only** the exact tab gesture token with fixed cancellation reasons `native-session-ended`/`native-session-unavailable`; successful probes reset both counters. An unavailable API is never mistaken for a healthy session, and watchdog cleanup never invokes native detach, reorder, Split or simulated drop. All timers are already owned by the existing Drag Engine lifecycle.
+
+The existing Downloads Dock owner now starts **one** source-level timer immediately after the native Downloads service accepts the file payload and before optional Bunny allocation (200ms interval, identical three-absent/six-unavailable logic). This source watcher also checks the popup's readiness, replacing the separate Bunny timer; loss of popup artwork never terminates native file DnD. Unexpected `popuphidden` stops only the visual tick and retains the source watch. File native preview nodes are appended only after `fileBunny` owns them for cleanup. Normal `dragend`, timeout, native session loss and teardown stop the same source timer; no duplicate writer or service subscription.
+
+When the Dock bridge accepts a Library file drag, Dock remains the **sole** native gesture lifecycle owner. If Dock is missing/rejects and Library successfully writes its own native payload through the existing Downloads service, the existing Library controller now owns a scoped fallback watchdog with the same bounded tri-state recovery. Lost `dragend` releases the Library source, pending results and deferred close; service-gone during active native file drag defers close rather than destroying the source. Dispose/hide stop fallback timers. Library remains private-window disabled, file action and underlying native download identity remain unchanged.
+
+Before publication: five extracted-source fault/recovery fixtures plus a new source-owned DOM attachment assertion PASS in isolation (tab absent/throws/live, Dock missing/throws/live, artwork allocation failure, hidden native popup, Library fallback/session error/active, exact cleanup); existing tests and all release/runtime/CI checks remain separate. Native Gecko OS-session timing, nested OLE loop, actual file OS drop, outside/inside visual continuity, private/multiwindow/mixed-DPI and diagnostics-on/off profiling remain OPEN. A5.1b2 true OS DragSession identity is not solved by bounded liveness sampling. Next: independent generated/source/readback and canonical CI closure, then A5.5b native acceptance and remaining A5 source issues.
