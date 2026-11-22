@@ -70,7 +70,7 @@ test("media reload waits for previous native scan to release",async()=>{
  assert.equal(await result,null);await read;assert.equal(scans,1);next.close();await second.dispose();
 });
 
-test("failed media refresh keeps committed rows actionable and successful refresh preserves IDs",async()=>{
+test("failed media refresh keeps committed rows actionable and rotates IDs while retaining view keys",async()=>{
  let files=[{path:"old.jpg"}],opened;
  const service=createMediaService({scan:()=>files,describe(f,id){
    if(f.path==="bad.jpg")throw Error("metadata unavailable");
@@ -82,8 +82,10 @@ test("failed media refresh keeps committed rows actionable and successful refres
  await assert.rejects(session.refresh(),/metadata unavailable/);
  assert.deepEqual(session.rows(),[old]);
  assert.equal(service.action(old.id,"open"),true);assert.equal(opened,"old.jpg");
- files=[{path:"old.jpg"}];assert.equal((await session.refresh())[0].id,old.id);
- files=[];await session.refresh();assert.equal(service.action(old.id,"open"),false);
+ files=[{path:"old.jpg"}];const next=(await session.refresh())[0];
+ assert.notEqual(next.id,old.id);assert.equal(next.viewKey,old.viewKey);
+ assert.equal(service.action(old.id,"open"),false);assert.equal(service.action(next.id,"open"),true);
+ files=[];await session.refresh();assert.equal(service.action(next.id,"open"),false);
  session.close();await service.dispose();
 });
 
@@ -174,4 +176,35 @@ test("bulk clear distinguishes native errors and eligibility skips without retry
  const s=createDownloadsService({loadList:async()=>list});await s.start();
  assert.deepEqual(await s.clearCompleted(),{requested:3,removed:1,skipped:1,failed:1});
  assert.deepEqual(attempts,[a,c]);assert.equal(s.getSnapshot().length,2);await s.dispose();
+});
+
+test("local-media handles rotate while view keys survive normalized paths, then expire on rename and close",async()=>{
+ let files=[{path:"C:\\Pictures\\FILE.JPG"}],opened=[],events=[];
+ const service=createMediaService({windows:true,scan:async()=>files,describe:(file,id)=>({id,name:file.path}),perform:path=>{opened.push(path);return true;},onRefresh:event=>events.push(event)});
+ const session=service.open("pictures"),[a]=await session.refresh();
+ files=[{path:"c:/pictures/file.jpg"}];const [b]=await session.refresh();
+ assert.equal(a.viewKey,b.viewKey);assert.notEqual(a.id,b.id);
+ assert.equal(service.action(a.id,"open"),false);assert.equal(service.action(b.id,"reveal"),true);
+ assert.deepEqual(opened,["c:/pictures/file.jpg"]);
+ assert.deepEqual(events.at(-1),{section:"pictures",status:"committed",count:1});
+ files=[{path:"C:/Pictures/renamed.jpg"}];const [renamed]=await session.refresh();
+ assert.notEqual(renamed.viewKey,b.viewKey);assert.equal(service.action(b.id,"open"),false);
+ session.close();assert.equal(service.action(renamed.id,"open"),false);
+ const fresh=service.open("pictures"),[again]=await fresh.refresh();
+ assert.notEqual(again.viewKey,renamed.viewKey);assert.equal(service.action(again.id,"open"),true);
+ fresh.close();await service.dispose();
+});
+test("metadata staging failure preserves the old cache; a delayed scan cannot reopen a closed session",async()=>{
+ let files=[{path:"one.jpg"}],gate=null,events=[];
+ const service=createMediaService({scan:()=>gate?gate.promise:files,describe:(file,id)=>{if(file.path==="bad.jpg")throw Error("bad metadata");return {id,name:file.path};},
+   perform:()=>true,onRefresh:e=>events.push(e)});
+ const session=service.open("pictures"),[saved]=await session.refresh();
+ files=[{path:"two.jpg"},{path:"bad.jpg"}];
+ await assert.rejects(session.refresh(),/bad metadata/);
+ assert.deepEqual(session.rows(),[saved]);assert.equal(service.action(saved.id,"open"),true);
+ assert.equal(service.action("local-2","open"),false);
+ assert.deepEqual(events.map(e=>e.status),["committed","error"]);
+ gate=deferred();const stale=session.refresh();await tick();session.close();gate.resolve([{path:"three.jpg"}]);
+ assert.equal(await stale,null);assert.equal(service.action(saved.id,"open"),false);
+ assert.deepEqual(events.map(e=>e.status),["committed","error"]);await service.dispose();
 });
