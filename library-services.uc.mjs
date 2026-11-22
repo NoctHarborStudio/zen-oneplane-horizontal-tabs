@@ -76,8 +76,9 @@ function queryDownloadRows(rows,{section="downloads",text="",limit=50,sort="new"
  list.sort((a,b)=>Number(!!b.active)-Number(!!a.active)||(sort==="size"?((b.total||b.bytes||0)-(a.total||a.bytes||0)):sort==="old"?a.time-b.time:b.time-a.time)||a.id.localeCompare(b.id));
  return Object.freeze({rows:Object.freeze(list.slice(0,limit)),limit,hasMore:list.length>limit});
 }
-function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,windows=false,describe,perform}){
- let dead=false,serial=0,generation=0,pending=Promise.resolve(barrier);const handles=new Map();
+function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,windows=false,describe,perform,onRefresh=()=>{}}){
+ let dead=false,serial=0,viewSerial=0,generation=0,pending=Promise.resolve(barrier);const handles=new Map();
+ const report=(section,status,count=0)=>{try{onRefresh({section,status,count});}catch{}};
  function open(section,downloadPaths=()=>new Set()){
    if(dead||!allowed()||!MEDIA_EXTENSIONS[section])throw Error("Media unavailable");
    let closed=false,owned=new Map(),cache=null,revision=0;
@@ -87,23 +88,28 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
      if(!available())return null;
      const token=++revision;
      const task=pending.catch(()=>{}).then(()=>!available()||token!==revision?[]:scan(section));
-     pending=task.catch(()=>{});const files=await task;
+     pending=task.catch(()=>{});
+     let files;
+     try{files=await task;}catch(error){if(available()&&token===revision)report(section,"error");throw error;}
      if(!available()||token!==revision)return null;
-     const next=new Map(),result=[],seen=new Set(downloadPaths());
-     for(const f of files.slice(0,300)){
-       if(!f?.path||f.cloudPlaceholder||mediaKind(f.path)!==section)continue;
-       const key=mediaPathKey(f.path,windows);if(seen.has(key))continue;seen.add(key);
-       const id=owned.get(key)??"local-"+(++serial),row=describe(f,id);
-       if(!row)continue;
-       next.set(key,{id,path:f.path});result.push(Object.freeze(row));
-     }
+     let next,result;
+     try{
+       next=new Map();result=[];const seen=new Set(downloadPaths());
+       for(const f of files.slice(0,300)){
+         if(!f?.path||f.cloudPlaceholder||mediaKind(f.path)!==section)continue;
+         const key=mediaPathKey(f.path,windows);if(seen.has(key))continue;seen.add(key);
+         const prior=owned.get(key),id="local-"+(++serial),viewKey=prior?.viewKey??"local-view-"+(++viewSerial),row=describe(f,id);
+         if(!row)continue;
+         next.set(key,{id,path:f.path,viewKey});result.push(Object.freeze({...row,id,viewKey}));
+       }
+     }catch(error){if(available()&&token===revision)report(section,"error");throw error;}
      if(!available()||token!==revision)return null;
-     for(const id of owned.values())handles.delete(id);
-     owned.clear();
-     for(const [key,{id,path}] of next){handles.set(id,path);owned.set(key,id);}
-     cache=Object.freeze(result);return cache;
+     for(const {id} of owned.values())handles.delete(id);
+     owned=next;
+     for(const {id,path} of owned.values())handles.set(id,path);
+     cache=Object.freeze(result);report(section,"committed",cache.length);return cache;
    }
-   return {refresh,rows:()=>{if(!available())return [];const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const id of owned.values())handles.delete(id);owned.clear();cache=null;}};
+   return {refresh,rows:()=>{if(!available())return [];const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const {id} of owned.values())handles.delete(id);owned.clear();cache=null;}};
  }
  function action(id,kind){if(dead||!allowed()||!handles.has(id)||!["open","reveal"].includes(kind))return false;return perform(handles.get(id),kind);}
  function invalidate(){++generation;handles.clear();}
@@ -358,7 +364,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   const trace=(event,data)=>{try{if(win.__nocturneTrace)win.__nocturneTrace(event,data,{flush:true});else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,data,t:win.performance?.now?.()??0});}}catch{}};
-  trace("library.services.script",{version:"0.3.0-preview.136"});
+  trace("library.services.script",{version:"0.3.0-preview.137"});
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
   const BARRIER="__nocturneDownloadsDisposal",MEDIA_BARRIER="__nocturneMediaDisposal";
   const previous=win[KEY],previousClosing=previous?.dispose?.(),existing=win[BARRIER];
@@ -414,7 +420,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
     if(section==="pictures")try{const f=Services.dirsvc.get("Home",Ci.nsIFile);f.append("Pictures");roots.push(f.path);}catch{}
     return new Promise((resolve,reject)=>{try{scanner().scanMedia([...new Map([...roots,...customFolders()].map(p=>[mediaPathKey(p,windows),p])).values()],MEDIA_EXTENSIONS[section],2,60,300,files=>resolve(Array.from(files)));}catch(e){reject(e);}});
   }
-  const media=createMediaService({scan:scanMedia,barrier:mediaBarrier,allowed:mediaAllowed,windows,
+  const media=createMediaService({scan:scanMedia,barrier:mediaBarrier,allowed:mediaAllowed,windows,onRefresh:detail=>trace("library.media.refresh",detail),
     describe(f,id){const name=f.path.split(/[\\/]/).pop();return {id,kind:"local",name,time:Number(f.lastModified)||0,bytes:Number(f.size)||0,total:Number(f.size)||0,success:true,exists:true,icon:iconFor(f.path),thumbnail:safeRaster(name,Number(f.size))?Services.io.newFileURI(fileFor(f.path)).spec:null};},
     perform(path,kind){try{const f=fileFor(path);if(!f.exists()||!f.isFile()||scanner().isCloudPlaceholder(path))return false;if(kind==="open")f.launch();else f.reveal();return true;}catch{return false;}}});
   // Single Gecko file-payload owner for Dock and Library. Neither path

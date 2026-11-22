@@ -5,7 +5,7 @@
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,{flush:true});
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.136",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.137",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
@@ -178,10 +178,11 @@
       }finally{if(token===actionSerial){clearing=false;syncTools();}}
     }catch{if(current(epoch))notice("History action unavailable.");}
   }
+  function rowKey(row){return row.kind==="local"&&row.viewKey?row.viewKey:row.id;}
   function fileBytes(n){if(!Number.isFinite(n)||n<=0)return "0 B";let i=0;while(n>=1024&&i<3){n/=1024;i++;}return n.toFixed(i?1:0)+" "+["B","KB","MB","GB"][i];}
   async function fileAction(entry,kind){
     const row=entry.record,source=win.__nocturneLibraryServices,epoch=state.motionEpoch;
-    if(!row||!source||rows.get(row.id)!==entry||!active()||dragSource||clearing||state.phase==="closing"||renderedSection!==state.section)return;
+    if(!row||!source||rows.get(rowKey(row))!==entry||!active()||dragSource||clearing||state.phase==="closing"||renderedSection!==state.section)return;
     try{
       const ok=await (row.kind==="local"?source.media.action(row.id,kind):source.downloads.action(row.id,kind));
       if(!ok&&current(epoch))notice("File unavailable or action not permitted.");
@@ -249,7 +250,7 @@
     const p=pendingResult;pendingResult=null;if(pendingClose){pendingClose=false;closeNow(false);return;}if(p?.error)renderError();else if(p)renderResults(p);
   }
   function updateFileRow(entry,row){
-    entry.record=row;entry.node.dataset.recordId=row.id;entry.title.textContent=row.name;
+    entry.record=row;entry.node.dataset.recordId=rowKey(row);entry.title.textContent=row.name;
     const completed=row.success&&!row.failed&&!row.canceled&&!row.partial&&!row.blocked&&row.exists;
     const status=row.kind==="local"?"Local folder":downloadFileStatus(row);
     entry.url.textContent=status+" · "+fileBytes(row.total||row.bytes)+(row.active&&row.speed?" · "+fileBytes(row.speed)+"/s":"");
@@ -296,8 +297,8 @@
     const body=shell.body,focusId=doc.activeElement?.closest?.("[data-record-id]")?.dataset?.recordId,focused=doc.activeElement;
     const oldScroll=body.scrollTop,ordered=[],live=new Set();let lastDay=null;
     for(const row of result.rows){
-      if(live.has(row.id))continue;live.add(row.id);
-      let entry=rows.get(row.id);if(!entry){entry=fileSection()?createFileRow():createRow();rows.set(row.id,entry);}
+      const key=rowKey(row);if(live.has(key))continue;live.add(key);
+      let entry=rows.get(key);if(!entry){entry=fileSection()?createFileRow():createRow();rows.set(key,entry);}
       if(fileSection()){updateFileRow(entry,row);ordered.push(entry.node);continue;}
       entry.record=row;entry.node.dataset.recordId=row.id;
       entry.title.textContent=row.title;entry.url.textContent=row.url;

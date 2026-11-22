@@ -2,7 +2,7 @@
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   const trace=(event,data)=>{try{if(win.__nocturneTrace)win.__nocturneTrace(event,data,{flush:true});else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,data,t:win.performance?.now?.()??0});}}catch{}};
-  trace("library.services.script",{version:"0.3.0-preview.136"});
+  trace("library.services.script",{version:"0.3.0-preview.137"});
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
   const BARRIER="__nocturneDownloadsDisposal",MEDIA_BARRIER="__nocturneMediaDisposal";
   const previous=win[KEY],previousClosing=previous?.dispose?.(),existing=win[BARRIER];
@@ -58,7 +58,7 @@
     if(section==="pictures")try{const f=Services.dirsvc.get("Home",Ci.nsIFile);f.append("Pictures");roots.push(f.path);}catch{}
     return new Promise((resolve,reject)=>{try{scanner().scanMedia([...new Map([...roots,...customFolders()].map(p=>[mediaPathKey(p,windows),p])).values()],MEDIA_EXTENSIONS[section],2,60,300,files=>resolve(Array.from(files)));}catch(e){reject(e);}});
   }
-  const media=createMediaService({scan:scanMedia,barrier:mediaBarrier,allowed:mediaAllowed,windows,
+  const media=createMediaService({scan:scanMedia,barrier:mediaBarrier,allowed:mediaAllowed,windows,onRefresh:detail=>trace("library.media.refresh",detail),
     describe(f,id){const name=f.path.split(/[\\/]/).pop();return {id,kind:"local",name,time:Number(f.lastModified)||0,bytes:Number(f.size)||0,total:Number(f.size)||0,success:true,exists:true,icon:iconFor(f.path),thumbnail:safeRaster(name,Number(f.size))?Services.io.newFileURI(fileFor(f.path)).spec:null};},
     perform(path,kind){try{const f=fileFor(path);if(!f.exists()||!f.isFile()||scanner().isCloudPlaceholder(path))return false;if(kind==="open")f.launch();else f.reveal();return true;}catch{return false;}}});
   // Single Gecko file-payload owner for Dock and Library. Neither path

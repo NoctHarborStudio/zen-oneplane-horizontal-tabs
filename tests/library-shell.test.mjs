@@ -130,3 +130,30 @@ test("Library Downloads clear treats a concurrent Dock clear as busy, not succes
  assert.deepEqual(notices,["Downloads are already being cleared."]);
  assert.deepEqual(events,[]);assert.equal(retried,1);
 });
+
+test("Library preserves local DOM row/scroll across capability refresh, but changes them on rename",()=>{
+ const source=read("src/library/controller.js.part");
+ const code=source.slice(source.indexOf("  function renderResults("),source.indexOf("  function renderBody("));
+ const rowKey=source.slice(source.indexOf("  function rowKey("),source.indexOf("  function fileBytes("));
+ let created=0,rows=new Map();
+ const body={children:[],scrollTop:42,insertBefore(node,ref){
+   const old=this.children.indexOf(node);if(old>=0)this.children.splice(old,1);
+   const i=ref?this.children.indexOf(ref):-1;this.children.splice(i<0?this.children.length:i,0,node);
+ }};
+ const shell={body},state={section:"pictures",phase:"open",query:""};
+ const doc={activeElement:{closest:()=>({dataset:{recordId:"local-view-1"}}),isConnected:true,focus(){}}};
+ const createFileRow=()=>{created++;const node={dataset:{},remove(){const i=body.children.indexOf(node);if(i>=0)body.children.splice(i,1);}};return {node,record:null};};
+ const updateFileRow=(entry,row)=>{entry.record=row;entry.node.dataset.recordId=row.viewKey;};
+ const render=new Function("rows","shell","state","doc","createFileRow","updateFileRow",`
+   const active=()=>true,fileSection=()=>true,syncTools=()=>{};
+   let renderedSection="pictures",dragSource=null,pendingResult=null;
+   ${rowKey}
+   ${code}
+   return renderResults;
+ `)(rows,shell,state,doc,createFileRow,updateFileRow);
+ render({rows:[{id:"local-1",viewKey:"local-view-1",kind:"local"}],hasMore:false});
+ const node=body.children[0];render({rows:[{id:"local-2",viewKey:"local-view-1",kind:"local"}],hasMore:false});
+ assert.equal(body.children[0],node);assert.equal(created,1);assert.equal(rows.get("local-view-1").record.id,"local-2");assert.equal(body.scrollTop,42);
+ render({rows:[{id:"local-3",viewKey:"local-view-2",kind:"local"}],hasMore:false});
+ assert.notEqual(body.children[0],node);assert.equal(created,2);assert.equal(rows.has("local-view-1"),false);
+});
