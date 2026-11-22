@@ -4,7 +4,7 @@ Status: primary static audit checkpoints completed; A0.3 release infrastructure 
 
 ## Active checkpoint — source vs native evidence
 
-Current source checkpoint: 0.3.0-preview.118 (A5.4a display coordinate/preview source changes staged; canonical CI pending; A5.1b2 Gecko OS identity and A5.2b2 Split native acceptance OPEN). Last confirmed canonical CI: preview.117. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
+Current source checkpoint: 0.3.0-preview.118 (A5.4a display coordinate/preview source/CI PASS; A5.1b2 Gecko OS identity and A5.2b2 Split native acceptance OPEN). Last confirmed canonical CI: preview.118. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
 
 | Stage | Source implementation/review | Native acceptance |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ Current source checkpoint: 0.3.0-preview.118 (A5.4a display coordinate/preview s
 | A2 | Implemented and reviewed | Explicitly deferred |
 | A3 | Core Fold ownership/handoff implemented; Bloom candidate dormant | Pending |
 | A4 | A4.4-R2 source/CI complete; native hit-region, visual and profiler gates still open | Pending |
-| A5–A7 | A5.1a–A5.2b1 and A5.3a source/CI PASS; A5.4a source staged/CI pending, A5.1b2 OS identity and A5.2b2/A5.3b–A7 native/remaining tasks OPEN | Pending |
+| A5–A7 | A5.1a–A5.2b1, A5.3a and A5.4a source/CI PASS; A5.1b2 OS identity, A5.2b2 Split, A5.3b file OS and A5.4b display native acceptance remain OPEN | Pending |
 | A8 | Integrated validation pending | Pending |
 | A9 | Optional vertical scope, separate approval | Pending |
 
@@ -1086,3 +1086,8 @@ Baseline `preview.117` at `d069d9a1390d826858912137e1bd1d78f559918a` with [CI 45
 A second source-confirmed presentation issue existed in `showPlacementPreview`: the cache key contained only full monitor geometry, snap mode and label, but not current `work` geometry or target rectangle. A same-monitor taskbar/work-area change could therefore leave a stale map fraction/label while the native drop used newly computed geometry. Popup relocation also occurred only when the monitor changed, even when the work-area anchor moved on the same monitor. Add one pure `displayPreviewKey(target,label)` in the existing `src/algorithms/display-placement.mjs` and consume it from Display Engine; the cached key includes the native full/work/target rectangles and label/mode. Recompute the map on actual geometry change and move the existing compact XUL popup when the actual CSS screen anchor changes. No new popup, observer, RAF, second controller or persistent coordinate cache. `drag.placement.preview` records only `{reason:"work-area-change",movedAnchor:boolean}` with 1000ms throttle and no workspace/tab/file or raw screen data.
 
 Before publication, 15/15 focused display algorithm and extracted-runtime popup fixtures PASS (including negative monitor coordinates, changed work area, identical snap mode, reanchor and bounded trace). Existing Hub and Display Engine are otherwise unchanged; two obsolete tests for the unreachable helper were removed, with two new behavior tests for the real consumer. Source/generated parser, full Node suite, release policy, immutable and live package CI and target Windows Gecko/native multi-DPI tests are separate gates. A5.4b native monitor/taskbar/OS drag acceptance OPEN; A5.1b2 Gecko session identity, A5.2b2 Split, A5.3b file OS handoff and remaining A5 lifecycle/motion work remain OPEN. Next independent generated-runtime/metadata self-check, canonical CI and native experiment design, not a second snap engine.
+
+
+### A5.4a-R — Canonical CI closure and independent readback (docs-only)
+
+Production `c38b66c1efe1e41e1b615a4a965907693aaa2fa3` via [PR #6](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/pull/6); [CI 45055890065](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45055890065) **SUCCESS** (728/728 Node tests, 15/15 Python release tests, 12/12 runtime syntax checks, reproducible build, version/timestamp/history/provenance lock and immutable/public Raw/codeload Sine package). Independent readback confirmed `preview.118`, the single `displaySnapTarget` production policy and no `hubSnapRect`/`hubOtherDisplay` legacy definitions in generated Layout; all four modified Layout fragment transformations match the exact prior generated bundle section and current source. Same-monitor work-area reflow and popup anchor/no-anchor fixtures PASS. No new native command, watcher, state owner or RAF, and native Snap behavior was not redefined. **A5.4a source/CI PASS only**; actual Gecko `MouseEvent.screen`, XUL popup placement, real monitor/DPI taskbar changes, OS drag handoff, animation frame profiling and no-phantom-detach acceptance remain OPEN under A5.4b/A5.1b2/A8. Next independent A5 source work may proceed without assuming native validation.
