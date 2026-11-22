@@ -63,3 +63,6 @@ A4.4-R2: native tab input shares one local phase gate, and native edge-control X
 
 
 A5.1a: `src/native/tab-adapter.js.part` is the sole existing custom-flavor source-resolution path. Protected Gecko dragover fallback returns a tab only if one valid active controller/token exists; explicit trusted payload is preferred. The controller token does not certify native OS DataTransfer identity. Never add a separate source registry to emulate native tabs.
+
+
+A5.1b1: native tab/group postconditions are ephemeral reads in `src/native/tab-adapter.js.part` and checked by existing drag consumers. Rejected or partial delivered custom drop still settles the exact source lifecycle token, without pretending a native mutation was successful or launching a second window. No new module/owner/observer/RAF or speculative rollback. True OS drag session identity remains a separate A5.1b2 gate.

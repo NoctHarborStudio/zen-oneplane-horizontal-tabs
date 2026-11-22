@@ -1200,3 +1200,8 @@ Source-level NC4 native-identity partial: `readDraggedTab` no longer chooses the
 
 
 A5.1a CI closure: preview.113 (707/707 Node, 15 Python, deterministic build, 12 runtime parsers) PASS. Native same-node OS session identity, drop payload absence and native split/move result checks remain A5.1b; no Gecko native acceptance claimed.
+
+
+### A5.1b1 — Immediate native postconditions (preview.114)
+
+Source-level correction: return values or visual cleanup no longer stand in for native tab/group movement, adopted ownership or Split membership. Delivered custom drops consume the exact source gesture even on native failures, to suppress unintended detach. Source/fixture gate is separate from native Zen/OS DragSession acceptance. Actual hidden-workspace reorder, multi-monitor/late native result, same-node stale Gecko dragend and native visual/performance proof are open. No user-reproduced corruption claim.

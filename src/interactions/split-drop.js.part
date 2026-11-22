@@ -46,31 +46,45 @@
     event.preventDefault();
     event.stopPropagation();
     if(toolbarDragReturnZone(event)){sourceHandled(tab);schedule();return;}
-    const side = splitSide(event);
-    try {
-      if (emptySplitTarget(current)) {
-        // Empty start page is not a valid split partner: select the real tab.
-        browser.selectedTab=tab;sourceHandled(tab);schedule();return;
+    const side=splitSide(event);
+    let operation="none",outcome="rejected";
+    try{
+      if(emptySplitTarget(current)){
+        operation="select-empty-partner";
+        browser.selectedTab=tab;
+        outcome=browser.selectedTab===tab?"confirmed":"rejected";
+        schedule();return;
       }
-      if (isSplit(tab)) {
-        unsplitTab(tab);
+      if(isSplit(tab)){
+        operation="unsplit";
+        outcome=unsplitTab(tab)&&!isSplit(tab)?"confirmed":"unverified";
+        if(outcome==="confirmed")schedule();
+      }else if(side&&validNativeTab(current)&&!tab.hasAttribute("zen-empty-tab")){
+        operation="split";
+        const first=side==="left"||side==="top";
+        const grid=side==="left"||side==="right"?"vsep":"hsep";
+        // Native Split owns browser/session state; a truthy API response
+        // alone does not establish a shared, live split group.
+        browser.selectedTab=tab;
+        const result=window.gZenViewSplitter?.splitTabs(first?[tab,current]:[current,tab],grid,first?0:1);
+        const group=splitGroup(tab);
+        outcome=result&&isSplit(tab)&&isSplit(current)&&group&&group===splitGroup(current)?"confirmed":result?"unverified":"rejected";
+        if(!result&&validNativeTab(current))browser.selectedTab=current;
         schedule();
-      } else if (side && validNativeTab(current) && !tab.hasAttribute("zen-empty-tab")) {
-        const first = side === "left" || side === "top";
-        const grid = side === "left" || side === "right" ? "vsep" : "hsep";
-        // Mirror ZenViewSplitter's native drop order: selecting the
-        // dragged tab first restores its pending browser. Keep the old
-        // selected tab as the other pane, and let Zen own the session.
-        browser.selectedTab = tab;
-        const result = window.gZenViewSplitter?.splitTabs(first ? [tab,current] : [current,tab], grid, first ? 0 : 1);
-        if (!result && validNativeTab(current)) browser.selectedTab = current;
+      }else if(!side&&validNativeTab(tab)){
+        operation="select";
+        browser.selectedTab=tab;
+        outcome=browser.selectedTab===tab?"confirmed":"rejected";
         schedule();
-      } else if (!side && validNativeTab(tab)) {
-        browser.selectedTab=tab;schedule();
       }
-      sourceHandled(tab);
-    } catch (error) {
-      if (validNativeTab(current) && browser.selectedTab !== current) browser.selectedTab = current;
-      console.error("[OnePlane] Split View:", error);
-    } finally { endDragVisual(); }
+    }catch(error){
+      outcome="error";
+      if(validNativeTab(current)&&browser.selectedTab!==current)browser.selectedTab=current;
+      console.error("[OnePlane] Split View:",error);
+    }finally{
+      window.__nocturneTrace?.("drag.native.outcome",{operation,outcome},{sample:1600});
+      // The native drop was delivered, even on rejection. Do not let a
+      // later dragend detach a tab solely because split/unsplit failed.
+      try{sourceHandled(tab);}finally{endDragVisual();}
+    }
   }

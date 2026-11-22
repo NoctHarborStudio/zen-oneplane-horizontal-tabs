@@ -332,3 +332,8 @@ No new trace stream. Existing drag, address.cascade, tabs.sync, geometry.preflig
 ### Preview.113 — protected drag source arbitration
 
 `drag.source.resolve` records only bounded static `reason: "ambiguous"` (750 ms throttle). No window/tab/token/URL/title/path or DataTransfer contents are logged. Pair with existing `drag.lifecycle.begin/cancel`, `drag.incoming.release` and `drag.drop` to distinguish invalidated preview from genuine OS drag completion. Real Gecko session identity is not proven by these records.
+
+
+### Preview.114 — native drag result vs consumed OS gesture
+
+`drag.native.outcome` emits sampled bounded `{operation,outcome}` for native local tab/group move, foreign adoption, split, unsplit and select on delivered drop. Static outcomes include `confirmed`, `rejected`, `unverified`, `transferred-off-target`, `no-op` and `error`. These reflect immediate native state after synchronous calls, not a later native/session-restore/OS DragSession certificate. The existing `drag.lifecycle.cancel`, `drag.end` and `drag.incoming.release` own gesture cleanup evidence. Never log URLs, titles, tab objects, window identifiers, private payloads or files in these events.

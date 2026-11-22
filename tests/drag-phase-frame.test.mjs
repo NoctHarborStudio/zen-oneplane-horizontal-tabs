@@ -63,11 +63,11 @@ test("phase-blocked local strip drop cannot invoke native tab commands",()=>{
 test("phase-blocked dragend does not prepare a native detach",()=>{
  const src=read("interactions/drag-end.js.part"),body=src.slice(0,src.indexOf("  const dragController = {"));
  const run=new Function(body+`
- const calls=[],tab={},nativeDragIdentity={};
+ const calls=[],tab={},nativeDragIdentity={token:1},nativeDragToken=1,dragLifecycle={owns:()=>true};
  const dragEndMatches=()=>true,retireChangedDragViewport=()=>false,retireChangedDragChromeFrame=()=>false;
  const retireBlockedNativeTabDrag=reason=>{calls.push(reason);return true;};
  const placementAt=()=>{throw Error("native placement must not run")};
- onDragEnd({},tab);return calls;`);
+ onDragEnd({isTrusted:true},tab);return calls;`);
  assert.deepEqual(run(),["dragend-phase"]);
 });
 test("existing native observers and commit paths use common fences without new scheduling",()=>{

@@ -143,11 +143,13 @@
     return dest.native===dest.tab&&tabs.some(x=>x.tab===dest.tab&&!x.group&&tabOwner(x.tab)===window);
   }
   function moveNativeNextTo(element, dest) {
-    if (!element || !dest?.native || element === dest.native) return false;
-    const method = dest.before ? "moveTabBefore" : "moveTabAfter";
-    if (typeof browser[method] !== "function") return false;
-    browser[method](element, dest.native);
-    return true;
+    if(!element||!dest?.native||element===dest.native)return false;
+    // Already adjacent is a native no-op, not a failed commit.
+    if(nativeStripPlacement(element,dest))return true;
+    const method=dest.before?"moveTabBefore":"moveTabAfter";
+    if(typeof browser[method]!=="function")return false;
+    browser[method](element,dest.native);
+    return nativeStripPlacement(element,dest);
   }
   function onStripDrop(event) {
     if(retireChangedDragViewport()||retireChangedDragChromeFrame("strip-drop"))return;
@@ -168,6 +170,9 @@
     event.preventDefault();
     event.stopPropagation();
     const source = owner?.[DRAG_CONTROLLER];
+    // A delivered custom drop must consume the source even if native Zen
+    // rejects a command: otherwise dragend can mistake it for OS detach.
+    // This is cancellation/cleanup, not evidence of a successful mutation.
     const markSourceHandled=()=>owner===window?source?.markHandled():source?.markHandled(false,incoming.token,window);
     const group = source?.group();
     if (owner === window && dragNode) { setDragImageMode("inline",event); setPull(0); }
@@ -183,44 +188,47 @@
       return;
     }
     row.setAttribute("data-op-drag-commit", "true");
+    let operation="none",outcome="rejected";
     try {
-      if (group) {
-        // Zen exposes a real tab-group object. Moving that object keeps the
-        // grid, live browser instances and the selected pane intact.
-        if (owner === window && splitGroup(tab) === group && dest?.native !== group) {
-          moveNativeNextTo(group, dest);
-        }
-        markSourceHandled();
-        schedule();
+      if(group){
+        operation="move-group";
+        if(owner===window&&splitGroup(tab)===group&&dest.native!==group)
+          outcome=moveNativeNextTo(group,dest)?"confirmed":"unverified";
+        else if(owner===window&&dest.native===group)outcome="no-op";
         return;
       }
-      if (dest?.tab === tab || (owner === window && dest?.group && splitGroup(tab) === dest.group)) {
-        markSourceHandled();
-        return;
+      if(dest?.tab===tab||(owner===window&&dest?.group&&splitGroup(tab)===dest.group)){
+        outcome="no-op";return;
       }
-      if(owner!==window&&!incomingDropAllowed(tab,owner,incoming,true)){rejectIncomingDrop(event,tab,owner,incoming);return;}
-      if (isSplit(tab) && !unsplitTab(tab)) { markSourceHandled(); return; }
-      if(!validStripDropTarget(dest)){markSourceHandled();return;}
-      if(owner!==window&&!incomingDropAllowed(tab,owner,incoming,true)){rejectIncomingDrop(event,tab,owner,incoming);return;}
-      if (owner === window) {
-        // Dropping a member beyond its original group detaches only that
-        // member. Never insert an ordinary tab inside another split group.
-        moveNativeNextTo(tab, dest);
-        markSourceHandled();
-      } else {
-        const all = Array.from(browser.tabs);
-        const boundary = dest?.group ? groupMembers(dest.group) : dest?.tab ? [dest.tab] : [];
-        const boundaryIndex=all.indexOf(dest.before ? boundary[0] : boundary.at(-1));
+      if(owner!==window&&!incomingDropAllowed(tab,owner,incoming,true))return;
+      if(isSplit(tab)){
+        operation="unsplit-before-move";
+        if(!unsplitTab(tab)){outcome="rejected";return;}
+      }
+      if(!validStripDropTarget(dest))return;
+      if(owner!==window&&!incomingDropAllowed(tab,owner,incoming,true))return;
+      if(owner===window){
+        operation="move-tab";
+        outcome=moveNativeNextTo(tab,dest)?"confirmed":"unverified";
+      }else{
+        operation="adopt-tab";
+        const all=Array.from(browser.tabs);
+        const boundary=dest?.group?groupMembers(dest.group):dest?.tab?[dest.tab]:[];
+        const boundaryIndex=all.indexOf(dest.before?boundary[0]:boundary.at(-1));
         if(!boundary.length||boundaryIndex<0)return;
         const index=boundaryIndex+(dest.before?0:1);
-        if(!incomingDropAllowed(tab,owner,incoming,true)){rejectIncomingDrop(event,tab,owner,incoming);return;}
-        const adopted = browser.adoptTab(tab, { tabIndex: index, selectTab: true });
-        if (adopted) markSourceHandled();
+        if(!incomingDropAllowed(tab,owner,incoming,true))return;
+        const adopted=browser.adoptTab(tab,{tabIndex:index,selectTab:true});
+        // A new native tab in the destination proves ownership. Placement
+        // can still differ when hidden/native tabs alter tabIndex semantics.
+        outcome=nativeAdoptionOutcome(adopted,dest);
       }
       schedule();
-    } catch (error) {
-      console.error("[OnePlane] Tab or split group move:", error);
-    } finally {
+    }catch(error){
+      outcome="error";console.error("[OnePlane] Tab or split group move:",error);
+    }finally{
+      window.__nocturneTrace?.("drag.native.outcome",{operation,outcome},{sample:1600});
+      try{markSourceHandled();}catch(error){console.error("[OnePlane] Drag source settle:",error);}
       if(incoming&&incomingDrag===incoming){incomingDrag=null;releaseDragReveal();}
       clearDropMarker();
       finishStripCommit();

@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.113",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.114",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -4595,13 +4595,15 @@ function installTabStrip() {
     if(dragLifecycle.current())dragLifecycle.cancel("superseded");
     nativeDragToken=dragLifecycle.begin("tab",{onCancel:cancelNativeDrag});
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.lifecycle.begin",()=>({token:nativeDragToken}),{sample:1800});
-    if(nativeDragToken!==null){nativeDragIdentity={target:event.target,tab};watchNativeDrag(nativeDragToken);}
+    if(nativeDragToken!==null){nativeDragIdentity={target:event.target,tab,token:nativeDragToken};watchNativeDrag(nativeDragToken);}
     return nativeDragToken!==null;
   }
   function finishNativeDragLifecycle(event=null,tab=null){
     if(event&&!dragEndMatches(nativeDragIdentity,event,tab))return false;
-    const token=nativeDragToken;nativeDragToken=null;nativeDragIdentity=null;stopNativeDragWatch();
-    return token!==null&&dragLifecycle.finish(token);
+    const token=nativeDragToken;
+    if(token===null||nativeDragIdentity?.token!==token||!dragLifecycle.owns(token,"tab"))return false;
+    nativeDragToken=null;nativeDragIdentity=null;stopNativeDragWatch();
+    return dragLifecycle.finish(token);
   }
   function cancelActiveDrag(reason){
     if(dragInsertPending)endDragVisual();
@@ -7780,6 +7782,30 @@ function installTabStrip() {
     splitter.removeTabFromGroup(tab, undefined, { forUnsplit: true });
     return !isSplit(tab);
   }
+  // Read the native projected order after an actual Zen command, not the
+  // mirrored DOM nor an assumed void moveTabBefore/After return value.
+  function nativeStripPlacement(element,dest){
+    if(!element||!dest?.native)return false;
+    const native=readStripTopology().tabs,order=native.map(x=>x.tab);
+    const members=entity=>entity?.hasAttribute?.("split-view-group")?
+      native.filter(x=>x.group===entity).map(x=>x.tab):
+      order.includes(entity)?[entity]:[];
+    const moved=members(element),target=members(dest.native);
+    if(!moved.length||!target.length||moved.some(t=>target.includes(t)))return false;
+    const range=list=>{
+      const indices=list.map(t=>order.indexOf(t));
+      if(indices.some(i=>i<0))return null;
+      const start=Math.min(...indices),end=Math.max(...indices);
+      return end-start+1===list.length?{start,end}:null;
+    };
+    const from=range(moved),to=range(target);
+    return !!from&&!!to&&(dest.before?from.end+1===to.start:to.end+1===from.start);
+  }
+  function nativeAdoptionOutcome(adopted,dest){
+    if(!adopted)return "rejected";
+    if(!validNativeTab(adopted)||tabOwner(adopted)!==window)return "unverified";
+    return nativeStripPlacement(adopted,dest)?"confirmed":"transferred-off-target";
+  }
   function tabFromItem(item) {
     for (const [tab, entry] of entries) if (entry.item === item) return tab;
     return null;
@@ -8871,11 +8897,13 @@ function installTabStrip() {
     return dest.native===dest.tab&&tabs.some(x=>x.tab===dest.tab&&!x.group&&tabOwner(x.tab)===window);
   }
   function moveNativeNextTo(element, dest) {
-    if (!element || !dest?.native || element === dest.native) return false;
-    const method = dest.before ? "moveTabBefore" : "moveTabAfter";
-    if (typeof browser[method] !== "function") return false;
-    browser[method](element, dest.native);
-    return true;
+    if(!element||!dest?.native||element===dest.native)return false;
+    // Already adjacent is a native no-op, not a failed commit.
+    if(nativeStripPlacement(element,dest))return true;
+    const method=dest.before?"moveTabBefore":"moveTabAfter";
+    if(typeof browser[method]!=="function")return false;
+    browser[method](element,dest.native);
+    return nativeStripPlacement(element,dest);
   }
   function onStripDrop(event) {
     if(retireChangedDragViewport()||retireChangedDragChromeFrame("strip-drop"))return;
@@ -8896,6 +8924,9 @@ function installTabStrip() {
     event.preventDefault();
     event.stopPropagation();
     const source = owner?.[DRAG_CONTROLLER];
+    // A delivered custom drop must consume the source even if native Zen
+    // rejects a command: otherwise dragend can mistake it for OS detach.
+    // This is cancellation/cleanup, not evidence of a successful mutation.
     const markSourceHandled=()=>owner===window?source?.markHandled():source?.markHandled(false,incoming.token,window);
     const group = source?.group();
     if (owner === window && dragNode) { setDragImageMode("inline",event); setPull(0); }
@@ -8911,44 +8942,47 @@ function installTabStrip() {
       return;
     }
     row.setAttribute("data-op-drag-commit", "true");
+    let operation="none",outcome="rejected";
     try {
-      if (group) {
-        // Zen exposes a real tab-group object. Moving that object keeps the
-        // grid, live browser instances and the selected pane intact.
-        if (owner === window && splitGroup(tab) === group && dest?.native !== group) {
-          moveNativeNextTo(group, dest);
-        }
-        markSourceHandled();
-        schedule();
+      if(group){
+        operation="move-group";
+        if(owner===window&&splitGroup(tab)===group&&dest.native!==group)
+          outcome=moveNativeNextTo(group,dest)?"confirmed":"unverified";
+        else if(owner===window&&dest.native===group)outcome="no-op";
         return;
       }
-      if (dest?.tab === tab || (owner === window && dest?.group && splitGroup(tab) === dest.group)) {
-        markSourceHandled();
-        return;
+      if(dest?.tab===tab||(owner===window&&dest?.group&&splitGroup(tab)===dest.group)){
+        outcome="no-op";return;
       }
-      if(owner!==window&&!incomingDropAllowed(tab,owner,incoming,true)){rejectIncomingDrop(event,tab,owner,incoming);return;}
-      if (isSplit(tab) && !unsplitTab(tab)) { markSourceHandled(); return; }
-      if(!validStripDropTarget(dest)){markSourceHandled();return;}
-      if(owner!==window&&!incomingDropAllowed(tab,owner,incoming,true)){rejectIncomingDrop(event,tab,owner,incoming);return;}
-      if (owner === window) {
-        // Dropping a member beyond its original group detaches only that
-        // member. Never insert an ordinary tab inside another split group.
-        moveNativeNextTo(tab, dest);
-        markSourceHandled();
-      } else {
-        const all = Array.from(browser.tabs);
-        const boundary = dest?.group ? groupMembers(dest.group) : dest?.tab ? [dest.tab] : [];
-        const boundaryIndex=all.indexOf(dest.before ? boundary[0] : boundary.at(-1));
+      if(owner!==window&&!incomingDropAllowed(tab,owner,incoming,true))return;
+      if(isSplit(tab)){
+        operation="unsplit-before-move";
+        if(!unsplitTab(tab)){outcome="rejected";return;}
+      }
+      if(!validStripDropTarget(dest))return;
+      if(owner!==window&&!incomingDropAllowed(tab,owner,incoming,true))return;
+      if(owner===window){
+        operation="move-tab";
+        outcome=moveNativeNextTo(tab,dest)?"confirmed":"unverified";
+      }else{
+        operation="adopt-tab";
+        const all=Array.from(browser.tabs);
+        const boundary=dest?.group?groupMembers(dest.group):dest?.tab?[dest.tab]:[];
+        const boundaryIndex=all.indexOf(dest.before?boundary[0]:boundary.at(-1));
         if(!boundary.length||boundaryIndex<0)return;
         const index=boundaryIndex+(dest.before?0:1);
-        if(!incomingDropAllowed(tab,owner,incoming,true)){rejectIncomingDrop(event,tab,owner,incoming);return;}
-        const adopted = browser.adoptTab(tab, { tabIndex: index, selectTab: true });
-        if (adopted) markSourceHandled();
+        if(!incomingDropAllowed(tab,owner,incoming,true))return;
+        const adopted=browser.adoptTab(tab,{tabIndex:index,selectTab:true});
+        // A new native tab in the destination proves ownership. Placement
+        // can still differ when hidden/native tabs alter tabIndex semantics.
+        outcome=nativeAdoptionOutcome(adopted,dest);
       }
       schedule();
-    } catch (error) {
-      console.error("[OnePlane] Tab or split group move:", error);
-    } finally {
+    }catch(error){
+      outcome="error";console.error("[OnePlane] Tab or split group move:",error);
+    }finally{
+      window.__nocturneTrace?.("drag.native.outcome",{operation,outcome},{sample:1600});
+      try{markSourceHandled();}catch(error){console.error("[OnePlane] Drag source settle:",error);}
       if(incoming&&incomingDrag===incoming){incomingDrag=null;releaseDragReveal();}
       clearDropMarker();
       finishStripCommit();
@@ -9002,36 +9036,51 @@ function installTabStrip() {
     event.preventDefault();
     event.stopPropagation();
     if(toolbarDragReturnZone(event)){sourceHandled(tab);schedule();return;}
-    const side = splitSide(event);
-    try {
-      if (emptySplitTarget(current)) {
-        // Empty start page is not a valid split partner: select the real tab.
-        browser.selectedTab=tab;sourceHandled(tab);schedule();return;
+    const side=splitSide(event);
+    let operation="none",outcome="rejected";
+    try{
+      if(emptySplitTarget(current)){
+        operation="select-empty-partner";
+        browser.selectedTab=tab;
+        outcome=browser.selectedTab===tab?"confirmed":"rejected";
+        schedule();return;
       }
-      if (isSplit(tab)) {
-        unsplitTab(tab);
+      if(isSplit(tab)){
+        operation="unsplit";
+        outcome=unsplitTab(tab)&&!isSplit(tab)?"confirmed":"unverified";
+        if(outcome==="confirmed")schedule();
+      }else if(side&&validNativeTab(current)&&!tab.hasAttribute("zen-empty-tab")){
+        operation="split";
+        const first=side==="left"||side==="top";
+        const grid=side==="left"||side==="right"?"vsep":"hsep";
+        // Native Split owns browser/session state; a truthy API response
+        // alone does not establish a shared, live split group.
+        browser.selectedTab=tab;
+        const result=window.gZenViewSplitter?.splitTabs(first?[tab,current]:[current,tab],grid,first?0:1);
+        const group=splitGroup(tab);
+        outcome=result&&isSplit(tab)&&isSplit(current)&&group&&group===splitGroup(current)?"confirmed":result?"unverified":"rejected";
+        if(!result&&validNativeTab(current))browser.selectedTab=current;
         schedule();
-      } else if (side && validNativeTab(current) && !tab.hasAttribute("zen-empty-tab")) {
-        const first = side === "left" || side === "top";
-        const grid = side === "left" || side === "right" ? "vsep" : "hsep";
-        // Mirror ZenViewSplitter's native drop order: selecting the
-        // dragged tab first restores its pending browser. Keep the old
-        // selected tab as the other pane, and let Zen own the session.
-        browser.selectedTab = tab;
-        const result = window.gZenViewSplitter?.splitTabs(first ? [tab,current] : [current,tab], grid, first ? 0 : 1);
-        if (!result && validNativeTab(current)) browser.selectedTab = current;
+      }else if(!side&&validNativeTab(tab)){
+        operation="select";
+        browser.selectedTab=tab;
+        outcome=browser.selectedTab===tab?"confirmed":"rejected";
         schedule();
-      } else if (!side && validNativeTab(tab)) {
-        browser.selectedTab=tab;schedule();
       }
-      sourceHandled(tab);
-    } catch (error) {
-      if (validNativeTab(current) && browser.selectedTab !== current) browser.selectedTab = current;
-      console.error("[OnePlane] Split View:", error);
-    } finally { endDragVisual(); }
+    }catch(error){
+      outcome="error";
+      if(validNativeTab(current)&&browser.selectedTab!==current)browser.selectedTab=current;
+      console.error("[OnePlane] Split View:",error);
+    }finally{
+      window.__nocturneTrace?.("drag.native.outcome",{operation,outcome},{sample:1600});
+      // The native drop was delivered, even on rejection. Do not let a
+      // later dragend detach a tab solely because split/unsplit failed.
+      try{sourceHandled(tab);}finally{endDragVisual();}
+    }
   }
   function onDragEnd(event, tab) {
-    if(!dragEndMatches(nativeDragIdentity,event,tab)||retireChangedDragViewport()||
+    if(!event?.isTrusted||!dragEndMatches(nativeDragIdentity,event,tab)||
+      nativeDragIdentity?.token!==nativeDragToken||!dragLifecycle.owns(nativeDragToken,"tab")||retireChangedDragViewport()||
       retireChangedDragChromeFrame("dragend")||retireBlockedNativeTabDrag("dragend-phase"))return;
     const dt = event.dataTransfer;
     // Ignore late or duplicate dragend after cancel/handled drop.
@@ -9094,8 +9143,9 @@ function installTabStrip() {
         draggedTab = null;
         draggedGroup = null;
         dragStartPoint=null;
-        // Native drop is committed now. Only the isolated visual remains
-        // until the return animation completes; no native session is held.
+        // This delivered drop was consumed; its native result may be
+        // confirmed, unverified or rejected by the destination. Only the
+        // isolated return visual can survive a finished drag session.
         if(keep)finishInsertionAfterDrop();
       }finally{clearSourceIncoming(finishedToken,destination);}
     }

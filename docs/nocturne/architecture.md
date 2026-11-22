@@ -310,3 +310,6 @@ A4.4-R2 (preview.112): one Layout-native tab input policy gates strip, Split Dro
 
 
 A5.1a (preview.113): native drag fallback is a strict admission check, not a second session store. The only admissible protected dragover source is a unique existing browser-window controller with live native tab and valid source lifecycle token; explicit trusted Gecko DataTransfer payload remains primary. No protected-mode guess on concurrent owners. Native OS session identity and commit confirmation remain separate A5 contracts.
+
+
+A5.1b1 (preview.114): Zen's current native tab/group order and live Split membership are the only synchronous postconditions for a delivered custom tab drop; the Layout mirror is not used to infer native success. Delivered drop consumption and verified native mutation are deliberately separate signals. The existing drag controller retires the exact active source regardless of rejected native command, avoiding an accidental secondary detach; no rollback/second reorder or OS session identity is synthesized.

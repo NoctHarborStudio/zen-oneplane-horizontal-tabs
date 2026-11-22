@@ -67,6 +67,30 @@
     splitter.removeTabFromGroup(tab, undefined, { forUnsplit: true });
     return !isSplit(tab);
   }
+  // Read the native projected order after an actual Zen command, not the
+  // mirrored DOM nor an assumed void moveTabBefore/After return value.
+  function nativeStripPlacement(element,dest){
+    if(!element||!dest?.native)return false;
+    const native=readStripTopology().tabs,order=native.map(x=>x.tab);
+    const members=entity=>entity?.hasAttribute?.("split-view-group")?
+      native.filter(x=>x.group===entity).map(x=>x.tab):
+      order.includes(entity)?[entity]:[];
+    const moved=members(element),target=members(dest.native);
+    if(!moved.length||!target.length||moved.some(t=>target.includes(t)))return false;
+    const range=list=>{
+      const indices=list.map(t=>order.indexOf(t));
+      if(indices.some(i=>i<0))return null;
+      const start=Math.min(...indices),end=Math.max(...indices);
+      return end-start+1===list.length?{start,end}:null;
+    };
+    const from=range(moved),to=range(target);
+    return !!from&&!!to&&(dest.before?from.end+1===to.start:to.end+1===from.start);
+  }
+  function nativeAdoptionOutcome(adopted,dest){
+    if(!adopted)return "rejected";
+    if(!validNativeTab(adopted)||tabOwner(adopted)!==window)return "unverified";
+    return nativeStripPlacement(adopted,dest)?"confirmed":"transferred-off-target";
+  }
   function tabFromItem(item) {
     for (const [tab, entry] of entries) if (entry.item === item) return tab;
     return null;

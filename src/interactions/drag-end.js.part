@@ -1,5 +1,6 @@
   function onDragEnd(event, tab) {
-    if(!dragEndMatches(nativeDragIdentity,event,tab)||retireChangedDragViewport()||
+    if(!event?.isTrusted||!dragEndMatches(nativeDragIdentity,event,tab)||
+      nativeDragIdentity?.token!==nativeDragToken||!dragLifecycle.owns(nativeDragToken,"tab")||retireChangedDragViewport()||
       retireChangedDragChromeFrame("dragend")||retireBlockedNativeTabDrag("dragend-phase"))return;
     const dt = event.dataTransfer;
     // Ignore late or duplicate dragend after cancel/handled drop.
@@ -62,8 +63,9 @@
         draggedTab = null;
         draggedGroup = null;
         dragStartPoint=null;
-        // Native drop is committed now. Only the isolated visual remains
-        // until the return animation completes; no native session is held.
+        // This delivered drop was consumed; its native result may be
+        // confirmed, unverified or rejected by the destination. Only the
+        // isolated return visual can survive a finished drag session.
         if(keep)finishInsertionAfterDrop();
       }finally{clearSourceIncoming(finishedToken,destination);}
     }

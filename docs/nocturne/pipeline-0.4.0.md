@@ -4,7 +4,7 @@ Status: primary static audit checkpoints completed; A0.3 release infrastructure 
 
 ## Active checkpoint — source vs native evidence
 
-Current source checkpoint: 0.3.0-preview.113 (A5.1a source/CI PASS; A5.1b next). Last confirmed canonical CI: preview.113. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
+Current source checkpoint: 0.3.0-preview.114 (A5.1b1 native command postconditions, CI pending; OS DragSession identity open). Last confirmed canonical CI: preview.113. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
 
 | Stage | Source implementation/review | Native acceptance |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ Current source checkpoint: 0.3.0-preview.113 (A5.1a source/CI PASS; A5.1b next).
 | A2 | Implemented and reviewed | Explicitly deferred |
 | A3 | Core Fold ownership/handoff implemented; Bloom candidate dormant | Pending |
 | A4 | A4.4-R2 source/CI complete; native hit-region, visual and profiler gates still open | Pending |
-| A5–A7 | A5.1a unique native drag source admission implemented; A5.1b OS identity/commit results and A5.2–A7 pending | Pending |
+| A5–A7 | A5.1a CI PASS; A5.1b1 native command result source implementation, CI pending; A5.1b2 OS session identity and A5.2–A7 open | Pending |
 | A8 | Integrated validation pending | Pending |
 | A9 | Optional vertical scope, separate approval | Pending |
 
@@ -995,3 +995,16 @@ Five permanent source-backed V8 fixture cases PASS (single/dual source, enumerat
 Production commit `bde36dcaac504f8fd30fad2237b0ce51d336f14f` passed [CI 45040154737](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45040154737): 707/707 Node tests, 15 Python release tests, all 12 runtime scripts parsed, deterministic generated outputs and published Raw/codeload verified. Exact source fragments `src/native/tab-adapter.js.part`, `src/interactions/strip-drag.js.part` and `src/interactions/drag-controller.js.part` occur once in generated `layout.uc.mjs`; manifest/package versions are both `0.3.0-preview.113`, and existing Magnetic Bookmarks lock matches the published blob. Source safety re-review: protected dragover is admitted only if a single active window controller has a valid native tab/token, while an available trusted explicit payload takes precedence. Two active candidates are rejected without native mutation; lost source clears incoming visual lease. Private-window/group restrictions and native ownership remain unchanged.
 
 Open A5.1b: do not equate the active JS source token with Gecko's OS drag session. Verify native session identity/Gecko protected mode across window handoffs before extending `dragEndMatches`. Verify `unsplitTab` native postcondition, actual `moveTabBefore/After` and `adoptTab` results and failure cleanup in separate narrow source commits; do not signal successful drop merely because an API was invoked or a visual animation completed. Native Zen multi-window/private/monitor acceptance and A8 profiler remain unverified. No installed-package change in this documentation checkpoint.
+
+
+### A5.1b1 — Native drag command postconditions and consumed gesture (preview.114)
+
+Baseline preview.113, `164377c0ab39f4cad397f42b6258fd36513c070b`, [CI 45040308128](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45040308128) PASS. Source and external API check: [Firefox gBrowser.moveTabBefore/After](https://firefox-source-docs.mozilla.org/browser/components/tabbrowser/docs/api.html) accepts a tab or tab group but does not promise a boolean success certificate; `adoptTab` returns the new tab or null. [ZenViewSplitter.removeTabFromGroup](https://github.com/zen-browser/desktop/blob/dev/src/zen/split-view/ZenViewSplitter.mjs) can return without changing the group if its internal reference is missing. Never equate an invocation, a truthy object or a completed Bunny visual with a native mutation.
+
+In existing `src/native/tab-adapter.js.part`, `nativeStripPlacement` reads the current Zen-owned visible tab/group order at the synchronous commit boundary; moving tab/group members must remain contiguous and be immediately before/after the native target entity. No second mirrored order or persistent cache. `moveNativeNextTo` returns true only when native geometry is already at the requested topology or the actual post-move topology matches it; it avoids a redundant move for already-adjacent targets. `nativeAdoptionOutcome` checks a returned native tab's destination owner and membership, reporting `confirmed`, `rejected`, `unverified`, or `transferred-off-target` separately; it does not attempt speculative repair in hidden workspace/index ordering.
+
+In `onStripDrop`, a delivered, valid custom drop always settles its exact current source token in `finally` even if native code rejects/throws/partially changes the tab. This is **consumption of the OS gesture, not evidence that a requested move succeeded**: it prevents a rejected delivered drop from becoming a second unintended window through `dragend`. `onSplitDrop` checks actual unsplit state, a nonempty shared native Split group following splitTabs, and native selection; failed and unverified commands are logged separately. It also settles its delivered local gesture on errors. Source dragend refuses untrusted events or a stale `nativeDragIdentity.token` / `dragLifecycle.owns` mismatch, without assigning a new OS session identity or watcher. Existing cleanup, ordering and motion owners remain unchanged.
+
+New bounded `drag.native.outcome` records only static operation/outcome labels, no titles, URLs, tabs or filenames. Six dedicated source-backed V8 fixtures PASS: moving single/group tab with void/unchanged native functions, actual adjacency and group continuity, rejected/partial/exception adoptTab with exact source cleanup, failed/partial Split and unsplit with cleanup, trusted token-scoped dragend. Existing incoming-drag and phase fixture mocks updated. Generated Layout parsed by JS parser. Full canonical CI and Zen native acceptance are not yet evidence at this stage.
+
+A5.1b2 remains OPEN: same-node delayed native `dragend` with a different true Gecko OS drag session cannot be proven/rejected solely by a JS token or source node. Do not add a second synthetic drag registry, depend on DataTransfer object reference stability, or assume an API's protected data is readable on every platform; research and native experiment required. Likewise eventual asynchronous native order, hidden-workspace reorder semantics, adopted-tab placement and split group postconditions need native acceptance before declaring complete. Next: canonical CI/readback and independent audit, then A5.1b2/native gesture identity and A5.2 Split ownership.

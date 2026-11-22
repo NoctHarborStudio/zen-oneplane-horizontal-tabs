@@ -19,6 +19,7 @@ function fixture(){
  const clearLiveDrag=()=>calls.push("live"),clearDropMarker=()=>calls.push("marker"),releaseDragReveal=()=>calls.push("hold"),refreshIndicator=()=>calls.push("indicator");
  const target={},browser={tabs:[target],adoptTab:(tab,opts)=>{calls.push(["adopt",opts.tabIndex]);return tab;}};
  const row={setAttribute:()=>{}},isSplit=()=>false,validStripDropTarget=()=>true,schedule=()=>{},finishStripCommit=()=>calls.push("commit");
+ const nativeAdoptionOutcome=()=> "confirmed";
  const previewStripDrag=()=>{if(!allowPreview)throw Error("stale native drop reached preview");return {native:target,tab:target,before:true};};
  const event=(type="dragover",isTrusted=true)=>({type,isTrusted,preventDefault(){calls.push("prevent")},stopPropagation(){calls.push("stop")}});
  return {tab,owner,source,calls,attrs,event,admit:e=>admitIncomingDrag(e,tab,owner),allowed:()=>incomingDropAllowed(tab,owner),

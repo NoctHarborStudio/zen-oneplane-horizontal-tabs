@@ -1,3 +1,11 @@
+## 0.3.0-preview.114 — A5.1b native drop postcondition and consumed gesture
+
+- Verify synchronous local move/group placement against the current Zen-owned visible tab topology, not `moveTabBefore/After`'s void API outcome or an assumed mirror position. Avoid invoking native move for already-adjacent slots.
+- Classify cross-window `adoptTab` by its returned native destination tab and actual position; distinguish null/rejected, valid transfer to an unexpected slot and unverified ownership. Avoid a second speculative native repair move.
+- Split/unsplit confirms actual Split-group membership rather than assuming that a native API invocation succeeded. Native input delivered to a rejected/partial drop consumes the exact source gesture, preventing a later dragend from detaching the original tab as an OS fallback.
+- Require trusted dragend and a current exact window-local drag lifecycle token before source placement/detach logic. Tokens do not certify Gecko OS DragSession identity.
+- New bounded `drag.native.outcome` result traces, six source-backed tests and adjusted existing fixtures. Native OS-session identity, true multi-DPI behaviour and delayed native state convergence remain open.
+
 ## 0.3.0-preview.113 — Native drag source arbitration (A5.1a)
 
 - Require trusted custom-flavor drag input and a current, valid source-controller token before resolving native tabs. Explicit Gecko DataTransfer payload remains authoritative when available.

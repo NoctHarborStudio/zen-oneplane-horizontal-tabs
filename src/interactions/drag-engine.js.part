@@ -52,13 +52,15 @@
     if(dragLifecycle.current())dragLifecycle.cancel("superseded");
     nativeDragToken=dragLifecycle.begin("tab",{onCancel:cancelNativeDrag});
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.lifecycle.begin",()=>({token:nativeDragToken}),{sample:1800});
-    if(nativeDragToken!==null){nativeDragIdentity={target:event.target,tab};watchNativeDrag(nativeDragToken);}
+    if(nativeDragToken!==null){nativeDragIdentity={target:event.target,tab,token:nativeDragToken};watchNativeDrag(nativeDragToken);}
     return nativeDragToken!==null;
   }
   function finishNativeDragLifecycle(event=null,tab=null){
     if(event&&!dragEndMatches(nativeDragIdentity,event,tab))return false;
-    const token=nativeDragToken;nativeDragToken=null;nativeDragIdentity=null;stopNativeDragWatch();
-    return token!==null&&dragLifecycle.finish(token);
+    const token=nativeDragToken;
+    if(token===null||nativeDragIdentity?.token!==token||!dragLifecycle.owns(token,"tab"))return false;
+    nativeDragToken=null;nativeDragIdentity=null;stopNativeDragWatch();
+    return dragLifecycle.finish(token);
   }
   function cancelActiveDrag(reason){
     if(dragInsertPending)endDragVisual();
