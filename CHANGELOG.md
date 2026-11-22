@@ -1,3 +1,7 @@
+## 0.3.0-preview.133 - Report skipped Downloads bulk-clear records accurately
+
+Fix NC4-076: native Download entries can change eligibility between collection and sequential removal. The existing Downloads service now reports requested, removed, skipped and failed separately, without retrying or removing active/partial/blocked records. The existing Library bulk-clear status reports incomplete clearing when a record is skipped; its existing diagnostic channel records only aggregate counts. No new operation, UI feature, timer, observer or file deletion. Three source-backed tests cover skipped native state, native error and Library feedback. Native Zen acceptance remains open.
+
 ## 0.3.0-preview.132 - Serialize existing Library History destructive actions
 
 Close NC4-084 source-confirmed command overlap: while native range clear is pending, a second range clear or a row Remove/Forget can no longer start. Native row deletion likewise prevents concurrent range clear, repeated removal and Forget until the operation settles. Reuse the existing Library `clearing` and `actionSerial` lifecycle gate, disable the Clear history action during the operation, preserve Copy, and release the gate on success/failure. Native confirmations, Places and SessionStore operations are unchanged. Two regression fixtures cover overlapping operations, failure and retry. Native Zen acceptance remains open.

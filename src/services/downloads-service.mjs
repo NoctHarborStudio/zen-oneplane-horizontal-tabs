@@ -116,9 +116,10 @@
     function drag(id,event,node){const d=byId.get(id);return !!(!dead&&ready&&source&&d&&completed(d)&&d.target?.exists!==false&&dragFile(d,event,node,"library"));}
     function dragNative(d,event,node){return !!(!dead&&ready&&source&&records.has(d)&&completed(d)&&d.target?.exists!==false&&dragFile(d,event,node,"dock"));}
     async function clearCompleted(){
-      const targets=[...records.keys()].filter(clearable);let removed=0,failed=0;
-      for(const d of targets)try{if(await actionNative(d,"remove"))removed++;}catch{failed++;}
-      return {removed,failed};
+      const targets=[...records.keys()].filter(clearable);let removed=0,skipped=0,failed=0;
+      // A native record can become ineligible after earlier removals.
+      for(const d of targets)try{if(await actionNative(d,"remove"))removed++;else skipped++;}catch{failed++;}
+      return {requested:targets.length,removed,skipped,failed};
     }
     function isReady(){return !dead&&ready;}
     function dispose(){

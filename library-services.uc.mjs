@@ -228,9 +228,10 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
     function drag(id,event,node){const d=byId.get(id);return !!(!dead&&ready&&source&&d&&completed(d)&&d.target?.exists!==false&&dragFile(d,event,node,"library"));}
     function dragNative(d,event,node){return !!(!dead&&ready&&source&&records.has(d)&&completed(d)&&d.target?.exists!==false&&dragFile(d,event,node,"dock"));}
     async function clearCompleted(){
-      const targets=[...records.keys()].filter(clearable);let removed=0,failed=0;
-      for(const d of targets)try{if(await actionNative(d,"remove"))removed++;}catch{failed++;}
-      return {removed,failed};
+      const targets=[...records.keys()].filter(clearable);let removed=0,skipped=0,failed=0;
+      // A native record can become ineligible after earlier removals.
+      for(const d of targets)try{if(await actionNative(d,"remove"))removed++;else skipped++;}catch{failed++;}
+      return {requested:targets.length,removed,skipped,failed};
     }
     function isReady(){return !dead&&ready;}
     function dispose(){
@@ -327,7 +328,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   const trace=(event,data)=>{try{if(win.__nocturneTrace)win.__nocturneTrace(event,data,{flush:true});else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,data,t:win.performance?.now?.()??0});}}catch{}};
-  trace("library.services.script",{version:"0.3.0-preview.132"});
+  trace("library.services.script",{version:"0.3.0-preview.133"});
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
   const BARRIER="__nocturneDownloadsDisposal",MEDIA_BARRIER="__nocturneMediaDisposal";
   const previous=win[KEY],previousClosing=previous?.dispose?.(),existing=win[BARRIER];

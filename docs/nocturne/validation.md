@@ -555,3 +555,10 @@ The user approved the **geometry and interaction concept**, not an implementatio
 - [ ] Disposable Zen 1.24.2b/Sine 2.3.3 profile: press Clear history and confirm; while native command is active, retry Clear history and click Remove on a history row. Only one native destructive operation is admitted; no duplicate confirmation and no unexpected records removed.
 - [ ] Repeat row Remove/Forget first then range-clear, test error/decline and retry; verify Clear history disabled only during active command, normal reopen/section switching after completion, and safe disposal/window close with an in-flight promise.
 - [ ] Verify actual Places and SessionStore results, other windows' view refresh, and native history state. Source lock is per Library shell, not a process-wide exclusive transaction.
+
+### A7 / NC4-076 — Downloads bulk-clear outcome integrity
+
+- [x] Source fixture: two initially clearable native records, one becomes partial after the first removal; skipped count is one, no second native removal is attempted and the Library displays partial completion.
+- [x] Source fixture: native remove throw is counted as a failed record independently from skipped; requested equals removed + skipped + failed; successful all-record result remains unchanged.
+- [ ] In a disposable Zen/Sine profile, use test downloads with a record becoming active/partial or disappearing during a bulk clear. Verify only eligible native entries are removed, no downloaded disk files are deleted, no duplicate removal is triggered, and Library accurately reports partial completion.
+- [ ] Test native list updates after clear/close/reload, multiwindow list state and errors from the native Downloads list. Source callbacks and CI alone do not close native acceptance.

@@ -45,7 +45,7 @@ test("clear finished records never removes active, partial or blocked downloads"
  let view;const removed=[];const a={stopped:true,succeeded:true,target:{path:"a.pdf"}},b={stopped:false},c={stopped:true,hasPartialData:true},d={stopped:true,hasBlockedData:true},e={stopped:true,canceled:true};
  const list={addView(v){view=v;for(const x of [a,b,c,d,e])v.onDownloadAdded(x);},removeView(){},remove(x){removed.push(x);view.onDownloadRemoved(x);}};
  const service=createDownloadsService({loadList:async()=>list});await service.start();assert.equal(service.isReady(),true);
- assert.deepEqual(await service.clearCompleted(),{removed:2,failed:0});assert.deepEqual(removed,[a,e]);await service.dispose();assert.equal(service.isReady(),false);
+ assert.deepEqual(await service.clearCompleted(),{requested:2,removed:2,skipped:0,failed:0});assert.deepEqual(removed,[a,e]);await service.dispose();assert.equal(service.isReady(),false);
 });
 test("download routing only recognizes native downloads command IDs",()=>{
  assert.equal(libraryDownloadsCommand({target:{id:"Tools:Downloads"}}),true);assert.equal(libraryDownloadsCommand({target:{id:"key_openDownloads"}}),true);assert.equal(libraryDownloadsCommand({target:{id:"key_gotoHistory"}}),false);assert.equal(libraryDownloadsCommand({target:{id:"Tools:Downloads"},defaultPrevented:true}),false);
@@ -151,4 +151,27 @@ test("queued media preference refresh respects disposal and a native file drag",
  await tick();assert.equal(rendered,0);
  const drag=init(win,state,()=>rendered++,()=>{});drag.drag();drag.onMediaPref();
  await tick();assert.equal(rendered,0);assert.equal(drag.pendingClose(),true);
+});
+
+test("bulk clear reports native state changes that skip a previously eligible record",async()=>{
+ const a={stopped:true,succeeded:true,target:{path:"a.pdf"}},b={stopped:true,succeeded:true,target:{path:"b.pdf"}};
+ let view;const removed=[];
+ const list={addView(v){view=v;v.onDownloadAdded(a);v.onDownloadAdded(b);},removeView(){},remove(d){
+   removed.push(d);if(d===a){b.hasPartialData=true;view.onDownloadChanged(b);}view.onDownloadRemoved(d);
+ }};
+ const s=createDownloadsService({loadList:async()=>list});await s.start();
+ assert.deepEqual(await s.clearCompleted(),{requested:2,removed:1,skipped:1,failed:0});
+ assert.deepEqual(removed,[a]);assert.equal(s.getSnapshot().length,1);assert.equal(s.getSnapshot()[0].partial,true);
+ await s.dispose();
+});
+test("bulk clear distinguishes native errors and eligibility skips without retrying",async()=>{
+ const a={stopped:true,succeeded:true,target:{path:"a"}},b={stopped:true,succeeded:true,target:{path:"b"}},c={stopped:true,succeeded:true,target:{path:"c"}};
+ let view;const attempts=[];
+ const list={addView(v){view=v;for(const d of [a,b,c])v.onDownloadAdded(d);},removeView(){},remove(d){
+   attempts.push(d);if(d===a){b.hasPartialData=true;view.onDownloadChanged(b);view.onDownloadRemoved(a);return;}
+   if(d===c)throw Error("native error");
+ }};
+ const s=createDownloadsService({loadList:async()=>list});await s.start();
+ assert.deepEqual(await s.clearCompleted(),{requested:3,removed:1,skipped:1,failed:1});
+ assert.deepEqual(attempts,[a,c]);assert.equal(s.getSnapshot().length,2);await s.dispose();
 });

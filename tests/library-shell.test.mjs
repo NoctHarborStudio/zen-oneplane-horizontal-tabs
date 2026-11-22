@@ -95,3 +95,20 @@ test("History row deletion blocks overlapping range clear, then releases gate on
  await fixture.clearRecentHistory(1);assert.deepEqual(commands[1],["range",1]);assert.equal(fixture.busy(),false);
  assert.ok(tools>=4);
 });
+
+test("Library Downloads bulk clear truthfully reports a skipped native entry",async()=>{
+ const source=read("src/library/controller.js.part");
+ const code=source.slice(source.indexOf("  async function clearDownloads("),source.indexOf("  function openNativeDownloads("));
+ assert.ok(code.includes("result.failed||result.skipped"));
+ const result={requested:2,removed:1,skipped:1,failed:0},notices=[],events=[];let retries=0;
+ const win={__nocturneLibraryServices:{downloads:{clearCompleted:async()=>result}}},state={section:"downloads",phase:"open"};
+ const action=new Function("win","state","notice","trace","syncTools","data",`
+   let confirmation=true,clearing=false,actionSerial=0;
+   const active=()=>true;
+   ${code}
+   return {clearDownloads};
+ `)(win,state,message=>notices.push(message),(event,data)=>events.push({event,data}),()=>{},{retry(){retries++;}});
+ await action.clearDownloads();
+ assert.equal(notices.at(-1),"Some records were not cleared. Files were not deleted.");
+ assert.deepEqual(events,[{event:"downloads.clear.result",data:result}]);assert.equal(retries,1);
+});
