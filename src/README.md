@@ -81,3 +81,6 @@ A5.4a (preview.118): Hub workspace drag and native tab Bunny already use the sin
 
 
 A5.5a (preview.119): `src/interactions/drag-engine.js.part` keeps one token-owned Gecko native tab session watcher and now handles absent vs unavailable `getCurrentSession` observations with bounded local cancellation. The independent `downloads-indicator.uc.mjs` root entrypoint now arms one native file source watcher before optional Bunny graphics and uses it for popup-readiness checks; popup hiding stops visual work, not the native data payload. `src/library/controller.js.part` has a scoped watchdog only when Dock rejects/unavailable and the Library falls back to direct native service file payload. Do not add a second observer or timer to accepted Dock-owned drags. Generated `layout.uc.mjs` and `library.uc.mjs` are assembled from these owners; OS acceptance, session identity and performance remain native gates.
+
+
+A5.5a canonical CI: `preview.119` [run 45057503562](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45057503562) PASS (734 Node, 15 Python, deterministic build, runtime and served package). This is source and package verification, not native OS DragSession or file-drop acceptance.

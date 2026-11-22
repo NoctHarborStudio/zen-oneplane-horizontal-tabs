@@ -4,7 +4,7 @@ Status: primary static audit checkpoints completed; A0.3 release infrastructure 
 
 ## Active checkpoint — source vs native evidence
 
-Current source checkpoint: 0.3.0-preview.119 (A5.5a bounded native drag session watchdog source changes staged; canonical CI pending; A5.1b2 Gecko OS identity and A5.2b2 Split native acceptance OPEN). Last confirmed canonical CI: preview.118. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
+Current source checkpoint: 0.3.0-preview.119 (A5.5a native drag session recovery source/CI PASS; A5.1b2 Gecko OS identity and A5.2b2 Split native acceptance OPEN). Last confirmed canonical CI: preview.119. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
 
 | Stage | Source implementation/review | Native acceptance |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ Current source checkpoint: 0.3.0-preview.119 (A5.5a bounded native drag session 
 | A2 | Implemented and reviewed | Explicitly deferred |
 | A3 | Core Fold ownership/handoff implemented; Bloom candidate dormant | Pending |
 | A4 | A4.4-R2 source/CI complete; native hit-region, visual and profiler gates still open | Pending |
-| A5–A7 | A5.1a–A5.2b1, A5.3a and A5.4a source/CI PASS; A5.5a source staged/CI pending, A5.1b2 OS identity and A5.2b2/A5.3b/A5.4b native acceptance OPEN | Pending |
+| A5–A7 | A5.1a–A5.2b1, A5.3a, A5.4a and A5.5a source/CI PASS; A5.1b2 OS identity, A5.2b2 Split, A5.3b file OS and A5.4b display native acceptance remain OPEN | Pending |
 | A8 | Integrated validation pending | Pending |
 | A9 | Optional vertical scope, separate approval | Pending |
 
@@ -1104,3 +1104,8 @@ The existing Downloads Dock owner now starts **one** source-level timer immediat
 When the Dock bridge accepts a Library file drag, Dock remains the **sole** native gesture lifecycle owner. If Dock is missing/rejects and Library successfully writes its own native payload through the existing Downloads service, the existing Library controller now owns a scoped fallback watchdog with the same bounded tri-state recovery. Lost `dragend` releases the Library source, pending results and deferred close; service-gone during active native file drag defers close rather than destroying the source. Dispose/hide stop fallback timers. Library remains private-window disabled, file action and underlying native download identity remain unchanged.
 
 Before publication: five extracted-source fault/recovery fixtures plus a new source-owned DOM attachment assertion PASS in isolation (tab absent/throws/live, Dock missing/throws/live, artwork allocation failure, hidden native popup, Library fallback/session error/active, exact cleanup); existing tests and all release/runtime/CI checks remain separate. Native Gecko OS-session timing, nested OLE loop, actual file OS drop, outside/inside visual continuity, private/multiwindow/mixed-DPI and diagnostics-on/off profiling remain OPEN. A5.1b2 true OS DragSession identity is not solved by bounded liveness sampling. Next: independent generated/source/readback and canonical CI closure, then A5.5b native acceptance and remaining A5 source issues.
+
+
+### A5.5a-R — Canonical publication and independent source/CI closure (docs-only)
+
+Production commit `01939137f14b3c841628c39450f7d25e3b2503b9` via [PR #7](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/pull/7); [CI 45057503562](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45057503562) **SUCCESS** (734/734 Node, 15/15 Python release, 12/12 runtime syntax, deterministic generated outputs and immutable/current Raw/codeload Sine package). Readback verified `preview.119` and synchronized `package.json`/`theme.json`/timestamp and bookmarks provenance lock. Exact modified source fragments matched generated `layout.uc.mjs` and `library.uc.mjs`; unchanged Library Services and Startup Animation outputs also reconstituted exactly. Six source-backed watchdog/popup/fallback/artwork tests PASS, with no new service subscriber, native mutation, session cache, background poll while idle, or fabricated native drop. **Source/CI classification is closed; native OS DragSession identity and timings, same-node successive drag events, missing dragend in actual Gecko, file transfer to Explorer/upload, private/OS handoff, mixed-DPI visual frame cadence and profiler remain OPEN.** A5.5b is a native acceptance gate; additional A5 source issues (reentry visuals, split hit contract, non-Dock reentry and panel hit regions) may proceed independently.
