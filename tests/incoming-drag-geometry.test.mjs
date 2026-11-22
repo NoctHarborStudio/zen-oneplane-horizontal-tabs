@@ -10,6 +10,9 @@ function fixture(){
  let viewport=[1200,800,1,0],cascadeState="idle",draggedTab=null,dragInsertPending=false,token=1,supported=true,allowPreview=false;
  const window={},tab={},owner={},DRAG_CONTROLLER="drag",attrs=new Set(),calls=[];
  const root={hasAttribute:k=>attrs.has(k)},dragLifecycle={current:()=>null},hoverSupported=()=>supported,dragViewportState=()=>viewport;
+ const dragPhaseInputAllowed=()=>supported&&cascadeState==="idle"&&!["data-zr-closing","data-zr-center-motion","data-zr-workspace-phase","data-zr-startup-phase"].some(k=>attrs.has(k));
+ let chrome={nodes:[],numbers:[0,100]};
+ const readDragChromeFrame=()=>chrome,sameDragChromeFrame=(a,b)=>a===b,retireChangedDragChromeFrame=()=>false;
  const source={source:()=>tab,sourceToken:()=>token,group:()=>null,markHandled:(finish,t)=>calls.push(["handled",t])};
  owner.drag=source;
  const tabOwner=()=>owner,readDraggedTab=()=>tab,retireChangedDragViewport=()=>false,toolbarDragReturnZone=()=>true;
@@ -19,7 +22,7 @@ function fixture(){
  const previewStripDrag=()=>{if(!allowPreview)throw Error("stale native drop reached preview");return {native:target,tab:target,before:true};};
  const event=(type="dragover",isTrusted=true)=>({type,isTrusted,preventDefault(){calls.push("prevent")},stopPropagation(){calls.push("stop")}});
  return {tab,owner,source,calls,attrs,event,admit:e=>admitIncomingDrag(e,tab,owner),allowed:()=>incomingDropAllowed(tab,owner),
- retire:retireIncomingDrag,clear:clearIncomingDrag,drop:()=>onStripDrop(event("drop")),viewport:v=>viewport=v,token:t=>token=t,read:()=>incomingDrag,support:v=>supported=v,allowPreview:()=>allowPreview=true};
+ retire:retireIncomingDrag,clear:clearIncomingDrag,drop:()=>onStripDrop(event("drop")),viewport:v=>viewport=v,token:t=>token=t,read:()=>incomingDrag,support:v=>supported=v,allowPreview:()=>allowPreview=true,chrome:v=>chrome=v};
  `)();
 }
 test("incoming resize or DPI invalidates preview once; fresh trusted dragover re-arms it",()=>{
@@ -81,8 +84,17 @@ test("foreign source placement remains active even outside the destination toolb
  const s=strip.slice(strip.indexOf("  function revealForDrag("),strip.indexOf("  function onToolbarDrop("));
  const f=new Function(s+`
  const calls=[],window={},tab={},owner={drag:{preview:()=>calls.push("preview"),outside:()=>calls.push("outside")}},DRAG_CONTROLLER="drag";
- const retireChangedDragViewport=()=>false,readDraggedTab=()=>tab,hoverSupported=()=>true,toolbarWrapper={},dragInsertPending=false,toolbarDragReturnZone=()=>false,tabOwner=()=>owner;
+ const retireChangedDragViewport=()=>false,retireBlockedNativeTabDrag=()=>false,readDraggedTab=()=>tab,hoverSupported=()=>true,toolbarWrapper={},dragInsertPending=false,toolbarDragReturnZone=()=>false,tabOwner=()=>owner;
  const clearIncomingDrag=r=>calls.push(r);
  revealForDrag({});return calls;`)();
  assert.deepEqual(f,["preview","outside","outside-toolbar"]);
+});
+test("changed native edge control without a viewport resize rejects the incoming drop",()=>{
+ const f=fixture();f.admit(f.event());f.chrome({nodes:[],numbers:[0,90]});
+ assert.equal(f.allowed(),true,"cheap dragover admission must not measure every native edge");
+ assert.equal(f.retire(),true);assert.equal(f.read().invalid,true);f.drop();
+ assert.equal(f.calls.some(x=>Array.isArray(x)&&x[0]==="adopt"),false);
+ assert.equal(f.read(),null);
+ const fresh=fixture();fresh.admit(fresh.event());fresh.allowPreview();fresh.drop();
+ assert.equal(fresh.calls.filter(x=>Array.isArray(x)&&x[0]==="adopt").length,1);
 });

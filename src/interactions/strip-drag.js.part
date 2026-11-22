@@ -2,19 +2,18 @@
   // native DataTransfer session; A5 owns that identity contract.
   let incomingDrag=null,incomingReleasing=false;
   function incomingMotionAllowed(){
-    return !incomingReleasing&&hoverSupported()&&cascadeState==="idle"&&!draggedTab&&!dragInsertPending&&!dragLifecycle.current()&&
-      !root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&
-      !root.hasAttribute("data-zr-workspace-phase")&&!root.hasAttribute("data-zr-startup-phase");
+    return !incomingReleasing&&dragPhaseInputAllowed()&&!draggedTab&&!dragInsertPending&&!dragLifecycle.current();
   }
   function incomingSourceCurrent(lease,tab=lease?.tab,owner=lease?.owner){
     try{return !!lease&&lease.tab===tab&&lease.owner===owner&&owner!==window&&!owner.closed&&
       owner[DRAG_CONTROLLER]===lease.source&&lease.source.source()===tab&&lease.source.sourceToken()===lease.token;}
     catch{return false;}
   }
-  function incomingDropAllowed(tab,owner,lease=incomingDrag){
+  function incomingDropAllowed(tab,owner,lease=incomingDrag,strict=false){
     if(!lease||incomingDrag!==lease||lease.invalid||!incomingSourceCurrent(lease,tab,owner)||!incomingMotionAllowed())return false;
     const viewport=dragViewportState();
-    return lease.viewport.every((value,i)=>Object.is(value,viewport[i]));
+    return lease.viewport.every((value,i)=>Object.is(value,viewport[i]))&&
+      (!strict||sameDragChromeFrame(lease.chrome,readDragChromeFrame()));
   }
   function releaseIncomingVisual(lease,reason,retain=false){
     if(!lease||incomingDrag!==lease)return false;
@@ -35,7 +34,7 @@
     if(!lease)return false;
     if(!incomingSourceCurrent(lease))return clearIncomingDrag("source-gone",lease);
     if(lease.invalid)return true;
-    if(!incomingDropAllowed(lease.tab,lease.owner,lease))return releaseIncomingVisual(lease,"geometry-or-phase",true);
+    if(!incomingDropAllowed(lease.tab,lease.owner,lease,true))return releaseIncomingVisual(lease,"geometry-or-phase",true);
     return false;
   }
   function admitIncomingDrag(event,tab,owner){
@@ -47,7 +46,9 @@
     clearIncomingDrag("new-preview");
     const source=owner?.[DRAG_CONTROLLER],token=source?.sourceToken?.();
     if(!incomingMotionAllowed()||!Number.isSafeInteger(token)||source?.source()!==tab)return false;
-    incomingDrag={tab,owner,source,token,viewport:dragViewportState(),invalid:false};
+    const chrome=readDragChromeFrame();
+    if(!chrome)return false;
+    incomingDrag={tab,owner,source,token,viewport:dragViewportState(),chrome,invalid:false};
     return true;
   }
   function rejectIncomingDrop(event,tab,owner,lease){
@@ -303,7 +304,7 @@
     splitZone.removeAttribute("data-op-side");
   }
   function revealForDrag(event) {
-    if(retireChangedDragViewport())return;
+    if(retireChangedDragViewport()||retireBlockedNativeTabDrag("window-phase"))return;
     const tab = readDraggedTab(event);
     if (!hoverSupported() || !tab || !toolbarWrapper) return;
     if(dragInsertPending)endDragVisual();
@@ -377,9 +378,12 @@
     previewStripDrag(event,tab);
   }
   function onToolbarDrop(event) {
-    if(retireChangedDragViewport())return;
+    if(retireChangedDragViewport()||retireChangedDragChromeFrame("toolbar-drop"))return;
     const tab=readDraggedTab(event);
     if(!tab||!toolbarDragReturnZone(event))return;
+    if(tabOwner(tab)===window&&!dragPhaseInputAllowed()){
+      event.preventDefault();event.stopPropagation();cancelActiveDrag("toolbar-phase");return;
+    }
     if(tabOwner(tab)===window&&(dragDetachedOnce||dragBunnyLayout)){
       event.preventDefault();event.stopImmediatePropagation();
       prepareBunnyDrop(event);

@@ -34,6 +34,46 @@
     cancelActiveDrag("viewport-changed");
     return true;
   }
+  // Shared native tab input admission, distinct from visual/OS drag ownership.
+  function dragPhaseInputAllowed(){
+    const bar=addressBar();
+    return hoverSupported()&&cascadeState==="idle"&&!root.hasAttribute("data-zr-closing")&&
+      !root.hasAttribute("data-zr-center-motion")&&!root.hasAttribute("data-zr-workspace-phase")&&
+      !root.hasAttribute("data-zr-startup-phase")&&!shield.hasAttribute("data-pressed")&&
+      !bar?.hasAttribute("focused")&&!bar?.hasAttribute("open");
+  }
+  function retireBlockedNativeTabDrag(reason="phase-conflict"){
+    if(dragLifecycle.current()?.kind!=="tab"||dragPhaseInputAllowed())return false;
+    cancelActiveDrag(reason);
+    return true;
+  }
+  // Read native edge-control X geometry, excluding moving tab lanes.
+  // No DOM measurements on ordinary dragover or animation frames.
+  let dragChromeFrame=null;
+  function readDragChromeFrame(){
+    try{
+      if(dead||!target?.isConnected)return null;
+      const nodes=Array.from(target.children).filter(n=>n!==row&&!centerIds.has(n.id)&&n.localName!=="toolbarspring");
+      const box=target.getBoundingClientRect(),numbers=[box.left,box.right];
+      for(const node of nodes){
+        const rect=node.getBoundingClientRect();
+        numbers.push(rect.left,rect.right);
+      }
+      return numbers.every(Number.isFinite)&&box.width>0?{nodes,numbers}:null;
+    }catch{return null;}
+  }
+  function sameDragChromeFrame(a,b){
+    return !!a&&!!b&&a.nodes.length===b.nodes.length&&a.numbers.length===b.numbers.length&&
+      a.nodes.every((node,i)=>node===b.nodes[i])&&
+      a.numbers.every((value,i)=>Math.abs(value-b.numbers[i])<=.75);
+  }
+  function retireChangedDragChromeFrame(stage="drop"){
+    if(!dragChromeFrame)return false;
+    if(sameDragChromeFrame(dragChromeFrame,readDragChromeFrame()))return false;
+    window.__nocturneTrace?.("drag.chrome-frame.changed",{stage},{throttle:500,flush:true});
+    cancelActiveDrag("chrome-frame-changed");
+    return true;
+  }
   let dropMarker = null;
   let dragRevealTimer = 0;
   let liveDragTarget = null;

@@ -29,7 +29,7 @@
     typeof window!=="undefined"&&window.__nocturneTrace?.("panel.workspace.motion",()=>({phase:root.getAttribute('data-zr-workspace-phase')}),{sample:1800});
     const phase=root.getAttribute("data-zr-workspace-phase"),active=!!phase;
     toolbarWrapper?.toggleAttribute("oneplane-workspace-hold",active);
-    if(active){retireIncomingDrag();cancelHoverTimer();cancelIndicatorReturn();}
+    if(active){retireBlockedNativeTabDrag("workspace-phase");retireIncomingDrag();cancelHoverTimer();cancelIndicatorReturn();}
     if(phase==="out"||phase==="swap"){islandTextAnimation?.cancel();clearTabHover();}
     if(phase==="in")refreshIslandTitle();
     reconcilePanel();
@@ -126,6 +126,7 @@
     checkCenterGeometry("window");
     if(dead)return;
     retireChangedDragViewport();
+    retireChangedDragChromeFrame("window-resize");
     retireIncomingDrag();
     if(dead)return;
     if(!row.hasAttribute("data-op-dragging")&&hoverTab)clearTabHover();
@@ -145,6 +146,9 @@
     window.requestAnimationFrame(revealSelectedInStrip);
   }
   function onCompactChanged() {
+    retireChangedDragChromeFrame("compact-mode");
+    retireBlockedNativeTabDrag("compact-phase");
+    retireIncomingDrag();
     hub.onMode();
     if(!hoverSupported()){retireIncomingDrag();cancelActiveDrag("unsupported-layout");closeNativeTabMenu();}
     if(hoverSupported()){ensureWindowCaptions();ensureDownloadHost();}

@@ -442,3 +442,6 @@ A4.4b (preview.110): 15/15 Window Geometry and 9/9 drag lifecycle fixture bodies
 
 
 A4.4-R1 native gate: drag a tab into a second window; resize/maximize or change DPI while hovering its strip, release before a fresh dragover, then repeat with fresh dragover. Check stale adoption/accidental detach and destination preview/autoscroll release. Verify source cancellation and completion, leave/reentry, workspace motion and same-package reload. Native evidence pending; source fixtures are not Gecko hit-test proof. Missing native drop dispatch and old-controller fallback remain unverified.
+
+
+A4.4-R2 native acceptance (pending): start tab Bunny then activate native URLbar, Compact/customize, workspace transition or close; verify no stale strip/split/drop/detach and no lost native tab. Move and resize native edge-control widgets without changing window size, including toolbar overflow; stale local/incoming release is rejected and a fresh compatible gesture can be re-admitted. Verify two windows/monitor DPI, actual Gecko non-client draggable points, Home hold vs rear fade, Split Drop, fast tab removal, reduced motion, same-package reload and zero orphan overlay; compare diagnostics enabled/disabled. Automated source gates are not native PASS.

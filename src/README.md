@@ -57,3 +57,6 @@ A4.4b: contour is visual-only; actual Home wrapper, spacer and resting strip own
 
 
 A4.4-R1: foreign-window strip preview is a destination-local lease within existing drag fragments, not a new owner/scheduler. The exact source controller/token and viewport are required at drop; resize/phase invalidation releases preview, fresh trusted dragover re-admits. Source completion clears only matching previews. Native event identity remains A5.
+
+
+A4.4-R2: native tab input shares one local phase gate, and native edge-control X geometry is an ephemeral snapshot validated at commits and existing geometry observers. No new scheduler, observer, renderer or persistent chrome geometry cache. Source fixture coverage is distinct from Zen native acceptance; A5 owns irreversible split/drag command outcomes.

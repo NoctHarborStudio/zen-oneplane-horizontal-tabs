@@ -1,3 +1,9 @@
+## 0.3.0-preview.112 — Native drag phase and edge frame audit
+
+- Reuse one native-input phase gate across strip drop, Split Drop, Bunny dragend, incoming preview, startup/workspace and URLbar interruption. Suppress native mutations on conflicting phase, without interrupting an unrelated pointer gesture.
+- Snapshot horizontal native toolbar/control geometry outside the moving tab lanes. Validate on native commits and existing ResizeObserver/toolbar mutation callbacks; cancel obsolete local sessions and retire incoming previews without new RAF, observer or timer.
+- Preserve native Gecko non-client CSS regions pending real point-level acceptance. Maintain identical source/native-data semantics and bounded diagnostics without titles, URLs or file paths.
+
 ## 0.3.0-preview.111 — Incoming drag geometry lease
 
 - Fence foreign-window previews and drops by exact source controller/token and destination size, DPI, mode and motion phase. Require fresh trusted dragover after invalidation; reject stale custom drops without native mutation.

@@ -248,7 +248,10 @@
   const tabObserver = new MutationObserver(schedule);
   const workspaceObserver = new MutationObserver(schedule);
   const toolbarObserver = new MutationObserver(() => {
-    if (dead || root.hasAttribute("customizing")) return;
+    if(dead)return;
+    retireChangedDragChromeFrame("toolbar-children");
+    retireIncomingDrag();
+    if(root.hasAttribute("customizing"))return;
     if (url.parentElement === target && row.parentElement !== target) url.after(row);
     if (leftSpacer.parentElement !== target) target.prepend(leftSpacer);
     if (rightSpacer.parentElement !== target) row.after(rightSpacer);

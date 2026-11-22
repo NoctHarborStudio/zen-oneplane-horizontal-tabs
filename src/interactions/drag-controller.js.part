@@ -16,7 +16,7 @@
   function endDragVisual(restoreReturn=false) {
     const returnedSource=restoreReturn?dragNode:null,returnedPoint=restoreReturn?dragReturnPoint:null;
     dragReturnPoint=null;
-    dragInsertPending=false;dragViewport=null;
+    dragInsertPending=false;dragViewport=null;dragChromeFrame=null;
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.visual.end",()=>({mode:dragImageMode,pull:dragPull,detached:dragDetachedOnce,ghost:!!dragGhost&&!dragGhost.hidden,shifted:dragShifted.size}),{sample:1800});
     clearPlacementPreview();
     cancelInsertion();
@@ -58,7 +58,7 @@
     source?.markHandled(finishReturn);
   }
   function onDragStart(event, tab, group = null) {
-    if (incomingReleasing || !hoverSupported() || !validNativeTab(tab) || !event.dataTransfer) {
+    if (incomingReleasing || !dragPhaseInputAllowed() || !validNativeTab(tab) || !event.dataTransfer) {
       event.preventDefault();
       return;
     }
@@ -109,6 +109,8 @@
         splitZone.setAttribute("data-op-dragging", "true");
       }
       previewStripDrag(event,tab);
+      dragChromeFrame=readDragChromeFrame();
+      if(!dragChromeFrame){cancelActiveDrag("chrome-frame-unready");return;}
       refreshIndicator();
       refreshIslandTitle();
       event.stopPropagation();
@@ -120,7 +122,9 @@
   }
   function onStripDragOver(event) {
     if(retireChangedDragViewport())return;
-    if(cascadeState!=="idle"){retireIncomingDrag();return;}
+    if(!dragPhaseInputAllowed()){
+      retireBlockedNativeTabDrag("strip-phase");retireIncomingDrag();return;
+    }
     const tab = readDraggedTab(event);
     if (!tab||!admitIncomingDrag(event,tab,tabOwner(tab))) return;
     event.preventDefault();
@@ -145,15 +149,21 @@
     return true;
   }
   function onStripDrop(event) {
-    if(retireChangedDragViewport())return;
+    if(retireChangedDragViewport()||retireChangedDragChromeFrame("strip-drop"))return;
     const tab = readDraggedTab(event);
     if (!tab) return;
     const owner = tabOwner(tab),incoming=owner!==window?incomingDrag:null;
-    if(owner!==window&&(!event.isTrusted||!toolbarDragReturnZone(event)||!incomingDropAllowed(tab,owner,incoming))){
+    if(!dragPhaseInputAllowed()){
+      if(event.isTrusted){
+        if(owner===window){event.preventDefault();event.stopPropagation();cancelActiveDrag("strip-phase");}
+        else rejectIncomingDrop(event,tab,owner,incoming);
+      }
+      return;
+    }
+    if(owner!==window&&(!event.isTrusted||!toolbarDragReturnZone(event)||!incomingDropAllowed(tab,owner,incoming,true))){
       if(event.isTrusted)rejectIncomingDrop(event,tab,owner,incoming);
       return;
     }
-    if(cascadeState!=="idle")return;
     event.preventDefault();
     event.stopPropagation();
     const source = owner?.[DRAG_CONTROLLER];
@@ -162,7 +172,8 @@
     if (owner === window && dragNode) { setDragImageMode("inline",event); setPull(0); }
     const dest = previewStripDrag(event, tab) || dropTarget(event);
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.drop",()=>({local:owner===window,group:!!group,dest:!!dest?.native,before:dest?.before,mode:dragImageMode}),{sample:1800});
-    if(owner!==window&&!incomingDropAllowed(tab,owner,incoming)){
+    if(retireChangedDragChromeFrame("strip-target"))return;
+    if(owner!==window&&!incomingDropAllowed(tab,owner,incoming,true)){
       rejectIncomingDrop(event,tab,owner,incoming);return;
     }
     if(!validStripDropTarget(dest)){
@@ -186,10 +197,10 @@
         markSourceHandled();
         return;
       }
-      if(owner!==window&&!incomingDropAllowed(tab,owner,incoming)){rejectIncomingDrop(event,tab,owner,incoming);return;}
+      if(owner!==window&&!incomingDropAllowed(tab,owner,incoming,true)){rejectIncomingDrop(event,tab,owner,incoming);return;}
       if (isSplit(tab) && !unsplitTab(tab)) { markSourceHandled(); return; }
       if(!validStripDropTarget(dest)){markSourceHandled();return;}
-      if(owner!==window&&!incomingDropAllowed(tab,owner,incoming)){rejectIncomingDrop(event,tab,owner,incoming);return;}
+      if(owner!==window&&!incomingDropAllowed(tab,owner,incoming,true)){rejectIncomingDrop(event,tab,owner,incoming);return;}
       if (owner === window) {
         // Dropping a member beyond its original group detaches only that
         // member. Never insert an ordinary tab inside another split group.
@@ -201,7 +212,7 @@
         const boundaryIndex=all.indexOf(dest.before ? boundary[0] : boundary.at(-1));
         if(!boundary.length||boundaryIndex<0)return;
         const index=boundaryIndex+(dest.before?0:1);
-        if(!incomingDropAllowed(tab,owner,incoming)){rejectIncomingDrop(event,tab,owner,incoming);return;}
+        if(!incomingDropAllowed(tab,owner,incoming,true)){rejectIncomingDrop(event,tab,owner,incoming);return;}
         const adopted = browser.adoptTab(tab, { tabIndex: index, selectTab: true });
         if (adopted) markSourceHandled();
       }

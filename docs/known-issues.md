@@ -1182,3 +1182,8 @@ NC4-018/052 partial source correction: destination preview no longer authorizes 
 
 
 A4.4-R1 CI correction: existing Bunny return fixture extraction boundary moved; targeted corrected fixture passes. No runtime change. Full CI rerun required.
+
+
+### A4.4-R2 — Phase/edge-control input reconciliation (preview.112)
+
+NC4-018/052 source fix: ordinary strip and native dragend now reject Center/Startup/Workspace/Close/URLbar/shield interruption consistently with Split Drop. Exact horizontal native edge-control snapshot is checked without per-dragover DOM reads. A5 retains native DataTransfer same-node identity, split/unsplit atomic outcome, mixed DPI and actual native hit regions; A8 native/visual performance acceptance remains pending. No claim of reproduced data loss or Gecko runtime PASS.

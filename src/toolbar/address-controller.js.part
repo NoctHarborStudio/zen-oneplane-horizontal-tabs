@@ -220,6 +220,8 @@
   }
   function onAddressMutation() {
     if (dead) return;
+    retireBlockedNativeTabDrag("address-phase");
+    retireIncomingDrag();
     updateAddressAnimation();
     reconcileTabCascade();
     if(!addressTransition&&!addressSettling&&!nativeInlineOpen(addressBar()))alignAddressStart();

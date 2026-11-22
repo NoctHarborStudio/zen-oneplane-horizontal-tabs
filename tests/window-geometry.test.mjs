@@ -37,8 +37,8 @@ test("window resize and native size mode reflow are lifecycle-owned",()=>{
  }
  const code=visibility.slice(visibility.indexOf("function onWindowGeometryChanged("),visibility.indexOf("function onCompactChanged("));
  const calls=[];
- const run=new Function("calls",code+'let dead=false,hoverTab={},addressTransition=null,addressSettling=false,cascadeState="hidden";const row={hasAttribute:()=>false};function checkCenterGeometry(stage){calls.push("geometry:"+stage)}function retireChangedDragViewport(){calls.push("drag-viewport")}function retireIncomingDrag(){calls.push("incoming-viewport")}function clearTabHover(){calls.push("hover")}function nativeInlineOpen(){return false}function addressBar(){}function resetTabCascade(){calls.push("cascade")}function movePageActions(){calls.push("actions")}function centerToolbar(){calls.push("center")}function onCompactChanged(){calls.push("layout")}function schedule(){calls.push("sync")}function revealSelectedInStrip(){calls.push("reveal")}const window={requestAnimationFrame(fn){fn()}};onWindowGeometryChanged();')(calls);
- assert.deepEqual(calls,["geometry:window","drag-viewport","incoming-viewport","hover","cascade","actions","center","layout","sync","reveal"]);
+ const run=new Function("calls",code+'let dead=false,hoverTab={},addressTransition=null,addressSettling=false,cascadeState="hidden";const row={hasAttribute:()=>false};function checkCenterGeometry(stage){calls.push("geometry:"+stage)}function retireChangedDragViewport(){calls.push("drag-viewport")}function retireChangedDragChromeFrame(stage){calls.push("chrome:"+stage)}function retireIncomingDrag(){calls.push("incoming-viewport")}function clearTabHover(){calls.push("hover")}function nativeInlineOpen(){return false}function addressBar(){}function resetTabCascade(){calls.push("cascade")}function movePageActions(){calls.push("actions")}function centerToolbar(){calls.push("center")}function onCompactChanged(){calls.push("layout")}function schedule(){calls.push("sync")}function revealSelectedInStrip(){calls.push("reveal")}const window={requestAnimationFrame(fn){fn()}};onWindowGeometryChanged();')(calls);
+ assert.deepEqual(calls,["geometry:window","drag-viewport","chrome:window-resize","incoming-viewport","hover","cascade","actions","center","layout","sync","reveal"]);
 });
 
 test("one and two rows share the same card center, padding and final-row reserve",()=>{
@@ -159,6 +159,8 @@ test("split hit is half-open, finite and requires the current input owner",()=>{
  const root={hasAttribute:k=>attrs.has(k)},shield={hasAttribute:k=>shieldAttrs.has(k)},bar={hasAttribute:k=>barAttrs.has(k)};
  const splitZone={hasAttribute:k=>splitAttrs.has(k),getBoundingClientRect:()=>({left:10,top:20,width:100,height:100})};
  const hoverSupported=()=>true,addressBar=()=>bar,toolbarDragReturnZone=()=>false;
+ const dragPhaseInputAllowed=()=>hoverSupported()&&!["data-zr-closing","data-zr-center-motion","data-zr-workspace-phase","data-zr-startup-phase"].some(k=>attrs.has(k))&&
+ !shieldAttrs.has("data-pressed")&&!barAttrs.has("focused")&&!barAttrs.has("open");
  ${code}return {point:splitDropPoint,side:splitSide,allowed:splitDropAllowed,attrs,barAttrs,shieldAttrs,splitAttrs};`)();
  for(const [x,y,expected] of [[10,70,"left"],[109,70,"right"],[60,20,"top"],[60,119,"bottom"],[60,70,""],[9,70,""],[110,70,""],[60,120,""],[NaN,70,""],[60,Infinity,""]])assert.equal(run.side({clientX:x,clientY:y}),expected);
  assert.equal(run.point({clientX:110,clientY:70}),null);assert.equal(run.allowed(),true);
@@ -170,7 +172,7 @@ test("retargeted split drop retires the local gesture before any native command"
  const source=readFileSync(new URL("../src/interactions/split-drop.js.part",import.meta.url),"utf8");
  const code=source.slice(source.indexOf("  function onSplitDrop("));
  const run=new Function("allowed","point",`const window={},tab={},selected={},browser={selectedTab:selected},draggedGroup=null,calls=[];
- const retireChangedDragViewport=()=>false,readDraggedTab=()=>tab,tabOwner=()=>window,isSplit=()=>false;
+ const retireChangedDragViewport=()=>false,retireChangedDragChromeFrame=()=>false,readDraggedTab=()=>tab,tabOwner=()=>window,isSplit=()=>false;
  const splitDropAllowed=()=>allowed,splitDropPoint=()=>point;
  function cancelActiveDrag(reason){calls.push(reason)}
  function toolbarDragReturnZone(){throw Error("native branch")}

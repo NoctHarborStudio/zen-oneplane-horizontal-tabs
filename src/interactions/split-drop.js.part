@@ -5,10 +5,7 @@
     return {x:(x-box.left)/box.width,y:(y-box.top)/box.height};
   }
   function splitDropAllowed(){
-    const bar=addressBar();
-    return hoverSupported()&&cascadeState==="idle"&&splitZone.hasAttribute("data-op-dragging")&&
-      !root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&!root.hasAttribute("data-zr-workspace-phase")&&!root.hasAttribute("data-zr-startup-phase")&&
-      !shield.hasAttribute("data-pressed")&&!bar?.hasAttribute("focused")&&!bar?.hasAttribute("open");
+    return dragPhaseInputAllowed()&&splitZone.hasAttribute("data-op-dragging");
   }
   function splitSide(event) {
     if(toolbarDragReturnZone(event))return "";
@@ -36,7 +33,7 @@
     event.dataTransfer.dropEffect = "move";
   }
   function onSplitDrop(event) {
-    if(retireChangedDragViewport())return;
+    if(retireChangedDragViewport()||retireChangedDragChromeFrame("split-drop"))return;
     const tab = readDraggedTab(event);
     const current = browser.selectedTab;
     if (!tab || tabOwner(tab) !== window || draggedGroup ||

@@ -216,6 +216,8 @@
     geometryObserver = new ResizeObserver(()=>{
       checkCenterGeometry("resize-observer");
       if(dead)return;
+      retireChangedDragChromeFrame("native-edge-resize");
+      retireIncomingDrag();
       // ResizeObserver delivery occurs before paint. Compensate edge
       // width changes now rather than a frame later.
       scheduleMeasuredGeometry(centerToolbar());

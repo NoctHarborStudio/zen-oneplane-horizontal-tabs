@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.111",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.112",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -4304,6 +4304,8 @@ function installTabStrip() {
   }
   function onAddressMutation() {
     if (dead) return;
+    retireBlockedNativeTabDrag("address-phase");
+    retireIncomingDrag();
     updateAddressAnimation();
     reconcileTabCascade();
     if(!addressTransition&&!addressSettling&&!nativeInlineOpen(addressBar()))alignAddressStart();
@@ -5089,7 +5091,7 @@ function installTabStrip() {
     });
   }
   function onSourceDrag(event){
-    if(retireChangedDragViewport()||!draggedTab||draggedGroup||(!event.screenX&&!event.screenY))return;
+    if(retireChangedDragViewport()||retireBlockedNativeTabDrag("source-phase")||!draggedTab||draggedGroup||(!event.screenX&&!event.screenY))return;
     if(!pointInSourceWindow(event)){
       if(dragImageMode!=="outside")setDragImageMode("outside",event);
       showPlacementPreview(event,"Tab");
@@ -7455,7 +7457,7 @@ function installTabStrip() {
     typeof window!=="undefined"&&window.__nocturneTrace?.("panel.workspace.motion",()=>({phase:root.getAttribute('data-zr-workspace-phase')}),{sample:1800});
     const phase=root.getAttribute("data-zr-workspace-phase"),active=!!phase;
     toolbarWrapper?.toggleAttribute("oneplane-workspace-hold",active);
-    if(active){retireIncomingDrag();cancelHoverTimer();cancelIndicatorReturn();}
+    if(active){retireBlockedNativeTabDrag("workspace-phase");retireIncomingDrag();cancelHoverTimer();cancelIndicatorReturn();}
     if(phase==="out"||phase==="swap"){islandTextAnimation?.cancel();clearTabHover();}
     if(phase==="in")refreshIslandTitle();
     reconcilePanel();
@@ -7552,6 +7554,7 @@ function installTabStrip() {
     checkCenterGeometry("window");
     if(dead)return;
     retireChangedDragViewport();
+    retireChangedDragChromeFrame("window-resize");
     retireIncomingDrag();
     if(dead)return;
     if(!row.hasAttribute("data-op-dragging")&&hoverTab)clearTabHover();
@@ -7571,6 +7574,9 @@ function installTabStrip() {
     window.requestAnimationFrame(revealSelectedInStrip);
   }
   function onCompactChanged() {
+    retireChangedDragChromeFrame("compact-mode");
+    retireBlockedNativeTabDrag("compact-phase");
+    retireIncomingDrag();
     hub.onMode();
     if(!hoverSupported()){retireIncomingDrag();cancelActiveDrag("unsupported-layout");closeNativeTabMenu();}
     if(hoverSupported()){ensureWindowCaptions();ensureDownloadHost();}
@@ -7652,6 +7658,46 @@ function installTabStrip() {
     if(dragViewport.every((value,i)=>Object.is(value,next[i])))return false;
     window.__nocturneTrace?.("drag.viewport.changed",{width:next[0],height:next[1],scale:next[2]},{throttle:500,flush:true});
     cancelActiveDrag("viewport-changed");
+    return true;
+  }
+  // Shared native tab input admission, distinct from visual/OS drag ownership.
+  function dragPhaseInputAllowed(){
+    const bar=addressBar();
+    return hoverSupported()&&cascadeState==="idle"&&!root.hasAttribute("data-zr-closing")&&
+      !root.hasAttribute("data-zr-center-motion")&&!root.hasAttribute("data-zr-workspace-phase")&&
+      !root.hasAttribute("data-zr-startup-phase")&&!shield.hasAttribute("data-pressed")&&
+      !bar?.hasAttribute("focused")&&!bar?.hasAttribute("open");
+  }
+  function retireBlockedNativeTabDrag(reason="phase-conflict"){
+    if(dragLifecycle.current()?.kind!=="tab"||dragPhaseInputAllowed())return false;
+    cancelActiveDrag(reason);
+    return true;
+  }
+  // Read native edge-control X geometry, excluding moving tab lanes.
+  // No DOM measurements on ordinary dragover or animation frames.
+  let dragChromeFrame=null;
+  function readDragChromeFrame(){
+    try{
+      if(dead||!target?.isConnected)return null;
+      const nodes=Array.from(target.children).filter(n=>n!==row&&!centerIds.has(n.id)&&n.localName!=="toolbarspring");
+      const box=target.getBoundingClientRect(),numbers=[box.left,box.right];
+      for(const node of nodes){
+        const rect=node.getBoundingClientRect();
+        numbers.push(rect.left,rect.right);
+      }
+      return numbers.every(Number.isFinite)&&box.width>0?{nodes,numbers}:null;
+    }catch{return null;}
+  }
+  function sameDragChromeFrame(a,b){
+    return !!a&&!!b&&a.nodes.length===b.nodes.length&&a.numbers.length===b.numbers.length&&
+      a.nodes.every((node,i)=>node===b.nodes[i])&&
+      a.numbers.every((value,i)=>Math.abs(value-b.numbers[i])<=.75);
+  }
+  function retireChangedDragChromeFrame(stage="drop"){
+    if(!dragChromeFrame)return false;
+    if(sameDragChromeFrame(dragChromeFrame,readDragChromeFrame()))return false;
+    window.__nocturneTrace?.("drag.chrome-frame.changed",{stage},{throttle:500,flush:true});
+    cancelActiveDrag("chrome-frame-changed");
     return true;
   }
   let dropMarker = null;
@@ -8233,19 +8279,18 @@ function installTabStrip() {
   // native DataTransfer session; A5 owns that identity contract.
   let incomingDrag=null,incomingReleasing=false;
   function incomingMotionAllowed(){
-    return !incomingReleasing&&hoverSupported()&&cascadeState==="idle"&&!draggedTab&&!dragInsertPending&&!dragLifecycle.current()&&
-      !root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&
-      !root.hasAttribute("data-zr-workspace-phase")&&!root.hasAttribute("data-zr-startup-phase");
+    return !incomingReleasing&&dragPhaseInputAllowed()&&!draggedTab&&!dragInsertPending&&!dragLifecycle.current();
   }
   function incomingSourceCurrent(lease,tab=lease?.tab,owner=lease?.owner){
     try{return !!lease&&lease.tab===tab&&lease.owner===owner&&owner!==window&&!owner.closed&&
       owner[DRAG_CONTROLLER]===lease.source&&lease.source.source()===tab&&lease.source.sourceToken()===lease.token;}
     catch{return false;}
   }
-  function incomingDropAllowed(tab,owner,lease=incomingDrag){
+  function incomingDropAllowed(tab,owner,lease=incomingDrag,strict=false){
     if(!lease||incomingDrag!==lease||lease.invalid||!incomingSourceCurrent(lease,tab,owner)||!incomingMotionAllowed())return false;
     const viewport=dragViewportState();
-    return lease.viewport.every((value,i)=>Object.is(value,viewport[i]));
+    return lease.viewport.every((value,i)=>Object.is(value,viewport[i]))&&
+      (!strict||sameDragChromeFrame(lease.chrome,readDragChromeFrame()));
   }
   function releaseIncomingVisual(lease,reason,retain=false){
     if(!lease||incomingDrag!==lease)return false;
@@ -8266,7 +8311,7 @@ function installTabStrip() {
     if(!lease)return false;
     if(!incomingSourceCurrent(lease))return clearIncomingDrag("source-gone",lease);
     if(lease.invalid)return true;
-    if(!incomingDropAllowed(lease.tab,lease.owner,lease))return releaseIncomingVisual(lease,"geometry-or-phase",true);
+    if(!incomingDropAllowed(lease.tab,lease.owner,lease,true))return releaseIncomingVisual(lease,"geometry-or-phase",true);
     return false;
   }
   function admitIncomingDrag(event,tab,owner){
@@ -8278,7 +8323,9 @@ function installTabStrip() {
     clearIncomingDrag("new-preview");
     const source=owner?.[DRAG_CONTROLLER],token=source?.sourceToken?.();
     if(!incomingMotionAllowed()||!Number.isSafeInteger(token)||source?.source()!==tab)return false;
-    incomingDrag={tab,owner,source,token,viewport:dragViewportState(),invalid:false};
+    const chrome=readDragChromeFrame();
+    if(!chrome)return false;
+    incomingDrag={tab,owner,source,token,viewport:dragViewportState(),chrome,invalid:false};
     return true;
   }
   function rejectIncomingDrop(event,tab,owner,lease){
@@ -8534,7 +8581,7 @@ function installTabStrip() {
     splitZone.removeAttribute("data-op-side");
   }
   function revealForDrag(event) {
-    if(retireChangedDragViewport())return;
+    if(retireChangedDragViewport()||retireBlockedNativeTabDrag("window-phase"))return;
     const tab = readDraggedTab(event);
     if (!hoverSupported() || !tab || !toolbarWrapper) return;
     if(dragInsertPending)endDragVisual();
@@ -8608,9 +8655,12 @@ function installTabStrip() {
     previewStripDrag(event,tab);
   }
   function onToolbarDrop(event) {
-    if(retireChangedDragViewport())return;
+    if(retireChangedDragViewport()||retireChangedDragChromeFrame("toolbar-drop"))return;
     const tab=readDraggedTab(event);
     if(!tab||!toolbarDragReturnZone(event))return;
+    if(tabOwner(tab)===window&&!dragPhaseInputAllowed()){
+      event.preventDefault();event.stopPropagation();cancelActiveDrag("toolbar-phase");return;
+    }
     if(tabOwner(tab)===window&&(dragDetachedOnce||dragBunnyLayout)){
       event.preventDefault();event.stopImmediatePropagation();
       prepareBunnyDrop(event);
@@ -8674,7 +8724,7 @@ function installTabStrip() {
   function endDragVisual(restoreReturn=false) {
     const returnedSource=restoreReturn?dragNode:null,returnedPoint=restoreReturn?dragReturnPoint:null;
     dragReturnPoint=null;
-    dragInsertPending=false;dragViewport=null;
+    dragInsertPending=false;dragViewport=null;dragChromeFrame=null;
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.visual.end",()=>({mode:dragImageMode,pull:dragPull,detached:dragDetachedOnce,ghost:!!dragGhost&&!dragGhost.hidden,shifted:dragShifted.size}),{sample:1800});
     clearPlacementPreview();
     cancelInsertion();
@@ -8716,7 +8766,7 @@ function installTabStrip() {
     source?.markHandled(finishReturn);
   }
   function onDragStart(event, tab, group = null) {
-    if (incomingReleasing || !hoverSupported() || !validNativeTab(tab) || !event.dataTransfer) {
+    if (incomingReleasing || !dragPhaseInputAllowed() || !validNativeTab(tab) || !event.dataTransfer) {
       event.preventDefault();
       return;
     }
@@ -8767,6 +8817,8 @@ function installTabStrip() {
         splitZone.setAttribute("data-op-dragging", "true");
       }
       previewStripDrag(event,tab);
+      dragChromeFrame=readDragChromeFrame();
+      if(!dragChromeFrame){cancelActiveDrag("chrome-frame-unready");return;}
       refreshIndicator();
       refreshIslandTitle();
       event.stopPropagation();
@@ -8778,7 +8830,9 @@ function installTabStrip() {
   }
   function onStripDragOver(event) {
     if(retireChangedDragViewport())return;
-    if(cascadeState!=="idle"){retireIncomingDrag();return;}
+    if(!dragPhaseInputAllowed()){
+      retireBlockedNativeTabDrag("strip-phase");retireIncomingDrag();return;
+    }
     const tab = readDraggedTab(event);
     if (!tab||!admitIncomingDrag(event,tab,tabOwner(tab))) return;
     event.preventDefault();
@@ -8803,15 +8857,21 @@ function installTabStrip() {
     return true;
   }
   function onStripDrop(event) {
-    if(retireChangedDragViewport())return;
+    if(retireChangedDragViewport()||retireChangedDragChromeFrame("strip-drop"))return;
     const tab = readDraggedTab(event);
     if (!tab) return;
     const owner = tabOwner(tab),incoming=owner!==window?incomingDrag:null;
-    if(owner!==window&&(!event.isTrusted||!toolbarDragReturnZone(event)||!incomingDropAllowed(tab,owner,incoming))){
+    if(!dragPhaseInputAllowed()){
+      if(event.isTrusted){
+        if(owner===window){event.preventDefault();event.stopPropagation();cancelActiveDrag("strip-phase");}
+        else rejectIncomingDrop(event,tab,owner,incoming);
+      }
+      return;
+    }
+    if(owner!==window&&(!event.isTrusted||!toolbarDragReturnZone(event)||!incomingDropAllowed(tab,owner,incoming,true))){
       if(event.isTrusted)rejectIncomingDrop(event,tab,owner,incoming);
       return;
     }
-    if(cascadeState!=="idle")return;
     event.preventDefault();
     event.stopPropagation();
     const source = owner?.[DRAG_CONTROLLER];
@@ -8820,7 +8880,8 @@ function installTabStrip() {
     if (owner === window && dragNode) { setDragImageMode("inline",event); setPull(0); }
     const dest = previewStripDrag(event, tab) || dropTarget(event);
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.drop",()=>({local:owner===window,group:!!group,dest:!!dest?.native,before:dest?.before,mode:dragImageMode}),{sample:1800});
-    if(owner!==window&&!incomingDropAllowed(tab,owner,incoming)){
+    if(retireChangedDragChromeFrame("strip-target"))return;
+    if(owner!==window&&!incomingDropAllowed(tab,owner,incoming,true)){
       rejectIncomingDrop(event,tab,owner,incoming);return;
     }
     if(!validStripDropTarget(dest)){
@@ -8844,10 +8905,10 @@ function installTabStrip() {
         markSourceHandled();
         return;
       }
-      if(owner!==window&&!incomingDropAllowed(tab,owner,incoming)){rejectIncomingDrop(event,tab,owner,incoming);return;}
+      if(owner!==window&&!incomingDropAllowed(tab,owner,incoming,true)){rejectIncomingDrop(event,tab,owner,incoming);return;}
       if (isSplit(tab) && !unsplitTab(tab)) { markSourceHandled(); return; }
       if(!validStripDropTarget(dest)){markSourceHandled();return;}
-      if(owner!==window&&!incomingDropAllowed(tab,owner,incoming)){rejectIncomingDrop(event,tab,owner,incoming);return;}
+      if(owner!==window&&!incomingDropAllowed(tab,owner,incoming,true)){rejectIncomingDrop(event,tab,owner,incoming);return;}
       if (owner === window) {
         // Dropping a member beyond its original group detaches only that
         // member. Never insert an ordinary tab inside another split group.
@@ -8859,7 +8920,7 @@ function installTabStrip() {
         const boundaryIndex=all.indexOf(dest.before ? boundary[0] : boundary.at(-1));
         if(!boundary.length||boundaryIndex<0)return;
         const index=boundaryIndex+(dest.before?0:1);
-        if(!incomingDropAllowed(tab,owner,incoming)){rejectIncomingDrop(event,tab,owner,incoming);return;}
+        if(!incomingDropAllowed(tab,owner,incoming,true)){rejectIncomingDrop(event,tab,owner,incoming);return;}
         const adopted = browser.adoptTab(tab, { tabIndex: index, selectTab: true });
         if (adopted) markSourceHandled();
       }
@@ -8879,10 +8940,7 @@ function installTabStrip() {
     return {x:(x-box.left)/box.width,y:(y-box.top)/box.height};
   }
   function splitDropAllowed(){
-    const bar=addressBar();
-    return hoverSupported()&&cascadeState==="idle"&&splitZone.hasAttribute("data-op-dragging")&&
-      !root.hasAttribute("data-zr-closing")&&!root.hasAttribute("data-zr-center-motion")&&!root.hasAttribute("data-zr-workspace-phase")&&!root.hasAttribute("data-zr-startup-phase")&&
-      !shield.hasAttribute("data-pressed")&&!bar?.hasAttribute("focused")&&!bar?.hasAttribute("open");
+    return dragPhaseInputAllowed()&&splitZone.hasAttribute("data-op-dragging");
   }
   function splitSide(event) {
     if(toolbarDragReturnZone(event))return "";
@@ -8910,7 +8968,7 @@ function installTabStrip() {
     event.dataTransfer.dropEffect = "move";
   }
   function onSplitDrop(event) {
-    if(retireChangedDragViewport())return;
+    if(retireChangedDragViewport()||retireChangedDragChromeFrame("split-drop"))return;
     const tab = readDraggedTab(event);
     const current = browser.selectedTab;
     if (!tab || tabOwner(tab) !== window || draggedGroup ||
@@ -8952,7 +9010,8 @@ function installTabStrip() {
     } finally { endDragVisual(); }
   }
   function onDragEnd(event, tab) {
-    if(!dragEndMatches(nativeDragIdentity,event,tab)||retireChangedDragViewport())return;
+    if(!dragEndMatches(nativeDragIdentity,event,tab)||retireChangedDragViewport()||
+      retireChangedDragChromeFrame("dragend")||retireBlockedNativeTabDrag("dragend-phase"))return;
     const dt = event.dataTransfer;
     // Ignore late or duplicate dragend after cancel/handled drop.
     const placement=placementAt(event,true);
@@ -9942,7 +10001,10 @@ function installTabStrip() {
   const tabObserver = new MutationObserver(schedule);
   const workspaceObserver = new MutationObserver(schedule);
   const toolbarObserver = new MutationObserver(() => {
-    if (dead || root.hasAttribute("customizing")) return;
+    if(dead)return;
+    retireChangedDragChromeFrame("toolbar-children");
+    retireIncomingDrag();
+    if(root.hasAttribute("customizing"))return;
     if (url.parentElement === target && row.parentElement !== target) url.after(row);
     if (leftSpacer.parentElement !== target) target.prepend(leftSpacer);
     if (rightSpacer.parentElement !== target) row.after(rightSpacer);
@@ -10170,6 +10232,8 @@ function installTabStrip() {
     geometryObserver = new ResizeObserver(()=>{
       checkCenterGeometry("resize-observer");
       if(dead)return;
+      retireChangedDragChromeFrame("native-edge-resize");
+      retireIncomingDrag();
       // ResizeObserver delivery occurs before paint. Compensate edge
       // width changes now rather than a frame later.
       scheduleMeasuredGeometry(centerToolbar());

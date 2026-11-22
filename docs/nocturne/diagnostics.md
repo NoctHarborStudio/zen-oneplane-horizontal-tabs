@@ -322,3 +322,8 @@ No new trace stream. Existing drag, address.cascade, tabs.sync, geometry.preflig
 ### Preview.111 — incoming viewport lease
 
 `drag.incoming.release` records static reason and whether rejection evidence is retained. No source tab, token, URL or window identity is emitted. Source detach fallback may be suppressed only for the captured current token on a delivered rejected drop.
+
+
+### Preview.112 — drag input frame and phase
+
+`drag.chrome-frame.changed` emits only a bounded static stage (`drop`, `strip-drop`, `dragend`, `toolbar-drop`, `window-resize`, `native-edge-resize`, `toolbar-children`, `compact-mode` or `split-drop`) and existing `drag.lifecycle.cancel` reports reason `chrome-frame-changed` or phase-owner interruption. Raw node IDs, tab identity, user input, coordinates, URLs and file names are not emitted. No new profiler/RAF channel; native frame gaps must still be measured independently.

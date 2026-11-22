@@ -304,3 +304,6 @@ A4.4b (preview.110): native drag region is independent of the contour mask. The 
 
 
 A4.4-R1 (preview.111): incoming tab preview holds one destination-local lease over exact source controller/token and viewport. Invalidating releases existing visual state; a fresh trusted dragover must re-admit before drop. Source completion/cancel clears only matching previews, excluding the destination currently committing. Native DataTransfer identity and actual commit remain A5, not inferred from the preview token.
+
+
+A4.4-R2 (preview.112): one Layout-native tab input policy gates strip, Split Drop, source dragend, foreign preview and toolbar return during Center/Startup/Workspace/Close and address ownership. Native edge-control horizontal geometry is a gesture-local immutable snapshot, not a second geometry controller. Existing resize/mutation delivery and final native commits validate it; moving tab lanes are intentionally excluded. Full Gecko non-client hit-region acceptance remains separate.

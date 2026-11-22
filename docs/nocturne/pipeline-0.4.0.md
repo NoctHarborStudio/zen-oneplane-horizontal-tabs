@@ -4,7 +4,7 @@ Status: primary static audit checkpoints completed; A0.3 release infrastructure 
 
 ## Active checkpoint — source vs native evidence
 
-Current source checkpoint: 0.3.0-preview.111 (A4.4-R1). Last confirmed canonical CI before this commit: preview.110. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
+Current source checkpoint: 0.3.0-preview.112 (A4.4-R2, CI pending). Last confirmed canonical CI before this commit: preview.110. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
 
 | Stage | Source implementation/review | Native acceptance |
 | --- | --- | --- |
@@ -12,7 +12,7 @@ Current source checkpoint: 0.3.0-preview.111 (A4.4-R1). Last confirmed canonical
 | A1 | Implemented and reviewed | Explicitly deferred |
 | A2 | Implemented and reviewed | Explicitly deferred |
 | A3 | Core Fold ownership/handoff implemented; Bloom candidate dormant | Pending |
-| A4 | A4.4-R1 incoming geometry safety slice; A4.4-R2 next | Pending |
+| A4 | A4.4-R2 source phase/edge-frame audit; canonical CI and native acceptance pending | Pending |
 | A5–A7 | Full interaction, overlay and data-service gates pending | Pending |
 | A8 | Integrated validation pending | Pending |
 | A9 | Optional vertical scope, separate approval | Pending |
@@ -961,3 +961,12 @@ Eight permanent source-backed fixtures and the existing return-tail fixture PASS
 ### A4.4-R1 — canonical CI fixture correction (tests/docs only)
 
 Preview.111 `ea64e5e1349a31e4acc48a9bb27b2615ea67f9f8`, [CI 44600514733](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/44600514733) FAIL: reproducible build, release policy, all runtime parser checks PASS; 694/695 Node tests PASS. The inherited Bunny return/highlight test extracted its branch up to the obsolete `else if (!local)` delimiter (foreign source forwarding moved earlier). Update extraction to the actual end of the local block, retain the original hover/geometry assertions and execute the real fixture body. Corrected targeted fixture PASS in isolated V8. No runtime, version or updatedAt change. Require green canonical CI before dependent A4.4-R2 production changes.
+
+
+### A4.4-R2 — Native input phase and edge-control frame (preview.112)
+
+Baseline preview.111 fixture correction `8ce0c4c2068ae3607063484476cd354b14daad13`, [CI 44600673427](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/44600673427) PASS (695/695 Node tests, 15 Python policy tests, 12 runtime parser, seven build outputs and publication endpoints). Source review re-traced dragstart → capture dragover → strip/toolbar/split drop → native operation → dragend, plus window resize/Compact/Workspace/Address and existing target MutationObserver/ResizeObserver cleanup. Source defect: split rejected conflicting startup/workspace/center/search phases while ordinary strip drop and native detach-end did not. Local drag could therefore commit an obsolete native operation under a phase that CSS already denied as a native hit region. Native edge control widths or identity could also change without viewport/DPI/window mode changing, leaving stale local or foreign targets.
+
+Use one existing Layout window input policy for tab strip, split, incoming preview and Bunny with native URLbar/shield/cascade exclusions. On phase takeover, retire only the owned native tab gesture, not unrelated workspace/trash pointer sessions; consumed rejected local drops cannot detach. Capture exact native toolbar child references and X rectangles excluding the moving row/center spacers, with 0.75 CSS px tolerance. Compare only at acquisition, native commit boundary and existing toolbar MutationObserver/ResizeObserver/resize/Compact callbacks, not every dragover or Bunny frame. Source and incoming leases remain separate: foreign drop checks source controller/token, viewport and edge snapshot before adopt; after geometry invalidation fresh trusted dragover can re-arm. No competing state owner, timer, observer, RAF, new native command, CSS hitbox or animation choreography. Bounded `drag.chrome-frame.changed` emits stage only; the existing cancellation event owns the cleanup reason. Ancillary native Split unsplit result, stale native DataTransfer event identity, customizations that alter Gecko non-client hit regions without rect change and actual window movement require A5/native verification, not source-only closure.
+
+Source-backed isolated V8 validation before publication: 6 new phase/edge fixtures and 9 incoming-destination regression bodies PASS, including local phase rejection before mutation, dragend fail-closed, native edge replacement/shift, foreign geometry invalidation and fresh-adopt path; generated Layout parses after exact substitutions. A4.4-R2 is source implementation pending full CI and native Zen acceptance. CI failures, if any, must be fixed before dependent A5 changes. Next: confirm canonical CI, perform independent readback, then A5.1 identity/commit contract. Deferred A0/A1/A2/A3/A4 native baseline and profiler remain OPEN.
