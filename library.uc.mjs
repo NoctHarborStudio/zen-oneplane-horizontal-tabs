@@ -85,10 +85,10 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
  const report=(section,status,count=0)=>{try{onRefresh({section,status,count});}catch{}};
  function open(section,downloadPaths=()=>new Set()){
    if(dead||!allowed()||!MEDIA_EXTENSIONS[section])throw Error("Media unavailable");
-   let closed=false,owned=new Map(),cache=null,revision=0;
+   let closed=false,owned=new Map(),cache=null,revision=0,refreshWork=null;
    const openedAt=generation;
    const available=()=>!closed&&!dead&&openedAt===generation&&allowed();
-   async function refresh(){
+   async function refreshCurrent(){
      if(!available())return null;
      const token=++revision;
      const task=pending.catch(()=>{}).then(()=>!available()||token!==revision?[]:scan(section));
@@ -113,7 +113,17 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
      for(const {id,path} of owned.values())handles.set(id,path);
      cache=Object.freeze(result);report(section,"committed",cache.length);return cache;
    }
-   return {refresh,rows:()=>{if(!available())return [];const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const {id} of owned.values())handles.delete(id);owned.clear();cache=null;}};
+   function refresh(){
+     if(!available())return Promise.resolve(null);
+     // Share one native scan per live session; do not build an unbounded
+     // chain of queued retries while Zen has not called back.
+     if(refreshWork)return refreshWork;
+     const task=refreshCurrent();refreshWork=task;
+     void task.then(()=>{if(refreshWork===task)refreshWork=null;},
+                    ()=>{if(refreshWork===task)refreshWork=null;});
+     return task;
+   }
+   return {refresh,rows:()=>{if(!available())return [];const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;refreshWork=null;for(const {id} of owned.values())handles.delete(id);owned.clear();cache=null;}};
  }
  function action(id,kind){if(dead||!allowed()||!handles.has(id)||!["open","reveal"].includes(kind))return false;return perform(handles.get(id),kind);}
  function invalidate(){++generation;handles.clear();}
@@ -121,11 +131,14 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
  return {open,action,invalidate,dispose};
 }
 // Own one bounded query session, reject stale results before rendering.
-function createLibraryData({getServices,onResult,onError,onNotice=()=>{},schedule,cancel}){
-  let section=null,source=null,session=null,off=null,timer=null,epoch=0,sessionEpoch=0,limit=50,text="",sort="new",filter="all",dead=false,media=null;
+const MEDIA_SCAN_UI_DEADLINE_MS=15000;
+const MEDIA_SCAN_SLOW_NOTICE="Local folder scan is still running. Downloaded files remain available.";
+function createLibraryData({getServices,onResult,onError,onNotice=()=>{},onScanWait=()=>{},schedule,cancel}){
+  let section=null,source=null,session=null,off=null,timer=null,epoch=0,sessionEpoch=0,limit=50,text="",sort="new",filter="all",dead=false,media=null,mediaWork=null;
   const files=s=>["downloads","documents","pictures"].includes(s);
   function stop(){
     ++epoch;++sessionEpoch;if(timer!==null){cancel(timer);timer=null;}
+    if(mediaWork){const old=mediaWork;mediaWork=null;if(old.timer!==null)cancel(old.timer);old.resolve(false);}
     try{off?.();}catch{}off=null;try{if(section==="history")session?.close();}catch{}
     try{media?.close();}catch{}media=null;session=null;source=null;section=null;limit=50;text="";sort="new";filter="all";
   }
@@ -142,10 +155,39 @@ function createLibraryData({getServices,onResult,onError,onNotice=()=>{},schedul
     timer=schedule(()=>{timer=null;void load();},160);
   }
   function immediate(){if(timer!==null)cancel(timer);timer=null;void load();}
-  async function refresh(){
-    const owner=source,token=sessionEpoch,m=media;if(!m)return false;
-    try{const result=await m.refresh();if(result===null||dead||sessionEpoch!==token||source!==owner||getServices()!==owner)return false;immediate();return true;}
-    catch{if(!dead&&sessionEpoch===token&&source===owner&&getServices()===owner)onNotice("Local folders could not be scanned. Showing downloaded files.");return false;}
+  function refresh(){
+    const owner=source,token=sessionEpoch,m=media;if(!m)return Promise.resolve(false);
+    if(mediaWork){if(mediaWork.expired)onNotice(MEDIA_SCAN_SLOW_NOTICE);return mediaWork.promise;}
+    const valid=()=>!dead&&sessionEpoch===token&&source===owner&&media===m&&getServices()===owner;
+    let resolve;
+    const promise=new Promise(done=>{resolve=done;});
+    const work={promise,resolve,timer:null,expired:false};mediaWork=work;
+    const release=()=>{
+      if(work.timer!==null){cancel(work.timer);work.timer=null;}
+      if(mediaWork===work)mediaWork=null;
+    };
+    // This deadline bounds only the UI wait. The Gecko native scan and the
+    // MediaService disposal barrier retain ownership until real settlement.
+    work.timer=schedule(()=>{
+      work.timer=null;work.expired=true;
+      if(valid()){onScanWait("deadline");onNotice(MEDIA_SCAN_SLOW_NOTICE);}
+      resolve(false);
+    },MEDIA_SCAN_UI_DEADLINE_MS);
+    void Promise.resolve().then(()=>valid()?m.refresh():null).then(result=>{
+      release();
+      if(result===null||!valid()){resolve(false);return;}
+      immediate();
+      if(work.expired){onScanWait("late-complete");onNotice("",MEDIA_SCAN_SLOW_NOTICE);}
+      resolve(true);
+    },()=>{
+      release();
+      if(valid()){
+        if(work.expired)onScanWait("late-error");
+        onNotice("Local folders could not be scanned. Showing downloaded files.");
+      }
+      resolve(false);
+    });
+    return promise;
   }
   function start(next,query=""){
     stop();if(dead||!["history","closed","downloads","documents","pictures"].includes(next))return false;
@@ -205,14 +247,14 @@ function libraryShortcutSection(event,os="WINNT"){
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,{flush:true});
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.137",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.138",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
   const labels={downloads:"All Downloads",documents:"Documents",history:"History",pictures:"Pictures",closed:"Recently Closed"};
   const summaries={downloads:"Download records and file actions",documents:"Downloaded documents and opted-in folders",history:"Browsing history and search",pictures:"Downloaded pictures and opted-in folders",closed:"Recently closed tabs in this window"};
   let state=createLibraryState(),dead=false,lease=()=>{},shell=null,animations=[],frame=0,returnFocus=null,rows=new Map(),backgroundAction=false,renderedSection=null,dragSource=null,pendingResult=null,clearing=false,nativeFallback=false,confirmation=false,actionSerial=0,pendingClose=false,dragOwner=null,indicatorReady=false,lastFailure=null,fallbackDragTimer=0,fallbackDragMissing=0,fallbackDragUnknown=0;
-  const data=createLibraryData({getServices:()=>win.__nocturneLibraryServices,onResult:renderResults,onError:renderError,onNotice:notice,schedule:(fn,ms)=>win.setTimeout(fn,ms),cancel:id=>win.clearTimeout(id)});
+  const data=createLibraryData({getServices:()=>win.__nocturneLibraryServices,onResult:renderResults,onError:renderError,onNotice:notice,onScanWait:status=>trace("media.scan.wait",{status,section:state.section}),schedule:(fn,ms)=>win.setTimeout(fn,ms),cancel:id=>win.clearTimeout(id)});
   const fileSection=()=>["downloads","documents","pictures"].includes(state.section);
   const enabled=()=>prefs.getBoolPref(PREF,false),active=()=>state.phase!=="closed";
   const duration=n=>libraryDuration(win.matchMedia("(prefers-reduced-motion: reduce)").matches,prefs.getIntPref("zen.oneplane.animation-duration",160)!==0,n);
@@ -309,8 +351,9 @@ function libraryShortcutSection(event,os="WINNT"){
     for(const [id,b] of tabs){const selected=id===state.section;b.setAttribute("aria-selected",String(selected));b.tabIndex=selected?0:-1;}
     search.placeholder="Search "+labels[state.section].toLowerCase();search.value=state.query;body.setAttribute("aria-labelledby","nl-tab-"+state.section);syncTools();syncIndicator();
   }
-  function notice(message){
+  function notice(message,onlyIf){
     if(!shell||!active()||state.phase==="closing")return;
+    if(onlyIf!==undefined&&shell.status.textContent!==onlyIf)return;
     shell.status.textContent=message;shell.status.hidden=!message;
   }
   function syncTools(){

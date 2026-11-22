@@ -81,10 +81,10 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
  const report=(section,status,count=0)=>{try{onRefresh({section,status,count});}catch{}};
  function open(section,downloadPaths=()=>new Set()){
    if(dead||!allowed()||!MEDIA_EXTENSIONS[section])throw Error("Media unavailable");
-   let closed=false,owned=new Map(),cache=null,revision=0;
+   let closed=false,owned=new Map(),cache=null,revision=0,refreshWork=null;
    const openedAt=generation;
    const available=()=>!closed&&!dead&&openedAt===generation&&allowed();
-   async function refresh(){
+   async function refreshCurrent(){
      if(!available())return null;
      const token=++revision;
      const task=pending.catch(()=>{}).then(()=>!available()||token!==revision?[]:scan(section));
@@ -109,7 +109,17 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
      for(const {id,path} of owned.values())handles.set(id,path);
      cache=Object.freeze(result);report(section,"committed",cache.length);return cache;
    }
-   return {refresh,rows:()=>{if(!available())return [];const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const {id} of owned.values())handles.delete(id);owned.clear();cache=null;}};
+   function refresh(){
+     if(!available())return Promise.resolve(null);
+     // Share one native scan per live session; do not build an unbounded
+     // chain of queued retries while Zen has not called back.
+     if(refreshWork)return refreshWork;
+     const task=refreshCurrent();refreshWork=task;
+     void task.then(()=>{if(refreshWork===task)refreshWork=null;},
+                    ()=>{if(refreshWork===task)refreshWork=null;});
+     return task;
+   }
+   return {refresh,rows:()=>{if(!available())return [];const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;refreshWork=null;for(const {id} of owned.values())handles.delete(id);owned.clear();cache=null;}};
  }
  function action(id,kind){if(dead||!allowed()||!handles.has(id)||!["open","reveal"].includes(kind))return false;return perform(handles.get(id),kind);}
  function invalidate(){++generation;handles.clear();}
@@ -364,7 +374,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   const trace=(event,data)=>{try{if(win.__nocturneTrace)win.__nocturneTrace(event,data,{flush:true});else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,data,t:win.performance?.now?.()??0});}}catch{}};
-  trace("library.services.script",{version:"0.3.0-preview.137"});
+  trace("library.services.script",{version:"0.3.0-preview.138"});
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
   const BARRIER="__nocturneDownloadsDisposal",MEDIA_BARRIER="__nocturneMediaDisposal";
   const previous=win[KEY],previousClosing=previous?.dispose?.(),existing=win[BARRIER];
