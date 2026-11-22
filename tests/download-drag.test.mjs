@@ -4,29 +4,56 @@ import {readFileSync} from "node:fs";
 const source=readFileSync(new URL("../downloads-indicator.uc.mjs",import.meta.url),"utf8");
 const css=readFileSync(new URL("../src/styles/refined-features.css.part",import.meta.url),"utf8");
 const section=(a,b)=>source.slice(source.indexOf(a),source.indexOf(b,source.indexOf(a)+a.length));
-const {canDragFile,latestCompleted,populateFileTransfer}=new Function(section("  function canDragFile(","  function beginFileDrag(")+"return {canDragFile,latestCompleted,populateFileTransfer};")();
+const {canDragFile,latestCompleted}=new Function(section("  function canDragFile(","  function fileIconURL(")+"return {canDragFile,latestCompleted};")();
+const services=readFileSync(new URL("../src/services/library-services-runtime.js.part",import.meta.url),"utf8");
+const dragBody=services.slice(services.indexOf("  function dragFile("),services.indexOf("  const downloads=createDownloadsService("));
+function dragFixture({allow=true,exists=true,isFile=true,closed=false}={}){
+ const calls=[],file={exists:()=>exists,isFile:()=>isFile};
+ const dragFile=new Function("allowed","fileFor","Services","win","dead",dragBody+"return dragFile;")(
+  ()=>allow,path=>{calls.push(["lookup",path]);return file;},
+  {io:{newFileURI:f=>{assert.equal(f,file);return {spec:"file:///C:/Downloads/hello%20world.txt"};}}},
+  {closed},false);
+ const dt={mozSetDataAt:(...args)=>calls.push(args),setData:(...args)=>calls.push(args),addElement:n=>calls.push(n)};
+ return {dragFile,calls,file,dt};
+}
 const completed=path=>({succeeded:true,target:{path,exists:true}});
 test("latest completed download is independent of current active transfers",()=>{
  const a=completed("a"),b=completed("b"),c={target:{path:"c"}},d=completed("d");d.target.exists=false;
  assert.equal(latestCompleted(new Map([[a,{time:10,completedAt:40}],[b,{time:20,completedAt:30}],[c,{time:50}],[d,{time:60}]])),a);
  assert.equal(latestCompleted(new Map([[c,{time:50}]])),null);
 });
-test("file drag exports real Gecko file and URI with native copy/move negotiation",()=>{
- const d=completed("C:\\Downloads\\hello world.txt"),file={exists:()=>true,isFile:()=>true},source={};
- const calls=[],dt={mozSetDataAt:(...args)=>calls.push(args),setData:(...args)=>calls.push(args),addElement:n=>calls.push(n)};
- assert.equal(populateFileTransfer(dt,d,source,p=>{assert.equal(p,d.target.path);return file;},f=>{assert.equal(f,file);return "file:///C:/Downloads/hello%20world.txt";}),true);
- assert.deepEqual(calls,[["application/x-moz-file",file,0],["text/uri-list","file:///C:/Downloads/hello%20world.txt"],source]);
- assert.equal(dt.effectAllowed,"copyMove");
+test("the sole native service exports Gecko file and URI synchronously",()=>{
+ const f=dragFixture(),d=completed("C:\\Downloads\\hello world.txt"),node={};
+ assert.equal(f.dragFile(d,{isTrusted:true,dataTransfer:f.dt},node,"dock"),true);
+ assert.deepEqual(f.calls,[
+  ["lookup",d.target.path],
+  ["application/x-moz-file",f.file,0],
+  ["text/uri-list","file:///C:/Downloads/hello%20world.txt"],node
+ ]);
+ assert.equal(f.dt.effectAllowed,"copyMove");
 });
-test("active, failed, canceled, blocked, partial and missing files are rejected",()=>{
+test("active, failed, canceled, blocked, partial and removed downloads cannot begin",()=>{
  for(const patch of [{succeeded:false},{error:{}},{canceled:true},{hasPartialData:true},{hasBlockedData:true},{target:{path:"x",exists:false}},{target:{path:""}}]){
-   const d={...completed("x"),...patch};assert.equal(canDragFile(d),false);
-   assert.equal(populateFileTransfer({},d,{},()=>{throw Error("must not inspect path")},()=>""),false);
+  const d={...completed("x"),...patch};assert.equal(canDragFile(d),false);
  }
- const d=completed("x"),dt={mozSetDataAt(){throw Error("must not export missing file")}};
- assert.equal(populateFileTransfer(dt,d,{},()=>({exists:()=>false,isFile:()=>true}),()=>""),false);
- assert.equal(populateFileTransfer(dt,d,{},()=>({exists:()=>true,isFile:()=>false}),()=>""),false);
- assert.equal(populateFileTransfer(dt,d,{},()=>{throw Error("invalid file")},()=>""),false);
+ for(const options of [{exists:false},{isFile:false},{closed:true}]){
+  const f=dragFixture(options);
+  assert.equal(f.dragFile(completed("x"),{isTrusted:true,dataTransfer:f.dt},{},"dock"),false);
+  assert.equal(f.calls.some(x=>Array.isArray(x)&&x[0]==="application/x-moz-file"),false);
+ }
+ const f=dragFixture();
+ for(const event of [{isTrusted:false,dataTransfer:f.dt},{dataTransfer:f.dt},{isTrusted:true,dataTransfer:{}}])
+  assert.equal(f.dragFile(completed("x"),event,{},"dock"),false);
+ assert.equal(f.dragFile(completed("x"),{isTrusted:true,dataTransfer:f.dt},{},"other"),false);
+});
+test("private Library denies file drag while native private Dock remains eligible",()=>{
+ const f=dragFixture({allow:false}),d=completed("x"),e={isTrusted:true,dataTransfer:f.dt};
+ assert.equal(f.dragFile(d,e,{},"library"),false);
+ assert.equal(f.calls.length,0);
+ assert.equal(f.dragFile(d,e,{},"dock"),true);
+ assert.ok(f.calls.some(x=>Array.isArray(x)&&x[0]==="application/x-moz-file"));
+ assert.ok(source.includes("list?.dragNative?.(d,e,source)"));
+ assert.ok(!source.includes("populateFileTransfer"));
 });
 test("row and indicator share native drag; clicks and source stability are protected",()=>{
  assert.ok(source.includes('bindFileDrag(node,()=>latestCompleted(history))'));
