@@ -1,3 +1,11 @@
+## 0.3.0-preview.119 — A5.5a native drag source watchdog recovery
+
+- Bound unavailable Gecko drag session capability errors separately from absent sessions for tab Drag Engine, while preserving the exact gesture token and never synthesizing a native drop.
+- Arm Downloads Dock native file-drag recovery before optional Bunny artwork. Use one source-owned timer for both session liveness and popup readiness; stop hidden popup rendering without ending the OS drag.
+- Add a bounded Dock-free Library fallback file drag watchdog; preserve Dock as the sole gesture owner when its bridge accepts the Library drag, defer Library close while a native file gesture is outstanding.
+- Attach native file preview DOM only after its cleanup state is created, preventing orphan artwork on construction failure.
+- Add extracted-source regression cases for missing/unknown/live sessions, optional art failure, unexpected popup closure, Library fallback and source cleanup. Actual Gecko OS DragSession identity, Explorer/upload drop, cancellation and performance remain native acceptance gates.
+
 ## 0.3.0-preview.118 — A5.4a display coordinates and preview freshness
 
 - Retire unused Hub snap/display helpers; both workspace projection and tab Bunny already use the same Display Engine placement path. The supported native snap policy and opt-in preference are unchanged.
