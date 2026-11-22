@@ -4,7 +4,7 @@ Status: primary static audit checkpoints completed; A0.3 release infrastructure 
 
 ## Active checkpoint — source vs native evidence
 
-Current source checkpoint: 0.3.0-preview.114 (A5.1b1 native command postconditions, CI pending; OS DragSession identity open). Last confirmed canonical CI: preview.113. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
+Current source checkpoint: 0.3.0-preview.114 (A5.1b1 source/CI PASS; OS DragSession identity and native acceptance open). Last confirmed canonical CI: preview.114. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
 
 | Stage | Source implementation/review | Native acceptance |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ Current source checkpoint: 0.3.0-preview.114 (A5.1b1 native command postconditio
 | A2 | Implemented and reviewed | Explicitly deferred |
 | A3 | Core Fold ownership/handoff implemented; Bloom candidate dormant | Pending |
 | A4 | A4.4-R2 source/CI complete; native hit-region, visual and profiler gates still open | Pending |
-| A5–A7 | A5.1a CI PASS; A5.1b1 native command result source implementation, CI pending; A5.1b2 OS session identity and A5.2–A7 open | Pending |
+| A5–A7 | A5.1a–A5.1b1 source/CI PASS; A5.1b2 OS session identity, A5.2–A7 and native acceptance open | Pending |
 | A8 | Integrated validation pending | Pending |
 | A9 | Optional vertical scope, separate approval | Pending |
 
@@ -1008,3 +1008,10 @@ In `onStripDrop`, a delivered, valid custom drop always settles its exact curren
 New bounded `drag.native.outcome` records only static operation/outcome labels, no titles, URLs, tabs or filenames. Six dedicated source-backed V8 fixtures PASS: moving single/group tab with void/unchanged native functions, actual adjacency and group continuity, rejected/partial/exception adoptTab with exact source cleanup, failed/partial Split and unsplit with cleanup, trusted token-scoped dragend. Existing incoming-drag and phase fixture mocks updated. Generated Layout parsed by JS parser. Full canonical CI and Zen native acceptance are not yet evidence at this stage.
 
 A5.1b2 remains OPEN: same-node delayed native `dragend` with a different true Gecko OS drag session cannot be proven/rejected solely by a JS token or source node. Do not add a second synthetic drag registry, depend on DataTransfer object reference stability, or assume an API's protected data is readable on every platform; research and native experiment required. Likewise eventual asynchronous native order, hidden-workspace reorder semantics, adopted-tab placement and split group postconditions need native acceptance before declaring complete. Next: canonical CI/readback and independent audit, then A5.1b2/native gesture identity and A5.2 Split ownership.
+
+
+### A5.1b1 — Canonical CI closure and independent native-result readback (docs-only)
+
+Production runtime commit `582990d1efa8647715232964e51643cfb9b853be`, [CI 45041297367](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45041297367) completed SUCCESS: 713/713 Node tests, 15 Python release tests, all 12 runtime scripts parsed, reproducible build, source/artifact checks and public Raw/codeload Sine package verified. Exact source-backed readback found each edited `src/native/tab-adapter.js.part`, `src/interactions/{drag-controller,split-drop,drag-engine,drag-end}.js.part` exactly once in generated `layout.uc.mjs`; `package.json` and `theme.json` both declare `0.3.0-preview.114`, with monotonically increasing updatedAt and matching shared-bookmarks lock. No parallel HEAD supersession as of this review.
+
+Independent result-path review rechecked native order on move/atomic group, skip-already-adjacent, adoption null vs returned foreign/native target, Split native synchronous postcondition, rejected/partial error source consumption and trusted lifecycle-bound dragend. The outcome trace names **the immediate result, not actual future OS success**. No authoritative later asynchronous native convergence, Gecko OS DragSession identity, real cross-monitor/hidden-workspace order, window closure or visual performance evidence. The source/CI substage is complete; keep A5.1b2 OS session identity and native A5 acceptance OPEN. Next technical work: inspect Gecko session/source data access with the target Zen version, and verify native Split atomicity under retargeted/late drop without inventing a second session store.

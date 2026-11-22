@@ -1205,3 +1205,6 @@ A5.1a CI closure: preview.113 (707/707 Node, 15 Python, deterministic build, 12 
 ### A5.1b1 — Immediate native postconditions (preview.114)
 
 Source-level correction: return values or visual cleanup no longer stand in for native tab/group movement, adopted ownership or Split membership. Delivered custom drops consume the exact source gesture even on native failures, to suppress unintended detach. Source/fixture gate is separate from native Zen/OS DragSession acceptance. Actual hidden-workspace reorder, multi-monitor/late native result, same-node stale Gecko dragend and native visual/performance proof are open. No user-reproduced corruption claim.
+
+
+A5.1b1 canonical CI verification: preview.114 (713/713 Node, 15 Python, 12 runtime parsers and publication checks) PASS. The native command postcondition trace is not an OS drag certificate. Same-node stale native events, asynchronous Zen adoption/group convergence and real window/monitor acceptance remain pending A5.1b2/A5.2.
