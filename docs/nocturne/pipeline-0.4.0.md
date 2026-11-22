@@ -4,7 +4,7 @@ Status: primary static audit checkpoints completed; A0.3 release infrastructure 
 
 ## Active checkpoint — source vs native evidence
 
-Current source checkpoint: 0.3.0-preview.116 (A5.2b native group postcondition source implementation; canonical CI pending; A5.1b2 Gecko OS DragSession identity and native acceptance OPEN). Last confirmed canonical CI: preview.115. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
+Current source checkpoint: 0.3.0-preview.116 (A5.2b1 native group source/CI PASS; A5.2b2 native acceptance and A5.1b2 Gecko OS DragSession identity OPEN). Last confirmed canonical CI: preview.116. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
 
 | Stage | Source implementation/review | Native acceptance |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ Current source checkpoint: 0.3.0-preview.116 (A5.2b native group postcondition s
 | A2 | Implemented and reviewed | Explicitly deferred |
 | A3 | Core Fold ownership/handoff implemented; Bloom candidate dormant | Pending |
 | A4 | A4.4-R2 source/CI complete; native hit-region, visual and profiler gates still open | Pending |
-| A5–A7 | A5.1a–A5.2a source/CI PASS; A5.1b2 native OS identity, A5.2b Split group convergence and A5.3–A7 pending | Pending |
+| A5–A7 | A5.1a–A5.2b1 source/CI PASS; A5.2b2 native Split validation, A5.1b2 native OS identity and A5.3–A7 pending | Pending |
 | A8 | Integrated validation pending | Pending |
 | A9 | Optional vertical scope, separate approval | Pending |
 
@@ -1057,4 +1057,9 @@ Baseline: preview.115 / A5.2a canonical [CI 45042973915](https://github.com/Noct
 
 In the existing `src/interactions/split-drop.js.part` owner, read the exact physical `TabGroup.tabs` without filtering invalid members and require native tab/window ownership, unique membership and live `splitView` flags. Before calling native Split, capture the current target membership and recheck the exact set after native selected-tab callbacks; reject stale membership even when group object identity is unchanged. After `splitTabs`, require both returned native `result.tabs` and physical group members to exactly match the original target members plus the dragged tab, including group identity and owner. Null/partial native outcomes report unverified, never confirmed or automatically repaired. For unsplit, verify complete dissolution of a size-two group or the exact surviving group after removing one of three-plus tabs. A malformed native group is not passed to `removeTabFromGroup`; no second registry, observer, scheduler, rollback or new native command.
 
-Added regression scenarios for mismatched returned native data, unexpected physical members, partial native null and two-/three-member unsplit, plus updated previous native-drop fixtures. Isolated source-backed V8: 12 Split fixtures and one Drag Engine Split fixture PASS. No canonical Node/CI result yet for preview.116, and no native Gecko/Zen acceptance: group changes may still converge asynchronously, real nested-folder/selection behavior and OS drag identity require targeted native tests. A5.2b1 source change is not full A5.2b closure. Next: independent generated-source and parser checks, canonical CI, then A5.2b2 native convergence/hit/selection experiment rather than further speculative mutation logic.
+Added regression scenarios for mismatched returned native data, unexpected physical members, partial native null and two-/three-member unsplit, plus updated previous native-drop fixtures. Isolated source-backed V8: 13 Split fixtures and one Drag Engine Split fixture PASS. Canonical Node/CI subsequently PASS for preview.116; and no native Gecko/Zen acceptance: group changes may still converge asynchronously, real nested-folder/selection behavior and OS drag identity require targeted native tests. A5.2b1 source change is not full A5.2b closure. Next: independent generated-source and parser checks, canonical CI, then A5.2b2 native convergence/hit/selection experiment rather than further speculative mutation logic.
+
+
+### A5.2b1 — Canonical publication closure and independent readback (docs-only)
+
+Production commit `91f720b658853f78283702a60bd2a435eec8514f` via [PR #4](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/pull/4); [CI 45045274006](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45045274006) **SUCCESS**: 726/726 Node tests, 15 Python release tests, runtime syntax, reproducible build, release metadata/history, public Raw and codeload Sine package verified. Readback confirmed `preview` HEAD and synchronized `0.3.0-preview.116` version in `theme.json` and `package.json`, monotonic `updatedAt`, shared-bookmarks lock blob, exact generated Layout fragment and other generated outputs. 12/12 runtime bodies parsed independently and 8/8 generated/source equivalence checks PASS before publication. No new process owner, observer, timer, animation or native mutation command. A5.2b1 source/CI is complete; **native acceptance, asynchronous native group convergence, nested-folder behavior, Gecko true OS drag gesture identity and profiler measurements remain OPEN**. Next A5.2b2 targeted Zen experiment, plus independent A5.3 source work if it does not assume native success.
