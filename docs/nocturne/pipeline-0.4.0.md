@@ -4,7 +4,7 @@ Status: primary static audit checkpoints completed; A0.3 release infrastructure 
 
 ## Active checkpoint — source vs native evidence
 
-Current source checkpoint: 0.3.0-preview.112 (A4.4-R2, CI pending). Last confirmed canonical CI before this commit: preview.110. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
+Current source checkpoint: 0.3.0-preview.112 (A4.4-R2 automated gate PASS, native gate open). Last confirmed canonical CI: preview.112. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
 
 | Stage | Source implementation/review | Native acceptance |
 | --- | --- | --- |
@@ -12,7 +12,7 @@ Current source checkpoint: 0.3.0-preview.112 (A4.4-R2, CI pending). Last confirm
 | A1 | Implemented and reviewed | Explicitly deferred |
 | A2 | Implemented and reviewed | Explicitly deferred |
 | A3 | Core Fold ownership/handoff implemented; Bloom candidate dormant | Pending |
-| A4 | A4.4-R2 source phase/edge-frame audit; canonical CI and native acceptance pending | Pending |
+| A4 | A4.4-R2 source/CI complete; native hit-region, visual and profiler gates still open | Pending |
 | A5–A7 | Full interaction, overlay and data-service gates pending | Pending |
 | A8 | Integrated validation pending | Pending |
 | A9 | Optional vertical scope, separate approval | Pending |
@@ -970,3 +970,12 @@ Baseline preview.111 fixture correction `8ce0c4c2068ae3607063484476cd354b14daad1
 Use one existing Layout window input policy for tab strip, split, incoming preview and Bunny with native URLbar/shield/cascade exclusions. On phase takeover, retire only the owned native tab gesture, not unrelated workspace/trash pointer sessions; consumed rejected local drops cannot detach. Capture exact native toolbar child references and X rectangles excluding the moving row/center spacers, with 0.75 CSS px tolerance. Compare only at acquisition, native commit boundary and existing toolbar MutationObserver/ResizeObserver/resize/Compact callbacks, not every dragover or Bunny frame. Source and incoming leases remain separate: foreign drop checks source controller/token, viewport and edge snapshot before adopt; after geometry invalidation fresh trusted dragover can re-arm. No competing state owner, timer, observer, RAF, new native command, CSS hitbox or animation choreography. Bounded `drag.chrome-frame.changed` emits stage only; the existing cancellation event owns the cleanup reason. Ancillary native Split unsplit result, stale native DataTransfer event identity, customizations that alter Gecko non-client hit regions without rect change and actual window movement require A5/native verification, not source-only closure.
 
 Source-backed isolated V8 validation before publication: 6 new phase/edge fixtures and 9 incoming-destination regression bodies PASS, including local phase rejection before mutation, dragend fail-closed, native edge replacement/shift, foreign geometry invalidation and fresh-adopt path; generated Layout parses after exact substitutions. A4.4-R2 is source implementation pending full CI and native Zen acceptance. CI failures, if any, must be fixed before dependent A5 changes. Next: confirm canonical CI, perform independent readback, then A5.1 identity/commit contract. Deferred A0/A1/A2/A3/A4 native baseline and profiler remain OPEN.
+
+
+### A4.4-R2 — CI closure, independent source readback and A5.1 preflight (docs-only)
+
+Pinned production commit `40aa80febfe597290adc643c6419860f568dc2e3`, [CI 45037863756](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45037863756) PASS: 702/702 Node, 15 Python policy tests, all 12 runtime parsers, seven deterministic generated outputs, published Raw/codeload identity. Readback: HEAD matches production commit, relevant generated and source fragments present. The version is 0.3.0-preview.112. No native Zen acceptance, OS drag or measured performance proof; NC4-018/052 remain native-open. A4 source refactor and CI exit are complete; scope now moves to A5 implementation, not more geometry schedulers.
+
+A5.1 source preflight: `src/native/tab-adapter.js.part:13–39` returns the first live source controller when trusted dragover hides DataTransfer payload; under a stale concurrent owner, it cannot prove that this source belongs to the OS gesture. `src/algorithms/drag-lifecycle.mjs:34–36` compares only node/tab for dragend, not actual native session; source-only token guards recent cross-window preview but does not identify same-node stale native events. `src/interactions/drag-controller.js.part` can acknowledge source handling when `moveNativeNextTo()` returns false, while `src/interactions/split-drop.js.part` ignores the `unsplitTab()` result. These are source-confirmed ownership/return-value gaps, not reproduced native tab corruption.
+
+A5 staged contract decision: (a) conservative unique current source controller for protected dragover, with no second native data store and explicit ambiguous/no-source rejection; (b) inspect/verify Gecko native session identity and custom DataTransfer flavor read restrictions before any token-based cutover; (c) separate native commit confirmation from successful visual cleanup, especially Split/unsplit and cross-window adoption, with no invented destructive rollback. Unit/source mock tests before each narrow runtime change, explicit CI/HEAD gate and later real Zen OS drag/Win multi-DPI acceptance. Avoid redesigning Bunny animation or treating move API return value as sufficient without checking real native behavior. No runtime changes in this checkpoint.

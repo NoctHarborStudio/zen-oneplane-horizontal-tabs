@@ -1187,3 +1187,8 @@ A4.4-R1 CI correction: existing Bunny return fixture extraction boundary moved; 
 ### A4.4-R2 — Phase/edge-control input reconciliation (preview.112)
 
 NC4-018/052 source fix: ordinary strip and native dragend now reject Center/Startup/Workspace/Close/URLbar/shield interruption consistently with Split Drop. Exact horizontal native edge-control snapshot is checked without per-dragover DOM reads. A5 retains native DataTransfer same-node identity, split/unsplit atomic outcome, mixed DPI and actual native hit regions; A8 native/visual performance acceptance remains pending. No claim of reproduced data loss or Gecko runtime PASS.
+
+
+### A5.1 source preflight — native drag identity and command outcomes (after preview.112)
+
+NC4-014/042/061 and associated A5 owners: protected-mode `readDraggedTab` currently selects the first active window controller; simultaneous stale candidates are ambiguous. `dragEndMatches` cannot distinguish two native sessions on the same tab node. Native move false/void and Split `unsplitTab` result handling require authoritative verification before acknowledging a successful drop. These are source risks, not observed native data loss. A5.1 begins with fail-closed unique source admission; stronger native session identity and exact command postconditions require target Gecko source/native tests. A4.4-R2 CI is green; native CSS/OS hit-region gates remain open.
