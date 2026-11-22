@@ -259,3 +259,24 @@ test("Library section stop cancels the deadline and blocks stale native media ca
  assert.ok(results.every(r=>r.rows.every(x=>x.name!=="late.png")));
  data.dispose();await media.dispose();
 });
+
+test("failed native media scan after the UI deadline frees the exact wait and allows a later retry",async()=>{
+ let rejectFirst,scans=0,last="",statuses=[],results=[],timers=new Map(),serial=0;
+ const first=new Promise((_,reject)=>{rejectFirst=reject;});
+ const media=createMediaService({scan:()=>++scans===1?first:Promise.resolve([{path:"recovered.png"}]),
+   describe:(f,id)=>({id,kind:"local",name:f.path,time:2,success:true,exists:true}),perform:()=>true});
+ const services={downloads:{start:async()=>{},subscribe:()=>()=>{},getSnapshot:()=>[]},openMedia:section=>media.open(section)};
+ const data=createLibraryData({getServices:()=>services,onResult:r=>results.push(r),onError:()=>assert.fail("unexpected error"),
+   onNotice:(msg,expected)=>{if(expected===undefined||last===expected)last=msg;},onScanWait:x=>statuses.push(x),
+   schedule:(fn,ms)=>{const id=++serial;timers.set(id,{fn,ms});return id;},cancel:id=>timers.delete(id)});
+ data.start("pictures");await tick();assert.equal(scans,1);
+ const deadline=[...timers].find(([,t])=>t.ms===15000);assert.ok(deadline);
+ const pending=data.refresh();timers.delete(deadline[0]);deadline[1].fn();
+ assert.equal(await pending,false);assert.deepEqual(statuses,["deadline"]);
+ rejectFirst(Error("native scanner failure"));await tick();
+ assert.deepEqual(statuses,["deadline","late-error"]);assert.match(last,/could not be scanned/);
+ assert.equal(timers.size,0);
+ assert.equal(await data.refresh(),true);await tick();
+ assert.equal(scans,2);assert.equal(results.at(-1).rows[0].name,"recovered.png");
+ data.dispose();await media.dispose();assert.equal(timers.size,0);
+});
