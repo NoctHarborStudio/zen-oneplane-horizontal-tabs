@@ -208,3 +208,54 @@ test("metadata staging failure preserves the old cache; a delayed scan cannot re
  assert.equal(await stale,null);assert.equal(service.action(saved.id,"open"),false);
  assert.deepEqual(events.map(e=>e.status),["committed","error"]);await service.dispose();
 });
+
+test("same media session coalesces repeated refresh into one native scan and retains the disposal barrier",async()=>{
+ const gate=deferred();let calls=0,events=[];
+ const service=createMediaService({scan:()=>{calls++;return gate.promise;},describe:(f,id)=>({id,name:f.path}),perform:()=>true,onRefresh:e=>events.push(e)});
+ const s=service.open("pictures"),first=s.refresh(),duplicate=s.refresh(),another=s.refresh();
+ assert.equal(first,duplicate);assert.equal(first,another);
+ await tick();assert.equal(calls,1);
+ const disposing=service.dispose();let finished=false;void disposing.then(()=>{finished=true;});
+ await tick();assert.equal(finished,false,"native scan completion must retain the barrier after UI disposal");
+ gate.resolve([{path:"a.png"}]);assert.equal(await first,null);
+ await disposing;assert.equal(finished,true);assert.deepEqual(events,[]);
+ s.close();
+});
+test("Library UI media deadline is non-native: repeated Refresh shares one operation and a late callback updates rows",async()=>{
+ const gate=deferred(),notices=[],statuses=[],results=[],timers=new Map();let timerId=0,scans=0,lastNotice="";
+ const media=createMediaService({scan:()=>{scans++;return gate.promise;},describe:(f,id)=>({id,kind:"local",name:f.path,time:2,success:true,exists:true}),
+   perform:()=>true});
+ const service={downloads:{start:async()=>{},subscribe:()=>()=>{},getSnapshot:()=>[row("download-1","download.png")]},
+   openMedia:section=>media.open(section)};
+ const notice=(message,onlyIf)=>{if(onlyIf!==undefined&&lastNotice!==onlyIf)return;lastNotice=message;notices.push(message);};
+ const data=createLibraryData({getServices:()=>service,onResult:r=>results.push(r),onError:()=>assert.fail("unexpected error"),onNotice:notice,onScanWait:status=>statuses.push(status),
+   schedule:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id;},cancel:id=>timers.delete(id)});
+ data.start("pictures");await tick();assert.equal(scans,1);
+ assert.deepEqual(results.at(-1).rows.map(r=>r.name),["download.png"]);
+ const deadline=[...timers].find(([,t])=>t.ms===15000);
+ assert.ok(deadline,"existing schedule should carry only a UI deadline");
+ const first=data.refresh(),second=data.refresh();assert.equal(first,second);
+ timers.delete(deadline[0]);deadline[1].fn();assert.equal(await first,false);
+ assert.deepEqual(statuses,["deadline"]);assert.match(lastNotice,/still running/);
+ assert.equal(await data.refresh(),false);assert.equal(scans,1);
+ gate.resolve([{path:"folder.png"}]);await tick();
+ assert.deepEqual(statuses,["deadline","late-complete"]);
+ assert.equal(lastNotice,"");assert.deepEqual(results.at(-1).rows.map(r=>r.name).sort(),["download.png","folder.png"]);
+ assert.equal(timers.size,0);
+ data.dispose();await media.dispose();
+});
+test("Library section stop cancels the deadline and blocks stale native media callback",async()=>{
+ const gate=deferred(),timers=new Map(),results=[],notices=[],statuses=[];let serial=0,scans=0;
+ const media=createMediaService({scan:()=>{scans++;return gate.promise;},describe:(f,id)=>({id,kind:"local",name:f.path}),perform:()=>true});
+ const service={downloads:{start:async()=>{},subscribe:()=>()=>{},getSnapshot:()=>[]},openMedia:section=>media.open(section)};
+ const data=createLibraryData({getServices:()=>service,onResult:r=>results.push(r),onError:()=>assert.fail("unexpected error"),
+   onNotice:x=>notices.push(x),onScanWait:x=>statuses.push(x),
+   schedule:(fn,ms)=>{const id=++serial;timers.set(id,{fn,ms});return id;},cancel:id=>timers.delete(id)});
+ data.start("pictures");await tick();assert.equal(scans,1);
+ const pending=data.refresh();data.stop();assert.equal(await pending,false);
+ assert.equal(timers.size,0);
+ gate.resolve([{path:"late.png"}]);await tick();
+ assert.deepEqual(statuses,[]);assert.deepEqual(notices,[]);
+ assert.ok(results.every(r=>r.rows.every(x=>x.name!=="late.png")));
+ data.dispose();await media.dispose();
+});

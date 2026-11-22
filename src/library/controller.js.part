@@ -12,7 +12,7 @@
   const labels={downloads:"All Downloads",documents:"Documents",history:"History",pictures:"Pictures",closed:"Recently Closed"};
   const summaries={downloads:"Download records and file actions",documents:"Downloaded documents and opted-in folders",history:"Browsing history and search",pictures:"Downloaded pictures and opted-in folders",closed:"Recently closed tabs in this window"};
   let state=createLibraryState(),dead=false,lease=()=>{},shell=null,animations=[],frame=0,returnFocus=null,rows=new Map(),backgroundAction=false,renderedSection=null,dragSource=null,pendingResult=null,clearing=false,nativeFallback=false,confirmation=false,actionSerial=0,pendingClose=false,dragOwner=null,indicatorReady=false,lastFailure=null,fallbackDragTimer=0,fallbackDragMissing=0,fallbackDragUnknown=0;
-  const data=createLibraryData({getServices:()=>win.__nocturneLibraryServices,onResult:renderResults,onError:renderError,onNotice:notice,onScanWait:status=>trace("media.scan.wait",{status}),schedule:(fn,ms)=>win.setTimeout(fn,ms),cancel:id=>win.clearTimeout(id)});
+  const data=createLibraryData({getServices:()=>win.__nocturneLibraryServices,onResult:renderResults,onError:renderError,onNotice:notice,onScanWait:status=>trace("media.scan.wait",{status,section:state.section}),schedule:(fn,ms)=>win.setTimeout(fn,ms),cancel:id=>win.clearTimeout(id)});
   const fileSection=()=>["downloads","documents","pictures"].includes(state.section);
   const enabled=()=>prefs.getBoolPref(PREF,false),active=()=>state.phase!=="closed";
   const duration=n=>libraryDuration(win.matchMedia("(prefers-reduced-motion: reduce)").matches,prefs.getIntPref("zen.oneplane.animation-duration",160)!==0,n);
