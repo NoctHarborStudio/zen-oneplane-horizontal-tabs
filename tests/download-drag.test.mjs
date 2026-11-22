@@ -195,7 +195,7 @@ test("hidden native file popup stops artwork without ending its source gesture",
  const set={append(){}};
  const prepare=new Function("popup","set","trace","onStop",`
    let filePopup=null,fileStage=null,fileBunny=null;
-   const document={createXULElement:()=>popup},get:()=>set,make:()=>({});
+   const document={createXULElement:()=>popup},get=()=>set,make=()=>({});
    function current(){return 0;}
    function fileBunnyTrace(event){trace.push(event);}
    function filePopupSurface(){return null;}
