@@ -23,8 +23,9 @@ export function queryDownloadRows(rows,{section="downloads",text="",limit=50,sor
  list.sort((a,b)=>Number(!!b.active)-Number(!!a.active)||(sort==="size"?((b.total||b.bytes||0)-(a.total||a.bytes||0)):sort==="old"?a.time-b.time:b.time-a.time)||a.id.localeCompare(b.id));
  return Object.freeze({rows:Object.freeze(list.slice(0,limit)),limit,hasMore:list.length>limit});
 }
-export function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,windows=false,describe,perform}){
- let dead=false,serial=0,generation=0,pending=Promise.resolve(barrier);const handles=new Map();
+export function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,windows=false,describe,perform,onRefresh=()=>{}}){
+ let dead=false,serial=0,viewSerial=0,generation=0,pending=Promise.resolve(barrier);const handles=new Map();
+ const report=(section,status,count=0)=>{try{onRefresh({section,status,count});}catch{}};
  function open(section,downloadPaths=()=>new Set()){
    if(dead||!allowed()||!MEDIA_EXTENSIONS[section])throw Error("Media unavailable");
    let closed=false,owned=new Map(),cache=null,revision=0;
@@ -34,23 +35,28 @@ export function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>t
      if(!available())return null;
      const token=++revision;
      const task=pending.catch(()=>{}).then(()=>!available()||token!==revision?[]:scan(section));
-     pending=task.catch(()=>{});const files=await task;
+     pending=task.catch(()=>{});
+     let files;
+     try{files=await task;}catch(error){if(available()&&token===revision)report(section,"error");throw error;}
      if(!available()||token!==revision)return null;
-     const next=new Map(),result=[],seen=new Set(downloadPaths());
-     for(const f of files.slice(0,300)){
-       if(!f?.path||f.cloudPlaceholder||mediaKind(f.path)!==section)continue;
-       const key=mediaPathKey(f.path,windows);if(seen.has(key))continue;seen.add(key);
-       const id=owned.get(key)??"local-"+(++serial),row=describe(f,id);
-       if(!row)continue;
-       next.set(key,{id,path:f.path});result.push(Object.freeze(row));
-     }
+     let next,result;
+     try{
+       next=new Map();result=[];const seen=new Set(downloadPaths());
+       for(const f of files.slice(0,300)){
+         if(!f?.path||f.cloudPlaceholder||mediaKind(f.path)!==section)continue;
+         const key=mediaPathKey(f.path,windows);if(seen.has(key))continue;seen.add(key);
+         const prior=owned.get(key),id="local-"+(++serial),viewKey=prior?.viewKey??"local-view-"+(++viewSerial),row=describe(f,id);
+         if(!row)continue;
+         next.set(key,{id,path:f.path,viewKey});result.push(Object.freeze({...row,id,viewKey}));
+       }
+     }catch(error){if(available()&&token===revision)report(section,"error");throw error;}
      if(!available()||token!==revision)return null;
-     for(const id of owned.values())handles.delete(id);
-     owned.clear();
-     for(const [key,{id,path}] of next){handles.set(id,path);owned.set(key,id);}
-     cache=Object.freeze(result);return cache;
+     for(const {id} of owned.values())handles.delete(id);
+     owned=next;
+     for(const {id,path} of owned.values())handles.set(id,path);
+     cache=Object.freeze(result);report(section,"committed",cache.length);return cache;
    }
-   return {refresh,rows:()=>{if(!available())return [];const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const id of owned.values())handles.delete(id);owned.clear();cache=null;}};
+   return {refresh,rows:()=>{if(!available())return [];const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const {id} of owned.values())handles.delete(id);owned.clear();cache=null;}};
  }
  function action(id,kind){if(dead||!allowed()||!handles.has(id)||!["open","reveal"].includes(kind))return false;return perform(handles.get(id),kind);}
  function invalidate(){++generation;handles.clear();}
