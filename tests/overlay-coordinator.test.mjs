@@ -40,3 +40,26 @@ test("a failed or reentrant yield does not authorize a new panel",()=>{
  c.register("a",{isActive:()=>true,yield(){inner=c.request("b");return true;}});
  c.register("b",{isActive:()=>false});assert.equal(c.request("b"),false);assert.equal(inner,false);
 });
+
+test("preflight rejects nested requests and target replacement before dismissal",()=>{
+  const c=createOverlayCoordinator();
+  let nested, dismissals=0;
+  c.register("hub",{isActive:()=>true,canYield(){
+    nested=c.request("hub");
+    c.register("library",{isActive:()=>false});
+    return true;
+  },yield(){dismissals++;}});
+  c.register("library",{isActive:()=>false});
+  assert.equal(c.request("library"),false);
+  assert.equal(nested,false);
+  assert.equal(dismissals,0);
+});
+test("a later refusal preserves completed dismissals and releases the request guard",()=>{
+  const f=fixture();
+  f.active.add("hub");f.active.add("downloads");
+  f.c.register("downloads",{isActive:()=>true,yield:()=>false});
+  assert.equal(f.c.request("library"),false);
+  assert.deepEqual(f.calls,["hub"]);
+  assert.equal(f.c.current(),"downloads");
+  assert.equal(f.c.request("downloads"),true);
+});

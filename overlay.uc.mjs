@@ -14,18 +14,25 @@
     function request(id,{passive=false}={}){
       if(dead||requesting||!owners.has(id))return false;
       const target=owners.get(id);
-      const conflicts=ordered().filter(e=>e!==target);
-      if(!conflicts.length)return true;
-      if(passive)return false;
-      // Validate every participant before changing any surface.
-      if(conflicts.some(e=>typeof e.spec.yield!=="function"||!safe(()=>e.spec.canYield?.()!==false,false)))return false;
+      const targetIsCurrent=()=>!dead&&owners.get(id)===target;
       requesting=true;
       try{
+        const conflicts=ordered().filter(entry=>entry!==target);
+        if(!targetIsCurrent())return false;
+        if(!conflicts.length)return true;
+        if(passive)return false;
+        // Validate the snapshot before dismissing any surface. A completed
+        // dismissal stands if a later participant refuses the handoff.
         for(const entry of conflicts){
-          if(owners.get(entry.id)!==entry)continue;
+          if(!targetIsCurrent()||owners.get(entry.id)!==entry)return false;
+          if(typeof entry.spec.yield!=="function"||!safe(()=>entry.spec.canYield?.()!==false,false))return false;
+        }
+        for(const entry of conflicts){
+          if(!targetIsCurrent()||owners.get(entry.id)!==entry)return false;
           if(!safe(()=>entry.spec.yield({to:id})!==false,false)||active(entry))return false;
         }
-        return !dead&&owners.get(id)===target&&!ordered().some(e=>e!==target);
+        const remaining=ordered();
+        return targetIsCurrent()&&!remaining.some(entry=>entry!==target);
       }finally{requesting=false;}
     }
     function allowsEscape(id,event){

@@ -1,3 +1,7 @@
+## 0.3.0-preview.124 - A6 overlay handoff
+
+Guard nested overlay requests during preflight and stop dismissing panels when the requesting owner is replaced. A later refusal leaves already dismissed panels closed. Native focus and Escape validation remain open.
+
 ## 0.3.0-preview.123 — A5.7c native drag topology lease and stale source retirement
 
 - Capture only the native active Workspace, visible tab identity/order, Split membership, pinned state, physical native tab parent and per-tab Workspace UUID while a native tab gesture is active. This ephemeral witness is compared against Zen's live topology, not used as a second tab store.
