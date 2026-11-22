@@ -1,3 +1,7 @@
+## 0.3.0-preview.140 — Stable Library History date headings (NC4-085)
+
+Existing Library History/Recently Closed rendering now reuses live date-heading DOM nodes when their displayed day and run position are unchanged. Stable group keys distinguish separate runs with the same date in non-date-sorted results, without an additional state owner, observer or cache. Unchanged result updates skip unnecessary DOM reconciliation; pagination, row and focus identity, scroll, native Places/SessionStore data sources and all existing actions are unchanged. Three source-extracted regression tests cover identical updates, repeated nonadjacent date runs, pagination extension/focus preservation and empty-view cleanup. No new user-facing feature or UI redesign; native Zen Browser acceptance remains OPEN.
+
 ## 0.3.0-preview.139 — Library History date-boundary pagination stabilization
 
 NC4-021: when a date-sorted native PlacesQuery search returns an extra lookahead record already older than the 120-day History range, Library no longer advertises a phantom Load more page. The existing source/identity/date guards, 50-row steps, 500-row UI cap, native History fallback and conservative behavior for site/other sort orders are unchanged. One consistent cutoff is applied within the existing query invocation. No new feature, observer, timer, native data owner, disk writes or destructive operation.

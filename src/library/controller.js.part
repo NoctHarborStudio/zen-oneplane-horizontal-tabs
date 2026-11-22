@@ -5,7 +5,7 @@
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,{flush:true});
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.139",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.140",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
@@ -296,7 +296,12 @@
     if(!active()||state.phase==="closing"||renderedSection!==state.section)return;
     if(dragSource){pendingResult=result;return;}syncTools();
     const body=shell.body,focusId=doc.activeElement?.closest?.("[data-record-id]")?.dataset?.recordId,focused=doc.activeElement;
-    const oldScroll=body.scrollTop,ordered=[],live=new Set();let lastDay=null;
+    const oldScroll=body.scrollTop,ordered=[],live=new Set(),headings=new Map(),dayRuns=new Map();let lastDay=null;
+    // The current DOM owns date headings. Reuse its exact nodes across
+    // History updates; no parallel cache or observer survives section reset.
+    if(!fileSection())for(const child of body.children)
+      if(child.classList?.contains("nl-day")&&child.dataset.dayKey)
+        headings.set(child.dataset.dayKey,child);
     for(const row of result.rows){
       const key=rowKey(row);if(live.has(key))continue;live.add(key);
       let entry=rows.get(key);if(!entry){entry=fileSection()?createFileRow():createRow();rows.set(key,entry);}
@@ -309,7 +314,15 @@
       const date=new Date(row.time),day=date.toLocaleDateString();
       entry.time.textContent=date.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
       if(Number.isFinite(date.getTime()))entry.time.dateTime=date.toISOString();
-      if(day!==lastDay){ordered.push(make("h3","nl-day",day));lastDay=day;}
+      if(day!==lastDay){
+        // Site-sorted results can return to the same date later. Distinguish
+        // repeated runs without merging the separate visual groups.
+        const run=dayRuns.get(day)||0;dayRuns.set(day,run+1);
+        const dayKey=day+"#"+run;
+        let heading=headings.get(dayKey);
+        if(!heading){heading=make("h3","nl-day",day);heading.dataset.dayKey=dayKey;}
+        ordered.push(heading);lastDay=day;
+      }
       ordered.push(entry.node);
     }
     for(const id of rows.keys())if(!live.has(id))rows.delete(id);
