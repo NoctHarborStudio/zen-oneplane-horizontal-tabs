@@ -3,12 +3,12 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 const read=p=>readFileSync(new URL("../src/"+p,import.meta.url),"utf8");
 const src=read("interactions/split-drop.js.part");
-const snippets=src.slice(src.indexOf("  function nativeSplitPreflight("));
+const snippets=src.slice(src.indexOf("  function nativeSplitMembers("));
 function fixture(mode="normal",o={}){
  const calls=[],window={__nocturneTrace:(n,d)=>calls.push(["trace",d])};
- const mk=(p,a)=>({hidden:!!p.hidden,pinned:!!p.pinned,attrs:new Set(p.attrs||[]),group:null,hasAttribute(k){return this.attrs.has(k)}});
+ const mk=p=>({hidden:!!p.hidden,pinned:!!p.pinned,splitView:false,attrs:new Set(p.attrs||[]),group:null,hasAttribute(k){return this.attrs.has(k)}});
  const tab=mk(o.source||{}),current=mk(o.target||{}),tabs=[tab,current],group={tabs:[current],hasAttribute:k=>k==="split-view-group"};
- const validNativeTab=t=>tabs.includes(t),tabOwner=()=>window,isSplit=t=>!!t.group;
+ const validNativeTab=t=>tabs.includes(t),tabOwner=()=>window,isSplit=t=>!!t.group||!!t.splitView;
  const splitGroup=t=>t.group?.hasAttribute("split-view-group")?t.group:null,groupMembers=g=>g.tabs;
  let nativeDragToken=1,draggedTab=tab,draggedGroup=null,selected=current,nativeCalls=0,phaseAllowed=true;
  const dragLifecycle={owns:t=>t===nativeDragToken};
@@ -20,17 +20,36 @@ function fixture(mode="normal",o={}){
   if(mode==="phase-change")phaseAllowed=false;
  }};
  window.gZenViewSplitter={MAX_TABS:o.limit??4,splitTabs:()=>{
-  nativeCalls++;if(mode==="partial"){tab.group=current.group=group;return null;}
-  if(mode==="throw"){tab.group=current.group=group;throw Error("native");}
-  if(mode==="reject")return null;
-  tab.group=current.group=group;return {};
+  nativeCalls++;if(mode==="reject")return null;
+  tab.group=current.group=group;
+  tab.splitView=current.splitView=true;
+  group.tabs=[tab,current];
+  if(mode==="partial")return null;
+  if(mode==="throw")throw Error("native");
+  if(mode==="native-foreign-member")group.tabs.push(mk({}));
+  if(mode==="native-wrong-result")return {tabs:[current]};
+  return {tabs:[tab,current]};
  }};
  const splitZone={hasAttribute:()=>true,removeAttribute:()=>{},setAttribute:()=>{}};
  const event={isTrusted:true,clientX:1,clientY:40,preventDefault:()=>calls.push(["prevent"]),stopPropagation:()=>calls.push(["stop"]),dataTransfer:{}};
  const readDraggedTab=()=>tab,retireChangedDragViewport=()=>false,retireChangedDragChromeFrame=()=>false;
  const dragPhaseInputAllowed=()=>phaseAllowed,splitDropAllowed=()=>true,splitDropPoint=()=>({x:.01,y:.4});
  const splitSide=()=>"left",toolbarDragReturnZone=()=>mode==="return",emptySplitTarget=()=>false;
- const unsplitTab=()=>true,schedule=()=>{},console={error:()=>{}};
+ let third=null;
+ if(mode.startsWith("unsplit")){
+  tab.group=current.group=group;tab.splitView=current.splitView=true;group.tabs=[tab,current];
+  if(mode.includes("three")){third=mk({});third.group=group;third.splitView=true;tabs.push(third);group.tabs.push(third);}
+ }
+ const unsplitTab=()=>{
+  if(!mode.startsWith("unsplit-success")&&!mode.startsWith("unsplit-partial"))return false;
+  tab.group=null;tab.splitView=false;
+  if(mode.includes("three"))group.tabs=[current,third];
+  else if(mode==="unsplit-success-two"){
+    current.group=null;current.splitView=false;group.tabs=[];
+  }
+  // A partial two-pane unsplit leaves the other member in Split.
+  return true;
+ },schedule=()=>{},console={error:()=>{}};
  const sourceHandled=(t,keep,token)=>{calls.push(["settled",token]);if(mode!=="unsettled")nativeDragToken=null};
  const cancelActiveDrag=reason=>{calls.push(["cancel",reason]);nativeDragToken=null};
  const env={window,browser,splitZone,event,validNativeTab,tabOwner,isSplit,splitGroup,groupMembers,dragLifecycle,
@@ -67,7 +86,9 @@ test("hidden, glance, empty and native maximum are rejected without mutation",()
   const f=fixture("normal",{source,target});assert.equal(f.api.check(f.tab,f.current),reason);
   f.api.drop(f.event);assert.equal(f.nativeCalls(),0);
  }
- const f=fixture("normal",{limit:1});f.current.group=f.group;
+ const f=fixture("normal",{limit:2}),member={splitView:true};
+ f.tabs.push(member);member.group=f.group;f.group.tabs=[f.current,member];
+ f.current.group=f.group;f.current.splitView=true;
  assert.equal(f.api.check(f.tab,f.current),"native-split-limit");
  f.api.drop(f.event);assert.equal(f.nativeCalls(),0);
 });
@@ -112,4 +133,30 @@ test("Split toolbar return and failed source finish share the exact-token finali
  assert.equal(unsettled.calls.filter(x=>x[0]==="settled").length,1);
  assert.ok(unsettled.calls.some(x=>x[0]==="cancel"&&x[1]==="split-settle-incomplete"));
  assert.equal(unsettled.token(),null);
+});
+
+test("Split return data, physical members and native owner must agree",()=>{
+ for(const mode of ["native-wrong-result","native-foreign-member","partial"]){
+  const f=fixture(mode);f.api.drop(f.event);
+  assert.equal(f.nativeCalls(),1);
+  assert.ok(f.calls.some(x=>x[0]==="trace"&&x[1].operation==="split"&&x[1].outcome==="unverified"));
+  assert.equal(f.calls.filter(x=>x[0]==="settled").length,1);
+ }
+});
+test("unsplit confirms both collapsed two-tab and retained three-tab native groups",()=>{
+ for(const mode of ["unsplit-success-two","unsplit-success-three"]){
+  const f=fixture(mode);f.api.drop(f.event);
+  assert.ok(f.calls.some(x=>x[0]==="trace"&&x[1].operation==="unsplit"&&x[1].outcome==="confirmed"));
+ }
+ const partial=fixture("unsplit-partial-two");partial.api.drop(partial.event);
+ assert.ok(partial.calls.some(x=>x[0]==="trace"&&x[1].operation==="unsplit"&&x[1].outcome==="unverified"));
+});
+test("native Split rejects a physically inconsistent existing group",()=>{
+ const f=fixture();
+ const extra=mk=>({group:f.group,splitView:true});
+ const member=extra();f.tabs.push(member);
+ f.current.group=f.group;f.current.splitView=true;f.group.tabs=[f.current,member];
+ assert.equal(f.api.check(f.tab,f.current),"");
+ f.group.tabs.push({});
+ assert.equal(f.api.check(f.tab,f.current),"native-split-group-unready");
 });
