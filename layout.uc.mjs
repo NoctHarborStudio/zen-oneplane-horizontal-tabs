@@ -9085,7 +9085,9 @@ function installTabStrip() {
     if(toolbarDragReturnZone(event)){splitZone.removeAttribute("data-op-side");return;}
     const current=browser.selectedTab;
     const side=emptySplitTarget(current)?"":isSplit(tab)?"unsplit":splitSide(event);
-    if(side&&side!=="unsplit"&&nativeSplitPreflight(tab,current)){
+    if(side&&(side==="unsplit"?
+      !nativeSplitMembers(splitGroup(tab))?.includes(tab):
+      !!nativeSplitPreflight(tab,current))){
       splitZone.removeAttribute("data-op-side");
       return;
     }
@@ -9150,7 +9152,9 @@ function installTabStrip() {
           outcome="unverified";reason="selection-retargeted";
           if(splitSourceCurrent(tab,token)&&browser.selectedTab===tab&&validNativeTab(current)&&
              tabOwner(current)===window&&splitGroup(tab)===originalTabGroup&&
-             splitGroup(current)===originalTargetGroup)browser.selectedTab=current;
+             splitGroup(current)===originalTargetGroup&&
+             (!originalTargetGroup||sameSplitMembers(nativeSplitMembers(originalTargetGroup),before)))
+            browser.selectedTab=current;
           return;
         }
         const result=window.gZenViewSplitter.splitTabs(first?[tab,current]:[current,tab],grid,first?0:1);
