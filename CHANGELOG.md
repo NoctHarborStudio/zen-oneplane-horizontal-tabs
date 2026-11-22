@@ -1,3 +1,9 @@
+## 0.3.0-preview.141 — Page Progress retired network request identity reliability
+
+A7 / NC4-087 source-extracted reproduction: when 19+ distinct top-level native NETWORK START request identities overlap, the previous hard-capped 16-entry strong Set evicts the oldest. A late STOP from that explicitly superseded request then incorrectly marks the current page load complete/canceled. The existing Page Progress owner now uses a WeakSet of superseded native nsIRequest objects for the lifetime of the active network transaction; old identities are not evicted by an arbitrary count or kept alive by the indicator, and the set is released on the accepted terminal event/unload. Existing Gecko aggregate progress for subrequests and the fallback for unknown STOP identities, visuals, timers, hosts and prefs remain unchanged.
+
+Two new source-backed regressions verify the 21-start overlap with the oldest late STOP and weak identity lifetime across terminal/restart. Old-source negative reproduction for the overlap test confirmed. No new feature, native observer, control or animation. Actual Gecko/Zen network ordering, redirect/cancellation and perf acceptance remain OPEN.
+
 ## 0.3.0-preview.140 — Stable Library History date headings (NC4-085)
 
 Existing Library History/Recently Closed rendering now reuses live date-heading DOM nodes when their displayed day and run position are unchanged. Stable group keys distinguish separate runs with the same date in non-date-sorted results, without an additional state owner, observer or cache. Unchanged result updates skip unnecessary DOM reconciliation; pagination, row and focus identity, scroll, native Places/SessionStore data sources and all existing actions are unchanged. Three source-extracted regression tests cover identical updates, repeated nonadjacent date runs, pagination extension/focus preservation and empty-view cleanup. No new user-facing feature or UI redesign; native Zen Browser acceptance remains OPEN.
