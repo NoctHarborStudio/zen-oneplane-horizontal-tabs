@@ -313,3 +313,46 @@ test("failed native removal releases the old service lease only after rejection"
  await fresh.start();assert.equal(views.size,1);
  await fresh.dispose();assert.equal(views.size,0);assert.equal(removed,1);
 });
+
+test("History date search does not advertise a page beyond the valid time range",async()=>{
+ const now=200*86400000,day=86400000;
+ const rows=[1,2,121].map((days,i)=>({guid:"visit-"+i,url:"https://example.test/"+i,date:new Date(now-days*day)}));
+ let searches=0;
+ const s=createHistorySession({now:()=>now,createQuery:()=>({
+   getHistory:async()=>new Map(),searchHistory:async(_term,limit)=>{searches++;return rows.slice(0,limit);},close(){}
+ })});
+ try{
+   const date=await s.query({text:"example",limit:2,days:120,sort:"date"});
+   assert.deepEqual(date.rows.map(r=>r.url),rows.slice(0,2).map(r=>r.url));
+   assert.equal(date.hasMore,false,"next native date-ordered row is beyond the 120-day cutoff");
+   const site=await s.query({text:"example",limit:2,days:120,sort:"site"});
+   assert.equal(site.hasMore,true,"URL-sorted searches cannot infer exhaustion from one old lookahead");
+   assert.equal(searches,2);
+ }finally{s.close();}
+});
+test("History date search includes cutoff boundary and retains pagination for newer lookahead",async()=>{
+ const now=200*86400000,day=86400000;
+ const rows=[1,2,120].map((days,i)=>({guid:"visit-"+i,url:"https://example.test/"+i,date:new Date(now-days*day)}));
+ const s=createHistorySession({now:()=>now,createQuery:()=>({
+   getHistory:async()=>new Map(),searchHistory:async(_term,limit)=>rows.slice(0,limit),close(){}
+ })});
+ try{
+   const first=await s.query({text:"example",limit:2,days:120,sort:"date"});
+   assert.equal(first.rows.length,2);assert.equal(first.hasMore,true);
+   const last=await s.query({text:"example",limit:3,days:120,sort:"date"});
+   assert.equal(last.rows.length,3);assert.equal(last.hasMore,false);
+ }finally{s.close();}
+});
+test("per-window Downloads snapshots and native leases remain isolated on the same public list",async()=>{
+ const download={stopped:true,succeeded:true,target:{path:"a.pdf",exists:true}};
+ const views=new Set(),nativeList={addView(view){views.add(view);view.onDownloadAdded(download);},removeView(view){views.delete(view);}};
+ const a=createDownloadsService({loadList:async()=>nativeList,idPrefix:"one"});
+ const b=createDownloadsService({loadList:async()=>nativeList,idPrefix:"two"});
+ await Promise.all([a.start(),b.start()]);
+ assert.equal(views.size,2);
+ const [ra]=a.getSnapshot(),[rb]=b.getSnapshot();assert.notEqual(ra.id,rb.id);
+ assert.equal(a.withNative(rb.id,()=>true),false);assert.equal(b.withNative(ra.id,()=>true),false);
+ await a.dispose();assert.equal(views.size,1);assert.equal(a.getSnapshot().length,0);
+ assert.equal(b.getSnapshot()[0].id,rb.id);assert.equal(b.withNative(rb.id,d=>d===download),true);
+ await b.dispose();assert.equal(views.size,0);
+});
