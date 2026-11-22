@@ -17,6 +17,10 @@ function fixture(mode="normal",o={}){
   if(mode==="reentry")nativeDragToken=2;
   if(mode==="deleted")tabs.splice(tabs.indexOf(current),1);
   if(mode==="regroup")current.group=group;
+  if(mode==="same-group-mutation"){
+   const another=mk({});another.group=group;another.splitView=true;
+   tabs.push(another);group.tabs.push(another);
+  }
   if(mode==="phase-change")phaseAllowed=false;
  }};
  window.gZenViewSplitter={MAX_TABS:o.limit??4,splitTabs:()=>{
@@ -36,6 +40,10 @@ function fixture(mode="normal",o={}){
  const dragPhaseInputAllowed=()=>phaseAllowed,splitDropAllowed=()=>true,splitDropPoint=()=>({x:.01,y:.4});
  const splitSide=()=>"left",toolbarDragReturnZone=()=>mode==="return",emptySplitTarget=()=>false;
  let third=null;
+ if(mode==="same-group-mutation"){
+  third=mk({});third.group=group;third.splitView=true;tabs.push(third);
+  current.group=group;current.splitView=true;group.tabs=[current,third];
+ }
  if(mode.startsWith("unsplit")){
   tab.group=current.group=group;tab.splitView=current.splitView=true;group.tabs=[tab,current];
   if(mode.includes("three")){third=mk({});third.group=group;third.splitView=true;tabs.push(third);group.tabs.push(third);}
@@ -159,4 +167,11 @@ test("native Split rejects a physically inconsistent existing group",()=>{
  assert.equal(f.api.check(f.tab,f.current),"");
  f.group.tabs.push({});
  assert.equal(f.api.check(f.tab,f.current),"native-split-group-unready");
+});
+
+test("selection changing native Split members without changing the group object aborts",()=>{
+ const f=fixture("same-group-mutation");f.api.drop(f.event);
+ assert.equal(f.nativeCalls(),0);
+ assert.equal(f.browser.selectedTab,f.tab);
+ assert.ok(f.calls.some(x=>x[0]==="trace"&&x[1].reason==="selection-retargeted"));
 });
