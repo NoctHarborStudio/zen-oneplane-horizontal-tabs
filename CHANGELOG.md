@@ -1,3 +1,10 @@
+## 0.3.0-preview.113 — Native drag source arbitration (A5.1a)
+
+- Require trusted custom-flavor drag input and a current, valid source-controller token before resolving native tabs. Explicit Gecko DataTransfer payload remains authoritative when available.
+- In protected dragover with hidden payload, scan browser windows for exactly one eligible source rather than selecting the first arbitrary controller. Reject ambiguous concurrent owners without native mutation.
+- Release a stale incoming preview when the source becomes unresolved. Keep the existing drag lifecycle, source cleanup, private-window and Split-group gates; do not introduce an independent OS session registry.
+- Add source-backed regression tests for concurrent sources, revoked tokens, explicit payload, untrusted input, Split/private isolation and stale preview cleanup. True native DataTransfer event identity and commit postconditions remain A5/native gates.
+
 ## 0.3.0-preview.112 — Native drag phase and edge frame audit
 
 - Reuse one native-input phase gate across strip drop, Split Drop, Bunny dragend, incoming preview, startup/workspace and URLbar interruption. Suppress native mutations on conflicting phase, without interrupting an unrelated pointer gesture.

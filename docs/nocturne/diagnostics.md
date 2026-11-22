@@ -327,3 +327,8 @@ No new trace stream. Existing drag, address.cascade, tabs.sync, geometry.preflig
 ### Preview.112 — drag input frame and phase
 
 `drag.chrome-frame.changed` emits only a bounded static stage (`drop`, `strip-drop`, `dragend`, `toolbar-drop`, `window-resize`, `native-edge-resize`, `toolbar-children`, `compact-mode` or `split-drop`) and existing `drag.lifecycle.cancel` reports reason `chrome-frame-changed` or phase-owner interruption. Raw node IDs, tab identity, user input, coordinates, URLs and file names are not emitted. No new profiler/RAF channel; native frame gaps must still be measured independently.
+
+
+### Preview.113 — protected drag source arbitration
+
+`drag.source.resolve` records only bounded static `reason: "ambiguous"` (750 ms throttle). No window/tab/token/URL/title/path or DataTransfer contents are logged. Pair with existing `drag.lifecycle.begin/cancel`, `drag.incoming.release` and `drag.drop` to distinguish invalidated preview from genuine OS drag completion. Real Gecko session identity is not proven by these records.

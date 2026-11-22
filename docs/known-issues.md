@@ -1192,3 +1192,8 @@ NC4-018/052 source fix: ordinary strip and native dragend now reject Center/Star
 ### A5.1 source preflight — native drag identity and command outcomes (after preview.112)
 
 NC4-014/042/061 and associated A5 owners: protected-mode `readDraggedTab` currently selects the first active window controller; simultaneous stale candidates are ambiguous. `dragEndMatches` cannot distinguish two native sessions on the same tab node. Native move false/void and Split `unsplitTab` result handling require authoritative verification before acknowledging a successful drop. These are source risks, not observed native data loss. A5.1 begins with fail-closed unique source admission; stronger native session identity and exact command postconditions require target Gecko source/native tests. A4.4-R2 CI is green; native CSS/OS hit-region gates remain open.
+
+
+### A5.1a — Protected drag source fallback (preview.113)
+
+Source-level NC4 native-identity partial: `readDraggedTab` no longer chooses the first source when multiple live controllers are eligible; untrusted custom-flavor input and revoked lifecycle tokens are rejected. Existing incoming preview is cleared if no source resolves. Same-node stale native session events, missing drop payload, native command postconditions and mixed-DPI Gecko behavior remain open. Not a native Zen PASS.

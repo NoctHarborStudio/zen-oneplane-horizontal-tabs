@@ -4,7 +4,7 @@ Status: primary static audit checkpoints completed; A0.3 release infrastructure 
 
 ## Active checkpoint — source vs native evidence
 
-Current source checkpoint: 0.3.0-preview.112 (A4.4-R2 automated gate PASS, native gate open). Last confirmed canonical CI: preview.112. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
+Current source checkpoint: 0.3.0-preview.113 (A5.1a source arbitration, CI pending). Last confirmed canonical CI: preview.112. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
 
 | Stage | Source implementation/review | Native acceptance |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ Current source checkpoint: 0.3.0-preview.112 (A4.4-R2 automated gate PASS, nativ
 | A2 | Implemented and reviewed | Explicitly deferred |
 | A3 | Core Fold ownership/handoff implemented; Bloom candidate dormant | Pending |
 | A4 | A4.4-R2 source/CI complete; native hit-region, visual and profiler gates still open | Pending |
-| A5–A7 | Full interaction, overlay and data-service gates pending | Pending |
+| A5–A7 | A5.1a unique native drag source admission implemented; A5.1b OS identity/commit results and A5.2–A7 pending | Pending |
 | A8 | Integrated validation pending | Pending |
 | A9 | Optional vertical scope, separate approval | Pending |
 
@@ -979,3 +979,12 @@ Pinned production commit `40aa80febfe597290adc643c6419860f568dc2e3`, [CI 4503786
 A5.1 source preflight: `src/native/tab-adapter.js.part:13–39` returns the first live source controller when trusted dragover hides DataTransfer payload; under a stale concurrent owner, it cannot prove that this source belongs to the OS gesture. `src/algorithms/drag-lifecycle.mjs:34–36` compares only node/tab for dragend, not actual native session; source-only token guards recent cross-window preview but does not identify same-node stale native events. `src/interactions/drag-controller.js.part` can acknowledge source handling when `moveNativeNextTo()` returns false, while `src/interactions/split-drop.js.part` ignores the `unsplitTab()` result. These are source-confirmed ownership/return-value gaps, not reproduced native tab corruption.
 
 A5 staged contract decision: (a) conservative unique current source controller for protected dragover, with no second native data store and explicit ambiguous/no-source rejection; (b) inspect/verify Gecko native session identity and custom DataTransfer flavor read restrictions before any token-based cutover; (c) separate native commit confirmation from successful visual cleanup, especially Split/unsplit and cross-window adoption, with no invented destructive rollback. Unit/source mock tests before each narrow runtime change, explicit CI/HEAD gate and later real Zen OS drag/Win multi-DPI acceptance. Avoid redesigning Bunny animation or treating move API return value as sufficient without checking real native behavior. No runtime changes in this checkpoint.
+
+
+### A5.1a — Protected native drag source arbitration (preview.113)
+
+Baseline `fd27c8781fa66c5b5bc400931d9ed978cccb1cd0`, [CI 45038102523](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45038102523) PASS (702 Node, 15 Python, reproducible build, 12 runtime parsers and Raw/codeload). Source path: `onDragStart` publishes an exact active tab and per-window `nativeDragToken`, with a custom Gecko DataTransfer flavor. `readDraggedTab` can access an explicit payload on drop, but Gecko may protect it in dragover and older code chose the first nonempty active controller among all windows, even if a second valid source existed. That is not an unambiguous native drag identity.
+
+New `readDraggedTab` retains explicit trusted payload priority, requires a currently active finite positive source token and exact owner controller, and falls back only for trusted dragover where exactly one eligible native source exists. A second distinct active controller rejects rather than guessing. Invalid/closed tab, expired/missing token and failing controllers are ignored; private-window and native Split-group restrictions remain. Untrusted custom-flavor events never authorize native mutation. On unresolved capture/row dragover, incoming preview is released through existing visual ownership; no new polling, registry, observer, scheduler, timer or native action. Diagnostic `drag.source.resolve` emits bounded reason `ambiguous` without tab/source identity.
+
+Five permanent source-backed V8 fixture cases PASS (single/dual source, enumeration order, trusted explicit payload, revoked tokens, malformed events, private/Split boundary, unresolved preview cleanup). Exact generated Layout source substitutions and all edited runtime syntax parsed. Canonical CI and native Zen validation pending at this checkpoint. This is a safety filter, not a proof that controller token equals the OS DataTransfer session; **same-node native gesture replay, missing payload on drop, native move/unsplit result and multi-window mixed-DPI acceptance remain OPEN**. Next A5.1b: native session identity feasibility and command postconditions, not Bunny appearance redesign.

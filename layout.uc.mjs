@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.112",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.113",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -7724,22 +7724,41 @@ function installTabStrip() {
       Array.from(owner.gBrowser.tabs).includes(tab));
   }
   function readDraggedTab(event) {
+    // Synthetic or untrusted chrome drag events cannot command native tabs.
+    if(!event?.isTrusted)return null;
     const dt = event.dataTransfer;
     if (!dt || !Array.from(dt.types || []).includes(DRAG_TYPE)) return null;
     try {
       let tab = null;
       try { tab = dt.mozGetDataAt(DRAG_TYPE, 0); } catch {}
-      // Some dragover events expose types but not data until drop. During
-      // that protected phase, resolve only an active chrome drag controller.
-      if (!tab && event.type === "dragover" && event.isTrusted) {
-        const windows = Services.wm.getEnumerator("navigator:browser");
-        while (windows.hasMoreElements()) {
-          const candidate = windows.getNext()?.[DRAG_CONTROLLER]?.source();
-          if (candidate && validNativeTab(candidate)) { tab = candidate; break; }
+      // Gecko may expose the custom flavor but protect the payload until
+      // drop. A source controller is only an eligibility witness, not an
+      // OS DataTransfer identity. Never adopt the first of two candidates.
+      if (!tab && event.type === "dragover") {
+        const windows=Services.wm.getEnumerator("navigator:browser");
+        let eligible=null,eligibleController=null,ambiguous=false;
+        while(windows.hasMoreElements()){
+          const win=windows.getNext();
+          try{
+            if(!win||win.closed)continue;
+            const controller=win[DRAG_CONTROLLER];
+            const candidate=controller?.source?.(),token=controller?.sourceToken?.();
+            if(!candidate||!Number.isSafeInteger(token)||token<=0||
+              !validNativeTab(candidate)||tabOwner(candidate)?.[DRAG_CONTROLLER]!==controller)continue;
+            if(eligible&&eligibleController!==controller){ambiguous=true;break;}
+            eligible=candidate;eligibleController=controller;
+          }catch{continue;}
         }
+        if(ambiguous){
+          window.__nocturneTrace?.("drag.source.resolve",{reason:"ambiguous"},{throttle:750});
+          return null;
+        }
+        tab=eligible;
       }
-      const owner = tabOwner(tab);
-      if (!validNativeTab(tab) || owner?.[DRAG_CONTROLLER]?.source() !== tab) return null;
+      const owner = tabOwner(tab),controller=owner?.[DRAG_CONTROLLER];
+      const token=controller?.sourceToken?.();
+      if (!validNativeTab(tab) || controller?.source?.() !== tab||
+          !Number.isSafeInteger(token)||token<=0)return null;
       // Moving the native group as a unit is supported within one window.
       // Individual members can still be adopted by another window.
       if (owner !== window && owner?.[DRAG_CONTROLLER]?.group()) return null;
@@ -8583,6 +8602,7 @@ function installTabStrip() {
   function revealForDrag(event) {
     if(retireChangedDragViewport()||retireBlockedNativeTabDrag("window-phase"))return;
     const tab = readDraggedTab(event);
+    if(!tab)clearIncomingDrag("source-unresolved");
     if (!hoverSupported() || !tab || !toolbarWrapper) return;
     if(dragInsertPending)endDragVisual();
     const within = toolbarDragReturnZone(event),owner=tabOwner(tab);
@@ -8834,7 +8854,8 @@ function installTabStrip() {
       retireBlockedNativeTabDrag("strip-phase");retireIncomingDrag();return;
     }
     const tab = readDraggedTab(event);
-    if (!tab||!admitIncomingDrag(event,tab,tabOwner(tab))) return;
+    if(!tab){clearIncomingDrag("source-unresolved");return;}
+    if(!admitIncomingDrag(event,tab,tabOwner(tab)))return;
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = "move";

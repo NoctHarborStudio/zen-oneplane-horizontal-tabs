@@ -307,3 +307,6 @@ A4.4-R1 (preview.111): incoming tab preview holds one destination-local lease ov
 
 
 A4.4-R2 (preview.112): one Layout-native tab input policy gates strip, Split Drop, source dragend, foreign preview and toolbar return during Center/Startup/Workspace/Close and address ownership. Native edge-control horizontal geometry is a gesture-local immutable snapshot, not a second geometry controller. Existing resize/mutation delivery and final native commits validate it; moving tab lanes are intentionally excluded. Full Gecko non-client hit-region acceptance remains separate.
+
+
+A5.1a (preview.113): native drag fallback is a strict admission check, not a second session store. The only admissible protected dragover source is a unique existing browser-window controller with live native tab and valid source lifecycle token; explicit trusted Gecko DataTransfer payload remains primary. No protected-mode guess on concurrent owners. Native OS session identity and commit confirmation remain separate A5 contracts.

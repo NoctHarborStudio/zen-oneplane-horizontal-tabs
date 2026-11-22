@@ -126,7 +126,8 @@
       retireBlockedNativeTabDrag("strip-phase");retireIncomingDrag();return;
     }
     const tab = readDraggedTab(event);
-    if (!tab||!admitIncomingDrag(event,tab,tabOwner(tab))) return;
+    if(!tab){clearIncomingDrag("source-unresolved");return;}
+    if(!admitIncomingDrag(event,tab,tabOwner(tab)))return;
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = "move";

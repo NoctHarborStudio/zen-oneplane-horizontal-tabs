@@ -306,6 +306,7 @@
   function revealForDrag(event) {
     if(retireChangedDragViewport()||retireBlockedNativeTabDrag("window-phase"))return;
     const tab = readDraggedTab(event);
+    if(!tab)clearIncomingDrag("source-unresolved");
     if (!hoverSupported() || !tab || !toolbarWrapper) return;
     if(dragInsertPending)endDragVisual();
     const within = toolbarDragReturnZone(event),owner=tabOwner(tab);

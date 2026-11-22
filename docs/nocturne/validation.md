@@ -445,3 +445,6 @@ A4.4-R1 native gate: drag a tab into a second window; resize/maximize or change 
 
 
 A4.4-R2 native acceptance (pending): start tab Bunny then activate native URLbar, Compact/customize, workspace transition or close; verify no stale strip/split/drop/detach and no lost native tab. Move and resize native edge-control widgets without changing window size, including toolbar overflow; stale local/incoming release is rejected and a fresh compatible gesture can be re-admitted. Verify two windows/monitor DPI, actual Gecko non-client draggable points, Home hold vs rear fade, Split Drop, fast tab removal, reduced motion, same-package reload and zero orphan overlay; compare diagnostics enabled/disabled. Automated source gates are not native PASS.
+
+
+A5.1a native gate (pending): in two Zen browser windows with only Nocturne installed, drag tabs across windows, return to source, cancel with Escape, and verify native tab identity/selection and no stale preview. Exercise private vs ordinary windows, concurrent/aborted gestures, and switching native Split groups. Confirm protected dragover resolves one source where Gecko hides payload and refuses ambiguous sources without adopting or detaching. Validate that ordinary browser text/file drags do not trigger custom adoption. These tests require native Gecko evidence; source mock PASS does not certify OS session identity.
