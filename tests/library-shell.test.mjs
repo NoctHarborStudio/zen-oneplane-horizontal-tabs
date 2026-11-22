@@ -157,3 +157,93 @@ test("Library preserves local DOM row/scroll across capability refresh, but chan
  render({rows:[{id:"local-3",viewKey:"local-view-2",kind:"local"}],hasMore:false});
  assert.notEqual(body.children[0],node);assert.equal(created,2);assert.equal(rows.has("local-view-1"),false);
 });
+
+function historyHeadingFixture(){
+ const source=read("src/library/controller.js.part");
+ const start=source.indexOf("  function renderResults("),end=source.indexOf("  function renderBody(",start);
+ const key=source.match(/^  function rowKey\([^\n]+\}/m)?.[0];
+ assert.ok(start>=0&&end>start&&key,"production render and key contracts are present");
+ const body={children:[],scrollTop:0,insertions:0,insertBefore(node,ref){
+   const previous=this.children.indexOf(node);if(previous>=0)this.children.splice(previous,1);
+   const pos=ref?this.children.indexOf(ref):-1;
+   this.children.splice(pos<0?this.children.length:pos,0,node);node.parent=this;this.insertions++;
+ },replaceChildren(...nodes){
+   for(const child of this.children)child.parent=null;
+   this.children=[...nodes];for(const child of nodes)child.parent=this;
+ }};
+ const make=(tag,cls="",text="")=>{
+   const n={tag,className:cls,textContent:text,children:[],dataset:{},attributes:new Map(),parent:null,
+     get classList(){return {contains:name=>this.className.split(" ").includes(name)};},
+     getAttribute:name=>n.attributes.get(name)||null,
+     removeAttribute:name=>n.attributes.delete(name),
+     remove(){const index=this.parent?.children.indexOf(this);if(index>=0)this.parent.children.splice(index,1);this.parent=null;}};
+   return n;
+ };
+ const rows=new Map(),state={section:"history",phase:"open",query:""};
+ const doc={activeElement:null},shell={body,more:make("button","nl-more","Load more")};
+ const createRow=()=>{
+   const node=make("div","nl-history-row"),main=make("button"),icon=make("img"),
+     title=make("span"),url=make("span"),time=make("time"),forget=make("button");
+   const entry={node,main,icon,title,url,time,forget,record:null};
+   node.querySelector=()=>main;
+   return entry;
+ };
+ const script="const active=()=>true,fileSection=()=>false,syncTools=()=>{},updateFileRow=()=>{throw Error('file render unexpected');};\n"+
+   "let renderedSection='history',dragSource=null,pendingResult=null;\n"+key+"\n"+source.slice(start,end)+"\nreturn renderResults;";
+ const render=new Function("rows","shell","state","doc","make","createRow","placeholder","libraryWebURL",script)(
+   rows,shell,state,doc,make,createRow,()=>body.replaceChildren(make("p","nl-placeholder")),()=>null);
+ const headings=()=>body.children.filter(n=>n.className==="nl-day");
+ const row=(id,time)=>({id,kind:"history",url:"https://example.test/"+id,title:id,time});
+ return {body,doc,rows,state,render,headings,row};
+}
+test("History repeated native result reuses exact day headings and skips DOM reordering",()=>{
+ const f=historyHeadingFixture(),now=new Date(2026,10,20,12).getTime(),day=86400000;
+ const records=[f.row("a",now),f.row("b",now-3*day),f.row("c",now-3*day)];
+ f.render({rows:records,hasMore:false,limit:50});
+ const headings=f.headings(),firstNodes=[...f.body.children],firstCount=f.body.insertions;
+ assert.equal(headings.length,2);
+ f.body.scrollTop=91;let refocus=0;
+ f.doc.activeElement={closest:()=>({dataset:{recordId:"a"}}),isConnected:true,focus(){refocus++;}};
+ f.render({rows:records.map(r=>({...r,title:r.title+" changed"})),hasMore:false,limit:50});
+ assert.deepEqual(f.body.children,firstNodes);
+ assert.equal(f.body.insertions,firstCount,"unchanged History projection should not detach or insert nodes");
+ assert.equal(f.headings()[0],headings[0]);assert.equal(f.headings()[1],headings[1]);
+ assert.equal(f.rows.get("a").record.title,"a changed");
+ assert.equal(refocus,0,"focus must remain on the original live control");
+ assert.equal(f.body.scrollTop,91);
+});
+test("History repeated date runs remain separate across site ordering and reuse live headings",()=>{
+ const f=historyHeadingFixture(),now=new Date(2026,10,20,12).getTime(),day=86400000;
+ const a=f.row("a",now),b=f.row("b",now-day),c=f.row("c",now);
+ f.render({rows:[a,b,c],hasMore:false,limit:50});
+ const before=f.headings(),count=f.body.insertions;
+ assert.equal(before.length,3);
+ assert.notEqual(before[0],before[2],"same day in nonadjacent runs needs a distinct heading");
+ assert.notEqual(before[0].dataset.dayKey,before[2].dataset.dayKey);
+ f.render({rows:[a,b,c],hasMore:false,limit:50});
+ assert.equal(f.body.insertions,count);
+ assert.deepEqual(f.headings(),before);
+ f.render({rows:[a,c],hasMore:false,limit:50});
+ assert.equal(f.headings().length,1,"adjacent same-day records use one heading");
+ assert.equal(f.headings()[0],before[0],"original run heading remains the authority");
+ assert.equal(f.body.children.includes(before[1]),false);
+ assert.equal(f.body.children.includes(before[2]),false);
+});
+test("History heading reconcile preserves row focus and scroll on page extension, then releases DOM on empty state",()=>{
+ const f=historyHeadingFixture(),now=new Date(2026,10,20,12).getTime(),day=86400000;
+ const a=f.row("a",now),b=f.row("b",now-day),c=f.row("c",now-2*day);
+ f.render({rows:[a,b],hasMore:false,limit:50});
+ const first=f.headings(),savedRow=f.rows.get("a").node;
+ f.body.scrollTop=117;let refocus=0;
+ f.doc.activeElement={closest:()=>({dataset:{recordId:"a"}}),isConnected:true,focus(){refocus++;}};
+ f.render({rows:[a,b,c],hasMore:false,limit:100});
+ assert.equal(f.rows.get("a").node,savedRow);
+ assert.equal(f.headings()[0],first[0]);assert.equal(f.headings()[1],first[1]);
+ assert.equal(f.headings().length,3);assert.equal(f.body.scrollTop,117);assert.equal(refocus,1);
+ f.doc.activeElement=null;
+ f.render({rows:[],hasMore:false,limit:50});
+ assert.equal(f.headings().length,0);assert.equal(f.rows.size,0);
+ f.render({rows:[a],hasMore:false,limit:50});
+ assert.equal(f.headings().length,1);
+ assert.notEqual(f.headings()[0],first[0],"new section/renderBody after empty does not revive stale headings");
+});
