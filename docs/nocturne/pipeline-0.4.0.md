@@ -4,7 +4,7 @@ Status: primary static audit checkpoints completed; A0.3 release infrastructure 
 
 ## Active checkpoint — source vs native evidence
 
-Current source checkpoint: 0.3.0-preview.115 (A5.2a Split native transaction safety, CI pending; A5.1b2 OS DragSession identity and native acceptance OPEN). Last confirmed canonical CI: preview.114. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
+Current source checkpoint: 0.3.0-preview.115 (A5.2a source/CI PASS; A5.2b and A5.1b2 OS DragSession identity, native acceptance OPEN). Last confirmed canonical CI: preview.115. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
 
 | Stage | Source implementation/review | Native acceptance |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ Current source checkpoint: 0.3.0-preview.115 (A5.2a Split native transaction saf
 | A2 | Implemented and reviewed | Explicitly deferred |
 | A3 | Core Fold ownership/handoff implemented; Bloom candidate dormant | Pending |
 | A4 | A4.4-R2 source/CI complete; native hit-region, visual and profiler gates still open | Pending |
-| A5–A7 | A5.1a–A5.1b1 source/CI PASS; A5.2a Split transaction admission/cleanup implemented, CI pending; A5.1b2 OS identity, A5.2 remainder–A7 and native acceptance OPEN | Pending |
+| A5–A7 | A5.1a–A5.2a source/CI PASS; A5.1b2 native OS identity, A5.2b Split group convergence and A5.3–A7 pending | Pending |
 | A8 | Integrated validation pending | Pending |
 | A9 | Optional vertical scope, separate approval | Pending |
 
@@ -1042,3 +1042,10 @@ Nine new source-backed Split fixture scenarios and six existing drag-command fix
 ### A5.2a preview.115 — source fixture correction after canonical CI
 
 Runtime `05196f2fe8abea6f3fb938ebd439508d1ff77191`, [CI 45042820471](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45042820471): release policy, metadata and deterministic build PASS; Node 721/722 PASS, one stale extracted `tests/window-geometry.test.mjs` fixture omitted the new `nativeDragToken` binding before its retargeted-hit guard. Existing native Split rejected-hit behavior is unchanged. Reproduced the fixture failure from the exact source, added its expected binding and re-executed both invalid-hit cases in isolated JS: PASS. This is a test-only/documentation correction, no runtime/version/updatedAt change. Full corrected CI and publication verification pending; do not start dependent A5.2b until green.
+
+
+### A5.2a — Verified CI closure, independent source readback and A5.2b preflight (docs-only)
+
+Runtime commit `05196f2fe8abea6f3fb938ebd439508d1ff77191` remains version `0.3.0-preview.115`; initial [CI 45042820471](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45042820471) had a **test-fixture-only** missing `nativeDragToken` binding in retargeted native Split hit, not an observed runtime failure. Correction `de6d477ffa65cd8ed578ec2601bad2f3a1409c92` [CI 45042973915](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45042973915) PASS: **722/722 Node**, **15 Python**, **12/12 runtime parser**, deterministic generated outputs and public Raw/codeload package. Independent readback: `src/interactions/split-drop.js.part` and `src/interactions/drag-controller.js.part` each appear once verbatim in generated `layout.uc.mjs`; synchronized `theme.json` and `package.json` both state preview.115, updatedAt monotonic, shared Magnetic Bookmarks lock retains correct blob. Nine new Split transaction tests and updated existing native/window fixtures are in the published HEAD. This closes **A5.2a source/CI**, not native acceptance or the larger A5 interaction stage.
+
+A5.2b preflight (not implemented): native Zen `splitTabs` can synchronously change native group membership while `removeTabFromGroup` may reset the entire group (size 2), and selection may transition during command callbacks. Audit post-command Split-group atomicity and owner-window identity, including native `MAX_TABS` and native grouping under nested folders; compare group membership before/after only through authoritative native APIs. Avoid a speculative mutation rollback or second cached state machine. Recheck whether refusal of previously unsupported Essentials/Glance/mixed pin combinations needs an explicit UI presentation contract in native Zen; current code correctly rejects move-as-clone source paths. A5.1b2 still lacks a verified same-node Gecko OS session identifier; native multiwindow, multi-DPI, visual overlap and frame-profile gates remain open. No user action needed for this source/CI checkpoint.
