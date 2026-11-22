@@ -110,9 +110,151 @@ test("popup screen movement drives swing inside and outside the source window",(
 });
 test("drag telemetry includes popup readiness, motion and final summary",()=>{
  for(const event of ["start","popup-shown","popup-not-shown","tick","end","popup-hidden","return-finish"])assert.ok(source.includes('fileBunnyTrace("'+event+'"'));
- assert.ok(source.includes("maxAngle:q.maxAngle"));assert.ok(source.includes("maxGap:q.maxGap"));assert.ok(source.includes("q.missing>=3"));
+ assert.ok(source.includes("maxAngle:q.maxAngle"));assert.ok(source.includes("maxGap:q.maxGap"));assert.ok(source.includes("fileDragMissing>=3"));assert.ok(source.includes("fileDragUnknown>=6"));
 });
 
+test("native file drag card is attached only after Bunny cleanup ownership exists",()=>{
+ const sectionSource=section("  function beginFileBunny(","  function finishExternalDrag(");
+ const ownership=sectionSource.indexOf("fileBunny={"),append=sectionSource.indexOf("root.append(native.card)");
+ assert.ok(ownership>=0&&append>ownership);
+ assert.ok(sectionSource.indexOf("source.setAttribute(\"data-file-lift\"")>append);
+});
+test("native file watchdog has bounded unknown and absent-session recovery",()=>{
+ const code=section("  function fileDragSession(","  function createFileCard(");
+ function fixture(read){
+   let next=0;const pending=new Map(),ends=[];
+   const window={setTimeout(fn){const id=++next;pending.set(id,fn);return id;},
+     clearTimeout(id){pending.delete(id);},__nocturneTrace(){}};
+   const Cc={"@mozilla.org/widget/dragservice;1":{getService(){return {getCurrentSession:read};}}};
+   const Ci={nsIDragService:{}};
+   const api=new Function("window","Cc","Ci","ends",`
+     let fileDragSource=null,dead=false,fileBunny=null,fileDragWatchTimer=0,fileDragMissing=0,fileDragUnknown=0;
+     function current(){return 0;}
+     function filePopupSurface(){return null;}
+     function tickFilePopup(){}
+     function endFileDrag(source,event,reason){
+       if(fileDragSource!==source)return;
+       fileDragSource=null;ends.push(reason);stopFileDragWatch();
+     }
+     `+code+`
+     return {start(source){fileDragSource=source;watchFileDrag(source);},
+       stop:stopFileDragWatch,source:()=>fileDragSource};
+   `)(window,Cc,Ci,ends);
+   return {api,pending,ends,tick(){
+     const [id,fn]=pending.entries().next().value??[];
+     assert.ok(fn);pending.delete(id);fn();
+   }};
+ }
+ for(const read of [()=>{throw Error("native error")},undefined]){
+   const f=fixture(read),src={};f.api.start(src);
+   for(let i=0;i<5;i++)f.tick();
+   assert.equal(f.ends.length,0);f.tick();
+   assert.deepEqual(f.ends,["native-session-unavailable"]);
+   assert.equal(f.api.source(),null);assert.equal(f.pending.size,0);
+ }
+ const missing=fixture(()=>null),src={};missing.api.start(src);
+ missing.tick();missing.tick();assert.equal(missing.ends.length,0);
+ missing.tick();assert.deepEqual(missing.ends,["native-session-ended"]);
+ assert.equal(missing.pending.size,0);
+ let n=0;const intermittent=fixture(()=>++n%4===0?{}:undefined);
+ intermittent.api.start({});for(let i=0;i<16;i++)intermittent.tick();
+ assert.equal(intermittent.ends.length,0);
+ intermittent.api.stop();assert.equal(intermittent.pending.size,0);
+});
+
+test("file source recovery arms before optional Bunny artwork failure",()=>{
+ const code=section("  function beginFileDrag(","  function ignoreFileDragClick(");
+ const sourceNode={setAttribute(){},removeAttribute(){}},download=completed("file"),calls=[];
+ const f=new Function("sourceNode","download","calls",`
+   let dead=false,fileDragSource=null,dragClickSource=null,fileBunny=null,externalDrag=null;
+   const node={},history=new Map([[download,{}]]);
+   const list={dragNative(d){calls.push("payload");return d===download;}};
+   const window={__nocturneTrace(){}};
+   function watchFileDrag(){calls.push("watch");}
+   function stopFileDragWatch(){calls.push("stop");}
+   function cancelHide(){}function cancelFlight(){}function pinPanel(){}
+   function beginFileBunny(){calls.push("art");throw Error("optional artwork failed");}
+   function clearFileBunny(){calls.push("clear-art");}
+   function fileBunnyTrace(){}
+   function syncDownloadHolds(){}
+   function finishFileBunny(){calls.push("finish-art");}
+   function finishExternalDrag(){}
+   function schedule(){}function scheduleMount(){}function armHide(){}
+   let cardOpen=false;
+   `+code+`
+   return {start:beginFileDrag,end:endFileDrag,source:()=>fileDragSource};
+ `)(sourceNode,download,calls);
+ const e={isTrusted:true,stopPropagation(){},preventDefault(){throw Error("native payload already accepted");}};
+ assert.equal(f.start(e,sourceNode,download),true);
+ assert.deepEqual(calls.slice(0,4),["payload","watch","art","clear-art"]);
+ assert.equal(f.source(),sourceNode);
+ f.end(sourceNode,undefined,"native-session-unavailable");
+ f.end(sourceNode,undefined,"duplicate");
+ assert.equal(f.source(),null);
+ assert.equal(calls.filter(c=>c==="stop").length,1);
+});
+test("hidden native file popup stops artwork without ending its source gesture",()=>{
+ const code=section("  function prepareFilePopup(","  function paintFileBunny(");
+ const events={},trace=[];let stopped=0;
+ const popup={style:{setProperty(){}},getOuterScreenRect(){},setAttribute(){},
+   append(){},addEventListener(k,v){events[k]=v;},isConnected:true,state:"closed"};
+ const set={append(){}};
+ const prepare=new Function("popup","set","trace","onStop",`
+   let filePopup=null,fileStage=null,fileBunny=null;
+   const document={createXULElement:()=>popup},get=()=>set,make=()=>({});
+   function current(){return 0;}
+   function fileBunnyTrace(event){trace.push(event);}
+   function filePopupSurface(){return null;}
+   function stopFileBunnyFrame(){onStop();}
+   function tickFilePopup(){}
+   `+code+`
+   return {prepare:prepareFilePopup,set(q){fileBunny=q;}};
+ `)(popup,set,trace,()=>stopped++);
+ assert.equal(prepare.prepare(),true);
+ const q={popup,ending:false,shown:true,frames:8};
+ prepare.set(q);events.popuphidden();
+ assert.equal(stopped,1);assert.equal(q.shown,false);
+ assert.ok(trace.includes("popup-hidden"));
+});
+test("Dock-free Library fallback owns a bounded native file drag source lease",()=>{
+ const library=readFileSync(new URL("../src/library/controller.js.part",import.meta.url),"utf8");
+ const a=library.indexOf("  function stopFallbackDragWatch(");
+ const b=library.indexOf("  function createFileRow(",a);
+ assert.ok(a>=0&&b>a);
+ const code=library.slice(a,b);
+ function fixture(read){
+   let next=0;const pending=new Map(),events=[];
+   const win={setTimeout(fn){const id=++next;pending.set(id,fn);return id;},clearTimeout(id){pending.delete(id);}};
+   const Cc={"@mozilla.org/widget/dragservice;1":{getService(){return {getCurrentSession:read};}}},Ci={nsIDragService:{}};
+   const api=new Function("win","Cc","Ci","events",`
+     let fallbackDragTimer=0,fallbackDragMissing=0,fallbackDragUnknown=0,dragSource=null,dragOwner=null,dead=false;
+     function trace(event,data){events.push([event,data]);}
+     function finishDrag(node){if(dragSource!==node)return;stopFallbackDragWatch();dragSource=null;events.push(["finished"]);}
+     `+code+`
+     return {start(node){dragSource=node;watchFallbackDrag(node);},stop:stopFallbackDragWatch,source:()=>dragSource};
+   `)(win,Cc,Ci,events);
+   return {api,pending,events,tick(){
+     const [id,fn]=pending.entries().next().value??[];assert.ok(fn);
+     pending.delete(id);fn();
+   }};
+ }
+ const absent=fixture(()=>null);absent.api.start({});
+ absent.tick();absent.tick();assert.equal(absent.events.length,0);
+ absent.tick();assert.deepEqual(absent.events,[
+   ["file.drag.recovered",{reason:"native-session-ended"}],["finished"]]);
+ assert.equal(absent.pending.size,0);
+ const unavailable=fixture(()=>{throw Error("API failed")});unavailable.api.start({});
+ for(let i=0;i<5;i++)unavailable.tick();assert.equal(unavailable.events.length,0);
+ unavailable.tick();assert.deepEqual(unavailable.events,[
+   ["file.drag.recovered",{reason:"native-session-unavailable"}],["finished"]]);
+ assert.equal(unavailable.pending.size,0);
+ let n=0;const live=fixture(()=>++n===5?{}:undefined);live.api.start({});
+ for(let i=0;i<10;i++)live.tick();
+ assert.equal(live.events.length,0);live.api.stop();assert.equal(live.pending.size,0);
+ assert.match(library,/if\(fallback\)watchFallbackDrag\(node\)/);
+ assert.match(library,/if\(dragSource\)\{pendingClose=true;return;\}if\(active\(\)\)closeNow\(\);/);
+ assert.match(library,/if\(dragSource!==node\)return;stopFallbackDragWatch\(\)/);
+});
 test("Library uses the existing Bunny owner and releases the external drag lease once",()=>{
  const code=section("  function finishExternalDrag(","  function clearFileBunny(");
  let externalDrag=null,fileDragSource=null,fileBunny=null,dead=false,node={},cardOpen=false,dockOpen=false;

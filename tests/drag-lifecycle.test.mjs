@@ -40,6 +40,47 @@ test("late native dragend from another origin cannot finish active drag",()=>{
   assert.equal(dragEndMatches(null,{target:node},tab),false);
 });
 
+test("native tab watchdog fails closed after bounded unavailable session probes",async()=>{
+  const {readFile}=await import("node:fs/promises");
+  const engine=await readFile(new URL("../src/interactions/drag-engine.js.part",import.meta.url),"utf8");
+  const a=engine.indexOf("  const dragLifecycle=createDragLifecycle(");
+  const b=engine.indexOf("  function clearSourceIncoming(",a);
+  assert.ok(a>=0&&b>a);
+  function fixture(read){
+    let next=0;const pending=new Map(),cancelled=[];
+    const window={
+      setTimeout(fn){const id=++next;pending.set(id,fn);return id;},
+      clearTimeout(id){pending.delete(id);}
+    };
+    const Cc={"@mozilla.org/widget/dragservice;1":{getService(){return {getCurrentSession:read};}}};
+    const Ci={nsIDragService:{}};
+    const f=new Function("createDragLifecycle","window","Cc","Ci",
+      engine.slice(a,b)+"return {life:dragLifecycle,watchNativeDrag,stopNativeDragWatch};")
+      (createDragLifecycle,window,Cc,Ci);
+    const token=f.life.begin("tab",{onCancel:reason=>cancelled.push(reason)});
+    f.watchNativeDrag(token);
+    return {f,pending,cancelled,token,
+      tick(){const [id,fn]=pending.entries().next().value??[];assert.ok(fn,"missing scheduled poll");pending.delete(id);fn();}};
+  }
+  for(const read of [()=>{throw Error("Gecko unavailable")},undefined]){
+    const f=fixture(read);
+    for(let i=0;i<5;i++)f.tick();
+    assert.equal(f.cancelled.length,0);assert.equal(f.pending.size,1);
+    f.tick();
+    assert.deepEqual(f.cancelled,["native-session-unavailable"]);
+    assert.equal(f.pending.size,0);assert.equal(f.f.life.current(),null);
+  }
+  const missing=fixture(()=>null);
+  missing.tick();missing.tick();assert.equal(missing.cancelled.length,0);
+  missing.tick();assert.deepEqual(missing.cancelled,["native-session-ended"]);
+  assert.equal(missing.pending.size,0);
+  let n=0;
+  const intermittent=fixture(()=>++n===4?{}:undefined);
+  for(let i=0;i<9;i++)intermittent.tick();
+  assert.equal(intermittent.cancelled.length,0);
+  intermittent.f.stopNativeDragWatch();assert.equal(intermittent.pending.size,0);
+  assert.equal(intermittent.f.life.owns(intermittent.token,"tab"),true);
+});
 test("Motion Lab magnet reverses exactly and anchors only the source side",async()=>{
   const {readFile}=await import("node:fs/promises");
   const read=p=>readFile(new URL("../src/interactions/"+p,import.meta.url),"utf8");

@@ -192,13 +192,13 @@ function libraryShortcutSection(event,os="WINNT"){
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,{flush:true});
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.118",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.119",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
   const labels={downloads:"All Downloads",documents:"Documents",history:"History",pictures:"Pictures",closed:"Recently Closed"};
   const summaries={downloads:"Download records and file actions",documents:"Downloaded documents and opted-in folders",history:"Browsing history and search",pictures:"Downloaded pictures and opted-in folders",closed:"Recently closed tabs in this window"};
-  let state=createLibraryState(),dead=false,lease=()=>{},shell=null,animations=[],frame=0,returnFocus=null,rows=new Map(),backgroundAction=false,renderedSection=null,dragSource=null,pendingResult=null,clearing=false,nativeFallback=false,confirmation=false,actionSerial=0,pendingClose=false,dragOwner=null,indicatorReady=false,lastFailure=null;
+  let state=createLibraryState(),dead=false,lease=()=>{},shell=null,animations=[],frame=0,returnFocus=null,rows=new Map(),backgroundAction=false,renderedSection=null,dragSource=null,pendingResult=null,clearing=false,nativeFallback=false,confirmation=false,actionSerial=0,pendingClose=false,dragOwner=null,indicatorReady=false,lastFailure=null,fallbackDragTimer=0,fallbackDragMissing=0,fallbackDragUnknown=0;
   const data=createLibraryData({getServices:()=>win.__nocturneLibraryServices,onResult:renderResults,onError:renderError,onNotice:notice,schedule:(fn,ms)=>win.setTimeout(fn,ms),cancel:id=>win.clearTimeout(id)});
   const fileSection=()=>["downloads","documents","pictures"].includes(state.section);
   const enabled=()=>prefs.getBoolPref(PREF,false),active=()=>state.phase!=="closed";
@@ -360,6 +360,35 @@ function libraryShortcutSection(event,os="WINNT"){
       if(!ok&&current(epoch))notice("File unavailable or action not permitted.");
     }catch{if(current(epoch))notice("Could not "+kind+" the file.");}
   }
+  function stopFallbackDragWatch(){
+    if(fallbackDragTimer)win.clearTimeout(fallbackDragTimer);
+    fallbackDragTimer=0;fallbackDragMissing=0;fallbackDragUnknown=0;
+  }
+  // Used only if the Downloads Dock bridge did not accept the gesture.
+  // Never infer an OS drop from a missing or unreadable native session.
+  function watchFallbackDrag(source){
+    stopFallbackDragWatch();
+    const check=()=>{
+      fallbackDragTimer=0;
+      if(dead||dragSource!==source||dragOwner)return;
+      let session;
+      try{
+        const service=Cc["@mozilla.org/widget/dragservice;1"].getService(Ci.nsIDragService);
+        session=typeof service.getCurrentSession==="function"?service.getCurrentSession(win):undefined;
+      }catch{session=undefined;}
+      if(session){
+        fallbackDragMissing=0;fallbackDragUnknown=0;
+      }else if(session===null){
+        fallbackDragUnknown=0;
+        if(++fallbackDragMissing>=3){trace("file.drag.recovered",{reason:"native-session-ended"});finishDrag(source);return;}
+      }else{
+        fallbackDragMissing=0;
+        if(++fallbackDragUnknown>=6){trace("file.drag.recovered",{reason:"native-session-unavailable"});finishDrag(source);return;}
+      }
+      if(!dead&&dragSource===source&&!dragOwner)fallbackDragTimer=win.setTimeout(check,200);
+    };
+    fallbackDragTimer=win.setTimeout(check,200);
+  }
   function createFileRow(){
     const node=make("div","nl-file-record"),icon=make("img","nl-file-icon"),copy=make("div","nl-record-text"),title=make("span","nl-record-title"),url=make("span","nl-record-url"),track=make("progress","nl-progress"),actions=make("div","nl-file-actions");
     icon.alt="";icon.loading="lazy";icon.decoding="async";icon.draggable=false;track.max=100;track.setAttribute("aria-label","Download progress");
@@ -374,9 +403,12 @@ function libraryShortcutSection(event,os="WINNT"){
       if(actionPress||e.target.closest?.("button")||entry.record?.kind!=="download"||dragSource||clearing){e.preventDefault();return;}
       const finish=()=>finishDrag(node);
       const dock=win.__zenRefinedDownloadIndicator;
+      let fallback=false;
       if(dock?.beginExternalDrag?.(e,node,entry.record.id,finish)){dragOwner=dock;}
       else if(!win.__nocturneLibraryServices?.downloads.drag(entry.record.id,e,node)){e.preventDefault();return;}
+      else fallback=true;
       dragSource=node;e.stopPropagation();node.setAttribute("data-file-dragging","");
+      if(fallback)watchFallbackDrag(node);
     });
     node.addEventListener("dragend",e=>{
       if(dragSource!==node)return;
@@ -386,7 +418,7 @@ function libraryShortcutSection(event,os="WINNT"){
     return entry;
   }
   function finishDrag(node){
-    if(dragSource!==node)return;dragSource=null;dragOwner=null;node.removeAttribute("data-file-dragging");
+    if(dragSource!==node)return;stopFallbackDragWatch();dragSource=null;dragOwner=null;node.removeAttribute("data-file-dragging");
     const p=pendingResult;pendingResult=null;if(pendingClose){pendingClose=false;closeNow(false);return;}if(p?.error)renderError();else if(p)renderResults(p);
   }
   function updateFileRow(entry,row){
@@ -477,6 +509,7 @@ function libraryShortcutSection(event,os="WINNT"){
   const current=epoch=>!dead&&state.motionEpoch===epoch;
   function settle(epoch){if(current(epoch)){state=reduceLibrary(state,{type:"MOTION_DONE",epoch});cancelMotion();}}
   function hide(restore=true){
+    stopFallbackDragWatch();
     data.stop();rows.clear();renderedSection=null;dragSource=null;dragOwner=null;indicatorReady=false;pendingResult=null;pendingClose=false;confirmation=false;clearing=false;++actionSerial;cancelMotion();if(frame)win.cancelAnimationFrame(frame);frame=0;
     if(shell){try{if(shell.topLayer&&shell.layer.matches(":popover-open"))shell.layer.hidePopover();}catch{}shell.layer.removeAttribute("data-library-open");shell.layer.hidden=true;shell.indicator.hidden=true;shell.panel.inert=false;shell.body.replaceChildren();shell.search.value="";}
     const target=returnFocus;returnFocus=null;if(!restore||win.closed)return;
@@ -570,9 +603,9 @@ function libraryShortcutSection(event,os="WINNT"){
     // A handled physical key is consumed before Zen's command dispatch.
     route(e,section,"keydown");
   }
-  function onServicesGone(){if(active())closeNow();}
+  function onServicesGone(){if(dragSource){pendingClose=true;return;}if(active())closeNow();}
   function dispose(){
-    if(dead)return;closeNow(false);dead=true;data.dispose();lease();cancelMotion();if(frame)win.cancelAnimationFrame(frame);
+    if(dead)return;closeNow(false);dead=true;stopFallbackDragWatch();data.dispose();lease();cancelMotion();if(frame)win.cancelAnimationFrame(frame);
     for(const [name,fn] of listeners)win.removeEventListener(name,fn,true);
     try{prefs.removeObserver(PREF,onPref);prefs.removeObserver(MEDIA_PREF,onMediaPref);}catch{}shell?.layer.remove();shell=null;if(win[KEY]===api)delete win[KEY];
   }
