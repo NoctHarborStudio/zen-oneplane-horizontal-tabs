@@ -113,8 +113,8 @@
     function withNative(id,fn){const d=byId.get(id);return !!(!dead&&ready&&d&&completed(d)&&typeof fn==="function"&&fn(d));}
     // The Dock receives native Download objects from this exact service view.
     // Library uses an opaque ID and the stricter non-private policy.
-    function drag(id,event,node){const d=byId.get(id);return !!(!dead&&ready&&source&&d&&completed(d)&&dragFile(d,event,node,"library"));}
-    function dragNative(d,event,node){return !!(!dead&&ready&&source&&records.has(d)&&completed(d)&&dragFile(d,event,node,"dock"));}
+    function drag(id,event,node){const d=byId.get(id);return !!(!dead&&ready&&source&&d&&completed(d)&&d.target?.exists!==false&&dragFile(d,event,node,"library"));}
+    function dragNative(d,event,node){return !!(!dead&&ready&&source&&records.has(d)&&completed(d)&&d.target?.exists!==false&&dragFile(d,event,node,"dock"));}
     async function clearCompleted(){
       const targets=[...records.keys()].filter(clearable);let removed=0,failed=0;
       for(const d of targets)try{if(await actionNative(d,"remove"))removed++;}catch{failed++;}
