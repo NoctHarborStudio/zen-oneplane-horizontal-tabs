@@ -541,3 +541,10 @@ The user approved the **geometry and interaction concept**, not an implementatio
 - [ ] Profile thumbnail decode/paint and retained memory with many small images, an encoded-small but pixel-large image, a GIF/multiframe image and a corrupt image. Test scroll, filtering, section switch, hot reload and preference disable; compare diagnostics on/off. Avoid opening huge images on an ordinary user profile.
 - [ ] Check cloud placeholder becoming online-only after scan and symlink files outside the selected root (with disposable fixtures) before thumbnail activation and Open/Reveal. Verify Windows and non-Windows behavior separately.
 - [ ] Before production remediation, verify a supported native way to obtain dimensions/decode small bounded surfaces and a per-session cancellation/resource contract. Preserve picture previews unless an icon-only safety fallback is expressly accepted. For the upstream C++ scanner, retain at most the newest `maxItems` during traversal while preserving top-K ordering; test correctness and memory.
+
+### A7 / NC4-022-S1 — Library media pref observer-order native acceptance
+
+- [x] Source-extracted regression in the existing test suite covers service-first and controller-first observers, two same-turn notifications, dispose before microtask execution, and preference change during an active file drag.
+- [ ] On a disposable Zen 1.24.2b / Sine 2.3.3 profile, with local media explicitly enabled and a single benign test file, toggle local-media enable/disable and add/reset an extra folder while Pictures/Documents is open; each reopened session should show fresh local rows once and stale actions should fail.
+- [ ] Repeat after Sine reload, in two windows, and while closing the Library/dragging a completed Download; verify one scan owner per window, no obsolete rows/actions, no callbacks after disposal and no unintended library close beyond existing file-drag rules.
+- [ ] Keep decoded-pixel memory, cloud placeholder mutation, symlink and scanner enumeration native gates under NC4-022 OPEN. This microtask fix does not imply memory safety.

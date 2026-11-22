@@ -1,4 +1,5 @@
 import test from "node:test";
+import {readFileSync} from "node:fs";
 import assert from "node:assert/strict";
 import {createLibraryData,libraryDownloadsCommand} from "../src/library/data.mjs";
 import {createMediaService,mediaKind,mediaPathKey,safeRaster,queryDownloadRows} from "../src/services/media-service.mjs";
@@ -101,4 +102,53 @@ test("revoked local-media sessions cannot regain rows or actions after re-enable
  const fresh=service.open("documents"),[next]=await fresh.refresh();
  old.close();assert.equal(service.action(next.id,"reveal"),true);
  await service.dispose();assert.deepEqual(fresh.rows(),[]);
+});
+
+test("media pref invalidation/reopen is safe for either Sine observer order",async()=>{
+ const runtime=readFileSync(new URL("../src/services/library-services-runtime.js.part",import.meta.url),"utf8");
+ const controller=readFileSync(new URL("../src/library/controller.js.part",import.meta.url),"utf8");
+ const nativeHandler=runtime.match(/^  function onMediaScopeChange\(\)\{[^\n]+\}/m)?.[0];
+ const start=controller.indexOf("  // Pref observers of independent Sine scripts");
+ const end=controller.indexOf("  function onWorkspace(",start);
+ assert.ok(nativeHandler&&start>=0&&end>start);
+ // Evaluate the exact production callbacks against the real media service.
+ const init=new Function("win","media","state","renderBody","trace",`
+   let folderGeneration=0,dead=false,dragSource=null,pendingClose=false;
+   const active=()=>state.phase!=="closed";
+   ${nativeHandler}
+   ${controller.slice(start,end)}
+   return {onMediaScopeChange,onMediaPref,dispose(){dead=true;},drag(){dragSource={};},pendingClose:()=>pendingClose};
+ `);
+ for(const first of ["service","controller"]){
+   const media=createMediaService({scan:async()=>[{path:"picture.png"}],
+     describe:(f,id)=>({id,name:f.path}),perform:()=>true});
+   let session=null,renders=0,read=null;const win={queueMicrotask};
+   const callbacks=init(win,media,{phase:"open",section:"pictures"},()=>{
+     renders++;session?.close();session=media.open("pictures");read=session.refresh();
+   },()=>{});
+   if(first==="service"){callbacks.onMediaScopeChange();callbacks.onMediaPref();}
+   else{callbacks.onMediaPref();callbacks.onMediaScopeChange();}
+   callbacks.onMediaPref(); // A second preference event in the same turn coalesces.
+   await tick();
+   assert.equal(renders,1,first+" observer ordering rendered more than once");
+   assert.equal((await read)?.length,1,first+" observer ordering invalidated its new session");
+   assert.equal(session.rows().length,1);
+   session.close();await media.dispose();
+ }
+});
+test("queued media preference refresh respects disposal and a native file drag",async()=>{
+ const src=readFileSync(new URL("../src/library/controller.js.part",import.meta.url),"utf8");
+ const start=src.indexOf("  // Pref observers of independent Sine scripts");
+ const end=src.indexOf("  function onWorkspace(",start);assert.ok(start>=0&&end>start);
+ let rendered=0;const state={phase:"open",section:"pictures"},win={queueMicrotask};
+ const init=new Function("win","state","renderBody","trace",`
+   let dead=false,dragSource=null,pendingClose=false;
+   const active=()=>state.phase!=="closed";
+   ${src.slice(start,end)}
+   return {onMediaPref,dispose(){dead=true;},drag(){dragSource={};},pendingClose:()=>pendingClose};
+ `);
+ const stale=init(win,state,()=>rendered++,()=>{});stale.onMediaPref();stale.dispose();
+ await tick();assert.equal(rendered,0);
+ const drag=init(win,state,()=>rendered++,()=>{});drag.drag();drag.onMediaPref();
+ await tick();assert.equal(rendered,0);assert.equal(drag.pendingClose(),true);
 });

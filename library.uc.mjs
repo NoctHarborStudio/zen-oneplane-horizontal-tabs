@@ -199,7 +199,7 @@ function libraryShortcutSection(event,os="WINNT"){
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,{flush:true});
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.130",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.131",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
@@ -585,7 +585,23 @@ function libraryShortcutSection(event,os="WINNT"){
   function onPref(){if(!enabled()){if(dragSource)pendingClose=true;else closeNow();}}
   function onTab(){if(active()&&!backgroundAction){if(dragSource)pendingClose=true;else closeNow(false);}}
   function onDragStart(e){if(active()&&!shell?.body.contains(e.target))onTab();}
-  function onMediaPref(){if(active()&&state.phase!=="closing"&&["documents","pictures"].includes(state.section)){if(dragSource){pendingClose=true;return;}renderBody();}}
+  // Pref observers of independent Sine scripts have no guaranteed order.
+  // Wait until all synchronous Gecko pref notifications finish before opening
+  // the new media session, otherwise a later service observer revokes it.
+  let mediaRefreshQueued=false;
+  function onMediaPref(){
+    if(dead||!active()||state.phase==="closing"||!["documents","pictures"].includes(state.section))return;
+    if(dragSource){pendingClose=true;return;}
+    if(mediaRefreshQueued)return;
+    mediaRefreshQueued=true;
+    win.queueMicrotask(()=>{
+      mediaRefreshQueued=false;
+      if(dead||!active()||state.phase==="closing"||!["documents","pictures"].includes(state.section))return;
+      if(dragSource){pendingClose=true;return;}
+      trace("media.scope.reload",{section:state.section});
+      renderBody();
+    });
+  }
   function onWorkspace(e){if(active()&&e.detail?.phase!=="idle"){if(dragSource)pendingClose=true;else closeNow(false);}}
   function route(e,section,origin){
     if(!section||nativeFallback)return false;

@@ -1,3 +1,7 @@
+## 0.3.0-preview.131 - Stabilize Library local-media preference invalidation ordering
+
+Fix a source-reproduced Sine entrypoint ordering race: a Library preference observer could rebuild and open a fresh media session before the independent Library Services observer invalidated existing sessions. Defer the existing controller refresh until synchronous Gecko pref notifications finish, coalesce multiple same-turn notifications, and ignore the deferred callback after close/disposal or during a file drag. Keep the existing owner, file actions, UI, native scanner and timeout budget unchanged. Add two source-extracted lifecycle regressions. Decoded-image memory and native scanner allocation limits remain open; native Zen acceptance is not claimed.
+
 ## 0.3.0-preview.130 - Page Progress native request correlation hardening
 
 Use request identity only for NETWORK START events known to be superseded: Gecko's network STOP and aggregate total-progress callbacks can legitimately carry other request objects. Preserve valid subresource progress and terminal events, while ignoring old request events after overlapping starts. Retain a bounded set of retired identities for the active load, clear it on completion/unload, and keep the approved motion and existing request-less fallback. Three new production-source regression tests cover aggregate progress, mismatched terminal requests, and multiple superseded starts. Physical Zen/Gecko acceptance remains open.
