@@ -1,3 +1,7 @@
+## 0.3.0-preview.132 - Serialize existing Library History destructive actions
+
+Close NC4-084 source-confirmed command overlap: while native range clear is pending, a second range clear or a row Remove/Forget can no longer start. Native row deletion likewise prevents concurrent range clear, repeated removal and Forget until the operation settles. Reuse the existing Library `clearing` and `actionSerial` lifecycle gate, disable the Clear history action during the operation, preserve Copy, and release the gate on success/failure. Native confirmations, Places and SessionStore operations are unchanged. Two regression fixtures cover overlapping operations, failure and retry. Native Zen acceptance remains open.
+
 ## 0.3.0-preview.131 - Stabilize Library local-media preference invalidation ordering
 
 Fix a source-reproduced Sine entrypoint ordering race: a Library preference observer could rebuild and open a fresh media session before the independent Library Services observer invalidated existing sessions. Defer the existing controller refresh until synchronous Gecko pref notifications finish, coalesce multiple same-turn notifications, and ignore the deferred callback after close/disposal or during a file drag. Keep the existing owner, file actions, UI, native scanner and timeout budget unchanged. Add two source-extracted lifecycle regressions. Decoded-image memory and native scanner allocation limits remain open; native Zen acceptance is not claimed.

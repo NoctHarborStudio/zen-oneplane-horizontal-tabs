@@ -5,7 +5,7 @@
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,{flush:true});
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.131",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.132",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
@@ -121,6 +121,7 @@
     shell.yes.hidden=shell.no.hidden=!d||!confirmation;shell.yes.disabled=shell.no.disabled=clearing;
     shell.native.hidden=!d;shell.refresh.hidden=shell.addFolder.hidden=shell.resetFolders.hidden=!local;
     shell.nativeHistory.hidden=shell.historyRange.hidden=shell.clearHistory.hidden=state.section!=="history";
+    shell.clearHistory.disabled=clearing;
   }
   async function clearDownloads(){
     if(!confirmation||clearing||state.section!=="downloads")return;
@@ -145,21 +146,30 @@
   }
   async function clearRecentHistory(hours){
     if(!active()||state.section!=="history"||clearing)return;
-    const epoch=state.motionEpoch;if(!win.confirm("Remove browser history from the last "+hours+" hour(s)? This cannot be undone.")||!current(epoch))return;
+    const epoch=state.motionEpoch;
+    if(!win.confirm("Remove browser history from the last "+hours+" hour(s)? This cannot be undone.")||clearing||!current(epoch))return;
+    const token=++actionSerial;clearing=true;
     try{
+      syncTools();
       const ok=await win.__nocturneLibraryServices?.clearHistoryRange(hours);
       if(current(epoch)){notice(ok?"History cleared.":"History could not be cleared.");data.retry();}
     }catch{if(current(epoch))notice("History could not be cleared.");}
+    finally{if(token===actionSerial){clearing=false;syncTools();}}
   }
   async function historyAction(entry,kind){
     const row=entry.record,service=win.__nocturneLibraryServices,epoch=state.motionEpoch;
     if(!row||!service||rows.get(row.id)!==entry||renderedSection!==state.section||!active()||state.phase==="closing")return;
     try{
       if(kind==="copy"){if(service.copyHistoryURL(row.url))notice("Address copied.");return;}
+      if(clearing)return;
       const msg=row.kind==="closed"?"Forget this recently closed tab? It will no longer be restorable.":"Remove this page and its visits from browser history?";
-      if(!win.confirm(msg)||!current(epoch)||rows.get(row.id)!==entry||entry.record!==row)return;
-      const ok=row.kind==="closed"?service.closedTabs.forget(row.closedId):await service.removeHistoryURL(row.url);
-      if(current(epoch)){notice(ok?"Record removed.":"Record could not be removed.");data.retry();}
+      if(!win.confirm(msg)||clearing||!current(epoch)||rows.get(row.id)!==entry||entry.record!==row)return;
+      const token=++actionSerial;clearing=true;
+      try{
+        syncTools();
+        const ok=row.kind==="closed"?service.closedTabs.forget(row.closedId):await service.removeHistoryURL(row.url);
+        if(current(epoch)){notice(ok?"Record removed.":"Record could not be removed.");data.retry();}
+      }finally{if(token===actionSerial){clearing=false;syncTools();}}
     }catch{if(current(epoch))notice("History action unavailable.");}
   }
   function fileBytes(n){if(!Number.isFinite(n)||n<=0)return "0 B";let i=0;while(n>=1024&&i<3){n/=1024;i++;}return n.toFixed(i?1:0)+" "+["B","KB","MB","GB"][i];}

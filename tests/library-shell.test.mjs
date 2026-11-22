@@ -37,3 +37,61 @@ test("shortcut routing only consumes the event on a successful open and reports 
  allowed=false;assert.equal(run(event,"history","keydown"),false);assert.equal(calls.at(-1).reason,"disabled");
  assert.match(source,/function showLayer\(/);assert.match(source,/layer.removeAttribute\("popover"\)/);
 });
+
+test("History range clear serializes duplicate and row removal while native promise is pending",async()=>{
+ const source=read("src/library/controller.js.part");
+ const code=source.slice(source.indexOf("  async function clearRecentHistory("),source.indexOf("  function fileBytes("));
+ assert.ok(code.includes("const token=++actionSerial;clearing=true;"));
+ assert.ok(source.includes("shell.clearHistory.disabled=clearing;"));
+ let resolve,commands=[],confirmations=0,refreshes=0,enabled=null;
+ const pending=new Promise(r=>resolve=r);
+ const row={id:"history-id",kind:"history",url:"https://example.test/"},entry={record:row};
+ const service={clearHistoryRange:hours=>{commands.push(["range",hours]);return pending;},
+   removeHistoryURL:url=>{commands.push(["row",url]);return pending;},copyHistoryURL:()=>true};
+ const win={__nocturneLibraryServices:service,confirm(){confirmations++;return true;}};
+ const state={section:"history",phase:"open",motionEpoch:1},rows=new Map([[row.id,entry]]);
+ const fixture=new Function("win","state","rows","data","notice","syncTools",`
+   let clearing=false,actionSerial=0,renderedSection="history";
+   const active=()=>state.phase!=="closed",current=e=>state.motionEpoch===e;
+   ${code}
+   return {clearRecentHistory,historyAction,busy:()=>clearing};
+ `)(win,state,rows,{retry(){refreshes++;}},()=>{},()=>{enabled=!fixture.busy();});
+ const first=fixture.clearRecentHistory(24);
+ assert.equal(fixture.busy(),true);assert.equal(enabled,false);
+ const duplicate=fixture.clearRecentHistory(24);
+ const rowRemoval=fixture.historyAction(entry,"forget");
+ await Promise.all([duplicate,rowRemoval]);
+ assert.deepEqual(commands,[["range",24]]);
+ assert.equal(confirmations,1);
+ resolve(true);await first;
+ assert.equal(fixture.busy(),false);assert.equal(enabled,true);assert.equal(refreshes,1);
+ await fixture.clearRecentHistory(1);
+ assert.deepEqual(commands,[["range",24],["range",1]]);
+});
+test("History row deletion blocks overlapping range clear, then releases gate on native failure",async()=>{
+ const source=read("src/library/controller.js.part");
+ const code=source.slice(source.indexOf("  async function clearRecentHistory("),source.indexOf("  function fileBytes("));
+ let reject,commands=[],confirmations=0,refreshes=0,notices=[],copied=0,tools=0;
+ const pending=new Promise((_,fail)=>reject=fail),row={id:"row",kind:"history",url:"https://example.test/"},entry={record:row};
+ const win={confirm(){confirmations++;return true;},__nocturneLibraryServices:{
+   removeHistoryURL:url=>{commands.push(["row",url]);return pending;},
+   clearHistoryRange:hours=>{commands.push(["range",hours]);return Promise.resolve(true);},
+   copyHistoryURL:()=>{copied++;return true;}
+ }};
+ const state={section:"history",motionEpoch:1,phase:"open"},rows=new Map([[row.id,entry]]);
+ const fixture=new Function("win","state","rows","data","notice","syncTools",`
+   let clearing=false,actionSerial=0,renderedSection="history";
+   const active=()=>state.phase!=="closed",current=e=>state.motionEpoch===e;
+   ${code}
+   return {clearRecentHistory,historyAction,busy:()=>clearing};
+ `)(win,state,rows,{retry(){refreshes++;}},message=>notices.push(message),()=>tools++);
+ const deleting=fixture.historyAction(entry,"forget");
+ assert.equal(fixture.busy(),true);
+ await fixture.clearRecentHistory(168);await fixture.historyAction(entry,"forget");
+ await fixture.historyAction(entry,"copy");
+ assert.deepEqual(commands,[["row",row.url]]);assert.equal(confirmations,1);assert.equal(copied,1);
+ reject(Error("native operation failed"));await deleting;
+ assert.equal(fixture.busy(),false);assert.equal(refreshes,0);assert.ok(notices.includes("History action unavailable."));
+ await fixture.clearRecentHistory(1);assert.deepEqual(commands[1],["range",1]);assert.equal(fixture.busy(),false);
+ assert.ok(tools>=4);
+});

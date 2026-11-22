@@ -548,3 +548,10 @@ The user approved the **geometry and interaction concept**, not an implementatio
 - [ ] On a disposable Zen 1.24.2b / Sine 2.3.3 profile, with local media explicitly enabled and a single benign test file, toggle local-media enable/disable and add/reset an extra folder while Pictures/Documents is open; each reopened session should show fresh local rows once and stale actions should fail.
 - [ ] Repeat after Sine reload, in two windows, and while closing the Library/dragging a completed Download; verify one scan owner per window, no obsolete rows/actions, no callbacks after disposal and no unintended library close beyond existing file-drag rules.
 - [ ] Keep decoded-pixel memory, cloud placeholder mutation, symlink and scanner enumeration native gates under NC4-022 OPEN. This microtask fix does not imply memory safety.
+
+### A7 / NC4-084 — Library History destructive-operation acceptance
+
+- [x] Source extracted handlers: duplicate range-clear and concurrent row removal are suppressed; row removal blocks range-clear; Copy remains allowed; native throw releases busy gate and a subsequent command can run.
+- [ ] Disposable Zen 1.24.2b/Sine 2.3.3 profile: press Clear history and confirm; while native command is active, retry Clear history and click Remove on a history row. Only one native destructive operation is admitted; no duplicate confirmation and no unexpected records removed.
+- [ ] Repeat row Remove/Forget first then range-clear, test error/decline and retry; verify Clear history disabled only during active command, normal reopen/section switching after completion, and safe disposal/window close with an in-flight promise.
+- [ ] Verify actual Places and SessionStore results, other windows' view refresh, and native history state. Source lock is per Library shell, not a process-wide exclusive transaction.
