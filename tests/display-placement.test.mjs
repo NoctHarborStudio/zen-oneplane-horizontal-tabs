@@ -1,6 +1,7 @@
+import {readFileSync} from "node:fs";
 import test from "node:test";
 import assert from "node:assert/strict";
-import {displayContains,displayCssPoint,displayRectEqual,displaySnapTarget,displayNativeRect,displayPreviewFraction,displayReleaseMatches,tabReturnZone,displayStartupFeatures,displayPlacementMatches} from "../src/algorithms/display-placement.mjs";
+import {displayContains,displayCssPoint,displayRectEqual,displaySnapTarget,displayNativeRect,displayPreviewFraction,displayPreviewKey,displayReleaseMatches,tabReturnZone,displayStartupFeatures,displayPlacementMatches} from "../src/algorithms/display-placement.mjs";
 const left={x:-2560,y:-200,width:2560,height:1440},work={x:-2560,y:-200,width:2560,height:1392};
 test("CSS points use event window scale, not target monitor scale",()=>{
   assert.deepEqual(displayCssPoint(-1600,400,1.5,1),{x:-2400,y:600});
@@ -46,6 +47,19 @@ test("wide independent edge zones, center and corners",()=>{
   assert.equal(displaySnapTarget(left,work,-480,-100).mode,"right-top");
   assert.equal(displaySnapTarget(left,work,-1280,-100).mode,"maximize");
   assert.equal(displaySnapTarget(left,work,-1280,400).mode,"center");
+});
+test("preview key follows same-monitor work-area and target changes",()=>{
+  const original=displaySnapTarget(left,work,-1,400);
+  const first=displayPreviewKey(original,"Tab");
+  assert.ok(first);
+  assert.equal(displayPreviewKey({...original,full:{...original.full}},"Tab"),first);
+  assert.equal(displayPreviewKey({...original,work:{...original.work,width:original.work.width-1}},"Tab")===first,false);
+  assert.equal(displayPreviewKey({...original,x:original.x-1},"Tab")===first,false);
+  assert.equal(displayPreviewKey({...original,mode:"left"},"Tab")===first,false);
+  assert.equal(displayPreviewKey(original,"Workspace")===first,false);
+  assert.equal(displayPreviewKey({...original,full:null},"Tab"),null);
+  assert.equal(displayPreviewKey({...original,width:NaN},"Tab"),null);
+  assert.equal(displayPreviewKey({...original,work:{...original.work,height:0}},"Tab"),null);
 });
 test("cached release only matches current nearby fresh gesture",()=>{
   const s={token:7,x:-800,y:400,time:100};
@@ -98,4 +112,56 @@ test("same-monitor centered seed is not a successful side, quarter or maximize p
   assert.equal(displayPlacementMatches(max,max,false),false);
   assert.equal(displayPlacementMatches(max,max,true),true);
   assert.equal(displayPlacementMatches(max,{...max,x:0},true),false);
+});
+
+test("runtime preview reflows and reanchors when the work area changes on one monitor",()=>{
+  const source=readFileSync(new URL("../src/interactions/display-engine.js.part",import.meta.url),"utf8");
+  const a=source.indexOf("  function showPlacementPreview("),b=source.indexOf("  function targetScreen(",a);
+  assert.ok(a>=0&&b>a);
+  const moves=[],events=[];
+  const mount=new Function("displayPreviewKey","displayPreviewFraction","displayRectEqual","moves","events",
+    `let placementPreview={state:"open",moveTo(x,y){moves.push({x,y});}},
+      placementMap={style:{}},placementArea={style:{}},placementLabel={textContent:""},
+      placementKey="",placementMonitor=null,placementSample=null,placementPopupPoint=null;
+     let current=null;
+     const window={devicePixelRatio:1,performance:{now:()=>100},
+       __nocturneTrace:(event,data)=>events.push([event,data])},
+       dragLifecycle={current:()=>({token:15})};
+     function placementAt(){return current;}
+     function clearPlacementPreview(){placementKey="";placementSample=null;}
+     function nativeBase(){return {devicePixelsPerDesktopPixel:1};}
+     function displayContains(){return true;}
+     `+source.slice(a,b)+
+    "return {showPlacementPreview,setCurrent:p=>{current=p;},snapshot:()=>({key:placementKey,area:{...placementArea.style},anchor:placementPopupPoint})};");
+  const ui=mount(displayPreviewKey,displayPreviewFraction,displayRectEqual,moves,events);
+  const full={x:-1920,y:-150,width:1920,height:1080};
+  const workA={x:-1920,y:-150,width:1920,height:1040};
+  const workB={x:-1790,y:-150,width:1790,height:1040};
+  const aTarget=displaySnapTarget(full,workA,-1,390);
+  const bTarget=displaySnapTarget(full,workB,-1,390);
+  assert.equal(aTarget.mode,"right");assert.equal(bTarget.mode,"right");
+  ui.setCurrent(aTarget);ui.showPlacementPreview({screenX:-1,screenY:390},"Tab");
+  const first=ui.snapshot();assert.equal(moves.length,1);
+  ui.setCurrent(bTarget);ui.showPlacementPreview({screenX:-1,screenY:390},"Tab");
+  const second=ui.snapshot();
+  assert.notEqual(first.key,second.key);
+  assert.notEqual(first.area.left,second.area.left);
+  assert.notDeepEqual(moves[0],moves[1]);
+  assert.equal(moves.length,2);
+  assert.deepEqual(events,[["drag.placement.preview",{reason:"work-area-change",movedAnchor:true}]]);
+  // A shorter taskbar-available height changes the map but not its
+  // top anchor: repaint the preview without needless popup relocation.
+  const workC={...workB,height:workB.height-40};
+  const cTarget=displaySnapTarget(full,workC,-1,390);
+  ui.setCurrent(cTarget);ui.showPlacementPreview({screenX:-1,screenY:390},"Tab");
+  const third=ui.snapshot();
+  assert.notEqual(second.key,third.key);
+  assert.notEqual(second.area.height,third.area.height);
+  assert.equal(moves.length,2);
+  assert.deepEqual(events,[
+    ["drag.placement.preview",{reason:"work-area-change",movedAnchor:true}],
+    ["drag.placement.preview",{reason:"work-area-change",movedAnchor:false}]
+  ]);
+  ui.showPlacementPreview({screenX:-1,screenY:390},"Tab");
+  assert.equal(moves.length,2);
 });

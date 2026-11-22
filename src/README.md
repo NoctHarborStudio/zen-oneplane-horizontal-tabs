@@ -75,3 +75,6 @@ A5.2b1 (preview.116): the existing Split Drop owner reads exact native `TabGroup
 
 
 A5.3a (preview.117): the existing one-native-list Downloads service admits exact current Download objects for Dock via `dragNative`, while Library continues using `drag(id)`. Both reuse the sole synchronous native Gecko payload constructor in `src/services/library-services-runtime.js.part`, with an explicit Dock-private vs Library-public policy. The Dock retains the same Bunny native image and lifecycle. Do not reintroduce a second payload builder or download list. Canonical CI 45054533303 PASS (728 Node, 15 Python); native Gecko/OS drag handoff remains unverified.
+
+
+A5.4a (preview.118): Hub workspace drag and native tab Bunny already use the single Display Engine `placementAt`/native monitor policy; unreachable alternative `hubSnapRect` and `hubOtherDisplay` pure exports were deleted. The existing `displayPreviewKey` pure function now validates the work-area/target presentation cache. The XUL preview reflows and moves only when its actual full/work/target geometry or anchor changes. Do not reintroduce a second snap policy in Hub; native DPI/multi-monitor and actual OS acceptance remain pending.

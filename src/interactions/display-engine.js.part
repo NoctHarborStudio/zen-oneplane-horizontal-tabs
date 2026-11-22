@@ -73,11 +73,13 @@
     }
   }
   function showPlacementPreview(event,label){
+    const previousWork=placementSample?.target?.work;
     const p=placementAt(event),fraction=displayPreviewFraction(p),token=dragLifecycle.current()?.token;
     if(!p||!fraction||token==null){clearPlacementPreview();return;}
     placementSample={token,x:event.screenX,y:event.screenY,time:window.performance.now(),target:p};
     const monitor=[p.full.x,p.full.y,p.full.width,p.full.height].join(":");
-    const key=[monitor,p.mode,label].join(":");
+    const key=displayPreviewKey(p,label);
+    if(!key){clearPlacementPreview();return;}
     if(key===placementKey)return;
     try{
       if(!placementPreview){
@@ -115,13 +117,16 @@
       if(!Number.isFinite(scale)||scale<=0)return;
       const x=Math.round((p.work.x+p.work.width/2)/scale-105);
       const y=Math.round((p.work.y+Math.min(90,p.work.height*.12))/scale);
-      placementPopupPoint={x,y};
       const changedMonitor=placementMonitor!==monitor;
-      placementMonitor=monitor;placementKey=key;
+      const movedAnchor=changedMonitor||!placementPopupPoint||
+        placementPopupPoint.x!==x||placementPopupPoint.y!==y;
+      placementPopupPoint={x,y};placementMonitor=monitor;placementKey=key;
+      if(!changedMonitor&&previousWork&&!displayRectEqual(previousWork,p.work))
+        window.__nocturneTrace?.("drag.placement.preview",{reason:"work-area-change",movedAnchor},{throttle:1000});
       if(placementPreview.state==="open"){
-        if(changedMonitor)placementPreview.moveTo(x,y);
+        if(movedAnchor)placementPreview.moveTo(x,y);
       }else if(placementPreview.state==="showing"){
-        if(changedMonitor)placementPreview.addEventListener("popupshown",()=>{
+        if(movedAnchor)placementPreview.addEventListener("popupshown",()=>{
           if(placementSample&&placementPopupPoint&&placementPreview?.state==="open")placementPreview.moveTo(placementPopupPoint.x,placementPopupPoint.y);
         },{once:true});
       }else if(placementPreview.state==="hiding"){

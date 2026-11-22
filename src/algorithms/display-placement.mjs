@@ -38,6 +38,18 @@
     return {x:Math.round(rect.x*desktopToDevice),y:Math.round(rect.y*desktopToDevice),
       width:Math.round(rect.width*desktopToDevice),height:Math.round(rect.height*desktopToDevice)};
   }
+  // Preview identity must include the current work area: taskbar/dock
+  // changes can move the same snap mode within an unchanged monitor.
+  // This is a presentation cache key, never an authority for OS placement.
+  export function displayPreviewKey(target,label){
+    if(!target?.full||!target?.work||typeof target.mode!=="string"||typeof label!=="string")return null;
+    const f=target.full,w=target.work;
+    const dimensions=[f.x,f.y,f.width,f.height,w.x,w.y,w.width,w.height,
+      target.x,target.y,target.width,target.height];
+    if(!dimensions.every(Number.isFinite)||f.width<=0||f.height<=0||
+       w.width<=0||w.height<=0||target.width<=0||target.height<=0)return null;
+    return [label,target.mode,...dimensions].join(":");
+  }
   export function displayPreviewFraction(target){
     if(!target||!displayContains(target.full,target.x,target.y)||
        !displayContains(target.full,target.x+target.width-1,target.y+target.height-1))return null;
