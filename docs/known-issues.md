@@ -1229,3 +1229,6 @@ A5.2b1 canonical verification: production `91f720b`, [CI 45045274006](https://gi
 ### A5.3a — Native file drag payload ownership (preview.117)
 
 NC4-016 duplication addressed in source by routing both Dock and Library through the existing one-per-window Downloads service. The Dock native Download must remain in the exact service map; Library keeps opaque-ID access and private-window refusal. Both produce identical synchronous Gecko file/URI flavors from the real existing nsIFile, preserving OS copy/move and the existing Bunny owner. This fixes a source-level stale Download admission gap, **not** a reproduced native file loss or OS drag success failure. Native Explorer/Desktop/web drop, private list/Library fallback, cancellation/reload and performance still require acceptance; broader A5 motion/coordinates and A7 service issues remain open.
+
+
+A5.3a canonical closure: production `29de5faf`, [CI 45054533303](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45054533303) PASS (728 Node, 15 Python, runtime parser, deterministic outputs and public package). Native filesystem/OS drop, private Zen, cross-monitor and diagnostics-on/off performance gates remain open. Known-missing `target.exists === false` is rejected by both service APIs before payload construction.

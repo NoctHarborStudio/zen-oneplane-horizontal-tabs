@@ -4,7 +4,7 @@ Status: primary static audit checkpoints completed; A0.3 release infrastructure 
 
 ## Active checkpoint — source vs native evidence
 
-Current source checkpoint: 0.3.0-preview.117 (A5.3a shared native file payload source implemented; canonical CI pending; A5.2b2 native Split acceptance and A5.1b2 Gecko OS identity OPEN). Last confirmed canonical CI: preview.116. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
+Current source checkpoint: 0.3.0-preview.117 (A5.3a shared native file payload source/CI PASS; A5.2b2 native Split acceptance and A5.1b2 Gecko OS identity OPEN). Last confirmed canonical CI: preview.117. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
 
 | Stage | Source implementation/review | Native acceptance |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ Current source checkpoint: 0.3.0-preview.117 (A5.3a shared native file payload s
 | A2 | Implemented and reviewed | Explicitly deferred |
 | A3 | Core Fold ownership/handoff implemented; Bloom candidate dormant | Pending |
 | A4 | A4.4-R2 source/CI complete; native hit-region, visual and profiler gates still open | Pending |
-| A5–A7 | A5.1a–A5.2b1 source/CI PASS; A5.3a source implementation/CI pending, A5.1b2 OS identity, A5.2b2 native Split and A5.3b–A7 open | Pending |
+| A5–A7 | A5.1a–A5.2b1 and A5.3a source/CI PASS; A5.1b2 OS identity, A5.2b2 Split native acceptance and A5.3b–A7 pending | Pending |
 | A8 | Integrated validation pending | Pending |
 | A9 | Optional vertical scope, separate approval | Pending |
 
@@ -1072,3 +1072,8 @@ Baseline `preview.116` `1c42906f8209f46746ca6b0d7871bb971453235e` with [canonica
 The existing `createDownloadsService` owner now exposes `dragNative(download,event,node)`, only when the native Download instance still exists in that exact generation's record map and has a completed/nonpartial/nonblocked state. The existing opaque-ID `drag(id,event,node)` remains for Library. Both delegate to one synchronous `dragFile` implementation inside `src/services/library-services-runtime.js.part`, using actual `nsIFile` plus native file URI, checking physical existence/type immediately before writing the DataTransfer. A trusted dragstart is required. The service enforces a purpose policy: **Dock** may drag a private Download from its own private native list as before; **Library** remains private-disabled. No arbitrary file path can be sent via the API: only an existing native Download object or current service ID is eligible. The payload is written synchronously; OS copy/move remains native, not simulated. There is no second Downloads subscription, logger, Drag Engine, file store, observer or timer, and the existing Dock Bunny/native image ownership is untouched.
 
 Pre-publication isolated source-backed checks: four Download drag payload/preflight fixtures and one current-native-record service fixture PASS; generated Library Services rebuilt exactly from the existing build-plan source sections and parses as an async runtime script. Permanent fixtures cover non-file/missing/partial/blocked downloads, native ID/stale object rejection, trusted event gate, private Dock vs Library behavior, and actual payload flavor order. This is not a full Node suite or native Gecko acceptance. Canonical preview.117 CI, Windows/macOS native file OS handoff, Library fallback without Dock, private indicator/row, untrusted/reload and diagnostics-on/off profiling remain OPEN. Next A5.3a-R independent source, generated-output, metadata and CI closure; A5.3b native file transfer acceptance and other A5 interaction work await their separate gates.
+
+
+### A5.3a-R — Independent canonical readback and CI closure (docs-only)
+
+Production `29de5faf37aeda807acc5fb4c81ce09936a7908d` via [PR #5](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/pull/5) passed [CI 45054533303](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45054533303): **728/728 Node** tests, **15/15 Python** release tests, all 12 runtime scripts parsed, deterministic source rebuild, manifest history and public immutable/Raw/codeload package checks. Independent source review found one additional missing-file metadata boundary; both `dragNative` and `drag(id)` now reject `target.exists === false` before invoking the file-payload callback, and the helper checks actual nsIFile type/existence. Exact native Download map membership is generation-local, and only the existing per-window subscribed Downloads list is accepted. The single owner writes Gecko file+URI flavors in the trusted dragstart; Dock retains its private-mode semantics and Bunny graphics, Library remains private-disabled. No new native list subscriber, cross-owner cache, animation driver or polling. Native drag cancellation/OS drop, private Zen, missing files, multiwindow/DPI and diagnostics-on/off profiler remain unverified; source/CI PASS does not close A5.3 native acceptance or A5.1b2 OS DragSession identity. Next A5.3b native acceptance when target Zen is available; independent remaining A5 source contracts may advance without claiming OS success.
