@@ -382,3 +382,7 @@ Existing `downloads.drag.tick` and `downloads.drag.end` aggregates include `pain
 ### Preview.123 native drag structural lease diagnostics
 
 `drag.topology.changed` is emitted only when an active tab Drag Engine token or a post-drag insertion visual tail has become structurally stale. The bounded event records a static `stage`, existing local drag `token` when live, boolean `tail`, previous visible tab count and boolean `sourceValid`. The existing `drag.lifecycle.cancel` reason is `native-topology-changed`; neither event logs native Workspace IDs, tab titles/URLs, folder names or DOM contents. No polling/RAF was added; event/MutationObserver wakeups are existing lifecycle owners. Confirm real OS session behavior in Zen separately.
+
+### Preview.129 — Page Progress overlapping native requests
+
+The existing trace channel records sampled page-progress.network {reason:"overlap-start"|"stale-stop"} for an overlapping top-level network transition and a mismatched late STOP. These are content-free bounded reasons; never record nsIRequest, URLs, status text, page titles or a request identifier. Standard events and missing-request fallback are not logged by this new probe. Native Gecko correlation and presentation timing still need target-browser validation.

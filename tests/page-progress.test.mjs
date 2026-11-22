@@ -28,8 +28,8 @@ function harness(){
  const document={documentElement:root,createElementNS:()=>node(),getElementById:id=>panels[id]||({"zen-appcontent-navbar-wrapper":dock,"oneplane-toolbar-surface":surface,"oneplane-tabs":row})[id]};
  new Function("window","document","Services","Ci",source)(window,document,Services,{nsIWebProgressListener:F});
  const advance=ms=>{const end=time+ms;while(true){const next=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];if(!next||next[1].at>end)break;time=next[1].at;timers.delete(next[0]);next[1].fn()}time=end};
- const evt=(flags,status=0,which=browser.selectedBrowser)=>listener.onStateChange(which,{isTopLevel:true},null,1|flags,status);
- return {root,panels,browser,a,b,advance,evt,frames,frame(){const jobs=[...frames.values()];frames.clear();for(const fn of jobs)fn(time)},setDock(bottom,tail,alpha){wrapperRect={left:0,width:1200,bottom};surfaceRect={bottom:tail};surfaceOpacity=String(alpha)},progress:(n,d)=>listener.onProgressChange(browser.selectedBrowser,{isTopLevel:true},null,0,0,n,d),
+ const evt=(flags,status=0,which=browser.selectedBrowser,request=null)=>listener.onStateChange(which,{isTopLevel:true},request,1|flags,status);
+ return {root,panels,browser,a,b,advance,evt,frames,frame(){const jobs=[...frames.values()];frames.clear();for(const fn of jobs)fn(time)},setDock(bottom,tail,alpha){wrapperRect={left:0,width:1200,bottom};surfaceRect={bottom:tail};surfaceOpacity=String(alpha)},progress:(n,d,request=null)=>listener.onProgressChange(browser.selectedBrowser,{isTopLevel:true},request,0,0,n,d),
  switchTo(i){browser.selectedBrowser=i?b:a;browser.selectedTab=tabs[i];select()},
  disable(){enabled=false;prefObserver()},enable(){enabled=true;prefObserver()},
  dispose:()=>window.__zenRefinedPageProgress(),get bar(){return root.children.find(n=>n.id==="zr-page-progress")||panels[browser.selectedTab.linkedPanel].children[0]},get timers(){return timers.size}};
@@ -105,6 +105,27 @@ test("replacement navigation survives the interrupted navigation's closing inter
  h.evt(2);h.advance(480);
  assert.equal(phase(),"loading");
  h.evt(4);assert.equal(phase(),"complete");
+ h.advance(620);assert.equal(h.bar.hasAttribute("data-visible"),false);
+ h.dispose();
+});
+
+test("late STOP of an older network request cannot end a newer navigation",()=>{
+ const h=harness(),oldRequest={},newRequest={};
+ const phase=()=>h.bar.getAttribute("data-phase");
+ const fill=()=>h.bar.children[0].children[0].values.get("--zr-page-progress");
+ h.evt(2,0,h.a,oldRequest);h.advance(480);
+ h.progress(60,100,oldRequest);h.advance(120);
+ assert.equal(fill(),"0.6");
+ h.evt(2,0,h.a,newRequest);
+ assert.equal(phase(),"loading");
+ h.evt(4,0x804b0002,h.a,oldRequest);
+ assert.equal(phase(),"loading");
+ h.progress(90,100,oldRequest);h.advance(120);
+ assert.equal(fill(),"0.6");
+ h.progress(70,100,newRequest);h.advance(120);
+ assert.equal(fill(),"0.7");
+ h.evt(4,0,h.a,newRequest);
+ assert.equal(phase(),"complete");
  h.advance(620);assert.equal(h.bar.hasAttribute("data-visible"),false);
  h.dispose();
 });

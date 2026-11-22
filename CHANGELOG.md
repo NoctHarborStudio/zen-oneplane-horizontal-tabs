@@ -1,3 +1,7 @@
+## 0.3.0-preview.129 - Preserve Page Progress across overlapping native navigation
+
+Correlate overlapping Gecko top-level START/STOP and progress callbacks by their available native request identity. A late STOP or progress update from an older request can no longer complete or repaint the new active load when both request identities are available. Preserve the current indicator animation, standard no-identity behavior, native page ownership and no idle polling. Source regression tests cover the interleaved sequence; native graphical acceptance remains open.
+
 ## 0.3.0-preview.128 - Initialize History search and restore Smart Search UTF-8 text
 
 Initialize native PlacesQuery options before a first or changed History search; do not dispatch a stale search after a superseding query. Restore the original Smart Search domain/workspace/container separator. Add independent regression checks for both paths. Real graphical Zen acceptance remains open.

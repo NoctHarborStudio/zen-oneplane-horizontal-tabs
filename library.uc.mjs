@@ -199,7 +199,7 @@ function libraryShortcutSection(event,os="WINNT"){
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,{flush:true});
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.128",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.129",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
