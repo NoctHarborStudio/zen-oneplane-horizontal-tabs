@@ -271,3 +271,45 @@ test("bulk clear honors an existing Dock generation guard between native removal
  assert.deepEqual(calls,[first]);assert.equal(service.getSnapshot().length,1);
  assert.deepEqual(await service.clearCompleted(),{requested:1,removed:1,skipped:0,failed:0});await service.dispose();
 });
+
+test("service reload cannot reattach while the old native removal Promise is pending",async()=>{
+ const d={stopped:true,succeeded:true,target:{path:"fixture.txt"}};
+ const views=new Set();let entered,release,removed=0,detached=0,attached=0,peak=0;
+ const started=new Promise(resolve=>entered=resolve),waiting=new Promise(resolve=>release=resolve);
+ const list={
+   addView(v){views.add(v);attached++;peak=Math.max(peak,views.size);v.onDownloadAdded(d);},
+   removeView(v){detached++;views.delete(v);},
+   async remove(item){removed++;entered();await waiting;for(const view of views)view.onDownloadRemoved(item);}
+ };
+ const old=createDownloadsService({loadList:async()=>list});await old.start();
+ const oldClear=old.clearCompleted();await started;
+ const barrier=old.dispose();
+ const next=createDownloadsService({loadList:async()=>list,barrier});
+ const nextStart=next.start();
+ await Promise.resolve();await Promise.resolve();
+ assert.equal(detached,0);assert.equal(attached,1);assert.equal(removed,1);
+ release();await oldClear;await barrier;await nextStart;
+ assert.equal(detached,1);assert.equal(attached,2);assert.equal(peak,1);
+ assert.equal((await next.clearCompleted()).removed,1);assert.equal(removed,2);
+ await next.dispose();assert.equal(views.size,0);
+});
+test("failed native removal releases the old service lease only after rejection",async()=>{
+ const d={stopped:true,succeeded:true,target:{path:"failure.txt"}};
+ const views=new Set();let entered,reject,removed=0;
+ const started=new Promise(resolve=>entered=resolve),waiting=new Promise((_,fail)=>reject=fail);
+ const native={
+   addView(v){views.add(v);v.onDownloadAdded(d);},removeView(v){views.delete(v);},
+   remove(){removed++;entered();return waiting;}
+ };
+ const old=createDownloadsService({loadList:async()=>native});await old.start();
+ const clear=old.clearCompleted();await started;
+ const barrier=old.dispose();let settled=false;void barrier.then(()=>{settled=true;});
+ await Promise.resolve();await Promise.resolve();
+ assert.equal(settled,false);assert.equal(views.size,1);
+ reject(Error("native remove failed"));
+ assert.deepEqual(await clear,{requested:1,removed:0,skipped:0,failed:1});
+ assert.equal(await barrier,true);assert.equal(views.size,0);
+ const fresh=createDownloadsService({loadList:async()=>native,barrier});
+ await fresh.start();assert.equal(views.size,1);
+ await fresh.dispose();assert.equal(views.size,0);assert.equal(removed,1);
+});

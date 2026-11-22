@@ -571,3 +571,12 @@ The user approved the **geometry and interaction concept**, not an implementatio
 - [ ] Reverse the order (Library first), attempt a row Remove during the native clear, and verify correct busy/partial notices and DownloadList event reconciliation.
 - [ ] Disable or hot reload the Dock while the first native removal is pending; the current in-flight call may complete but no second stale removal should begin. Test native view detach and new-owner acquisition.
 - [ ] Check two independent normal windows sharing the same Downloads list separately. The current coordination is deliberately window-local, not a process-wide exclusive lock; source/CI PASS is not native acceptance.
+
+### A7 / NC4-090-R2 — outstanding native removal during hot reload
+
+- [x] Source-extracted fixture: hold a native `DownloadList.remove` Promise, dispose the old service, attempt replacement attach; no new native view is added until the original operation settles.
+- [x] Source-extracted fixture: rejected native removal still releases exact old view/lease, and replacement can attach without accumulating stale observers.
+- [ ] In a disposable Zen 1.24.2b / Sine 2.3.3 profile, start a native Downloads removal, disable/reload Nocturne while it is in flight and re-enable; verify old view detaches only after the native Promise ends and only one native remove is issued per Download identity.
+- [ ] Repeat after a native remove error and during full window close, while preserving private scope and no file-system deletion; capture only content-free event counts/timing.
+- [ ] Test a stalled/unresolved native remove separately: a new service must remain blocked rather than overlapping old owner. Recovery design requires actual Gecko evidence; do not fake native cancellation or use speculative timeouts.
+- [ ] Repeat in two browser windows: per-window lease does not establish process-wide mutation exclusion.
