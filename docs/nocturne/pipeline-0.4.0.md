@@ -4,7 +4,7 @@ Status: primary static audit checkpoints completed; A0.3 release infrastructure 
 
 ## Active checkpoint — source vs native evidence
 
-Current source checkpoint: 0.3.0-preview.120 (A5.6a File Bunny layout flush gate and conservative Tab Bunny OS image policy; source fixture PASS, canonical CI pending; A5 native gates OPEN). Last confirmed canonical CI: preview.119. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
+Current source checkpoint: 0.3.0-preview.120 (A5.6a File Bunny layout flush gate and conservative Tab Bunny OS image policy source/CI PASS; A5 Gecko native/visual/performance gates OPEN). Last confirmed canonical CI: preview.120. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
 
 | Stage | Source implementation/review | Native acceptance |
 | --- | --- | --- |
@@ -1118,3 +1118,10 @@ Baseline preview.119 at `db21d71c8ba73a986609428cb43d83e0b294237b`, [CI 45057614
 NC4-064: the native `outside` drag mode already returned before its later `previous === "outside"` branch; that clearing path was unreachable. Delete only the dead branch, retain the single sticky Gecko-owned OS drag image per gesture to avoid unverified blank/duplicate artwork on cross-window reentry. Native Tab Bunny return fidelity and same-tab Gecko gesture identity stay OPEN.
 
 Source-extracted OLE fixture: 7 session/position ticks, 3 artwork paints/widget flushes, 4 skipped near-static ticks; native timer kept active. Exact visible-property thresholds, latest release pose and outside latch covered by permanent regression cases. Canonical CI, OS DragSession identity, actual Windows nested OLE loop paintability, mixed-DPI visuals and diagnostics-on/off profiling remain separate OPEN gates. Next A5.6b native validation and independent A5 source work (NC4-062/065/066/072/073).
+
+
+### A5.6a-R — Independent canonical CI and release provenance closure (docs-only)
+
+Published runtime `bd52b7e49c31ec43b0cd01d4056b39a9b2358a72` (preview.120). Initial [CI 45058530304](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45058530304) failed **only** the pinned Magnetic Bookmarks provenance test (736/737 Node PASS): standalone `bookmarks.uc.mjs` diagnostic-version synchronization changed its Git blob SHA, but `scripts/shared-bookmarks.lock.json` still recorded preview.119. Runtime/Node fixtures otherwise passed; the failed publication workflow was not accepted as a PASS. Follow-up `b6312ad8e0a63ded5b0cfe26a60acea1088ad4bf` updated only the explicit Nocturne localOverride Git blob/commit/reason while preserving original pinned upstream provenance. No runtime or version change in this correction.
+
+Re-run [CI 45058630741](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45058630741) **SUCCESS**: 737/737 Node tests, 15/15 Python release tests, all 12 runtime syntax checks, reproducible generated build and public Raw/codeload Sine package. Readback confirmed `preview` HEAD, `0.3.0-preview.120` manifest/package version, updatedAt, generated Layout's exact changed native drag-image section, recorded new File Bunny paint guard, and the published bookmark blob's provenance lock. This closes **A5.6a source/CI only**. Native Windows OLE frame paint and File Bunny source return, actual OS file drops, Gecko same-tab gesture identity, native Split, mixed-DPI visual performance and profiler remain OPEN. Continue independent A5 source analysis; do not advertise native PASS or reenable local art on `outside` reentry without measured evidence.
