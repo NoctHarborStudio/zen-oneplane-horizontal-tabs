@@ -24,22 +24,6 @@
       return spaces;
     } catch { return null; }
   }
-  export function hubOtherDisplay(source,dest,x,y){
-    return !!source&&!!dest&&(source.x!==dest.x||source.y!==dest.y)&&x>=dest.x&&x<dest.x+dest.width&&y>=dest.y&&y<dest.y+dest.height;
-  }
-  export function hubSnapRect(display,x,y){
-    if(!display||![display.x,display.y,display.width,display.height,x,y].every(Number.isFinite)||display.width<=0||display.height<=0)return null;
-    const {x:left,y:top,width,height}=display;
-    const edge=Math.max(24,Math.min(100,Math.round(Math.min(width,height)*.085)));
-    const right=left+width,bottom=top+height,hw=Math.floor(width/2),hh=Math.floor(height/2);
-    const h=x-left<=edge?"left":right-x<=edge?"right":"",v=y-top<=edge?"top":bottom-y<=edge?"bottom":"";
-    if(h&&v)return {x:h==="left"?left:left+hw,y:v==="top"?top:top+hh,width:h==="left"?hw:width-hw,height:v==="top"?hh:height-hh,mode:h+"-"+v};
-    if(v==="top")return {x:left,y:top,width,height,mode:"maximize"};
-    if(h)return {x:h==="left"?left:left+hw,y:top,width:h==="left"?hw:width-hw,height,mode:h};
-    if(v==="bottom")return {x:left,y:top+hh,width,height:height-hh,mode:"bottom"};
-    const w=Math.round(width*.72),ht=Math.round(height*.74);
-    return {x:left+Math.floor((width-w)/2),y:top+Math.floor((height-ht)/2),width:w,height:ht,mode:"center"};
-  }
   export function hubTrashAgeMatches(stamp,age,now){
     if(age==="all")return true;
     const duration={"5m":300000,"1h":3600000,"1d":86400000,"7d":604800000,"30d":2592000000,"1y":31536000000}[age];
