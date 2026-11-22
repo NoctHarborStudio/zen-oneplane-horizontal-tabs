@@ -149,6 +149,19 @@ test("runtime preview reflows and reanchors when the work area changes on one mo
   assert.notDeepEqual(moves[0],moves[1]);
   assert.equal(moves.length,2);
   assert.deepEqual(events,[["drag.placement.preview",{reason:"work-area-change",movedAnchor:true}]]);
+  // A shorter taskbar-available height changes the map but not its
+  // top anchor: repaint the preview without needless popup relocation.
+  const workC={...workB,height:workB.height-40};
+  const cTarget=displaySnapTarget(full,workC,-1,390);
+  ui.setCurrent(cTarget);ui.showPlacementPreview({screenX:-1,screenY:390},"Tab");
+  const third=ui.snapshot();
+  assert.notEqual(second.key,third.key);
+  assert.notEqual(second.area.height,third.area.height);
+  assert.equal(moves.length,2);
+  assert.deepEqual(events,[
+    ["drag.placement.preview",{reason:"work-area-change",movedAnchor:true}],
+    ["drag.placement.preview",{reason:"work-area-change",movedAnchor:false}]
+  ]);
   ui.showPlacementPreview({screenX:-1,screenY:390},"Tab");
   assert.equal(moves.length,2);
 });
