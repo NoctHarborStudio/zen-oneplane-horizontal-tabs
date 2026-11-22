@@ -1224,3 +1224,8 @@ Source code previously reported a Split command confirmed when both inputs point
 
 
 A5.2b1 canonical verification: production `91f720b`, [CI 45045274006](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45045274006) PASS (726 Node, 15 Python, runtime/release/public artifact checks). Source/CI classification closed; native Split convergence, nested folders, OS drag identity, mixed-DPI visuals and profiler remain open.
+
+
+### A5.3a — Native file drag payload ownership (preview.117)
+
+NC4-016 duplication addressed in source by routing both Dock and Library through the existing one-per-window Downloads service. The Dock native Download must remain in the exact service map; Library keeps opaque-ID access and private-window refusal. Both produce identical synchronous Gecko file/URI flavors from the real existing nsIFile, preserving OS copy/move and the existing Bunny owner. This fixes a source-level stale Download admission gap, **not** a reproduced native file loss or OS drag success failure. Native Explorer/Desktop/web drop, private list/Library fallback, cancellation/reload and performance still require acceptance; broader A5 motion/coordinates and A7 service issues remain open.
