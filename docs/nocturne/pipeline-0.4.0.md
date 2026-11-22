@@ -4,7 +4,7 @@ Status: primary static audit checkpoints completed; A0.3 release infrastructure 
 
 ## Active checkpoint — source vs native evidence
 
-Current source checkpoint: 0.3.0-preview.123 (A5.7c native drag source topology fence and insertion-tail invalidation source/CI PASS; Gecko native acceptance OPEN). Last confirmed canonical CI: preview.123. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
+Current source checkpoint: 0.3.0-preview.125. A5.7c drag topology, A6.1 overlay admission, stale Smart Search query callbacks and atomic Library local-media refresh passed source/CI verification. Selected A6/A7 paths passed a native headless smoke check on Zen 1.24.2b / Sine 2.3.3. Physical drag, visual and integrated performance acceptance remain open.
 
 | Stage | Source implementation/review | Native acceptance |
 | --- | --- | --- |
@@ -1205,3 +1205,14 @@ Preview.124 guards reentry through preflight and yield callbacks. Participants m
 ### A6/A7 - Search query lifetime and atomic media refresh (preview.125)
 
 The Smart Search listener now checks the current native query context before changing layout and recovery state. Local Media publishes rows and action handles only after the entire scan result has been described. Regression coverage includes out-of-order query completion, failed refresh and subsequent removal. Broader native and integrated acceptance remains open.
+
+### Native smoke evidence on preview.125 (2026-11-22)
+
+Tested the package at commit 3887393 in a disposable Windows profile using Zen 1.24.2b (build 20261111122308) and Sine 2.3.3.0. The run used the actual native browser chrome in headless mode. Library preview and local diagnostics were enabled in the test profile. [Package CI](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45064182048) passed. Local Node suite: 767/767.
+
+- Native startup recorded layout readiness, Library service registration and a confirmed Free workspace switch.
+- Smart Search registered with the native provider manager. Two successive address-bar searches emitted two starts, one cancellation and one completion; both terminal callbacks carried the same native context object as their respective starts.
+- History opened in Library and became the current overlay owner. A synthetic Escape key event through the chrome window listener closed it and restored focus to the previously focused test button. Downloads then opened and closed through the Library API.
+- With a real XUL panel in the open state, the coordinator deferred Escape to the native popup.
+
+This covers specific startup, query and overlay paths. Physical keyboard/drag input, external file drops, mixed-DPI layout, visual transitions, accessible navigation, upgrade/rollback and matched hardware profiler runs remain open.
