@@ -118,13 +118,14 @@ test("runtime preview reflows and reanchors when the work area changes on one mo
   const source=readFileSync(new URL("../src/interactions/display-engine.js.part",import.meta.url),"utf8");
   const a=source.indexOf("  function showPlacementPreview("),b=source.indexOf("  function targetScreen(",a);
   assert.ok(a>=0&&b>a);
-  const moves=[];
-  const mount=new Function("displayPreviewKey","displayPreviewFraction","moves",
+  const moves=[],events=[];
+  const mount=new Function("displayPreviewKey","displayPreviewFraction","displayRectEqual","moves","events",
     `let placementPreview={state:"open",moveTo(x,y){moves.push({x,y});}},
       placementMap={style:{}},placementArea={style:{}},placementLabel={textContent:""},
       placementKey="",placementMonitor=null,placementSample=null,placementPopupPoint=null;
      let current=null;
-     const window={devicePixelRatio:1,performance:{now:()=>100}},
+     const window={devicePixelRatio:1,performance:{now:()=>100},
+       __nocturneTrace:(event,data)=>events.push([event,data])},
        dragLifecycle={current:()=>({token:15})};
      function placementAt(){return current;}
      function clearPlacementPreview(){placementKey="";placementSample=null;}
@@ -132,7 +133,7 @@ test("runtime preview reflows and reanchors when the work area changes on one mo
      function displayContains(){return true;}
      `+source.slice(a,b)+
     "return {showPlacementPreview,setCurrent:p=>{current=p;},snapshot:()=>({key:placementKey,area:{...placementArea.style},anchor:placementPopupPoint})};");
-  const ui=mount(displayPreviewKey,displayPreviewFraction,moves);
+  const ui=mount(displayPreviewKey,displayPreviewFraction,displayRectEqual,moves,events);
   const full={x:-1920,y:-150,width:1920,height:1080};
   const workA={x:-1920,y:-150,width:1920,height:1040};
   const workB={x:-1790,y:-150,width:1790,height:1040};
@@ -147,6 +148,7 @@ test("runtime preview reflows and reanchors when the work area changes on one mo
   assert.notEqual(first.area.left,second.area.left);
   assert.notDeepEqual(moves[0],moves[1]);
   assert.equal(moves.length,2);
+  assert.deepEqual(events,[["drag.placement.preview",{reason:"work-area-change",movedAnchor:true}]]);
   ui.showPlacementPreview({screenX:-1,screenY:390},"Tab");
   assert.equal(moves.length,2);
 });
