@@ -113,6 +113,12 @@ test("drag telemetry includes popup readiness, motion and final summary",()=>{
  assert.ok(source.includes("maxAngle:q.maxAngle"));assert.ok(source.includes("maxGap:q.maxGap"));assert.ok(source.includes("fileDragMissing>=3"));assert.ok(source.includes("fileDragUnknown>=6"));
 });
 
+test("native file drag card is attached only after Bunny cleanup ownership exists",()=>{
+ const sectionSource=section("  function beginFileBunny(","  function finishExternalDrag(");
+ const ownership=sectionSource.indexOf("fileBunny={"),append=sectionSource.indexOf("root.append(native.card)");
+ assert.ok(ownership>=0&&append>ownership);
+ assert.ok(sectionSource.indexOf("source.setAttribute(\"data-file-lift\"")>append);
+});
 test("native file watchdog has bounded unknown and absent-session recovery",()=>{
  const code=section("  function fileDragSession(","  function createFileCard(");
  function fixture(read){
