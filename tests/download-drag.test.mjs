@@ -187,6 +187,29 @@ test("file source recovery arms before optional Bunny artwork failure",()=>{
  assert.equal(f.source(),null);
  assert.equal(calls.filter(c=>c==="stop").length,1);
 });
+test("hidden native file popup stops artwork without ending its source gesture",()=>{
+ const code=section("  function prepareFilePopup(","  function paintFileBunny(");
+ const events={},trace=[];let stopped=0;
+ const popup={style:{setProperty(){}},getOuterScreenRect(){},setAttribute(){},
+   append(){},addEventListener(k,v){events[k]=v;},isConnected:true,state:"closed"};
+ const set={append(){}};
+ const prepare=new Function("popup","set","trace","onStop",`
+   let filePopup=null,fileStage=null,fileBunny=null;
+   const document={createXULElement:()=>popup},get:()=>set,make:()=>({});
+   function current(){return 0;}
+   function fileBunnyTrace(event){trace.push(event);}
+   function filePopupSurface(){return null;}
+   function stopFileBunnyFrame(){onStop();}
+   function tickFilePopup(){}
+   `+code+`
+   return {prepare:prepareFilePopup,set(q){fileBunny=q;}};
+ `)(popup,set,trace,()=>stopped++);
+ assert.equal(prepare.prepare(),true);
+ const q={popup,ending:false,shown:true,frames:8};
+ prepare.set(q);events.popuphidden();
+ assert.equal(stopped,1);assert.equal(q.shown,false);
+ assert.ok(trace.includes("popup-hidden"));
+});
 test("Library uses the existing Bunny owner and releases the external drag lease once",()=>{
  const code=section("  function finishExternalDrag(","  function clearFileBunny(");
  let externalDrag=null,fileDragSource=null,fileBunny=null,dead=false,node={},cardOpen=false,dockOpen=false;
