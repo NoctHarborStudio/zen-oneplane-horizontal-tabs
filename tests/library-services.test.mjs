@@ -155,3 +155,34 @@ test("disposal waiting on an inherited barrier does not require the barrier to s
  const p=a.start(),rejected=assert.rejects(p,/disposed/);
  assert.equal(await a.dispose(),true);finish();await rejected;assert.equal(loads,0);
 });
+
+test("native Dock and Library drags use one current Download identity, with distinct purpose",async()=>{
+ const f=fake(),calls=[],s=createDownloadsService({loadList:async()=>f.list,dragFile:(d,e,node,purpose)=>{
+  calls.push([d,e,node,purpose]);return true;
+ }});
+ const event={isTrusted:true},node={};
+ assert.equal(s.dragNative(f.d,event,node),false);
+ await s.start();
+ const id=s.getSnapshot()[0].id;
+ assert.equal(s.dragNative(f.d,event,node),true);
+ assert.equal(s.drag(id,event,node),true);
+ assert.deepEqual(calls.map(x=>x[3]),["dock","library"]);
+ assert.ok(calls.every(x=>x[0]===f.d));
+ assert.equal(s.dragNative({...f.d},event,node),false);
+ assert.equal(s.dragNative(null,event,node),false);
+ for(const field of ["succeeded","hasBlockedData","hasPartialData","canceled","error"]){
+  const prev=f.d[field];f.d[field]=field==="succeeded"?false:true;
+  assert.equal(s.dragNative(f.d,event,node),false);
+  assert.equal(s.drag(id,event,node),false);
+  f.d[field]=prev;
+ }
+ f.d.target.exists=false;
+ assert.equal(s.dragNative(f.d,event,node),true); // Native filesystem check belongs to dragFile.
+ f.d.target.exists=true;
+ f.emit("onDownloadRemoved",f.d);
+ assert.equal(s.dragNative(f.d,event,node),false);
+ assert.equal(s.drag(id,event,node),false);
+ assert.deepEqual(calls.map(x=>x[3]),["dock","library","dock"]);
+ await s.dispose();
+ assert.equal(s.dragNative(f.d,event,node),false);
+});
