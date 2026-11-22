@@ -1,3 +1,7 @@
+## 0.3.0-preview.136 - Publish reproducible Downloads removal lifetime correction
+
+Republish the preview.135 DownloadsService native-remove disposal fix with a canonical generated `library-services.uc.mjs` assembled from the current source. The initial preview.135 CI correctly rejected a stale generated bundle; a follow-up bundle-only correction passed deterministic assembly but was correctly blocked by release policy because a published runtime artifact changed without a version increase. Preview.136 preserves the same native removal lifetime contract and two regression tests while satisfying the existing build and version monotonicity rules. No additional native behavior, features, services or timers.
+
 ## 0.3.0-preview.135 - Close Downloads native-remove hot-reload lease gap
 
 Independent review of the preview.134 NC4-090 source fix reproduced a generation handoff race: an old DownloadList.remove Promise may remain pending after DownloadsService.dispose removes its native view, while the replacement service attaches and attempts the same native removal. Track outstanding native removal Promises in the existing DownloadsService and await their settlement before releasing its view/lease. Reuse the current Downloads disposal barrier; do not add a new service, queue, timer, feature or OS operation. Two regression fixtures cover delayed completion and rejection with replacement startup. Keep the deliberate fail-closed rule for native operations that never settle. Cross-window and real Gecko event acceptance remain open.

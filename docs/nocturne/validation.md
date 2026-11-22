@@ -580,3 +580,9 @@ The user approved the **geometry and interaction concept**, not an implementatio
 - [ ] Repeat after a native remove error and during full window close, while preserving private scope and no file-system deletion; capture only content-free event counts/timing.
 - [ ] Test a stalled/unresolved native remove separately: a new service must remain blocked rather than overlapping old owner. Recovery design requires actual Gecko evidence; do not fake native cancellation or use speculative timeouts.
 - [ ] Repeat in two browser windows: per-window lease does not establish process-wide mutation exclusion.
+
+### A7 / NC4-090-R2 — versioned generated-package verification (preview.136)
+
+- [x] The failed preview.135 CI build and same-version publication boundary failures are preserved as negative evidence; runtime changes must not bypass reproducible source generation or monotonically increasing package version.
+- [ ] Preview.136 canonical CI: exact `npm run check:build`, runtime parser, all Node/Python tests, same-source generated bundles and immutable/current Raw+codeload public package.
+- [ ] Native Zen 1.24.2b/Sine 2.3.3: verify old native remove Promise settles before the service lease/view is released during hot reload; reject duplicate removal on the same Download and avoid files-on-disk deletion.

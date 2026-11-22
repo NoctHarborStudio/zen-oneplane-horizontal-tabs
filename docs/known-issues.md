@@ -1274,3 +1274,7 @@ On preview.133, a source-extracted Dock `clearHistory()` and real shared Downloa
 ### NC4-090-R2 — reload can detach a Downloads owner while native remove remains pending (preview.135)
 
 The preview.134 same-generation Dock/Library clear fix passed 789 Node + 15 Python ([CI 45073889342](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45073889342)). Independent extraction nevertheless showed that `DownloadsService.dispose()` could release its native view/lease before an already started `DownloadList.remove` Promise completed, allowing a second generation to remove the same item concurrently. Preview.135 retains native-removal Promises through service disposal and delays view release on the existing barrier until they settle. No new native list or feature; source regression is distinct from native Zen PASS. Native hangs can block reload, and multiwindow operation overlap remains OPEN.
+
+### NC4-090-R2 release-integrity follow-up — preview.136
+
+The preview.135 source fix exposed a stale `library-services.uc.mjs` generated output (CI 45074333000). A same-version output correction passed assembly but triggered the expected monotonic publication-rule error (CI 45074457589). Preview.136 is the canonical full rebuild with the same native removal completion barrier and advanced version. Neither failed run is recorded as PASS; native hot-reload and cross-window operations remain OPEN.
