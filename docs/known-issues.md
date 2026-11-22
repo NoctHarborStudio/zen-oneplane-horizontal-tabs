@@ -622,11 +622,13 @@ smart-search.uc.mjs:145–152 resolves window from controller then registry.wind
 
 **Required:** A6: verify live window/controller/manager generation on query and engagement; fail closed on conflicting identity, keep private guard; test replaced manager, stale controller and same URL across windows.
 
-#### NC4-087 — Page Progress ignores request identity across overlapping loads (S/R/P1)
+#### NC4-087 — Page Progress retired network request eviction (S/R/P1; scoped source/CI CLOSED at preview.141)
 
-page-progress.uc.mjs:162–182 uses one active flag per browser and ignores request. Actual listener fixture START A, START B, STOP A, PROGRESS B -> active=false, progress=null, finish(true). Native Gecko ordering/reachability not verified; refines NC4-024.
+**Baseline:** This audit originally predates preview.129/130 request-identity handling. The current implementation already rejects STOP/progress from known superseded NETWORK START identities while keeping Gecko aggregate fallback for an unknown request; a strict object-match replacement would regress legitimate native subresources/STOPs.
 
-**Required:** A7: validate real nsIWebProgress network event semantics (redirect, request replacement, cancel) before changing aggregation; test matching native trace and no false completion.
+**Confirmed preview.140 source defect:** the bounded 16-entry strong `retired` Set dropped the oldest of 21 successive START identities, so its late STOP incorrectly ended the active newer load. Source-extracted listener reproduction failed against preview.140. Preview.141 uses a per-active-load `WeakSet`, keeping all old identities weakly tracked without an arbitrary cap or new owner; reset at accepted terminal/dispose. Two source regressions, [CI 45083811169](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45083811169) PASS (806 Node, 15 Python, 12 runtime parsers, published package). **The specific eviction defect is source/CI CLOSED.**
+
+**Native OPEN:** real Gecko/Zen `STATE_IS_NETWORK` start/stop ordering, redirect/cancellation, parent request versus subresource progress, final presentation and frame-gap profiling still require actual disposable Zen tests. `STATE_IS_NETWORK` signals network-activity scope, not guaranteed same-object request START/STOP; do not reject unknown STOPs solely because the object differs. No new visual feature or animation change.
 
 #### NC4-088 — Diagnostics disabled state does not gate pending persistence (S/R/P1)
 
