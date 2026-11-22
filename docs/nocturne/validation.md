@@ -525,3 +525,11 @@ Separately release a normal drag to reorder locally (native `TabMove`) and acros
 - [ ] Stress active animations, native OS drag, external native tab actions, close/reopen, fast mode switching and changing Workspace; check no cloned browser tabs, bad Split membership, lost input, stale side marker or orphan observers/effects. Profile frame gaps and layout/paint against Automatic on identical hardware, diagnostics both on/off. No native PASS claim from HTML Lab or Node fixtures alone.
 
 The user approved the **geometry and interaction concept**, not an implementation or native compatibility claim. Open ML0 decisions: mode scope (global/per Workspace), selected-tab-absent side default, special Zen roles and exact session-safe side persistence. Owner/specification: [manual-mirror-layout.md](manual-mirror-layout.md). Production cutover requires separate implementation gates; no version bump for this planning-only edit.
+
+### A7 / NC4-024-R2 — Page Progress native acceptance after preview.130
+
+- [x] Source regression + CI: 777 Node and 15 Python tests PASS at preview.130; aggregate progress updates from subresource requests are accepted, retired known starts cannot terminate a subsequent navigation; public package verification PASS.
+- [ ] Native Zen 1.24.2b / Sine 2.3.3: start a delayed page in a disposable profile; redirect/cancel/replace it while the page is loading. Capture the native `isTopLevel`, `STATE_IS_NETWORK`, request relationship and indicator phases without recording URLs or request identifiers.
+- [ ] Verify a page with independent image/CSS resources produces a progressing rather than permanently indeterminate indicator; old STOP never completes the newer active load, including two rapid replacements.
+- [ ] Switch away/back during loading; cancel with browser stop; toggle Nocturne Page Progress preference off/on and hot reload; confirm one owner, no lingering indicator, timers, observers or RAF after terminal stop/unload.
+- [ ] Check native horizontal/dock and vertical/native host placement with both compact toolbar states, reduced motion and visual/perf with diagnostics on/off. Do not infer actual presented FPS from callback counts.
