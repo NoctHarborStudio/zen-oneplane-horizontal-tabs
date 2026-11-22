@@ -13,6 +13,8 @@
     if(!lease||incomingDrag!==lease||lease.invalid||!incomingSourceCurrent(lease,tab,owner)||!incomingMotionAllowed())return false;
     const viewport=dragViewportState();
     return lease.viewport.every((value,i)=>Object.is(value,viewport[i]))&&
+      lease.workspaceManager===(window.gZenWorkspaces??null)&&
+      lease.workspaceId===(window.gZenWorkspaces?.activeWorkspace??null)&&
       (!strict||sameDragChromeFrame(lease.chrome,readDragChromeFrame()));
   }
   function releaseIncomingVisual(lease,reason,retain=false){
@@ -48,7 +50,9 @@
     if(!incomingMotionAllowed()||!Number.isSafeInteger(token)||source?.source()!==tab)return false;
     const chrome=readDragChromeFrame();
     if(!chrome)return false;
-    incomingDrag={tab,owner,source,token,viewport:dragViewportState(),chrome,invalid:false};
+    incomingDrag={tab,owner,source,token,viewport:dragViewportState(),chrome,
+      workspaceManager:window.gZenWorkspaces??null,
+      workspaceId:window.gZenWorkspaces?.activeWorkspace??null,invalid:false};
     return true;
   }
   function rejectIncomingDrop(event,tab,owner,lease){
@@ -162,6 +166,19 @@
     if(owner!==window&&!incomingDropAllowed(tab,owner))return null;
     const group = owner?.[DRAG_CONTROLLER]?.group();
     const entry = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
+    if(owner!==window&&!stripNodes().length){
+      const empty=emptyStripDestination(event,tab);
+      if(empty){
+        if(!liveDragTarget?.empty||liveDragTarget.spaceId!==empty.spaceId){
+          clearLiveDrag();
+          row.setAttribute("data-op-empty-incoming","true");
+          window.__nocturneTrace?.("drag.empty.preview",{admitted:true},{throttle:400});
+        }
+        liveDragTarget=empty;return empty;
+      }
+      // A rejected/left empty hit must also retire the visual in lane mode.
+      if(liveDragTarget?.empty||row.hasAttribute("data-op-empty-incoming"))clearLiveDrag();
+    }
     if(useLaneDrop())return previewLaneDrag(event,tab,entry);
     if(owner!==window && row.hasAttribute("data-op-show-island") &&
         !row.hasAttribute("data-op-island-incoming")){

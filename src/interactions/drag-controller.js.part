@@ -138,7 +138,8 @@
   }
   // Frozen mirrors can outlive a native close/group change. Validate the
   // destination at command time rather than mutating a stale native target.
-  function validStripDropTarget(dest){
+  function validStripDropTarget(dest,event=null,tab=null){
+    if(dest?.empty)return validEmptyStripDestination(dest,event,tab);
     if(!dest?.native)return false;
     const tabs=readStripTopology().tabs;
     if(dest.group)return dest.native===dest.group&&tabs.some(x=>x.group===dest.group&&tabOwner(x.tab)===window);
@@ -179,12 +180,12 @@
     const group = source?.group();
     if (owner === window && dragNode) { setDragImageMode("inline",event); setPull(0); }
     const dest = previewStripDrag(event, tab) || dropTarget(event);
-    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.drop",()=>({local:owner===window,group:!!group,dest:!!dest?.native,before:dest?.before,mode:dragImageMode}),{sample:1800});
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.drop",()=>({local:owner===window,group:!!group,dest:!!dest?.native,empty:!!dest?.empty,before:dest?.before,mode:dragImageMode}),{sample:1800});
     if(retireChangedDragChromeFrame("strip-target"))return;
     if(owner!==window&&!incomingDropAllowed(tab,owner,incoming,true)){
       rejectIncomingDrop(event,tab,owner,incoming);return;
     }
-    if(!validStripDropTarget(dest)){
+    if(!validStripDropTarget(dest,event,tab)){
       markSourceHandled();
       if(!clearIncomingDrag("target-rejected",incoming)){clearLiveDrag();clearDropMarker();}
       return;
@@ -192,6 +193,25 @@
     row.setAttribute("data-op-drag-commit", "true");
     let operation="none",outcome="rejected";
     try {
+      if(dest?.empty){
+        operation="adopt-empty-workspace";
+        if(owner===window||!validEmptyStripDestination(dest,event,tab)||
+           !incomingDropAllowed(tab,owner,incoming,true)){outcome="rejected";return;}
+        // No synthetic tabIndex: Zen's native space owner chooses its
+        // insertion position (including other hidden Workspaces).
+        const adopted=browser.adoptTab(tab,{selectTab:true});
+        if(adopted&&validNativeTab(adopted)&&tabOwner(adopted)===window&&
+           dest.manager===window.gZenWorkspaces&&dest.manager.activeWorkspace===dest.spaceId&&
+           dest.container.isConnected){
+          try{
+            // This existing Zen API enforces the native tabsContainer and
+            // UUID even if the two windows happen to share a workspace ID.
+            dest.manager.moveTabToWorkspace(adopted,dest.spaceId);
+          }catch(error){console.error("[OnePlane] Native workspace adoption:",error);}
+        }
+        outcome=nativeEmptyAdoptionOutcome(adopted,dest);
+        schedule();return;
+      }
       if(group){
         operation="move-group";
         if(owner===window&&splitGroup(tab)===group&&dest.native!==group)

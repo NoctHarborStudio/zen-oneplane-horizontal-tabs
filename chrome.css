@@ -1284,6 +1284,11 @@
 #oneplane-tabs[data-op-magnetic-pull] #oneplane-tab-indicator {
   opacity:0!important;visibility:hidden!important;transition:none!important;
 }
+
+/* An empty native destination has no mirrored slot or fake hitbox. */
+#oneplane-tabs[data-op-empty-incoming] .oneplane-new-tab {
+  box-shadow:inset 0 0 0 1px var(--zen-primary-color, currentColor)!important;
+}
     /* Keep layout slots. On opening only opacity animates; the return
        is bounded scale/opacity. The whole strip stays noninteractive. */
     #oneplane-tabs[data-op-cascade] { pointer-events:none !important; }

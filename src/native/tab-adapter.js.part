@@ -86,6 +86,56 @@
     const from=range(moved),to=range(target);
     return !!from&&!!to&&(dest.before?from.end+1===to.start:to.end+1===from.start);
   }
+  // A zero-card projection is not proof of a zero-tab native workspace.
+  // Only the active Zen-owned regular-tabs container can accept this drop.
+  function emptyStripDestination(event,tab){
+    try{
+    if(!event?.isTrusted||tabOwner(tab)===window||!validNativeTab(tab)||tab.pinned||tab.group||
+       tab.hidden||tab.hasAttribute("zen-empty-tab")||tab.hasAttribute("zen-essential")||
+       tab.hasAttribute("zen-glance-tab")||tab.hasAttribute("split-view")||tab.splitView)return null;
+    if(stripNodes().length||readStripTopology().tabs.length||row.hasAttribute("data-op-home-open"))return null;
+    const x=event?.clientX,y=event?.clientY;
+    if(!Number.isFinite(x)||!Number.isFinite(y)||event.target?.closest?.(
+      ".oneplane-title-island, .oneplane-overflow-slider, .oneplane-split-group, .oneplane-tab"))return null;
+    const hit=[list,plus].some(node=>{
+      if(!node?.isConnected||node.hidden)return false;
+      const r=node.getBoundingClientRect();
+      return r.width>=6&&r.height>=6&&x>=r.left&&x<r.right&&y>=r.top&&y<r.bottom;
+    });
+    if(!hit)return null;
+    const native=window.gZenWorkspaces,spaceId=native?.activeWorkspace;
+    if(!native?.workspaceEnabled||typeof spaceId!=="string"||!spaceId||
+       typeof native.getWorkspaceFromId!=="function"||
+       typeof native.workspaceElement!=="function"||
+       typeof native.moveTabToWorkspace!=="function")return null;
+    const space=native.getWorkspaceFromId(spaceId),element=native.workspaceElement(spaceId);
+    const container=element?.tabsContainer;
+    if(space?.uuid!==spaceId||!container?.isConnected||
+       native.activeWorkspaceStrip!==container)return null;
+    // Hidden native tabs and groups in the active container are not empty.
+    if(Array.from(container.querySelectorAll(".tabbrowser-tab")).some(node=>
+       node.closing||!node.hasAttribute("zen-empty-tab")||node.group))return null;
+    if(container.querySelector(".tab-group, tab-group, [split-view-group]"))return null;
+    if(native.activeWorkspace!==spaceId)return null;
+    return {empty:true,spaceId,container,manager:native};
+    }catch{return null;}
+  }
+  function validEmptyStripDestination(dest,event,tab){
+    if(!dest?.empty)return false;
+    const current=emptyStripDestination(event,tab);
+    return !!current&&current.spaceId===dest.spaceId&&current.container===dest.container&&
+      current.manager===dest.manager;
+  }
+  function nativeEmptyAdoptionOutcome(adopted,dest){
+    if(!adopted)return "rejected";
+    if(!validNativeTab(adopted)||tabOwner(adopted)!==window)return "unverified";
+    const native=window.gZenWorkspaces;
+    if(native!==dest.manager||native.activeWorkspace!==dest.spaceId||
+       native.activeWorkspaceStrip!==dest.container||
+       adopted.getAttribute("zen-workspace-id")!==dest.spaceId||
+       !dest.container.contains(adopted))return "transferred-off-target";
+    return "confirmed";
+  }
   function nativeAdoptionOutcome(adopted,dest){
     if(!adopted)return "rejected";
     if(!validNativeTab(adopted)||tabOwner(adopted)!==window)return "unverified";

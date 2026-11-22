@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.121",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.122",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -7817,6 +7817,56 @@ function installTabStrip() {
     const from=range(moved),to=range(target);
     return !!from&&!!to&&(dest.before?from.end+1===to.start:to.end+1===from.start);
   }
+  // A zero-card projection is not proof of a zero-tab native workspace.
+  // Only the active Zen-owned regular-tabs container can accept this drop.
+  function emptyStripDestination(event,tab){
+    try{
+    if(!event?.isTrusted||tabOwner(tab)===window||!validNativeTab(tab)||tab.pinned||tab.group||
+       tab.hidden||tab.hasAttribute("zen-empty-tab")||tab.hasAttribute("zen-essential")||
+       tab.hasAttribute("zen-glance-tab")||tab.hasAttribute("split-view")||tab.splitView)return null;
+    if(stripNodes().length||readStripTopology().tabs.length||row.hasAttribute("data-op-home-open"))return null;
+    const x=event?.clientX,y=event?.clientY;
+    if(!Number.isFinite(x)||!Number.isFinite(y)||event.target?.closest?.(
+      ".oneplane-title-island, .oneplane-overflow-slider, .oneplane-split-group, .oneplane-tab"))return null;
+    const hit=[list,plus].some(node=>{
+      if(!node?.isConnected||node.hidden)return false;
+      const r=node.getBoundingClientRect();
+      return r.width>=6&&r.height>=6&&x>=r.left&&x<r.right&&y>=r.top&&y<r.bottom;
+    });
+    if(!hit)return null;
+    const native=window.gZenWorkspaces,spaceId=native?.activeWorkspace;
+    if(!native?.workspaceEnabled||typeof spaceId!=="string"||!spaceId||
+       typeof native.getWorkspaceFromId!=="function"||
+       typeof native.workspaceElement!=="function"||
+       typeof native.moveTabToWorkspace!=="function")return null;
+    const space=native.getWorkspaceFromId(spaceId),element=native.workspaceElement(spaceId);
+    const container=element?.tabsContainer;
+    if(space?.uuid!==spaceId||!container?.isConnected||
+       native.activeWorkspaceStrip!==container)return null;
+    // Hidden native tabs and groups in the active container are not empty.
+    if(Array.from(container.querySelectorAll(".tabbrowser-tab")).some(node=>
+       node.closing||!node.hasAttribute("zen-empty-tab")||node.group))return null;
+    if(container.querySelector(".tab-group, tab-group, [split-view-group]"))return null;
+    if(native.activeWorkspace!==spaceId)return null;
+    return {empty:true,spaceId,container,manager:native};
+    }catch{return null;}
+  }
+  function validEmptyStripDestination(dest,event,tab){
+    if(!dest?.empty)return false;
+    const current=emptyStripDestination(event,tab);
+    return !!current&&current.spaceId===dest.spaceId&&current.container===dest.container&&
+      current.manager===dest.manager;
+  }
+  function nativeEmptyAdoptionOutcome(adopted,dest){
+    if(!adopted)return "rejected";
+    if(!validNativeTab(adopted)||tabOwner(adopted)!==window)return "unverified";
+    const native=window.gZenWorkspaces;
+    if(native!==dest.manager||native.activeWorkspace!==dest.spaceId||
+       native.activeWorkspaceStrip!==dest.container||
+       adopted.getAttribute("zen-workspace-id")!==dest.spaceId||
+       !dest.container.contains(adopted))return "transferred-off-target";
+    return "confirmed";
+  }
   function nativeAdoptionOutcome(adopted,dest){
     if(!adopted)return "rejected";
     if(!validNativeTab(adopted)||tabOwner(adopted)!==window)return "unverified";
@@ -7890,9 +7940,11 @@ function installTabStrip() {
       node.removeAttribute("data-op-drag-follow");
     }
     dragShifted.clear();
-    const active=row.hasAttribute("data-op-live-drag")||row.hasAttribute("data-op-island-incoming");
+    const active=row.hasAttribute("data-op-live-drag")||row.hasAttribute("data-op-island-incoming")||
+      row.hasAttribute("data-op-empty-incoming");
     row.removeAttribute("data-op-live-drag");
     row.removeAttribute("data-op-island-incoming");
+    row.removeAttribute("data-op-empty-incoming");
     row.style.removeProperty("--op-drag-incoming");
     if(active&&!dead){schedule();scheduleGeometry();}
   }
@@ -8349,6 +8401,8 @@ function installTabStrip() {
     if(!lease||incomingDrag!==lease||lease.invalid||!incomingSourceCurrent(lease,tab,owner)||!incomingMotionAllowed())return false;
     const viewport=dragViewportState();
     return lease.viewport.every((value,i)=>Object.is(value,viewport[i]))&&
+      lease.workspaceManager===(window.gZenWorkspaces??null)&&
+      lease.workspaceId===(window.gZenWorkspaces?.activeWorkspace??null)&&
       (!strict||sameDragChromeFrame(lease.chrome,readDragChromeFrame()));
   }
   function releaseIncomingVisual(lease,reason,retain=false){
@@ -8384,7 +8438,9 @@ function installTabStrip() {
     if(!incomingMotionAllowed()||!Number.isSafeInteger(token)||source?.source()!==tab)return false;
     const chrome=readDragChromeFrame();
     if(!chrome)return false;
-    incomingDrag={tab,owner,source,token,viewport:dragViewportState(),chrome,invalid:false};
+    incomingDrag={tab,owner,source,token,viewport:dragViewportState(),chrome,
+      workspaceManager:window.gZenWorkspaces??null,
+      workspaceId:window.gZenWorkspaces?.activeWorkspace??null,invalid:false};
     return true;
   }
   function rejectIncomingDrop(event,tab,owner,lease){
@@ -8498,6 +8554,19 @@ function installTabStrip() {
     if(owner!==window&&!incomingDropAllowed(tab,owner))return null;
     const group = owner?.[DRAG_CONTROLLER]?.group();
     const entry = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
+    if(owner!==window&&!stripNodes().length){
+      const empty=emptyStripDestination(event,tab);
+      if(empty){
+        if(!liveDragTarget?.empty||liveDragTarget.spaceId!==empty.spaceId){
+          clearLiveDrag();
+          row.setAttribute("data-op-empty-incoming","true");
+          window.__nocturneTrace?.("drag.empty.preview",{admitted:true},{throttle:400});
+        }
+        liveDragTarget=empty;return empty;
+      }
+      // A rejected/left empty hit must also retire the visual in lane mode.
+      if(liveDragTarget?.empty||row.hasAttribute("data-op-empty-incoming"))clearLiveDrag();
+    }
     if(useLaneDrop())return previewLaneDrag(event,tab,entry);
     if(owner!==window && row.hasAttribute("data-op-show-island") &&
         !row.hasAttribute("data-op-island-incoming")){
@@ -8935,7 +9004,8 @@ function installTabStrip() {
   }
   // Frozen mirrors can outlive a native close/group change. Validate the
   // destination at command time rather than mutating a stale native target.
-  function validStripDropTarget(dest){
+  function validStripDropTarget(dest,event=null,tab=null){
+    if(dest?.empty)return validEmptyStripDestination(dest,event,tab);
     if(!dest?.native)return false;
     const tabs=readStripTopology().tabs;
     if(dest.group)return dest.native===dest.group&&tabs.some(x=>x.group===dest.group&&tabOwner(x.tab)===window);
@@ -8976,12 +9046,12 @@ function installTabStrip() {
     const group = source?.group();
     if (owner === window && dragNode) { setDragImageMode("inline",event); setPull(0); }
     const dest = previewStripDrag(event, tab) || dropTarget(event);
-    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.drop",()=>({local:owner===window,group:!!group,dest:!!dest?.native,before:dest?.before,mode:dragImageMode}),{sample:1800});
+    typeof window!=="undefined"&&window.__nocturneTrace?.("drag.drop",()=>({local:owner===window,group:!!group,dest:!!dest?.native,empty:!!dest?.empty,before:dest?.before,mode:dragImageMode}),{sample:1800});
     if(retireChangedDragChromeFrame("strip-target"))return;
     if(owner!==window&&!incomingDropAllowed(tab,owner,incoming,true)){
       rejectIncomingDrop(event,tab,owner,incoming);return;
     }
-    if(!validStripDropTarget(dest)){
+    if(!validStripDropTarget(dest,event,tab)){
       markSourceHandled();
       if(!clearIncomingDrag("target-rejected",incoming)){clearLiveDrag();clearDropMarker();}
       return;
@@ -8989,6 +9059,25 @@ function installTabStrip() {
     row.setAttribute("data-op-drag-commit", "true");
     let operation="none",outcome="rejected";
     try {
+      if(dest?.empty){
+        operation="adopt-empty-workspace";
+        if(owner===window||!validEmptyStripDestination(dest,event,tab)||
+           !incomingDropAllowed(tab,owner,incoming,true)){outcome="rejected";return;}
+        // No synthetic tabIndex: Zen's native space owner chooses its
+        // insertion position (including other hidden Workspaces).
+        const adopted=browser.adoptTab(tab,{selectTab:true});
+        if(adopted&&validNativeTab(adopted)&&tabOwner(adopted)===window&&
+           dest.manager===window.gZenWorkspaces&&dest.manager.activeWorkspace===dest.spaceId&&
+           dest.container.isConnected){
+          try{
+            // This existing Zen API enforces the native tabsContainer and
+            // UUID even if the two windows happen to share a workspace ID.
+            dest.manager.moveTabToWorkspace(adopted,dest.spaceId);
+          }catch(error){console.error("[OnePlane] Native workspace adoption:",error);}
+        }
+        outcome=nativeEmptyAdoptionOutcome(adopted,dest);
+        schedule();return;
+      }
       if(group){
         operation="move-group";
         if(owner===window&&splitGroup(tab)===group&&dest.native!==group)

@@ -39,9 +39,11 @@
       node.removeAttribute("data-op-drag-follow");
     }
     dragShifted.clear();
-    const active=row.hasAttribute("data-op-live-drag")||row.hasAttribute("data-op-island-incoming");
+    const active=row.hasAttribute("data-op-live-drag")||row.hasAttribute("data-op-island-incoming")||
+      row.hasAttribute("data-op-empty-incoming");
     row.removeAttribute("data-op-live-drag");
     row.removeAttribute("data-op-island-incoming");
+    row.removeAttribute("data-op-empty-incoming");
     row.style.removeProperty("--op-drag-incoming");
     if(active&&!dead){schedule();scheduleGeometry();}
   }

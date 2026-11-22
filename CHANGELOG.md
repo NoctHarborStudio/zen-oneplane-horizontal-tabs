@@ -1,3 +1,11 @@
+## 0.3.0-preview.122 — A5.7b native empty Workspace tab adoption
+
+- Accept a cross-window ordinary native tab over the real empty tab strip or native new-tab control only when Zen proves the active Workspace and its connected native regular-tabs container are empty (excluding native `zen-empty-tab` placeholders).
+- Preserve the existing exact source drag token, private-window and chrome/viewport gates. Bind the destination preview lease to the native Workspace manager and active ID; a switch or manager replacement retires the old destination without a native command.
+- Call `gBrowser.adoptTab` without a guessed `tabIndex`; delegate the resulting tab's physical Workspace placement to Zen's existing `moveTabToWorkspace`. Verify native ownership, workspace ID and actual native container membership; classify partial/off-target results separately from confirmed, never synthesize a rollback or detach.
+- Reject unsupported Pinned, Essentials, Split, Folder, Glance, hidden source and stale/hidden native target cases. Keep the current native return/OS image ownership unchanged and add a noninteractive indicator on the real new-tab affordance.
+- Add eleven extracted-source regression cases for native eligibility, zero-tab/hidden-tab boundaries, trusted coordinates, native results/throws, cleanup and pointer exit. Real Zen 1.24.2b/Gecko acceptance, multiwindow Workspace placement and DPI/OS drag outcomes remain OPEN.
+
 ## 0.3.0-preview.121 — A5.7a native startup search restoration generation fence
 
 - Bind delayed startup search restoration to a captured native tab drag gesture token and an exact generation. Stale queued timers cannot clear a successor timer or replay search after the next gesture.

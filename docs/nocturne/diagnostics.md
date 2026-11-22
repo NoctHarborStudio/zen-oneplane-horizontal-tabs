@@ -372,3 +372,8 @@ Existing `downloads.drag.tick` and `downloads.drag.end` aggregates include `pain
 ### Preview.121 Startup Search gesture restoration diagnostics
 
 `drag.search.restore` emits only static `outcome` (`requested`, `invalidated`, `skipped`), static cancellation `reason`, and the same per-window Drag Engine token already present in `drag.lifecycle.begin`. Queries and native URLs are used only transiently for native identity checks and are never logged, uploaded or persisted. The native 80ms restore delay is unchanged. Actual Gecko/Zen acceptance remains pending.
+
+
+### Preview.122 empty-native Workspace tab adoption diagnostics
+
+`drag.empty.preview` records a sampled static `admitted:true` only on a newly eligible native destination. `drag.drop` adds a bounded boolean `empty`; `drag.native.outcome` uses static `operation:"adopt-empty-workspace"` and existing outcome values (`confirmed`, `rejected`, `unverified`, `transferred-off-target`, `error`). Do not record Workspace UUIDs, titles, URL or native payloads. Source token, incoming lease, terminal cleanup and diagnostic retention remain those of the existing Drag Engine. An accepted native custom drop does not equal a successful OS mutation.

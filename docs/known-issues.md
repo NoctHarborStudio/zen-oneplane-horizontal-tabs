@@ -479,6 +479,8 @@ strip-drag.js.part:108–110 returns null if stripNodes empty; native/tab-adapte
 
 **Required:** A5: explicit empty-strip destination (native active Workspace and insertion contract), verify incoming tab adoption into zero-tab Home/Free without unintended detach or duplicate window.
 
+**preview.122 source checkpoint:** Added a dedicated trusted empty-native-Workspace destination, bounded to the real strip/plus hit, checked against the connected native Zen active regular-tabs container, actual native membership and a supported `moveTabToWorkspace` method. This deliberately excludes Home overlay, Pinned/Essentials/Split/Folder/Glance and all ambiguous target cases. `adoptTab` has no guessed `tabIndex`; postcondition requires native destination ownership, current UUID and actual `tabsContainer.contains(adopted)`. Extracted-source tests cover null/throw/off-target and once-only source cleanup. **Native Zen OS drop and placement remain OPEN.**
+
 #### NC4-066 — Mirror sync can remove or reparent native drag source during active session (S/R/P1)
 
 tab-sync.js.part:8–14 freezes structural changes only for center-motion; normal sync removes entries and applies partition; reorder.js.part:1–2 explicitly requires stable drag source. Native tab close/workspace/group changes can invalidate snapshot; no explicit drag topology generation.
