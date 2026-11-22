@@ -602,3 +602,18 @@ Native acceptance for NC4-090-R2 remains open: source/CI PASS does not imply Zen
 - [ ] Native: rename/remove the focused local file, refresh, then attempt the previously displayed button; no stale file action or wrong-target open/reveal. Failed metadata/native scan must preserve prior valid rows until a successful refresh.
 - [ ] Native: switch the local-media pref, close/reopen Library, hot-reload Sine during scan, then repeat across two normal windows; verify ownership, lifecycle, no stale callback and correct file existence/cloud checks.
 - [ ] Keep NC4-022/082/083 native scanner allocation/cancellation, thumbnail decoded-memory bounds, cloud changes and native OS behavior OPEN; source pass does not certify these.
+
+### A7 / NC4-022/082/083 — local media decoder, traversal and scan liveness (preview.138)
+
+- [x] Re-read Zen 1.24.2b native `nsZenLibraryFiles.cpp` and IDL: full FoundFile accumulation before sort/truncate, maxItems not native work budget, scan callback has no cancel/timeout token.
+- [x] Re-read `safeRaster` and UI image path: 2 MiB compressed-file limit, lazy 32px image, no intrinsic decoded-pixel or frame budget. NC4-022 **remediation OPEN**.
+- [x] Verify per-session repeated Refresh shares one native Promise and never launches overlapping native walks; the outstanding native Promise remains in disposal barrier even after UI stop.
+- [x] Verify 15s UI deadline is not a native abort: only the current status changes and downloaded/committed rows stay available.
+- [x] Verify late current success clears only the slow-scan notice; late native error releases the gate and allows retry after settlement.
+- [x] Verify section switch/close cancels the UI timer, prevents stale rows or notices and keeps native pending lease until completion.
+- [x] Four new source-backed cases and [CI 45078211906](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45078211906): 798 Node / 15 Python, reproducible build, 12 parsers, release metadata and public Raw/codeload PASS.
+- [ ] Native Zen 1.24.2b/Sine 2.3.3 in disposable opt-in profile: artificially delayed scan callback and repeated Refresh, verify only one actual scanner invocation, visible pending notice after UI deadline, late data display, error recovery and no misleading success.
+- [ ] Native: close Library/switch sections/disable or hot-reload Nocturne during delayed scan; confirm native ownership persists and no stale row reappears. Check different windows separately; this fix is window/session-local.
+- [ ] Native large/network/slow folders: measure C++ enumeration allocations, peak memory and scan latency; assess hard budget/upstream top-K change without assuming maxItems bounds the walk (NC4-082 OPEN).
+- [ ] Native thumbnail stress: oversized-dimension compressed PNG/JPEG/GIF, cloud-placeholder transition and symlink file; profile decoded memory/frames with diagnostics on/off before selecting a native safe-thumbnail path or agreed icon fallback (NC4-022 OPEN).
+- [ ] Permanently unresolved native scanner must retain its existing disposal barrier: do not create an overlapping new service on a speculative timeout. Native recovery/cancellation capability remains unavailable in verified target API.
