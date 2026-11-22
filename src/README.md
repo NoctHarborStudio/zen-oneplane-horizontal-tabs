@@ -69,3 +69,6 @@ A5.1b1: native tab/group postconditions are ephemeral reads in `src/native/tab-a
 
 
 A5.2a: `src/interactions/split-drop.js.part` owns native Split custom drag admission and exact-token terminal cleanup. It reads ephemeral live native tabs/pin roles/Split groups, revalidates command identity after native selection callbacks and never duplicates a native tab just to simulate a successful move. Reuse existing Drag Engine lifecycle and `sourceHandled` optional expected token; do not introduce a second Split session registry or unverified rollback.
+
+
+A5.2b1 (preview.116): the existing Split Drop owner reads exact native `TabGroup.tabs` and returned Zen `splitTabs().tabs` for synchronous postconditions; preflight rejects inconsistent native group topology. Unsplit confirms native size-two dissolution or exact surviving members for larger groups. No additional Split registry, native cache, rollback, observer or animation engine; async native convergence, folders and OS session identity need native acceptance. Canonical CI pending at initial source checkpoint.

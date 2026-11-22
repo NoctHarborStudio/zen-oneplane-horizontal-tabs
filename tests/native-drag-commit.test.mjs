@@ -78,16 +78,16 @@ test("rejected, partial and throwing adoption each settle source exactly once",(
  }
 });
 function splitDrop(mode){
- const code=split.slice(split.indexOf("  function onSplitDrop("));
+ const code=split.slice(split.indexOf("  function nativeSplitMembers("),split.indexOf("  function nativeSplitPreflight("))+split.slice(split.indexOf("  function onSplitDrop("));
  return new Function("mode",code+
-  'const calls=[],window={__nocturneTrace:(n,d)=>calls.push(["trace",d.operation,d.outcome])},tab={group:null,hasAttribute:()=>false},current={group:null};'+
+  'const calls=[],window={__nocturneTrace:(n,d)=>calls.push(["trace",d.operation,d.outcome])},tab={group:null,splitView:false,hasAttribute:()=>false},current={group:null,splitView:false};'+
   'const browser={selectedTab:current},tabOwner=()=>window,draggedGroup=null,draggedTab=tab;let nativeDragToken=1;const dragLifecycle={owns:t=>t===nativeDragToken},readDraggedTab=()=>tab;'+
   'const retireChangedDragViewport=()=>false,retireChangedDragChromeFrame=()=>false,splitDropAllowed=()=>true,splitDropPoint=()=>({x:.1,y:.1});'+
   'const toolbarDragReturnZone=()=>false,emptySplitTarget=()=>false,splitSide=()=>"left",validNativeTab=()=>true,dragPhaseInputAllowed=()=>true,splitSourceCurrent=(t,token)=>t===tab&&token===nativeDragToken,nativeSplitPreflight=()=>"";'+
-  'const group={hasAttribute:()=>true},splitGroup=t=>t.group,isSplit=t=>!!t.group;'+
-  'if(mode.startsWith("unsplit"))tab.group=group;'+
-  'const unsplitTab=t=>{calls.push("unsplit");if(mode==="unsplit-success"){t.group=null;return true;}return false;};'+
-  'window.gZenViewSplitter={splitTabs:()=>{calls.push("split");if(mode==="split-failure")return null;if(mode==="split-success"){tab.group=group;current.group=group;}return {};}};'+
+  'const group={hasAttribute:()=>true,tabs:[]},splitGroup=t=>t.group,isSplit=t=>!!t.group||!!t.splitView;'+
+  'if(mode.startsWith("unsplit")){tab.group=current.group=group;tab.splitView=current.splitView=true;group.tabs=[tab,current];}'+
+  'const unsplitTab=t=>{calls.push("unsplit");if(mode==="unsplit-success"){t.group=null;t.splitView=false;current.group=null;current.splitView=false;group.tabs=[];return true;}return false;};'+
+  'window.gZenViewSplitter={splitTabs:()=>{calls.push("split");if(mode==="split-failure")return null;if(mode==="split-success"){tab.group=current.group=group;tab.splitView=current.splitView=true;group.tabs=[tab,current];return {tabs:[tab,current]};}return {};}};'+
   'const sourceHandled=()=>{calls.push("settled");calls.push("visual");nativeDragToken=null;},cancelActiveDrag=()=>calls.push("cancel"),schedule=()=>{},console={error:()=>calls.push("error")};'+
   'const event={isTrusted:true,preventDefault(){},stopPropagation(){}};onSplitDrop(event);return {calls,selected:browser.selectedTab===tab};'
  )(mode);

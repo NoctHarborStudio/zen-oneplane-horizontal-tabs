@@ -342,3 +342,8 @@ No new trace stream. Existing drag, address.cascade, tabs.sync, geometry.preflig
 ### Preview.115 — Split native admission and settlement
 
 Existing `drag.native.outcome` adds an optional bounded fixed `reason` for rejected/retargeted Split command candidates (e.g. `native-may-clone`, `native-essentials-unsupported`, `native-split-limit`, `selection-retargeted`, `stale-source`). `split-settle-incomplete` is an existing Drag Engine lifecycle cancellation reason for a delivered Split drop whose exact source could not be marked handled. No new recorder, persistent source cache, timer, RAF or raw native tab data. Native reentrant selection and OS drag sequencing still require Zen diagnostics/profiler evidence.
+
+
+### Preview.116 — Split native group convergence
+
+The existing bounded `drag.native.outcome` event now uses the fixed `native-postcondition` reason when a Split/unsplit native result cannot be confirmed against exact physical/returned native membership. Inconsistent pre-existing Split group topology uses `native-split-group-unready`; changes during native selection remain `selection-retargeted`. `confirmed` is an immediate native snapshot, not a promise of asynchronous future convergence or a unique OS drag session. Existing gesture settlement traces remain authoritative for token cleanup. No tabs, window IDs, URLs, titles, paths, native objects or extra polling are recorded.

@@ -1216,3 +1216,8 @@ Source-reproduced risks addressed: Nocturne previously advertised a move-like Sp
 
 
 A5.2a canonical gate: `preview.115` (runtime `05196f2`, test correction `de6d477`) [CI 45042973915](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45042973915) PASS: 722 Node, 15 Python, 12 runtime parser and published artifacts. Native Split group post-command convergence, true Gecko OS session identity, visual and performance tests remain open for A5.2b/A5.1b2/A8; do not mark native PASS.
+
+
+### A5.2b1 — Native Split membership/result certificate (preview.116)
+
+Source code previously reported a Split command confirmed when both inputs pointed to a Split group and `splitTabs` returned a truthy result, without checking the returned native `result.tabs`, exact group members or surviving unsplit peers. This could misclassify partial/reentrant native mutations; not a reproduced data-loss symptom. Preview.116 validates authoritative exact native physical membership and native return data, including selected-tab reentrancy, full two-member unsplit collapse and three-plus remaining members. It fails closed on unreadable/inconsistent native groups, logs unverified outcomes and never runs speculative native rollback. Source fixture pass does not establish asynchronous Zen convergence, nested folder integration, Gecko gesture uniqueness, native visual performance or multi-monitor acceptance. A5.2b2 and A5.1b2 remain open.
