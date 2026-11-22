@@ -588,3 +588,17 @@ The user approved the **geometry and interaction concept**, not an implementatio
 - [ ] Native Zen 1.24.2b/Sine 2.3.3: verify old native remove Promise settles before the service lease/view is released during hot reload; reject duplicate removal on the same Download and avoid files-on-disk deletion.
 
 Native acceptance for NC4-090-R2 remains open: source/CI PASS does not imply Zen process-wide cross-window exclusive removal or bounded completion of a hung native Promise.
+
+### A7 / NC4-077 + NC4-092 — media refresh consistency and row identity (preview.137)
+
+- [x] Reproduced an old local-media action ID surviving unchanged-file refresh on preview.136; differentiated stale action capability from stable view identity.
+- [x] Preserve prior committed cache and valid action handles when scanner/metadata staging fails; no partially new handles exposed.
+- [x] Successful scan revokes old local action IDs; current IDs open/reveal only current live session entries.
+- [x] Normalized unchanged Windows paths retain `viewKey`; rename/removal and close/reopen retire the old view identity.
+- [x] Existing local Library DOM row and scroll remain stable across action-capability rotation; renamed file no longer reuses old DOM row.
+- [x] Source-backed regressions and [CI 45077039287](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45077039287) PASS: 794 Node / 15 Python; generated outputs, 12 runtime parsers and public package verified.
+- [x] Diagnostic reports bounded `section/status/count` only; no path, filename or URL.
+- [ ] Native disposable Zen 1.24.2b/Sine 2.3.3: enable local-media opt-in, focus a picture/document row, refresh the same folder and verify no lost focus, duplicate row or stale actions.
+- [ ] Native: rename/remove the focused local file, refresh, then attempt the previously displayed button; no stale file action or wrong-target open/reveal. Failed metadata/native scan must preserve prior valid rows until a successful refresh.
+- [ ] Native: switch the local-media pref, close/reopen Library, hot-reload Sine during scan, then repeat across two normal windows; verify ownership, lifecycle, no stale callback and correct file existence/cloud checks.
+- [ ] Keep NC4-022/082/083 native scanner allocation/cancellation, thumbnail decoded-memory bounds, cloud changes and native OS behavior OPEN; source pass does not certify these.

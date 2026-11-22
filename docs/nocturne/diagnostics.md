@@ -390,3 +390,7 @@ The existing trace channel records sampled page-progress.network {reason:"overla
 ### Preview.130 — Page Progress correlation correction
 
 `page-progress.network` retains the existing sampled content-free reasons `overlap-start` and `stale-stop`. The latter now means that a STOP carried a request previously seen and superseded by another NETWORK START, **not** merely that the STOP request differed from the current one. The bounded retired-request identity set is never serialized to telemetry and is cleared at terminal completion or unload. No additional hot-path probe or sensitive request metadata.
+
+### Preview.137 — local Media refresh commit/failure diagnostic
+
+`library.media.refresh` is emitted by the existing Library Services trace sink only on a **current** scan success or scanner/metadata staging error. Detail is exactly `{section:"documents"|"pictures", status:"committed"|"error", count:<bounded number>}`, with `count` equal to the currently published row count on commit and zero on staging error. Neither native path nor filename, query, file content, action ID or view key is recorded. Superseded sessions are ignored, not reported as a successful commit. This does not measure decoded image memory, scanner traversal cost or OS file action success.
