@@ -220,6 +220,7 @@
     }
   }
   function onSelect() {
+    if(restoreSearchTimer)cancelStartupSearchRestore("native-tab-select");
     typeof window!=="undefined"&&window.__nocturneTrace?.("tabs.select",()=>({home:row.hasAttribute('data-op-home-open'),phase:root.getAttribute('data-zr-workspace-phase'),overflow:row.hasAttribute('data-op-overflow-row')}),{sample:1800});
     markHomeTitleActivity();
     indicatorSelectionChanged();
@@ -231,6 +232,7 @@
     window.requestAnimationFrame(revealSelectedInStrip);
   }
   function onTabOpenOrClose(){
+    if(restoreSearchTimer)cancelStartupSearchRestore("native-tab-change");
     guardPanelSwitch();
     schedule();
   }

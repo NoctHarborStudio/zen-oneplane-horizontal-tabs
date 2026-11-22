@@ -2,7 +2,7 @@
 
 A unified UI modification for [Zen Browser](https://zen-browser.app/), combining OnePlane and Zen Refined. Nocturne is not a browser fork.
 
-**Development preview: 0.3.0-preview.120** · Target: Zen 1.24.2b / Sine 2.3.3. Native verification of this combined package is pending.
+**Development preview: 0.3.0-preview.121** · Target: Zen 1.24.2b / Sine 2.3.3. Native verification of this combined package is pending.
 
 ## Features
 

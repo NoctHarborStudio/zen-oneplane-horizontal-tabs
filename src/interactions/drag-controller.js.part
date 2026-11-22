@@ -69,6 +69,7 @@
     cancelInsertion();
     cancelOverflowMotion();
     if(dragLifecycle.current())cancelActiveDrag("superseded");
+    cancelStartupSearchRestore("dragstart");
     const grabbed = image.getBoundingClientRect();
     dragGrabRatio = Math.max(0,Math.min(1,(event.clientX-grabbed.left)/Math.max(1,grabbed.width)));
     dragGrabY = Math.max(0,Math.min(1,(event.clientY-grabbed.top)/Math.max(1,grabbed.height)));
@@ -85,7 +86,8 @@
       return;
     }
     if(!startNativeDragLifecycle(event,tab)){event.preventDefault();return;}
-    dragSearch = pointerSearch?.tab === browser.selectedTab ? pointerSearch : readStartupSearch();
+    const startupSearch=pointerSearch?.tab === browser.selectedTab ? pointerSearch : readStartupSearch();
+    dragSearch=startupSearch?{...startupSearch,gestureToken:nativeDragToken}:null;
     pointerSearch = null;
     groupPullLayout = null;
     draggedTab = tab;

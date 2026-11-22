@@ -367,3 +367,8 @@ Existing `drag.lifecycle.cancel` can now include fixed `reason:"native-session-u
 ### Preview.120 File Bunny OLE artwork paint gate
 
 Existing `downloads.drag.tick` and `downloads.drag.end` aggregates include `paints` (actual artwork style write and forced layout flush count) and `skips` (near-static frames with physics/release pose updated without layout). These counters measure this code path, not Gecko-composited frames. The 16 ms timer and native source watchdog remain unchanged. Never log file names, paths or OS drop contents; native OS paint/profiler acceptance pending.
+
+
+### Preview.121 Startup Search gesture restoration diagnostics
+
+`drag.search.restore` emits only static `outcome` (`requested`, `invalidated`, `skipped`), static cancellation `reason`, and the same per-window Drag Engine token already present in `drag.lifecycle.begin`. Queries and native URLs are used only transiently for native identity checks and are never logged, uploaded or persisted. The native 80ms restore delay is unchanged. Actual Gecko/Zen acceptance remains pending.

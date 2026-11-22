@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.120",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.121",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -4310,7 +4310,9 @@ function installTabStrip() {
     reconcileTabCascade();
     if(!addressTransition&&!addressSettling&&!nativeInlineOpen(addressBar()))alignAddressStart();
   }
-  function onAddressInput() {
+  function onAddressInput(event) {
+    if(event?.isTrusted && (event.type==="pointerdown" || event.type==="input") && restoreSearchTimer)
+      cancelStartupSearchRestore("native-address-input");
     // Typing or clicking the real input during closing reverses the close.
     if (!addressSettling && !addressTransition?.name.startsWith("closing")) {
       if(!addressTransition)rememberCompactAddress();
@@ -4581,7 +4583,7 @@ function installTabStrip() {
     dragHandled=true;dragStartPoint=null;draggedTab=null;draggedGroup=null;
     // Do not reopen the start-page search after an interrupted OS gesture.
     dragSearch=null;pointerSearch=null;
-    if(restoreSearchTimer)window.clearTimeout(restoreSearchTimer);restoreSearchTimer=0;
+    cancelStartupSearchRestore("drag-cancel");
     try{endDragVisual();}finally{clearSourceIncoming(cancelledToken);}
   }
   function startNativeDragLifecycle(event,tab){
@@ -4614,7 +4616,9 @@ function installTabStrip() {
       else if(signal==="drop")current.onUp?.(event);
     }
     function freshPointer(event){
-      if(event.isTrusted&&(dragLifecycle.current()||dragInsertPending))cancelActiveDrag("new-pointerdown");
+      if(!event.isTrusted)return;
+      if(restoreSearchTimer)cancelStartupSearchRestore("new-pointerdown");
+      if(dragLifecycle.current()||dragInsertPending)cancelActiveDrag("new-pointerdown");
     }
     function mouseFallback(event){
       if(!event.isTrusted)return;
@@ -4625,7 +4629,9 @@ function installTabStrip() {
       // buttons=0. Never infer a tab drop from mousemove.
     }
     function keyboard(event){
-      if(!event.isTrusted||!dragLifecycle.current()||!dragInterruptionKey(event))return;
+      if(!event.isTrusted)return;
+      if(restoreSearchTimer)cancelStartupSearchRestore("new-keydown");
+      if(!dragLifecycle.current()||!dragInterruptionKey(event))return;
       const kind=dragLifecycle.current().kind;
       cancelActiveDrag("keyboard-interruption");
       if(event.key==="Escape"&&["workspace","trash"].includes(kind)){event.preventDefault();event.stopImmediatePropagation();}
@@ -8733,18 +8739,46 @@ function installTabStrip() {
       /^(about:(blank|newtab|home|privatebrowsing))(?:[?#].*)?$/i.test(tab.linkedBrowser?.currentURI?.spec || "");
     if (!empty || !(bar.hasAttribute("zen-newtab") || bar.hasAttribute("zen-floating-urlbar")) ||
         !(bar.hasAttribute("open") || bar.hasAttribute("focused") || bar.view?.isOpen)) return null;
-    return {tab,empty,query:bar.value || "",newtab:bar.hasAttribute("zen-newtab")};
+    // The native document must still be the same one when restoration runs.
+    // This transient identity is never logged or persisted.
+    return {tab,empty,query:bar.value || "",newtab:bar.hasAttribute("zen-newtab"),
+      uri:tab.linkedBrowser?.currentURI?.spec??null};
+  }
+  // One pending restoration belongs to one finished native tab gesture.
+  // Increment even after a cleared timeout: an already queued callback from
+  // a previous gesture must not clear or consume a successor's timer.
+  let startupSearchEpoch=0;
+  function cancelStartupSearchRestore(reason) {
+    ++startupSearchEpoch;
+    const pending=!!restoreSearchTimer;
+    if(restoreSearchTimer)window.clearTimeout(restoreSearchTimer);
+    restoreSearchTimer=0;
+    if(pending)window.__nocturneTrace?.("drag.search.restore",{outcome:"invalidated",reason},{sample:1000});
   }
   function rememberStartupSearch(event) {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || !event.isTrusted) return;
+    cancelStartupSearchRestore("source-pointer");
     pointerSearch = readStartupSearch();
   }
   function restoreStartupSearch(state) {
-    if (!state || dead) return;
-    if (restoreSearchTimer) window.clearTimeout(restoreSearchTimer);
+    if (!state || dead || !Number.isSafeInteger(state.gestureToken)) return;
+    cancelStartupSearchRestore("reschedule");
+    const epoch=startupSearchEpoch;
     restoreSearchTimer = window.setTimeout(()=>{
+      if(epoch!==startupSearchEpoch)return;
       restoreSearchTimer=0;
-      if (dead || browser.selectedTab !== state.tab || !validNativeTab(state.tab)) return;
+      // Native tab/search remain authoritative. An intervening gesture,
+      // new input, navigation or incoming drag invalidates old intent.
+      const tab=state.tab;
+      const empty=tab?.hasAttribute("zen-empty-tab") ||
+        /^(about:(blank|newtab|home|privatebrowsing))(?:[?#].*)?$/i.test(tab?.linkedBrowser?.currentURI?.spec || "");
+      if (dead || dragLifecycle.current() || nativeDragToken!==null || dragInsertPending ||
+          incomingDrag || row.hasAttribute("data-op-dragging") ||
+          browser.selectedTab!==tab || !validNativeTab(tab) || !empty ||
+          state.uri!==(tab?.linkedBrowser?.currentURI?.spec??null)) {
+        window.__nocturneTrace?.("drag.search.restore",{outcome:"skipped",reason:"state-changed",token:state.gestureToken},{sample:1000});
+        return;
+      }
       const bar=window.gURLBar;
       if (!bar || bar.hasAttribute("open") || bar.hasAttribute("focused") || bar.view?.isOpen) return;
       try {
@@ -8757,6 +8791,7 @@ function installTabStrip() {
           bar.search(state.query);
           document.getElementById("Browser:OpenLocation")?.doCommand();
         }
+        window.__nocturneTrace?.("drag.search.restore",{outcome:"requested",token:state.gestureToken},{sample:1000});
       } catch(error) { console.error("[OnePlane] Restore startup search:",error); }
     },80);
   }
@@ -8831,6 +8866,7 @@ function installTabStrip() {
     cancelInsertion();
     cancelOverflowMotion();
     if(dragLifecycle.current())cancelActiveDrag("superseded");
+    cancelStartupSearchRestore("dragstart");
     const grabbed = image.getBoundingClientRect();
     dragGrabRatio = Math.max(0,Math.min(1,(event.clientX-grabbed.left)/Math.max(1,grabbed.width)));
     dragGrabY = Math.max(0,Math.min(1,(event.clientY-grabbed.top)/Math.max(1,grabbed.height)));
@@ -8847,7 +8883,8 @@ function installTabStrip() {
       return;
     }
     if(!startNativeDragLifecycle(event,tab)){event.preventDefault();return;}
-    dragSearch = pointerSearch?.tab === browser.selectedTab ? pointerSearch : readStartupSearch();
+    const startupSearch=pointerSearch?.tab === browser.selectedTab ? pointerSearch : readStartupSearch();
+    dragSearch=startupSearch?{...startupSearch,gestureToken:nativeDragToken}:null;
     pointerSearch = null;
     groupPullLayout = null;
     draggedTab = tab;
@@ -10167,6 +10204,7 @@ function installTabStrip() {
     }
   }
   function onSelect() {
+    if(restoreSearchTimer)cancelStartupSearchRestore("native-tab-select");
     typeof window!=="undefined"&&window.__nocturneTrace?.("tabs.select",()=>({home:row.hasAttribute('data-op-home-open'),phase:root.getAttribute('data-zr-workspace-phase'),overflow:row.hasAttribute('data-op-overflow-row')}),{sample:1800});
     markHomeTitleActivity();
     indicatorSelectionChanged();
@@ -10178,6 +10216,7 @@ function installTabStrip() {
     window.requestAnimationFrame(revealSelectedInStrip);
   }
   function onTabOpenOrClose(){
+    if(restoreSearchTimer)cancelStartupSearchRestore("native-tab-change");
     guardPanelSwitch();
     schedule();
   }
@@ -10256,8 +10295,7 @@ function installTabStrip() {
     cleanupStep("window.removeEventListener(\"dragleave\", onWindowDragLeave, true)",()=>{window.removeEventListener("dragleave", onWindowDragLeave, true);});
     cleanupStep("window.removeEventListener(\"dragexit\", onWindowDragLeave, true)",()=>{window.removeEventListener("dragexit", onWindowDragLeave, true);});
     cleanupStep("row.removeEventListener(\"pointerdown\", rememberStartupSearch, true)",()=>{row.removeEventListener("pointerdown", rememberStartupSearch, true);});
-    cleanupStep("if (restoreSearchTimer) window.clearTimeout(restoreSearchTimer)",()=>{if (restoreSearchTimer) window.clearTimeout(restoreSearchTimer);});
-    restoreSearchTimer=0;
+    cleanupStep("cancelStartupSearchRestore()",()=>{cancelStartupSearchRestore("destroy");});
     cleanupStep("row.removeEventListener(\"dragover\", onStripDragOver)",()=>{row.removeEventListener("dragover", onStripDragOver);});
     cleanupStep("row.removeEventListener(\"drop\", onStripDrop)",()=>{row.removeEventListener("drop", onStripDrop);});
     cleanupStep("row.removeEventListener(\"dragleave\", onStripDragLeave)",()=>{row.removeEventListener("dragleave", onStripDragLeave);});

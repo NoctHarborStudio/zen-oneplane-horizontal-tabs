@@ -226,7 +226,9 @@
     reconcileTabCascade();
     if(!addressTransition&&!addressSettling&&!nativeInlineOpen(addressBar()))alignAddressStart();
   }
-  function onAddressInput() {
+  function onAddressInput(event) {
+    if(event?.isTrusted && (event.type==="pointerdown" || event.type==="input") && restoreSearchTimer)
+      cancelStartupSearchRestore("native-address-input");
     // Typing or clicking the real input during closing reverses the close.
     if (!addressSettling && !addressTransition?.name.startsWith("closing")) {
       if(!addressTransition)rememberCompactAddress();

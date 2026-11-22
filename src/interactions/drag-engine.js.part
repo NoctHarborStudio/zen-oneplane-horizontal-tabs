@@ -54,7 +54,7 @@
     dragHandled=true;dragStartPoint=null;draggedTab=null;draggedGroup=null;
     // Do not reopen the start-page search after an interrupted OS gesture.
     dragSearch=null;pointerSearch=null;
-    if(restoreSearchTimer)window.clearTimeout(restoreSearchTimer);restoreSearchTimer=0;
+    cancelStartupSearchRestore("drag-cancel");
     try{endDragVisual();}finally{clearSourceIncoming(cancelledToken);}
   }
   function startNativeDragLifecycle(event,tab){
@@ -87,7 +87,9 @@
       else if(signal==="drop")current.onUp?.(event);
     }
     function freshPointer(event){
-      if(event.isTrusted&&(dragLifecycle.current()||dragInsertPending))cancelActiveDrag("new-pointerdown");
+      if(!event.isTrusted)return;
+      if(restoreSearchTimer)cancelStartupSearchRestore("new-pointerdown");
+      if(dragLifecycle.current()||dragInsertPending)cancelActiveDrag("new-pointerdown");
     }
     function mouseFallback(event){
       if(!event.isTrusted)return;
@@ -98,7 +100,9 @@
       // buttons=0. Never infer a tab drop from mousemove.
     }
     function keyboard(event){
-      if(!event.isTrusted||!dragLifecycle.current()||!dragInterruptionKey(event))return;
+      if(!event.isTrusted)return;
+      if(restoreSearchTimer)cancelStartupSearchRestore("new-keydown");
+      if(!dragLifecycle.current()||!dragInterruptionKey(event))return;
       const kind=dragLifecycle.current().kind;
       cancelActiveDrag("keyboard-interruption");
       if(event.key==="Escape"&&["workspace","trash"].includes(kind)){event.preventDefault();event.stopImmediatePropagation();}

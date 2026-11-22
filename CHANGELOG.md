@@ -1,3 +1,11 @@
+## 0.3.0-preview.121 — A5.7a native startup search restoration generation fence
+
+- Bind delayed startup search restoration to a captured native tab drag gesture token and an exact generation. Stale queued timers cannot clear a successor timer or replay search after the next gesture.
+- Invalidate pending native search restoration on trusted pointer/keyboard activity, native TabSelect/Open/Close and genuine address input, as well as drag start, cancellation and Layout disposal.
+- Verify the selected native tab still exists, remains empty and retains its original native URI immediately before restore. Preserve native URLbar/Zen command ownership, the 80 ms delay and successful un-interrupted behavior.
+- Add source-extracted deterministic regressions for quick repeat, stale timer reentrancy, native input/navigation, active drag and cleanup. No new scheduler, global controller or URLs/queries in diagnostics.
+- NC4-065 empty-toolbar cross-window adoption and NC4-066 native topology change during drag still require separate native admission and lifecycle evidence; no speculative native mutation in this release.
+
 ## 0.3.0-preview.120 — A5.6a native file paint gating and Tab Bunny image audit
 
 - Keep the Windows OLE-safe 16 ms File Bunny timer and native widget movement, but skip visual style writes and forced layout when relative artwork is below bounded subpixel thresholds.

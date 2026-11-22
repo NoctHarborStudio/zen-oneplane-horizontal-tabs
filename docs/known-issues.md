@@ -529,6 +529,8 @@ startup-search.js.part:14–35 schedules restore after 80ms; checks same selecte
 
 **Required:** A5/A6: bind restore to native search token and completed gesture generation, invalidate on new input/navigation; test fast repeat drag, Escape and native newtab session.
 
+**preview.121 source checkpoint:** A5.7a captures the exact native gesture token in the transient search snapshot, fences 80ms callbacks by a monotonic generation, and cancels on trusted new input/native tab changes/drag start/cancel/teardown. A source fixture reproduces the preview.120 stale command and candidate tests exercise native empty-page identity and callback reentry. This is source-only; real Zen rapid drag/Escape/NewTab acceptance remains OPEN.
+
 #### NC4-074 — Legacy drag implementations remain unreferenced in generated layout (S/P2)
 
 Pinned layout.uc.mjs identifier scan: captureGroupPull, previewGroupPull, dragPaintedBox, markDrop each occur once (definition only); group-pull helper and older state branches coexist with magnetic anchor path. No claim that all group-pull helpers are unused (clearGroupPull/setPull remain live).

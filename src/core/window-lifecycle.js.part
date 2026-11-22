@@ -46,8 +46,7 @@
     cleanupStep("window.removeEventListener(\"dragleave\", onWindowDragLeave, true)",()=>{window.removeEventListener("dragleave", onWindowDragLeave, true);});
     cleanupStep("window.removeEventListener(\"dragexit\", onWindowDragLeave, true)",()=>{window.removeEventListener("dragexit", onWindowDragLeave, true);});
     cleanupStep("row.removeEventListener(\"pointerdown\", rememberStartupSearch, true)",()=>{row.removeEventListener("pointerdown", rememberStartupSearch, true);});
-    cleanupStep("if (restoreSearchTimer) window.clearTimeout(restoreSearchTimer)",()=>{if (restoreSearchTimer) window.clearTimeout(restoreSearchTimer);});
-    restoreSearchTimer=0;
+    cleanupStep("cancelStartupSearchRestore()",()=>{cancelStartupSearchRestore("destroy");});
     cleanupStep("row.removeEventListener(\"dragover\", onStripDragOver)",()=>{row.removeEventListener("dragover", onStripDragOver);});
     cleanupStep("row.removeEventListener(\"drop\", onStripDrop)",()=>{row.removeEventListener("drop", onStripDrop);});
     cleanupStep("row.removeEventListener(\"dragleave\", onStripDragLeave)",()=>{row.removeEventListener("dragleave", onStripDragLeave);});
