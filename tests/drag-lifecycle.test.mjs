@@ -174,3 +174,19 @@ test("Bunny return restores source highlight and hover only on the visible card"
   assert.ok(end.includes("if(!keep)endDragVisual(finishReturn);"));
   assert.ok(img.includes("dragReturnPoint={x:event.clientX,y:event.clientY}"));
 });
+
+
+test("outside Tab Bunny image handoff keeps Gecko artwork owner across reentry",async()=>{
+  const {readFile}=await import("node:fs/promises");
+  const img=await readFile(new URL("../src/interactions/native-drag-image.js.part",import.meta.url),"utf8");
+  const a=img.indexOf("  function setDragImageMode("),b=img.indexOf("  function followLocalSource(",a);
+  assert.ok(a>=0&&b>a);
+  assert.ok(!img.slice(a,b).includes('else if (previous === "outside")'));
+  const f=new Function(`
+    let dragNode={},dragImageMode="outside";
+    ${img.slice(a,b)}
+    return {change:setDragImageMode,mode:()=>dragImageMode};
+  `)();
+  f.change("inline",{});f.change("content",{});
+  assert.equal(f.mode(),"outside","reentry must not draw local art over the OS image");
+});

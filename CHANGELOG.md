@@ -1,3 +1,10 @@
+## 0.3.0-preview.120 — A5.6a native file paint gating and Tab Bunny image audit
+
+- Keep the Windows OLE-safe 16 ms File Bunny timer and native widget movement, but skip visual style writes and forced layout when relative artwork is below bounded subpixel thresholds.
+- Preserve every physics/release pose, source ownership, native payload, cancellation and popup-hidden cleanup; aggregate paints/skips in the existing privacy-bounded diagnostics.
+- Remove unreachable Tab Bunny native-image reset logic while retaining conservative single-OS-image ownership after outside handoff. Local return-artwork reactivation awaits real Gecko validation.
+- Add extracted-source regression coverage. Native OS DragSession identity, paint/fidelity, file drops and matched profiler remain OPEN.
+
 ## 0.3.0-preview.119 — A5.5a native drag source watchdog recovery
 
 - Bound unavailable Gecko drag session capability errors separately from absent sessions for tab Drag Engine, while preserving the exact gesture token and never synthesizing a native drop.

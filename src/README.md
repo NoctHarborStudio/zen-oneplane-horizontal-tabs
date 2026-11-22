@@ -84,3 +84,6 @@ A5.5a (preview.119): `src/interactions/drag-engine.js.part` keeps one token-owne
 
 
 A5.5a canonical CI: `preview.119` [run 45057503562](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45057503562) PASS (734 Node, 15 Python, deterministic build, runtime and served package). This is source and package verification, not native OS DragSession or file-drop acceptance.
+
+
+A5.6a (preview.120): Downloads Dock's native OLE file artwork timer stays at 16 ms, but only visibly changed relative poses incur style/layout flush. Native popup position, source lifecycle and OS payload are unchanged. Tab Bunny retains a sticky `outside` image ownership latch; the formerly unreachable outside-to-local image clearing branch is removed. Actual Gecko reentry, file OS drop and performance still require native validation.

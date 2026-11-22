@@ -362,3 +362,8 @@ The existing Display Engine now records bounded `drag.placement.preview` only wh
 ### Preview.119 — Bounded native tab/file source recovery
 
 Existing `drag.lifecycle.cancel` can now include fixed `reason:"native-session-unavailable"` after six consecutive unknown/unavailable Gecko session probes, alongside `"native-session-ended"` after three consecutive confirmed absent observations. The Downloads Dock's existing `downloads.drag.end` event records the same static reasons when file source liveness expires, even if Bunny artwork creation failed. Library's existing private-safe `library.*` trace emits `library.file.drag.recovered` with only `{reason:"native-session-ended"|"native-session-unavailable"}` for its Dock-free fallback. The popup's existing `downloads.drag.popup-hidden` does not mean native OS drop completed. These paths log no URLs, titles, downloaded file identities/paths, raw event/session objects or native file contents and do not create a new writer. Watchers run only for a live drag source at 200–250ms intervals, with explicit timeout teardown on normal dragend/dispose; diagnostic sampling cannot establish true native DragSession identity or OS payload acceptance.
+
+
+### Preview.120 File Bunny OLE artwork paint gate
+
+Existing `downloads.drag.tick` and `downloads.drag.end` aggregates include `paints` (actual artwork style write and forced layout flush count) and `skips` (near-static frames with physics/release pose updated without layout). These counters measure this code path, not Gecko-composited frames. The 16 ms timer and native source watchdog remain unchanged. Never log file names, paths or OS drop contents; native OS paint/profiler acceptance pending.

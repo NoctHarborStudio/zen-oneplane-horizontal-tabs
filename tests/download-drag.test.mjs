@@ -295,3 +295,42 @@ test("live drag popup disables Gecko screen-edge constraints before attachment",
  const prepare=new Function("document","get","make",`let filePopup=null,fileStage=null,fileBunny=null;\n${code}\nreturn prepareFilePopup;`)({createXULElement:()=>popup},()=>set,()=>({}));
  assert.equal(prepare(),true);assert.equal(attrs.get("flip"),"none");assert.equal(attrs.get("mousethrough"),"always");assert.equal(attached,true);
 });
+
+
+test("File Bunny OLE loop suppresses unchanged forced layout without stopping samples",()=>{
+  const code=section("  function fileBunnyVisualChanged(","  function stopFileBunnyFrame(");
+  const poses=[0,.01,.02,.06,.06,.06,0].map(x=>({x,y:45,w:186,h:51,angle:0,scale:1,morph:1}));
+  const run=new Function("poses",`
+    let fileBunny=null,now=0,next=0,index=0,flushes=0;const writes=[],timers=new Map(),events=[];
+    const window={setTimeout(fn){const id=++next;timers.set(id,fn);return id;},windowUtils:{paintCount:0}};
+    function current(){return now;}
+    function popupPoint(){return {x:20,y:20};}
+    function sampleFilePopup(q){q.moves++;}
+    function fileBunnyStep(){return poses[Math.min(index++,poses.length-1)];}
+    function paintFileBunny(q,p){q.pose=p;writes.push(p.x);}
+    function fileBunnyTrace(name,data){events.push([name,data]);}
+    ${code}
+    const q={ending:false,shown:true,timer:0,started:0,last:0,lastReport:-300,frames:0,moves:0,maxGap:0,maxAngle:0,
+      popup:{state:"open",getAttribute:()=>null},visual:{card:{getBoundingClientRect(){flushes++;}}},
+      paintPose:null,paints:0,skips:0};
+    fileBunny=q;tickFilePopup(q);
+    return {tick(){const [id,fn]=timers.entries().next().value??[];if(!fn)throw Error("missing native timer");timers.delete(id);now+=16;fn();},
+      read(){return {writes,flushes,frames:q.frames,paints:q.paints,skips:q.skips,pose:q.pose,pending:timers.size,
+        telemetry:events.find(e=>e[0]==="tick")?.[1]}}};
+  `)(poses);
+  for(let i=0;i<poses.length;i++)run.tick();
+  const state=run.read();
+  assert.deepEqual(state.writes,[0,.06,0]);
+  assert.equal(state.flushes,3);assert.equal(state.paints,3);assert.equal(state.skips,4);
+  assert.equal(state.frames,7);assert.equal(state.pending,1);
+  assert.equal(state.pose.x,0,"release pose stays current even on skipped frames");
+  assert.equal(state.telemetry.paints,1);assert.equal(state.telemetry.skips,0);
+});
+test("File Bunny relative pose gate checks all visible dimensions",()=>{
+  const changed=new Function(section("  function fileBunnyVisualChanged(","  function tickFilePopup(")+"return fileBunnyVisualChanged;")();
+  const q={x:10,y:20,w:100,h:35,angle:0,scale:1,morph:0};
+  assert.equal(changed(null,q),true);
+  assert.equal(changed(q,{...q,x:q.x+.01,y:q.y+.02,w:q.w+.01,h:q.h+.01,angle:.01,scale:1.0001,morph:.0005}),false);
+  for(const [key,delta] of [["x",.06],["y",.06],["w",.06],["h",.06],["angle",.04],["scale",.0006],["morph",.003]])
+    assert.equal(changed(q,{...q,[key]:q[key]+delta}),true,key);
+});

@@ -1,6 +1,6 @@
 // Nocturne preview.45: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="downloads.script",data={version:"0.3.0-preview.119"};
+  const event="downloads.script",data={version:"0.3.0-preview.120"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -739,17 +739,30 @@ try{if(typeof window!=="undefined"){
     q.screenPoint=p;const inside=filePointInside(p);
     if(q.inside!==inside){q.inside=inside;q.crossings++;fileBunnyTrace("boundary",{inside,frames:q.frames,moves:q.moves},{sample:600});}
   }
+  // Gecko owns popup screen movement. Only flush the nested OLE widget when
+  // relative artwork changes; keep its 16ms source timer unchanged.
+  function fileBunnyVisualChanged(last,next){
+    return !last||Math.abs(last.x-next.x)>.05||Math.abs(last.y-next.y)>.05||
+      Math.abs(last.w-next.w)>.05||Math.abs(last.h-next.h)>.05||
+      Math.abs(last.angle-next.angle)>.03||Math.abs(last.scale-next.scale)>.0005||
+      Math.abs(last.morph-next.morph)>.002;
+  }
   function tickFilePopup(q){
     if(fileBunny!==q||q.ending||!q.shown||q.timer)return;
     const step=()=>{
       q.timer=0;if(fileBunny!==q||q.ending||!q.shown)return;
       const now=current();q.maxGap=Math.max(q.maxGap,now-q.last);
       sampleFilePopup(q,popupPoint(q),now);
-      const pose=fileBunnyStep(q,now);paintFileBunny(q,pose);q.frames++;q.maxAngle=Math.max(q.maxAngle,Math.abs(pose.angle));
-      // Native Windows OLE runs a nested loop: rAF stalls. Timer updates
-      // the popup widget's live artwork; flush its style for the widget.
-      q.visual.card.getBoundingClientRect();
-      if(now-q.lastReport>=300){q.lastReport=now;fileBunnyTrace("tick",{frames:q.frames,moves:q.moves,maxGap:q.maxGap,angle:pose.angle,morph:pose.morph,inside:q.inside,state:q.popup.state,paintCount:window.windowUtils?.paintCount??null,grip:q.screenPoint?[Math.round(q.screenPoint.x),Math.round(q.screenPoint.y)]:null,flip:q.popup.getAttribute("flip")});}
+      const pose=fileBunnyStep(q,now);q.frames++;q.maxAngle=Math.max(q.maxAngle,Math.abs(pose.angle));
+      if(fileBunnyVisualChanged(q.paintPose,pose)){
+        paintFileBunny(q,pose);q.paintPose=pose;q.paints++;
+        // Gecko's nested OLE loop stalls rAF; flush changed widget artwork.
+        q.visual.card.getBoundingClientRect();
+      }else{
+        // Preserve the exact release pose without redundant layout.
+        q.pose=pose;q.skips++;
+      }
+      if(now-q.lastReport>=300){q.lastReport=now;fileBunnyTrace("tick",{frames:q.frames,moves:q.moves,maxGap:q.maxGap,angle:pose.angle,morph:pose.morph,inside:q.inside,state:q.popup.state,paintCount:window.windowUtils?.paintCount??null,paints:q.paints,skips:q.skips,grip:q.screenPoint?[Math.round(q.screenPoint.x),Math.round(q.screenPoint.y)]:null,flip:q.popup.getAttribute("flip")});}
       q.timer=window.setTimeout(step,16);
     };
     q.timer=window.setTimeout(step,0);
@@ -766,7 +779,7 @@ try{if(typeof window!=="undefined"){
     const dx=origin.x-(Number.isFinite(e.clientX)?e.clientX:origin.x),dy=origin.y-(Number.isFinite(e.clientY)?e.clientY:origin.y);
     const seed={x:point.x+clamp(dx,-45,45),y:point.y+clamp(dy,-36,20),w:Math.min(250,origin.w),h:Math.min(76,origin.h)};
     const s=Object.fromEntries(Object.entries({...seed,angle:0,scale:1}).map(([k,x])=>[k,{x,v:0}]));s.scale.v=2.4;
-    const now=current(),q=fileBunny={source,fromIndicator:source===node,origin:seed,point,s,started:now,last:now,lastMove:now,lastReport:now,vx:0,visual,native,glyph,popup:null,ghost:null,mode:"bitmap",frame:0,timer:0,ending:false,shown:false,frames:0,moves:0,crossings:0,maxGap:0,maxAngle:0,screenPoint:null,inside:null};
+    const now=current(),q=fileBunny={source,fromIndicator:source===node,origin:seed,point,s,started:now,last:now,lastMove:now,lastReport:now,vx:0,visual,native,glyph,popup:null,ghost:null,mode:"bitmap",frame:0,timer:0,ending:false,shown:false,frames:0,moves:0,crossings:0,maxGap:0,maxAngle:0,paints:0,skips:0,paintPose:null,screenPoint:null,inside:null};
     // Do not attach the native card until the scoped Bunny state owns it.
     // A failure during source/card construction must leave no orphan node.
     root.append(native.card);
@@ -813,7 +826,7 @@ try{if(typeof window!=="undefined"){
     const q=fileBunny;if(!q)return;stopFileBunnyFrame(q);
     const cancelled=!e||e.dataTransfer?.mozUserCancelled||e.dataTransfer?.dropEffect==="none";
     const point=q.mode==="popup"?(popupPoint(q)||q.screenPoint):null;
-    fileBunnyTrace("end",{reason,mode:q.mode,cancelled,shown:q.shown,frames:q.frames,moves:q.moves,crossings:q.crossings,maxGap:q.maxGap,maxAngle:q.maxAngle,inside:filePointInside(point),drop:e?.dataTransfer?.dropEffect??null},{flush:true});
+    fileBunnyTrace("end",{reason,mode:q.mode,cancelled,shown:q.shown,frames:q.frames,paints:q.paints,skips:q.skips,moves:q.moves,crossings:q.crossings,maxGap:q.maxGap,maxAngle:q.maxAngle,inside:filePointInside(point),drop:e?.dataTransfer?.dropEffect??null},{flush:true});
     if(dead||reduced.matches||!q.shown||!q.source.isConnected||!q.pose||!filePointInside(point)){clearFileBunny();return;}
     q.ending=true;
     const from={...q.pose,x:point.x-window.mozInnerScreenX-FILE_GRIP_X+q.pose.x,y:point.y-window.mozInnerScreenY-FILE_GRIP_Y+q.pose.y};

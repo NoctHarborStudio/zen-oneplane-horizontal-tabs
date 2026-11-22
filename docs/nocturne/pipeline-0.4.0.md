@@ -4,7 +4,7 @@ Status: primary static audit checkpoints completed; A0.3 release infrastructure 
 
 ## Active checkpoint — source vs native evidence
 
-Current source checkpoint: 0.3.0-preview.119 (A5.5a native drag session recovery source/CI PASS; A5.1b2 Gecko OS identity and A5.2b2 Split native acceptance OPEN). Last confirmed canonical CI: preview.119. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
+Current source checkpoint: 0.3.0-preview.120 (A5.6a File Bunny layout flush gate and conservative Tab Bunny OS image policy; source fixture PASS, canonical CI pending; A5 native gates OPEN). Last confirmed canonical CI: preview.119. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
 
 | Stage | Source implementation/review | Native acceptance |
 | --- | --- | --- |
@@ -1109,3 +1109,12 @@ Before publication: five extracted-source fault/recovery fixtures plus a new sou
 ### A5.5a-R — Canonical publication and independent source/CI closure (docs-only)
 
 Production commit `01939137f14b3c841628c39450f7d25e3b2503b9` via [PR #7](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/pull/7); [CI 45057503562](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45057503562) **SUCCESS** (734/734 Node, 15/15 Python release, 12/12 runtime syntax, deterministic generated outputs and immutable/current Raw/codeload Sine package). Readback verified `preview.119` and synchronized `package.json`/`theme.json`/timestamp and bookmarks provenance lock. Exact modified source fragments matched generated `layout.uc.mjs` and `library.uc.mjs`; unchanged Library Services and Startup Animation outputs also reconstituted exactly. Six source-backed watchdog/popup/fallback/artwork tests PASS, with no new service subscriber, native mutation, session cache, background poll while idle, or fabricated native drop. **Source/CI classification is closed; native OS DragSession identity and timings, same-node successive drag events, missing dragend in actual Gecko, file transfer to Explorer/upload, private/OS handoff, mixed-DPI visual frame cadence and profiler remain OPEN.** A5.5b is a native acceptance gate; additional A5 source issues (reentry visuals, split hit contract, non-Dock reentry and panel hit regions) may proceed independently.
+
+
+### A5.6a — Conservative File Bunny flush gate and Tab Bunny OS-image policy (preview.120, source checkpoint)
+
+Baseline preview.119 at `db21d71c8ba73a986609428cb43d83e0b294237b`, [CI 45057614307](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45057614307) PASS. NC4-071: the Windows native OLE drag image timer ran every 16 ms, writing card geometry/transforms and forcing `getBoundingClientRect` even after artwork settled. Keep the exact source-watchdog/16 ms timer, native OS popup movement and payload unchanged. Compare the current relative x/y/w/h/angle/scale/morph against the last actually painted pose; only flush on a bounded subpixel visual change. Always advance the physical/release pose even when a frame skips painting. Add `paints`/`skips` aggregates to the existing bounded diagnostics and do not infer displayed FPS from timer callbacks. This reduces redundant widget layout work in a source fixture, not a measured native performance improvement; postpone structural fixed-size-stage or adaptive cadence changes until native OLE evidence.
+
+NC4-064: the native `outside` drag mode already returned before its later `previous === "outside"` branch; that clearing path was unreachable. Delete only the dead branch, retain the single sticky Gecko-owned OS drag image per gesture to avoid unverified blank/duplicate artwork on cross-window reentry. Native Tab Bunny return fidelity and same-tab Gecko gesture identity stay OPEN.
+
+Source-extracted OLE fixture: 7 session/position ticks, 3 artwork paints/widget flushes, 4 skipped near-static ticks; native timer kept active. Exact visible-property thresholds, latest release pose and outside latch covered by permanent regression cases. Canonical CI, OS DragSession identity, actual Windows nested OLE loop paintability, mixed-DPI visuals and diagnostics-on/off profiling remain separate OPEN gates. Next A5.6b native validation and independent A5 source work (NC4-062/065/066/072/073).

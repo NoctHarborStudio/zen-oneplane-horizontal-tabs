@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.119",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.120",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -8263,7 +8263,8 @@ function installTabStrip() {
   }
   function setDragImageMode(mode, event) {
     if (!dragNode || mode === dragImageMode) return;
-    // Once OS owns the drag image, never draw a local duplicate on re-entry.
+    // Gecko owns the OS image for the rest of this gesture, even after re-entry.
+    // Clearing/replacing it without a verified native contract risks duplicate art.
     if(dragImageMode==="outside")return;
     const previous = dragImageMode;
     if(dragBunnyLayout&&mode!=="outside"){
@@ -8288,9 +8289,6 @@ function installTabStrip() {
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.native-image",()=>({ok,width:box.width,height:box.height}),{sample:1800});
       hideGhost();
       if (!ok) { if (dragBunnyLayout)paintBunnyAt(dragBunnyLayout.progress,dragBunnyLayout.point);else if (previous === "content") showGhost(event); return; }
-    } else if (previous === "outside") {
-      // Clear the OS image BEFORE displaying our local animated card.
-      if (!updateNativeDragImage(blankDragImage,0,0,event)) return;
     }
     cancelInsertion();
     const detached = mode === "content" || mode === "outside";

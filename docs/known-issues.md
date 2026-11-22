@@ -471,6 +471,8 @@ native-drag-image.js.part:176–181 returns immediately if current mode is outsi
 
 **Required:** A5: explicitly model outside-reentry policy, confirm actual Gecko image update ability on Windows; retain one visual owner, no blank/duplicate image; remove unreachable branch only after validation.
 
+**preview.120 source checkpoint:** Removed the unreachable image-reset branch while retaining the deliberate sticky `outside` policy. Source fixture proves the local mode cannot reenter during that gesture, **not** that Windows native drag art returns correctly. True Gecko OS-image reentry remains OPEN.
+
 #### NC4-065 — Incoming tab into empty strip has no destination command (S/R/P1)
 
 strip-drag.js.part:108–110 returns null if stripNodes empty; native/tab-adapter dropTarget also returns null when no children; drag-controller:148–152 handles local no-destination only, never adopts incoming into empty target. Native drop event may still be prevented, source remains under OS drag semantics.
@@ -512,6 +514,8 @@ downloads-indicator.uc.mjs:678–684 popuphidden only logs, tickFilePopup:712–
 downloads-indicator.uc.mjs:687–695 updates width/height/transform; tickFilePopup:712–725 reads popup screen rect then writes artwork and forces getBoundingClientRect. This is intentionally designed for Windows nested OLE loop where RAF may stall; cost and presented frames not measured.
 
 **Required:** A5/A8: profile actual nested native loop, compare fixed-size stage + transform/dirty updates/adaptive cadence; keep live outside-window animation if native evidence supports it.
+
+**preview.120 source checkpoint:** Keep the native 16 ms timer; suppress changed-style writes and forced widget layout when relative pose is below a small subpixel threshold. The latest release pose remains current, with `paints`/`skips` aggregates in bounded diagnostics. Native Windows OLE screen paint, real FPS and mixed-DPI visual acceptance remain OPEN.
 
 #### NC4-072 — Snap preference also controls coordinate validation and ordinary detachment (S/R/P1)
 
