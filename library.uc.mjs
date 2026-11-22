@@ -199,7 +199,7 @@ function libraryShortcutSection(event,os="WINNT"){
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,{flush:true});
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.133",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.134",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
@@ -321,10 +321,13 @@ function libraryShortcutSection(event,os="WINNT"){
     if(!confirmation||clearing||state.section!=="downloads")return;
     const source=win.__nocturneLibraryServices,token=++actionSerial;clearing=true;syncTools();
     try{
-      const result=await source.downloads.clearCompleted();
+      const result=await source.downloads.clearCompleted(()=>!dead&&token===actionSerial&&active()&&state.section==="downloads");
       if(token===actionSerial&&active()&&state.section==="downloads"){
-        trace("downloads.clear.result",{requested:result.requested,removed:result.removed,skipped:result.skipped,failed:result.failed});
-        notice(result.failed||result.skipped?"Some records were not cleared. Files were not deleted.":"Cleared "+result.removed+" finished records. Files were not deleted.");
+        if(result===null)notice("Downloads are already being cleared.");
+        else{
+          trace("downloads.clear.result",{requested:result.requested,removed:result.removed,skipped:result.skipped,failed:result.failed});
+          notice(result.failed||result.skipped?"Some records were not cleared. Files were not deleted.":"Cleared "+result.removed+" finished records. Files were not deleted.");
+        }
       }
     }catch{if(token===actionSerial)notice("Could not clear completed records.");}
     finally{if(token===actionSerial){clearing=false;confirmation=false;syncTools();data.retry();}}

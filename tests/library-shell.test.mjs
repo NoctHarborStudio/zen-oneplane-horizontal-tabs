@@ -112,3 +112,21 @@ test("Library Downloads bulk clear truthfully reports a skipped native entry",as
  assert.equal(notices.at(-1),"Some records were not cleared. Files were not deleted.");
  assert.deepEqual(events,[{event:"downloads.clear.result",data:result}]);assert.equal(retries,1);
 });
+
+test("Library Downloads clear treats a concurrent Dock clear as busy, not success",async()=>{
+ const source=read("src/library/controller.js.part");
+ const code=source.slice(source.indexOf("  async function clearDownloads("),source.indexOf("  function openNativeDownloads("));
+ const events=[],notices=[];let retried=0;
+ const win={__nocturneLibraryServices:{downloads:{clearCompleted:async predicate=>{
+   assert.equal(typeof predicate,"function");return null;
+ }}}},state={section:"downloads",phase:"open"};
+ const run=new Function("win","state","notice","trace","syncTools","data",`
+   let confirmation=true,clearing=false,actionSerial=0,dead=false;
+   const active=()=>true;
+   ${code}
+   return {clearDownloads};
+ `)(win,state,x=>notices.push(x),(e,d)=>events.push([e,d]),()=>{},{retry(){retried++;}});
+ await run.clearDownloads();
+ assert.deepEqual(notices,["Downloads are already being cleared."]);
+ assert.deepEqual(events,[]);assert.equal(retried,1);
+});

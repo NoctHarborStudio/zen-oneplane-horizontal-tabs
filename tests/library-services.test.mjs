@@ -227,3 +227,47 @@ test("superseded native History initialization cannot dispatch an old search",as
    assert.deepEqual(terms,["new"]);
  }finally{session.close();}
 });
+
+test("Dock and Library cannot run overlapping bulk clears on one native list",async()=>{
+ let view,entered,release,removes=0;
+ const started=new Promise(resolve=>entered=resolve),waiting=new Promise(resolve=>release=resolve);
+ const d={stopped:true,succeeded:true,target:{path:"test.txt"}};
+ const native={addView(v){view=v;v.onDownloadAdded(d);},removeView(){},async remove(item){
+   removes++;entered();await waiting;view.onDownloadRemoved(item);
+ }};
+ const service=createDownloadsService({loadList:async()=>native});await service.start();
+ const dock=service.clearCompleted();await started;
+ assert.equal(await service.clearCompleted(),null);
+ assert.equal(removes,1);
+ release();assert.deepEqual(await dock,{requested:1,removed:1,skipped:0,failed:0});
+ assert.deepEqual(await service.clearCompleted(),{requested:0,removed:0,skipped:0,failed:0});
+ await service.dispose();
+});
+test("the same native Download cannot be removed by a row while bulk removal is pending",async()=>{
+ let view,entered,release,removes=0;
+ const started=new Promise(resolve=>entered=resolve),waiting=new Promise(resolve=>release=resolve);
+ const d={stopped:true,succeeded:true,target:{path:"test.txt"}};
+ const native={addView(v){view=v;v.onDownloadAdded(d);},removeView(){},async remove(item){
+   removes++;entered();await waiting;view.onDownloadRemoved(item);
+ }};
+ const service=createDownloadsService({loadList:async()=>native});await service.start();
+ const id=service.getSnapshot()[0].id;
+ const bulk=service.clearCompleted();await started;
+ assert.equal(await service.action(id,"remove"),false);
+ assert.equal(await service.remove(d),false);
+ assert.equal(removes,1);
+ release();assert.equal((await bulk).removed,1);await service.dispose();
+});
+test("bulk clear honors an existing Dock generation guard between native removals",async()=>{
+ let view,entered,release;const calls=[],first={stopped:true,target:{path:"first.txt"}},second={stopped:true,target:{path:"second.txt"}};
+ const started=new Promise(resolve=>entered=resolve),waiting=new Promise(resolve=>release=resolve);
+ const native={addView(v){view=v;v.onDownloadAdded(first);v.onDownloadAdded(second);},removeView(){},async remove(d){
+   calls.push(d);if(d===first){entered();await waiting;}view.onDownloadRemoved(d);
+ }};
+ const service=createDownloadsService({loadList:async()=>native});await service.start();
+ let current=true;const inFlight=service.clearCompleted(()=>current);await started;
+ current=false;release();
+ assert.deepEqual(await inFlight,{requested:2,removed:1,skipped:1,failed:0});
+ assert.deepEqual(calls,[first]);assert.equal(service.getSnapshot().length,1);
+ assert.deepEqual(await service.clearCompleted(),{requested:1,removed:1,skipped:0,failed:0});await service.dispose();
+});

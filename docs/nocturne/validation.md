@@ -562,3 +562,12 @@ The user approved the **geometry and interaction concept**, not an implementatio
 - [x] Source fixture: native remove throw is counted as a failed record independently from skipped; requested equals removed + skipped + failed; successful all-record result remains unchanged.
 - [ ] In a disposable Zen/Sine profile, use test downloads with a record becoming active/partial or disappearing during a bulk clear. Verify only eligible native entries are removed, no downloaded disk files are deleted, no duplicate removal is triggered, and Library accurately reports partial completion.
 - [ ] Test native list updates after clear/close/reload, multiwindow list state and errors from the native Downloads list. Source callbacks and CI alone do not close native acceptance.
+
+### A7 / NC4-090 — Dock/Library Downloads shared clear acceptance
+
+- [x] Source fixture reproduces preview.133 duplicate native remove for one item when Dock and Library clear simultaneously, then validates one native removal on the corrected shared owner.
+- [x] Source fixtures verify busy rejection, per-native-identity duplicate row remove suppression, Dock generation/teardown stop between records, existing confirmation feedback, and Library busy message.
+- [ ] In a disposable Zen 1.24.2b/Sine 2.3.3 profile, start a Dock clear with two finished downloads and try Library clear while it is still running; only one set of native removals should occur, no false confirmation and no actual files deleted.
+- [ ] Reverse the order (Library first), attempt a row Remove during the native clear, and verify correct busy/partial notices and DownloadList event reconciliation.
+- [ ] Disable or hot reload the Dock while the first native removal is pending; the current in-flight call may complete but no second stale removal should begin. Test native view detach and new-owner acquisition.
+- [ ] Check two independent normal windows sharing the same Downloads list separately. The current coordination is deliberately window-local, not a process-wide exclusive lock; source/CI PASS is not native acceptance.

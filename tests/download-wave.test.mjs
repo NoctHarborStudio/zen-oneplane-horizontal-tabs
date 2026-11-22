@@ -147,3 +147,29 @@ test("hosted wave keeps a single resting box and surface in every state",()=>{
  assert.ok(source.includes('const orientation=hosted?"top":r.side;'));
  assert.ok(source.includes('if(!following||!dockHeight)dockHeight=dock.offsetHeight'));
 });
+
+test("Dock clear delegates to one native Downloads service bulk owner and respects its own teardown",async()=>{
+ const {createDownloadsService}=await import("../src/services/downloads-service.mjs");
+ const code=section("  async function clearHistory(){","  function outsideDock(");
+ assert.match(code,/source\.clearCompleted\(/);assert.doesNotMatch(code,/source\.remove\(/);
+ const d={stopped:true,succeeded:true,target:{path:"fixture.txt"}};
+ let view,entered,release,removes=0,notices=[];
+ const started=new Promise(resolve=>entered=resolve),waiting=new Promise(resolve=>release=resolve);
+ const native={addView(v){view=v;v.onDownloadAdded(d);},removeView(){},async remove(item){
+   removes++;entered();await waiting;view.onDownloadRemoved(item);
+ }};
+ const service=createDownloadsService({loadList:async()=>native});await service.start();
+ const dock=new Function("source","history","window",`
+   let confirming=true,clearing=false,list=source,epoch=1,dead=false;
+   let dockNotice={set textContent(v){window.notices.push(v)}},yesButton={disabled:false},noButton={disabled:false};
+   const setConfirm=()=>{},schedule=()=>{};
+   ${code}
+   return {clearHistory,unload(){epoch++;list=null;},busy:()=>clearing};
+ `)(service,new Map([[d,{}]]),{notices, __nocturneTrace:()=>{}});
+ const dockClear=dock.clearHistory();await started;
+ assert.equal(await service.clearCompleted(),null);
+ assert.equal(removes,1);
+ dock.unload();release();await dockClear;
+ assert.deepEqual(notices,[]);
+ await service.dispose();
+});

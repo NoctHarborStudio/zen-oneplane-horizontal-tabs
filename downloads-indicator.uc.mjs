@@ -1,6 +1,6 @@
 // Nocturne preview.45: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="downloads.script",data={version:"0.3.0-preview.133"};
+  const event="downloads.script",data={version:"0.3.0-preview.134"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -474,21 +474,22 @@ try{if(typeof window!=="undefined"){
   async function clearHistory(){
     if(!confirming||clearing||!list)return;
     const source=list,token=epoch;
-    const targets=[...history.keys()].filter(CLEARABLE);
     clearing=true;yesButton.disabled=true;noButton.disabled=true;
-    let failures=0;
+    let message="";
     try{
-      // Native session list only. No Places deletion, finalize(), file
-      // deletion, cancellation or manipulation of partial/blocked files.
-      for(const d of targets){
-        if(dead||token!==epoch||list!==source)break;
-        if(!CLEARABLE(d)||!history.has(d))continue;
-        try{if(!await source.remove(d))failures++;}catch{failures++;}
+      // The shared native service owns one current bulk removal for both
+      // Dock and Library. Preserve this Dock generation's cancellation gate.
+      const result=await source.clearCompleted(()=>!dead&&token===epoch&&list===source);
+      if(result===null)message="Downloads are already being cleared.";
+      else{
+        if(result.failed||result.skipped)message="Some entries could not be cleared.";
+        window.__nocturneTrace?.("downloads.clear.result",{owner:"dock",requested:result.requested,removed:result.removed,skipped:result.skipped,failed:result.failed},{flush:true});
       }
-    }finally{
+    }catch{message="Some entries could not be cleared.";}
+    finally{
       if(!dead&&token===epoch&&list===source){
         clearing=false;setConfirm(false,true);
-        if(dockNotice)dockNotice.textContent=failures?"Some entries could not be cleared.":"";
+        if(dockNotice)dockNotice.textContent=message;
         schedule(true);
       }
     }

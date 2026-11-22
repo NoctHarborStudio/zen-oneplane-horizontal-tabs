@@ -112,8 +112,8 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
 }
 // One native list subscription per window, independent of any view.
   function createDownloadsService({loadList,barrier=Promise.resolve(),lease=null,onError=()=>{},onDetach=()=>{},idPrefix="download",describeFile=()=>({}),dragFile=()=>false}){
-    let dead=false,source=null,pending=null,detaching=null,ready=false,accepting=false,serial=0;
-    const records=new Map(),byId=new Map(),listeners=new Set(),nativeListeners=new Set();
+    let dead=false,source=null,pending=null,detaching=null,ready=false,accepting=false,serial=0,bulkClearing=false;
+    const records=new Map(),byId=new Map(),listeners=new Set(),nativeListeners=new Set(),removing=new Set();
     const report=()=>{try{onError();}catch{}};
     const safe=(fn,...args)=>{try{fn(...args);}catch{report();}};
     const number=n=>Number.isFinite(n)?Math.max(0,n):0;
@@ -212,8 +212,12 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
     async function actionNative(d,action){
       if(dead||!ready||!source||!records.has(d))return false;
       if(action==="remove"){
-        if(!clearable(d))return false;
-        await source.remove(d);return true;
+        if(!clearable(d)||removing.has(d))return false;
+        // One in-flight native removal per Download identity, regardless of
+        // whether it was initiated by Dock, Library or a row action.
+        removing.add(d);
+        try{await source.remove(d);return true;}
+        finally{removing.delete(d);}
       }
       if(!completed(d))return false;
       if(action==="open"&&d.target?.exists!==false&&typeof d.launch==="function"){await d.launch();return true;}
@@ -227,11 +231,22 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
     // Library uses an opaque ID and the stricter non-private policy.
     function drag(id,event,node){const d=byId.get(id);return !!(!dead&&ready&&source&&d&&completed(d)&&d.target?.exists!==false&&dragFile(d,event,node,"library"));}
     function dragNative(d,event,node){return !!(!dead&&ready&&source&&records.has(d)&&completed(d)&&d.target?.exists!==false&&dragFile(d,event,node,"dock"));}
-    async function clearCompleted(){
-      const targets=[...records.keys()].filter(clearable);let removed=0,skipped=0,failed=0;
-      // A native record can become ineligible after earlier removals.
-      for(const d of targets)try{if(await actionNative(d,"remove"))removed++;else skipped++;}catch{failed++;}
-      return {requested:targets.length,removed,skipped,failed};
+    async function clearCompleted(continueIf=()=>true){
+      // Library and Dock are projections of one native list, not two bulk
+      // removal owners. Reject an overlapping confirmation, never join it.
+      if(dead||!ready||!source||bulkClearing)return null;
+      bulkClearing=true;
+      try{
+        const targets=[...records.keys()].filter(clearable);let removed=0,skipped=0,failed=0;
+        for(let i=0;i<targets.length;i++){
+          // Dock supplies its existing epoch/teardown guard. A stale bulk
+          // request never begins another native removal after invalidation.
+          if(dead||!ready||!source||!continueIf()){skipped+=targets.length-i;break;}
+          try{if(await actionNative(targets[i],"remove"))removed++;else skipped++;}
+          catch{failed++;}
+        }
+        return {requested:targets.length,removed,skipped,failed};
+      }finally{bulkClearing=false;}
     }
     function isReady(){return !dead&&ready;}
     function dispose(){
@@ -328,7 +343,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   const trace=(event,data)=>{try{if(win.__nocturneTrace)win.__nocturneTrace(event,data,{flush:true});else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,data,t:win.performance?.now?.()??0});}}catch{}};
-  trace("library.services.script",{version:"0.3.0-preview.133"});
+  trace("library.services.script",{version:"0.3.0-preview.134"});
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
   const BARRIER="__nocturneDownloadsDisposal",MEDIA_BARRIER="__nocturneMediaDisposal";
   const previous=win[KEY],previousClosing=previous?.dispose?.(),existing=win[BARRIER];
