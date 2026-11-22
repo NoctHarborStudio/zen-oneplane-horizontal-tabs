@@ -617,3 +617,16 @@ Native acceptance for NC4-090-R2 remains open: source/CI PASS does not imply Zen
 - [ ] Native large/network/slow folders: measure C++ enumeration allocations, peak memory and scan latency; assess hard budget/upstream top-K change without assuming maxItems bounds the walk (NC4-082 OPEN).
 - [ ] Native thumbnail stress: oversized-dimension compressed PNG/JPEG/GIF, cloud-placeholder transition and symlink file; profile decoded memory/frames with diagnostics on/off before selecting a native safe-thumbnail path or agreed icon fallback (NC4-022 OPEN).
 - [ ] Permanently unresolved native scanner must retain its existing disposal barrier: do not create an overlapping new service on a speculative timeout. Native recovery/cancellation capability remains unavailable in verified target API.
+
+### A7 / NC4-020/021 — History lookahead and Downloads list leases (preview.139)
+
+- [x] Trace actual Downloads runtime/list owner → Dock and Library native projections, per-window lifecycle and action IDs; no second subscriber inside a window. No unapproved history merge or process-owner replacement.
+- [x] Synthetic two-window native PUBLIC list fixture: two window-owned views coexist, action IDs cannot cross service boundaries, disposing one does not detach/revoke the surviving view.
+- [x] Verify with native source references: PlacesQuery date search returns newest-first but does not filter by `daysOld` from the cache-priming `getHistory` call. The Nocturne postfilter is required.
+- [x] Reproduce preview.138 `hasMore=true` with two recent visits and next 121-day-old native date-ordered lookahead, then verify preview.139 `hasMore=false` for this exhausted range.
+- [x] Test a lookahead exactly on the cutoff (must keep pagination), and `sort:"site"` (must not infer exhaustion from an older URL-ordered lookahead). Existing grouped native results, newer lookahead and stale query fixtures remain.
+- [x] [CI 45079730929](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45079730929): 801/801 Node, 15/15 Python, 12 runtime parsers, deterministic build, release/public Raw and codeload PASS.
+- [ ] Native Zen 1.24.2b/Sine 2.3.3 disposable profile: History search 120-day cutoff, same-day time boundary, 50/100/500 Load more and full-history fallback; actual result ordering and no false exhaustion.
+- [ ] Native DownloadsCommon vs `Downloads.getList(PUBLIC)` sample includes a Places-only old record; verify native full Downloads opens through existing fallback and Clear completed modifies only removable current records, never disk files.
+- [ ] Native two normal windows plus a private window: shared PUBLIC event delivery and subscriptions; private list isolation; close/hot-reload during native removal retains exact view lease and does not duplicate remove.
+- [ ] Performance: subscriptions per window, large histories, rapid search/Load more, sort/grouping and persistence after reload. CI source fixtures do not prove these native runtime gates.
