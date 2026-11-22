@@ -73,6 +73,7 @@
     }
   }
   function showPlacementPreview(event,label){
+    const previousWork=placementSample?.target?.work;
     const p=placementAt(event),fraction=displayPreviewFraction(p),token=dragLifecycle.current()?.token;
     if(!p||!fraction||token==null){clearPlacementPreview();return;}
     placementSample={token,x:event.screenX,y:event.screenY,time:window.performance.now(),target:p};
@@ -120,6 +121,8 @@
       const movedAnchor=changedMonitor||!placementPopupPoint||
         placementPopupPoint.x!==x||placementPopupPoint.y!==y;
       placementPopupPoint={x,y};placementMonitor=monitor;placementKey=key;
+      if(!changedMonitor&&previousWork&&!displayRectEqual(previousWork,p.work))
+        window.__nocturneTrace?.("drag.placement.preview",{reason:"work-area-change",movedAnchor},{throttle:1000});
       if(placementPreview.state==="open"){
         if(movedAnchor)placementPreview.moveTo(x,y);
       }else if(placementPreview.state==="showing"){
