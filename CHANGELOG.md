@@ -1,3 +1,10 @@
+## 0.3.0-preview.116 — A5.2b native Split group convergence
+
+- Verify the exact native Split data and physical group membership after a drop, including the original members and source tab; do not certify a partial result from a truthy native call.
+- Confirm both two-tab group dissolution and surviving three-plus-member group integrity on native unsplit. Treat inconsistent membership as unverified; never roll back native data speculatively.
+- Revalidate source group members after selection callbacks, preserve exact drag-token cleanup, and add regression fixtures for partial native outcomes.
+- Native Zen, OS DragSession identity, multi-window/DPI, visual and performance acceptance remain pending.
+
 ## 0.3.0-preview.115 — A5.2a Split drag transaction admission and cleanup
 
 - Check actual Zen Split eligibility before native `splitTabs`: fail closed when pinned/normal role mixing or Live Folder combinations would cause an unadvertised tab clone, when Essentials is unsupported, when Glance remapping or hidden/empty tabs change source identity, and when an existing Split group is full.
