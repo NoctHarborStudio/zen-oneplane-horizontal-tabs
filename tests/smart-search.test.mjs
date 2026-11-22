@@ -251,3 +251,9 @@ test("partial Smart Search install failure rolls back provider and keeps diagnos
  }
 });
 
+
+test("native recent-tab detail retains the UTF-8 workspace and container separator",()=>{
+ assert.ok(source.includes('join(" · ")'),"native detail separator must be a real middle dot");
+ assert.ok(source.includes("Zen Refined — Smart Search"),"source header must not be mojibake");
+ assert.ok(!source.includes(" В· ")&&!source.includes("вЂ"),"corrupted text must not ship");
+});

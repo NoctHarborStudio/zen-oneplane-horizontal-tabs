@@ -262,7 +262,15 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
       const range=Math.min(36500,Math.max(1,Math.trunc(Number(days)||120)));
       const order=["date","site","lastvisited"].includes(sort)?sort:"date";
       const fetchLimit=count+1;
-      const result=term?await native.searchHistory(term,fetchLimit):await native.getHistory({daysOld:range,limit:fetchLimit,sortBy:order});
+      // Gecko PlacesQuery.searchHistory() reads cachedHistoryOptions.
+      // getHistory() initializes the native cache for this range, limit and sort.
+      const options={daysOld:range,limit:fetchLimit,sortBy:order};
+      let result;
+      if(term){
+        await native.getHistory(options);
+        if(closed||token!==epoch||!allowed())return null;
+        result=await native.searchHistory(term,fetchLimit);
+      }else result=await native.getHistory(options);
       if(closed||token!==epoch||!allowed())return null;
       const rows=[],seen=new Set();let rawCount=0;
       const groups=Array.isArray(result)?[[null,result]]:result instanceof Map?[...result]:[];
@@ -319,7 +327,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   const trace=(event,data)=>{try{if(win.__nocturneTrace)win.__nocturneTrace(event,data,{flush:true});else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,data,t:win.performance?.now?.()??0});}}catch{}};
-  trace("library.services.script",{version:"0.3.0-preview.127"});
+  trace("library.services.script",{version:"0.3.0-preview.128"});
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
   const BARRIER="__nocturneDownloadsDisposal",MEDIA_BARRIER="__nocturneMediaDisposal";
   const previous=win[KEY],previousClosing=previous?.dispose?.(),existing=win[BARRIER];

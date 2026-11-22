@@ -38,7 +38,7 @@ test("reload waits for old addView and removal, stale replay is ignored",async()
 test("history supports grouped and search results, invalidates old query, closes native observer",async()=>{
  let resolve,closed=0,notify=0,observer;
  const first=new Promise(r=>resolve=r),v={guid:"g",url:"https://example.com",title:"Example",date:new Date(1000)};
- const native={getHistory:()=>first,searchHistory:async()=>[v],observeHistory(fn){observer=fn;},close(){closed++;}};
+ let getCount=0;const native={getHistory:()=>++getCount===1?first:new Map(),searchHistory:async()=>[v],observeHistory(fn){observer=fn;},close(){closed++;}};
  const s=createHistorySession({createQuery:()=>native,now:()=>2000,onChange:()=>notify++});
  const old=s.query();const result=await s.query({text:"example"});resolve(new Map([[1,[v]]]));assert.equal(await old,null);
  assert.equal(result.rows[0].id,"g-1000");observer();assert.equal(notify,1);s.close();observer();assert.equal(notify,1);assert.equal(closed,1);
@@ -199,5 +199,31 @@ test("filtered first history page can reach a recent visit and exact boundaries 
    assert.deepEqual(first.rows,[]);assert.equal(first.hasMore,true);
    const all=await session.query({text:"example",limit:3});
    assert.deepEqual(all.rows.map(row=>row.time),[now]);assert.equal(all.hasMore,false);
+ }finally{session.close();}
+});
+
+test("fresh native Places search primes cache options before first typed query",async()=>{
+ const calls=[],now=2000000;
+ const native={cachedHistoryOptions:null,
+   async getHistory(options){calls.push(["getHistory",options]);this.cachedHistoryOptions=options;return new Map();},
+   async searchHistory(text,limit){assert.ok(this.cachedHistoryOptions,"native search requires cache options");calls.push(["searchHistory",text,limit]);return [{url:"https://example.test/first",guid:"first",date:new Date(now-1000)}];},
+   close(){}};
+ const session=createHistorySession({now:()=>now,createQuery:()=>native});
+ try{
+   const result=await session.query({text:"first",limit:2,sort:"site",days:90});
+   assert.deepEqual(calls,[["getHistory",{daysOld:90,limit:3,sortBy:"site"}],["searchHistory","first",3]]);
+   assert.equal(result.rows[0].id,"first-"+(now-1000));
+   assert.equal(result.hasMore,false);
+ }finally{session.close();}
+});
+test("superseded native History initialization cannot dispatch an old search",async()=>{
+ let release;const wait=new Promise(resolve=>release=resolve),terms=[];
+ let priming=0;
+ const native={async getHistory(){if(++priming===1)await wait;return new Map();},async searchHistory(term){terms.push(term);return [];},close(){}};
+ const session=createHistorySession({createQuery:()=>native});
+ try{
+   const stale=session.query({text:"old"});const latest=await session.query({text:"new"});
+   assert.deepEqual(latest.rows,[]);release();assert.equal(await stale,null);
+   assert.deepEqual(terms,["new"]);
  }finally{session.close();}
 });

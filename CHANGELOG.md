@@ -1,3 +1,7 @@
+## 0.3.0-preview.128 - Initialize History search and restore Smart Search UTF-8 text
+
+Initialize native PlacesQuery options before a first or changed History search; do not dispatch a stale search after a superseding query. Restore the original Smart Search domain/workspace/container separator. Add independent regression checks for both paths. Real graphical Zen acceptance remains open.
+
 ## 0.3.0-preview.127 - Invalidate local Library access when folder permissions change
 
 Closing access or changing extra folders invalidates previously issued file handles and scan sessions in every window. An earlier scan or open folder picker cannot restore access after settings change. Active file sections reload from the new settings.

@@ -13,7 +13,15 @@
       const range=Math.min(36500,Math.max(1,Math.trunc(Number(days)||120)));
       const order=["date","site","lastvisited"].includes(sort)?sort:"date";
       const fetchLimit=count+1;
-      const result=term?await native.searchHistory(term,fetchLimit):await native.getHistory({daysOld:range,limit:fetchLimit,sortBy:order});
+      // Gecko PlacesQuery.searchHistory() reads cachedHistoryOptions.
+      // getHistory() initializes the native cache for this range, limit and sort.
+      const options={daysOld:range,limit:fetchLimit,sortBy:order};
+      let result;
+      if(term){
+        await native.getHistory(options);
+        if(closed||token!==epoch||!allowed())return null;
+        result=await native.searchHistory(term,fetchLimit);
+      }else result=await native.getHistory(options);
       if(closed||token!==epoch||!allowed())return null;
       const rows=[],seen=new Set();let rawCount=0;
       const groups=Array.isArray(result)?[[null,result]]:result instanceof Map?[...result]:[];
