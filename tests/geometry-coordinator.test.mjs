@@ -178,11 +178,17 @@ test("preflight cannot acknowledge a contour after startup or workspace phase ch
 
 test("frozen projection only updates icons and does not read native topology or mutate slots",()=>{
  const sync=read("src/toolbar/tab-sync.js.part"),code=sync.slice(sync.indexOf("  function syncNow()"),sync.indexOf("  function schedule()"));
+ const engine=read("src/interactions/drag-engine.js.part");
+ const guard=engine.slice(engine.indexOf("  function retireChangedNativeDragTopology("),engine.indexOf("  const dragService="));
  const run=new Function(`let dead=false,icons=0;const root={hasAttribute:()=>false},row={};
  const entries=new Map([[{closing:false},{}],[{closing:true},{}]]);
+ let nativeDragToken=null,dragInsertPending=false,nativeDragTopology=null;
+ const dragLifecycle={owns(){throw Error("idle drag lifecycle touched")}};
+ function nativeDragStructureMatches(){throw Error("native topology read")}
  function restingGeometryBlocked(){return true}
  function refreshEntryIcon(){icons++}
  function readStripTopology(){throw Error("native read")}
+ ${guard}
  ${code}syncNow();return icons;`);
  assert.equal(run(),1);
 });
