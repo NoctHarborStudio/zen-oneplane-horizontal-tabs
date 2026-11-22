@@ -319,18 +319,26 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
         result=await native.searchHistory(term,fetchLimit);
       }else result=await native.getHistory(options);
       if(closed||token!==epoch||!allowed())return null;
-      const rows=[],seen=new Set();let rawCount=0;
+      const rows=[],seen=new Set();let rawCount=0;const cutoff=now()-range*86400000;
       const groups=Array.isArray(result)?[[null,result]]:result instanceof Map?[...result]:[];
       for(const [group,items] of groups)for(const v of items){
         if(++rawCount>count)continue;
         const time=Number(v?.date);
-        if(typeof v?.url!=="string"||!v.url||!Number.isFinite(time)||time<now()-range*86400000)continue;
+        if(typeof v?.url!=="string"||!v.url||!Number.isFinite(time)||time<cutoff)continue;
         const id=String(v.guid??v.url)+"-"+time;
         if(seen.has(id))continue;seen.add(id);
         rows.push(Object.freeze({id,url:v.url,title:String(v.title||v.url),time,
           group:group==null?null:String(group),kind:"history",identity:"native-url-date"}));
       }
-      return Object.freeze({rows:Object.freeze(rows),limit:count,hasMore:rawCount>count});
+      let hasMore=rawCount>count;
+      if(hasMore&&term&&order==="date"&&Array.isArray(result)){
+        // PlacesQuery's date search is newest-first. If the lookahead
+        // already predates the configured range, no later result can
+        // be eligible. Retain conservative pagination for other sorts.
+        const lookahead=Number(result[count]?.date);
+        if(result[count]?.date!=null&&Number.isFinite(lookahead)&&lookahead<cutoff)hasMore=false;
+      }
+      return Object.freeze({rows:Object.freeze(rows),limit:count,hasMore});
     }
     function close(){if(closed)return;closed=true;epoch++;native.close();}
     return {query,close};
@@ -374,7 +382,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   const trace=(event,data)=>{try{if(win.__nocturneTrace)win.__nocturneTrace(event,data,{flush:true});else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,data,t:win.performance?.now?.()??0});}}catch{}};
-  trace("library.services.script",{version:"0.3.0-preview.138"});
+  trace("library.services.script",{version:"0.3.0-preview.139"});
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
   const BARRIER="__nocturneDownloadsDisposal",MEDIA_BARRIER="__nocturneMediaDisposal";
   const previous=win[KEY],previousClosing=previous?.dispose?.(),existing=win[BARRIER];
