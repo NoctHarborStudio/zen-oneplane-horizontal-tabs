@@ -1240,3 +1240,8 @@ NC4-017: the two Hub-specific pure `hubSnapRect`/`hubOtherDisplay` helpers were 
 
 
 A5.4a canonical closure: production `c38b66c1` via [PR #6](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/pull/6), [CI 45055890065](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45055890065) PASS (728 Node, 15 Python, all runtime parsers and public package). Removing unused Hub snap geometry does not prove native event coordinate accuracy; A5.4b native monitor/taskbar/OS drop and A5.1b2 gesture identity remain open.
+
+
+### A5.5a — Native tab/file drag watchdog and fallback recovery (preview.119)
+
+NC4-067: Tab Drag Engine now distinguishes native DragSession active/absent/unavailable; consecutive failures cancel only the current Layout token, not a native operation. NC4-069: Downloads Dock now arms its single file source watchdog after trusted native payload acceptance and **before** optional Bunny artwork, surviving early visual failure; a separate Bunny watchdog no longer competes with the source. NC4-070: unexpectedly hidden live popup stops its style/layout tick while native source ownership remains. NC4-068: Library's Dock-free direct-download fallback now owns one bounded native-session watchdog; Dock-accepted gestures remain solely Dock-owned. Native file preview card is mounted only after an owning cleanup state exists. Service-gone defers Library close when a file drag is active. These changes address source-level liveness/cleanup risk; real Gecko timing and OS drag acceptance remain unverified. NC4-062 same-node Gecko gesture identity, NC4-064 reentry visuals, NC4-071 nested OLE paint cost, other A5 issues remain OPEN.
