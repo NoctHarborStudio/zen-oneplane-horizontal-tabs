@@ -113,7 +113,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
 // One native list subscription per window, independent of any view.
   function createDownloadsService({loadList,barrier=Promise.resolve(),lease=null,onError=()=>{},onDetach=()=>{},idPrefix="download",describeFile=()=>({}),dragFile=()=>false}){
     let dead=false,source=null,pending=null,detaching=null,ready=false,accepting=false,serial=0,bulkClearing=false;
-    const records=new Map(),byId=new Map(),listeners=new Set(),nativeListeners=new Set(),removing=new Set();
+    const records=new Map(),byId=new Map(),listeners=new Set(),nativeListeners=new Set(),removing=new Set(),removalTasks=new Set();
     const report=()=>{try{onError();}catch{}};
     const safe=(fn,...args)=>{try{fn(...args);}catch{report();}};
     const number=n=>Number.isFinite(n)?Math.max(0,n):0;
@@ -216,8 +216,17 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
         // One in-flight native removal per Download identity, regardless of
         // whether it was initiated by Dock, Library or a row action.
         removing.add(d);
-        try{await source.remove(d);return true;}
-        finally{removing.delete(d);}
+        let task;
+        try{
+          // Retain the actual native Promise until it settles, including
+          // across dispose and the next Sine service generation's barrier.
+          task=Promise.resolve(source.remove(d));
+          removalTasks.add(task);
+          await task;return true;
+        }finally{
+          if(task)removalTasks.delete(task);
+          removing.delete(d);
+        }
       }
       if(!completed(d))return false;
       if(action==="open"&&d.target?.exists!==false&&typeof d.launch==="function"){await d.launch();return true;}
@@ -256,9 +265,15 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
       // view. Its late continuation checks dead before addView. Do not make
       // a replacement wait for a read that can no longer attach anything.
       if(!source){releaseLease();return Promise.resolve(true);}
-      // Once addView has begun, finish it before removing the exact view.
-      // Failed removal retains its handle and lease for explicit retry.
-      detaching=(async()=>{try{await pending;}catch{}return detach();})().finally(()=>{detaching=null;});
+      // Native removals already issued must finish before releasing the
+      // old view/lease to a replacement Sine generation. A hung native
+      // remove intentionally blocks a second owner rather than duplicating
+      // the same destructive operation.
+      detaching=(async()=>{
+        try{await pending;}catch{}
+        await Promise.allSettled([...removalTasks]);
+        return detach();
+      })().finally(()=>{detaching=null;});
       return detaching;
     }
     return {start,subscribeNative,subscribe,getSnapshot,action,actionNative,pathKeys,withNative,drag,dragNative,clearCompleted,isReady,remove:d=>actionNative(d,"remove"),dispose};
