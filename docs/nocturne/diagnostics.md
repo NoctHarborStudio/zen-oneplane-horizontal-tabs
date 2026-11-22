@@ -347,3 +347,8 @@ Existing `drag.native.outcome` adds an optional bounded fixed `reason` for rejec
 ### Preview.116 — Split native group convergence
 
 The existing bounded `drag.native.outcome` event now uses the fixed `native-postcondition` reason when a Split/unsplit native result cannot be confirmed against exact physical/returned native membership. Inconsistent pre-existing Split group topology uses `native-split-group-unready`; changes during native selection remain `selection-retargeted`. `confirmed` is an immediate native snapshot, not a promise of asynchronous future convergence or a unique OS drag session. Existing gesture settlement traces remain authoritative for token cleanup. No tabs, window IDs, URLs, titles, paths, native objects or extra polling are recorded.
+
+
+### Preview.117 — Native file drag payload ownership
+
+A new bounded `downloads.native.transfer` event records only `{mode,reason}`: `mode` is `dock` or `library`; `reason` is `ineligible`, `file-unavailable`, `native-error` or `payload-written`. The existing Dock `downloads.drag.payload` records static `{accepted:false,reason:"native-source-or-file-unavailable"}` on failure. These are **DataTransfer population** outcomes, not native OS drop confirmation. Neither event includes paths, file names, download IDs, URLs or DataTransfer content. Sampling/throttle is bounded and no new writer, RAF or poller is created. Combine with existing Bunny begin/end/cancel traces and native OS manual acceptance.

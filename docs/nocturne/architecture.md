@@ -316,3 +316,6 @@ A5.1b1 (preview.114): Zen's current native tab/group order and live Split member
 
 
 A5.2a (preview.115): Split Drop performs one synchronous native eligibility preflight before selection and one owner/native-partner validation after selection, then calls Zen's existing `gZenViewSplitter.splitTabs/removeTabFromGroup` only for a still-owned gesture. Source identity, native group membership and selected-tab state remain owned by Zen/Gecko; no source-to-mirror transaction rollback. Every delivered Split drop is settled by the captured Drag Engine token, without clearing a newer synchronous gesture. Clone-prone pinned/Essentials/Glance combinations are rejected rather than reinterpreted as ordinary move.
+
+
+A5.3a (preview.117): file transfer payloads now belong to the existing Library Services / Downloads service owner; Dock and Library remain gesture/UI consumers, with Dock owning only Bunny visuals and OS image handoff. The identity gate is the service's exact native Download record (or opaque Library ID); no second cached filesystem model. Both variants use real nsIFile plus native URI and completed-file checks synchronously. The deliberate private distinction is preserved: native Dock is allowed for its own private list, Library is not. Native OS copy/move and accepted visual choreography unchanged; actual OS handoff remains a native validation gate.

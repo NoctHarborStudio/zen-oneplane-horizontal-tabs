@@ -216,7 +216,10 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
     function action(id,kind){return actionNative(byId.get(id),kind);}
     function pathKeys(windows=false){return new Set([...records.keys()].filter(d=>completed(d)&&d.target?.exists!==false).map(d=>d.target?.path).filter(Boolean).map(p=>windows?String(p).replace(/\\/g,"/").toLowerCase():String(p)));}
     function withNative(id,fn){const d=byId.get(id);return !!(!dead&&ready&&d&&completed(d)&&typeof fn==="function"&&fn(d));}
-    function drag(id,event,node){const d=byId.get(id);return !!(!dead&&ready&&d&&completed(d)&&dragFile(d,event,node));}
+    // The Dock receives native Download objects from this exact service view.
+    // Library uses an opaque ID and the stricter non-private policy.
+    function drag(id,event,node){const d=byId.get(id);return !!(!dead&&ready&&source&&d&&completed(d)&&d.target?.exists!==false&&dragFile(d,event,node,"library"));}
+    function dragNative(d,event,node){return !!(!dead&&ready&&source&&records.has(d)&&completed(d)&&d.target?.exists!==false&&dragFile(d,event,node,"dock"));}
     async function clearCompleted(){
       const targets=[...records.keys()].filter(clearable);let removed=0,failed=0;
       for(const d of targets)try{if(await actionNative(d,"remove"))removed++;}catch{failed++;}
@@ -235,7 +238,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
       detaching=(async()=>{try{await pending;}catch{}return detach();})().finally(()=>{detaching=null;});
       return detaching;
     }
-    return {start,subscribeNative,subscribe,getSnapshot,action,actionNative,pathKeys,withNative,drag,clearCompleted,isReady,remove:d=>actionNative(d,"remove"),dispose};
+    return {start,subscribeNative,subscribe,getSnapshot,action,actionNative,pathKeys,withNative,drag,dragNative,clearCompleted,isReady,remove:d=>actionNative(d,"remove"),dispose};
   }
 // PlacesQuery uses a Map of grouped visits or an array of search results.
   function createHistorySession({createQuery,allowed=()=>true,onChange=()=>{},now=Date.now}){
@@ -308,7 +311,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   const trace=(event,data)=>{try{if(win.__nocturneTrace)win.__nocturneTrace(event,data,{flush:true});else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,data,t:win.performance?.now?.()??0});}}catch{}};
-  trace("library.services.script",{version:"0.3.0-preview.116"});
+  trace("library.services.script",{version:"0.3.0-preview.117"});
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
   const BARRIER="__nocturneDownloadsDisposal",MEDIA_BARRIER="__nocturneMediaDisposal";
   const previous=win[KEY],previousClosing=previous?.dispose?.(),existing=win[BARRIER];
@@ -363,11 +366,31 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
   const media=createMediaService({scan:scanMedia,barrier:mediaBarrier,allowed:mediaAllowed,windows,
     describe(f,id){const name=f.path.split(/[\\/]/).pop();return {id,kind:"local",name,time:Number(f.lastModified)||0,bytes:Number(f.size)||0,total:Number(f.size)||0,success:true,exists:true,icon:iconFor(f.path),thumbnail:safeRaster(name,Number(f.size))?Services.io.newFileURI(fileFor(f.path)).spec:null};},
     perform(path,kind){try{const f=fileFor(path);if(!f.exists()||!f.isFile()||scanner().isCloudPlaceholder(path))return false;if(kind==="open")f.launch();else f.reveal();return true;}catch{return false;}}});
-  function dragFile(d,event,node){
-    if(!allowed()||!event?.isTrusted||!d.target?.path||d.target.exists===false)return false;
-    try{const f=fileFor(d.target.path),dt=event.dataTransfer;if(!f.exists()||!f.isFile()||!dt?.mozSetDataAt)return false;
-      dt.mozSetDataAt("application/x-moz-file",f,0);dt.setData("text/uri-list",Services.io.newFileURI(f).spec);dt.effectAllowed="copyMove";dt.addElement?.(node);return true;
-    }catch{return false;}
+  // Single Gecko file-payload owner for Dock and Library. Neither path
+  // reads file contents; both validate the current native Download identity
+  // through createDownloadsService before entering this synchronous helper.
+  function dragFile(d,event,node,purpose="library"){
+    const mode=purpose==="dock"?"dock":"library";
+    const report=(reason,ok=false)=>{
+      win.__nocturneTrace?.("downloads.native.transfer",{mode,reason},{throttle:250});
+      return ok;
+    };
+    try{
+      if(dead||win.closed||!["library","dock"].includes(purpose)||
+         (purpose==="library"&&!allowed())||event?.isTrusted!==true||
+         !d?.target||d.target.exists===false||
+         typeof d.target.path!=="string"||!d.target.path||
+         typeof event.dataTransfer?.mozSetDataAt!=="function"||
+         typeof event.dataTransfer?.setData!=="function")return report("ineligible");
+      const file=fileFor(d.target.path);
+      if(!file.exists()||!file.isFile())return report("file-unavailable");
+      const dt=event.dataTransfer,uri=Services.io.newFileURI(file).spec;
+      // Native dragstart's data store is writable only synchronously.
+      dt.mozSetDataAt("application/x-moz-file",file,0);
+      dt.setData("text/uri-list",uri);
+      dt.effectAllowed="copyMove";dt.addElement?.(node);
+      return report("payload-written",true);
+    }catch{return report("native-error");}
   }
   const downloads=createDownloadsService({describeFile:d=>({icon:iconFor(d.target?.path)}),dragFile,barrier,lease,onDetach:result=>trace("library.downloads.detach",result),idPrefix:"download-"+(win.crypto?.randomUUID?.()||String(win.performance.now())),loadList:()=>{
     const D=win.Downloads||load("resource://gre/modules/Downloads.sys.mjs","Downloads");

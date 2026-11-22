@@ -1,6 +1,6 @@
 // Nocturne preview.45: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="downloads.script",data={version:"0.3.0-preview.116"};
+  const event="downloads.script",data={version:"0.3.0-preview.117"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -25,7 +25,7 @@ try{if(typeof window!=="undefined"){
   let lastDockRect=null,followFrame=0,followUntil=0,overlayUntil=0,heldWrapper=null;
   let dock=null,dockList=null,dockEmpty=null,dockMore=null,dockBackdrop=null,dockNotice=null,dockOpen=false,limit=30;
   const history=new Map(),rows=new Map();
-  let externalDrag=null,fileDragSource=null,dragClickSource=null,FileUtils=null,fileBunny=null,fileIconWarm=null,filePopup=null,fileStage=null;
+  let externalDrag=null,fileDragSource=null,dragClickSource=null,fileBunny=null,fileIconWarm=null,filePopup=null,fileStage=null;
   const FILE_CARD_W=186,FILE_CARD_H=51,FILE_LIFT=320,FILE_RETURN=480,FILE_GRIP_X=172,FILE_GRIP_Y=48;
   let historyOrder=null,recentOrder=null,dockHeight=0,allButton=null,dockTitle=null,dockSort=null;
   const OVERLAY_WIDTH=430,RECENT_LIMIT=4;
@@ -584,21 +584,6 @@ try{if(typeof window!=="undefined"){
     }
     return result;
   }
-  function populateFileTransfer(dt,d,source,createFile,fileURI){
-    if(!canDragFile(d)||!dt||typeof dt.mozSetDataAt!=="function")return false;
-    try{
-      // Must be synchronous: dragstart's data store becomes read-only
-      // after dispatch. Check existence only on the explicit gesture.
-      const file=createFile(d.target.path);
-      if(!file.exists()||!file.isFile())return false;
-      const uri=fileURI(file);
-      dt.mozSetDataAt("application/x-moz-file",file,0);
-      dt.setData("text/uri-list",uri);
-      dt.effectAllowed="copyMove";
-      dt.addElement?.(source);
-      return true;
-    }catch{return false;}
-  }
   // Native Firefox downloads refresh moz-icon on successful completion.
   function fileIconURL(d,size=32){
     const path=d?.target?.path;
@@ -813,11 +798,11 @@ try{if(typeof window!=="undefined"){
     },0);
   }
   function beginFileDrag(e,source,d){
-    if(dead||e.isTrusted===false||!history.has(d)||
-       !populateFileTransfer(e.dataTransfer,d,source,path=>{
-         FileUtils??=ChromeUtils.importESModule("resource://gre/modules/FileUtils.sys.mjs").FileUtils;
-         return new FileUtils.File(path);
-       },file=>Services.io.newFileURI(file).spec)){
+    // Source membership is verified again by the sole Downloads service.
+    // Private-window Dock drags remain supported; Library ID drag is denied.
+    if(dead||e.isTrusted!==true||!history.has(d)||
+       !list?.dragNative?.(d,e,source)){
+      window.__nocturneTrace?.("downloads.drag.payload",{accepted:false,reason:"native-source-or-file-unavailable"},{throttle:250});
       e.preventDefault();return false;
     }
     e.stopPropagation();
@@ -1133,7 +1118,7 @@ try{if(typeof window!=="undefined"){
     try{prefs.removeObserver(SIDE,scheduleMount);}catch{}
     try{prefs.removeObserver(STATS_PREF,refreshStatistics);}catch{}
     if(fileBunny)fileBunny.ending=false;clearFileBunny();filePopup?.remove();filePopup=fileStage=null;fileIconWarm=null;
-    fileDragSource?.removeAttribute("data-file-dragging");fileDragSource=dragClickSource=null;FileUtils=null;syncDownloadHolds();finishExternalDrag();
+    fileDragSource?.removeAttribute("data-file-dragging");fileDragSource=dragClickSource=null;syncDownloadHolds();finishExternalDrag();
     node?.remove();node=fill=speed=icon=null;host=null;batch.clear();fresh=new WeakSet();latest=lastClick=null;
     dock?.remove();overlayLayer?.remove();dockBackdrop?.remove();dock=dockList=dockEmpty=dockMore=dockBackdrop=dockNotice=overlayLayer=null;history.clear();rows.clear();historyOrder=recentOrder=null;limit=30;dockHeight=0;allButton=dockTitle=dockSort=null;
     sortKey="time";sortDir=-1;headerNormal=headerConfirm=clearButton=sortTime=sortSize=yesButton=noButton=null;confirming=clearing=false;
