@@ -210,6 +210,45 @@ test("hidden native file popup stops artwork without ending its source gesture",
  assert.equal(stopped,1);assert.equal(q.shown,false);
  assert.ok(trace.includes("popup-hidden"));
 });
+test("Dock-free Library fallback owns a bounded native file drag source lease",()=>{
+ const library=readFileSync(new URL("../src/library/controller.js.part",import.meta.url),"utf8");
+ const a=library.indexOf("  function stopFallbackDragWatch(");
+ const b=library.indexOf("  function createFileRow(",a);
+ assert.ok(a>=0&&b>a);
+ const code=library.slice(a,b);
+ function fixture(read){
+   let next=0;const pending=new Map(),events=[];
+   const win={setTimeout(fn){const id=++next;pending.set(id,fn);return id;},clearTimeout(id){pending.delete(id);}};
+   const Cc={"@mozilla.org/widget/dragservice;1":{getService(){return {getCurrentSession:read};}}},Ci={nsIDragService:{}};
+   const api=new Function("win","Cc","Ci","events",`
+     let fallbackDragTimer=0,fallbackDragMissing=0,fallbackDragUnknown=0,dragSource=null,dragOwner=null,dead=false;
+     function trace(event,data){events.push([event,data]);}
+     function finishDrag(node){if(dragSource!==node)return;stopFallbackDragWatch();dragSource=null;events.push(["finished"]);}
+     `+code+`
+     return {start(node){dragSource=node;watchFallbackDrag(node);},stop:stopFallbackDragWatch,source:()=>dragSource};
+   `)(win,Cc,Ci,events);
+   return {api,pending,events,tick(){
+     const [id,fn]=pending.entries().next().value??[];assert.ok(fn);
+     pending.delete(id);fn();
+   }};
+ }
+ const absent=fixture(()=>null);absent.api.start({});
+ absent.tick();absent.tick();assert.equal(absent.events.length,0);
+ absent.tick();assert.deepEqual(absent.events,[
+   ["file.drag.recovered",{reason:"native-session-ended"}],["finished"]]);
+ assert.equal(absent.pending.size,0);
+ const unavailable=fixture(()=>{throw Error("API failed")});unavailable.api.start({});
+ for(let i=0;i<5;i++)unavailable.tick();assert.equal(unavailable.events.length,0);
+ unavailable.tick();assert.deepEqual(unavailable.events,[
+   ["file.drag.recovered",{reason:"native-session-unavailable"}],["finished"]]);
+ assert.equal(unavailable.pending.size,0);
+ let n=0;const live=fixture(()=>++n===5?{}:undefined);live.api.start({});
+ for(let i=0;i<10;i++)live.tick();
+ assert.equal(live.events.length,0);live.api.stop();assert.equal(live.pending.size,0);
+ assert.match(library,/if\(fallback\)watchFallbackDrag\(node\)/);
+ assert.match(library,/if\(dragSource\)\{pendingClose=true;return;\}if\(active\(\)\)closeNow\(\);/);
+ assert.match(library,/if\(dragSource!==node\)return;stopFallbackDragWatch\(\)/);
+});
 test("Library uses the existing Bunny owner and releases the external drag lease once",()=>{
  const code=section("  function finishExternalDrag(","  function clearFileBunny(");
  let externalDrag=null,fileDragSource=null,fileBunny=null,dead=false,node={},cardOpen=false,dockOpen=false;
