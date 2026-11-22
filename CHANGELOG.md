@@ -1,3 +1,10 @@
+## 0.3.0-preview.118 — A5.4a display coordinates and preview freshness
+
+- Retire unused Hub snap/display helpers; both workspace projection and tab Bunny already use the same Display Engine placement path. The supported native snap policy and opt-in preference are unchanged.
+- Include actual monitor work-area and target rectangle geometry in the display preview identity, so same-monitor taskbar/work-area changes reflow the preview rather than presenting a stale target.
+- Move the compact native preview popup when its actual screen anchor changes, even on the same monitor; emit a bounded diagnostic without raw display, tab, workspace or file data.
+- Add pure placement and extracted runtime popup regression tests. Native Gecko multi-DPI/OS drag/window placement and visual acceptance remain pending.
+
 ## 0.3.0-preview.117 — A5.3a shared native file-drag ownership
 
 - Route Downloads Dock and Library completed-file drag through one window-local Downloads service and one synchronous Gecko file/URI payload constructor.
