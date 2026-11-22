@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="page-progress.script",data={version:"0.3.0-preview.129"};
+  const event="page-progress.script",data={version:"0.3.0-preview.130"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -58,7 +58,7 @@ try{if(typeof window!=="undefined"){
   }
   function state(b){
     let s=states.get(b);
-    if(!s){s={active:false,progress:null,request:null};states.set(b,s);}
+    if(!s){s={active:false,progress:null,request:null,retired:null};states.set(b,s);}
     return s;
   }
   function selectedState(){return selected?states.get(selected):null;}
@@ -167,19 +167,26 @@ try{if(typeof window!=="undefined"){
           s.active=true;s.progress=null;s.request=request||null;
           if(b===selected){hide();attachSelected();reveal();}
         }else if(request&&request!==s.request){
-          // Redirect/replacement before a previous network STOP.
-          // Keep the painted phase; the latest native request owns completion.
+          // Retire only a previously observed NETWORK START: Gecko total
+          // progress can come from arbitrary page subresource requests.
+          if(s.request){
+            s.retired??=new Set();
+            s.retired.add(s.request);
+            if(s.retired.size>16)s.retired.delete(s.retired.values().next().value);
+          }
           s.request=request;
           window.__nocturneTrace?.("page-progress.network",{reason:"overlap-start"},{sample:1200});
         }
       }
       if(flags&F.STATE_STOP){
         if(!s.active)return;
-        if(request&&s.request&&request!==s.request){
+        // NETWORK STOP may report a different request from NETWORK START:
+        // only a known superseded START is proof of a stale terminal event.
+        if(request&&s.retired?.has(request)){
           window.__nocturneTrace?.("page-progress.network",{reason:"stale-stop"},{sample:1200});
           return;
         }
-        s.active=false;s.request=null;
+        s.active=false;s.request=null;s.retired=null;
         if(b!==selected)return;
         if(showTimer)window.clearTimeout(showTimer);showTimer=0;
         if(renderTimer)window.clearTimeout(renderTimer);renderTimer=0;
@@ -189,7 +196,7 @@ try{if(typeof window!=="undefined"){
     onProgressChange(b,webProgress,request,curSelf,maxSelf,curTotal,maxTotal){
       if(!installed||!b||!webProgress?.isTopLevel)return;
       const s=states.get(b);if(!s?.active||!Number.isFinite(maxTotal)||maxTotal<=0||!Number.isFinite(curTotal)||curTotal<0)return;
-      if(s.request&&request&&request!==s.request)return;
+      if(request&&s.retired?.has(request))return;
       const estimate=Math.min(.94,Math.max(.025,curTotal/maxTotal));
       s.progress=Math.max(s.progress??0,estimate);
       if(b===selected)schedule();

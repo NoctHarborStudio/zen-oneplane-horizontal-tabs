@@ -1,3 +1,7 @@
+## 0.3.0-preview.130 - Page Progress native request correlation hardening
+
+Use request identity only for NETWORK START events known to be superseded: Gecko's network STOP and aggregate total-progress callbacks can legitimately carry other request objects. Preserve valid subresource progress and terminal events, while ignoring old request events after overlapping starts. Retain a bounded set of retired identities for the active load, clear it on completion/unload, and keep the approved motion and existing request-less fallback. Three new production-source regression tests cover aggregate progress, mismatched terminal requests, and multiple superseded starts. Physical Zen/Gecko acceptance remains open.
+
 ## 0.3.0-preview.129 - Preserve Page Progress across overlapping native navigation
 
 Correlate overlapping Gecko top-level START/STOP and progress callbacks by their available native request identity. A late STOP or progress update from an older request can no longer complete or repaint the new active load when both request identities are available. Preserve the current indicator animation, standard no-identity behavior, native page ownership and no idle polling. Source regression tests cover the interleaved sequence; native graphical acceptance remains open.

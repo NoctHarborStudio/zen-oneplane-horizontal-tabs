@@ -386,3 +386,7 @@ Existing `downloads.drag.tick` and `downloads.drag.end` aggregates include `pain
 ### Preview.129 — Page Progress overlapping native requests
 
 The existing trace channel records sampled page-progress.network {reason:"overlap-start"|"stale-stop"} for an overlapping top-level network transition and a mismatched late STOP. These are content-free bounded reasons; never record nsIRequest, URLs, status text, page titles or a request identifier. Standard events and missing-request fallback are not logged by this new probe. Native Gecko correlation and presentation timing still need target-browser validation.
+
+### Preview.130 — Page Progress correlation correction
+
+`page-progress.network` retains the existing sampled content-free reasons `overlap-start` and `stale-stop`. The latter now means that a STOP carried a request previously seen and superseded by another NETWORK START, **not** merely that the STOP request differed from the current one. The bounded retired-request identity set is never serialized to telemetry and is cleared at terminal completion or unload. No additional hot-path probe or sensitive request metadata.

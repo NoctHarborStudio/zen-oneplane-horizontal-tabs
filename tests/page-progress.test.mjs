@@ -129,3 +129,38 @@ test("late STOP of an older network request cannot end a newer navigation",()=>{
  h.advance(620);assert.equal(h.bar.hasAttribute("data-visible"),false);
  h.dispose();
 });
+
+test("aggregate page progress accepts subresource requests and a network STOP with a different request",()=>{
+ const h=harness(),documentRequest={},subresource={};
+ const phase=()=>h.bar.getAttribute("data-phase");
+ const fill=()=>h.bar.children[0].children[0].values.get("--zr-page-progress");
+ h.evt(2,0,h.a,documentRequest);h.advance(480);
+ h.progress(35,100,subresource);h.advance(120);
+ assert.equal(fill(),"0.35"); // Gecko total progress is not scoped to the document request.
+ h.evt(4,0,h.a,subresource);assert.equal(phase(),"complete");
+ h.advance(620);assert.equal(h.bar.hasAttribute("data-visible"),false);
+ h.dispose();
+});
+test("overlapping navigation permits current subresource progress but rejects retired request events",()=>{
+ const h=harness(),oldDocument={},newDocument={},currentImage={};
+ const phase=()=>h.bar.getAttribute("data-phase");
+ const fill=()=>h.bar.children[0].children[0].values.get("--zr-page-progress");
+ h.evt(2,0,h.a,oldDocument);h.advance(480);
+ h.progress(60,100,oldDocument);h.advance(120);
+ h.evt(2,0,h.a,newDocument);
+ h.evt(4,0x804b0002,h.a,oldDocument);assert.equal(phase(),"loading");
+ h.progress(90,100,oldDocument);h.advance(120);assert.equal(fill(),"0.6");
+ h.progress(70,100,currentImage);h.advance(120);assert.equal(fill(),"0.7");
+ h.evt(4,0,h.a,newDocument);assert.equal(phase(),"complete");
+ h.dispose();
+});
+test("multiple superseded NETWORK START identities cannot end the latest load",()=>{
+ const h=harness(),a={},b={},c={};
+ const phase=()=>h.bar.getAttribute("data-phase");
+ h.evt(2,0,h.a,a);h.advance(480);
+ h.evt(2,0,h.a,b);h.evt(2,0,h.a,c);
+ h.evt(4,0x804b0002,h.a,a);h.evt(4,0x804b0002,h.a,b);
+ assert.equal(phase(),"loading");
+ h.evt(4,0,h.a,c);assert.equal(phase(),"complete");
+ h.dispose();
+});
