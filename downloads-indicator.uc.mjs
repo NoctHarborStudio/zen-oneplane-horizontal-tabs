@@ -760,13 +760,16 @@ try{if(typeof window!=="undefined"){
   function beginFileBunny(e,source,d){
     clearFileBunny();
     const origin=fileOrigin(source),visual=createFileCard(d),native=createFileCard(d);
-    native.card.setAttribute("data-native-preview","");native.card.setAttribute("aria-hidden","true");native.card.setAttribute("inert","");root.append(native.card);
+    native.card.setAttribute("data-native-preview","");native.card.setAttribute("aria-hidden","true");native.card.setAttribute("inert","");
     let glyph=null;if(source===node){glyph=make("span","zr-download-icon zr-file-bunny-seed");visual.card.append(glyph);}
     const point={x:FILE_GRIP_X,y:FILE_GRIP_Y};
     const dx=origin.x-(Number.isFinite(e.clientX)?e.clientX:origin.x),dy=origin.y-(Number.isFinite(e.clientY)?e.clientY:origin.y);
     const seed={x:point.x+clamp(dx,-45,45),y:point.y+clamp(dy,-36,20),w:Math.min(250,origin.w),h:Math.min(76,origin.h)};
     const s=Object.fromEntries(Object.entries({...seed,angle:0,scale:1}).map(([k,x])=>[k,{x,v:0}]));s.scale.v=2.4;
     const now=current(),q=fileBunny={source,fromIndicator:source===node,origin:seed,point,s,started:now,last:now,lastMove:now,lastReport:now,vx:0,visual,native,glyph,popup:null,ghost:null,mode:"bitmap",frame:0,timer:0,ending:false,shown:false,frames:0,moves:0,crossings:0,maxGap:0,maxAngle:0,screenPoint:null,inside:null};
+    // Do not attach the native card until the scoped Bunny state owns it.
+    // A failure during source/card construction must leave no orphan node.
+    root.append(native.card);
     let popupReady=false;
     // nsBaseDragSession DrawDrag recognizes a XUL panel as a live drag
     // image. Windows QueryContinueDrag calls DragMoved even outside Zen.
