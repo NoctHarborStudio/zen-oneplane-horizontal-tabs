@@ -311,7 +311,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   const trace=(event,data)=>{try{if(win.__nocturneTrace)win.__nocturneTrace(event,data,{flush:true});else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,data,t:win.performance?.now?.()??0});}}catch{}};
-  trace("library.services.script",{version:"0.3.0-preview.116"});
+  trace("library.services.script",{version:"0.3.0-preview.117"});
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
   const BARRIER="__nocturneDownloadsDisposal",MEDIA_BARRIER="__nocturneMediaDisposal";
   const previous=win[KEY],previousClosing=previous?.dispose?.(),existing=win[BARRIER];
@@ -370,22 +370,27 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
   // reads file contents; both validate the current native Download identity
   // through createDownloadsService before entering this synchronous helper.
   function dragFile(d,event,node,purpose="library"){
-    if(dead||win.closed||!["library","dock"].includes(purpose)||
-       (purpose==="library"&&!allowed())||event?.isTrusted!==true||
-       !d?.target||d.target.exists===false||
-       typeof d.target.path!=="string"||!d.target.path||
-       typeof event.dataTransfer?.mozSetDataAt!=="function"||
-       typeof event.dataTransfer?.setData!=="function")return false;
+    const mode=purpose==="dock"?"dock":"library";
+    const report=(reason,ok=false)=>{
+      win.__nocturneTrace?.("downloads.native.transfer",{mode,reason},{throttle:250});
+      return ok;
+    };
     try{
+      if(dead||win.closed||!["library","dock"].includes(purpose)||
+         (purpose==="library"&&!allowed())||event?.isTrusted!==true||
+         !d?.target||d.target.exists===false||
+         typeof d.target.path!=="string"||!d.target.path||
+         typeof event.dataTransfer?.mozSetDataAt!=="function"||
+         typeof event.dataTransfer?.setData!=="function")return report("ineligible");
       const file=fileFor(d.target.path);
-      if(!file.exists()||!file.isFile())return false;
+      if(!file.exists()||!file.isFile())return report("file-unavailable");
       const dt=event.dataTransfer,uri=Services.io.newFileURI(file).spec;
-      // The native dragstart data store is writable only synchronously.
+      // Native dragstart's data store is writable only synchronously.
       dt.mozSetDataAt("application/x-moz-file",file,0);
       dt.setData("text/uri-list",uri);
       dt.effectAllowed="copyMove";dt.addElement?.(node);
-      return true;
-    }catch{return false;}
+      return report("payload-written",true);
+    }catch{return report("native-error");}
   }
   const downloads=createDownloadsService({describeFile:d=>({icon:iconFor(d.target?.path)}),dragFile,barrier,lease,onDetach:result=>trace("library.downloads.detach",result),idPrefix:"download-"+(win.crypto?.randomUUID?.()||String(win.performance.now())),loadList:()=>{
     const D=win.Downloads||load("resource://gre/modules/Downloads.sys.mjs","Downloads");
