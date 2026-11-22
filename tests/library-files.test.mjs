@@ -68,3 +68,20 @@ test("media reload waits for previous native scan to release",async()=>{
  const next=second.open("documents"),read=next.refresh();await tick();assert.equal(scans,0);gate.resolve([]);
  assert.equal(await result,null);await read;assert.equal(scans,1);next.close();await second.dispose();
 });
+
+test("failed media refresh keeps committed rows actionable and successful refresh preserves IDs",async()=>{
+ let files=[{path:"old.jpg"}],opened;
+ const service=createMediaService({scan:()=>files,describe(f,id){
+   if(f.path==="bad.jpg")throw Error("metadata unavailable");
+   return {id,name:f.path};
+ },perform(path){opened=path;return true;}});
+ const session=service.open("pictures");
+ const [old]=await session.refresh();
+ files=[{path:"new.jpg"},{path:"bad.jpg"}];
+ await assert.rejects(session.refresh(),/metadata unavailable/);
+ assert.deepEqual(session.rows(),[old]);
+ assert.equal(service.action(old.id,"open"),true);assert.equal(opened,"old.jpg");
+ files=[{path:"old.jpg"}];assert.equal((await session.refresh())[0].id,old.id);
+ files=[];await session.refresh();assert.equal(service.action(old.id,"open"),false);
+ session.close();await service.dispose();
+});

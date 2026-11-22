@@ -101,7 +101,10 @@ test("native view listener reports final result counts and detaches on unload",(
  };
  new Function("window","document","Services","ChromeUtils","console",source)(w,{documentElement:{hasAttribute:()=>false}},{prefs:{},obs:{}},{importESModule:p=>modules[p]},{info:m=>logs.push(m),warn:m=>logs.push(m)});
  assert.equal(w.__zenRefinedSmartSearchStatus().registered,true);
- listener.onQueryFinished({searchString:"",results:[{providerName:"ZenRefinedRecentTabs"},{providerName:"native"}]});
+ const query={searchString:"",results:[{providerName:"ZenRefinedRecentTabs"},{providerName:"native"}]};
+ const stale={searchString:"",results:[]};
+ listener.onQueryStarted(stale);listener.onQueryStarted(query);listener.onQueryCancelled(stale);
+ listener.onQueryFinished(query);listener.onQueryFinished(stale);
  assert.equal(w.__zenRefinedSmartSearchStatus().visible,1);
  assert.equal(logs.at(-1),"[Zen Refined] Smart Search native finished: recent=1 recommended=1 total=2");
  w.__zenRefinedSmartSearch();assert.equal(listener,null);assert.equal(providers.size,0);
@@ -154,9 +157,10 @@ test("actual lifecycle raises only zero-prefix budget, groups native rows and pe
  // The first-ready refresh is coalesced and not repeated.
  const fire=()=>{const pending=[...timers.values()];timers.clear();for(const fn of pending)fn();};
  fire();assert.equal(queries,1);
- listener.onQueryFinished({searchString:"",results:rows.children.map(r=>r.result)});
+ const query={searchString:"",results:rows.children.map(r=>r.result)};
+ listener.onQueryStarted(query);listener.onQueryFinished(query);
  events.focusin();fire();assert.equal(queries,1);
- listener.onQueryResults({searchString:"",results:rows.children.map(r=>r.result)});
+ listener.onQueryResults(query);
  assert.equal(rows.hasAttribute("data-zr-smart-grid"),true);
  assert.equal(rows.children[0].getAttribute("data-zr-first"),"Recent tabs");
  assert.equal(rows.children[2].getAttribute("data-zr-first"),"Recommended");
@@ -208,7 +212,7 @@ test("startup recovers missing native recommendations even when Recent tabs alre
  const obs={addObserver:(fn,t)=>observers.set(t,fn),removeObserver:(fn,t)=>observers.delete(t)};
  new Function("window","document","Services","ChromeUtils","console",source)(w,{documentElement:{hasAttribute:()=>false}},{prefs,obs},{importESModule:p=>modules[p]},{info(){},warn(){}});
  const recent={providerName:"ZenRefinedRecentTabs"},native={providerName:"UrlbarProviderTopSites"};
- const finish=results=>{listener.onQueryStarted({searchString:""});listener.onQueryFinished({searchString:"",results});};
+ const finish=results=>{const query={searchString:"",results};listener.onQueryStarted(query);listener.onQueryFinished(query);};
  const fire=()=>{const p=[...timers.values()];timers.clear();for(const t of p)t.fn();};
  finish([recent]);assert.equal(timers.size,1);
  assert.equal([...timers.values()][0].ms,180);

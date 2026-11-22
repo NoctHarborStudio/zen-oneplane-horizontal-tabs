@@ -1,3 +1,7 @@
+## 0.3.0-preview.125 - Smart Search query lifetime and Library media refresh
+
+Ignore results, cancellation and completion from superseded address-bar queries. Publish local media rows and their action targets together after a successful scan; retain stable row IDs for surviving paths and keep the previous snapshot usable after a failed refresh.
+
 ## 0.3.0-preview.124 - A6 overlay handoff
 
 Guard nested overlay requests during preflight and stop dismissing panels when the requesting owner is replaced. A later refusal leaves already dismissed panels closed. Native focus and Escape validation remain open.

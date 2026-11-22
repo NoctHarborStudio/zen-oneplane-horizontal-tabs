@@ -1201,3 +1201,7 @@ This is a **new mode**, not a rewrite of the accepted Automatic algorithm. Nativ
 ### A6.1 - Overlay handoff
 
 Preview.124 guards reentry through preflight and yield callbacks. Participants must retain their registration before dismissal. A later refusal denies the request and retains completed dismissals. Native focus, Escape and hot reload acceptance remain open.
+
+### A6/A7 - Search query lifetime and atomic media refresh (preview.125)
+
+The Smart Search listener now checks the current native query context before changing layout and recovery state. Local Media publishes rows and action handles only after the entire scan result has been described. Regression coverage includes out-of-order query completion, failed refresh and subsequent removal. Broader native and integrated acceptance remains open.

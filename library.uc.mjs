@@ -84,24 +84,27 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
  let dead=false,serial=0,pending=Promise.resolve(barrier);const handles=new Map();
  function open(section,downloadPaths=()=>new Set()){
    if(dead||!allowed()||!MEDIA_EXTENSIONS[section])throw Error("Media unavailable");
-   let closed=false,owned=new Set(),cache=null,revision=0;
+   let closed=false,owned=new Map(),cache=null,revision=0;
    async function refresh(){
      const token=++revision;
      const task=pending.catch(()=>{}).then(()=>closed||dead||!allowed()||token!==revision?[]:scan(section));
      pending=task.catch(()=>{});const files=await task;
      if(closed||dead||!allowed()||token!==revision)return null;
-     for(const id of owned)handles.delete(id);owned.clear();
-     const result=[],seen=new Set(downloadPaths());
+     const next=new Map(),result=[],seen=new Set(downloadPaths());
      for(const f of files.slice(0,300)){
        if(!f?.path||f.cloudPlaceholder||mediaKind(f.path)!==section)continue;
        const key=mediaPathKey(f.path,windows);if(seen.has(key))continue;seen.add(key);
-       const id="local-"+(++serial),row=describe(f,id);
+       const id=owned.get(key)??"local-"+(++serial),row=describe(f,id);
        if(!row)continue;
-       handles.set(id,f.path);owned.add(id);result.push(Object.freeze(row));
+       next.set(key,{id,path:f.path});result.push(Object.freeze(row));
      }
+     if(closed||dead||!allowed()||token!==revision)return null;
+     for(const id of owned.values())handles.delete(id);
+     owned.clear();
+     for(const [key,{id,path}] of next){handles.set(id,path);owned.set(key,id);}
      cache=Object.freeze(result);return cache;
    }
-   return {refresh,rows:()=>{const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const id of owned)handles.delete(id);owned.clear();cache=null;}};
+   return {refresh,rows:()=>{const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const id of owned.values())handles.delete(id);owned.clear();cache=null;}};
  }
  function action(id,kind){if(dead||!allowed()||!handles.has(id)||!["open","reveal"].includes(kind))return false;return perform(handles.get(id),kind);}
  function dispose(){dead=true;handles.clear();return pending.catch(()=>{});}
@@ -192,7 +195,7 @@ function libraryShortcutSection(event,os="WINNT"){
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,{flush:true});
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.124",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.125",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";

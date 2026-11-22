@@ -1,10 +1,10 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="search.script",data={version:"0.3.0-preview.124"};
+  const event="search.script",data={version:"0.3.0-preview.125"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
-/* Zen Refined — Smart Search.
+/* Zen Refined вЂ” Smart Search.
  * Native URL-bar provider. Recent active tabs are computed on demand;
  * no history database, tab cloning, network requests, or custom input.
  */
@@ -181,7 +181,7 @@ try{if(typeof window!=="undefined"){
         if(state.diagnostic){state.diagnostic.started=true;state.diagnostic.candidates=candidates.length;state.diagnostic.emitted=0;}
         for(let i=0;i<entries.length;i++){
           const e=entries[i],token=remember(state,e);
-          const detail=[domain(e.url),!e.current?e.workspace:"",e.container].filter(Boolean).join(" · ");
+          const detail=[domain(e.url),!e.current?e.workspace:"",e.container].filter(Boolean).join(" В· ");
           try{add(this,new Result({
             type:Shared.RESULT_TYPE.DYNAMIC,source:Shared.RESULT_SOURCE.TABS,
             suggestedIndex:i,
@@ -402,15 +402,17 @@ try{if(typeof window!=="undefined"){
       }
       listener={
         onQueryStarted(context){
+          if(disposed)return;
           inFlight=true;activeContext=context;cancelRefresh();
           if(context.isPrivate||context.searchString!==""){finishRecovery();clearLayout();return;}
           diagnostic.viewQueries=(diagnostic.viewQueries||0)+1;
           console.info("[Zen Refined] Smart Search native query started");
         },
-        onQueryResults(context){activeContext=context;layout(context);},
-        onQueryCancelled(){inFlight=false;},
+        onQueryResults(context){if(!disposed&&context===activeContext)layout(context);},
+        onQueryCancelled(context){if(context===activeContext){inFlight=false;activeContext=null;clearLayout();}},
         onQueryFinished(context){
-          inFlight=false;activeContext=context;layout(context);
+          if(disposed||context!==activeContext)return;
+          inFlight=false;layout(context);
           if(context.isPrivate||context.searchString!=="")return;
           const rows=context.results||[];
           const counts=countResults(rows);
