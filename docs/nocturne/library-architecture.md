@@ -147,3 +147,7 @@ Source fixture coverage includes successful resolution, native removal rejection
 ## Preview.136 — generated bundle and release-policy closure for NC4-090-R2
 
 The preview.135 native-remove disposal correction was valid source but the first published bundle missed the new in-flight Promise tracking due to a stale generated assembly. Rebuilding `library-services.uc.mjs` repaired that mismatch but produced a second, package-changing commit at an unchanged version, correctly rejected by the monotonic release policy. Preview.136 uses the same existing DownloadsService algorithm, a regenerated bundle and synchronized versions/updatedAt; it does not add any feature or competing data owner. The original source fixture for a pending native removal across reload remains part of the two new regressions. Native Zen acceptance and unresolved native-remove hang policy remain unchanged.
+
+## Preview.136 canonical Downloads stabilization result
+
+[CI 45074815964](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45074815964) **PASS**: 791 Node and 15 Python, deterministic generated/parser/metadata, immutable and current public package. The source/CI correction to NC4-090 (single same-window Dock/Library bulk owner, native-identity in-flight guard and native-removal Promise disposal barrier across reload) is CLOSED at preview.136. No new UI, service, timer or file deletion. The two failed .135 runs remain preserved as release integrity checks. Actual Gecko/OS native timing, multiwindow and unresolved removal acceptance are OPEN.

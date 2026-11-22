@@ -1278,3 +1278,5 @@ The preview.134 same-generation Dock/Library clear fix passed 789 Node + 15 Pyth
 ### NC4-090-R2 release-integrity follow-up — preview.136
 
 The preview.135 source fix exposed a stale `library-services.uc.mjs` generated output (CI 45074333000). A same-version output correction passed assembly but triggered the expected monotonic publication-rule error (CI 45074457589). Preview.136 is the canonical full rebuild with the same native removal completion barrier and advanced version. Neither failed run is recorded as PASS; native hot-reload and cross-window operations remain OPEN.
+
+NC4-090/R2 canonical preview.136 CI closure: production `072382046126895e08da6662caa7041de45ef0ee`, publication/provenance `efd0a5109948fb932fdde5a6bd996ce17da03a37`, [CI 45074815964](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45074815964) SUCCESS (791/791 Node, 15/15 Python, deterministic generated outputs and public package). Source/CI CLOSED; native Zen/Gecko, cross-window and hung-operation liveness OPEN. Both preview.135 failures remain correctly recorded, not ignored.

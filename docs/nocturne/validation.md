@@ -584,5 +584,7 @@ The user approved the **geometry and interaction concept**, not an implementatio
 ### A7 / NC4-090-R2 — versioned generated-package verification (preview.136)
 
 - [x] The failed preview.135 CI build and same-version publication boundary failures are preserved as negative evidence; runtime changes must not bypass reproducible source generation or monotonically increasing package version.
-- [ ] Preview.136 canonical CI: exact `npm run check:build`, runtime parser, all Node/Python tests, same-source generated bundles and immutable/current Raw+codeload public package.
+- [x] Preview.136 canonical CI [45074815964](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45074815964): exact generated build and runtime parser, 791/791 Node + 15/15 Python, immutable/current Raw+codeload public package.
 - [ ] Native Zen 1.24.2b/Sine 2.3.3: verify old native remove Promise settles before the service lease/view is released during hot reload; reject duplicate removal on the same Download and avoid files-on-disk deletion.
+
+Native acceptance for NC4-090-R2 remains open: source/CI PASS does not imply Zen process-wide cross-window exclusive removal or bounded completion of a hung native Promise.
