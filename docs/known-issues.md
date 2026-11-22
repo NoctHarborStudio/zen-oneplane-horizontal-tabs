@@ -1232,3 +1232,8 @@ NC4-016 duplication addressed in source by routing both Dock and Library through
 
 
 A5.3a canonical closure: production `29de5faf`, [CI 45054533303](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45054533303) PASS (728 Node, 15 Python, runtime parser, deterministic outputs and public package). Native filesystem/OS drop, private Zen, cross-monitor and diagnostics-on/off performance gates remain open. Known-missing `target.exists === false` is rejected by both service APIs before payload construction.
+
+
+### A5.4a — Display snap policy and stale same-monitor preview (preview.118)
+
+NC4-017: the two Hub-specific pure `hubSnapRect`/`hubOtherDisplay` helpers were unreferenced in real Layout/Hub runtime; Hub and Bunny already consume the one Display Engine placement path. The unused functions and their obsolete tests have been removed. A separate source-confirmed stale-preview risk existed because cache identity ignored actual native `work` geometry and target rect, and the XUL preview popup moved only when the full monitor changed. A5.4a keys preview to full/work/target geometry and reanchors on actual screen position change; behavior tests cover same-monitor work-area changes. It does not change native snap policy, OS window placement or active drag lifecycle. Native Gecko monitor/DPI, taskbar, real drag/drop, cancellation and profiler acceptance remain unverified; do not mark NC4-017 fully closed until those gates.
