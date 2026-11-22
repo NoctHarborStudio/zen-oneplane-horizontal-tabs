@@ -377,3 +377,8 @@ Existing `downloads.drag.tick` and `downloads.drag.end` aggregates include `pain
 ### Preview.122 empty-native Workspace tab adoption diagnostics
 
 `drag.empty.preview` records a sampled static `admitted:true` only on a newly eligible native destination. `drag.drop` adds a bounded boolean `empty`; `drag.native.outcome` uses static `operation:"adopt-empty-workspace"` and existing outcome values (`confirmed`, `rejected`, `unverified`, `transferred-off-target`, `error`). Do not record Workspace UUIDs, titles, URL or native payloads. Source token, incoming lease, terminal cleanup and diagnostic retention remain those of the existing Drag Engine. An accepted native custom drop does not equal a successful OS mutation.
+
+
+### Preview.123 native drag structural lease diagnostics
+
+`drag.topology.changed` is emitted only when an active tab Drag Engine token or a post-drag insertion visual tail has become structurally stale. The bounded event records a static `stage`, existing local drag `token` when live, boolean `tail`, previous visible tab count and boolean `sourceValid`. The existing `drag.lifecycle.cancel` reason is `native-topology-changed`; neither event logs native Workspace IDs, tab titles/URLs, folder names or DOM contents. No polling/RAF was added; event/MutationObserver wakeups are existing lifecycle owners. Confirm real OS session behavior in Zen separately.

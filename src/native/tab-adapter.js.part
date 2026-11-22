@@ -46,6 +46,11 @@
       const token=controller?.sourceToken?.();
       if (!validNativeTab(tab) || controller?.source?.() !== tab||
           !Number.isSafeInteger(token)||token<=0)return null;
+      // A delivered cross-window drop must still match the original native
+      // source topology. Dragover stays on native event/observer admission.
+      if(event.type==="drop"&&controller?.topologyCurrent?.()===false){
+        controller?.retireTopology?.();return null;
+      }
       // Moving the native group as a unit is supported within one window.
       // Individual members can still be adopted by another window.
       if (owner !== window && owner?.[DRAG_CONTROLLER]?.group()) return null;

@@ -1,7 +1,8 @@
   function onDragEnd(event, tab) {
     if(!event?.isTrusted||!dragEndMatches(nativeDragIdentity,event,tab)||
       nativeDragIdentity?.token!==nativeDragToken||!dragLifecycle.owns(nativeDragToken,"tab")||retireChangedDragViewport()||
-      retireChangedDragChromeFrame("dragend")||retireBlockedNativeTabDrag("dragend-phase"))return;
+      retireChangedDragChromeFrame("dragend")||retireBlockedNativeTabDrag("dragend-phase")||
+      retireChangedNativeDragTopology("dragend"))return;
     const dt = event.dataTransfer;
     // Ignore late or duplicate dragend after cancel/handled drop.
     const placement=placementAt(event,true);
@@ -44,6 +45,8 @@
   const dragController = {
     source: () => draggedTab,
     sourceToken: () => nativeDragToken,
+    topologyCurrent: () => nativeDragTopologyCurrent(),
+    retireTopology: () => retireChangedNativeDragTopology("remote-drop"),
     group: () => draggedGroup,
     outside: event => setDragImageMode("outside",event),
     preview: event => {if(draggedTab&&!draggedGroup)showPlacementPreview(event,"Tab");},

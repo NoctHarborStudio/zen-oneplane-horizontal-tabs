@@ -60,6 +60,9 @@
     try{syncNow();}finally{syncing=false;}
   }
   function syncNow(){
+    // Retire stale native gesture before the mirror can remove/reparent the
+    // OS drag source, including a delayed Center/Workspace reconciliation.
+    retireChangedNativeDragTopology("projection-sync");
     if(root.hasAttribute("data-zr-center-motion")){
       // Native changes are handled by the exact motion owner. Reconcile
       // only once the owner has released its freeze, never under it.
@@ -220,6 +223,7 @@
     }
   }
   function onSelect() {
+    retireChangedNativeDragTopology("native-tab-select");
     if(restoreSearchTimer)cancelStartupSearchRestore("native-tab-select");
     typeof window!=="undefined"&&window.__nocturneTrace?.("tabs.select",()=>({home:row.hasAttribute('data-op-home-open'),phase:root.getAttribute('data-zr-workspace-phase'),overflow:row.hasAttribute('data-op-overflow-row')}),{sample:1800});
     markHomeTitleActivity();
@@ -232,6 +236,7 @@
     window.requestAnimationFrame(revealSelectedInStrip);
   }
   function onTabOpenOrClose(){
+    retireChangedNativeDragTopology("native-tab-change");
     if(restoreSearchTimer)cancelStartupSearchRestore("native-tab-change");
     guardPanelSwitch();
     schedule();
@@ -246,9 +251,19 @@
         win.dispatchEvent(new win.CustomEvent("OnePlane:SyncedIconChanged"));
     }
   }
+  function onNativeTabEvent(event){
+    retireChangedNativeDragTopology(event?.type||"native-tab-event");
+    schedule();
+  }
   const events = ["SSTabRestoring", "SSTabRestored", "TabOpen", "TabClose", "TabMove", "TabAttrModified", "TabPinned", "TabUnpinned", "TabShow", "TabHide", "TabBrowserInserted", "TabBrowserDiscarded", "ZenTabRemovedFromSplit"];
-  const tabObserver = new MutationObserver(schedule);
-  const workspaceObserver = new MutationObserver(schedule);
+  const tabObserver = new MutationObserver(()=>{
+    retireChangedNativeDragTopology("native-tab-observer");
+    schedule();
+  });
+  const workspaceObserver = new MutationObserver(()=>{
+    retireChangedNativeDragTopology("native-workspace-observer");
+    schedule();
+  });
   const toolbarObserver = new MutationObserver(() => {
     if(dead)return;
     retireChangedDragChromeFrame("toolbar-children");

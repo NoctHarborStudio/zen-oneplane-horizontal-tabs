@@ -108,17 +108,17 @@
     cleanupStep("url.removeEventListener(\"focusout\", onAddressMutation)",()=>{url.removeEventListener("focusout", onAddressMutation);});
     cleanupStep("restorePageActions()",()=>{restorePageActions();});
     cleanupStep("restoreWindowCaptions()",()=>{restoreWindowCaptions();});
-    for (const event of events) cleanupStep("browser.tabContainer.removeEventListener(event, schedule)",()=>{browser.tabContainer.removeEventListener(event, schedule);});
+    for (const event of events) cleanupStep("browser.tabContainer.removeEventListener(event, onNativeTabEvent)",()=>{browser.tabContainer.removeEventListener(event, onNativeTabEvent);});
     cleanupStep("browser.tabContainer.removeEventListener(\"TabSelect\", onSelect)",()=>{browser.tabContainer.removeEventListener("TabSelect", onSelect);});
     for(const event of ["TabOpen","TabClose"]) cleanupStep("browser.tabContainer.removeEventListener(event,onTabOpenOrClose,true)",()=>{browser.tabContainer.removeEventListener(event,onTabOpenOrClose,true);});
-    cleanupStep("window.removeEventListener(\"ZenWorkspaceDataChanged\", schedule)",()=>{window.removeEventListener("ZenWorkspaceDataChanged", schedule);});
+    cleanupStep("window.removeEventListener(\"ZenWorkspaceDataChanged\", schedule)",()=>{window.removeEventListener("ZenWorkspaceDataChanged", onNativeTabEvent);});
     cleanupStep("window.removeEventListener(\"ZenRefined:WorkspaceTransition\",onWorkspaceMotion)",()=>{window.removeEventListener("ZenRefined:WorkspaceTransition",onWorkspaceMotion);});
     cleanupStep("center motion listener",()=>window.removeEventListener("Nocturne:CenterMotionEnd",onCenterMotionEnd));
     cleanupStep("toolbarWrapper?.removeAttribute(\"oneplane-workspace-hold\")",()=>{toolbarWrapper?.removeAttribute("oneplane-workspace-hold");});
     cleanupStep("window.removeEventListener(\"ZenTabIconChanged\",onNativeIconChanged,true)",()=>{window.removeEventListener("ZenTabIconChanged",onNativeIconChanged,true);});
     cleanupStep("window.removeEventListener(\"OnePlane:SyncedIconChanged\",schedule)",()=>{window.removeEventListener("OnePlane:SyncedIconChanged",schedule);});
-    cleanupStep("window.removeEventListener(\"ZenViewSplitter:SplitViewActivated\", schedule)",()=>{window.removeEventListener("ZenViewSplitter:SplitViewActivated", schedule);});
-    cleanupStep("window.removeEventListener(\"ZenViewSplitter:SplitViewDeactivated\", schedule)",()=>{window.removeEventListener("ZenViewSplitter:SplitViewDeactivated", schedule);});
+    cleanupStep("window.removeEventListener(\"ZenViewSplitter:SplitViewActivated\", schedule)",()=>{window.removeEventListener("ZenViewSplitter:SplitViewActivated", onNativeTabEvent);});
+    cleanupStep("window.removeEventListener(\"ZenViewSplitter:SplitViewDeactivated\", schedule)",()=>{window.removeEventListener("ZenViewSplitter:SplitViewDeactivated", onNativeTabEvent);});
     cleanupStep("window.removeEventListener(\"aftercustomization\", schedule)",()=>{window.removeEventListener("aftercustomization", schedule);});
     cleanupStep("download host",releaseDownloadHost);
     cleanupStep("download hold",()=>toolbarWrapper?.removeAttribute("oneplane-download-hold"));
@@ -191,17 +191,17 @@
     plus.addEventListener("pointerleave", leaveTabPointer);
     plus.addEventListener("click", onNewTabClick);
     mountOverflowSlider();
-    for (const event of events) browser.tabContainer.addEventListener(event, schedule);
+    for (const event of events) browser.tabContainer.addEventListener(event, onNativeTabEvent);
     browser.tabContainer.addEventListener("TabSelect", onSelect);
     for(const event of ["TabOpen","TabClose"])browser.tabContainer.addEventListener(event,onTabOpenOrClose,true);
-    window.addEventListener("ZenWorkspaceDataChanged", schedule);
+    window.addEventListener("ZenWorkspaceDataChanged", onNativeTabEvent);
     window.addEventListener("ZenRefined:WorkspaceTransition",onWorkspaceMotion);
     window.addEventListener("Nocturne:CenterMotionEnd",onCenterMotionEnd);
     onWorkspaceMotion();
     window.addEventListener("ZenTabIconChanged",onNativeIconChanged,true);
     window.addEventListener("OnePlane:SyncedIconChanged",schedule);
-    window.addEventListener("ZenViewSplitter:SplitViewActivated", schedule);
-    window.addEventListener("ZenViewSplitter:SplitViewDeactivated", schedule);
+    window.addEventListener("ZenViewSplitter:SplitViewActivated", onNativeTabEvent);
+    window.addEventListener("ZenViewSplitter:SplitViewDeactivated", onNativeTabEvent);
     window.addEventListener("aftercustomization", schedule);
     tabObserver.observe(browser.tabContainer, {
       subtree: true, childList: true, attributes: true,

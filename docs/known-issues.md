@@ -489,6 +489,8 @@ tab-sync.js.part:8–14 freezes structural changes only for center-motion; norma
 
 **Required:** A4/A5: source-node lease with native validity, cancel safely if source gone, defer or reconcile other topology, test external events during drag and insertion tail.
 
+**preview.123 source checkpoint:** Existing Drag Engine captures a native gesture-scoped structural witness of visible tab identity/order, Split/pinned, physical native parent, Workspace ID and current manager. Tab Sync events/observers and pre-projection sync retire the exact source token on divergence before removing/reparenting its card; a local accepted native commit is excluded from self-invalidation. Foreign delivered drops recheck the original source topology, and insertion visual tails retire after external native mutation. Ten extracted-source regressions PASS; real Zen Gecko OS gesture, Split/Folder/Workspace and user-visible acceptance remain **OPEN**.
+
 #### NC4-067 — Session watchdog treats API error as ongoing drag (S/R/P1)
 
 drag-engine.js.part:18–26 resets missing count on exceptions or does not advance if getCurrentSession unavailable; downloads-indicator:646–648,754–760 returns undefined on exception and resets missing. Both can keep scheduling if dragend lost and capability fails; not proven in native Gecko.

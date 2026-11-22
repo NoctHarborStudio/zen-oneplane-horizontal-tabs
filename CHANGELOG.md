@@ -1,3 +1,12 @@
+## 0.3.0-preview.123 — A5.7c native drag topology lease and stale source retirement
+
+- Capture only the native active Workspace, visible tab identity/order, Split membership, pinned state, physical native tab parent and per-tab Workspace UUID while a native tab gesture is active. This ephemeral witness is compared against Zen's live topology, not used as a second tab store.
+- Retire a stale native drag gesture before the existing Tab Sync structurally removes/reparents its chrome source, including TabClose, TabMove, TabHide/Show, native Split changes, Workspace switch, native DOM mutation and same-tab migration to a folder/another Workspace. Selection/title/icon-only changes do not cancel the gesture.
+- Preserve intentional synchronous TabMove from a previously accepted local native drop, and separately invalidate a return-to-strip insertion animation if its source structure changes after OS drag completion.
+- Verify a cross-window source lease again on delivered native drop; when its original topology no longer matches, retire the precise source token and prevent any stale native move/adopt/detach.
+- Keep the existing Drag Engine/Tab Sync owners, native OS handoff, watcher and no-idle-polling behavior. Add ten source-extracted regression cases covering native disappearance, reparenting, rearrangement, Split/Workspace, accepted commit, foreign drop and insertion-tail cleanup.
+- Native Gecko/Zen behavior, OS DragSession termination, mixed-DPI, workspace/Folder/Split edge cases and visual/performance acceptance remain OPEN.
+
 ## 0.3.0-preview.122 — A5.7b native empty Workspace tab adoption
 
 - Accept a cross-window ordinary native tab over the real empty tab strip or native new-tab control only when Zen proves the active Workspace and its connected native regular-tabs container are empty (excluding native `zen-empty-tab` placeholders).

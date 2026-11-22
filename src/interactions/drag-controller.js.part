@@ -16,7 +16,7 @@
   function endDragVisual(restoreReturn=false) {
     const returnedSource=restoreReturn?dragNode:null,returnedPoint=restoreReturn?dragReturnPoint:null;
     dragReturnPoint=null;
-    dragInsertPending=false;dragViewport=null;dragChromeFrame=null;
+    dragInsertPending=false;dragViewport=null;dragChromeFrame=null;nativeDragTopology=null;
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.visual.end",()=>({mode:dragImageMode,pull:dragPull,detached:dragDetachedOnce,ghost:!!dragGhost&&!dragGhost.hidden,shifted:dragShifted.size}),{sample:1800});
     clearPlacementPreview();
     cancelInsertion();
