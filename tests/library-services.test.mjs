@@ -177,12 +177,13 @@ test("native Dock and Library drags use one current Download identity, with dist
   f.d[field]=prev;
  }
  f.d.target.exists=false;
- assert.equal(s.dragNative(f.d,event,node),true); // Native filesystem check belongs to dragFile.
+ assert.equal(s.dragNative(f.d,event,node),false);
+ assert.equal(s.drag(id,event,node),false);
  f.d.target.exists=true;
  f.emit("onDownloadRemoved",f.d);
  assert.equal(s.dragNative(f.d,event,node),false);
  assert.equal(s.drag(id,event,node),false);
- assert.deepEqual(calls.map(x=>x[3]),["dock","library","dock"]);
+ assert.deepEqual(calls.map(x=>x[3]),["dock","library"]);
  await s.dispose();
  assert.equal(s.dragNative(f.d,event,node),false);
 });
