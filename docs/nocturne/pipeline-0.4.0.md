@@ -4,7 +4,7 @@ Status: primary static audit checkpoints completed; A0.3 release infrastructure 
 
 ## Active checkpoint — source vs native evidence
 
-Current source checkpoint: 0.3.0-preview.123 (A5.7c native drag source topology lease and visual-tail invalidation implemented; staged source fixtures PASS, canonical CI pending; Gecko native acceptance OPEN). Last confirmed canonical CI: preview.122. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
+Current source checkpoint: 0.3.0-preview.123 (A5.7c native drag source topology fence and insertion-tail invalidation source/CI PASS; Gecko native acceptance OPEN). Last confirmed canonical CI: preview.123. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
 
 | Stage | Source implementation/review | Native acceptance |
 | --- | --- | --- |
@@ -1180,3 +1180,12 @@ The existing native Tab Sync event listener, native tab/workspace MutationObserv
 Source controller `topologyCurrent` and `retireTopology` are narrow methods over the same owner, not a second controller. `readDraggedTab` rechecks source topology on delivered `drop` across windows and retires the exact source token on mismatch, without using stale data to move/adopt or create a detached window. High-frequency `dragover` remains on existing source admission and existing tab observers, without a new structural scan per frame. Workspaces/physical parents are held by reference only until native completion/visual-tail cleanup.
 
 Permanent source-extracted tests cover unchanged selection/labels, external reorder, close and detached owner, group/pinned/Split/visibility/folder/Workspace changes, source missing at dragstart, own accepted native move, changed insertion tail, delivered foreign drop, event subscriptions/unsubscribe, and no new timer/observer. Ten tests PASS in isolated staged-source execution. Full canonical CI, Gecko drag-image behavior, real native OS session cancellation, mixed DPI and accepted local/crosswindow operations are independent **OPEN** gates; never mark native PASS from Node fixtures.
+
+ 
+### A5.7c-R — Source/CI closure and fixture self-review (docs only)
+
+Runtime implementation: `be722e132b99360f5a3dccd20684bc7257b95ae7` (preview.123), plus exact bookmark override provenance commit `69ae6030538942ab498d0e0208decfc2843523c4`. The initial published checkout [CI 45062404236](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45062404236) failed one isolated `tests/geometry-coordinator.test.mjs` fixture (763/764 Node): the existing frozen-`syncNow()` extracted-source test omitted the new Drag Engine guard symbol. The production source parsed and the other checks passed, but this run was correctly treated as FAIL.
+
+Follow-up **tests-only** commit `d06a21fda07a81315fef34a46460a4782d75b257` wires the actual source-extracted `retireChangedNativeDragTopology` into that fixture and asserts it does **not** inspect native tabs while no drag/tail exists. This preserves the original test's stronger invariant (idle frozen projection performs no native topology read) without bypassing the production guard. No runtime/version bump was needed for this fixture repair.
+
+[Canonical CI 45062577060](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45062577060) **SUCCESS** at that exact HEAD: 764/764 Node tests (10 new topology source fixtures included), 15/15 Python release-policy tests, generated-build reproducibility/runtime syntax, Sine Raw GitHub and codeload package delivery. Independent staged-source test execution, generated fragment equality, metadata/updatedAt and bookmark lock readback also passed. **A5.7c source/CI CLOSED; native Zen OS drag session, visual, Workspace, Split/Folder and multiwindow acceptance still OPEN.** No Gecko runtime test has been claimed.

@@ -491,6 +491,8 @@ tab-sync.js.part:8–14 freezes structural changes only for center-motion; norma
 
 **preview.123 source checkpoint:** Existing Drag Engine captures a native gesture-scoped structural witness of visible tab identity/order, Split/pinned, physical native parent, Workspace ID and current manager. Tab Sync events/observers and pre-projection sync retire the exact source token on divergence before removing/reparenting its card; a local accepted native commit is excluded from self-invalidation. Foreign delivered drops recheck the original source topology, and insertion visual tails retire after external native mutation. Ten extracted-source regressions PASS; real Zen Gecko OS gesture, Split/Folder/Workspace and user-visible acceptance remain **OPEN**.
 
+**preview.123 verification:** [Canonical CI 45062577060](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45062577060) PASS (764 Node, 15 Python, runtime/syntax/deterministic Sine delivery). Initial isolated fixture failure in 45062404236 corrected by tests-only commit d06a21f; native Gecko acceptance remains OPEN.
+
 #### NC4-067 — Session watchdog treats API error as ongoing drag (S/R/P1)
 
 drag-engine.js.part:18–26 resets missing count on exceptions or does not advance if getCurrentSession unavailable; downloads-indicator:646–648,754–760 returns undefined on exception and resets missing. Both can keep scheduling if dragend lost and capability fails; not proven in native Gecko.
