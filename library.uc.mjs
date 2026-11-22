@@ -80,8 +80,9 @@ function queryDownloadRows(rows,{section="downloads",text="",limit=50,sort="new"
  list.sort((a,b)=>Number(!!b.active)-Number(!!a.active)||(sort==="size"?((b.total||b.bytes||0)-(a.total||a.bytes||0)):sort==="old"?a.time-b.time:b.time-a.time)||a.id.localeCompare(b.id));
  return Object.freeze({rows:Object.freeze(list.slice(0,limit)),limit,hasMore:list.length>limit});
 }
-function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,windows=false,describe,perform}){
- let dead=false,serial=0,generation=0,pending=Promise.resolve(barrier);const handles=new Map();
+function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,windows=false,describe,perform,onRefresh=()=>{}}){
+ let dead=false,serial=0,viewSerial=0,generation=0,pending=Promise.resolve(barrier);const handles=new Map();
+ const report=(section,status,count=0)=>{try{onRefresh({section,status,count});}catch{}};
  function open(section,downloadPaths=()=>new Set()){
    if(dead||!allowed()||!MEDIA_EXTENSIONS[section])throw Error("Media unavailable");
    let closed=false,owned=new Map(),cache=null,revision=0;
@@ -91,23 +92,28 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
      if(!available())return null;
      const token=++revision;
      const task=pending.catch(()=>{}).then(()=>!available()||token!==revision?[]:scan(section));
-     pending=task.catch(()=>{});const files=await task;
+     pending=task.catch(()=>{});
+     let files;
+     try{files=await task;}catch(error){if(available()&&token===revision)report(section,"error");throw error;}
      if(!available()||token!==revision)return null;
-     const next=new Map(),result=[],seen=new Set(downloadPaths());
-     for(const f of files.slice(0,300)){
-       if(!f?.path||f.cloudPlaceholder||mediaKind(f.path)!==section)continue;
-       const key=mediaPathKey(f.path,windows);if(seen.has(key))continue;seen.add(key);
-       const id=owned.get(key)??"local-"+(++serial),row=describe(f,id);
-       if(!row)continue;
-       next.set(key,{id,path:f.path});result.push(Object.freeze(row));
-     }
+     let next,result;
+     try{
+       next=new Map();result=[];const seen=new Set(downloadPaths());
+       for(const f of files.slice(0,300)){
+         if(!f?.path||f.cloudPlaceholder||mediaKind(f.path)!==section)continue;
+         const key=mediaPathKey(f.path,windows);if(seen.has(key))continue;seen.add(key);
+         const prior=owned.get(key),id="local-"+(++serial),viewKey=prior?.viewKey??"local-view-"+(++viewSerial),row=describe(f,id);
+         if(!row)continue;
+         next.set(key,{id,path:f.path,viewKey});result.push(Object.freeze({...row,id,viewKey}));
+       }
+     }catch(error){if(available()&&token===revision)report(section,"error");throw error;}
      if(!available()||token!==revision)return null;
-     for(const id of owned.values())handles.delete(id);
-     owned.clear();
-     for(const [key,{id,path}] of next){handles.set(id,path);owned.set(key,id);}
-     cache=Object.freeze(result);return cache;
+     for(const {id} of owned.values())handles.delete(id);
+     owned=next;
+     for(const {id,path} of owned.values())handles.set(id,path);
+     cache=Object.freeze(result);report(section,"committed",cache.length);return cache;
    }
-   return {refresh,rows:()=>{if(!available())return [];const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const id of owned.values())handles.delete(id);owned.clear();cache=null;}};
+   return {refresh,rows:()=>{if(!available())return [];const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const {id} of owned.values())handles.delete(id);owned.clear();cache=null;}};
  }
  function action(id,kind){if(dead||!allowed()||!handles.has(id)||!["open","reveal"].includes(kind))return false;return perform(handles.get(id),kind);}
  function invalidate(){++generation;handles.clear();}
@@ -199,7 +205,7 @@ function libraryShortcutSection(event,os="WINNT"){
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,{flush:true});
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.136",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.137",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
@@ -372,10 +378,11 @@ function libraryShortcutSection(event,os="WINNT"){
       }finally{if(token===actionSerial){clearing=false;syncTools();}}
     }catch{if(current(epoch))notice("History action unavailable.");}
   }
+  function rowKey(row){return row.kind==="local"&&row.viewKey?row.viewKey:row.id;}
   function fileBytes(n){if(!Number.isFinite(n)||n<=0)return "0 B";let i=0;while(n>=1024&&i<3){n/=1024;i++;}return n.toFixed(i?1:0)+" "+["B","KB","MB","GB"][i];}
   async function fileAction(entry,kind){
     const row=entry.record,source=win.__nocturneLibraryServices,epoch=state.motionEpoch;
-    if(!row||!source||rows.get(row.id)!==entry||!active()||dragSource||clearing||state.phase==="closing"||renderedSection!==state.section)return;
+    if(!row||!source||rows.get(rowKey(row))!==entry||!active()||dragSource||clearing||state.phase==="closing"||renderedSection!==state.section)return;
     try{
       const ok=await (row.kind==="local"?source.media.action(row.id,kind):source.downloads.action(row.id,kind));
       if(!ok&&current(epoch))notice("File unavailable or action not permitted.");
@@ -443,7 +450,7 @@ function libraryShortcutSection(event,os="WINNT"){
     const p=pendingResult;pendingResult=null;if(pendingClose){pendingClose=false;closeNow(false);return;}if(p?.error)renderError();else if(p)renderResults(p);
   }
   function updateFileRow(entry,row){
-    entry.record=row;entry.node.dataset.recordId=row.id;entry.title.textContent=row.name;
+    entry.record=row;entry.node.dataset.recordId=rowKey(row);entry.title.textContent=row.name;
     const completed=row.success&&!row.failed&&!row.canceled&&!row.partial&&!row.blocked&&row.exists;
     const status=row.kind==="local"?"Local folder":downloadFileStatus(row);
     entry.url.textContent=status+" · "+fileBytes(row.total||row.bytes)+(row.active&&row.speed?" · "+fileBytes(row.speed)+"/s":"");
@@ -490,8 +497,8 @@ function libraryShortcutSection(event,os="WINNT"){
     const body=shell.body,focusId=doc.activeElement?.closest?.("[data-record-id]")?.dataset?.recordId,focused=doc.activeElement;
     const oldScroll=body.scrollTop,ordered=[],live=new Set();let lastDay=null;
     for(const row of result.rows){
-      if(live.has(row.id))continue;live.add(row.id);
-      let entry=rows.get(row.id);if(!entry){entry=fileSection()?createFileRow():createRow();rows.set(row.id,entry);}
+      const key=rowKey(row);if(live.has(key))continue;live.add(key);
+      let entry=rows.get(key);if(!entry){entry=fileSection()?createFileRow():createRow();rows.set(key,entry);}
       if(fileSection()){updateFileRow(entry,row);ordered.push(entry.node);continue;}
       entry.record=row;entry.node.dataset.recordId=row.id;
       entry.title.textContent=row.title;entry.url.textContent=row.url;
