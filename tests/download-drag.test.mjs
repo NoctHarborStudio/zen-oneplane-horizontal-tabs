@@ -110,7 +110,7 @@ test("popup screen movement drives swing inside and outside the source window",(
 });
 test("drag telemetry includes popup readiness, motion and final summary",()=>{
  for(const event of ["start","popup-shown","popup-not-shown","tick","end","popup-hidden","return-finish"])assert.ok(source.includes('fileBunnyTrace("'+event+'"'));
- assert.ok(source.includes("maxAngle:q.maxAngle"));assert.ok(source.includes("maxGap:q.maxGap"));assert.ok(source.includes("q.missing>=3"));
+ assert.ok(source.includes("maxAngle:q.maxAngle"));assert.ok(source.includes("maxGap:q.maxGap"));assert.ok(source.includes("fileDragMissing>=3"));assert.ok(source.includes("fileDragUnknown>=6"));
 });
 
 test("Library uses the existing Bunny owner and releases the external drag lease once",()=>{
