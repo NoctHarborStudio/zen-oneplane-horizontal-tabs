@@ -533,3 +533,11 @@ The user approved the **geometry and interaction concept**, not an implementatio
 - [ ] Verify a page with independent image/CSS resources produces a progressing rather than permanently indeterminate indicator; old STOP never completes the newer active load, including two rapid replacements.
 - [ ] Switch away/back during loading; cancel with browser stop; toggle Nocturne Page Progress preference off/on and hot reload; confirm one owner, no lingering indicator, timers, observers or RAF after terminal stop/unload.
 - [ ] Check native horizontal/dock and vertical/native host placement with both compact toolbar states, reduced motion and visual/perf with diagnostics on/off. Do not infer actual presented FPS from callback counts.
+
+### A7 / NC4-022 — local media thumbnail and scan native acceptance (after source audit)
+
+- [x] Source audit: direct `file:` thumbnail path, compressed-size-only `safeRaster`, native Zen 1.24.2b scanner metadata/algorithm, cloud actions, session lifetime and stock Zen comparison checked (NC4-022a); **no runtime remediation claimed**.
+- [ ] With disposable local folders in the target Zen/Sine profile, profile the scanner's allocation/time for 300 ordinary files and a large directory with well over 300 matching entries; compare one vs two windows. No personal file-paths or names in diagnostics.
+- [ ] Profile thumbnail decode/paint and retained memory with many small images, an encoded-small but pixel-large image, a GIF/multiframe image and a corrupt image. Test scroll, filtering, section switch, hot reload and preference disable; compare diagnostics on/off. Avoid opening huge images on an ordinary user profile.
+- [ ] Check cloud placeholder becoming online-only after scan and symlink files outside the selected root (with disposable fixtures) before thumbnail activation and Open/Reveal. Verify Windows and non-Windows behavior separately.
+- [ ] Before production remediation, verify a supported native way to obtain dimensions/decode small bounded surfaces and a per-session cancellation/resource contract. Preserve picture previews unless an icon-only safety fallback is expressly accepted. For the upstream C++ scanner, retain at most the newest `maxItems` during traversal while preserving top-K ordering; test correctness and memory.
