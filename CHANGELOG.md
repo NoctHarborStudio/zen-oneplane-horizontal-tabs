@@ -1,3 +1,10 @@
+## 0.3.0-preview.117 — A5.3a shared native file-drag ownership
+
+- Route Downloads Dock and Library completed-file drag through one window-local Downloads service and one synchronous Gecko file/URI payload constructor.
+- Revalidate the current native Download identity, completed state and actual filesystem existence at dragstart; reject removed/stale records and untrusted payloads.
+- Preserve explicit private policy: Dock may drag a native private download from its own list; Library stays disabled in private windows. Keep native OS copy/move negotiation and existing file Bunny image/cleanup ownership.
+- Add bounded privacy-safe native payload outcomes and regression coverage. Native Zen/Windows Explorer/file handoff, mixed-DPI visuals and profiler acceptance remain pending.
+
 ## 0.3.0-preview.116 — A5.2b native Split group convergence
 
 - Verify the exact native Split data and physical group membership after a drop, including the original members and source tab; do not certify a partial result from a truthy native call.
