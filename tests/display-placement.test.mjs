@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {displayContains,displayCssPoint,displayRectEqual,displaySnapTarget,displayNativeRect,displayPreviewFraction,displayReleaseMatches,tabReturnZone,displayStartupFeatures,displayPlacementMatches} from "../src/algorithms/display-placement.mjs";
+import {displayContains,displayCssPoint,displayRectEqual,displaySnapTarget,displayNativeRect,displayPreviewFraction,displayPreviewKey,displayReleaseMatches,tabReturnZone,displayStartupFeatures,displayPlacementMatches} from "../src/algorithms/display-placement.mjs";
 const left={x:-2560,y:-200,width:2560,height:1440},work={x:-2560,y:-200,width:2560,height:1392};
 test("CSS points use event window scale, not target monitor scale",()=>{
   assert.deepEqual(displayCssPoint(-1600,400,1.5,1),{x:-2400,y:600});
@@ -46,6 +46,19 @@ test("wide independent edge zones, center and corners",()=>{
   assert.equal(displaySnapTarget(left,work,-480,-100).mode,"right-top");
   assert.equal(displaySnapTarget(left,work,-1280,-100).mode,"maximize");
   assert.equal(displaySnapTarget(left,work,-1280,400).mode,"center");
+});
+test("preview key follows same-monitor work-area and target changes",()=>{
+  const original=displaySnapTarget(left,work,-1,400);
+  const first=displayPreviewKey(original,"Tab");
+  assert.ok(first);
+  assert.equal(displayPreviewKey({...original,full:{...original.full}},"Tab"),first);
+  assert.equal(displayPreviewKey({...original,work:{...original.work,width:original.work.width-1}},"Tab")===first,false);
+  assert.equal(displayPreviewKey({...original,x:original.x-1},"Tab")===first,false);
+  assert.equal(displayPreviewKey({...original,mode:"left"},"Tab")===first,false);
+  assert.equal(displayPreviewKey(original,"Workspace")===first,false);
+  assert.equal(displayPreviewKey({...original,full:null},"Tab"),null);
+  assert.equal(displayPreviewKey({...original,width:NaN},"Tab"),null);
+  assert.equal(displayPreviewKey({...original,work:{...original.work,height:0}},"Tab"),null);
 });
 test("cached release only matches current nearby fresh gesture",()=>{
   const s={token:7,x:-800,y:400,time:100};
