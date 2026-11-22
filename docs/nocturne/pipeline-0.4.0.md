@@ -1230,3 +1230,9 @@ On Windows, a fresh disposable headless Zen 1.24.2b / Sine 2.3.3 profile loaded 
 A filtered-empty raw page retains the Load more action when a lookahead record exists. At the 500-record UI limit, the view explains the bounded search and directs users to Native history. Exact-boundary pages no longer advertise an empty next page.
 
 In a disposable headless Zen 1.24.2b / Sine 2.3.3 profile, the production Library UI received controlled history responses: the first 50-record window was filtered empty, Load more stayed visible, clicking it requested 100 records, rendered the matching row and removed the exhausted control. This UI check used a fixture history service; the separate service regression covers date filtering and lookahead.
+
+### A7 / NC4-022 - Local-media permission and folder changes (preview.127)
+
+The Library service invalidates local file action handles and pending scan results when either the media preference or extra-folder list changes. An obsolete session stays invalid after re-enable, and a stale folder picker cannot commit its selection. This retires results and queued scans; an already running native scan can finish before the serial barrier releases. Thumbnail decode budgets remain open.
+
+A disposable headless Zen 1.24.2b / Sine 2.3.3 profile exercised both actual preference observers. A previously opened session stopped consulting its row source after disable/re-enable and after a folder-list change; newly opened sessions consulted it normally. No personal directories were scanned. The regression fixture separately checks pending scan completion, old action IDs and fresh-session cleanup.

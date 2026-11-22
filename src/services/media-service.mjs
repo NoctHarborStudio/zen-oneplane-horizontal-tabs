@@ -24,15 +24,18 @@ export function queryDownloadRows(rows,{section="downloads",text="",limit=50,sor
  return Object.freeze({rows:Object.freeze(list.slice(0,limit)),limit,hasMore:list.length>limit});
 }
 export function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,windows=false,describe,perform}){
- let dead=false,serial=0,pending=Promise.resolve(barrier);const handles=new Map();
+ let dead=false,serial=0,generation=0,pending=Promise.resolve(barrier);const handles=new Map();
  function open(section,downloadPaths=()=>new Set()){
    if(dead||!allowed()||!MEDIA_EXTENSIONS[section])throw Error("Media unavailable");
    let closed=false,owned=new Map(),cache=null,revision=0;
+   const openedAt=generation;
+   const available=()=>!closed&&!dead&&openedAt===generation&&allowed();
    async function refresh(){
+     if(!available())return null;
      const token=++revision;
-     const task=pending.catch(()=>{}).then(()=>closed||dead||!allowed()||token!==revision?[]:scan(section));
+     const task=pending.catch(()=>{}).then(()=>!available()||token!==revision?[]:scan(section));
      pending=task.catch(()=>{});const files=await task;
-     if(closed||dead||!allowed()||token!==revision)return null;
+     if(!available()||token!==revision)return null;
      const next=new Map(),result=[],seen=new Set(downloadPaths());
      for(const f of files.slice(0,300)){
        if(!f?.path||f.cloudPlaceholder||mediaKind(f.path)!==section)continue;
@@ -41,15 +44,16 @@ export function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>t
        if(!row)continue;
        next.set(key,{id,path:f.path});result.push(Object.freeze(row));
      }
-     if(closed||dead||!allowed()||token!==revision)return null;
+     if(!available()||token!==revision)return null;
      for(const id of owned.values())handles.delete(id);
      owned.clear();
      for(const [key,{id,path}] of next){handles.set(id,path);owned.set(key,id);}
      cache=Object.freeze(result);return cache;
    }
-   return {refresh,rows:()=>{const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const id of owned.values())handles.delete(id);owned.clear();cache=null;}};
+   return {refresh,rows:()=>{if(!available())return [];const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const id of owned.values())handles.delete(id);owned.clear();cache=null;}};
  }
  function action(id,kind){if(dead||!allowed()||!handles.has(id)||!["open","reveal"].includes(kind))return false;return perform(handles.get(id),kind);}
- function dispose(){dead=true;handles.clear();return pending.catch(()=>{});}
- return {open,action,dispose};
+ function invalidate(){++generation;handles.clear();}
+ function dispose(){dead=true;invalidate();return pending.catch(()=>{});}
+ return {open,action,invalidate,dispose};
 }

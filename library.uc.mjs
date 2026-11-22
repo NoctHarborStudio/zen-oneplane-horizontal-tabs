@@ -81,15 +81,18 @@ function queryDownloadRows(rows,{section="downloads",text="",limit=50,sort="new"
  return Object.freeze({rows:Object.freeze(list.slice(0,limit)),limit,hasMore:list.length>limit});
 }
 function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,windows=false,describe,perform}){
- let dead=false,serial=0,pending=Promise.resolve(barrier);const handles=new Map();
+ let dead=false,serial=0,generation=0,pending=Promise.resolve(barrier);const handles=new Map();
  function open(section,downloadPaths=()=>new Set()){
    if(dead||!allowed()||!MEDIA_EXTENSIONS[section])throw Error("Media unavailable");
    let closed=false,owned=new Map(),cache=null,revision=0;
+   const openedAt=generation;
+   const available=()=>!closed&&!dead&&openedAt===generation&&allowed();
    async function refresh(){
+     if(!available())return null;
      const token=++revision;
-     const task=pending.catch(()=>{}).then(()=>closed||dead||!allowed()||token!==revision?[]:scan(section));
+     const task=pending.catch(()=>{}).then(()=>!available()||token!==revision?[]:scan(section));
      pending=task.catch(()=>{});const files=await task;
-     if(closed||dead||!allowed()||token!==revision)return null;
+     if(!available()||token!==revision)return null;
      const next=new Map(),result=[],seen=new Set(downloadPaths());
      for(const f of files.slice(0,300)){
        if(!f?.path||f.cloudPlaceholder||mediaKind(f.path)!==section)continue;
@@ -98,17 +101,18 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
        if(!row)continue;
        next.set(key,{id,path:f.path});result.push(Object.freeze(row));
      }
-     if(closed||dead||!allowed()||token!==revision)return null;
+     if(!available()||token!==revision)return null;
      for(const id of owned.values())handles.delete(id);
      owned.clear();
      for(const [key,{id,path}] of next){handles.set(id,path);owned.set(key,id);}
      cache=Object.freeze(result);return cache;
    }
-   return {refresh,rows:()=>{const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const id of owned.values())handles.delete(id);owned.clear();cache=null;}};
+   return {refresh,rows:()=>{if(!available())return [];const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const id of owned.values())handles.delete(id);owned.clear();cache=null;}};
  }
  function action(id,kind){if(dead||!allowed()||!handles.has(id)||!["open","reveal"].includes(kind))return false;return perform(handles.get(id),kind);}
- function dispose(){dead=true;handles.clear();return pending.catch(()=>{});}
- return {open,action,dispose};
+ function invalidate(){++generation;handles.clear();}
+ function dispose(){dead=true;invalidate();return pending.catch(()=>{});}
+ return {open,action,invalidate,dispose};
 }
 // Own one bounded query session, reject stale results before rendering.
 function createLibraryData({getServices,onResult,onError,onNotice=()=>{},schedule,cancel}){
@@ -134,8 +138,8 @@ function createLibraryData({getServices,onResult,onError,onNotice=()=>{},schedul
   function immediate(){if(timer!==null)cancel(timer);timer=null;void load();}
   async function refresh(){
     const owner=source,token=sessionEpoch,m=media;if(!m)return false;
-    try{await m.refresh();if(dead||sessionEpoch!==token||source!==owner||getServices()!==owner)return false;immediate();return true;}
-    catch{if(!dead&&sessionEpoch===token&&source===owner)onNotice("Local folders could not be scanned. Showing downloaded files.");return false;}
+    try{const result=await m.refresh();if(result===null||dead||sessionEpoch!==token||source!==owner||getServices()!==owner)return false;immediate();return true;}
+    catch{if(!dead&&sessionEpoch===token&&source===owner&&getServices()===owner)onNotice("Local folders could not be scanned. Showing downloaded files.");return false;}
   }
   function start(next,query=""){
     stop();if(dead||!["history","closed","downloads","documents","pictures"].includes(next))return false;
@@ -195,7 +199,7 @@ function libraryShortcutSection(event,os="WINNT"){
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,{flush:true});
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.126",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.127",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
@@ -329,11 +333,9 @@ function libraryShortcutSection(event,os="WINNT"){
   }
   async function changeFolders(reset){
     if(!active()||dragSource||clearing||!["documents","pictures"].includes(state.section)||!prefs.getBoolPref(MEDIA_PREF,false))return;
-    const epoch=state.motionEpoch,service=win.__nocturneLibraryServices;
+    const service=win.__nocturneLibraryServices;
     if(reset&&!win.confirm("Remove all extra Library folders? No files will be deleted."))return;
-    let ok=false;try{ok=reset?service.clearFolders():await service.chooseFolder();}catch{}
-    if(!current(epoch)||!active()||state.phase==="closing")return;
-    if(ok){notice("Refreshing folders…");void data.refresh().then(done=>{if(done&&current(epoch))notice("");});}
+    try{if(reset)service.clearFolders();else await service.chooseFolder();}catch{}
   }
   async function clearRecentHistory(hours){
     if(!active()||state.section!=="history"||clearing)return;
@@ -583,7 +585,7 @@ function libraryShortcutSection(event,os="WINNT"){
   function onPref(){if(!enabled()){if(dragSource)pendingClose=true;else closeNow();}}
   function onTab(){if(active()&&!backgroundAction){if(dragSource)pendingClose=true;else closeNow(false);}}
   function onDragStart(e){if(active()&&!shell?.body.contains(e.target))onTab();}
-  function onMediaPref(){if(active()&&["documents","pictures"].includes(state.section)){if(dragSource){pendingClose=true;return;}renderBody();}}
+  function onMediaPref(){if(active()&&state.phase!=="closing"&&["documents","pictures"].includes(state.section)){if(dragSource){pendingClose=true;return;}renderBody();}}
   function onWorkspace(e){if(active()&&e.detail?.phase!=="idle"){if(dragSource)pendingClose=true;else closeNow(false);}}
   function route(e,section,origin){
     if(!section||nativeFallback)return false;
@@ -613,10 +615,10 @@ function libraryShortcutSection(event,os="WINNT"){
   function dispose(){
     if(dead)return;closeNow(false);dead=true;stopFallbackDragWatch();data.dispose();lease();cancelMotion();if(frame)win.cancelAnimationFrame(frame);
     for(const [name,fn] of listeners)win.removeEventListener(name,fn,true);
-    try{prefs.removeObserver(PREF,onPref);prefs.removeObserver(MEDIA_PREF,onMediaPref);}catch{}shell?.layer.remove();shell=null;if(win[KEY]===api)delete win[KEY];
+    try{prefs.removeObserver(PREF,onPref);prefs.removeObserver(MEDIA_PREF,onMediaPref);prefs.removeObserver("zen.nocturne.library.custom-folders",onMediaPref);}catch{}shell?.layer.remove();shell=null;if(win[KEY]===api)delete win[KEY];
   }
   const listeners=[["keydown",onKey],["command",onCommand],["Nocturne:ServicesGone",onServicesGone],["Nocturne:OverlayReady",bindOverlay],["resize",resize],["TabSelect",onTab],["ZenRefined:WorkspaceTransition",onWorkspace],["dragstart",onDragStart],["unload",dispose]];
   const api={open,toggle,close,getState:()=>({...state}),getDiagnostics:diagnostics,dispose};
   win[KEY]=api;for(const [name,fn] of listeners)win.addEventListener(name,fn,true);
-  win.addUnloadListener(dispose);prefs.addObserver(PREF,onPref);prefs.addObserver(MEDIA_PREF,onMediaPref);bindOverlay();trace("ready",diagnostics(false));
+  win.addUnloadListener(dispose);prefs.addObserver(PREF,onPref);prefs.addObserver(MEDIA_PREF,onMediaPref);prefs.addObserver("zen.nocturne.library.custom-folders",onMediaPref);bindOverlay();trace("ready",diagnostics(false));
 })();

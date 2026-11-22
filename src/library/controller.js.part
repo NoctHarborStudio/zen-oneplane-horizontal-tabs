@@ -5,7 +5,7 @@
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,{flush:true});
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.126",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.127",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
@@ -139,11 +139,9 @@
   }
   async function changeFolders(reset){
     if(!active()||dragSource||clearing||!["documents","pictures"].includes(state.section)||!prefs.getBoolPref(MEDIA_PREF,false))return;
-    const epoch=state.motionEpoch,service=win.__nocturneLibraryServices;
+    const service=win.__nocturneLibraryServices;
     if(reset&&!win.confirm("Remove all extra Library folders? No files will be deleted."))return;
-    let ok=false;try{ok=reset?service.clearFolders():await service.chooseFolder();}catch{}
-    if(!current(epoch)||!active()||state.phase==="closing")return;
-    if(ok){notice("Refreshing folders…");void data.refresh().then(done=>{if(done&&current(epoch))notice("");});}
+    try{if(reset)service.clearFolders();else await service.chooseFolder();}catch{}
   }
   async function clearRecentHistory(hours){
     if(!active()||state.section!=="history"||clearing)return;
@@ -393,7 +391,7 @@
   function onPref(){if(!enabled()){if(dragSource)pendingClose=true;else closeNow();}}
   function onTab(){if(active()&&!backgroundAction){if(dragSource)pendingClose=true;else closeNow(false);}}
   function onDragStart(e){if(active()&&!shell?.body.contains(e.target))onTab();}
-  function onMediaPref(){if(active()&&["documents","pictures"].includes(state.section)){if(dragSource){pendingClose=true;return;}renderBody();}}
+  function onMediaPref(){if(active()&&state.phase!=="closing"&&["documents","pictures"].includes(state.section)){if(dragSource){pendingClose=true;return;}renderBody();}}
   function onWorkspace(e){if(active()&&e.detail?.phase!=="idle"){if(dragSource)pendingClose=true;else closeNow(false);}}
   function route(e,section,origin){
     if(!section||nativeFallback)return false;
@@ -423,10 +421,10 @@
   function dispose(){
     if(dead)return;closeNow(false);dead=true;stopFallbackDragWatch();data.dispose();lease();cancelMotion();if(frame)win.cancelAnimationFrame(frame);
     for(const [name,fn] of listeners)win.removeEventListener(name,fn,true);
-    try{prefs.removeObserver(PREF,onPref);prefs.removeObserver(MEDIA_PREF,onMediaPref);}catch{}shell?.layer.remove();shell=null;if(win[KEY]===api)delete win[KEY];
+    try{prefs.removeObserver(PREF,onPref);prefs.removeObserver(MEDIA_PREF,onMediaPref);prefs.removeObserver("zen.nocturne.library.custom-folders",onMediaPref);}catch{}shell?.layer.remove();shell=null;if(win[KEY]===api)delete win[KEY];
   }
   const listeners=[["keydown",onKey],["command",onCommand],["Nocturne:ServicesGone",onServicesGone],["Nocturne:OverlayReady",bindOverlay],["resize",resize],["TabSelect",onTab],["ZenRefined:WorkspaceTransition",onWorkspace],["dragstart",onDragStart],["unload",dispose]];
   const api={open,toggle,close,getState:()=>({...state}),getDiagnostics:diagnostics,dispose};
   win[KEY]=api;for(const [name,fn] of listeners)win.addEventListener(name,fn,true);
-  win.addUnloadListener(dispose);prefs.addObserver(PREF,onPref);prefs.addObserver(MEDIA_PREF,onMediaPref);bindOverlay();trace("ready",diagnostics(false));
+  win.addUnloadListener(dispose);prefs.addObserver(PREF,onPref);prefs.addObserver(MEDIA_PREF,onMediaPref);prefs.addObserver("zen.nocturne.library.custom-folders",onMediaPref);bindOverlay();trace("ready",diagnostics(false));
 })();

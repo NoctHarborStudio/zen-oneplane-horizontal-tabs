@@ -85,3 +85,20 @@ test("failed media refresh keeps committed rows actionable and successful refres
  files=[];await session.refresh();assert.equal(service.action(old.id,"open"),false);
  session.close();await service.dispose();
 });
+
+test("revoked local-media sessions cannot regain rows or actions after re-enable",async()=>{
+ let enabled=true,calls=0;const pending=deferred();
+ const service=createMediaService({allowed:()=>enabled,scan(){
+   return ++calls===2?pending.promise:[{path:"saved.pdf"}];
+ },describe:(f,id)=>({id}),perform:()=>true});
+ const old=service.open("documents"),[item]=await old.refresh();
+ const inflight=old.refresh();await tick();
+ enabled=false;service.invalidate();enabled=true;
+ pending.resolve([{path:"stale.pdf"}]);
+ assert.equal(await inflight,null);assert.deepEqual(old.rows(),[]);
+ assert.equal(await old.refresh(),null);assert.equal(calls,2);
+ assert.equal(service.action(item.id,"open"),false);
+ const fresh=service.open("documents"),[next]=await fresh.refresh();
+ old.close();assert.equal(service.action(next.id,"reveal"),true);
+ await service.dispose();assert.deepEqual(fresh.rows(),[]);
+});

@@ -2,7 +2,7 @@
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   const trace=(event,data)=>{try{if(win.__nocturneTrace)win.__nocturneTrace(event,data,{flush:true});else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,data,t:win.performance?.now?.()??0});}}catch{}};
-  trace("library.services.script",{version:"0.3.0-preview.126"});
+  trace("library.services.script",{version:"0.3.0-preview.127"});
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
   const BARRIER="__nocturneDownloadsDisposal",MEDIA_BARRIER="__nocturneMediaDisposal";
   const previous=win[KEY],previousClosing=previous?.dispose?.(),existing=win[BARRIER];
@@ -19,7 +19,8 @@
   const load=(path,key)=>ChromeUtils.importESModule(path)[key];
   const privateWindow=()=>load("resource://gre/modules/PrivateBrowsingUtils.sys.mjs","PrivateBrowsingUtils").isWindowPrivate(win);
   const allowed=()=>!dead&&!win.closed&&!privateWindow();
-  const mediaAllowed=()=>allowed()&&Services.prefs.getBoolPref("zen.nocturne.library.local-media",false);
+  const mediaPref="zen.nocturne.library.local-media";
+  const mediaAllowed=()=>allowed()&&Services.prefs.getBoolPref(mediaPref,false);
   const windows=Services.appinfo.OS==="WINNT";
   const fileFor=path=>new (load("resource://gre/modules/FileUtils.sys.mjs","FileUtils").File)(path);
   const scanner=()=>Cc["@mozilla.org/zen/library-files;1"].getService(Ci.nsIZenLibraryFiles);
@@ -30,13 +31,16 @@
       return Array.isArray(value)?value.filter(v=>typeof v==="string"&&v.length>0&&v.length<=4096).slice(0,8):[];
     }catch{return [];}
   }
+  let folderGeneration=0;
+  function onMediaScopeChange(){++folderGeneration;media.invalidate();}
   async function chooseFolder(){
+    const generation=folderGeneration;
     if(!mediaAllowed()||!win.browsingContext)return false;
     try{
       const picker=Cc["@mozilla.org/filepicker;1"].createInstance(Ci.nsIFilePicker);
       picker.init(win.browsingContext,"Choose a Library folder",Ci.nsIFilePicker.modeGetFolder);
       const result=await new Promise(resolve=>picker.open(resolve));
-      if(result!==Ci.nsIFilePicker.returnOK||!mediaAllowed()||!picker.file?.isDirectory())return false;
+      if(result!==Ci.nsIFilePicker.returnOK||generation!==folderGeneration||!mediaAllowed()||!picker.file?.isDirectory())return false;
       const path=picker.file.path,paths=customFolders();
       if(paths.some(p=>mediaPathKey(p,windows)===mediaPathKey(path,windows)))return true;
       if(paths.length>=8)return false;
@@ -137,6 +141,7 @@
     if(closing)return closing;
     dead=true;
     win.removeEventListener("unload",dispose);
+    for(const pref of [mediaPref,folderPref])try{Services.prefs.removeObserver(pref,onMediaScopeChange);}catch{}
     for(const s of [...historySessions])try{s.close();}catch{}
     try{trace("library.scope.dispose",{owner:"closed-tabs",...closedTabs.dispose()});}catch{}
     const mediaClosing=media.dispose();win[MEDIA_BARRIER]=mediaClosing;
@@ -146,6 +151,8 @@
     return closing;
   }
   const api={downloads,openHistory,historyReady,openHistoryURL,closedTabs,copyHistoryURL,removeHistoryURL,clearHistoryRange,media,chooseFolder,clearFolders,openMedia:section=>mediaAllowed()?media.open(section,()=>downloads.pathKeys(windows)):null,dispose};
+  Services.prefs.addObserver(mediaPref,onMediaScopeChange);
+  Services.prefs.addObserver(folderPref,onMediaScopeChange);
   win[KEY]=api;win.addUnloadListener(dispose);win.addEventListener("unload",dispose,{once:true});
   trace("library.services.ready",{registered:true});win.dispatchEvent(new win.CustomEvent("Nocturne:ServicesReady"));
 })();

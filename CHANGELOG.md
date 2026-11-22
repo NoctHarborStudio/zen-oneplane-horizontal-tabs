@@ -1,3 +1,7 @@
+## 0.3.0-preview.127 - Invalidate local Library access when folder permissions change
+
+Closing access or changing extra folders invalidates previously issued file handles and scan sessions in every window. An earlier scan or open folder picker cannot restore access after settings change. Active file sections reload from the new settings.
+
 ## 0.3.0-preview.126 - Library history pagination
 
 Keep Load more available when a history search page contains only out-of-range visits. Check one extra native record to distinguish a full last page from a truncated result. Explain the 500-record limit and native history fallback.

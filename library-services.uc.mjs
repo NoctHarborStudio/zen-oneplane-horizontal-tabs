@@ -77,15 +77,18 @@ function queryDownloadRows(rows,{section="downloads",text="",limit=50,sort="new"
  return Object.freeze({rows:Object.freeze(list.slice(0,limit)),limit,hasMore:list.length>limit});
 }
 function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,windows=false,describe,perform}){
- let dead=false,serial=0,pending=Promise.resolve(barrier);const handles=new Map();
+ let dead=false,serial=0,generation=0,pending=Promise.resolve(barrier);const handles=new Map();
  function open(section,downloadPaths=()=>new Set()){
    if(dead||!allowed()||!MEDIA_EXTENSIONS[section])throw Error("Media unavailable");
    let closed=false,owned=new Map(),cache=null,revision=0;
+   const openedAt=generation;
+   const available=()=>!closed&&!dead&&openedAt===generation&&allowed();
    async function refresh(){
+     if(!available())return null;
      const token=++revision;
-     const task=pending.catch(()=>{}).then(()=>closed||dead||!allowed()||token!==revision?[]:scan(section));
+     const task=pending.catch(()=>{}).then(()=>!available()||token!==revision?[]:scan(section));
      pending=task.catch(()=>{});const files=await task;
-     if(closed||dead||!allowed()||token!==revision)return null;
+     if(!available()||token!==revision)return null;
      const next=new Map(),result=[],seen=new Set(downloadPaths());
      for(const f of files.slice(0,300)){
        if(!f?.path||f.cloudPlaceholder||mediaKind(f.path)!==section)continue;
@@ -94,17 +97,18 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
        if(!row)continue;
        next.set(key,{id,path:f.path});result.push(Object.freeze(row));
      }
-     if(closed||dead||!allowed()||token!==revision)return null;
+     if(!available()||token!==revision)return null;
      for(const id of owned.values())handles.delete(id);
      owned.clear();
      for(const [key,{id,path}] of next){handles.set(id,path);owned.set(key,id);}
      cache=Object.freeze(result);return cache;
    }
-   return {refresh,rows:()=>{const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const id of owned.values())handles.delete(id);owned.clear();cache=null;}};
+   return {refresh,rows:()=>{if(!available())return [];const known=downloadPaths();return (cache||[]).filter(r=>!known.has(mediaPathKey(handles.get(r.id),windows)));},close(){closed=true;++revision;for(const id of owned.values())handles.delete(id);owned.clear();cache=null;}};
  }
  function action(id,kind){if(dead||!allowed()||!handles.has(id)||!["open","reveal"].includes(kind))return false;return perform(handles.get(id),kind);}
- function dispose(){dead=true;handles.clear();return pending.catch(()=>{});}
- return {open,action,dispose};
+ function invalidate(){++generation;handles.clear();}
+ function dispose(){dead=true;invalidate();return pending.catch(()=>{});}
+ return {open,action,invalidate,dispose};
 }
 // One native list subscription per window, independent of any view.
   function createDownloadsService({loadList,barrier=Promise.resolve(),lease=null,onError=()=>{},onDetach=()=>{},idPrefix="download",describeFile=()=>({}),dragFile=()=>false}){
@@ -315,7 +319,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   const trace=(event,data)=>{try{if(win.__nocturneTrace)win.__nocturneTrace(event,data,{flush:true});else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,data,t:win.performance?.now?.()??0});}}catch{}};
-  trace("library.services.script",{version:"0.3.0-preview.126"});
+  trace("library.services.script",{version:"0.3.0-preview.127"});
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
   const BARRIER="__nocturneDownloadsDisposal",MEDIA_BARRIER="__nocturneMediaDisposal";
   const previous=win[KEY],previousClosing=previous?.dispose?.(),existing=win[BARRIER];
@@ -332,7 +336,8 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
   const load=(path,key)=>ChromeUtils.importESModule(path)[key];
   const privateWindow=()=>load("resource://gre/modules/PrivateBrowsingUtils.sys.mjs","PrivateBrowsingUtils").isWindowPrivate(win);
   const allowed=()=>!dead&&!win.closed&&!privateWindow();
-  const mediaAllowed=()=>allowed()&&Services.prefs.getBoolPref("zen.nocturne.library.local-media",false);
+  const mediaPref="zen.nocturne.library.local-media";
+  const mediaAllowed=()=>allowed()&&Services.prefs.getBoolPref(mediaPref,false);
   const windows=Services.appinfo.OS==="WINNT";
   const fileFor=path=>new (load("resource://gre/modules/FileUtils.sys.mjs","FileUtils").File)(path);
   const scanner=()=>Cc["@mozilla.org/zen/library-files;1"].getService(Ci.nsIZenLibraryFiles);
@@ -343,13 +348,16 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
       return Array.isArray(value)?value.filter(v=>typeof v==="string"&&v.length>0&&v.length<=4096).slice(0,8):[];
     }catch{return [];}
   }
+  let folderGeneration=0;
+  function onMediaScopeChange(){++folderGeneration;media.invalidate();}
   async function chooseFolder(){
+    const generation=folderGeneration;
     if(!mediaAllowed()||!win.browsingContext)return false;
     try{
       const picker=Cc["@mozilla.org/filepicker;1"].createInstance(Ci.nsIFilePicker);
       picker.init(win.browsingContext,"Choose a Library folder",Ci.nsIFilePicker.modeGetFolder);
       const result=await new Promise(resolve=>picker.open(resolve));
-      if(result!==Ci.nsIFilePicker.returnOK||!mediaAllowed()||!picker.file?.isDirectory())return false;
+      if(result!==Ci.nsIFilePicker.returnOK||generation!==folderGeneration||!mediaAllowed()||!picker.file?.isDirectory())return false;
       const path=picker.file.path,paths=customFolders();
       if(paths.some(p=>mediaPathKey(p,windows)===mediaPathKey(path,windows)))return true;
       if(paths.length>=8)return false;
@@ -450,6 +458,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
     if(closing)return closing;
     dead=true;
     win.removeEventListener("unload",dispose);
+    for(const pref of [mediaPref,folderPref])try{Services.prefs.removeObserver(pref,onMediaScopeChange);}catch{}
     for(const s of [...historySessions])try{s.close();}catch{}
     try{trace("library.scope.dispose",{owner:"closed-tabs",...closedTabs.dispose()});}catch{}
     const mediaClosing=media.dispose();win[MEDIA_BARRIER]=mediaClosing;
@@ -459,6 +468,8 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
     return closing;
   }
   const api={downloads,openHistory,historyReady,openHistoryURL,closedTabs,copyHistoryURL,removeHistoryURL,clearHistoryRange,media,chooseFolder,clearFolders,openMedia:section=>mediaAllowed()?media.open(section,()=>downloads.pathKeys(windows)):null,dispose};
+  Services.prefs.addObserver(mediaPref,onMediaScopeChange);
+  Services.prefs.addObserver(folderPref,onMediaScopeChange);
   win[KEY]=api;win.addUnloadListener(dispose);win.addEventListener("unload",dispose,{once:true});
   trace("library.services.ready",{registered:true});win.dispatchEvent(new win.CustomEvent("Nocturne:ServicesReady"));
 })();

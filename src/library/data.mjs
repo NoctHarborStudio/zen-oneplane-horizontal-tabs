@@ -23,8 +23,8 @@ export function createLibraryData({getServices,onResult,onError,onNotice=()=>{},
   function immediate(){if(timer!==null)cancel(timer);timer=null;void load();}
   async function refresh(){
     const owner=source,token=sessionEpoch,m=media;if(!m)return false;
-    try{await m.refresh();if(dead||sessionEpoch!==token||source!==owner||getServices()!==owner)return false;immediate();return true;}
-    catch{if(!dead&&sessionEpoch===token&&source===owner)onNotice("Local folders could not be scanned. Showing downloaded files.");return false;}
+    try{const result=await m.refresh();if(result===null||dead||sessionEpoch!==token||source!==owner||getServices()!==owner)return false;immediate();return true;}
+    catch{if(!dead&&sessionEpoch===token&&source===owner&&getServices()===owner)onNotice("Local folders could not be scanned. Showing downloaded files.");return false;}
   }
   function start(next,query=""){
     stop();if(dead||!["history","closed","downloads","documents","pictures"].includes(next))return false;
