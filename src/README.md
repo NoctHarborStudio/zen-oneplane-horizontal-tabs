@@ -66,3 +66,6 @@ A5.1a: `src/native/tab-adapter.js.part` is the sole existing custom-flavor sourc
 
 
 A5.1b1: native tab/group postconditions are ephemeral reads in `src/native/tab-adapter.js.part` and checked by existing drag consumers. Rejected or partial delivered custom drop still settles the exact source lifecycle token, without pretending a native mutation was successful or launching a second window. No new module/owner/observer/RAF or speculative rollback. True OS drag session identity remains a separate A5.1b2 gate.
+
+
+A5.2a: `src/interactions/split-drop.js.part` owns native Split custom drag admission and exact-token terminal cleanup. It reads ephemeral live native tabs/pin roles/Split groups, revalidates command identity after native selection callbacks and never duplicates a native tab just to simulate a successful move. Reuse existing Drag Engine lifecycle and `sourceHandled` optional expected token; do not introduce a second Split session registry or unverified rollback.

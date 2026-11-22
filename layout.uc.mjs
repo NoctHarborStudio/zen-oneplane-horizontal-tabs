@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.114",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.115",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -8807,9 +8807,9 @@ function installTabStrip() {
     restoreStartupSearch(search);
     reconcileTabCascade();
   }
-  function sourceHandled(tab,finishReturn=false) {
-    const source = tabOwner(tab)?.[DRAG_CONTROLLER];
-    source?.markHandled(finishReturn);
+  function sourceHandled(tab,finishReturn=false,expectedToken=null) {
+    const source=tabOwner(tab)?.[DRAG_CONTROLLER];
+    source?.markHandled(finishReturn,expectedToken);
   }
   function onDragStart(event, tab, group = null) {
     if (incomingReleasing || !dragPhaseInputAllowed() || !validNativeTab(tab) || !event.dataTransfer) {
@@ -9006,6 +9006,38 @@ function installTabStrip() {
     sides.sort((a,b) => a[1]-b[1]);
     return sides[0][1] <= .25 ? sides[0][0] : "";
   }
+  // Zen 1.24.2b splitTabs() filters hidden/empty tabs, maps Glance
+  // children to parents and can duplicate pinned tabs when mixing pin roles,
+  // Essentials or Live Folder items. A drag advertised as move must not
+  // silently turn into a different native tab identity.
+  function nativeSplitPreflight(tab,current){
+    if(!validNativeTab(tab)||!validNativeTab(current)||tab===current||
+       tabOwner(tab)!==window||tabOwner(current)!==window)return "native-target-stale";
+    if(tab.hidden||current.hidden||
+       tab.hasAttribute("zen-empty-tab")||current.hasAttribute("zen-empty-tab"))return "native-hidden-or-empty";
+    if(tab.hasAttribute("zen-glance-tab")||current.hasAttribute("zen-glance-tab"))return "native-glance-remap";
+    const splitter=window.gZenViewSplitter;
+    if(typeof splitter?.splitTabs!=="function")return "native-split-unavailable";
+    const pinned=Boolean(tab.pinned),otherPinned=Boolean(current.pinned);
+    const essential=tab.hasAttribute("zen-essential")||current.hasAttribute("zen-essential");
+    const folder=tab.hasAttribute("zen-live-folder-item-id")||current.hasAttribute("zen-live-folder-item-id");
+    // Native Zen's splitter explicitly does not support Essentials yet.
+    // Never reinterpret an Essentials command as a successful ordinary move.
+    if(essential)return "native-essentials-unsupported";
+    if((pinned||otherPinned)&&(folder||pinned!==otherPinned))return "native-may-clone";
+    if(isSplit(current)){
+      const group=splitGroup(current);
+      if(!group)return "native-split-group-unready";
+      const members=groupMembers(group);
+      if(!members.includes(current)||Number.isSafeInteger(splitter.MAX_TABS)&&
+         members.length>=splitter.MAX_TABS)return "native-split-limit";
+    }
+    return "";
+  }
+  function splitSourceCurrent(tab,token){
+    return Number.isSafeInteger(token)&&token>0&&dragLifecycle.owns(token,"tab")&&
+      draggedTab===tab&&!draggedGroup&&validNativeTab(tab)&&tabOwner(tab)===window;
+  }
   function onSplitDragOver(event) {
     if(retireChangedDragViewport()||!splitDropAllowed()||!splitDropPoint(event)){splitZone.removeAttribute("data-op-side");return;}
     const tab = readDraggedTab(event);
@@ -9015,8 +9047,12 @@ function installTabStrip() {
     // Keep the start-page search instead of calling splitTabs with one
     // real tab (Zen filters the empty tab out).
     if(toolbarDragReturnZone(event)){splitZone.removeAttribute("data-op-side");return;}
-    const side = emptySplitTarget(browser.selectedTab) ? "" :
-      isSplit(tab) ? "unsplit" : splitSide(event);
+    const current=browser.selectedTab;
+    const side=emptySplitTarget(current)?"":isSplit(tab)?"unsplit":splitSide(event);
+    if(side&&side!=="unsplit"&&nativeSplitPreflight(tab,current)){
+      splitZone.removeAttribute("data-op-side");
+      return;
+    }
     splitZone.setAttribute("data-op-side", side);
     event.preventDefault();
     event.stopPropagation();
@@ -9024,21 +9060,25 @@ function installTabStrip() {
   }
   function onSplitDrop(event) {
     if(retireChangedDragViewport()||retireChangedDragChromeFrame("split-drop"))return;
-    const tab = readDraggedTab(event);
-    const current = browser.selectedTab;
-    if (!tab || tabOwner(tab) !== window || draggedGroup ||
-        (tab === current && !isSplit(tab))) return;
+    const tab=readDraggedTab(event),current=browser.selectedTab,token=nativeDragToken;
+    if(!tab||tabOwner(tab)!==window||draggedGroup||
+      (tab===current&&!isSplit(tab)))return;
     if(!splitDropAllowed()||!splitDropPoint(event)){
-      // A stale/retargeted event must not select, split, unsplit or detach.
       event.preventDefault();event.stopPropagation();
       cancelActiveDrag("split-hit-rejected");return;
     }
-    event.preventDefault();
-    event.stopPropagation();
-    if(toolbarDragReturnZone(event)){sourceHandled(tab);schedule();return;}
-    const side=splitSide(event);
-    let operation="none",outcome="rejected";
+    event.preventDefault();event.stopPropagation();
+    if(!splitSourceCurrent(tab,token)){
+      window.__nocturneTrace?.("drag.native.outcome",{operation:"split-source",outcome:"rejected",reason:"stale-source"},{sample:1600});
+      return;
+    }
+    let operation="none",outcome="rejected",reason="";
     try{
+      if(toolbarDragReturnZone(event)){
+        operation="return-to-strip";outcome="no-op";
+        schedule();return;
+      }
+      const side=splitSide(event);
       if(emptySplitTarget(current)){
         operation="select-empty-partner";
         browser.selectedTab=tab;
@@ -9049,19 +9089,36 @@ function installTabStrip() {
         operation="unsplit";
         outcome=unsplitTab(tab)&&!isSplit(tab)?"confirmed":"unverified";
         if(outcome==="confirmed")schedule();
-      }else if(side&&validNativeTab(current)&&!tab.hasAttribute("zen-empty-tab")){
+      }else if(side){
         operation="split";
+        reason=nativeSplitPreflight(tab,current);
+        if(reason)return;
+        const originalTabGroup=splitGroup(tab),originalTargetGroup=splitGroup(current);
         const first=side==="left"||side==="top";
         const grid=side==="left"||side==="right"?"vsep":"hsep";
-        // Native Split owns browser/session state; a truthy API response
-        // alone does not establish a shared, live split group.
+        // Selecting the dragged tab can synchronously run Zen observers.
+        // Recheck the exact source and native partners before splitTabs().
         browser.selectedTab=tab;
-        const result=window.gZenViewSplitter?.splitTabs(first?[tab,current]:[current,tab],grid,first?0:1);
+        if(browser.selectedTab!==tab||!splitSourceCurrent(tab,token)||
+           !dragPhaseInputAllowed()||retireChangedDragViewport()||
+           retireChangedDragChromeFrame("split-selection")||
+           !validNativeTab(current)||tabOwner(current)!==window||
+           splitGroup(tab)!==originalTabGroup||splitGroup(current)!==originalTargetGroup){
+          outcome="unverified";reason="selection-retargeted";
+          if(splitSourceCurrent(tab,token)&&browser.selectedTab===tab&&validNativeTab(current)&&
+             tabOwner(current)===window&&splitGroup(tab)===originalTabGroup&&
+             splitGroup(current)===originalTargetGroup)browser.selectedTab=current;
+          return;
+        }
+        const result=window.gZenViewSplitter.splitTabs(first?[tab,current]:[current,tab],grid,first?0:1);
         const group=splitGroup(tab);
         outcome=result&&isSplit(tab)&&isSplit(current)&&group&&group===splitGroup(current)?"confirmed":result?"unverified":"rejected";
-        if(!result&&validNativeTab(current))browser.selectedTab=current;
+        // Only restore the earlier pane if Zen performed no split at all.
+        // Never rollback partially changed native Split state.
+        if(!result&&!isSplit(tab)&&!isSplit(current)&&validNativeTab(current)&&
+           tabOwner(current)===window&&browser.selectedTab===tab)browser.selectedTab=current;
         schedule();
-      }else if(!side&&validNativeTab(tab)){
+      }else if(validNativeTab(tab)){
         operation="select";
         browser.selectedTab=tab;
         outcome=browser.selectedTab===tab?"confirmed":"rejected";
@@ -9069,13 +9126,20 @@ function installTabStrip() {
       }
     }catch(error){
       outcome="error";
-      if(validNativeTab(current)&&browser.selectedTab!==current)browser.selectedTab=current;
+      // A thrown native command may already have mutated Split state.
+      // Do not restore selection against a partial native transaction.
+      if(!isSplit(tab)&&!isSplit(current)&&validNativeTab(current)&&
+         tabOwner(current)===window&&browser.selectedTab===tab)browser.selectedTab=current;
       console.error("[OnePlane] Split View:",error);
     }finally{
-      window.__nocturneTrace?.("drag.native.outcome",{operation,outcome},{sample:1600});
-      // The native drop was delivered, even on rejection. Do not let a
-      // later dragend detach a tab solely because split/unsplit failed.
-      try{sourceHandled(tab);}finally{endDragVisual();}
+      window.__nocturneTrace?.("drag.native.outcome",{operation,outcome,...(reason?{reason}:{})},{sample:1600});
+      // Only the captured source may complete this delivered OS drop.
+      // If native callbacks replaced/cancelled it, never clear new visuals.
+      if(splitSourceCurrent(tab,token)){
+        try{sourceHandled(tab,false,token);}
+        catch(error){console.error("[OnePlane] Split drop source settle:",error);}
+        if(dragLifecycle.owns(token,"tab"))cancelActiveDrag("split-settle-incomplete");
+      }
     }
   }
   function onDragEnd(event, tab) {

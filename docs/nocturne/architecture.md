@@ -313,3 +313,6 @@ A5.1a (preview.113): native drag fallback is a strict admission check, not a sec
 
 
 A5.1b1 (preview.114): Zen's current native tab/group order and live Split membership are the only synchronous postconditions for a delivered custom tab drop; the Layout mirror is not used to infer native success. Delivered drop consumption and verified native mutation are deliberately separate signals. The existing drag controller retires the exact active source regardless of rejected native command, avoiding an accidental secondary detach; no rollback/second reorder or OS session identity is synthesized.
+
+
+A5.2a (preview.115): Split Drop performs one synchronous native eligibility preflight before selection and one owner/native-partner validation after selection, then calls Zen's existing `gZenViewSplitter.splitTabs/removeTabFromGroup` only for a still-owned gesture. Source identity, native group membership and selected-tab state remain owned by Zen/Gecko; no source-to-mirror transaction rollback. Every delivered Split drop is settled by the captured Drag Engine token, without clearing a newer synchronous gesture. Clone-prone pinned/Essentials/Glance combinations are rejected rather than reinterpreted as ordinary move.

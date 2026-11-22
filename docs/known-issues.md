@@ -1208,3 +1208,8 @@ Source-level correction: return values or visual cleanup no longer stand in for 
 
 
 A5.1b1 canonical CI verification: preview.114 (713/713 Node, 15 Python, 12 runtime parsers and publication checks) PASS. The native command postcondition trace is not an OS drag certificate. Same-node stale native events, asynchronous Zen adoption/group convergence and real window/monitor acceptance remain pending A5.1b2/A5.2.
+
+
+### A5.2a — Split transaction preflight and reentry (preview.115)
+
+Source-reproduced risks addressed: Nocturne previously advertised a move-like Split drop that Zen 1.24.2b could translate into duplicating a pinned tab, silently filtering a hidden/empty tab, or remapping Glance to a parent. Selection callbacks could also change a source/partner before splitTabs and old cleanup could erase a replacement drag. New native eligibility check and exact-token finalizer prevent these code paths in source fixtures. Native acceptance, Split's asynchronous results, OS gesture uniqueness, mixed-DPI and visual timing remain open; no user-reproduced data loss claimed.

@@ -1,3 +1,11 @@
+## 0.3.0-preview.115 — A5.2a Split drag transaction admission and cleanup
+
+- Check actual Zen Split eligibility before native `splitTabs`: fail closed when pinned/normal role mixing or Live Folder combinations would cause an unadvertised tab clone, when Essentials is unsupported, when Glance remapping or hidden/empty tabs change source identity, and when an existing Split group is full.
+- After selecting the dragged native tab, revalidate source gesture token, selected tab, partner ownership, Split group identities, current input phase, viewport and edge frame before the irreversible `splitTabs` call.
+- Never restore an earlier native selection after a failed or throwing split command that already mutated native group membership. Record `drag.native.outcome` with a bounded rejection/retarget reason.
+- All delivered Split Drop branches, including toolbar return, settle only the captured source token in one finalizer. An incomplete settle cancels that exact still-owned gesture; a synchronously superseding gesture remains untouched.
+- Add source-backed regression tests for clone cases, hidden/Glance/Essentials, Split limits, reentrant selection, partial native mutations and exact cleanup. Native Zen acceptance remains pending.
+
 ## 0.3.0-preview.114 — A5.1b native drop postcondition and consumed gesture
 
 - Verify synchronous local move/group placement against the current Zen-owned visible tab topology, not `moveTabBefore/After`'s void API outcome or an assumed mirror position. Avoid invoking native move for already-adjacent slots.

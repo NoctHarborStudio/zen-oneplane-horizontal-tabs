@@ -337,3 +337,8 @@ No new trace stream. Existing drag, address.cascade, tabs.sync, geometry.preflig
 ### Preview.114 — native drag result vs consumed OS gesture
 
 `drag.native.outcome` emits sampled bounded `{operation,outcome}` for native local tab/group move, foreign adoption, split, unsplit and select on delivered drop. Static outcomes include `confirmed`, `rejected`, `unverified`, `transferred-off-target`, `no-op` and `error`. These reflect immediate native state after synchronous calls, not a later native/session-restore/OS DragSession certificate. The existing `drag.lifecycle.cancel`, `drag.end` and `drag.incoming.release` own gesture cleanup evidence. Never log URLs, titles, tab objects, window identifiers, private payloads or files in these events.
+
+
+### Preview.115 — Split native admission and settlement
+
+Existing `drag.native.outcome` adds an optional bounded fixed `reason` for rejected/retargeted Split command candidates (e.g. `native-may-clone`, `native-essentials-unsupported`, `native-split-limit`, `selection-retargeted`, `stale-source`). `split-settle-incomplete` is an existing Drag Engine lifecycle cancellation reason for a delivered Split drop whose exact source could not be marked handled. No new recorder, persistent source cache, timer, RAF or raw native tab data. Native reentrant selection and OS drag sequencing still require Zen diagnostics/profiler evidence.

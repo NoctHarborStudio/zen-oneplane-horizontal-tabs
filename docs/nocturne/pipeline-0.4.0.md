@@ -4,7 +4,7 @@ Status: primary static audit checkpoints completed; A0.3 release infrastructure 
 
 ## Active checkpoint — source vs native evidence
 
-Current source checkpoint: 0.3.0-preview.114 (A5.1b1 source/CI PASS; OS DragSession identity and native acceptance open). Last confirmed canonical CI: preview.114. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
+Current source checkpoint: 0.3.0-preview.115 (A5.2a Split native transaction safety, CI pending; A5.1b2 OS DragSession identity and native acceptance OPEN). Last confirmed canonical CI: preview.114. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
 
 | Stage | Source implementation/review | Native acceptance |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ Current source checkpoint: 0.3.0-preview.114 (A5.1b1 source/CI PASS; OS DragSess
 | A2 | Implemented and reviewed | Explicitly deferred |
 | A3 | Core Fold ownership/handoff implemented; Bloom candidate dormant | Pending |
 | A4 | A4.4-R2 source/CI complete; native hit-region, visual and profiler gates still open | Pending |
-| A5–A7 | A5.1a–A5.1b1 source/CI PASS; A5.1b2 OS session identity, A5.2–A7 and native acceptance open | Pending |
+| A5–A7 | A5.1a–A5.1b1 source/CI PASS; A5.2a Split transaction admission/cleanup implemented, CI pending; A5.1b2 OS identity, A5.2 remainder–A7 and native acceptance OPEN | Pending |
 | A8 | Integrated validation pending | Pending |
 | A9 | Optional vertical scope, separate approval | Pending |
 
@@ -1028,3 +1028,12 @@ Candidate evaluation:
 - Custom second DataTransfer flavor for an opaque per-gesture nonce: potential exact identity if it survives Gecko protected dragover, native cross-window drop and dragend, but this would change the current package/native flavor contract. It must be tried in an isolated native experiment before production; don't invent a second persisted tab store or hide lost-drop failures.
 
 Decision: keep preview.114's trusted event/current JS lifecycle token and authoritative synchronous native outcome guards as the shipped safe baseline. Do not claim they resolve same-node late OS events. Later native experiment on target Zen: log only `{sourceNodeAvailable, sameSourceDocument, sessionAvailable, sameSessionWrapper, phase}` on sampled gesture events (without tab URL/title or source object), compare one-window detach, two-window transfer, same-node Escape/restart, absent drop/dragend, reload and monitor DPI; remove provisional probes afterward. No background polling. A5.1b2 is research-only until evidence permits one exact contract. Meanwhile A5.2 native Split source audits are independently actionable.
+
+
+### A5.2a — Split View native drop transaction admission, reentry and settlement (preview.115)
+
+Baseline preview.114, production runtime `582990d1efa8647715232964e51643cfb9b853be`, [CI 45041297367](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45041297367) PASS (713/713 Node, 15 Python, 12 parsers, deterministic build and published assets). Docs-only followups `209c1491868b20ae3ab0caefe7bbe94c11dd09a3` and `01b034318a8e86d1791453a74c3775c9faa8f2c9` CI PASS. Scoped Split owner: `src/interactions/split-drop.js.part`, existing `sourceHandled` and `dragLifecycle`; no new native state cache or service. Source review against [Zen 1.24.2b ZenViewSplitter.mjs](https://github.com/zen-browser/desktop/blob/1.24.2b/src/zen/split-view/ZenViewSplitter.mjs) `splitTabs`/`removeTabFromGroup`: `splitTabs` removes hidden/empty tab inputs, maps Glance children to parents and, in `#useTabsToSplit`, duplicates pinned tabs when mixing pin roles, Essentials or Live Folder identity. The native API explicitly has TODO for Essentials support; it may reject/return undefined without a group, and selecting dragged tab runs native callbacks before the actual Split command. Earlier Split Drop did not exclude these source-changing native paths and did not revalidate command owner after synchronous selection. A fast new drag during native selection could also be wiped by unscoped `endDragVisual()` in its `finally`.
+
+`nativeSplitPreflight` now rejects stale native pair, hidden/empty, Glance remap, unsupported Essentials, native clone-causing pinned/folder combination, missing Split API, unreadable existing group and native `MAX_TABS` limit *before* changing native selection. Dragover does not advertise an invalid split command. After `browser.selectedTab=tab`, Split Drop rechecks exact source lifecycle token, current native tab and selected partner, group identity, input phase, viewport and native toolbar frame before calling `splitTabs`. Aborts do not synthesize native rollback. Failed/rejected native commands restore old selection only if neither native tab has become split; partial outcomes never overwrite a native Split selection. A single `finally` handles Split, unsplit, selected-empty, ordinary select, and toolbar return: `sourceHandled(tab,false,token)` acknowledges only the captured drag, and an unretired exact token is cancelled via existing lifecycle; no stale source can clear a later gesture or trigger unintended detach. `drag.native.outcome` may include a bounded fixed `reason`, but never native tab identity, URL, title, filesystem path, or raw exception.
+
+Nine new source-backed Split fixture scenarios and six existing drag-command fixtures PASS in isolated JS, including actual native-source extracted command/handler bodies, clone protection, group capacity, selection reentry, changed phase/partner, incomplete settlement and partial native exception. Generated `layout.uc.mjs` parses and includes exact updated fragments. Canonical CI and native Zen acceptance pending in this checkpoint. Native session identity A5.1b2, asynchronous Zen grouping, drag/resize/DPI, real Split visual choreography/performance and native browser validation remain OPEN. Next: green CI/readback, independent review of Split group membership and cleanup, then A5.2b/native tests; no Bunny redesign.

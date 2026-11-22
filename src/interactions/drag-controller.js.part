@@ -53,9 +53,9 @@
     restoreStartupSearch(search);
     reconcileTabCascade();
   }
-  function sourceHandled(tab,finishReturn=false) {
-    const source = tabOwner(tab)?.[DRAG_CONTROLLER];
-    source?.markHandled(finishReturn);
+  function sourceHandled(tab,finishReturn=false,expectedToken=null) {
+    const source=tabOwner(tab)?.[DRAG_CONTROLLER];
+    source?.markHandled(finishReturn,expectedToken);
   }
   function onDragStart(event, tab, group = null) {
     if (incomingReleasing || !dragPhaseInputAllowed() || !validNativeTab(tab) || !event.dataTransfer) {
