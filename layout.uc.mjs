@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.115",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.116",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -9010,6 +9010,41 @@ function installTabStrip() {
   // children to parents and can duplicate pinned tabs when mixing pin roles,
   // Essentials or Live Folder items. A drag advertised as move must not
   // silently turn into a different native tab identity.
+  // Native Zen owns both the internal Split data and the physical tab group.
+  // Never filter invalid physical members: omission could certify partial state.
+  function nativeSplitMembers(group){
+    if(!group?.hasAttribute?.("split-view-group"))return null;
+    let members;
+    try{members=Array.from(group.tabs);}catch{return null;}
+    if(members.length<2||new Set(members).size!==members.length||
+       members.some(tab=>!validNativeTab(tab)||tabOwner(tab)!==window||
+         splitGroup(tab)!==group||tab.splitView!==true))return null;
+    return members;
+  }
+  function sameSplitMembers(a,b){
+    return Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&
+      new Set(a).size===a.length&&a.every(tab=>b.includes(tab));
+  }
+  function nativeSplitPostcondition(result,tab,current,before,oldGroup){
+    // splitTabs() returns the Zen-owned Split data (including its tabs),
+    // not a boolean certificate. Compare it to the physical group exactly.
+    const group=splitGroup(tab);
+    const expected=[tab,...before];
+    return !!result&&group&&group===splitGroup(current)&&
+      (!oldGroup||group===oldGroup)&&
+      sameSplitMembers(result.tabs,expected)&&
+      sameSplitMembers(nativeSplitMembers(group),expected);
+  }
+  function nativeUnsplitPostcondition(tab,before,oldGroup){
+    if(!validNativeTab(tab)||tabOwner(tab)!==window||isSplit(tab))return false;
+    const remaining=before.filter(other=>other!==tab);
+    if(before.length===2){
+      // Zen removes the entire two-member Split group on unsplit.
+      return remaining.length===1&&remaining.every(other=>
+        validNativeTab(other)&&tabOwner(other)===window&&!isSplit(other));
+    }
+    return sameSplitMembers(nativeSplitMembers(oldGroup),remaining);
+  }
   function nativeSplitPreflight(tab,current){
     if(!validNativeTab(tab)||!validNativeTab(current)||tab===current||
        tabOwner(tab)!==window||tabOwner(current)!==window)return "native-target-stale";
@@ -9028,8 +9063,9 @@ function installTabStrip() {
     if(isSplit(current)){
       const group=splitGroup(current);
       if(!group)return "native-split-group-unready";
-      const members=groupMembers(group);
-      if(!members.includes(current)||Number.isSafeInteger(splitter.MAX_TABS)&&
+      const members=nativeSplitMembers(group);
+      if(!members||!members.includes(current))return "native-split-group-unready";
+      if(Number.isSafeInteger(splitter.MAX_TABS)&&
          members.length>=splitter.MAX_TABS)return "native-split-limit";
     }
     return "";
@@ -9087,13 +9123,19 @@ function installTabStrip() {
       }
       if(isSplit(tab)){
         operation="unsplit";
-        outcome=unsplitTab(tab)&&!isSplit(tab)?"confirmed":"unverified";
-        if(outcome==="confirmed")schedule();
+        const oldGroup=splitGroup(tab),before=nativeSplitMembers(oldGroup);
+        if(!before||!before.includes(tab)){outcome="unverified";reason="native-split-group-unready";return;}
+        const applied=unsplitTab(tab);
+        outcome=applied&&nativeUnsplitPostcondition(tab,before,oldGroup)?"confirmed":"unverified";
+        if(outcome!=="confirmed")reason="native-postcondition";
+        schedule();
       }else if(side){
         operation="split";
         reason=nativeSplitPreflight(tab,current);
         if(reason)return;
         const originalTabGroup=splitGroup(tab),originalTargetGroup=splitGroup(current);
+        const before=originalTargetGroup?nativeSplitMembers(originalTargetGroup):[current];
+        if(!before){outcome="unverified";reason="native-split-group-unready";return;}
         const first=side==="left"||side==="top";
         const grid=side==="left"||side==="right"?"vsep":"hsep";
         // Selecting the dragged tab can synchronously run Zen observers.
@@ -9103,7 +9145,8 @@ function installTabStrip() {
            !dragPhaseInputAllowed()||retireChangedDragViewport()||
            retireChangedDragChromeFrame("split-selection")||
            !validNativeTab(current)||tabOwner(current)!==window||
-           splitGroup(tab)!==originalTabGroup||splitGroup(current)!==originalTargetGroup){
+           splitGroup(tab)!==originalTabGroup||splitGroup(current)!==originalTargetGroup||
+           (originalTargetGroup&&!sameSplitMembers(nativeSplitMembers(originalTargetGroup),before))){
           outcome="unverified";reason="selection-retargeted";
           if(splitSourceCurrent(tab,token)&&browser.selectedTab===tab&&validNativeTab(current)&&
              tabOwner(current)===window&&splitGroup(tab)===originalTabGroup&&
@@ -9111,8 +9154,12 @@ function installTabStrip() {
           return;
         }
         const result=window.gZenViewSplitter.splitTabs(first?[tab,current]:[current,tab],grid,first?0:1);
-        const group=splitGroup(tab);
-        outcome=result&&isSplit(tab)&&isSplit(current)&&group&&group===splitGroup(current)?"confirmed":result?"unverified":"rejected";
+        const confirmed=nativeSplitPostcondition(result,tab,current,before,originalTargetGroup);
+        const unchanged=splitGroup(tab)===originalTabGroup&&
+          splitGroup(current)===originalTargetGroup&&!isSplit(tab)&&
+          (!originalTargetGroup||sameSplitMembers(nativeSplitMembers(originalTargetGroup),before));
+        outcome=confirmed?"confirmed":result||!unchanged?"unverified":"rejected";
+        if(outcome==="unverified")reason="native-postcondition";
         // Only restore the earlier pane if Zen performed no split at all.
         // Never rollback partially changed native Split state.
         if(!result&&!isSplit(tab)&&!isSplit(current)&&validNativeTab(current)&&
