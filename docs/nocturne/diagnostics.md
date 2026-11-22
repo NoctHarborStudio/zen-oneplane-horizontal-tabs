@@ -352,3 +352,8 @@ The existing bounded `drag.native.outcome` event now uses the fixed `native-post
 ### Preview.117 — Native file drag payload ownership
 
 A new bounded `downloads.native.transfer` event records only `{mode,reason}`: `mode` is `dock` or `library`; `reason` is `ineligible`, `file-unavailable`, `native-error` or `payload-written`. The existing Dock `downloads.drag.payload` records static `{accepted:false,reason:"native-source-or-file-unavailable"}` on failure. These are **DataTransfer population** outcomes, not native OS drop confirmation. Neither event includes paths, file names, download IDs, URLs or DataTransfer content. Sampling/throttle is bounded and no new writer, RAF or poller is created. Combine with existing Bunny begin/end/cancel traces and native OS manual acceptance.
+
+
+### Preview.118 — Display preview work-area reconciliation
+
+The existing Display Engine now records bounded `drag.placement.preview` only when a live drag's current monitor is unchanged but its native available work rectangle differs from the previous preview. The payload has fixed `reason:"work-area-change"` and boolean `movedAnchor`; it is throttled to 1000 ms. This reports presentation cache/anchor reconciliation, **not** an OS placement or drop result. It contains no display rectangles, absolute positions, tab/workspace identities, labels, URLs, paths or native objects. Use with existing drag release/placement traces; no additional observer, timer or diagnostic writer is introduced.
