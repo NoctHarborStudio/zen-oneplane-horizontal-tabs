@@ -1197,3 +1197,6 @@ NC4-014/042/061 and associated A5 owners: protected-mode `readDraggedTab` curren
 ### A5.1a — Protected drag source fallback (preview.113)
 
 Source-level NC4 native-identity partial: `readDraggedTab` no longer chooses the first source when multiple live controllers are eligible; untrusted custom-flavor input and revoked lifecycle tokens are rejected. Existing incoming preview is cleared if no source resolves. Same-node stale native session events, missing drop payload, native command postconditions and mixed-DPI Gecko behavior remain open. Not a native Zen PASS.
+
+
+A5.1a CI closure: preview.113 (707/707 Node, 15 Python, deterministic build, 12 runtime parsers) PASS. Native same-node OS session identity, drop payload absence and native split/move result checks remain A5.1b; no Gecko native acceptance claimed.
