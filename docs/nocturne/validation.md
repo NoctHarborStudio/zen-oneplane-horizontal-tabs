@@ -630,3 +630,15 @@ Native acceptance for NC4-090-R2 remains open: source/CI PASS does not imply Zen
 - [ ] Native DownloadsCommon vs `Downloads.getList(PUBLIC)` sample includes a Places-only old record; verify native full Downloads opens through existing fallback and Clear completed modifies only removable current records, never disk files.
 - [ ] Native two normal windows plus a private window: shared PUBLIC event delivery and subscriptions; private list isolation; close/hot-reload during native removal retains exact view lease and does not duplicate remove.
 - [ ] Performance: subscriptions per window, large histories, rapid search/Load more, sort/grouping and persistence after reload. CI source fixtures do not prove these native runtime gates.
+
+### A7 / NC4-085 — History/Recently Closed date-heading reuse (preview.140)
+
+- [x] Reproduce preview.139 source behavior with production `renderResults`: unchanged History results construct new `h3` nodes and force nontrivial DOM reconciliation despite stable row IDs.
+- [x] Production-source fixture: repeat identical rows with updated title text, assert exact heading references, no `insertBefore` calls, original control focus and scroll retained.
+- [x] Production-source fixture: nonadjacent same-day runs in incoming row order keep distinct headings on rerender; when runs become adjacent, preserve the first heading and retire obsolete nodes.
+- [x] Production-source fixture: page extension retains existing rows/headings and scroll/focus; empty result discards row handles and headings, no stale group resurrected.
+- [x] All three new fixtures fail on pinned preview.139 source and pass on preview.140.
+- [x] [CI 45080392259](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45080392259): 804 Node / 15 Python PASS, 12 runtime parsers, deterministic build and public Sine distribution.
+- [ ] Native Zen 1.24.2b/Sine 2.3.3 disposable profile: load History and Recently Closed; update native records, search, page 50→100, close/reopen and switch sections. Verify heading grouping, unchanged row focus and scroll, and lack of duplicate date labels.
+- [ ] Native Gecko Profiler/DOM observation: repeated identical history notifications with diagnostics on/off, compare node insertions, layout cost/frame p50/p95/p99 and allocations against preview.139 on equivalent data; source fixtures are not a measured FPS claim.
+- [ ] Native alternate order/daylight-saving and locale date labels, 360px/620px responsive and keyboard focus under active updates. Do not close native visual/performance acceptance through Node tests alone.

@@ -610,11 +610,11 @@ library/controller.js.part:148–155 checks clearing but does not set it or acqu
 
 **Required:** A7: one destructive-command gate with exact scope, confirmation generation and native result; define close behavior during accepted operation; test duplicate range clear and row deletion while pending.
 
-#### NC4-085 — History result updates recreate date heading nodes (S/R/P2)
+#### NC4-085 — History date-heading DOM reuse (S/R/P2; source/CI CLOSED at preview.140)
 
-library/controller.js.part:247–277 reuses row DOM by ID but creates a new h3 per day each render; unchanged comparison then fails even with same row order. Potential DOM churn/focus scroll cost, not measured.
+**Baseline (preview.139):** `library/controller.js.part:renderResults` reused row DOM by ID but created a fresh `h3` per day on every result, forcing the unchanged comparison to fail. This unnecessary reconciliation was reproduced by the extracted production renderer. It does **not** by itself prove native focus loss or measured jank.
 
-**Required:** A7: stable group keys and keyed heading reconciliation; measure native history updates and preserve focus.
+**Correction:** preview.140 reuses only live headings from the current body, keyed by local day + repeated-run index, preserving distinct nonadjacent same-day groups. Three source-based tests cover no-op updates, repeated-date grouping and focus/scroll/pagination/teardown. [CI 45080392259](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45080392259) PASS (804 Node, 15 Python, 12 parsers, public package). **Source/CI CLOSED**; **native Zen UI behaviour and Gecko Profiler measurement OPEN**. No extra owner, observer, new feature or UX changes.
 
 #### NC4-086 — Smart Search manager state fallback needs exact controller identity (S/R/P1)
 
