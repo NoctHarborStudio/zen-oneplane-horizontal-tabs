@@ -95,3 +95,16 @@ test("dock anchor uses a fixed chrome layer and preserves positive gap",()=>{
  assert.deepEqual(fn({left:20,width:800,bottom:50},{bottom:90},1,1000,700),{x:420,y:98});
  assert.deepEqual(fn({left:20,width:800,bottom:0},{bottom:90},0,1000,700),{x:420,y:8});
 });
+
+test("replacement navigation survives the interrupted navigation's closing interval",()=>{
+ const h=harness(),phase=()=>h.bar.getAttribute("data-phase");
+ h.evt(2);h.advance(480);
+ assert.equal(phase(),"loading");
+ // Target Zen delivered NS_BINDING_ABORTED before the replacement START.
+ h.evt(4,0x804b0002);assert.equal(phase(),"closing");
+ h.evt(2);h.advance(480);
+ assert.equal(phase(),"loading");
+ h.evt(4);assert.equal(phase(),"complete");
+ h.advance(620);assert.equal(h.bar.hasAttribute("data-visible"),false);
+ h.dispose();
+});

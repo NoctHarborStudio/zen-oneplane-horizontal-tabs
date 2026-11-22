@@ -1216,3 +1216,11 @@ Tested the package at commit 3887393 in a disposable Windows profile using Zen 1
 - With a real XUL panel in the open state, the coordinator deferred Escape to the native popup.
 
 This covers specific startup, query and overlay paths. Physical keyboard/drag input, external file drops, mixed-DPI layout, visual transitions, accessible navigation, upgrade/rollback and matched hardware profiler runs remain open.
+
+### A7 / NC4-024 - Page Progress navigation replacement and cancellation
+
+On Windows, a fresh disposable headless Zen 1.24.2b / Sine 2.3.3 profile loaded preview.125. A loopback HTTP fixture sent an initial HTML chunk and delayed the rest of the document. A second native navigation replaced the in-flight page through an HTTP 302 to another delayed document. A tab progress listener recorded top-level network START/STOP, native status and indicator phase.
+
+- The interrupted load delivered STOP with NS_BINDING_ABORTED (0x804b0002) before the replacement START. The indicator entered closing, showed loading during the replacement, completed on the successful STOP and disappeared. The old closing timer did not hide the replacement.
+- During a separate delayed load, selecting an idle tab hid the indicator. Returning to the loading tab showed it again. Explicit browser stop went to closing and then hidden without a success phase.
+- A regression fixture replays the observed replacement sequence against the production entrypoint. These runs establish this ordering for the exercised paths. Late STOP after a replacement START was not observed. Mixed-DPI placement, graphical frame timing, and other Gecko navigation paths remain open.
