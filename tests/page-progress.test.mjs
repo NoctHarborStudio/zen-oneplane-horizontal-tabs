@@ -164,3 +164,38 @@ test("multiple superseded NETWORK START identities cannot end the latest load",(
  h.evt(4,0,h.a,c);assert.equal(phase(),"complete");
  h.dispose();
 });
+
+test("late STOP for the oldest of twenty redirected or overlapping native starts never completes the latest load",()=>{
+ const h=harness(),requests=Array.from({length:21},()=>({}));
+ const phase=()=>h.bar.getAttribute("data-phase");
+ const fill=()=>h.bar.children[0].children[0].values.get("--zr-page-progress");
+ h.evt(2,0,h.a,requests[0]);h.advance(480);
+ h.progress(40,100,requests[0]);h.advance(120);assert.equal(fill(),"0.4");
+ for(let i=1;i<requests.length;i++)h.evt(2,0,h.a,requests[i]);
+ // Before preview.141 the 16-entry strong Set evicts requests[0] and
+ // incorrectly treats its late canceled STOP as the latest NETWORK STOP.
+ h.evt(4,0x804b0002,h.a,requests[0]);assert.equal(phase(),"loading");
+ h.progress(90,100,requests[0]);h.advance(120);assert.equal(fill(),"0.4");
+ h.progress(60,100,requests.at(-1));h.advance(120);assert.equal(fill(),"0.6");
+ h.evt(4,0x804b0002,h.a,requests[1]);assert.equal(phase(),"loading");
+ h.evt(4,0,h.a,requests.at(-1));assert.equal(phase(),"complete");
+ h.advance(620);assert.equal(h.bar.hasAttribute("data-visible"),false);
+ h.dispose();assert.equal(h.timers,0);assert.equal(h.frames.size,0);
+});
+test("retired native request identities expire on terminal network completion and cannot poison a later load",()=>{
+ const h=harness(),old={},newer={},last={};
+ const phase=()=>h.bar.getAttribute("data-phase");
+ h.evt(2,0,h.a,old);h.advance(480);
+ h.evt(2,0,h.a,newer);h.evt(4,0x804b0002,h.a,old);
+ assert.equal(phase(),"loading");
+ h.evt(4,0,h.a,newer);assert.equal(phase(),"complete");
+ h.advance(620);
+ // Reusing the same synthetic object in a later independent load must
+ // not carry an old generation's retired membership.
+ h.evt(2,0,h.a,old);h.advance(480);assert.equal(phase(),"loading");
+ h.evt(4,0,h.a,old);assert.equal(phase(),"complete");
+ h.advance(620);
+ h.evt(2,0,h.a,last);h.advance(480);
+ h.evt(4,0,h.a,{});assert.equal(phase(),"complete","unknown STOP retains Gecko aggregate fallback");
+ h.dispose();
+});

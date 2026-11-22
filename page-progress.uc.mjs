@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="page-progress.script",data={version:"0.3.0-preview.140"};
+  const event="page-progress.script",data={version:"0.3.0-preview.141"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -170,9 +170,12 @@ try{if(typeof window!=="undefined"){
           // Retire only a previously observed NETWORK START: Gecko total
           // progress can come from arbitrary page subresource requests.
           if(s.request){
-            s.retired??=new Set();
+            // Do not evict old starts by an arbitrary count: a late
+            // NETWORK STOP for an evicted identity would finish the newer
+            // load. Native nsIRequest objects can be tracked weakly until
+            // the current network activity really terminates.
+            s.retired??=new WeakSet();
             s.retired.add(s.request);
-            if(s.retired.size>16)s.retired.delete(s.retired.values().next().value);
           }
           s.request=request;
           window.__nocturneTrace?.("page-progress.network",{reason:"overlap-start"},{sample:1200});
