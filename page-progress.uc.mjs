@@ -170,9 +170,12 @@ try{if(typeof window!=="undefined"){
           // Retire only a previously observed NETWORK START: Gecko total
           // progress can come from arbitrary page subresource requests.
           if(s.request){
-            s.retired??=new Set();
+            // Do not evict old starts by an arbitrary count: a late
+            // NETWORK STOP for an evicted identity would finish the newer
+            // load. Native nsIRequest objects can be tracked weakly until
+            // the current network activity really terminates.
+            s.retired??=new WeakSet();
             s.retired.add(s.request);
-            if(s.retired.size>16)s.retired.delete(s.retired.values().next().value);
           }
           s.request=request;
           window.__nocturneTrace?.("page-progress.network",{reason:"overlap-start"},{sample:1200});
