@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.118",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.119",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -4528,11 +4528,11 @@ function installTabStrip() {
   // Drag Engine: lifecycle only. Geometry/rendering and native tab
   // operations remain separate. No polling while idle.
   const dragLifecycle=createDragLifecycle();
-  let nativeDragToken=null,nativeDragIdentity=null,dragWatchTimer=0,dragMissingSessions=0,dragFallbackTimer=0;
+  let nativeDragToken=null,nativeDragIdentity=null,dragWatchTimer=0,dragMissingSessions=0,dragUnknownSessions=0,dragFallbackTimer=0;
   const dragService=()=>Cc["@mozilla.org/widget/dragservice;1"].getService(Ci.nsIDragService);
   function stopNativeDragWatch(){
     if(dragWatchTimer)window.clearTimeout(dragWatchTimer);
-    dragWatchTimer=0;dragMissingSessions=0;
+    dragWatchTimer=0;dragMissingSessions=0;dragUnknownSessions=0;
     if(dragFallbackTimer)window.clearTimeout(dragFallbackTimer);dragFallbackTimer=0;
   }
   function watchNativeDrag(token){
@@ -4542,13 +4542,22 @@ function installTabStrip() {
       if(!dragLifecycle.owns(token,"tab"))return;
       // A parent-process native session spans browser windows. A short
       // grace period avoids transient gaps at native drag startup/teardown.
+      let session;
       try{
         const service=dragService();
-        if(typeof service.getCurrentSession==="function"){
-          if(service.getCurrentSession(window))dragMissingSessions=0;
-          else if(++dragMissingSessions>=3){dragLifecycle.cancel("native-session-ended",token);return;}
-        }
-      }catch{dragMissingSessions=0;}
+        session=typeof service.getCurrentSession==="function"?service.getCurrentSession(window):undefined;
+      }catch{session=undefined;}
+      if(session){
+        dragMissingSessions=0;dragUnknownSessions=0;
+      }else if(session===null){
+        dragUnknownSessions=0;
+        if(++dragMissingSessions>=3){dragLifecycle.cancel("native-session-ended",token);return;}
+      }else{
+        // Missing API/throws are UNKNOWN, not evidence of a live session.
+        // Bound local cleanup without ever synthesizing an OS drop.
+        dragMissingSessions=0;
+        if(++dragUnknownSessions>=6){dragLifecycle.cancel("native-session-unavailable",token);return;}
+      }
       if(dragLifecycle.owns(token,"tab"))dragWatchTimer=window.setTimeout(check,250);
     };
     dragWatchTimer=window.setTimeout(check,250);
