@@ -46,7 +46,7 @@ test("history supports grouped and search results, invalidates old query, closes
 test("grouped Places results retain native grouping and bounded pagination",async()=>{
  const v={guid:"g",url:"https://example.com",date:new Date(1000)};let args;
  const s=createHistorySession({now:()=>2000,createQuery:()=>({getHistory:async a=>{args=a;return new Map([[42,[v,v]]]);},searchHistory:async()=>[],close(){}})});
- const r=await s.query({limit:1});assert.equal(args.limit,1);assert.equal(r.rows[0].group,"42");assert.equal(r.rows.length,1);assert.equal(r.hasMore,true);s.close();
+ const r=await s.query({limit:1});assert.equal(args.limit,2);assert.equal(r.rows[0].group,"42");assert.equal(r.rows.length,1);assert.equal(r.hasMore,true);s.close();
 });
 test("private history fails before constructing a Places query",()=>{
  assert.throws(()=>createHistorySession({allowed:()=>false,createQuery:()=>{throw Error("must not touch Places");}}),/unavailable/);
@@ -186,4 +186,18 @@ test("native Dock and Library drags use one current Download identity, with dist
  assert.deepEqual(calls.map(x=>x[3]),["dock","library"]);
  await s.dispose();
  assert.equal(s.dragNative(f.d,event,node),false);
+});
+
+test("filtered first history page can reach a recent visit and exact boundaries end pagination",async()=>{
+ const now=200*86400000;
+ const visits=[0,0,now].map((date,i)=>({url:"https://example.test/"+i,date}));
+ const session=createHistorySession({now:()=>now,createQuery:()=>({
+   getHistory(){},searchHistory:async(term,limit)=>visits.slice(0,limit),close(){}
+ })});
+ try{
+   const first=await session.query({text:"example",limit:2});
+   assert.deepEqual(first.rows,[]);assert.equal(first.hasMore,true);
+   const all=await session.query({text:"example",limit:3});
+   assert.deepEqual(all.rows.map(row=>row.time),[now]);assert.equal(all.hasMore,false);
+ }finally{session.close();}
 });

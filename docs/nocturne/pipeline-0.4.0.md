@@ -1224,3 +1224,9 @@ On Windows, a fresh disposable headless Zen 1.24.2b / Sine 2.3.3 profile loaded 
 - The interrupted load delivered STOP with NS_BINDING_ABORTED (0x804b0002) before the replacement START. The indicator entered closing, showed loading during the replacement, completed on the successful STOP and disappeared. The old closing timer did not hide the replacement.
 - During a separate delayed load, selecting an idle tab hid the indicator. Returning to the loading tab showed it again. Explicit browser stop went to closing and then hidden without a success phase.
 - A regression fixture replays the observed replacement sequence against the production entrypoint. These runs establish this ordering for the exercised paths. Late STOP after a replacement START was not observed. Mixed-DPI placement, graphical frame timing, and other Gecko navigation paths remain open.
+
+### A7 / NC4-021 - History pagination after date filtering (preview.126)
+
+A filtered-empty raw page retains the Load more action when a lookahead record exists. At the 500-record UI limit, the view explains the bounded search and directs users to Native history. Exact-boundary pages no longer advertise an empty next page.
+
+In a disposable headless Zen 1.24.2b / Sine 2.3.3 profile, the production Library UI received controlled history responses: the first 50-record window was filtered empty, Load more stayed visible, clicking it requested 100 records, rendered the matching row and removed the exhausted control. This UI check used a fixture history service; the separate service regression covers date filtering and lookahead.

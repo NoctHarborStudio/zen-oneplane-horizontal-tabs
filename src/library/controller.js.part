@@ -5,7 +5,7 @@
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,{flush:true});
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.125",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.126",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
@@ -297,10 +297,13 @@
       ordered.push(entry.node);
     }
     for(const id of rows.keys())if(!live.has(id))rows.delete(id);
-    if(!ordered.length){placeholder(state.query?"No matching results":"Nothing to show","No records in this section for the selected period.");return;}
+    if(!ordered.length&&!result.hasMore){placeholder(state.query?"No matching results":"Nothing to show","No records in this section for the selected period.");return;}
+    if(!ordered.length&&state.section==="history"){
+      ordered.push(make("p","nl-limit","No visits from the last 120 days in these results."));
+    }
     if(result.hasMore&&result.limit<500){
       shell.more.disabled=false;ordered.push(shell.more);
-    }else if(result.hasMore){ordered.push(make("p","nl-limit","Showing up to 500 records. Use search to narrow results."));}
+    }else if(result.hasMore){ordered.push(make("p","nl-limit",state.section==="history"?"Checked the first 500 history records. Refine your search or open Native history.":"Showing up to 500 records. Use search to narrow results."));}
     // Keep the same DOM node in place for progress-only updates.
     const unchanged=body.children.length===ordered.length&&ordered.every((n,i)=>body.children[i]===n);
     if(!unchanged){const keep=new Set(ordered);for(const child of [...body.children])if(!keep.has(child))child.remove();

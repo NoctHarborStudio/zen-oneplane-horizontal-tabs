@@ -12,12 +12,13 @@
       const count=Math.min(5000,Math.max(1,Math.trunc(Number(limit)||100)));
       const range=Math.min(36500,Math.max(1,Math.trunc(Number(days)||120)));
       const order=["date","site","lastvisited"].includes(sort)?sort:"date";
-      const result=term?await native.searchHistory(term,count):await native.getHistory({daysOld:range,limit:count,sortBy:order});
+      const fetchLimit=count+1;
+      const result=term?await native.searchHistory(term,fetchLimit):await native.getHistory({daysOld:range,limit:fetchLimit,sortBy:order});
       if(closed||token!==epoch||!allowed())return null;
       const rows=[],seen=new Set();let rawCount=0;
       const groups=Array.isArray(result)?[[null,result]]:result instanceof Map?[...result]:[];
       for(const [group,items] of groups)for(const v of items){
-        rawCount++;
+        if(++rawCount>count)continue;
         const time=Number(v?.date);
         if(typeof v?.url!=="string"||!v.url||!Number.isFinite(time)||time<now()-range*86400000)continue;
         const id=String(v.guid??v.url)+"-"+time;
@@ -25,7 +26,7 @@
         rows.push(Object.freeze({id,url:v.url,title:String(v.title||v.url),time,
           group:group==null?null:String(group),kind:"history",identity:"native-url-date"}));
       }
-      return Object.freeze({rows:Object.freeze(rows),limit:count,hasMore:rawCount>=count});
+      return Object.freeze({rows:Object.freeze(rows),limit:count,hasMore:rawCount>count});
     }
     function close(){if(closed)return;closed=true;epoch++;native.close();}
     return {query,close};

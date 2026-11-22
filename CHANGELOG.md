@@ -1,3 +1,7 @@
+## 0.3.0-preview.126 - Library history pagination
+
+Keep Load more available when a history search page contains only out-of-range visits. Check one extra native record to distinguish a full last page from a truncated result. Explain the 500-record limit and native history fallback.
+
 ## 0.3.0-preview.125 - Smart Search query lifetime and Library media refresh
 
 Ignore results, cancellation and completion from superseded address-bar queries. Publish local media rows and their action targets together after a successful scan; retain stable row IDs for surviving paths and keep the previous snapshot usable after a failed refresh.
