@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.117",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.118",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -4455,22 +4455,6 @@ function installTabStrip() {
       return spaces;
     } catch { return null; }
   }
-  function hubOtherDisplay(source,dest,x,y){
-    return !!source&&!!dest&&(source.x!==dest.x||source.y!==dest.y)&&x>=dest.x&&x<dest.x+dest.width&&y>=dest.y&&y<dest.y+dest.height;
-  }
-  function hubSnapRect(display,x,y){
-    if(!display||![display.x,display.y,display.width,display.height,x,y].every(Number.isFinite)||display.width<=0||display.height<=0)return null;
-    const {x:left,y:top,width,height}=display;
-    const edge=Math.max(24,Math.min(100,Math.round(Math.min(width,height)*.085)));
-    const right=left+width,bottom=top+height,hw=Math.floor(width/2),hh=Math.floor(height/2);
-    const h=x-left<=edge?"left":right-x<=edge?"right":"",v=y-top<=edge?"top":bottom-y<=edge?"bottom":"";
-    if(h&&v)return {x:h==="left"?left:left+hw,y:v==="top"?top:top+hh,width:h==="left"?hw:width-hw,height:v==="top"?hh:height-hh,mode:h+"-"+v};
-    if(v==="top")return {x:left,y:top,width,height,mode:"maximize"};
-    if(h)return {x:h==="left"?left:left+hw,y:top,width:h==="left"?hw:width-hw,height,mode:h};
-    if(v==="bottom")return {x:left,y:top+hh,width,height:height-hh,mode:"bottom"};
-    const w=Math.round(width*.72),ht=Math.round(height*.74);
-    return {x:left+Math.floor((width-w)/2),y:top+Math.floor((height-ht)/2),width:w,height:ht,mode:"center"};
-  }
   function hubTrashAgeMatches(stamp,age,now){
     if(age==="all")return true;
     const duration={"5m":300000,"1h":3600000,"1d":86400000,"7d":604800000,"30d":2592000000,"1y":31536000000}[age];
@@ -4718,6 +4702,18 @@ function installTabStrip() {
     return {x:Math.round(rect.x*desktopToDevice),y:Math.round(rect.y*desktopToDevice),
       width:Math.round(rect.width*desktopToDevice),height:Math.round(rect.height*desktopToDevice)};
   }
+  // Preview identity must include the current work area: taskbar/dock
+  // changes can move the same snap mode within an unchanged monitor.
+  // This is a presentation cache key, never an authority for OS placement.
+  function displayPreviewKey(target,label){
+    if(!target?.full||!target?.work||typeof target.mode!=="string"||typeof label!=="string")return null;
+    const f=target.full,w=target.work;
+    const dimensions=[f.x,f.y,f.width,f.height,w.x,w.y,w.width,w.height,
+      target.x,target.y,target.width,target.height];
+    if(!dimensions.every(Number.isFinite)||f.width<=0||f.height<=0||
+       w.width<=0||w.height<=0||target.width<=0||target.height<=0)return null;
+    return [label,target.mode,...dimensions].join(":");
+  }
   function displayPreviewFraction(target){
     if(!target||!displayContains(target.full,target.x,target.y)||
        !displayContains(target.full,target.x+target.width-1,target.y+target.height-1))return null;
@@ -4826,11 +4822,13 @@ function installTabStrip() {
     }
   }
   function showPlacementPreview(event,label){
+    const previousWork=placementSample?.target?.work;
     const p=placementAt(event),fraction=displayPreviewFraction(p),token=dragLifecycle.current()?.token;
     if(!p||!fraction||token==null){clearPlacementPreview();return;}
     placementSample={token,x:event.screenX,y:event.screenY,time:window.performance.now(),target:p};
     const monitor=[p.full.x,p.full.y,p.full.width,p.full.height].join(":");
-    const key=[monitor,p.mode,label].join(":");
+    const key=displayPreviewKey(p,label);
+    if(!key){clearPlacementPreview();return;}
     if(key===placementKey)return;
     try{
       if(!placementPreview){
@@ -4868,13 +4866,16 @@ function installTabStrip() {
       if(!Number.isFinite(scale)||scale<=0)return;
       const x=Math.round((p.work.x+p.work.width/2)/scale-105);
       const y=Math.round((p.work.y+Math.min(90,p.work.height*.12))/scale);
-      placementPopupPoint={x,y};
       const changedMonitor=placementMonitor!==monitor;
-      placementMonitor=monitor;placementKey=key;
+      const movedAnchor=changedMonitor||!placementPopupPoint||
+        placementPopupPoint.x!==x||placementPopupPoint.y!==y;
+      placementPopupPoint={x,y};placementMonitor=monitor;placementKey=key;
+      if(!changedMonitor&&previousWork&&!displayRectEqual(previousWork,p.work))
+        window.__nocturneTrace?.("drag.placement.preview",{reason:"work-area-change",movedAnchor},{throttle:1000});
       if(placementPreview.state==="open"){
-        if(changedMonitor)placementPreview.moveTo(x,y);
+        if(movedAnchor)placementPreview.moveTo(x,y);
       }else if(placementPreview.state==="showing"){
-        if(changedMonitor)placementPreview.addEventListener("popupshown",()=>{
+        if(movedAnchor)placementPreview.addEventListener("popupshown",()=>{
           if(placementSample&&placementPopupPoint&&placementPreview?.state==="open")placementPreview.moveTo(placementPopupPoint.x,placementPopupPoint.y);
         },{once:true});
       }else if(placementPreview.state==="hiding"){
