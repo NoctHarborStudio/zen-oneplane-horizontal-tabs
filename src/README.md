@@ -92,3 +92,5 @@ A5.6a canonical source/CI closure (preview.120): [CI 45058630741](https://github
 
 
 A5.7a (preview.121): Startup Search restore uses the existing native Drag Engine gesture token and an exact timeout generation, invalidating on new trusted input/drag, native selection, navigation, and teardown. Native URLbar remains authoritative. Six source-backed regression cases cover stale timer reentry and replacement without introducing a new scheduler. NC4-065 empty strip native adoption and NC4-066 topology change remain independent native evidence gates.
+
+A5.7a canonical source/CI closure: [CI 45059536163](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45059536163) PASS (743 Node tests, 15 Python, deterministic build and published package). Exact native gesture token/monotonic restore ticket protects against stale 80 ms search reopens; native Zen behavior remains unverified.

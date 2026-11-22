@@ -4,7 +4,7 @@ Status: primary static audit checkpoints completed; A0.3 release infrastructure 
 
 ## Active checkpoint — source vs native evidence
 
-Current source checkpoint: 0.3.0-preview.121 (A5.7a native Startup Search delayed-restore gesture fence implemented; source-backed tests, canonical CI pending; A5 native gates OPEN). Last confirmed canonical CI: preview.120. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
+Current source checkpoint: 0.3.0-preview.121 (A5.7a native Startup Search gesture-scoped restore source/CI PASS; Gecko native acceptance OPEN). Last confirmed canonical CI: preview.121. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
 
 | Stage | Source implementation/review | Native acceptance |
 | --- | --- | --- |
@@ -1136,3 +1136,10 @@ The existing Drag Engine owns the operation token; the existing Startup Search h
 Permanent source-backed tests cover untouched success, stale timer reentry/successor ownership, trusted pointer + active drag fences, same-tab navigation/empty/selection changes, native address input and actual owner wiring. Isolated staged-source V8 probes PASS; parser/build/canonical CI are separate. Native acceptance must exercise fast repeated gestures and Escape on the target Zen; do not mark search native PASS without evidence.
 
 **NC4-065 (empty incoming strip)** remains a native command/eligibility question: both lane and ordinary drop target paths require a destination tab/group, and the current `adoptTab` branch computes insertion from an existing native boundary. With no safe authoritatively selected workspace insertion contract verified, do not fabricate an empty target or native destination. **NC4-066 (native topology change during drag)** has current source protections: `restingGeometryBlocked` freezes projection, `readDraggedTab` validates current source tab/controller token, drop revalidates target topology, watchdog has bounded cancellation. Native TabClose/Workspace/Group mutation while OS gesture remains active still requires a behavioral test before claiming source-node lease closure. These are separate OPEN A5.7b/c gates, not accidentally completed in A5.7a.
+
+
+### A5.7a-R — Native Search restore independent CI/source closure (docs-only)
+
+Published production commit `e5a5a73781c74c65e0f9532263a2859c71158ffe`, followed by metadata-only provenance commit `a3d8528ee172df0075358908cee7f054eef1837d`. Both were prepared before the single fast-forward `preview` ref update, so no moving-branch source/bookmark lock mismatch was exposed. The current `scripts/shared-bookmarks.lock.json` records the new `bookmarks.uc.mjs` Git blob at the exact production commit; upstream provenance remains unchanged.
+
+[Canonical CI 45059536163](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45059536163) **SUCCESS**: 743/743 Node tests (including six new source-backed delayed-restore regressions), 15/15 Python release-policy tests, all versioned runtime scripts syntax-check, deterministic generated bundles, and Raw/codeload Sine delivery. Independently extracted the staged production functions to V8, checked the six new tests and required current-layout section equivalence before publication; readback confirms HEAD, version and lock. This closes **A5.7a source/CI only**. Native Zen/Sine fast repeated tab drag, Escape, URLbar interaction, tab navigation/selection, multiwindow and cleanup acceptance remains OPEN. NC4-065 empty strip and NC4-066 native drag topology are still separate unsolved acceptance/implementation gates; no inferred native adoption or unverified source-node lease was introduced.
