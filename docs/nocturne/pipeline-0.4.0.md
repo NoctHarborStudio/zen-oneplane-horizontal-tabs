@@ -4,7 +4,7 @@ Status: primary static audit checkpoints completed; A0.3 release infrastructure 
 
 ## Active checkpoint — source vs native evidence
 
-Current source checkpoint: 0.3.0-preview.122 (A5.7b empty Workspace native tab-adoption source tests PASS; full canonical CI pending; A5 native acceptance OPEN). Last confirmed canonical CI: preview.121. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
+Current source checkpoint: 0.3.0-preview.122 (A5.7b native empty Workspace cross-window tab adoption source/CI PASS; Gecko OS visual/placement acceptance OPEN). Last confirmed canonical CI: preview.122. Source implementation and native acceptance are distinct; keep detailed historical evidence below.
 
 | Stage | Source implementation/review | Native acceptance |
 | --- | --- | --- |
@@ -1156,3 +1156,14 @@ The existing incoming lease retains the source's exact native token, viewport an
 Source-extracted preflight and delivered-drop tests verify real empty container/plus hit, hidden native tabs/group, pinned/Essential/Glance/folder/Split, stale projected cards, missing manager method, OS event trust, null/throw/wrong-owner/off-target native results, absence of guessed `tabIndex`, source settle and leaving the destination in island/lane mode. Eleven staged fixture cases PASS; **canonical CI and Zen 1.24.2b native OS acceptance are separate gates**. Dev branch of the public Zen `ZenSpaceManager.mjs` documents a native `moveTabToWorkspace`/active container contract; its presence in the target installed build is checked at runtime rather than assumed. No support for source gestures whose owner/native DragSession identity cannot be verified (A5.1b2 remains OPEN). Native test must confirm that `gBrowser.adoptTab` preserves real session/cookie/window state and Zen's placeholder policy, especially with multiple hidden Workspaces and mixed DPI.
 
 A5.7c NC4-066 (native tab/group topology mutation mid-gesture) and A5.7b native acceptance remain OPEN, including multiwindow/Workspace/Free/Trash and OS gesture identity.
+
+
+### A5.7b-R — Native empty Workspace adoption independent canonical closure (docs-only)
+
+Published production `589cd1396b829ac0926a4d5592bae89089bd86a0` (preview.122), followed by provenance metadata-only `0f1ce819a209efd845309b182d122fad02beaaee`. They were prepared and published with one compare-and-swap fast-forward of `preview`; previous head `e78eb967ea38035cf9025027cb635eaa13c5ed9f` was verified immediately before publication. The pinned `bookmarks.uc.mjs` local override hash was synchronized to preview.122 without touching its upstream provenance or creating a temporary released mismatch.
+
+[Canonical CI 45061035123](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45061035123) **SUCCESS**: 754/754 Node tests, 15/15 Python release tests, all manifest runtime syntax checks, reproducible generated Layout/CSS and public Raw/codeload Sine artifact delivery. Eleven new source-backed cases pass for the exact eligible native empty container, boundary/source roles, untrusted/outside target coordinates, native API errors, null/off-target/partial adoption, same-gesture source cleanup, pointer exit and Workspace change reentrancy. Readback verified exact generated fragments, `0.3.0-preview.122` metadata, timestamp, HEAD and bookmark provenance blob. CI is **source evidence only**.
+
+Native API cross-check: independently fetched the official `zen-browser/desktop` **`1.24.2b` tag** `src/zen/spaces/ZenSpaceManager.mjs` blob `8e23f82896c3961b5aa61a587851354e4cad6a91`. Its lines 280–285 expose the active tabs container; lines 319–327 `workspaceElement`; lines 783–788 `getWorkspaceFromId`; lines 1800–1816 handle a foreign native tab's workspace; lines 1833–1874 implement `moveTabToWorkspace` via native `gBrowser.zenHandleTabMove` and `container.insertBefore`. [Pinned Zen 1.24.2b source](https://github.com/zen-browser/desktop/blob/1.24.2b/src/zen/spaces/ZenSpaceManager.mjs). The contract is **actually present at the target source tag**, not merely inferred from `dev`; runtime capability/readiness checks still fail closed. This does not prove Gecko OS drag routing in an installed build, user-visible placement, private window, mixed DPI or the safe native placeholder life cycle; those remain **A5.7b native acceptance OPEN**.
+
+Next source stage: A5.7c/NC4-066 tab topology invalidation during an active OS session. Preserve A5.1b2 real Gecko DragSession identity, A5.2b2 Split native acceptance and other native gates.
