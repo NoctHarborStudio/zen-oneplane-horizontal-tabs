@@ -171,7 +171,7 @@ test("split hit is half-open, finite and requires the current input owner",()=>{
 test("retargeted split drop retires the local gesture before any native command",()=>{
  const source=readFileSync(new URL("../src/interactions/split-drop.js.part",import.meta.url),"utf8");
  const code=source.slice(source.indexOf("  function onSplitDrop("));
- const run=new Function("allowed","point",`const window={},tab={},selected={},browser={selectedTab:selected},draggedGroup=null,calls=[];
+ const run=new Function("allowed","point",`const window={},tab={},selected={},browser={selectedTab:selected},draggedGroup=null,nativeDragToken=1,calls=[];
  const retireChangedDragViewport=()=>false,retireChangedDragChromeFrame=()=>false,readDraggedTab=()=>tab,tabOwner=()=>window,isSplit=()=>false;
  const splitDropAllowed=()=>allowed,splitDropPoint=()=>point;
  function cancelActiveDrag(reason){calls.push(reason)}
