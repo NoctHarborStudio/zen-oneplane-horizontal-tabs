@@ -26,6 +26,7 @@ try{if(typeof window!=="undefined"){
   let dock=null,dockList=null,dockEmpty=null,dockMore=null,dockBackdrop=null,dockNotice=null,dockOpen=false,limit=30;
   const history=new Map(),rows=new Map();
   let externalDrag=null,fileDragSource=null,dragClickSource=null,fileBunny=null,fileIconWarm=null,filePopup=null,fileStage=null;
+  let fileDragWatchTimer=0,fileDragMissing=0,fileDragUnknown=0;
   const FILE_CARD_W=186,FILE_CARD_H=51,FILE_LIFT=320,FILE_RETURN=480,FILE_GRIP_X=172,FILE_GRIP_Y=48;
   let historyOrder=null,recentOrder=null,dockHeight=0,allButton=null,dockTitle=null,dockSort=null;
   const OVERLAY_WIDTH=430,RECENT_LIMIT=4;
@@ -629,9 +630,47 @@ try{if(typeof window!=="undefined"){
     return {x:r.left+r.width/2,y:r.top,w:Math.max(1,r.width),h:Math.max(1,r.height)};
   }
   function fileDragSession(){
-    try{return Cc["@mozilla.org/widget/dragservice;1"].getService(Ci.nsIDragService).getCurrentSession(window);}catch{return undefined;}
+    try{
+      const service=Cc["@mozilla.org/widget/dragservice;1"].getService(Ci.nsIDragService);
+      return typeof service.getCurrentSession==="function"?service.getCurrentSession(window):undefined;
+    }catch{return undefined;}
   }
   function fileBunnyTrace(event,data,opts={}){window.__nocturneTrace?.("downloads.drag."+event,data,opts);}
+  function stopFileDragWatch(){
+    if(fileDragWatchTimer)window.clearTimeout(fileDragWatchTimer);
+    fileDragWatchTimer=0;fileDragMissing=0;fileDragUnknown=0;
+  }
+  // Native drag source lifecycle is independent of optional Bunny artwork.
+  // The same timer also observes popup readiness; it never commits an OS drop.
+  function watchFileDrag(source){
+    stopFileDragWatch();
+    const check=()=>{
+      fileDragWatchTimer=0;
+      if(dead||fileDragSource!==source)return;
+      const session=fileDragSession();
+      if(session){
+        fileDragMissing=0;fileDragUnknown=0;
+      }else if(session===null){
+        fileDragUnknown=0;
+        if(++fileDragMissing>=3){endFileDrag(source,undefined,"native-session-ended");return;}
+      }else{
+        fileDragMissing=0;
+        if(++fileDragUnknown>=6){endFileDrag(source,undefined,"native-session-unavailable");return;}
+      }
+      const q=fileBunny;
+      if(q?.source===source&&!q.ending&&q.mode==="popup"&&!q.shown){
+        if(q.popup?.state==="open"){
+          q.shown=true;q.started=q.last=current();
+          fileBunnyTrace("popup-shown",{state:"open",via:"watch",surface:filePopupSurface(q.popup)});
+          tickFilePopup(q);
+        }else if(current()-q.started>700&&!q.reported){
+          q.reported=true;fileBunnyTrace("popup-not-shown",{state:q.popup?.state??"missing",session:!!session},{flush:true});
+        }
+      }
+      if(!dead&&fileDragSource===source)fileDragWatchTimer=window.setTimeout(check,200);
+    };
+    fileDragWatchTimer=window.setTimeout(check,200);
+  }
   function createFileCard(d){
     const card=make("div","zr-file-bunny-card"),grip=make("span","zr-file-bunny-grip"),icon=createFileIcon(),body=make("span","zr-file-bunny-info"),name=make("span","zr-file-bunny-name"),meta=make("span","zr-file-bunny-meta");
     const v=history.get(d)||sample(d);name.textContent=v.name;meta.textContent=sizeText(v.total||v.bytes);
@@ -665,7 +704,13 @@ try{if(typeof window!=="undefined"){
       q.shown=true;q.started=q.last=current();fileBunnyTrace("popup-shown",{state:popup.state,surface:filePopupSurface(popup)},{sample:1500});tickFilePopup(q);
     });
     popup.addEventListener("popuphidden",()=>{
-      const q=fileBunny;if(q?.popup===popup)fileBunnyTrace("popup-hidden",{ending:q.ending,frames:q.frames},{flush:true});
+      const q=fileBunny;
+      if(q?.popup!==popup)return;
+      fileBunnyTrace("popup-hidden",{ending:q.ending,frames:q.frames},{flush:true});
+      if(!q.ending){
+        // An unexpectedly hidden native widget must not keep painting.
+        q.shown=false;stopFileBunnyFrame(q);
+      }
     });
     return true;
   }
@@ -721,7 +766,7 @@ try{if(typeof window!=="undefined"){
     const dx=origin.x-(Number.isFinite(e.clientX)?e.clientX:origin.x),dy=origin.y-(Number.isFinite(e.clientY)?e.clientY:origin.y);
     const seed={x:point.x+clamp(dx,-45,45),y:point.y+clamp(dy,-36,20),w:Math.min(250,origin.w),h:Math.min(76,origin.h)};
     const s=Object.fromEntries(Object.entries({...seed,angle:0,scale:1}).map(([k,x])=>[k,{x,v:0}]));s.scale.v=2.4;
-    const now=current(),q=fileBunny={source,fromIndicator:source===node,origin:seed,point,s,started:now,last:now,lastMove:now,lastReport:now,vx:0,visual,native,glyph,popup:null,ghost:null,mode:"bitmap",frame:0,timer:0,watch:0,ending:false,shown:false,frames:0,moves:0,crossings:0,maxGap:0,maxAngle:0,screenPoint:null,inside:null,missing:0};
+    const now=current(),q=fileBunny={source,fromIndicator:source===node,origin:seed,point,s,started:now,last:now,lastMove:now,lastReport:now,vx:0,visual,native,glyph,popup:null,ghost:null,mode:"bitmap",frame:0,timer:0,ending:false,shown:false,frames:0,moves:0,crossings:0,maxGap:0,maxAngle:0,screenPoint:null,inside:null};
     let popupReady=false;
     // nsBaseDragSession DrawDrag recognizes a XUL panel as a live drag
     // image. Windows QueryContinueDrag calls DragMoved even outside Zen.
@@ -735,16 +780,6 @@ try{if(typeof window!=="undefined"){
     }catch{q.popup=null;fileStage?.replaceChildren();}
     if(!popupReady)try{e.dataTransfer.setDragImage(native.card,FILE_CARD_W/2,0);}catch{}
     source.setAttribute("data-file-lift","");
-    const watch=()=>{
-      q.watch=0;if(fileBunny!==q||q.ending)return;
-      const session=fileDragSession();if(session===null){if(++q.missing>=3){endFileDrag(source,undefined,"watchdog");return;}}else q.missing=0;
-      if(q.mode==="popup"&&!q.shown){
-        if(q.popup.state==="open"){q.shown=true;q.started=q.last=current();fileBunnyTrace("popup-shown",{state:"open",via:"watch",surface:filePopupSurface(q.popup)});tickFilePopup(q);}
-        else if(current()-now>700&&!q.reported){q.reported=true;fileBunnyTrace("popup-not-shown",{state:q.popup.state,session:!!session},{flush:true});}
-      }
-      q.watch=window.setTimeout(watch,200);
-    };
-    q.watch=window.setTimeout(watch,200);
     fileBunnyTrace("start",{indicator:q.fromIndicator,reduced:reduced.matches,mode:q.mode,os:Services.appinfo.OS,seed:[seed.w,seed.h]},{sample:1500});
   }
   function finishExternalDrag(){
@@ -764,7 +799,7 @@ try{if(typeof window!=="undefined"){
     endFileDrag(source,event);return true;
   }
   function clearFileBunny(){
-    const q=fileBunny;if(!q)return;fileBunny=null;stopFileBunnyFrame(q);if(q.watch)window.clearTimeout(q.watch);
+    const q=fileBunny;if(!q)return;fileBunny=null;stopFileBunnyFrame(q);
     q.source.removeAttribute("data-file-lift");
     if(q.popup){try{if(q.popup.state!=="closed")q.popup.hidePopup();}catch{}fileStage?.replaceChildren();}
     q.visual.card.remove();q.ghost?.remove();q.native.card.remove();
@@ -772,7 +807,7 @@ try{if(typeof window!=="undefined"){
     if(externalDrag?.source===q.source&&!fileDragSource)finishExternalDrag();
   }
   function finishFileBunny(e,reason="dragend"){
-    const q=fileBunny;if(!q)return;if(q.watch)window.clearTimeout(q.watch);q.watch=0;stopFileBunnyFrame(q);
+    const q=fileBunny;if(!q)return;stopFileBunnyFrame(q);
     const cancelled=!e||e.dataTransfer?.mozUserCancelled||e.dataTransfer?.dropEffect==="none";
     const point=q.mode==="popup"?(popupPoint(q)||q.screenPoint):null;
     fileBunnyTrace("end",{reason,mode:q.mode,cancelled,shown:q.shown,frames:q.frames,moves:q.moves,crossings:q.crossings,maxGap:q.maxGap,maxAngle:q.maxAngle,inside:filePointInside(point),drop:e?.dataTransfer?.dropEffect??null},{flush:true});
@@ -808,6 +843,8 @@ try{if(typeof window!=="undefined"){
     e.stopPropagation();
     fileDragSource=dragClickSource=source;
     source.setAttribute("data-file-dragging","");
+    // Arm native-source recovery before optional card/popup allocation.
+    watchFileDrag(source);
     cancelHide();cancelFlight();
     if(source!==node&&cardOpen)pinPanel();
     try{beginFileBunny(e,source,d);}catch{fileBunnyTrace("start-error",{indicator:source===node},{flush:true});clearFileBunny();}
@@ -816,7 +853,7 @@ try{if(typeof window!=="undefined"){
   function endFileDrag(source,e,reason){
     if(fileDragSource!==source)return;
     source.removeAttribute("data-file-dragging");fileDragSource=null;
-    finishFileBunny(e,reason);syncDownloadHolds();
+    stopFileDragWatch();finishFileBunny(e,reason);syncDownloadHolds();
     if(externalDrag?.source===source&&!fileBunny?.ending)finishExternalDrag();
     // Reconcile queued rows only after the platform drag releases the source.
     if(!dead){schedule(true);scheduleMount();if(cardOpen)armHide();}
@@ -1117,6 +1154,7 @@ try{if(typeof window!=="undefined"){
     window.removeEventListener("pointerdown",trackClick,true);window.removeEventListener("pointerdown",outsideDock,true);window.removeEventListener("keydown",onKey,true);
     try{prefs.removeObserver(SIDE,scheduleMount);}catch{}
     try{prefs.removeObserver(STATS_PREF,refreshStatistics);}catch{}
+    stopFileDragWatch();
     if(fileBunny)fileBunny.ending=false;clearFileBunny();filePopup?.remove();filePopup=fileStage=null;fileIconWarm=null;
     fileDragSource?.removeAttribute("data-file-dragging");fileDragSource=dragClickSource=null;syncDownloadHolds();finishExternalDrag();
     node?.remove();node=fill=speed=icon=null;host=null;batch.clear();fresh=new WeakSet();latest=lastClick=null;
