@@ -1,10 +1,13 @@
 import {queryDownloadRows} from "../services/media-service.mjs";
 // Own one bounded query session, reject stale results before rendering.
-export function createLibraryData({getServices,onResult,onError,onNotice=()=>{},schedule,cancel}){
-  let section=null,source=null,session=null,off=null,timer=null,epoch=0,sessionEpoch=0,limit=50,text="",sort="new",filter="all",dead=false,media=null;
+const MEDIA_SCAN_UI_DEADLINE_MS=15000;
+const MEDIA_SCAN_SLOW_NOTICE="Local folder scan is still running. Downloaded files remain available.";
+export function createLibraryData({getServices,onResult,onError,onNotice=()=>{},onScanWait=()=>{},schedule,cancel}){
+  let section=null,source=null,session=null,off=null,timer=null,epoch=0,sessionEpoch=0,limit=50,text="",sort="new",filter="all",dead=false,media=null,mediaWork=null;
   const files=s=>["downloads","documents","pictures"].includes(s);
   function stop(){
     ++epoch;++sessionEpoch;if(timer!==null){cancel(timer);timer=null;}
+    if(mediaWork){const old=mediaWork;mediaWork=null;if(old.timer!==null)cancel(old.timer);old.resolve(false);}
     try{off?.();}catch{}off=null;try{if(section==="history")session?.close();}catch{}
     try{media?.close();}catch{}media=null;session=null;source=null;section=null;limit=50;text="";sort="new";filter="all";
   }
@@ -21,10 +24,39 @@ export function createLibraryData({getServices,onResult,onError,onNotice=()=>{},
     timer=schedule(()=>{timer=null;void load();},160);
   }
   function immediate(){if(timer!==null)cancel(timer);timer=null;void load();}
-  async function refresh(){
-    const owner=source,token=sessionEpoch,m=media;if(!m)return false;
-    try{const result=await m.refresh();if(result===null||dead||sessionEpoch!==token||source!==owner||getServices()!==owner)return false;immediate();return true;}
-    catch{if(!dead&&sessionEpoch===token&&source===owner&&getServices()===owner)onNotice("Local folders could not be scanned. Showing downloaded files.");return false;}
+  function refresh(){
+    const owner=source,token=sessionEpoch,m=media;if(!m)return Promise.resolve(false);
+    if(mediaWork){if(mediaWork.expired)onNotice(MEDIA_SCAN_SLOW_NOTICE);return mediaWork.promise;}
+    const valid=()=>!dead&&sessionEpoch===token&&source===owner&&media===m&&getServices()===owner;
+    let resolve;
+    const promise=new Promise(done=>{resolve=done;});
+    const work={promise,resolve,timer:null,expired:false};mediaWork=work;
+    const release=()=>{
+      if(work.timer!==null){cancel(work.timer);work.timer=null;}
+      if(mediaWork===work)mediaWork=null;
+    };
+    // This deadline bounds only the UI wait. The Gecko native scan and the
+    // MediaService disposal barrier retain ownership until real settlement.
+    work.timer=schedule(()=>{
+      work.timer=null;work.expired=true;
+      if(valid()){onScanWait("deadline");onNotice(MEDIA_SCAN_SLOW_NOTICE);}
+      resolve(false);
+    },MEDIA_SCAN_UI_DEADLINE_MS);
+    void Promise.resolve().then(()=>valid()?m.refresh():null).then(result=>{
+      release();
+      if(result===null||!valid()){resolve(false);return;}
+      immediate();
+      if(work.expired){onScanWait("late-complete");onNotice("",MEDIA_SCAN_SLOW_NOTICE);}
+      resolve(true);
+    },()=>{
+      release();
+      if(valid()){
+        if(work.expired)onScanWait("late-error");
+        onNotice("Local folders could not be scanned. Showing downloaded files.");
+      }
+      resolve(false);
+    });
+    return promise;
   }
   function start(next,query=""){
     stop();if(dead||!["history","closed","downloads","documents","pictures"].includes(next))return false;
