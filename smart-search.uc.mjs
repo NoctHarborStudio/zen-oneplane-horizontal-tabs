@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="search.script",data={version:"0.3.0-preview.141"};
+  const event="search.script",data={version:"0.3.0-preview.142"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -146,8 +146,18 @@ try{if(typeof window!=="undefined"){
         try{
           win=controller?.browserWindow||controller?.input?.browserWindow;
           state=registry.windows.get(win)||registry.byId?.get(outerId(win))||registry.controllers?.get(controller);
+          // The live native controller owns the query. A cached window reference
+          // or an old registry alias cannot authorize a replaced controller.
+          if(state?.win&&win&&state.win!==win)return null;
           if(state?.win)win=state.win;
-          if(!win||win.closed||!state||privateUtils.isWindowPrivate(win))return null;
+          const liveChild=win?.gURLBar?.controller;
+          const liveParent=win?.gURLBar?.parentController||liveChild?.parentController;
+          const mapped=registry.controllers?.get(controller);
+          if(!win||win.closed||!state||registry.windows.get(win)!==state||
+             (mapped&&mapped!==state)||
+             (controller!==liveChild&&controller!==liveParent)||
+             (liveParent?.manager&&liveParent.manager!==manager)||
+             privateUtils.isWindowPrivate(win))return null;
         }catch{return null;}
         return {win,state};
       }
@@ -486,8 +496,11 @@ try{if(typeof window!=="undefined"){
     try{if(listener)child?.removeListener?.(listener);}catch{}
     listener=null;
     if(joined&&registry){
-      registry.windows.get(window)?.targets.clear();registry.windows.delete(window);
-      if(windowId!==null)registry.byId?.delete(windowId);if(parent)registry.controllers?.delete(parent);
+      // Delayed Sine unload must not clear a replacement generation's entries.
+      windowState?.targets.clear();
+      if(registry.windows.get(window)===windowState)registry.windows.delete(window);
+      if(windowId!==null&&registry.byId?.get(windowId)===windowState)registry.byId.delete(windowId);
+      if(parent&&registry.controllers?.get(parent)===windowState)registry.controllers.delete(parent);
       registry.count--;joined=false;
     }
     // Also roll back a newly-created registry if registration threw
