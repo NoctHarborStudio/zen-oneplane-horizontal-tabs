@@ -774,3 +774,15 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 
 **Remaining-effort estimate (not a deadline):** complete the remaining R7c generic producer-inventory/Console review (preview.152 P1 and preview.153 P2 source/CI passes verified), then one or more critical Library native memory/cancellation safety policy/remediation passes; at least five native scenario families and separate visual/drag/profiler signoffs. Source repair count can grow if those checks expose defects. No fixed completion date or native PASS claim.
 
+
+
+### A7 / NC4-022/082/083 — approved safe Library cutover, preview.155
+
+- [x] Production Library Services entry is fail-closed for native local-media scan regardless of existing opted-in preference, including public `openMedia` and direct `media.open`; folder-picker and reset commands also reject. Does not change prefs, files or native folder lists.
+- [x] Nocturne-local path thumbnail metadata is icon-only (no direct `file:` image URI). Documents/Pictures preserve the existing downloads-based records and Library retains History, Closed, All Downloads and native fallback.
+- [x] UI hides local folder controls and shows a pause notice when an old local-media opt-in is saved; the new service exposes `mediaScanAvailable:false` and the controller defaults to unavailable for older/missing capability. Three source-extracted regression tests.
+- [x] Release `0.3.0-preview.155`, [PR #39](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/pull/39), production `31471a458bb8ec27a7f36016c2d1e787fcf434f3`; [CI 45247966548](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45247966548) **SUCCESS**: 839 Node, 15 Python, 12 runtime parsers and Raw/Sine package.
+- [ ] Native acceptance after **full browser restart** (hot reload alone is insufficient): with previous opt-in and custom folders still saved, Documents/Pictures show downloaded items only; no native scan dispatch; missing local folder buttons; no regression in History, Recently Closed, Downloads, private windows, multiwindow, disable/unload and performance.
+- [ ] **Upstream Zen blockers still OPEN:** NC4-022 intrinsic decoded memory/frames, NC4-082 pre-truncation C++ accumulation and scan CPU, NC4-083 true native cancellation. Existing Zen/Gecko in-flight work cannot be cancelled by Nocturne; stock Zen Library scanning is not changed. Re-enable opt-in local scanning only against a validated native capability, not by lowering the JavaScript `maxItems` count or treating UI deadline as native abort.
+
+**Exit distinction:** Nocturne's optional unsafe scan/thumbnail entry point is source/CI CLOSED by a temporary UX restriction; neither upstream native risk nor native A7/NA-1 browser acceptance is closed.
