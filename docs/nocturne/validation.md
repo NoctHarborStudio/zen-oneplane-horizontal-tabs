@@ -697,5 +697,5 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [x] Extracted-source regression: malformed, overlong and human/free-form manual marks rejected; safe symbolic marks retained.
 - [x] Extracted-source regression: `native.TabSelect` and `event.OnePlane:StartupState` remain admissible, malicious event names rejected, throttle identities evicted after 256 unique keys, object keys cannot retain references.
 - [x] Extracted-source regression: cyclic/high-fanout detail has finite depth, node and serialized size; no unbounded recursion.
-- [ ] Run canonical `npm run verify` and Sine public-package checks on preview.143 before claiming source/CI completion.
+- [x] [CI 45097834977](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45097834977) SUCCESS on production `b2e4e370fd07bf412002aa872f6289323606002f`: 815 Node, 15 Python, 12 runtime parsers, reproducible generated sources, publication/version history, immutable and current Sine archive.
 - [ ] Audit every source producer against explicit per-event fields, including extension/error edge cases; test native Zen diagnostics on/off and multiple/private windows with file-content privacy and profiler comparison. Source fixtures are not native privacy or performance evidence.
