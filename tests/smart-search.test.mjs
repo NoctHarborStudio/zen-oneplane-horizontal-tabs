@@ -46,6 +46,7 @@ test("provider uses actual query window and switches exact duplicate URL tab",as
  const Shared={PROVIDER_TYPE:{PROFILE:1},RESULT_SOURCE:{TABS:4},RESULT_TYPE:{DYNAMIC:8},getIconForUrl:u=>"icon"};
  const P=api.makeProvider(class{},Shared,class{constructor(p){Object.assign(this,p)}},f.utils,f.session,registry,{getProvider:()=>({getPriority:()=>1})},{isWindowPrivate:()=>false});
  const controller={browserWindow:f.win},results=[];
+ f.win.gURLBar={controller,parentController:controller}; // Native owner identity is required.
  assert.equal(await P.isActive(context,controller),true);
  assert.equal(await P.isActive(context,{browserWindow:{}}),false);
  await P.startQuery({...context,maxResults:9},(_,r)=>results.push(r),controller);
