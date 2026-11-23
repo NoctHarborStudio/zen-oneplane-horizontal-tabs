@@ -654,7 +654,7 @@
   {
     "type": "checkbox",
     "property": "zen.nocturne.library.local-media",
-    "label": "Library — scan Downloads, Documents and Pictures folders",
+    "label": "Library — local folder scan (temporarily paused; choice preserved)",
     "defaultValue": false
   }
 ]

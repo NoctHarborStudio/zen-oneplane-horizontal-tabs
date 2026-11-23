@@ -382,7 +382,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   const trace=(event,data)=>{try{if(win.__nocturneTrace)win.__nocturneTrace(event,data,{flush:true});else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,data,t:win.performance?.now?.()??0});}}catch{}};
-  trace("library.services.script",{version:"0.3.0-preview.154"});
+  trace("library.services.script",{version:"0.3.0-preview.155"});
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
   const BARRIER="__nocturneDownloadsDisposal",MEDIA_BARRIER="__nocturneMediaDisposal";
   const previous=win[KEY],previousClosing=previous?.dispose?.(),existing=win[BARRIER];
@@ -400,7 +400,10 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
   const privateWindow=()=>load("resource://gre/modules/PrivateBrowsingUtils.sys.mjs","PrivateBrowsingUtils").isWindowPrivate(win);
   const allowed=()=>!dead&&!win.closed&&!privateWindow();
   const mediaPref="zen.nocturne.library.local-media";
-  const mediaAllowed=()=>allowed()&&Services.prefs.getBoolPref(mediaPref,false);
+  // NC4-022/082/083: Zen 1.24.2b cannot bound decoded images, scan accumulation, or cancel native work.
+  // Preserve the saved opt-in/folder prefs, but fail closed until a verified native-safe contract exists.
+  const LOCAL_MEDIA_SCAN_SUSPENDED=true;
+  const mediaAllowed=()=>!LOCAL_MEDIA_SCAN_SUSPENDED&&allowed()&&Services.prefs.getBoolPref(mediaPref,false);
   const windows=Services.appinfo.OS==="WINNT";
   const fileFor=path=>new (load("resource://gre/modules/FileUtils.sys.mjs","FileUtils").File)(path);
   const scanner=()=>Cc["@mozilla.org/zen/library-files;1"].getService(Ci.nsIZenLibraryFiles);
@@ -439,7 +442,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
     return new Promise((resolve,reject)=>{try{scanner().scanMedia([...new Map([...roots,...customFolders()].map(p=>[mediaPathKey(p,windows),p])).values()],MEDIA_EXTENSIONS[section],2,60,300,files=>resolve(Array.from(files)));}catch(e){reject(e);}});
   }
   const media=createMediaService({scan:scanMedia,barrier:mediaBarrier,allowed:mediaAllowed,windows,onRefresh:detail=>trace("library.media.refresh",detail),
-    describe(f,id){const name=f.path.split(/[\\/]/).pop();return {id,kind:"local",name,time:Number(f.lastModified)||0,bytes:Number(f.size)||0,total:Number(f.size)||0,success:true,exists:true,icon:iconFor(f.path),thumbnail:safeRaster(name,Number(f.size))?Services.io.newFileURI(fileFor(f.path)).spec:null};},
+    describe(f,id){const name=f.path.split(/[\\/]/).pop();return {id,kind:"local",name,time:Number(f.lastModified)||0,bytes:Number(f.size)||0,total:Number(f.size)||0,success:true,exists:true,icon:iconFor(f.path),thumbnail:null};},
     perform(path,kind){try{const f=fileFor(path);if(!f.exists()||!f.isFile()||scanner().isCloudPlaceholder(path))return false;if(kind==="open")f.launch();else f.reveal();return true;}catch{return false;}}});
   // Single Gecko file-payload owner for Dock and Library. Neither path
   // reads file contents; both validate the current native Download identity
@@ -530,9 +533,9 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
     if(win[KEY]===api){delete win[KEY];win.dispatchEvent(new win.CustomEvent("Nocturne:ServicesGone"));}
     return closing;
   }
-  const api={downloads,openHistory,historyReady,openHistoryURL,closedTabs,copyHistoryURL,removeHistoryURL,clearHistoryRange,media,chooseFolder,clearFolders,openMedia:section=>mediaAllowed()?media.open(section,()=>downloads.pathKeys(windows)):null,dispose};
+  const api={downloads,openHistory,historyReady,openHistoryURL,closedTabs,copyHistoryURL,removeHistoryURL,clearHistoryRange,media,chooseFolder,clearFolders,mediaScanAvailable:!LOCAL_MEDIA_SCAN_SUSPENDED,openMedia:section=>mediaAllowed()?media.open(section,()=>downloads.pathKeys(windows)):null,dispose};
   Services.prefs.addObserver(mediaPref,onMediaScopeChange);
   Services.prefs.addObserver(folderPref,onMediaScopeChange);
   win[KEY]=api;win.addUnloadListener(dispose);win.addEventListener("unload",dispose,{once:true});
-  trace("library.services.ready",{registered:true});win.dispatchEvent(new win.CustomEvent("Nocturne:ServicesReady"));
+  trace("library.services.ready",{registered:true,mediaScanAvailable:!LOCAL_MEDIA_SCAN_SUSPENDED});win.dispatchEvent(new win.CustomEvent("Nocturne:ServicesReady"));
 })();
