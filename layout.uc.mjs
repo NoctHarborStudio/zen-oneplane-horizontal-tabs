@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.152",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.153",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -114,6 +114,9 @@
   const MARK_LABEL=/^[a-z][a-z0-9_-]{0,39}$/;
   const SAFE_TOKEN=/^[A-Za-z0-9_.:-]{1,80}$/;
   const STRING_FIELDS=new Set(["owner","reason","stage","status","phase","mode","state","kind","type","section","operation","action","result","outcome","resource","source","target","direction","writer","version","label","name","context","scope","placement","transition","effect","substage","settlement","strategy","decision","method","cause","gesture","origin","policy","side"]);
+  // Recorder initialization precedes the compiled Layout helper; class filtering is intentionally self-contained.
+  // Locked to src/core/error-class.mjs by a source-backed parity regression.
+  const TRACE_ERROR_NAMES=new Set(["Error","TypeError","RangeError","ReferenceError","SyntaxError","URIError","EvalError","AggregateError","DOMException","AbortError","NotAllowedError","InvalidStateError","NotFoundError","NotSupportedError","SecurityError","DataCloneError","NetworkError","TimeoutError","QuotaExceededError","WorkspaceCommandError","NS_ERROR_FAILURE","NS_ERROR_ABORT","NS_ERROR_NOT_AVAILABLE","NS_ERROR_UNEXPECTED","NS_ERROR_NOT_INITIALIZED","NS_ERROR_FILE_NOT_FOUND","NS_ERROR_XPC_BAD_CONVERT_JS"]);
   const STRING_ENUMS=new Map([
     ["previous",new Set(["inline","content","outside"])],
     ["requested",new Set(["inline","content","outside"])],
@@ -155,7 +158,15 @@
     ["hub.projection.search-error",{reason:new Set(["native-error"])}],
     ["hub.projection.failed",{reason:new Set(["native-error"])}],
     ["hub.projection.return-rejected",{reason:new Set(["return-target","return-unverified","unavailable"])}],
-    ["drag.placement.preview",{reason:new Set(["work-area-change"])}]
+    ["drag.placement.preview",{reason:new Set(["work-area-change"])}],
+    ["assembly.eligible.check",{reason:new Set(["no-unload-hook","already-seen","popup","disabled","reduced-motion","closed","native-mode","late-established-window"])}],
+    ["assembly.finish",{reason:new Set(["disposed","boundary","completed","watchdog","interrupted","effect-cancelled","boot-cancelled","setup-failed","insufficient-budget","geometry-unready","boundary-incomplete","completed-unverified","completed-with-retired"])}],
+    ["assembly.skip",{reason:new Set(["insufficient-budget","deadline"])}],
+    ["assembly.late.skip",{reason:new Set(["insufficient-budget"])}],
+    ["assembly.bloom.fallback",{reason:new Set(["budget"])}],
+    ["disassembly.bypass",{reason:new Set(["bookmark-preflight-failed","engine-replaced","tab-engine-unavailable","tab-acquisition-failed","bookmark-acquisition-failed","control-acquisition-failed"])}],
+    ["drag.source.resolve",{reason:new Set(["ambiguous"])}],
+    ["drag.search.restore",{reason:new Set(["native-address-input","drag-cancel","new-pointerdown","new-keydown","source-pointer","reschedule","dragstart","native-tab-select","native-tab-change","destroy","state-changed"])}]
   ]);
   const CSS_FIELDS=new Set(["opacity","visibility","display","translate","scale","transform","transition","height","width","hoverProgress","centerX","centerAlpha","startupBase","mask","bmMask","contour","bmContour","measure","progress","startupProgress"]);
   const CSS_VALUE=/^[#A-Za-z0-9.,()%+ :-]{1,180}$/;
@@ -186,7 +197,7 @@
       if(event==="downloads.drag.popup-shown"&&key==="via")return v==="watch"?v:null;
       if(event.startsWith("downloads.drag.")&&key==="flip")return POPUP_FLIP.has(v)?v:null;
       if(parent===""&&(key==="reason"||key==="status")){const values=EVENT_STRING_ENUMS.get(event)?.[key];if(values&&!values.has(v))return null;}
-      if(key==="name"&&!/^(?:Error|[A-Z][A-Za-z0-9]{0,45}(?:Error|Exception)|NS_ERROR_[A-Z0-9_]{1,45})$/.test(v))return null;
+      if(key==="name"&&!TRACE_ERROR_NAMES.has(v))return null;
       if(key==="label"&&!MARK_LABEL.test(v))return null;
       if(STRING_ENUMS.has(key))return STRING_ENUMS.get(key).has(v)?v:null;
       if(!CSS_FIELDS.has(key)&&!STRING_FIELDS.has(key)&&!key.startsWith("data-")&&!key.startsWith("zen-")&&!["customizing","inDOMFullscreen","inFullscreen"].includes(key))return null;
