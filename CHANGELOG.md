@@ -1,3 +1,11 @@
+## 0.3.0-preview.158 — A7 Library Ctrl+H/J keyboard-layout fallback
+
+A user-observed regression opened the native Zen History/Downloads interface instead of the experimental Nocturne Library. The attached three-session diagnostics file captured preview.156 and preview.157 startup with Library enabled and both shortcuts opted in, services/overlay present, but no Library shortcut attempts and no Library open/accept/reject events. This narrows the observed break to shortcut recognition/dispatch, not shell opt-out or a reported Library opening failure.
+
+**Verified source defect and repair:** `libraryShortcutSection` used only `KeyboardEvent.key` ("h"/"j"), which changes under non-Latin keyboard layouts even though a physical accelerator remains on `code==="KeyH"` / `code==="KeyJ"`. Match the existing logical keys first and use the two physical codes as fallback, preserving exact Ctrl/Meta platform modifiers, repeat/composition/Alt/Shift and already-prevented guards. Source-backed regression covers Cyrillic-key synthetic events for Ctrl+H/J, Darwin and denied modifiers; generated Library output synchronized. No additional key logging, handlers, shortcut changes, service owner or UI feature.
+
+**Evidence boundary:** The uploaded diagnostics intentionally omit actual key values/layout. The language-layout path is a reproducible source defect, **not a proven explanation** of the observed Zen routing regression. Also possible: earlier native event suppression, a changed Zen command target or a startup race. Full source/CI result pending; live Zen retest must verify both shortcuts in non-Latin/Latin input and native fallback, or investigate the earliest event/command handler next.
+
 ## 0.3.0-preview.157 — A7 NC4-089-R7c-P4 finite diagnostics and Console opt-out
 
 **Audit finding 1:** `downloads.drag.end.reason` and `workspace.data.journal.reason` still used the generic token grammar despite their source-owned finite result sets. Preserve every verified dragend/native-session and Workspace journal outcome, and reject unknown strings before local JSON persistence or mirrored Browser Console. No native operation, workspace tab mutation, download drag identity or animation was changed.

@@ -802,3 +802,12 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [x] Two source-backed regressions added for hostile reason tokens and direct Display Console opt-out/field filtering.
 - [ ] Installed Zen/Sine: compare diagnostics enabled/disabled, normal/private/two-window Display placement and download drag; verify no unrequested Console geometry after opt-out, no regressions in native placement/OS drag, and measured profiler overhead.
 - [ ] Further audit unreviewed direct-console producers and generic structured diagnostic fields before claiming blanket R7c or A7 closure; Library native scanning safety and five scenario families remain independent OPEN gates.
+
+### A7 / preview.158 — Library Ctrl+H/J keyboard-layout regression
+
+- [x] Analyze uploaded diagnostics: preview.157 reports `library.ready` with experimental shell, both shortcut prefs, Overlay and Library Services available in two sessions; no `library.shortcut` or Library opening events were retained, despite user-observed native fallback. A separate preview.156 session likewise recorded shell readiness and no shortcut event.
+- [x] Source-reproduce `libraryShortcutSection` rejecting physical H/J in a Cyrillic layout because it matched only `event.key`.
+- [x] Add physical `event.code` fallback (`KeyH`, `KeyJ`) after logical key matching with existing platform modifier, event cancellation, repeat/composition and opt-in/native-readiness controls unchanged.
+- [x] Add regression for synthetic non-Latin events and negative modifier/previous-default guards; no raw keystroke data logged.
+- [ ] Source/CI verification and publication; do not infer native acceptance.
+- [ ] Installed Zen/Sine: Ctrl+H and Ctrl+J after full restart with the experimental prefs still on; test Latin and Cyrillic input layouts in a normal window. Also check native fallback when shortcut prefs are disabled and in private windows. If failure persists, capture event/command dispatch ordering without recording raw key values.
