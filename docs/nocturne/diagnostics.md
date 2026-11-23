@@ -402,3 +402,9 @@ The existing trace channel records sampled page-progress.network {reason:"overla
 ### Preview.141 — Page Progress long-overlap retired identity audit
 
 The existing sampled `page-progress.network` event retains only `{reason:"overlap-start"|"stale-stop"}`. The second reason means a STOP matched an explicitly superseded NETWORK START while the active session remained live. The per-session retired registry now uses a `WeakSet` instead of a strong 16-entry `Set`; no additional trace payload, native `nsIRequest` identifier, URL, page title, request count array or content is logged. Source fixture with 21 starts reproduces the old eviction error, but target Gecko event ordering and frequency remain a native-test question. Diagnostics disabled/on profiling remains an independent performance gate.
+
+### NC4-088 — diagnostics opt-out persistence semantics (preview.142 audit)
+
+Disabling `zen.nocturne.diagnostics.enabled` stops recording immediately and stops **new** snapshot submissions, including deferred flushes whose timer fires after opt-out. It does not erase the already captured in-memory snapshot or delete an existing `nocturne-diagnostics.json`. An `IOUtils.writeUTF8` that was already submitted while diagnostics was enabled may finish after the pref change; it cannot be safely revoked by the current process-owned writer. No background upload is involved. Do not interpret a prior authorized write's late completion as new recording after opt-out.
+
+Source-backed tests exercise both a pending unsent snapshot and an already-submitted disk write. This checkpoint defines the existing behavior; it does not add a preference observer, cancel native I/O, or silently delete a user's diagnostic history. Actual Zen preference-flip/live write timing remains a separate native acceptance scenario.

@@ -680,3 +680,10 @@ Native acceptance for NC4-090-R2 remains open: source/CI PASS does not imply Zen
 - [ ] Real Zen 1.24.2b + Sine 2.3.3 acceptance **OPEN**: on a disposable profile verify current parent controller in two normal windows, replace/reinitialize a native URLbar controller if it occurs naturally, then disable/re-enable Nocturne and reopen an empty URLbar query. Results/actions must remain tied only to their exact live window; stale controller engagement must not select a tab. Include a separate private-window fail-closed check, and observe cleanup without losing the new owner. Do not use injected privileged changes or a primary profile for this test.
 
 This is independent of the existing A7 / NA-1 five-lane native checklist and does not waive **NC4-022/082 P0 decoded-image/scanner memory acceptance**. Source/CI PASS is not a native runtime PASS.
+
+### A0/A7 follow-up / NC4-088 — diagnostics opt-out persistence (preview.142, no runtime change)
+
+- [x] Confirm the existing source gates `record()` before and after lazy detail, and `persist()` before process-writer `submit()`.
+- [x] Add an extracted production-source test: event captured with delayed flush, pref switched off before submission, timer fires, no additional file write; disabled lazy event not evaluated.
+- [x] Add an extracted production-source test: writer already entered `IOUtils.writeUTF8` while pref on, pref switched off, that authorized write completes with no newly captured event; a later flush is rejected.
+- [ ] Real Zen preference toggle during a slow disk write and after a deferred flush remains **native OPEN**. No old-file deletion or guaranteed in-flight native cancellation is promised.

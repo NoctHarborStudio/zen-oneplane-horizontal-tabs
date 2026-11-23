@@ -35,6 +35,46 @@ test("disabled recording never evaluates detail and private recording never writ
  const f=fixture({isPrivate:true});f.win.__nocturneTrace("private",{count:1});await f.api.flush();assert.equal(f.writes.length,0);
  let count=0;f.disable();f.win.__nocturneTrace("disabled",()=>++count);assert.equal(count,0);f.api.dispose();assert.equal(f.timers.size,0);
 });
+
+test("NC4-088 disabling diagnostics blocks a queued but unsubmitted snapshot",async()=>{
+ const f=fixture();await f.api.flush();
+ const initialWrites=f.writes.length;
+ f.win.__nocturneTrace("pending.before.optout",{count:1});
+ const pending=[...f.timers].find(([,t])=>t.ms===2200);
+ assert.ok(pending,"dirty snapshot should have an ordinary deferred flush");
+ f.disable();
+ let evaluated=0;
+ f.win.__nocturneTrace("forbidden.after.optout",()=>{evaluated++;return {count:2};},{flush:true});
+ assert.equal(evaluated,0,"opt-out prevents lazy payload evaluation");
+ assert.ok(JSON.parse(f.api.dump()).events.some(e=>e.event==="pending.before.optout"));
+ f.timers.delete(pending[0]);pending[1].f();
+ assert.equal(await f.api.flush(),false);
+ assert.equal(f.writes.length,initialWrites,"no new disk submission after opt-out");
+ f.api.dispose();
+});
+
+test("NC4-088 pref off honors an already submitted write without capturing new events",async()=>{
+ const f=fixture();await f.api.flush();
+ let unlock,notify;
+ const gate=new Promise(resolve=>unlock=resolve),started=new Promise(resolve=>notify=resolve);
+ const previousWrite=f.io.writeUTF8;
+ f.io.writeUTF8=async(...args)=>{notify();await gate;return previousWrite(...args);};
+ f.win.__nocturneTrace("preauthorized.snapshot",{count:1},{flush:true});
+ await started;
+ const previousCount=f.writes.length;
+ f.disable();let evaluated=0;
+ f.win.__nocturneTrace("after.optout",()=>{evaluated++;return {count:2};},{flush:true});
+ assert.equal(evaluated,0);assert.equal(f.writes.length,previousCount);
+ unlock();
+ assert.equal(await f.api.flush(),true,"a previously authorized in-flight write can finish");
+ assert.equal(f.writes.length,previousCount+1);
+ const events=JSON.parse(f.writes.at(-1).data).sessions.at(-1).events;
+ assert.ok(events.some(e=>e.event==="preauthorized.snapshot"));
+ assert.ok(!events.some(e=>e.event==="after.optout"));
+ assert.equal(await f.api.flush(),false,"opt-out cannot authorize another write");
+ f.api.dispose();
+});
+
 test("recorder is included at start of layout, versioned and avoids content fields",()=>{
  const layout=readFileSync(new URL("../layout.uc.mjs",import.meta.url),"utf8");
  const prelude=readFileSync(new URL("../src/core/boot-prelude.js.part",import.meta.url),"utf8");

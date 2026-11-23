@@ -632,11 +632,11 @@ library/controller.js.part:148–155 checks clearing but does not set it or acqu
 
 **Native OPEN:** real Gecko/Zen `STATE_IS_NETWORK` start/stop ordering, redirect/cancellation, parent request versus subresource progress, final presentation and frame-gap profiling still require actual disposable Zen tests. `STATE_IS_NETWORK` signals network-activity scope, not guaranteed same-object request START/STOP; do not reject unknown STOPs solely because the object differs. No new visual feature or animation change.
 
-#### NC4-088 — Diagnostics disabled state does not gate pending persistence (S/R/P1)
+#### NC4-088 — Diagnostics opt-out and preauthorized persistence (S/R/P1; contract/source test CLOSED)
 
-diagnostics.js.part:93–118 record gates enabled, but flush/persist do not recheck enabled; already queued write can occur after pref off. Private check remains. Whether opt-out should finish previously captured local records is not specified.
+**Current behavior verified at preview.142:** `record()` checks `enabled()` before and after lazy detail, and `persist()` checks it before submitting to the process writer. Switching `zen.nocturne.diagnostics.enabled` off blocks further event capture and any queued snapshot **not yet submitted**. The shared writer can legitimately finish an I/O transaction already submitted while the setting was on; the API has no safe cancellation contract for that in-flight native file write. Previously saved local logs are not automatically deleted. This is explicit preauthorization semantics, not a claim that a preexisting write can be interrupted.
 
-**Required:** A0: define disable semantics explicitly, cancel or complete preauthorized flush consistently; test pref flip during queued/write and no new capture; do not claim old files are deleted.
+Two source-backed regression cases cover an unsent delayed flush after opt-out (no new write or lazy event) and a write already inside `IOUtils.writeUTF8` at opt-out (only the previously authorized snapshot may complete, no new event or submission). No new writer, pref observer, native operation, data field or runtime behavior. The source-level policy was previously unspecified; close its ambiguity without pretending to guarantee abort of in-progress disk I/O. **Source/CI validation pending at checkpoint publication; native user-pref acceptance remains OPEN.**
 
 #### NC4-089 — Diagnostics accepts arbitrary event keys and user mark strings (S/R/P1)
 
