@@ -247,7 +247,7 @@ function libraryShortcutSection(event,os="WINNT"){
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,{flush:true});
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.154",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.155",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
@@ -324,7 +324,7 @@ function libraryShortcutSection(event,os="WINNT"){
     const clearHistory=button("Clear history…",()=>void clearRecentHistory(Number(historyRange.value)));
     const addFolder=button("Add folder…",()=>void changeFolders(false));
     const resetFolders=button("Reset extra folders",()=>void changeFolders(true));
-    const refresh=button("Refresh folders",()=>{const epoch=state.motionEpoch;notice("Scanning opted-in folders…");void data.refresh().then(ok=>{if(ok&&current(epoch))notice("");});});
+    const refresh=button("Refresh folders",()=>{if(win.__nocturneLibraryServices?.mediaScanAvailable!==true)return;const epoch=state.motionEpoch;notice("Scanning opted-in folders…");void data.refresh().then(ok=>{if(ok&&current(epoch))notice("");});});
     const more=button("Load more",()=>{more.disabled=true;if(!data.more())more.disabled=false;});more.classList.add("nl-more");
     tools.append(sort,filter,clear,yes,no,native,nativeHistory,historyRange,clearHistory,refresh,addFolder,resetFolders);
     panel.append(header,nav,search,tools,status,body);layer.append(shade,panel);root.append(layer);
@@ -357,7 +357,7 @@ function libraryShortcutSection(event,os="WINNT"){
     shell.status.textContent=message;shell.status.hidden=!message;
   }
   function syncTools(){
-    if(!shell)return;const f=fileSection(),d=state.section==="downloads",local=f&&!d&&prefs.getBoolPref(MEDIA_PREF,false);
+    if(!shell)return;const f=fileSection(),d=state.section==="downloads",local=f&&!d&&prefs.getBoolPref(MEDIA_PREF,false)&&win.__nocturneLibraryServices?.mediaScanAvailable===true;
     shell.tools.hidden=!f&&state.section!=="history";shell.sort.hidden=!f;shell.sort.value=state.sort;
     shell.filter.hidden=!d;shell.filter.value=state.filter;
     shell.clear.hidden=!d||confirmation;shell.clear.disabled=clearing||!win.__nocturneLibraryServices?.downloads?.getSnapshot().some(r=>r.clearable);
@@ -388,7 +388,7 @@ function libraryShortcutSection(event,os="WINNT"){
     closeNow(false);nativeFallback=true;try{command.doCommand();}finally{nativeFallback=false;}
   }
   async function changeFolders(reset){
-    if(!active()||dragSource||clearing||!["documents","pictures"].includes(state.section)||!prefs.getBoolPref(MEDIA_PREF,false))return;
+    if(!active()||dragSource||clearing||!["documents","pictures"].includes(state.section)||!prefs.getBoolPref(MEDIA_PREF,false)||win.__nocturneLibraryServices?.mediaScanAvailable!==true)return;
     const service=win.__nocturneLibraryServices;
     if(reset&&!win.confirm("Remove all extra Library folders? No files will be deleted."))return;
     try{if(reset)service.clearFolders();else await service.chooseFolder();}catch{}
@@ -585,6 +585,8 @@ function libraryShortcutSection(event,os="WINNT"){
   function renderBody(){
     rows.clear();shell.body.scrollTop=0;renderedSection=state.section;
     shell.search.disabled=false;notice("");syncTools();
+    if(["documents","pictures"].includes(state.section)&&prefs.getBoolPref(MEDIA_PREF,false)&&win.__nocturneLibraryServices?.mediaScanAvailable!==true)
+      notice("Local folder scanning is temporarily paused for safety. Downloaded files remain available.");
     placeholder("Loading…","Reading native browser records.");data.start(state.section,state.query);
   }
   function sample(n){const c=win.getComputedStyle(n);return {opacity:c.opacity,transform:c.transform};}
