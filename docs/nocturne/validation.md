@@ -725,3 +725,14 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [x] Production [PR #18](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/pull/18), `c9011b7dcbf9335f0116fd68048dbf7d7475c846`; [CI 45116100787](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45116100787) **SUCCESS**: 823 Node, 15 Python, 12 runtime scripts, reproducible generated package and public Sine archive.
 - [ ] Real Zen 1.24.2b/Sine 2.3.3 observer/error edge, diagnostics enabled/disabled, private/multi-window privacy and profiler acceptance remain OPEN; do not inject native failures in a primary profile.
 - [ ] Continue explicit per-event semantic inventory of generic `reason`/`status` strings and third-party error edge cases. No universal content-sanitizer certification is claimed.
+
+### A0/A7 / NC4-089-R5 — 15 finite diagnostic event schemas and Home console boundary (preview.147)
+
+- [x] Independently verify current preview.146 producer sources for Library failure/shortcut, media scan/refresh, native transfer/payload, Home Search, Page Progress, Library drag fallback and Center Motion. Record exact accepted top-level `reason`/`status` domains for 15 events; leave unreviewed event families unchanged.
+- [x] Reproduce Home Search's independent raw `console.info(event,fields)` path and remove raw fields from that echo without losing sanitized `__nocturneTrace` data; move snapshot error to restricted `name`.
+- [x] Add source-backed accepted/rejected semantic regressions and Home direct-Console hostile-payload check; update existing source-extracted Home regression.
+- [x] [PR #20](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/pull/20) / production `2e26594448ff227e5a257ed9a406af9f91ea2ff4` and [CI 45123101888](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45123101888) **SUCCESS**: 825 Node, 15 Python, 12 runtime parsers and served public package; release metadata `0.3.0-preview.147`.
+- [ ] Finish source-driven inventory for other events' generic `reason`/`status`, any other native/third-party free-form error and direct console echo paths. No universal sanitizer claim.
+- [ ] Native Zen 1.24.2b + Sine 2.3.3 diagnostics-enabled/disabled/private/multiwindow persistence and console inspection, error-class fidelity, and Gecko profiler overhead remain OPEN. Do not require user tests before the source evidence passes or suggest a primary-profile failure injection.
+- [ ] A7 P0: NC4-022/082 decoded thumbnail and upstream native scanner accumulation; NC4-083 actual scan cancellation not implemented. Follow existing pinned NA-1 plan; no claim of native acceptance.
+
