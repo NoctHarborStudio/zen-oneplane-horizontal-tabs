@@ -146,7 +146,16 @@
     ["library.surface.fallback",{reason:new Set(["popover-unavailable"])}],
     ["center.bloom.fallback",{reason:new Set(["preflight","budget"])}],
     ["center.motion.skip",{reason:new Set(["no-row","no-visible-cards"])}],
-    ["center.fold.reject",{reason:new Set(["partial-clip","coordinate-frame"])}]
+    ["center.fold.reject",{reason:new Set(["partial-clip","coordinate-frame"])}],
+    ["workspace.startup.wait",{reason:new Set(["user-takeover","deadline","setup-error","settled","error","layout-dispose"])}],
+    ["address.cascade.finish",{reason:new Set(["cancelled","setup-failed","finished","watchdog","watchdog-unavailable"])}],
+    ["address.finish",{reason:new Set(["finished","cancelled","watchdog","fallback-failed","setup-failed"])}],
+    ["drag.incoming.release",{reason:new Set(["source-gone","geometry-or-phase","new-preview","drop-rejected","leave-strip","source-unresolved","outside-toolbar"])}],
+    ["hub.projection.search-cancelled",{reason:new Set(["stale-preparation"])}],
+    ["hub.projection.search-error",{reason:new Set(["native-error"])}],
+    ["hub.projection.failed",{reason:new Set(["native-error"])}],
+    ["hub.projection.return-rejected",{reason:new Set(["return-target","return-unverified","unavailable"])}],
+    ["drag.placement.preview",{reason:new Set(["work-area-change"])}]
   ]);
   const CSS_FIELDS=new Set(["opacity","visibility","display","translate","scale","transform","transition","height","width","hoverProgress","centerX","centerAlpha","startupBase","mask","bmMask","contour","bmContour","measure","progress","startupProgress"]);
   const CSS_VALUE=/^[#A-Za-z0-9.,()%+ :-]{1,180}$/;
@@ -950,7 +959,7 @@ function startupBloomAssemblyPlan(start,scale){
         duration<=0||delay<0||duration+delay>t.finishLength)return null;
       trace("center.bloom.fallback",{reason:t.finishLength>=plan.end?"preflight":"budget"},{flush:true});
       return acquireTabs(row,options);
-    }catch(error){trace("center.motion.error",{stage:"prepare",name:error?.name},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
+    }catch(error){trace("center.motion.error",{stage:"prepare",name:nocturneErrorClass(error)},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
   }
   function invalidateTopology(row){
     const handle=active;
@@ -1050,7 +1059,7 @@ function startupBloomAssemblyPlan(start,scale){
           // A busy sibling surface may defer notification until the next
           // checkpoint. Never call the owner twice under nested callbacks.
           if(!committed||wasBusy)return true;
-          try{if(exact())onTopologyInvalidated?.();}catch(error){trace("center.topology.error",{owner,name:error?.name},{flush:true});}
+          try{if(exact())onTopologyInvalidated?.();}catch(error){trace("center.topology.error",{owner,name:nocturneErrorClass(error)},{flush:true});}
           finally{if(!released)handle.release(reason==="geometry"?"geometry-changed":"topology-changed");}
           return true;
         }finally{invalidating=false;motionBusy=wasBusy;drainDispose();}
@@ -1268,14 +1277,14 @@ function startupBloomAssemblyPlan(start,scale){
       return handle;
     }catch(error){
       handle.release("setup-failed");
-      trace("center.motion.error",{id,owner,mode:handle.mode,stage:"setup",name:error?.name},{flush:true});return null;
+      trace("center.motion.error",{id,owner,mode:handle.mode,stage:"setup",name:nocturneErrorClass(error)},{flush:true});return null;
     }
   }
   // Bookmarks use the Lab's center squeeze, not individual vertical slides.
   function bookmarks(options={}){
     if(dead||motionBusy||disposing||!current())return null;
     motionBusy=true;
-    try{return acquireBookmark(options);}catch(error){trace("center.bookmarks.error",{stage:"prepare",name:error?.name},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
+    try{return acquireBookmark(options);}catch(error){trace("center.bookmarks.error",{stage:"prepare",name:nocturneErrorClass(error)},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
   }
   function acquireBookmark({owner="unknown",direction="in",duration=520,delay=0,paused=false,retainOnDispose=null,observeEffect=null}={}){
     activeBookmark?.release("superseded");
@@ -1321,7 +1330,7 @@ function startupBloomAssemblyPlan(start,scale){
       trace("center.bookmarks.acquire",{id,owner,direction,duration},{sample:duration+250});
       if(dead||released||!current()){handle.release("disposed");return null;}
       return handle;
-    }catch(error){handle.release("setup-failed");trace("center.bookmarks.error",{id,owner,name:error?.name},{flush:true});return null;}
+    }catch(error){handle.release("setup-failed");trace("center.bookmarks.error",{id,owner,name:nocturneErrorClass(error)},{flush:true});return null;}
   }
   function dispose({replacement=false}={}){
     if(disposing)return false;
@@ -1488,18 +1497,18 @@ function restorePrefs() {
       original.released=true;
     } catch (error) {
       failed++;
-      console.warn("[Nocturne] Layout preference restore:", name, error?.name || "Error");
+      console.warn("[Nocturne] Layout preference restore:", name, nocturneErrorClass(error));
     }
   }
   // Keep original values and release progress when a native key or backup
   // removal fails. Retrying must not touch keys we already relinquished.
   if (!failed) {
     try { prefs.clearUserPref(KEY); }
-    catch (error) { failed++; console.warn("[Nocturne] Layout backup release:", error?.name || "Error"); }
+    catch (error) { failed++; console.warn("[Nocturne] Layout backup release:", nocturneErrorClass(error)); }
   }
   if (failed) {
     try { prefs.setStringPref(KEY,JSON.stringify(saved)); }
-    catch (error) { checkpointFailed=true; console.warn("[Nocturne] Layout backup checkpoint:",error?.name || "Error"); }
+    catch (error) { checkpointFailed=true; console.warn("[Nocturne] Layout backup checkpoint:",nocturneErrorClass(error)); }
   }
   try { window.__nocturneTrace?.("layout.prefs.restore",{restored,skipped,failed,alreadyReleased,checkpointFailed,backupRetained:failed>0},{flush:true}); } catch {}
   return failed===0;
@@ -4109,7 +4118,7 @@ function installTabStrip() {
         failed=true;
         if(anim){cascadeAnimations.delete(node);try{anim.cancel();}catch{}}
         try{node.removeAttribute(attr);}catch{}
-        window.console.warn("[OnePlane] Wave animation fallback:",error);
+        window.console.warn("[OnePlane] Wave animation fallback:",nocturneErrorClass(error));
         return false;
       }
     };
@@ -6160,7 +6169,7 @@ function installTabStrip() {
           ...extra
         };
         window.__nocturneTrace?.("hub.projection."+stage,data,{flush:true});
-        console.info("[OnePlane] Projection "+stage,JSON.stringify(data));
+        console.info("[OnePlane] Projection "+stage);
       }catch{} // Diagnostic failure must not interrupt a native operation.
     }
     // Zen's native selectEmptyTab can fall back to creating an ordinary
@@ -6655,7 +6664,7 @@ function installTabStrip() {
         const result=await endpoint(window,projection);
         if(hubViewCurrent(session)&&result?.status==="not-closed")status.textContent="Native window close was not completed.";
       }catch(error){
-        if(hubViewCurrent(session))status.textContent=["return-target","return-unverified","return-unavailable","data-busy"].includes(error?.code)?error.message:"Could not return safely.";
+        if(hubViewCurrent(session))status.textContent=error?.code==="data-busy"?"Another native Workspace data command is pending.":error?.code==="return-unavailable"?"Use the native close-window command.":error?.code==="return-target"?"Return target changed. Try again.":error?.code==="return-unverified"?"Tab ownership could not be verified. Close any Glance view and try again.":"Could not return safely.";
         projectionLog(window,"return-rejected",{reason:["return-target","return-unverified"].includes(error?.code)?error.code:"unavailable"});
       }finally{projectionBusy=false;projectionStartedAt=null;settleHubView(session);}
     }
@@ -8317,7 +8326,7 @@ function installTabStrip() {
       else if (event?.dataTransfer?.updateDragImage) event.dataTransfer.updateDragImage(image,x,y);
       else return false;
       return true;
-    } catch (error) { console.error("[OnePlane] Drag image transition:",error); return false; }
+    } catch (error) { console.error("[OnePlane] Drag image transition:",nocturneErrorClass(error)); return false; }
   }
   function dragPaintedBox(){
     const n=dragGhost&&!dragGhost.hidden&&dragGhostBody?dragGhostBody:dragNode;
@@ -9480,14 +9489,14 @@ function installTabStrip() {
       // Do not restore selection against a partial native transaction.
       if(!isSplit(tab)&&!isSplit(current)&&validNativeTab(current)&&
          tabOwner(current)===window&&browser.selectedTab===tab)browser.selectedTab=current;
-      console.error("[OnePlane] Split View:",error);
+      console.error("[OnePlane] Split View:",nocturneErrorClass(error));
     }finally{
       window.__nocturneTrace?.("drag.native.outcome",{operation,outcome,...(reason?{reason}:{})},{sample:1600});
       // Only the captured source may complete this delivered OS drop.
       // If native callbacks replaced/cancelled it, never clear new visuals.
       if(splitSourceCurrent(tab,token)){
         try{sourceHandled(tab,false,token);}
-        catch(error){console.error("[OnePlane] Split drop source settle:",error);}
+        catch(error){console.error("[OnePlane] Split drop source settle:",nocturneErrorClass(error));}
         if(dragLifecycle.owns(token,"tab"))cancelActiveDrag("split-settle-incomplete");
       }
     }
@@ -9717,7 +9726,7 @@ function installTabStrip() {
   }
   function mountHome(){
     typeof window!=="undefined"&&window.__nocturneTrace?.("home.mount",()=>(null),{sample:1800});
-    try{homeLease=acquireZenHome(window,Services);}catch(error){console.warn("[OnePlane] Home unavailable",error);}
+    try{homeLease=acquireZenHome(window,Services);}catch(error){console.warn("[OnePlane] Home unavailable",nocturneErrorClass(error));}
     island.toggleAttribute("data-op-home-enabled",!!homeLease);island.disabled=!homeLease;
     const startup=homeStartupRecord=window.__nocturneLayoutStartup;
     if(startup?.initial)startup.homeState=homeLease&&!window.__oneplaneWorkspaceProjection?"pending":"skipped";
@@ -9755,7 +9764,7 @@ function installTabStrip() {
       if(!current()||!beforeReveal())return;
       if(lease.open){outcome="ready";return;}
       if(lease.showOnStartup?.())outcome="ready";
-    }catch(error){outcome="failed";window.console.warn("[OnePlane] Startup search initialization:",error);}
+    }catch(error){outcome="failed";window.console.warn("[OnePlane] Startup search initialization:",nocturneErrorClass(error));}
     finally{
       if(startup&&window.__nocturneLayoutStartup===startup){
         startup.homeState=outcome;
@@ -10796,7 +10805,7 @@ let cleanupErrors=0,cleanupErrorStart=0,completeDiagnostics=null,cancelFreeStart
 // Each release is isolated: one feature failure must not prevent native
 // preference restoration or the remaining controller cleanup.
 function cleanupStep(label,fn){
-  try{fn();}catch(error){cleanupErrors++;console.warn("[Nocturne] Cleanup "+label+":",nocturneErrorClass(error));try{window.__nocturneTrace?.("layout.cleanup.error",{resource:label,name:error?.name||"Error"});}catch{}}
+  try{fn();}catch(error){cleanupErrors++;console.warn("[Nocturne] Cleanup "+label+":",nocturneErrorClass(error));try{window.__nocturneTrace?.("layout.cleanup.error",{resource:label,name:nocturneErrorClass(error)});}catch{}}
 }
 function cleanup(nativeExit=false) {
   if (disposed) return;

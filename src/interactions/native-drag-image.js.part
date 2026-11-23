@@ -6,7 +6,7 @@
       else if (event?.dataTransfer?.updateDragImage) event.dataTransfer.updateDragImage(image,x,y);
       else return false;
       return true;
-    } catch (error) { console.error("[OnePlane] Drag image transition:",error); return false; }
+    } catch (error) { console.error("[OnePlane] Drag image transition:",nocturneErrorClass(error)); return false; }
   }
   function dragPaintedBox(){
     const n=dragGhost&&!dragGhost.hidden&&dragGhostBody?dragGhostBody:dragNode;

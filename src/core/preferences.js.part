@@ -89,18 +89,18 @@ function restorePrefs() {
       original.released=true;
     } catch (error) {
       failed++;
-      console.warn("[Nocturne] Layout preference restore:", name, error?.name || "Error");
+      console.warn("[Nocturne] Layout preference restore:", name, nocturneErrorClass(error));
     }
   }
   // Keep original values and release progress when a native key or backup
   // removal fails. Retrying must not touch keys we already relinquished.
   if (!failed) {
     try { prefs.clearUserPref(KEY); }
-    catch (error) { failed++; console.warn("[Nocturne] Layout backup release:", error?.name || "Error"); }
+    catch (error) { failed++; console.warn("[Nocturne] Layout backup release:", nocturneErrorClass(error)); }
   }
   if (failed) {
     try { prefs.setStringPref(KEY,JSON.stringify(saved)); }
-    catch (error) { checkpointFailed=true; console.warn("[Nocturne] Layout backup checkpoint:",error?.name || "Error"); }
+    catch (error) { checkpointFailed=true; console.warn("[Nocturne] Layout backup checkpoint:",nocturneErrorClass(error)); }
   }
   try { window.__nocturneTrace?.("layout.prefs.restore",{restored,skipped,failed,alreadyReleased,checkpointFailed,backupRetained:failed>0},{flush:true}); } catch {}
   return failed===0;

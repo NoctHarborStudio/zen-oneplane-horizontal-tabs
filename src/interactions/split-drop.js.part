@@ -191,14 +191,14 @@
       // Do not restore selection against a partial native transaction.
       if(!isSplit(tab)&&!isSplit(current)&&validNativeTab(current)&&
          tabOwner(current)===window&&browser.selectedTab===tab)browser.selectedTab=current;
-      console.error("[OnePlane] Split View:",error);
+      console.error("[OnePlane] Split View:",nocturneErrorClass(error));
     }finally{
       window.__nocturneTrace?.("drag.native.outcome",{operation,outcome,...(reason?{reason}:{})},{sample:1600});
       // Only the captured source may complete this delivered OS drop.
       // If native callbacks replaced/cancelled it, never clear new visuals.
       if(splitSourceCurrent(tab,token)){
         try{sourceHandled(tab,false,token);}
-        catch(error){console.error("[OnePlane] Split drop source settle:",error);}
+        catch(error){console.error("[OnePlane] Split drop source settle:",nocturneErrorClass(error));}
         if(dragLifecycle.owns(token,"tab"))cancelActiveDrag("split-settle-incomplete");
       }
     }

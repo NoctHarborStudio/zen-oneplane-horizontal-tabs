@@ -6,7 +6,7 @@ let cleanupErrors=0,cleanupErrorStart=0,completeDiagnostics=null,cancelFreeStart
 // Each release is isolated: one feature failure must not prevent native
 // preference restoration or the remaining controller cleanup.
 function cleanupStep(label,fn){
-  try{fn();}catch(error){cleanupErrors++;console.warn("[Nocturne] Cleanup "+label+":",nocturneErrorClass(error));try{window.__nocturneTrace?.("layout.cleanup.error",{resource:label,name:error?.name||"Error"});}catch{}}
+  try{fn();}catch(error){cleanupErrors++;console.warn("[Nocturne] Cleanup "+label+":",nocturneErrorClass(error));try{window.__nocturneTrace?.("layout.cleanup.error",{resource:label,name:nocturneErrorClass(error)});}catch{}}
 }
 function cleanup(nativeExit=false) {
   if (disposed) return;
