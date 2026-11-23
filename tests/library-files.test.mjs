@@ -280,3 +280,106 @@ test("failed native media scan after the UI deadline frees the exact wait and al
  assert.equal(scans,2);assert.equal(results.at(-1).rows[0].name,"recovered.png");
  data.dispose();await media.dispose();assert.equal(timers.size,0);
 });
+
+
+test("NC4-022/082/083 paused native media policy blocks opt-in, direct sessions and folder mutations",async()=>{
+ const runtime=readFileSync(new URL("../src/services/library-services-runtime.js.part",import.meta.url),"utf8");
+ const start=runtime.indexOf('  const mediaPref="zen.nocturne.library.local-media";'),end=runtime.indexOf("  const windows=",start);
+ assert.ok(start>=0&&end>start,"evaluate actual source policy, not test-only flag");
+ const saved=["C:/Pictures/keep","C:/Documents/keep"],prefs={
+   custom:JSON.stringify(saved),getBoolPref(){return true;},
+   getStringPref(){return this.custom;},setStringPref(){assert.fail("saved folders must not change");},
+   clearUserPref(){assert.fail("saved folder pref must not be cleared");}
+ };
+ let available=true;
+ const {LOCAL_MEDIA_SCAN_SUSPENDED,mediaAllowed}=new Function("allowed","Services",
+   runtime.slice(start,end)+"return {LOCAL_MEDIA_SCAN_SUSPENDED,mediaAllowed};")(
+     ()=>available,{prefs});
+ assert.equal(LOCAL_MEDIA_SCAN_SUSPENDED,true);
+ for(const enabled of [true,false]){
+   available=enabled;
+   assert.equal(mediaAllowed(),false,"enabled pref and normal window cannot reenable unsafe native scan");
+ }
+ let nativeCalls=0;
+ const media=createMediaService({allowed:mediaAllowed,scan:()=>{nativeCalls++;return Promise.resolve([]);},
+   describe:()=>assert.fail("unsafe local files cannot be materialized"),perform:()=>assert.fail("no stale action")});
+ for(const section of ["pictures","documents"])assert.throws(()=>media.open(section),/Media unavailable/);
+ assert.equal(nativeCalls,0);
+ const fStart=runtime.indexOf("  async function chooseFolder(){"),fEnd=runtime.indexOf("  function scanMedia(",fStart);
+ assert.ok(fStart>=0&&fEnd>fStart);
+ let pickerCalls=0;
+ const {chooseFolder,clearFolders}=new Function("mediaAllowed","win","Services","Cc","Ci",
+   "let folderGeneration=0;\n"+runtime.slice(fStart,fEnd)+"return {chooseFolder,clearFolders};")(
+     mediaAllowed,{browsingContext:{}},{prefs},{get(){pickerCalls++;throw Error("filepicker must not open");}},{});
+ assert.equal(await chooseFolder(),false);assert.equal(clearFolders(),false);
+ assert.equal(pickerCalls,0);assert.deepEqual(JSON.parse(prefs.custom),saved);
+ const apiStart=runtime.indexOf("  const api={"),apiEnd=runtime.indexOf("\n  Services.prefs.addObserver",apiStart);
+ assert.ok(apiStart>=0&&apiEnd>apiStart);
+ const noop=()=>{};
+ const scope={downloads:{pathKeys:()=>new Set()},openHistory:noop,historyReady:noop,openHistoryURL:noop,
+   closedTabs:{},copyHistoryURL:noop,removeHistoryURL:noop,clearHistoryRange:noop,
+   media,chooseFolder,clearFolders,mediaAllowed,windows:false,LOCAL_MEDIA_SCAN_SUSPENDED,dispose:noop};
+ const api=new Function("scope","with(scope){"+runtime.slice(apiStart,apiEnd)+"return api;}")(scope);
+ assert.equal(api.mediaScanAvailable,false);
+ assert.equal(api.openMedia("pictures"),null);assert.equal(api.openMedia("documents"),null);
+ assert.equal(nativeCalls,0);await media.dispose();
+});
+
+test("NC4-022/082/083 local rows cannot create file URI thumbnails",()=>{
+ const runtime=readFileSync(new URL("../src/services/library-services-runtime.js.part",import.meta.url),"utf8");
+ const start=runtime.indexOf("    describe(f,id){"),end=runtime.indexOf("},\n    perform(",start);
+ assert.ok(start>=0&&end>start);
+ const describe=new Function("iconFor","Services","fileFor","safeRaster",
+   "return ({"+runtime.slice(start,end+1)+"}).describe;")(
+   path=>"moz-icon://"+path+"?size=32",
+   {io:{newFileURI(){assert.fail("raw file thumbnail URI must not be constructed");}}},
+   ()=>assert.fail("local decoder path must not run"),
+   ()=>assert.fail("compressed-byte threshold is not a pixel budget"));
+ const image=describe({path:"C:/Pictures/large.png",lastModified:100,size:128}, "local-test");
+ assert.equal(image.thumbnail,null);assert.match(image.icon,/^moz-icon:/);
+ assert.equal(image.name,"large.png");assert.equal(image.kind,"local");
+});
+
+test("NC4-022/082/083 paused media UI hides folder controls and keeps download projections",async()=>{
+ const controller=readFileSync(new URL("../src/library/controller.js.part",import.meta.url),"utf8");
+ const start=controller.indexOf("  function syncTools(){"),end=controller.indexOf("  async function clearDownloads(){",start);
+ assert.ok(start>=0&&end>start);
+ const state={phase:"open",section:"pictures",sort:"new",query:""},win={
+   __nocturneLibraryServices:{mediaScanAvailable:false,downloads:{getSnapshot:()=>[]}}
+ };
+ const prefs={getBoolPref:()=>true},MEDIA_PREF="zen.nocturne.library.local-media";
+ const shell=Object.fromEntries(["tools","sort","filter","clear","yes","no","native","refresh","addFolder",
+   "resetFolders","nativeHistory","historyRange","clearHistory"].map(x=>[x,{}]));
+ const syncTools=new Function("shell","fileSection","state","prefs","MEDIA_PREF","win","confirmation","clearing",
+   controller.slice(start,end)+"return syncTools;")(
+   shell,()=>["downloads","documents","pictures"].includes(state.section),state,prefs,MEDIA_PREF,win,false,false);
+ for(const section of ["pictures","documents"]){
+   state.section=section;syncTools();
+   assert.equal(shell.refresh.hidden,true);assert.equal(shell.addFolder.hidden,true);
+   assert.equal(shell.resetFolders.hidden,true);assert.equal(shell.sort.hidden,false);
+ }
+ state.section="downloads";syncTools();assert.equal(shell.native.hidden,false);
+ state.section="pictures";delete win.__nocturneLibraryServices.mediaScanAvailable;syncTools();
+ assert.equal(shell.refresh.hidden,true,"unknown older service capability must fail closed");
+ const rbStart=controller.indexOf("  function renderBody(){"),rbEnd=controller.indexOf("  function sample(",rbStart);
+ assert.ok(rbStart>=0&&rbEnd>rbStart);
+ const notices=[],starts=[];
+ const renderBody=new Function("rows","shell","state","notice","syncTools","placeholder","data",
+   "prefs","MEDIA_PREF","win",
+   controller.slice(rbStart,rbEnd)+"return renderBody;")(
+   {clear(){}},{body:{scrollTop:0},search:{disabled:false}},
+   state,x=>notices.push(x),()=>{},()=>{}, {start:(...args)=>starts.push(args)},
+   prefs,MEDIA_PREF,win);
+ renderBody();
+ assert.deepEqual(starts,[["pictures",""]]);
+ assert.match(notices.at(-1),/temporarily paused for safety/);
+ const projected=[row("picture","photo.png"),row("document","notes.pdf"),row("missing","photo2.png",{exists:false})];
+ const services={downloads:{start:async()=>{},subscribe:()=>()=>{},getSnapshot:()=>projected},
+   mediaScanAvailable:false,openMedia:()=>null};
+ const outputs=[];
+ const data=createLibraryData({getServices:()=>services,onResult:x=>outputs.push(x),
+   onError:()=>assert.fail("download-only query failed"),schedule:setTimeout,cancel:clearTimeout});
+ data.start("pictures");await tick();assert.deepEqual(outputs.at(-1).rows.map(x=>x.name),["photo.png"]);
+ data.start("documents");await tick();assert.deepEqual(outputs.at(-1).rows.map(x=>x.name),["notes.pdf"]);
+ data.dispose();
+});
