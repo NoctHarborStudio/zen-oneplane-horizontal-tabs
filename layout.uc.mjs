@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.148",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.149",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -2035,6 +2035,9 @@ function acquireZenHome(win, services) {
 #zen-shared-home .zh-space{flex:1 1 160px;max-width:232px;min-width:0;display:flex;align-items:center;gap:10px;text-align:start;min-height:48px;padding:13px;border:1px solid color-mix(in srgb,currentColor 8%,transparent);background:color-mix(in srgb,currentColor 5%,transparent);border-radius:11px}
 #zen-shared-home .zh-space span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #zen-shared-home .zh-space[aria-current=true]{border-color:color-mix(in srgb,currentColor 25%,transparent)}
+/* A command notice must never change the Home section/footer layout. */
+#zen-shared-home .zh-workspace-section{position:relative}
+#zen-shared-home .zh-workspace-section > .zh-workspace-pending{position:absolute;inset-inline:0;top:100%;margin:6px 0 0;max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 #zen-shared-home .zh-footer,#zen-shared-home .zh-editbar{display:flex;justify-content:center;gap:8px;margin-top:34px}
 #zen-shared-home .zh-small{padding:8px 12px;border-radius:8px;font-size:11px;opacity:.8}
 #zen-shared-home .zh-small:hover{background:color-mix(in srgb,currentColor 8%,transparent);opacity:1}
@@ -2197,7 +2200,7 @@ function acquireZenHome(win, services) {
   let pinScrollTop=0,pinCustom=false,pinViewMode="home",pendingWatch=null;
   function updateWorkspacePending(state){
     const status=content.querySelector(".zh-workspace-pending");
-    if(status){const message=workspaceCommandMessage(state);status.textContent=message;status.hidden=!message;}
+    if(status){const message=workspaceCommandMessage(state);status.textContent=message;status.title=message;status.hidden=!message;}
     for(const b of Array.from(content.querySelectorAll?.(".zh-space[data-zh-workspace-id]")||[]))b.disabled=switching||workspaceCommandPresentationBlocked(state);
   }
   const leases=new Set(),cleanups=[];
@@ -3007,7 +3010,7 @@ function acquireZenHome(win, services) {
     }
     const manager=win.gZenWorkspaces;
     if(manager?.workspaceEnabled&&typeof manager.getWorkspaces==="function"){
-      const spaces=html("section","zh-section"),list=html("div","zh-spaces");spaces.append(html("h3","","Workspaces"),list);
+      const spaces=html("section","zh-section zh-workspace-section"),list=html("div","zh-spaces");spaces.append(html("h3","","Workspaces"),list);
       let workspaces=[];try{workspaces=manager.getWorkspaces()||[];}catch{}
       for(const ws of workspaces){
         if(!ws?.uuid)continue;
