@@ -21,6 +21,72 @@ function fixture({isPrivate=false,on=true,prior=null,failWrite=false,writeHook=(
  reload();
  return {reload,win,doc,timers,frames,logs,writes,io,listeners,attrs,unload:()=>unload(),setTime:t=>time=t,disable:()=>enabled=false,api:win.__nocturneDiagnostics};
 }
+test("NC4-089-R5 enforces source-declared event-specific reasons and statuses",()=>{
+ const f=fixture(),trace=f.win.__nocturneTrace;
+ const library=readFileSync(new URL("../src/library/controller.js.part",import.meta.url),"utf8");
+ const media=readFileSync(new URL("../src/services/media-service.mjs",import.meta.url),"utf8");
+ const data=readFileSync(new URL("../src/library/data.mjs",import.meta.url),"utf8");
+ const transfer=readFileSync(new URL("../src/services/library-services-runtime.js.part",import.meta.url),"utf8");
+ const progress=readFileSync(new URL("../page-progress.uc.mjs",import.meta.url),"utf8");
+ for(const reason of ["busy","disabled","section","startup","window","overlay-missing","services-missing","exception","mount","geometry","overlay-busy","surface-hidden"]){
+   assert.ok(library.includes('fail("'+reason+'")'),reason);
+   trace("library.open.rejected",{reason});
+   assert.equal(JSON.parse(f.api.dump()).events.at(-1).data.reason,reason);
+ }
+ for(const status of ["deadline","late-complete","late-error"]){
+   assert.ok(data.includes('onScanWait("'+status+'")'));
+   trace("library.media.scan.wait",{status});
+   assert.equal(JSON.parse(f.api.dump()).events.at(-1).data.status,status);
+ }
+ for(const status of ["committed","error"]){
+   assert.ok(media.includes('report(section,"'+status+'"'));
+   trace("library.media.refresh",{status});
+   assert.equal(JSON.parse(f.api.dump()).events.at(-1).data.status,status);
+ }
+ for(const reason of ["ineligible","file-unavailable","payload-written","native-error"]){
+   assert.ok(transfer.includes('report("'+reason+'"'));
+   trace("downloads.native.transfer",{reason});
+   assert.equal(JSON.parse(f.api.dump()).events.at(-1).data.reason,reason);
+ }
+ for(const reason of ["overlap-start","stale-stop"]){
+   assert.ok(progress.includes('reason:"'+reason+'"'));
+   trace("page-progress.network",{reason});
+   assert.equal(JSON.parse(f.api.dump()).events.at(-1).data.reason,reason);
+ }
+ for(const [event,field] of [
+   ["library.open.rejected","reason"],["library.shortcut","reason"],
+   ["library.media.scan.wait","status"],["library.media.refresh","status"],
+   ["downloads.native.transfer","reason"],["downloads.drag.payload","reason"],
+   ["home.search.close-start","reason"],["home.search.close-finish","reason"],
+   ["home.search.snapshot-unavailable","reason"],["page-progress.network","reason"],
+   ["library.file.drag.recovered","reason"],["library.surface.fallback","reason"],
+   ["center.bloom.fallback","reason"],["center.motion.skip","reason"],["center.fold.reject","reason"]
+ ]){
+   trace(event,{[field]:"personal-workspace-token"});
+   assert.equal(JSON.parse(f.api.dump()).events.at(-1).data[field],null,event);
+ }
+ assert.ok(!f.api.dump().includes("personal-workspace-token"));
+ assert.ok(f.logs.every(s=>!s.includes("personal-workspace-token")));
+ f.api.dispose();
+});
+test("NC4-089-R5 Home Search console cannot echo unfiltered event fields",()=>{
+ const f=fixture(),home=readFileSync(new URL("../src/home/shared-home.js.part",import.meta.url),"utf8");
+ const start=home.indexOf("  function searchLog("),end=home.indexOf("  // A card starts appearing",start);
+ assert.ok(start>=0&&end>start);
+ const searchLog=new Function("win",home.slice(start,end)+";return searchLog;")(f.win);
+ searchLog("close-start",{reason:"private-workspace-token",query:"sensitive search phrase"});
+ searchLog("snapshot-unavailable",{name:"PrivateAccount",reason:"personal-workspace-token"});
+ searchLog("snapshot-unavailable",{name:"TypeError"});
+ const events=JSON.parse(f.api.dump()).events;
+ assert.equal(events.at(-3).data.reason,null);
+ assert.equal(events.at(-2).data.name,null);
+ assert.equal(events.at(-2).data.reason,null);
+ assert.equal(events.at(-1).data.name,"TypeError");
+ for(const secret of ["private-workspace-token","personal-workspace-token","sensitive search phrase","PrivateAccount"])
+   assert.ok(!f.api.dump().includes(secret)&&f.logs.every(s=>!s.includes(secret)),secret);
+ f.api.dispose();
+});
+
 test("NC4-089-R4 Closed Tabs native observer errors retain class without private message",()=>{
  const f=fixture();
  const code=readFileSync(new URL("../src/services/library-services-runtime.js.part",import.meta.url),"utf8");
@@ -184,12 +250,12 @@ test("NC4-089-R2 extracted Home producer and address phase survive the recorder"
  const address=readFileSync(new URL("../src/toolbar/address-controller.js.part",import.meta.url),"utf8");
  const start=home.indexOf("  function searchLog("),end=home.indexOf("  // A card starts appearing",start);
  assert.ok(start>0&&end>start);
- assert.ok(home.includes('searchLog("snapshot-unavailable",{reason:error?.name||"Error"})'));
+ assert.ok(home.includes('searchLog("snapshot-unavailable",{name:error?.name||"Error"})'));
  assert.ok(address.includes('__nocturneTrace?.("address.begin",()=>({phase:name,'));
  const searchLog=new Function("win",home.slice(start,end)+";return searchLog;")(f.win);
- searchLog("snapshot-unavailable",{reason:"Error"});
+ searchLog("snapshot-unavailable",{name:"Error"});
  const found=JSON.parse(f.api.dump()).events.find(e=>e.event==="home.search.snapshot-unavailable");
- assert.ok(found);assert.equal(found.data.reason,"Error");
+ assert.ok(found);assert.equal(found.data.name,"Error");
  f.api.dispose();
 });
 test("NC4-089 drops unstructured content fields, URI/path values and malicious keys",()=>{

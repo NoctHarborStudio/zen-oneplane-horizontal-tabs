@@ -681,7 +681,7 @@ function acquireZenHome(win, services) {
   }
 
   function searchLog(event,fields={}){
-    win.console.info?.("[Zen Home] search "+event,fields);
+    win.console.info?.("[Zen Home] search "+event);
     win.__nocturneTrace?.("home.search."+event,fields,{sample:800});
   }
   // A card starts appearing when any of its height is uncovered, rather
@@ -776,7 +776,7 @@ function acquireZenHome(win, services) {
       if(!view?.querySelector(".urlbarView-row:not([hidden])"))return;
       const began=snapshotNow(),frozen=freezeSearchResults(view,searchBar.getBoundingClientRect());
       if(frozen?.rows){frozen.capturedAt=snapshotNow();frozen.captureMs=frozen.capturedAt-began;searchSnapshot=frozen;searchSnapshotDirty=false;}
-    }catch(error){searchLog("snapshot-unavailable",{reason:error?.name||"Error"});}
+    }catch(error){searchLog("snapshot-unavailable",{name:error?.name||"Error"});}
   }
   function scheduleSearchSnapshot(){
     if(!searchToken||searchClosing||searchReturn||!snapshotReady(searchBar))return;
