@@ -62,6 +62,6 @@
           document.getElementById("Browser:OpenLocation")?.doCommand();
         }
         window.__nocturneTrace?.("drag.search.restore",{outcome:"requested",token:state.gestureToken},{sample:1000});
-      } catch(error) { console.error("[OnePlane] Restore startup search:",error); }
+      } catch(error) { console.error("[OnePlane] Restore startup search:",nocturneErrorClass(error)); }
     },80);
   }

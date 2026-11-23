@@ -146,7 +146,7 @@
       // Normally unused. Preserve a functional native editor.
       stopAddressAnimations();
       a.engine="fallback";delete a.epoch;
-      window.console.warn("[OnePlane] Native address animation unavailable:",error);
+      window.console.warn("[OnePlane] Native address animation unavailable:",nocturneErrorClass(error));
       addressClipHome={bar,value:bar.style.getPropertyValue("clip-path"),priority:bar.style.getPropertyPriority("clip-path")};
       a.start=window.performance.now();
       const draw=now=>{

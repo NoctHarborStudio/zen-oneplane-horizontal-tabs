@@ -40,7 +40,7 @@
       if(seed)logPlacement("tab-open",p,null,seed);
       const win=browser.replaceTabWithWindow(tab,{replaceLastTab:true,...(seed||{})});
       if(win&&p)placeAfterStartup(win,p);
-    } catch (error) { console.error("[OnePlane] Detach tab:", error); }
+    } catch (error) { console.error("[OnePlane] Detach tab:",nocturneErrorClass(error)); }
   }
   const dragController = {
     source: () => draggedTab,

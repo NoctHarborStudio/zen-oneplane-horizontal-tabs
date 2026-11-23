@@ -297,7 +297,7 @@
       if(commandBlocked()){pendingWatch?.refresh();return;}
       busy=true;status.textContent="";
       const session=hubSession,native=manager(),current=()=>!destroyed&&manager()===native&&canManage();
-      try{return await runWorkspaceCommand(window,native,"hub-data",current,fn,{data:true});}catch(error){if(hubViewCurrent(session))status.textContent=String(error.message||error);console.warn("[OnePlane] Workspace Engine:",error);}
+      try{return await runWorkspaceCommand(window,native,"hub-data",current,fn,{data:true});}catch(error){if(hubViewCurrent(session))status.textContent="Workspace command could not be completed.";console.warn("[OnePlane] Workspace Engine:",nocturneErrorClass(error));}
       finally{busy=false;settleHubView(session);}
     }
     function renderFreeSetup(snapshot){
@@ -1164,7 +1164,7 @@
         if(child&&!child.closed&&child[PROJECTION]===projection)delete child[PROJECTION];
         if(hubViewCurrent(session))status.textContent="Could not open synced workspace. Check window sync settings.";
         projectionLog(child,"failed",{reason:"native-error"});
-        console.warn("[OnePlane] Workspace projection:",error);
+        console.warn("[OnePlane] Workspace projection:",nocturneErrorClass(error));
       }finally{
         releaseProjection();
         projectionBusy=false;projectionStartedAt=null;settleHubView(session);
@@ -1392,7 +1392,7 @@
     typeof window!=="undefined"&&window.__nocturneTrace?.("hub.workspace.request",()=>({hasTransition:!!transition}),{sample:1800});
         await requestWorkspaceSwitch(window,native,id,"hub-select",()=>!destroyed&&manager()===native);
         if(hubViewCurrent(session)){contextId=null;confirmation=null;scheduleHubGeometry();}
-      }catch(error){if(hubViewCurrent(session))status.textContent="Could not switch workspace.";console.warn("[OnePlane] Hub switch:",error);}
+      }catch(error){if(hubViewCurrent(session))status.textContent="Could not switch workspace.";console.warn("[OnePlane] Hub switch:",nocturneErrorClass(error));}
       finally{busy=false;settleHubView(session);}
     }
     async function create(event){
@@ -1407,7 +1407,7 @@
         if(!result?.uuid||!native.getWorkspaceFromId(result.uuid))throw Error("Native workspace creation unavailable");
       },{data:true});
         if(hubViewCurrent(session)){name.value="";contextId=null;confirmation=null;scheduleHubGeometry();}
-      }catch(error){if(hubViewCurrent(session))status.textContent=error?.code==="data-busy"?error.message:"Could not create workspace.";console.warn("[OnePlane] Hub create:",error);}
+      }catch(error){if(hubViewCurrent(session))status.textContent=error?.code==="data-busy"?"Another native Workspace data command is pending.":"Could not create workspace.";console.warn("[OnePlane] Hub create:",nocturneErrorClass(error));}
       finally{busy=false;settleHubView(session);}
     }
     function ensure(){
@@ -1432,7 +1432,7 @@
       try{
         if(!showPopup()){close();return;}
         (panel.querySelector('.op-hub-space[aria-current="true"]:not(:disabled)')||panel.querySelector(".op-hub-space:not(:disabled)")||mode).focus({preventScroll:true});
-      }catch(error){close();console.warn("[OnePlane] Hub open:",error);}
+      }catch(error){close();console.warn("[OnePlane] Hub open:",nocturneErrorClass(error));}
     }
     function key(event){
       if(!open||event.key!=="Escape"||event.defaultPrevented||window.__nocturneOverlay?.allowsEscape("hub",event)===false)return;
@@ -1446,7 +1446,7 @@
     function toggleMode(){
       const cmd=command();if(typeof cmd?.doCommand!=="function"||!open)return;
       setHold(true);
-      try{cmd.doCommand();changed();}catch(error){console.warn("[OnePlane] Compact Mode:",error);}
+      try{cmd.doCommand();changed();}catch(error){console.warn("[OnePlane] Compact Mode:",nocturneErrorClass(error));}
     }
     function onInput(){add.disabled=busy||workspaceCommandPresentationBlocked(hubCommandState())||!name.value.trim();}
     function onOutside(event){
@@ -1596,7 +1596,7 @@
         if(!active()){phase="cancelled";return blocked;}
         phase="run";
       }catch(error){
-        console.warn("[OnePlane] Could not scope workspace URI lookup:",error);
+        console.warn("[OnePlane] Could not scope workspace URI lookup:",nocturneErrorClass(error));
         return undefined;
       }finally{
         if(phase!=="run")restoreAll();
@@ -1676,7 +1676,7 @@
           if(!Reflect.deleteProperty(proto,key))throw Error("URL bar registry removal failed");
         }
       };
-    }catch(error){console.warn("[OnePlane] URL bar workspace isolation unavailable:",error);}
+    }catch(error){console.warn("[OnePlane] URL bar workspace isolation unavailable:",nocturneErrorClass(error));}
     return ()=>{
       if(released)return;released=true;
       let failed=0;
@@ -1711,5 +1711,5 @@
     toolbarWrapper?.setAttribute("oneplane-tab-menu-hold","true");reconcilePanel();
     const rect=button.getBoundingClientRect(),x=event.screenX||window.mozInnerScreenX+rect.left,y=event.screenY||window.mozInnerScreenY+rect.bottom;
     try{popup.openPopupAtScreen(x,y,true,event);}
-    catch(error){cleanup();console.warn("[OnePlane] Native tab menu:",error);}
+    catch(error){cleanup();console.warn("[OnePlane] Native tab menu:",nocturneErrorClass(error));}
   }

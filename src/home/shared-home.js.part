@@ -285,7 +285,7 @@ function acquireZenHome(win, services) {
   const button=(cls,label,fn)=>{const n=html("button",cls,label);n.type="button";n.addEventListener("click",fn);return n;};
   function load(){try{return normalize(JSON.parse(prefs.getStringPref(PREF,'{"version":1,"items":[]}')));}catch{return [];}}
   function save(items){prefs.setStringPref(PREF,JSON.stringify({version:1,items:normalize({version:1,items})}));}
-  function notify(){for(const l of [...leases])for(const fn of [...l.listeners])try{fn(open);}catch(error){win.console.warn("[Zen Home] subscriber",error);}}
+  function notify(){for(const l of [...leases])for(const fn of [...l.listeners])try{fn(open);}catch(error){win.console.warn("[Zen Home] subscriber",nocturneErrorClass(error));}}
   function allowed(){return !dead&&host.isConnected&&panels.isConnected&&!root.hasAttribute("customizing")&&root.getAttribute("inDOMFullscreen")!=="true"&&root.getAttribute("inFullscreen")!=="true"&&!root.hasAttribute("popup-window");}
   // Home is a primary destination, not a modal toggle.
   function isHomePlaceholder(tab,uri){
@@ -507,7 +507,7 @@ function acquireZenHome(win, services) {
     focusHome=null;
   }
   function navigate(item){
-    try{win.openTrustedLinkIn(item.url,"tab");leaveHome();}catch(error){win.console.warn("[Zen Home] shortcut navigation",error);}
+    try{win.openTrustedLinkIn(item.url,"tab");leaveHome();}catch(error){win.console.warn("[Zen Home] shortcut navigation",nocturneErrorClass(error));}
   }
   // Animate only the Home-origin native floating search session.
   function searchActive(){
@@ -664,7 +664,7 @@ function acquireZenHome(win, services) {
         searchInput.setAttribute("placeholder",searchSessionLabel);
       }
       startSearchSnapshot();startSearchMorph(token,geometry);
-    }catch(error){finishSearchVisual();win.console.warn("[Zen Home] native search",error);}
+    }catch(error){finishSearchVisual();win.console.warn("[Zen Home] native search",nocturneErrorClass(error));}
   }
   // Freeze the visual result tree only: no native custom elements,
   // event handlers, selectable IDs or interactive links.
@@ -812,7 +812,7 @@ function acquireZenHome(win, services) {
       if(typeof bar?._zenHandleUrlbarClose==="function")bar._zenHandleUrlbarClose(false,false);
       else bar?.view?.close();
       bar?.blur?.();
-    }catch(error){win.console.warn("[Zen Home] search cancel",error);finishSearchVisual();}
+    }catch(error){win.console.warn("[Zen Home] search cancel",nocturneErrorClass(error));finishSearchVisual();}
   }
   function cancelHomeSearch(reason="escape"){
     if(!searchToken||!searchBar||!searchGeometry||searchClosing||!nativeSearchOpen(searchBar))return false;
@@ -1096,7 +1096,7 @@ function acquireZenHome(win, services) {
           if(workspaceCommandState(win).blocked){pendingWatch?.refresh();return;}
           switching=true;
           pendingWatch?.refresh();
-          try{await switchHomeWorkspace(manager,ws.uuid);}catch(error){win.console.warn("[Zen Home] workspace",error);}
+          try{await switchHomeWorkspace(manager,ws.uuid);}catch(error){win.console.warn("[Zen Home] workspace",nocturneErrorClass(error));}
           finally{switching=false;if(open){refreshWorkspaceSelection();pendingWatch?.refresh();}}
         });
         b.setAttribute("data-zh-workspace-id",ws.uuid);b.setAttribute("data-zh-workspace-name",String(ws.name||"Workspace"));
@@ -1134,7 +1134,7 @@ function acquireZenHome(win, services) {
       // Startup is not a keyboard navigation action. Avoid a native
       // focus outline flashing before the search field enters.
       if(!startup&&!staged)content.querySelector(".zh-search")?.focus({preventScroll:true});return true;
-    }catch(error){close();restore();win.console.warn("[Zen Home] open",error);return false;}
+    }catch(error){close();restore();win.console.warn("[Zen Home] open",nocturneErrorClass(error));return false;}
   }
   function destroy(){
     if(dead)return;close();dead=true;for(const fn of cleanups.splice(0))try{fn();}catch{}
@@ -1242,6 +1242,6 @@ function acquireZenHome(win, services) {
     }};
     if(typeof browser.addTabsProgressListener==="function"){browser.addTabsProgressListener(progress);cleanups.push(()=>browser.removeTabsProgressListener(progress));}
     win[KEY]=registry;const lease=registry.acquire();ensurePrimaryHome();return lease;
-  }catch(error){destroy();win.console.warn("[Zen Home] init",error);return null;}
+  }catch(error){destroy();win.console.warn("[Zen Home] init",nocturneErrorClass(error));return null;}
 }
 

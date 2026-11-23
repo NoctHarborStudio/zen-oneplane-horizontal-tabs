@@ -143,7 +143,7 @@
     url.after(row);url.append(compactSearch);
     hub.ensure();ensureDownloadHost();checkMount();
     releaseDragEngine=installDragEngine();
-    try{releaseWorkspaceLinkScope=installWorkspaceLinkScope();}catch(error){console.warn("[OnePlane] Workspace link isolation:",error);}
+    try{releaseWorkspaceLinkScope=installWorkspaceLinkScope();}catch(error){console.warn("[OnePlane] Workspace link isolation:",nocturneErrorClass(error));}
     target.prepend(leftSpacer);
     row.after(rightSpacer);
     tabbox.append(shield, splitZone);
