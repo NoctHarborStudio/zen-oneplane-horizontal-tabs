@@ -693,3 +693,49 @@ test("NC4-089-R7c Layout exception Console and Hub return notices are bounded",(
   const startup=readFileSync(new URL("../src/core/bootstrap.js.part",import.meta.url),"utf8");
   assert.ok(startup.includes("name:nocturneErrorClass(error)"));
 });
+
+test("NC4-089-R7c-P2 finite recorder error names match existing Layout class filter",()=>{
+  const errorSource=readFileSync(new URL("../src/core/error-class.mjs",import.meta.url),"utf8");
+  const match=errorSource.match(/const NOCTURNE_EXCEPTION_CLASSES=new Set\((\[[\s\S]*?\])\);/);
+  const recorder=source.match(/const TRACE_ERROR_NAMES=new Set\((\[[^;]*?\])\);/);
+  assert.ok(match&&recorder,"both finite class sets must exist");
+  const classes=JSON.parse(match[1]);
+  assert.deepEqual(JSON.parse(recorder[1]),classes,"early recorder must match pure Layout helper");
+  const f=fixture(),trace=f.win.__nocturneTrace;
+  for(const name of classes){
+    trace("diagnostics.setup-error",{name});
+    assert.equal(JSON.parse(f.api.dump()).events.at(-1).data.name,name);
+  }
+  for(const name of ["PersonalTokenError","AccountFilenameException","NS_ERROR_PERSONAL_SECRET"]){
+    trace("diagnostics.setup-error",{name});
+    assert.equal(JSON.parse(f.api.dump()).events.at(-1).data.name,null,name);
+    assert.ok(!f.api.dump().includes(name));
+    assert.ok(f.logs.every(l=>!String(l).includes(name)));
+  }
+  f.api.dispose();
+});
+test("NC4-089-R7c-P2 source-declared Assembly/Disassembly/Drag reason enums",()=>{
+  const f=fixture(),trace=f.win.__nocturneTrace;
+  const groups=[
+    ["assembly.eligible.check",["src/core/startup-animation.js.part"],["no-unload-hook","already-seen","popup","disabled","reduced-motion","closed","native-mode","late-established-window"]],
+    ["assembly.finish",["src/core/startup-animation.js.part","src/algorithms/startup-timeline.mjs"],["disposed","boundary","completed","watchdog","interrupted","effect-cancelled","boot-cancelled","setup-failed","insufficient-budget","geometry-unready","boundary-incomplete","completed-unverified","completed-with-retired"]],
+    ["assembly.skip",["src/core/startup-animation.js.part"],["insufficient-budget","deadline"]],
+    ["assembly.late.skip",["src/core/startup-animation.js.part"],["insufficient-budget"]],
+    ["assembly.bloom.fallback",["src/core/startup-animation.js.part"],["budget"]],
+    ["disassembly.bypass",["closing-animation.uc.mjs"],["bookmark-preflight-failed","engine-replaced","tab-engine-unavailable","tab-acquisition-failed","bookmark-acquisition-failed","control-acquisition-failed"]],
+    ["drag.source.resolve",["src/native/tab-adapter.js.part"],["ambiguous"]],
+    ["drag.search.restore",["src/toolbar/address-controller.js.part","src/interactions/drag-engine.js.part","src/interactions/startup-search.js.part","src/toolbar/tab-sync.js.part","src/core/window-lifecycle.js.part","src/interactions/drag-controller.js.part"],["native-address-input","drag-cancel","new-pointerdown","new-keydown","source-pointer","reschedule","dragstart","native-tab-select","native-tab-change","destroy","state-changed"]]
+  ];
+  for(const [event,paths,values] of groups){
+    const producers=paths.map(p=>readFileSync(new URL("../"+p,import.meta.url),"utf8")).join("\n");
+    for(const reason of values){
+      assert.ok(producers.includes('"'+reason+'"'),event+" source missing "+reason);
+      trace(event,{reason});
+      assert.equal(JSON.parse(f.api.dump()).events.at(-1).data.reason,reason,event);
+    }
+    trace(event,{reason:"AccountSecretTokenError"});
+    assert.equal(JSON.parse(f.api.dump()).events.at(-1).data.reason,null,event);
+  }
+  assert.ok(!f.api.dump().includes("AccountSecretTokenError"));
+  f.api.dispose();
+});
