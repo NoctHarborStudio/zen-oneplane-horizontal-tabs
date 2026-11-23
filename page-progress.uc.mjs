@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="page-progress.script",data={version:"0.3.0-preview.150"};
+  const event="page-progress.script",data={version:"0.3.0-preview.151"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -18,6 +18,8 @@ try{if(typeof window!=="undefined"){
   let dead=false,installed=false,initialized=false,observer=null,bar=null,fill=null;
   let browser=null,states=new WeakMap(),selected=null,shown=false,showTimer=0,phaseTimer=0,renderTimer=0,lastRender=0,phase="hidden",terminal=null;
   const now=()=>window.performance.now();
+const PAGE_PROGRESS_ERROR_CLASSES=new Set(["Error","TypeError","RangeError","ReferenceError","SyntaxError","URIError","EvalError","AggregateError","DOMException","AbortError","NotAllowedError","InvalidStateError","NotFoundError","NotSupportedError","SecurityError","DataCloneError","NetworkError","TimeoutError","QuotaExceededError","WorkspaceCommandError","NS_ERROR_FAILURE","NS_ERROR_ABORT","NS_ERROR_NOT_AVAILABLE","NS_ERROR_UNEXPECTED","NS_ERROR_NOT_INITIALIZED","NS_ERROR_FILE_NOT_FOUND","NS_ERROR_XPC_BAD_CONVERT_JS"]);
+function pageErrorClass(error){try{const name=error?.name;return typeof name==="string"&&PAGE_PROGRESS_ERROR_CLASSES.has(name)?name:"Error";}catch{return "Error";}}
   const enabled=()=>prefs.getBoolPref(PREF,true);
   const make=(tag,cls)=>{const n=document.createElementNS(NS,tag);n.className=cls;return n;};
   function clearTimers(){
@@ -219,7 +221,7 @@ try{if(typeof window!=="undefined"){
       browser.tabContainer.addEventListener("TabSelect",onSelect);
       resetFor(browser.selectedBrowser);
       root.setAttribute(OWNER,"center");
-    }catch(error){console.warn("[Zen Refined] Page progress:",error);uninstall();}
+    }catch(error){console.warn("[Zen Refined] Page progress:",pageErrorClass(error));uninstall();}
   }
   function uninstall(){
     hide();

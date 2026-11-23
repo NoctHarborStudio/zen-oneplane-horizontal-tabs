@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="workspace.script",data={version:"0.3.0-preview.150"};
+  const event="workspace.script",data={version:"0.3.0-preview.151"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -14,6 +14,8 @@ try{if(typeof window!=="undefined"){
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   let dead=false,active=null,request=null,registered=false,transitionCount=0;
+const WORKSPACE_ERROR_CLASSES=new Set(["Error","TypeError","RangeError","ReferenceError","SyntaxError","URIError","EvalError","AggregateError","DOMException","AbortError","NotAllowedError","InvalidStateError","NotFoundError","NotSupportedError","SecurityError","DataCloneError","NetworkError","TimeoutError","QuotaExceededError","WorkspaceCommandError","NS_ERROR_FAILURE","NS_ERROR_ABORT","NS_ERROR_NOT_AVAILABLE","NS_ERROR_UNEXPECTED","NS_ERROR_NOT_INITIALIZED","NS_ERROR_FILE_NOT_FOUND","NS_ERROR_XPC_BAD_CONVERT_JS"]);
+function workspaceErrorClass(error){try{const name=error?.name;return typeof name==="string"&&WORKSPACE_ERROR_CLASSES.has(name)?name:"Error";}catch{return "Error";}}
   // This gate survives replacement of the visual controller in the same
   // window. Native work already in flight cannot be cancelled by WAAPI.
   const GATE="__nocturneWorkspaceCommandGate";
@@ -85,7 +87,7 @@ try{if(typeof window!=="undefined"){
     if((root.getAttribute(PHASE)||null)===(value||null))return;
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.phase",()=>({from:root.getAttribute(PHASE),to:value,locked:!!geometryLock}),{sample:1800});
     if(value)root.setAttribute(PHASE,value);else root.removeAttribute(PHASE);
-    try{win.__zenMagneticBookmarksShared?.syncAddressState?.();}catch(error){console.warn("[Nocturne] Workspace bookmarks:",error);}
+    try{win.__zenMagneticBookmarksShared?.syncAddressState?.();}catch(error){console.warn("[Nocturne] Workspace bookmarks:",workspaceErrorClass(error));}
     win.dispatchEvent(new win.CustomEvent("ZenRefined:WorkspaceTransition",{detail:{phase:value||"idle"}}));
     if(dead||root.getAttribute(PHASE)!==(value||null))return;
     // First collapse hover decorations and acquire the panel hold, then
@@ -278,7 +280,7 @@ try{if(typeof window!=="undefined"){
       const one=root.getAttribute("oneplane-active")==="true";
       let prepared,failed=false;
       try{if(one)prepared=visualStep(()=>layout?.prepareWorkspaceGeometry?.());}
-      catch(error){failed=true;console.warn("[Nocturne] Workspace geometry:",error);}
+      catch(error){failed=true;console.warn("[Nocturne] Workspace geometry:",workspaceErrorClass(error));}
       const ready=!one||get("oneplane-tabs")?.getAttribute("data-ready")==="true"&&!!layout&&typeof layout.prepareWorkspaceGeometry==="function"&&!failed&&win.__oneplaneLayoutController===layout&&prepared!==false&&
         (layout.geometryPreflightVersion!==1||prepared===true);
       win.__nocturneTrace?.("workspace.preflight.geometry",{sequence:tx.sequence,ready,legacy:!!one&&!!layout&&layout.geometryPreflightVersion!==1},{sample:1000});
@@ -299,7 +301,7 @@ try{if(typeof window!=="undefined"){
       return result;
     }catch(error){
       if(!called){called=true;cleanup(tx);return tx.superseded||req.superseded||dead||win.closed?undefined:invoke();}
-      if(nativeResolved){try{win.__nocturneTrace?.("workspace.visual.error",{name:error?.name||"Error"},{flush:true});}catch{}return result;}
+      if(nativeResolved){try{win.__nocturneTrace?.("workspace.visual.error",{name:workspaceErrorClass(error)},{flush:true});}catch{}return result;}
       throw error;
     }finally{
       const successor=!dead&&request&&request!==req&&!request.superseded&&request.carrySwap;
@@ -339,5 +341,5 @@ try{if(typeof window!=="undefined"){
     win[KEY]=api;win.addUnloadListener(dispose);win.addEventListener("unload",dispose,{once:true});
     win.addEventListener("keydown",onKey,true);win.addEventListener("beforecustomization",abort);
     reduced.addEventListener("change",abort);prefs.addObserver(PREF,abort);
-  }catch(error){console.warn("[Zen Refined] Workspace transition:",error);dispose();}
+  }catch(error){console.warn("[Zen Refined] Workspace transition:",workspaceErrorClass(error));dispose();}
 })();

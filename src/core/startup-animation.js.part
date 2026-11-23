@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.150"};
+  const event="assembly.script",data={version:"0.3.0-preview.151"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -15,6 +15,8 @@ try{if(typeof window!=="undefined"){
   const get=id=>document.getElementById(id);
   const reduced=window.matchMedia("(prefers-reduced-motion: reduce)");
   const now=()=>window.performance.now();
+const ASSEMBLY_ERROR_CLASSES=new Set(["Error","TypeError","RangeError","ReferenceError","SyntaxError","URIError","EvalError","AggregateError","DOMException","AbortError","NotAllowedError","InvalidStateError","NotFoundError","NotSupportedError","SecurityError","DataCloneError","NetworkError","TimeoutError","QuotaExceededError","WorkspaceCommandError","NS_ERROR_FAILURE","NS_ERROR_ABORT","NS_ERROR_NOT_AVAILABLE","NS_ERROR_UNEXPECTED","NS_ERROR_NOT_INITIALIZED","NS_ERROR_FILE_NOT_FOUND","NS_ERROR_XPC_BAD_CONVERT_JS"]);
+function assemblyErrorClass(error){try{const name=error?.name;return typeof name==="string"&&ASSEMBLY_ERROR_CLASSES.has(name)?name:"Error";}catch{return "Error";}}
   function canStartBeforePaint(utils,readyState){
     // Never hide controls that Gecko has already painted.
     try{
@@ -114,7 +116,7 @@ try{if(typeof window!=="undefined"){
         if(dead||epoch!==timerEpoch)return;
         timer=0;complete();
       },Math.max(0,end-now()));
-    }catch(error){decision("assembly.timer.error",{name:error?.name});finish("setup-failed");}
+    }catch(error){decision("assembly.timer.error",{name:assemblyErrorClass(error)});finish("setup-failed");}
   }
   function mountBoot(){
     if(!prefs.getBoolPref(BOOT_PREF,true)){removeBoot();return;}
@@ -146,7 +148,7 @@ try{if(typeof window!=="undefined"){
       if(dead){try{logo.finished.catch(()=>{});}catch{}try{logo.cancel();}catch{}return;}
       bootEffects.push(logo);logo.finished.catch(()=>{});
       decision("boot.show",{age:bootAt-started,adopted:!!early,backgroundAt:early?.at??bootAt,lead,minimum:BOOT_MIN,exit:BOOT_EXIT});
-    }catch(error){removeBoot();decision("boot.error",{name:error?.name});}
+    }catch(error){removeBoot();decision("boot.error",{name:assemblyErrorClass(error)});}
   }
   function removeBoot(){
     let failed=0;
@@ -167,7 +169,7 @@ try{if(typeof window!=="undefined"){
     const done=()=>{
       if(dead||boot!==overlay)return;
       removeBoot();decision("boot.handoff",{elapsed:now()-bootAt});
-      try{resume();}catch(error){decision("assembly.resume.error",{name:error?.name});finish("setup-failed");}
+      try{resume();}catch(error){decision("assembly.resume.error",{name:assemblyErrorClass(error)});finish("setup-failed");}
     };
     // Allow the frozen proxy tree to receive a paint before the exit.
     bootFrame=window.requestAnimationFrame(()=>{
@@ -308,7 +310,7 @@ try{if(typeof window!=="undefined"){
       if(!from||!play(record.n,[from,to],0,120,false,FADE,record.complete))record.complete?.();
     }
     armFinish(now()+155);
-    }catch(error){decision("assembly.settle.error",{name:error?.name});finish("setup-failed");}
+    }catch(error){decision("assembly.settle.error",{name:assemblyErrorClass(error)});finish("setup-failed");}
   }
   function interrupt(event){
     // Typing in Home or a web page must not terminate a chrome animation.
@@ -348,7 +350,7 @@ try{if(typeof window!=="undefined"){
         if(dead||animations.get(a)!==record||!cancelled&&retain)return;
         animations.delete(a);
         if(!cancelled)try{a.cancel();}catch{}
-        try{complete?.();}catch(error){decision("assembly.effect.cleanup-error",{name:error?.name});}
+        try{complete?.();}catch(error){decision("assembly.effect.cleanup-error",{name:assemblyErrorClass(error)});}
         if(cancelled)decision("assembly.effect.cancel",{retained:retain});
       };
       const promise=a.finished;
@@ -363,7 +365,7 @@ try{if(typeof window!=="undefined"){
       return true;
     }catch(error){
       if(a){animations.delete(a);if(verify)try{a.finished.catch(()=>{});}catch{}try{a.cancel();}catch{}}
-      decision("assembly.effect.error",{name:error?.name,paused:bootPreparing});
+      decision("assembly.effect.error",{name:assemblyErrorClass(error),paused:bootPreparing});
       return false;
     }
   }
@@ -603,7 +605,7 @@ try{if(typeof window!=="undefined"){
       return handle;
     }catch(error){
       try{handle?.release();}catch{}
-      handle=null;decision("assembly.bookmarks.error",{name:error?.name});return null;
+      handle=null;decision("assembly.bookmarks.error",{name:assemblyErrorClass(error)});return null;
     }finally{
       if(!handle&&!dead){
         for(const {n,mark} of prepared){
@@ -632,7 +634,7 @@ try{if(typeof window!=="undefined"){
       controls(row,url,center,true);
       // Cards inserted after the snapshot appear in their real slots.
       // Never restart an already-playing train for late mirror mutations.
-      }catch(error){decision("assembly.late.error",{name:error?.name});finish("setup-failed");}
+      }catch(error){decision("assembly.late.error",{name:assemblyErrorClass(error)});finish("setup-failed");}
     });
   }
   // WAAPI startTime is a document-timeline time, not performance.now().
@@ -851,11 +853,11 @@ try{if(typeof window!=="undefined"){
         armFinish();
         if(!dead)exitBoot(resume);
       }else resume();
-    }catch(error){decision("assembly.launch.error",{name:error?.name});console.warn("[Zen Refined] Startup reveal failed:",error);finish("setup-failed");}
+    }catch(error){decision("assembly.launch.error",{name:assemblyErrorClass(error)});console.warn("[Zen Refined] Startup reveal failed:",assemblyErrorClass(error));finish("setup-failed");}
   }
   function schedule(){
     if(dead||playing||settling||raf)return;
-    try{raf=window.requestAnimationFrame(tick);}catch(error){decision("assembly.readiness.error",{name:error?.name});finish("setup-failed");}
+    try{raf=window.requestAnimationFrame(tick);}catch(error){decision("assembly.readiness.error",{name:assemblyErrorClass(error)});finish("setup-failed");}
   }
   let readinessKey="",quietSince=started,resourceRevision=0,resourceOwners=null,resourceNodes=[];
   function sampleStartupResources(row,force=false){
@@ -874,7 +876,7 @@ try{if(typeof window!=="undefined"){
   }
   function tick(){
     raf=0;if(dead||playing)return;
-    try{checkReadiness();}catch(error){decision("assembly.readiness.error",{name:error?.name});finish("setup-failed");}
+    try{checkReadiness();}catch(error){decision("assembly.readiness.error",{name:assemblyErrorClass(error)});finish("setup-failed");}
   }
   function selectStartupPlan(one,overhead){
     const fold=startupTimeline(0,scale);
@@ -1036,5 +1038,5 @@ try{if(typeof window!=="undefined"){
     else{nativeObserver=subject=>{if(subject!==window)return;Services.obs.removeObserver(nativeObserver,"browser-delayed-startup-finished");nativeObserver=null;onNativeReady();};
       Services.obs.addObserver(nativeObserver,"browser-delayed-startup-finished");}
     schedule();
-  }catch(error){console.warn("[Zen Refined] Startup controller:",error);finish("setup-failed");}
+  }catch(error){console.warn("[Zen Refined] Startup controller:",assemblyErrorClass(error));finish("setup-failed");}
 })();

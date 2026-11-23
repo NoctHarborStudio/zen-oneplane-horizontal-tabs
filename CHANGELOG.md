@@ -1,3 +1,9 @@
+## 0.3.0-preview.151 — Standalone Sine exception console hardening (NC4-089-R7b)
+
+The independent Startup preferences, Magnetic Bookmarks, Page Progress, Workspace Transition and Center Assembly Sine entrypoints could pass raw Gecko/native exception objects to Browser Console outside the existing bounded diagnostics recorder. Those owners now log only a finite, explicit standard/native class (or `Error` on unsupported/throwing names) while retaining fixed operation labels; no exception message, stack or native object is sent. Startup, workspace and assembly diagnostic error-name fields use the same narrow classification.
+
+Each entrypoint owns its local pure filter to remain independent of unpredictable Sine load order, hot reload and Layout availability. The generated Center Assembly output and its source are kept in sync, and existing native operations, UI, resource ownership, animation durations, timers, preferences and Library scanner are unchanged. A source-backed regression executes the installed console statements with hostile message/getter inputs and verifies only safe classes are emitted. CI and actual Zen/Sine native console and performance acceptance are distinct; R7c event inventories and Library NC4-022/082/083 memory/cancellation work remain open.
+
 ## 0.3.0-preview.150 — Bounded Layout/Home/Hub/Drag direct-console exceptions (NC4-089-R7a)
 
 An independent full Layout source sweep found raw native exception objects in direct Browser Console warnings/errors from Home, Hub, Layout bootstrap, window lifecycle, tab drag/detach, Display placement, native address animation and startup search restoration. The existing Diagnostics recorder sanitized structured events, but did not own those direct Console sinks. Hub data-command failures also displayed arbitrary native exception messages directly in its status panel.
