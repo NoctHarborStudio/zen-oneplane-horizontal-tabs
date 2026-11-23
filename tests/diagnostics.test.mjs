@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {createClosedTabsService} from "../src/services/closed-tabs-service.mjs";
 import {readFileSync} from "node:fs";
 const version=JSON.parse(readFileSync(new URL("../theme.json",import.meta.url),"utf8")).version;
 const source=readFileSync(new URL("../src/core/diagnostics.js.part",import.meta.url),"utf8");
@@ -20,6 +21,25 @@ function fixture({isPrivate=false,on=true,prior=null,failWrite=false,writeHook=(
  reload();
  return {reload,win,doc,timers,frames,logs,writes,io,listeners,attrs,unload:()=>unload(),setTime:t=>time=t,disable:()=>enabled=false,api:win.__nocturneDiagnostics};
 }
+test("NC4-089-R4 Closed Tabs native observer errors retain class without private message",()=>{
+ const f=fixture();
+ const code=readFileSync(new URL("../src/services/library-services-runtime.js.part",import.meta.url),"utf8");
+ const start=code.indexOf('onError:(resource,error)=>trace("library.scope.error"');
+ const end=code.indexOf("),getClosed:",start);
+ assert.ok(start>=0&&end>start,"extract actual service producer, not a test-only imitation");
+ const callbackSource=code.slice(start+"onError:".length,end+1);
+ const onError=new Function("trace","return "+callbackSource)((event,data)=>f.win.__nocturneTrace(event,data));
+ const service=createClosedTabsService({getClosed:()=>[],observe:()=>()=>{throw new TypeError("sensitive-raw-error-message");},onError});
+ service.subscribe(()=>{});
+ assert.deepEqual(service.dispose(),{released:0,failed:1});
+ const saved=JSON.parse(f.api.dump()).events.find(e=>e.event==="library.scope.error");
+ assert.ok(saved);
+ assert.deepEqual(saved.data,{owner:"closed-tabs",resource:"closed-tabs-observer",name:"TypeError"});
+ assert.ok(!f.api.dump().includes("sensitive-raw-error-message"));
+ assert.ok(f.logs.every(log=>!log.includes("sensitive-raw-error-message")));
+ f.api.dispose();
+});
+
 test("NC4-089-R3 restores finite Workspace error codes from source producers",()=>{
  const f=fixture(),trace=f.win.__nocturneTrace;
  const command=readFileSync(new URL("../src/core/workspace-commands.mjs",import.meta.url),"utf8");
