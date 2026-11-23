@@ -689,3 +689,13 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [ ] Real Zen preference toggle during a slow disk write and after a deferred flush remains **native OPEN**. No old-file deletion or guaranteed in-flight native cancellation is promised.
 
 **Canonical closure:** PR #14, production `112fe9821dd7ee79ee9acee3cee331aaabb248c7`; [CI 45089400036](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45089400036) **SUCCESS** — 811 Node, 15 Python, 12 runtime parser checks, deterministic build, release-policy and public immutable/current Sine package. NC4-088 timing policy source/CI CLOSED, real pref toggles/native disk timing OPEN; no version bump or runtime change.
+
+### A0/A7 / NC4-089 — bounded diagnostic event metadata (preview.143 source candidate)
+
+- [x] Source-audit `record`, `safe`, throttle Map, early-event replay, `mark`, process writer and diagnostics-on/off/private gates; no new instrumentation owner or disk storage.
+- [x] Extracted-source regression: structural status/CSS/error-class data survives while URL/path/title/search/payload fields, arbitrary strings, malformed keys and console echoes are excluded.
+- [x] Extracted-source regression: malformed, overlong and human/free-form manual marks rejected; safe symbolic marks retained.
+- [x] Extracted-source regression: `native.TabSelect` and `event.OnePlane:StartupState` remain admissible, malicious event names rejected, throttle identities evicted after 256 unique keys, object keys cannot retain references.
+- [x] Extracted-source regression: cyclic/high-fanout detail has finite depth, node and serialized size; no unbounded recursion.
+- [ ] Run canonical `npm run verify` and Sine public-package checks on preview.143 before claiming source/CI completion.
+- [ ] Audit every source producer against explicit per-event fields, including extension/error edge cases; test native Zen diagnostics on/off and multiple/private windows with file-content privacy and profiler comparison. Source fixtures are not native privacy or performance evidence.

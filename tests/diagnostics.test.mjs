@@ -20,6 +20,66 @@ function fixture({isPrivate=false,on=true,prior=null,failWrite=false,writeHook=(
  reload();
  return {reload,win,doc,timers,frames,logs,writes,io,listeners,attrs,unload:()=>unload(),setTime:t=>time=t,disable:()=>enabled=false,api:win.__nocturneDiagnostics};
 }
+test("NC4-089 drops unstructured content fields, URI/path values and malicious keys",()=>{
+ const f=fixture(),trace=f.win.__nocturneTrace;
+ trace("drag.lifecycle.begin",{
+   reason:"native-session-ended",count:2,name:"Error",label:"before-drag",
+   transform:"matrix(1,0,0,1,10,20)",phase:"startup",
+   url:"https://bank.example/private",filePath:"C:\\\\Users\\\\secret.png",tabTitle:"Bank account",query:"very private search",
+   nested:{"bad title":"sensitive heading",constructor:"unsafe",status:"confirmed",path:"/home/user/secret",note:"user written message",unexpected:"oneword",searchQuery:"trivia",
+     statusText:"hello world",image:"file:///home/user/photo.png","safe-key":"unsafe value"},
+   [["a".repeat(100)]]:"sensitive key",badValue:"https://example.org/hidden"
+ },{flush:true});
+ const dumped=f.api.dump(),event=JSON.parse(dumped).events.at(-1);
+ assert.equal(event.event,"drag.lifecycle.begin");
+ assert.equal(event.data.reason,"native-session-ended");assert.equal(event.data.name,"Error");
+ assert.equal(event.data.label,"before-drag");assert.equal(event.data.transform,"matrix(1,0,0,1,10,20)");
+ assert.equal(event.data.nested.status,"confirmed");
+ for(const content of ["bank.example","secret.png","Bank account","private search","sensitive heading","user written message","example.org","hello world","bad title","oneword","trivia"])
+   assert.ok(!dumped.includes(content),content);
+ assert.ok(f.logs.every(x=>!x.includes("bank.example")&&!x.includes("secret.png")));
+ f.api.dispose();
+});
+test("NC4-089 refuses arbitrary mark labels and preserves short manual checkpoints",()=>{
+ const f=fixture(),api=f.api;
+ for(const label of ["human readable title","https://example.org/private","C:\\\\Users\\\\file.txt","a".repeat(80),{},null,"UPPER","before.drag"])
+   assert.equal(api.mark(label),false);
+ assert.equal(api.mark("before-drag"),true);
+ const marks=JSON.parse(api.dump()).events.filter(e=>e.event==="user.mark");
+ assert.deepEqual(marks.map(e=>e.data.label),["before-drag"]);
+ f.api.dispose();
+});
+test("NC4-089 limits throttle identities without breaking native event spellings",()=>{
+ const f=fixture(),trace=f.win.__nocturneTrace;
+ trace("event.OnePlane:StartupState",{phase:"playing"});
+ trace("native.TabSelect",{count:3});
+ trace("native.TabSelect",{count:4},{key:"native.TabSelect",throttle:1000});
+ trace("native.TabSelect",{count:5},{key:"native.TabSelect",throttle:1000});
+ assert.equal(JSON.parse(f.api.dump()).events.filter(e=>e.event==="native.TabSelect").length,2);
+ let lazy=0;for(const event of ["http://bad.example/","foo\\nbar","x".repeat(120),null,{},42])
+   trace(event,()=>++lazy);
+ assert.equal(lazy,0);
+ const evilKey={id:99};trace("drag.end",{count:1},{throttle:10000,key:evilKey});
+ trace("drag.end",{count:2},{throttle:10000,key:evilKey});
+ assert.equal(JSON.parse(f.api.dump()).events.filter(e=>e.event==="drag.end").length,1);
+ trace("drag.drop",{count:1},{throttle:10000,key:"first-key"});
+ for(let i=0;i<290;i++)trace("drag.drop",{n:i},{key:"key."+i,throttle:10000});
+ trace("drag.drop",{count:2},{throttle:10000,key:"first-key"});
+ assert.equal(JSON.parse(f.api.dump()).events.filter(e=>e.event==="drag.drop"&&e.data?.count===2).length,1,
+   "the oldest identity expires when throttle map reaches its cap");
+ assert.ok(JSON.parse(f.api.dump()).events.some(e=>e.event==="event.OnePlane:StartupState"));
+ f.api.dispose();
+});
+test("NC4-089 bounded nested trace handles cycles and excessive fanout",()=>{
+ const f=fixture(),node={mode:"native"};node.back=node;
+ const branch=()=>Object.fromEntries(Array.from({length:45},(_,i)=>["node"+i,{children:Array.from({length:32},()=>({phase:"running"}))}]));
+ f.win.__nocturneTrace("diagnostics.fixture",{node,big:branch()},{flush:true});
+ const event=JSON.parse(f.api.dump()).events.at(-1);
+ assert.equal(event.data.node.mode,"native");
+ let cycle=event.data.node;for(let i=0;i<5;i++)cycle=cycle.back;assert.equal(cycle,null);
+ assert.ok(JSON.stringify(event).length<50000);
+ f.api.dispose();
+});
 test("recorder keeps ordered events, early markers, lazy detail and bounded ring",async()=>{
  const f=fixture();const trace=f.win.__nocturneTrace;
  let evaluated=0;trace("drag",()=>({p:++evaluated}),{throttle:100});f.setTime(10);trace("drag",()=>({p:++evaluated}),{throttle:100});
