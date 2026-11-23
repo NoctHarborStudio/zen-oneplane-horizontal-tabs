@@ -271,7 +271,7 @@
         duration<=0||delay<0||duration+delay>t.finishLength)return null;
       trace("center.bloom.fallback",{reason:t.finishLength>=plan.end?"preflight":"budget"},{flush:true});
       return acquireTabs(row,options);
-    }catch(error){trace("center.motion.error",{stage:"prepare",name:error?.name},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
+    }catch(error){trace("center.motion.error",{stage:"prepare",name:nocturneErrorClass(error)},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
   }
   function invalidateTopology(row){
     const handle=active;
@@ -371,7 +371,7 @@
           // A busy sibling surface may defer notification until the next
           // checkpoint. Never call the owner twice under nested callbacks.
           if(!committed||wasBusy)return true;
-          try{if(exact())onTopologyInvalidated?.();}catch(error){trace("center.topology.error",{owner,name:error?.name},{flush:true});}
+          try{if(exact())onTopologyInvalidated?.();}catch(error){trace("center.topology.error",{owner,name:nocturneErrorClass(error)},{flush:true});}
           finally{if(!released)handle.release(reason==="geometry"?"geometry-changed":"topology-changed");}
           return true;
         }finally{invalidating=false;motionBusy=wasBusy;drainDispose();}
@@ -589,14 +589,14 @@
       return handle;
     }catch(error){
       handle.release("setup-failed");
-      trace("center.motion.error",{id,owner,mode:handle.mode,stage:"setup",name:error?.name},{flush:true});return null;
+      trace("center.motion.error",{id,owner,mode:handle.mode,stage:"setup",name:nocturneErrorClass(error)},{flush:true});return null;
     }
   }
   // Bookmarks use the Lab's center squeeze, not individual vertical slides.
   function bookmarks(options={}){
     if(dead||motionBusy||disposing||!current())return null;
     motionBusy=true;
-    try{return acquireBookmark(options);}catch(error){trace("center.bookmarks.error",{stage:"prepare",name:error?.name},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
+    try{return acquireBookmark(options);}catch(error){trace("center.bookmarks.error",{stage:"prepare",name:nocturneErrorClass(error)},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
   }
   function acquireBookmark({owner="unknown",direction="in",duration=520,delay=0,paused=false,retainOnDispose=null,observeEffect=null}={}){
     activeBookmark?.release("superseded");
@@ -642,7 +642,7 @@
       trace("center.bookmarks.acquire",{id,owner,direction,duration},{sample:duration+250});
       if(dead||released||!current()){handle.release("disposed");return null;}
       return handle;
-    }catch(error){handle.release("setup-failed");trace("center.bookmarks.error",{id,owner,name:error?.name},{flush:true});return null;}
+    }catch(error){handle.release("setup-failed");trace("center.bookmarks.error",{id,owner,name:nocturneErrorClass(error)},{flush:true});return null;}
   }
   function dispose({replacement=false}={}){
     if(disposing)return false;

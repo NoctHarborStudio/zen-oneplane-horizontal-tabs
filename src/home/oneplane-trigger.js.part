@@ -7,7 +7,7 @@
   }
   function mountHome(){
     typeof window!=="undefined"&&window.__nocturneTrace?.("home.mount",()=>(null),{sample:1800});
-    try{homeLease=acquireZenHome(window,Services);}catch(error){console.warn("[OnePlane] Home unavailable",error);}
+    try{homeLease=acquireZenHome(window,Services);}catch(error){console.warn("[OnePlane] Home unavailable",nocturneErrorClass(error));}
     island.toggleAttribute("data-op-home-enabled",!!homeLease);island.disabled=!homeLease;
     const startup=homeStartupRecord=window.__nocturneLayoutStartup;
     if(startup?.initial)startup.homeState=homeLease&&!window.__oneplaneWorkspaceProjection?"pending":"skipped";
@@ -45,7 +45,7 @@
       if(!current()||!beforeReveal())return;
       if(lease.open){outcome="ready";return;}
       if(lease.showOnStartup?.())outcome="ready";
-    }catch(error){outcome="failed";window.console.warn("[OnePlane] Startup search initialization:",error);}
+    }catch(error){outcome="failed";window.console.warn("[OnePlane] Startup search initialization:",nocturneErrorClass(error));}
     finally{
       if(startup&&window.__nocturneLayoutStartup===startup){
         startup.homeState=outcome;

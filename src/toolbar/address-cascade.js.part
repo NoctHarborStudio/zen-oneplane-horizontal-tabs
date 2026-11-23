@@ -203,7 +203,7 @@
         failed=true;
         if(anim){cascadeAnimations.delete(node);try{anim.cancel();}catch{}}
         try{node.removeAttribute(attr);}catch{}
-        window.console.warn("[OnePlane] Wave animation fallback:",error);
+        window.console.warn("[OnePlane] Wave animation fallback:",nocturneErrorClass(error));
         return false;
       }
     };

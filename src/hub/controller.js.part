@@ -882,7 +882,7 @@
           ...extra
         };
         window.__nocturneTrace?.("hub.projection."+stage,data,{flush:true});
-        console.info("[OnePlane] Projection "+stage,JSON.stringify(data));
+        console.info("[OnePlane] Projection "+stage);
       }catch{} // Diagnostic failure must not interrupt a native operation.
     }
     // Zen's native selectEmptyTab can fall back to creating an ordinary
@@ -1377,7 +1377,7 @@
         const result=await endpoint(window,projection);
         if(hubViewCurrent(session)&&result?.status==="not-closed")status.textContent="Native window close was not completed.";
       }catch(error){
-        if(hubViewCurrent(session))status.textContent=["return-target","return-unverified","return-unavailable","data-busy"].includes(error?.code)?error.message:"Could not return safely.";
+        if(hubViewCurrent(session))status.textContent=error?.code==="data-busy"?"Another native Workspace data command is pending.":error?.code==="return-unavailable"?"Use the native close-window command.":error?.code==="return-target"?"Return target changed. Try again.":error?.code==="return-unverified"?"Tab ownership could not be verified. Close any Glance view and try again.":"Could not return safely.";
         projectionLog(window,"return-rejected",{reason:["return-target","return-unverified"].includes(error?.code)?error.code:"unavailable"});
       }finally{projectionBusy=false;projectionStartedAt=null;settleHubView(session);}
     }

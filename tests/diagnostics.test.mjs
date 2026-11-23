@@ -630,3 +630,66 @@ test("reentrant completion during native handoff and disabled recorder do not st
  f.listeners.get("unload")({target:f.doc});await Promise.resolve();assert.equal(calls,1);
  assert.equal(f.win.__nocturneTrace,undefined);assert.equal(f.timers.size,0);assert.equal(f.writes.length,0);
 });
+
+test("NC4-089-R7c bounds remaining source-declared reason families",()=>{
+  const f=fixture(),trace=f.win.__nocturneTrace;
+  const families=[
+    ["workspace.startup.wait","src/core/bootstrap.js.part",["user-takeover","deadline","setup-error","settled","error","layout-dispose"]],
+    ["address.cascade.finish","src/toolbar/address-cascade.js.part",["cancelled","setup-failed","finished","watchdog","watchdog-unavailable"]],
+    ["address.finish","src/toolbar/address-controller.js.part",["finished","cancelled","watchdog","fallback-failed","setup-failed"]],
+    ["drag.incoming.release","src/interactions/strip-drag.js.part",["source-gone","geometry-or-phase","new-preview","drop-rejected","leave-strip","source-unresolved","outside-toolbar"]],
+    ["hub.projection.search-cancelled","src/hub/controller.js.part",["stale-preparation"]],
+    ["hub.projection.search-error","src/hub/controller.js.part",["native-error"]],
+    ["hub.projection.failed","src/hub/controller.js.part",["native-error"]],
+    ["hub.projection.return-rejected","src/hub/controller.js.part",["return-target","return-unverified","unavailable"]],
+    ["drag.placement.preview","src/interactions/display-engine.js.part",["work-area-change"]]
+  ];
+  for(const [event,path,allowed] of families){
+    const producer=readFileSync(new URL("../"+path,import.meta.url),"utf8");
+    for(const reason of allowed){
+      assert.ok(producer.includes('"'+reason+'"'),event+": "+reason+" not source-backed");
+      trace(event,{reason});
+      assert.equal(JSON.parse(f.api.dump()).events.at(-1).data.reason,reason,event);
+    }
+    trace(event,{reason:"PersonalAccountError"});
+    assert.equal(JSON.parse(f.api.dump()).events.at(-1).data.reason,null,event);
+  }
+  assert.ok(!f.api.dump().includes("PersonalAccountError"));
+  f.api.dispose();
+});
+test("NC4-089-R7c Layout exception Console and Hub return notices are bounded",()=>{
+  const paths=[
+    "src/home/oneplane-trigger.js.part","src/interactions/native-drag-image.js.part",
+    "src/interactions/split-drop.js.part","src/toolbar/address-cascade.js.part",
+    "src/core/preferences.js.part"
+  ];
+  for(const path of paths){
+    const src=readFileSync(new URL("../"+path,import.meta.url),"utf8");
+    const logLines=src.split("\n").filter(line=>/\bconsole\.(?:warn|error)\(/.test(line)&&/\berror\b/.test(line));
+    assert.ok(logLines.length>0,path);
+    for(const line of logLines)assert.ok(line.includes("nocturneErrorClass(error)"),path+": "+line);
+  }
+  const hub=readFileSync(new URL("../src/hub/controller.js.part",import.meta.url),"utf8");
+  assert.ok(!hub.includes("error?.code)?error.message:"));
+  assert.ok(!hub.includes('JSON.stringify(data));'));
+  for(const message of [
+    "Another native Workspace data command is pending.",
+    "Use the native close-window command.",
+    "Return target changed. Try again.",
+    "Tab ownership could not be verified. Close any Glance view and try again."
+  ])assert.ok(hub.includes('"'+message+'"'),message);
+  const a=hub.indexOf("    function projectionLog("),b=hub.indexOf("    // Zen's native selectEmptyTab",a);
+  assert.ok(a>=0&&b>a);
+  const f=fixture(),info=[];
+  const projectionLog=new Function("window","console","PROJECTION","projectionSequence",
+    hub.slice(a,b)+"return projectionLog;")(f.win,{info:(...args)=>info.push(args)},"__projection",0);
+  projectionLog({gBrowserInit:{delayedStartupFinished:true}},"return-rejected",{reason:"private_account_token",secret:"https://private.example/secret"});
+  assert.deepEqual(info,[["[OnePlane] Projection return-rejected"]]);
+  const log=f.api.dump();
+  assert.ok(!log.includes("private_account_token")&&!log.includes("private.example/secret"));
+  f.api.dispose();
+  const center=readFileSync(new URL("../src/core/center-motion.js.part",import.meta.url),"utf8");
+  assert.ok(!center.includes("name:error?.name"));
+  const startup=readFileSync(new URL("../src/core/bootstrap.js.part",import.meta.url),"utf8");
+  assert.ok(startup.includes("name:nocturneErrorClass(error)"));
+});

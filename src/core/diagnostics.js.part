@@ -1,7 +1,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.151",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.152",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -87,7 +87,16 @@
     ["library.surface.fallback",{reason:new Set(["popover-unavailable"])}],
     ["center.bloom.fallback",{reason:new Set(["preflight","budget"])}],
     ["center.motion.skip",{reason:new Set(["no-row","no-visible-cards"])}],
-    ["center.fold.reject",{reason:new Set(["partial-clip","coordinate-frame"])}]
+    ["center.fold.reject",{reason:new Set(["partial-clip","coordinate-frame"])}],
+    ["workspace.startup.wait",{reason:new Set(["user-takeover","deadline","setup-error","settled","error","layout-dispose"])}],
+    ["address.cascade.finish",{reason:new Set(["cancelled","setup-failed","finished","watchdog","watchdog-unavailable"])}],
+    ["address.finish",{reason:new Set(["finished","cancelled","watchdog","fallback-failed","setup-failed"])}],
+    ["drag.incoming.release",{reason:new Set(["source-gone","geometry-or-phase","new-preview","drop-rejected","leave-strip","source-unresolved","outside-toolbar"])}],
+    ["hub.projection.search-cancelled",{reason:new Set(["stale-preparation"])}],
+    ["hub.projection.search-error",{reason:new Set(["native-error"])}],
+    ["hub.projection.failed",{reason:new Set(["native-error"])}],
+    ["hub.projection.return-rejected",{reason:new Set(["return-target","return-unverified","unavailable"])}],
+    ["drag.placement.preview",{reason:new Set(["work-area-change"])}]
   ]);
   const CSS_FIELDS=new Set(["opacity","visibility","display","translate","scale","transform","transition","height","width","hoverProgress","centerX","centerAlpha","startupBase","mask","bmMask","contour","bmContour","measure","progress","startupProgress"]);
   const CSS_VALUE=/^[#A-Za-z0-9.,()%+ :-]{1,180}$/;
