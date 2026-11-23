@@ -786,3 +786,9 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [ ] **Upstream Zen blockers still OPEN:** NC4-022 intrinsic decoded memory/frames, NC4-082 pre-truncation C++ accumulation and scan CPU, NC4-083 true native cancellation. Existing Zen/Gecko in-flight work cannot be cancelled by Nocturne; stock Zen Library scanning is not changed. Re-enable opt-in local scanning only against a validated native capability, not by lowering the JavaScript `maxItems` count or treating UI deadline as native abort.
 
 **Exit distinction:** Nocturne's optional unsafe scan/thumbnail entry point is source/CI CLOSED by a temporary UX restriction; neither upstream native risk nor native A7/NA-1 browser acceptance is closed.
+
+### A7 / preview.156 — cross-realm History native acceptance
+
+- [x] Reproduce a native-shaped grouped `Map` constructed in an independent JS realm: `instanceof Map` fails despite valid visits; a source regression asserts the visit now appears with the correct group and date.
+- [ ] After updating the `preview.156` Sine package and restarting Zen, visit a normal non-private HTTP(S) page and open Ctrl+H; compare Nocturne History with the built-in Native history command. The visit should appear in both. Do not use the `Last hour` clear-history period selector as a filter; do not clear real history.
+- [ ] If the native fallback has entries but Nocturne stays empty, collect bounded local diagnostic evidence and investigate the exact `PlacesQuery` shape/readiness/observer and Gecko realm boundaries. Source compatibility does not establish native root cause or a full A7 PASS.

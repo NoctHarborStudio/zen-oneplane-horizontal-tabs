@@ -1,3 +1,9 @@
+## 0.3.0-preview.156 — Cross-realm native History results (A7)
+
+Fix native History silently displaying an empty list when `PlacesQuery.getHistory()` returns its grouped `Map` from a different Gecko JavaScript global. The previous `instanceof Map` check relied on matching constructors across realms; the Library now accepts the native iterable groups while retaining cross-realm `Array.isArray` handling for flat search results, the original 120-day limit, bounded pagination, URL/identity rules, and one native History owner. An isolated VM regression reproduces the previous empty rendering with a cross-realm Map, and verifies the normalized visit is visible. Does not change the native history database, privacy, commands, UI design, scanner safety gate, or any destructive action.
+
+This is source/CI stabilization based on the user-observed blank Library after enabling experimental Ctrl+H. It does not yet prove that the installed Zen/Gecko context caused that blank state; native comparison with the built-in History after a full Nocturne update remains required. No new feature or API and no native Zen acceptance are claimed.
+
 ## 0.3.0-preview.155 — Temporary fail-closed Library local-media safety policy (NC4-022/082/083)
 
 Following explicit user approval, temporarily suspend the optional native folder scan for Documents/Pictures in the existing Library Services owner regardless of the saved `zen.nocturne.library.local-media` preference. The Zen 1.24.2b native scanner accumulates all matching entries before limiting its returned items, exposes no cancellation handle, and Nocturne's former raw `file:` thumbnail source cannot bound decoded pixel or animation memory. Lowering `maxItems` or using CSS `img` sizing would not remove these risks. This scope does not patch Zen C++ or claim that its native scanner is now bounded/cancellable.
