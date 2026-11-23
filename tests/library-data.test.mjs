@@ -54,6 +54,22 @@ test("forget closed tab revalidates native ID and private state",()=>{
  assert.deepEqual(forgot,[1]);s.dispose();assert.equal(s.forget(1),false);
 });
 
+test("Library shortcuts preserve Ctrl+H/J on non-Latin keyboard layouts",()=>{
+  // These are synthetic event shapes: current native logs never capture actual keys or layouts.
+  // The old key-only matcher returned null for both and fell through to Zen.
+  for(const [code,key,section] of [["KeyH","р","history"],["KeyJ","о","downloads"]]){
+    assert.equal(libraryShortcutSection({key,code,ctrlKey:true}),section);
+    assert.equal(libraryShortcutSection({key,code,metaKey:true},"Darwin"),section);
+    for(const patch of [{defaultPrevented:true},{repeat:true},{isComposing:true},{shiftKey:true},{altKey:true},{ctrlKey:false}]){
+      assert.equal(libraryShortcutSection({key,code,ctrlKey:true,...patch}),null);
+    }
+    assert.equal(libraryShortcutSection({key,code,metaKey:true,ctrlKey:true},"Darwin"),null);
+  }
+  assert.equal(libraryShortcutSection({key:"x",code:"KeyX",ctrlKey:true}),null);
+  assert.equal(libraryShortcutSection({key:"H",code:"Unidentified",ctrlKey:true}),"history");
+  assert.equal(libraryShortcutSection({key:"j",ctrlKey:true}),"downloads");
+});
+
 test("physical library shortcut recognizes exact platform accelerator and rejects repeats or modifiers",()=>{
  const e={key:"H",ctrlKey:true};
  assert.equal(libraryShortcutSection(e),"history");assert.equal(libraryShortcutSection({...e,key:"j"}),"downloads");
