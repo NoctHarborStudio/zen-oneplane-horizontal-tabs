@@ -87,7 +87,7 @@
     addressPhaseTimer=timer;
   }
   function beginAddressPhase(name,from,to,duration,layoutWidth=Math.max(from.width,to.width)){
-    typeof window!=="undefined"&&window.__nocturneTrace?.("address.begin",()=>({name,fromWidth:from.width,toWidth:to.width,duration,layoutWidth}),{sample:1800});
+    typeof window!=="undefined"&&window.__nocturneTrace?.("address.begin",()=>({phase:name,fromWidth:from.width,toWidth:to.width,duration,layoutWidth}),{sample:1800});
     // Cancel only after sampling the previous visual position. Keep
     // the native editor, selection, results and popup anchors intact.
     const previous=addressTransition?.bar||addressSettleOwner?.bar;

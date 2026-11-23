@@ -699,3 +699,11 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [x] Extracted-source regression: cyclic/high-fanout detail has finite depth, node and serialized size; no unbounded recursion.
 - [x] [CI 45097834977](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45097834977) SUCCESS on production `b2e4e370fd07bf412002aa872f6289323606002f`: 815 Node, 15 Python, 12 runtime parsers, reproducible generated sources, publication/version history, immutable and current Sine archive.
 - [ ] Audit every source producer against explicit per-event fields, including extension/error edge cases; test native Zen diagnostics on/off and multiple/private windows with file-content privacy and profiler comparison. Source fixtures are not native privacy or performance evidence.
+
+### A0/A7 / NC4-089-R2 — post-preview.143 diagnostic producer regression (preview.144)
+
+- [x] Independently reproduce on exact preview.143 recorder that `drag.mode.request.previous/requested`, `drag.end.drop`, `workspace.command.rejected.code`, and `address.begin.name` are null, and `home.search.snapshot unavailable` is rejected by `EVENT_NAME`.
+- [x] Audit source-defined values for `workspace.phase` (out/swap/in), Startup phases (waiting/playing/settling), Home readiness (unavailable/pending/skipped/ready/failed), native `typeof` results, address engine and easing.
+- [x] Add new source-backed cases for valid finite native/animation categories, unexpected-string rejection, and extracted production Home `searchLog()` plus address-phase source contract.
+- [ ] Verify `preview.144` full Node/Python/runtime parser, reproducible build, release policy and public Sine package in GitHub CI.
+- [ ] Verify real Zen 1.24.2b/Sine 2.3.3 diagnostic values in normal/private and multiple windows with diagnostics on/off, and confirm no user strings or unexpectedly null lifecycle reasons. Native/complete per-event schema gate remains OPEN.
