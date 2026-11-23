@@ -746,3 +746,15 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [ ] Real Zen 1.24.2b/Sine 2.3.3 normal/private/multiwindow status/console privacy, native controller/query injection ordering, hot reload and diagnostics-on/off Gecko profiler remain OPEN.
 - [ ] Library NC4-022/082 decoded thumbnail/native pre-truncation scanner memory and NC4-083 scan cancellation remain OPEN; do not treat UI wait as native cancellation.
 
+### A7 / NC4-093 — Actual user smoke and Home status layout fix (preview.148 → preview.149)
+
+- [x] User reported partial native smoke on preview.148: no obvious overall functional breakage, motions subjectively improved, but screenshots show `Workspace command in progress…` below the Home grid and a content shift. This report is **native observation**, not a controlled perf benchmark or integrated acceptance.
+- [x] Source-trace `workspaceCommandState → watchWorkspaceCommand → updateWorkspacePending → hidden` and Home flex-centering; show that an inserted pending paragraph affects flow, independently of whether its native Workspace lease is valid.
+- [x] Keep existing Workspace `pending/unknown/native-busy` messages, accessibility and blocked command admission; position the existing status out of flow with full text/title. Test source CSS placement and the actual Home updater for idle/pending/unknown/settled.
+- [x] [PR #24](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/pull/24), `9bb5448ce5518f7b1c33c109c4c5674d839a365e`, [CI 45133076154](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45133076154) **SUCCESS**: 827 Node / 15 Python / 12 runtime parsers, deterministic build and served Sine package. Source/CI regression CLOSED.
+- [ ] Native preview.149: opening Home while a real workspace command begins/settles must not move the surrounding cards/footer; message must remain readable and not cover buttons. If `pending` changes to `unknown` after five seconds without native settlement, keep the blocking behavior, report the persistent native state rather than hiding it.
+- [ ] Downloads Dock: investigate user-observed flash on reinsert / instant bottom track separately from native drag completion and progress indicator. Capture exact drag-end, Bunny popup/ghost, paint/RAF and release phase, with no changes to native drop semantics until measured.
+- [ ] Multi-monitor: user reports lagging follower under OS drag across monitors. Collect source/window/screen coordinates, per-monitor DPI/scales, native OLE popup handoff where applicable, frame gaps and profiler cost; distinguish OS drag cadence from JS/compositor without guessing.
+- [ ] Steam Store page showed `ServiceTransportProvider` content error. No source evidence of a Nocturne cause; compare with a no-mod session only if persistent. Do not count as a Nocturne regression.
+- [ ] NC4-022/082/083 and full A7/A8 native acceptance remain OPEN.
+
