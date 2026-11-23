@@ -1,3 +1,9 @@
+## 0.3.0-preview.146 — Preserve Closed Tabs error-class diagnostics (NC4-089-R4)
+
+Independent producer/recorder audit found that `library.scope.error` emitted a native Closed Tabs observer failure class under `error`, a key rejected by the scoped diagnostic string filter. The existing Closed Tabs callback now emits `name`, the same restricted exception-class field already used by Layout and Hub. A production-source-extracted regression triggers actual observer disposal failure and confirms that the class survives while raw exception messages remain absent.
+
+No new services, native commands, scanner, logger, writer, timer, observer, preferences, UI behavior or browser data access. Native Zen/Sine privacy/performance acceptance and full per-event semantic reason/status inventory remain OPEN.
+
 ## 0.3.0-preview.145 — Complete the scoped diagnostic producer evidence audit (NC4-089-R3)
 
 Independent preview.144 replay reproduced additional evidence loss: native Workspace selection/return error codes were redacted; `chrome.attributes` preserved array length but nulled all node/attribute/value metadata; Download Bunny popup CSS surface samples, OS platform and lifecycle trace error class were missing. No private-data exposure in Zen has been reproduced.

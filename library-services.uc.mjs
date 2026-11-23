@@ -382,7 +382,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   const trace=(event,data)=>{try{if(win.__nocturneTrace)win.__nocturneTrace(event,data,{flush:true});else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,data,t:win.performance?.now?.()??0});}}catch{}};
-  trace("library.services.script",{version:"0.3.0-preview.145"});
+  trace("library.services.script",{version:"0.3.0-preview.146"});
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
   const BARRIER="__nocturneDownloadsDisposal",MEDIA_BARRIER="__nocturneMediaDisposal";
   const previous=win[KEY],previousClosing=previous?.dispose?.(),existing=win[BARRIER];
@@ -471,7 +471,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
     const D=win.Downloads||load("resource://gre/modules/Downloads.sys.mjs","Downloads");
     return D.getList(privateWindow()?D.PRIVATE:D.PUBLIC);
   },onError:()=>win.console.warn("[Nocturne] Downloads service listener failed")});
-  const closedTabs=createClosedTabsService({allowed,onError:(resource,error)=>trace("library.scope.error",{owner:"closed-tabs",resource,error:error?.name||"Error"}),getClosed:()=>load("moz-src:///browser/components/sessionstore/SessionStore.sys.mjs","SessionStore").getClosedTabData({sourceWindow:win}),
+  const closedTabs=createClosedTabsService({allowed,onError:(resource,error)=>trace("library.scope.error",{owner:"closed-tabs",resource,name:error?.name||"Error"}),getClosed:()=>load("moz-src:///browser/components/sessionstore/SessionStore.sys.mjs","SessionStore").getClosedTabData({sourceWindow:win}),
     restoreNative(id,background){
       const store=load("moz-src:///browser/components/sessionstore/SessionStore.sys.mjs","SessionStore");
       if(typeof store.undoCloseById!=="function"||!win.gBrowser)return false;
