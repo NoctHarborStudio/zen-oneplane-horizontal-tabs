@@ -463,3 +463,9 @@ Tests cover positive/hostile error names and the extracted real Home subscriber 
 
 **Exclusions:** external independent Sine entrypoints' raw console errors, generic per-event `reason/status`, native diagnostics on/off/private/multiwindow/profiler, and Library NC4-022/082/083 memory/cancellation. Browser Console error-class safety is source-proven only for the nine inlined owners, not all Nocturne or Zen.
 
+
+### Preview.153 / NC4-089-R7c-P2 — Finite Diagnostics name classes and source-scoped reasons
+
+The recorder's early `name` sink previously admitted arbitrary `[A-Z]…Error` strings, unlike the existing finite 27-class producer filter. The early recorder now uses the exact finite class set with an automated source-level parity check; unknown names become `null` in both the JSON dump and mirrored Console. Eight source-backed Assembly, Disassembly and Drag `reason` event families now have explicit value sets. Runtime event producers, native commands, lifecycle scopes, animation timing, resource ownership and diagnostic storage quotas are unchanged.
+
+[PR #35](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/pull/35), `preview.153` production `545c3e2adf5cc5caa16b26e79e4259b383333471`; [CI 45141588472](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45141588472) **SUCCESS**: 835/835 Node, 15/15 Python, 12 parsers and public Sine package. Remaining dynamic `reason/status` domains and real Zen/Sine private/multiwindow/diagnostics-on-off/profiler checks are OPEN; Library NC4-022/082/083 memory/cancellation P0 gates remain OPEN.
