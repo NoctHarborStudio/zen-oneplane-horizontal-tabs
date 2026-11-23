@@ -736,3 +736,13 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [ ] Native Zen 1.24.2b + Sine 2.3.3 diagnostics-enabled/disabled/private/multiwindow persistence and console inspection, error-class fidelity, and Gecko profiler overhead remain OPEN. Do not require user tests before the source evidence passes or suggest a primary-profile failure injection.
 - [ ] A7 P0: NC4-022/082 decoded thumbnail and upstream native scanner accumulation; NC4-083 actual scan cancellation not implemented. Follow existing pinned NA-1 plan; no claim of native acceptance.
 
+### A0/A7 / NC4-089-R6 — Smart Search status and Console exception safety (preview.148)
+
+- [x] Review installed Smart Search provider's real query callbacks, error status closure, independent native register/unregister, cleanup and Console ownership. Confirm `String(e)` in status and raw `console.warn` exceptions; note possible user URL-bearing error messages without claiming an observed leak.
+- [x] Keep existing status API and provider lifecycles; use one class-only helper, fail closed to `Error` for malformed or throwing native `name`, no raw exception object in six warning paths.
+- [x] Extract actual production `makeProvider` into source fixture; trigger tab-result callback `TypeError` containing a private URL, assert correct candidates/emitted semantics and no private data in warnings/status. Existing full-script rollback fixture now injects a sensitive URL-bearing initialization error.
+- [x] [PR #22](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/pull/22) / `c4877e9aa8885d098959dd6fb4d8498ff91b8e6e` / [CI 45125761168](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45125761168) **SUCCESS**: 826 Node, 15 Python, 12 parsers, deterministic build, public Sine distribution. Smart Search source/CI gate CLOSED.
+- [ ] Audit other independent direct-console exception owners and generic diagnostic metadata per event; avoid broad logger removal or weakening error-class evidence without verified producer values.
+- [ ] Real Zen 1.24.2b/Sine 2.3.3 normal/private/multiwindow status/console privacy, native controller/query injection ordering, hot reload and diagnostics-on/off Gecko profiler remain OPEN.
+- [ ] Library NC4-022/082 decoded thumbnail/native pre-truncation scanner memory and NC4-083 scan cancellation remain OPEN; do not treat UI wait as native cancellation.
+
