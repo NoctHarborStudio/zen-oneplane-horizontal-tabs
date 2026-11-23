@@ -1,3 +1,9 @@
+## 0.3.0-preview.145 — Complete the scoped diagnostic producer evidence audit (NC4-089-R3)
+
+Independent preview.144 replay reproduced additional evidence loss: native Workspace selection/return error codes were redacted; `chrome.attributes` preserved array length but nulled all node/attribute/value metadata; Download Bunny popup CSS surface samples, OS platform and lifecycle trace error class were missing. No private-data exposure in Zen has been reproduced.
+
+The existing recorder retains a finite set of source-declared Workspace codes and OS platforms. For its internal `chrome.attributes` stream it now accepts only the actually observed root/known-node attribute names and a finite lifecycle-state vocabulary; unrecognized values become null. The existing Download Bunny popup trace accepts bounded CSS color/length/appearance and popup-flip grammar only in its known event context. Layout and Hub scope-error producers use the existing sanitized `name` error-class field instead of an unrecognized `error` key. Four new production-source regressions cover known/malicious strings, actual popup sampling and source producer compatibility. No UI, native drag, Workspace command, browser data mutation, additional writer, timer or observer. Real Zen/Sine privacy and performance acceptance remain OPEN.
+
 ## 0.3.0-preview.144 — Restore bounded diagnostic result fields (NC4-089-R2)
 
 An independent post-preview.143 producer audit reproduced five lost traces/values in the actual recorder: drag mode transitions' previous/requested values, native dropEffect, Workspace command rejection codes, address phase labels and Home's snapshot-unavailable event (the latter had an invalid space). Additional source audit confirmed similarly affected Workspace phase, startup readiness, disassembly native result type, and address engine/easing fields.
