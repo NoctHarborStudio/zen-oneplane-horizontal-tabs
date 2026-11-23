@@ -42,6 +42,31 @@ test("Home leases share one instance and only the last release tears down",()=>{
  win.__zenSharedHomeV1={apiVersion:2};assert.equal(acquire(win,services),null);
 });
 
+test("Workspace command notices preserve Home geometry without hiding native pending state",()=>{
+ assert.ok(core.includes('const spaces=html("section","zh-section zh-workspace-section")'));
+ assert.ok(core.includes('#zen-shared-home .zh-workspace-section{position:relative}'));
+ assert.match(core,/#zen-shared-home \.zh-workspace-section > \.zh-workspace-pending\{position:absolute;inset-inline:0;top:100%;/);
+ assert.ok(core.includes('overflow:hidden;white-space:nowrap;text-overflow:ellipsis'));
+ assert.ok(core.includes('pending.setAttribute("aria-live","polite")'));
+ const code=extract("  function updateWorkspacePending(","  const leases=");
+ const status={textContent:"",title:"",hidden:true},buttons=[{disabled:false}];
+ const content={querySelector:selector=>selector===".zh-workspace-pending"?status:null,querySelectorAll:()=>buttons};
+ const update=new Function("content","workspaceCommandMessage","workspaceCommandPresentationBlocked","switching",
+   code+"return updateWorkspacePending;")(content,workspaceCommandMessage,workspaceCommandPresentationBlocked,false);
+ update({blocked:false,phase:"idle"});
+ assert.deepEqual({text:status.textContent,title:status.title,hidden:status.hidden,disabled:buttons[0].disabled},
+   {text:"",title:"",hidden:true,disabled:false});
+ update({blocked:true,phase:"pending",remaining:3000,reserved:false});
+ assert.equal(status.textContent,"Workspace command in progress…");
+ assert.equal(status.title,status.textContent);
+ assert.equal(status.hidden,false);assert.equal(buttons[0].disabled,true);
+ update({blocked:true,phase:"unknown"});
+ assert.match(status.textContent,/restart Zen/);
+ assert.equal(status.title,status.textContent);
+ update({blocked:false,phase:"idle"});
+ assert.equal(status.hidden,true);assert.equal(status.title,"");assert.equal(buttons[0].disabled,false);
+});
+
 test("Home native search preserves surface on cancel and ignores stale close",()=>{
  const code=extract("  function searchActive(","  function move(");
  const run=new Function("win","panel","content",code+`

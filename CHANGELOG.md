@@ -1,3 +1,11 @@
+## 0.3.0-preview.149 — Keep Home Workspace command notices out of layout flow (native visual checkpoint)
+
+User's first native preview.148 smoke reported no major functional regressions and slightly smoother motion, but the live Home `Workspace command in progress…` notice shifted vertically centered Home sections. The source-confirmed cause was the existing `.zh-workspace-pending` paragraph entering normal document flow on `hidden=false`. Preview.149 anchors only that existing status underneath the Workspace grid as an absolutely positioned, one-line clipped note inside a relative Workspace section. Full native warnings remain in accessible `textContent`, `aria-live` and a hover `title`, including the long unknown/never-settled warning. Command leases, timeouts, native blockers, workspace buttons and event observers are unchanged.
+
+A source-extracted Home regression covers idle/pending/unknown/settled visibility, full status text and native command blocking, alongside static assertions of the out-of-flow layout geometry. This is a targeted source/CI correction, not a claim of a Gecko-rendered no-jump acceptance. User also observed Downloads Dock return blinking and laggy cross-monitor file drag; these remain separate native visual/performance cases requiring timings. An unrelated-looking Steam Store `ServiceTransportProvider` content error is not evidence of a Nocturne failure.
+
+No new functionality, native calls, overlay owner, timers, preferences or scanner changes. NC4-022/082/083 Library memory/cancellation and NC4-089-R7 diagnostics audit remain OPEN.
+
 ## 0.3.0-preview.148 — Smart Search exception metadata privacy (NC4-089-R6)
 
 A producer/source re-audit found that Smart Search's native provider error paths wrote the unfiltered `String(error)` to its externally readable diagnostic status and passed raw exception objects to Browser Console. Native/provider messages may contain URLs, tab titles or search context. The existing Smart Search entrypoint now retains only a bounded exception class (or `Error` fallback) in status and all its own warning paths; normal result/selection behavior and numeric counters are unchanged.
