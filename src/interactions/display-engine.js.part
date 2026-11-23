@@ -134,7 +134,7 @@
           if(placementSample&&placementPopupPoint&&placementPreview?.state==="closed")placementPreview.openPopupAtScreen(placementPopupPoint.x,placementPopupPoint.y,false);
         },{once:true});
       }else placementPreview.openPopupAtScreen(x,y,false);
-    }catch(error){console.warn("[OnePlane] Display preview:",error);try{placementPreview?.hidePopup();}catch{}}
+    }catch(error){console.warn("[OnePlane] Display preview:",nocturneErrorClass(error));try{placementPreview?.hidePopup();}catch{}}
   }
   function targetScreen(target){
     if(!target)return null;
@@ -151,7 +151,7 @@
       const destinationScale=screen.defaultCSSScaleFactor/screen.contentsScaleFactor;
       const zoom=window.browsingContext?.fullZoom||1;
       return displayStartupFeatures(target,openerScale,destinationScale,zoom);
-    }catch(error){console.warn("[OnePlane] Startup display features:",error);return null;}
+    }catch(error){console.warn("[OnePlane] Startup display features:",nocturneErrorClass(error));return null;}
   }
   function logPlacement(stage,target,actual=null,extra=null){
     console.info("[OnePlane] Display placement "+stage,JSON.stringify({target:target?.full,rect:target?{x:target.x,y:target.y,width:target.width,height:target.height}:null,mode:target?.mode,actual,extra}));
@@ -262,7 +262,7 @@
       }
       logPlacement("size-unverified",target,nativeWindowRect(win));
       return false;
-    }catch(error){if(alive()){logPlacement("exception",target,nativeWindowRect(win),{reason:"native-error"});console.warn("[OnePlane] Native display placement:",error);}return false;}
+    }catch(error){if(alive()){logPlacement("exception",target,nativeWindowRect(win),{reason:"native-error"});console.warn("[OnePlane] Native display placement:",nocturneErrorClass(error));}return false;}
   }
   // Both creation paths schedule this immediately. Native window placement
   // must finish even when workspace initialization or activation fails.

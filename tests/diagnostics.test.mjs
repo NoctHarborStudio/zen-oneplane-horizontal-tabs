@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {createClosedTabsService} from "../src/services/closed-tabs-service.mjs";
+import {nocturneErrorClass} from "../src/core/error-class.mjs";
 import {readFileSync} from "node:fs";
 const version=JSON.parse(readFileSync(new URL("../theme.json",import.meta.url),"utf8")).version;
 const source=readFileSync(new URL("../src/core/diagnostics.js.part",import.meta.url),"utf8");
@@ -21,6 +22,52 @@ function fixture({isPrivate=false,on=true,prior=null,failWrite=false,writeHook=(
  reload();
  return {reload,win,doc,timers,frames,logs,writes,io,listeners,attrs,unload:()=>unload(),setTime:t=>time=t,disable:()=>enabled=false,api:win.__nocturneDiagnostics};
 }
+test("NC4-089-R7 restricts native error classes without reading messages",()=>{
+ const secret="https://private.example/tab?query=account&token=confidential";
+ for(const [name,wanted] of [
+   ["TypeError","TypeError"],["DOMException","DOMException"],["WorkspaceCommandError","WorkspaceCommandError"],
+   ["NS_ERROR_FAILURE","NS_ERROR_FAILURE"],["AccountTokenError","Error"],["private.example","Error"],[123,"Error"]
+ ]){
+   const input={name,get message(){throw new Error("Unexpected access to "+secret);},get stack(){throw new Error("stack access");}};
+   assert.equal(nocturneErrorClass(input),wanted,String(name));
+ }
+ assert.equal(nocturneErrorClass(null),"Error");
+ assert.equal(nocturneErrorClass({get name(){throw new Error(secret);}}),"Error");
+ assert.equal(nocturneErrorClass(new TypeError(secret)),"TypeError");
+});
+
+test("NC4-089-R7 real Home subscriber catch and Hub status do not leak native errors",()=>{
+ const secret="https://private.example/tab?query=account&token=confidential";
+ const home=readFileSync(new URL("../src/home/shared-home.js.part",import.meta.url),"utf8");
+ const hub=readFileSync(new URL("../src/hub/controller.js.part",import.meta.url),"utf8");
+ const line=home.split("\n").find(x=>x.includes("  function notify(){"));
+ assert.ok(line&&line.includes("nocturneErrorClass(error)"));
+ const logs=[],win={console:{warn:(...args)=>logs.push(args)}};
+ const notify=new Function("win","nocturneErrorClass","listeners",
+  "const leases=new Set([{listeners:new Set(listeners)}]);const open=true;"+line+";return notify;")(
+  win,nocturneErrorClass,[()=>{throw new TypeError(secret);}]);
+ notify();
+ assert.deepEqual(logs,[["[Zen Home] subscriber","TypeError"]]);
+ assert.ok(!JSON.stringify(logs).includes(secret));
+ assert.ok(!hub.includes("String(error.message||error)"));
+ assert.ok(!hub.includes('error?.code==="data-busy"?error.message:'));
+ assert.ok(hub.includes('status.textContent="Workspace command could not be completed."'));
+ assert.ok(hub.includes('error?.code==="data-busy"?"Another native Workspace data command is pending."'));
+ for(const path of [
+  "src/core/bootstrap.js.part","src/core/window-lifecycle.js.part","src/home/shared-home.js.part",
+  "src/hub/controller.js.part","src/interactions/drag-controller.js.part","src/interactions/drag-end.js.part",
+  "src/interactions/display-engine.js.part","src/interactions/startup-search.js.part","src/toolbar/address-controller.js.part"
+ ]){
+  const code=readFileSync(new URL("../"+path,import.meta.url),"utf8");
+  const lines=code.split("\n").filter(x=>/\bconsole\.(?:warn|error)\(/.test(x)&&/\berror\b/.test(x));
+  assert.ok(lines.length>0,path);
+  for(const l of lines)assert.ok(l.includes("nocturneErrorClass(error)"),path+": "+l);
+ }
+ const layout=readFileSync(new URL("../layout.uc.mjs",import.meta.url),"utf8");
+ assert.ok(layout.includes("const NOCTURNE_EXCEPTION_CLASSES=new Set("));
+ assert.ok(layout.includes('status.textContent="Workspace command could not be completed."'));
+});
+
 test("NC4-089-R5 enforces source-declared event-specific reasons and statuses",()=>{
  const f=fixture(),trace=f.win.__nocturneTrace;
  const library=readFileSync(new URL("../src/library/controller.js.part",import.meta.url),"utf8");

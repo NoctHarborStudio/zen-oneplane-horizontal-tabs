@@ -6,7 +6,7 @@ let cleanupErrors=0,cleanupErrorStart=0,completeDiagnostics=null,cancelFreeStart
 // Each release is isolated: one feature failure must not prevent native
 // preference restoration or the remaining controller cleanup.
 function cleanupStep(label,fn){
-  try{fn();}catch(error){cleanupErrors++;console.warn("[Nocturne] Cleanup "+label+":",error);try{window.__nocturneTrace?.("layout.cleanup.error",{resource:label,name:error?.name||"Error"});}catch{}}
+  try{fn();}catch(error){cleanupErrors++;console.warn("[Nocturne] Cleanup "+label+":",nocturneErrorClass(error));try{window.__nocturneTrace?.("layout.cleanup.error",{resource:label,name:error?.name||"Error"});}catch{}}
 }
 function cleanup(nativeExit=false) {
   if (disposed) return;
@@ -100,7 +100,7 @@ async function initializeFreeAtStartup(allowed=()=>true){
       runtime.setBoolPref(key,true);
       console.info("[OnePlane] Free startup",JSON.stringify({selected:true}));
     },{data:true});
-  }catch(error){console.warn("[OnePlane] Free startup:",error);}
+  }catch(error){console.warn("[OnePlane] Free startup:",nocturneErrorClass(error));}
 }
 
 // A slow Free command must not prevent the entire Layout from mounting.
@@ -206,7 +206,7 @@ async function activate() {
       window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
     }));
   } catch (error) {
-    console.error("[OnePlane] Layout activation failed:", error);
+    console.error("[OnePlane] Layout activation failed:",nocturneErrorClass(error));
     cleanup();
   }
 }
@@ -244,7 +244,7 @@ if (!root.hasAttribute("popup-window") && typeof window.addUnloadListener === "f
       }
     }
   }catch(error){
-    console.error("[OnePlane] Layout registration failed:",error);
+    console.error("[OnePlane] Layout registration failed:",nocturneErrorClass(error));
     cleanup();
   }
 }

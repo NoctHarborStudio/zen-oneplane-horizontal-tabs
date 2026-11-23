@@ -10,6 +10,10 @@
       "kind": "section"
     },
     {
+      "path": "src/core/error-class.mjs",
+      "kind": "esm-inline"
+    },
+    {
       "path": "src/algorithms/magnetic-fold.mjs",
       "kind": "esm-inline"
     },

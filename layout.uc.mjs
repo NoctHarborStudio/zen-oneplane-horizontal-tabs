@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.149",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.150",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -513,6 +513,21 @@
     for(const item of early)record(item.event,()=>({earlyAt:item.t,...item.data}),{sample:2000});
   }catch(error){record("diagnostics.setup-error",{name:error?.name});dispose();}
 })();
+/* A pure diagnostic boundary for browser/extension exception names.
+ * Native exception objects can embed URLs, file paths, titles and queries. */
+const NOCTURNE_EXCEPTION_CLASSES=new Set([
+  "Error","TypeError","RangeError","ReferenceError","SyntaxError","URIError","EvalError","AggregateError",
+  "DOMException","AbortError","NotAllowedError","InvalidStateError","NotFoundError","NotSupportedError",
+  "SecurityError","DataCloneError","NetworkError","TimeoutError","QuotaExceededError","WorkspaceCommandError",
+  "NS_ERROR_FAILURE","NS_ERROR_ABORT","NS_ERROR_NOT_AVAILABLE","NS_ERROR_UNEXPECTED","NS_ERROR_NOT_INITIALIZED",
+  "NS_ERROR_FILE_NOT_FOUND","NS_ERROR_XPC_BAD_CONVERT_JS"
+]);
+function nocturneErrorClass(error){
+  try{
+    const name=error?.name;
+    return typeof name==="string"&&NOCTURNE_EXCEPTION_CLASSES.has(name)?name:"Error";
+  }catch{return "Error";}
+}
 // Existing Magnetic Fold math; shared by Center Motion and the comparison Lab.
 // Preserve the original sampled curve and portal clipping exactly.
 function createMagneticFoldMath(){
@@ -2208,7 +2223,7 @@ function acquireZenHome(win, services) {
   const button=(cls,label,fn)=>{const n=html("button",cls,label);n.type="button";n.addEventListener("click",fn);return n;};
   function load(){try{return normalize(JSON.parse(prefs.getStringPref(PREF,'{"version":1,"items":[]}')));}catch{return [];}}
   function save(items){prefs.setStringPref(PREF,JSON.stringify({version:1,items:normalize({version:1,items})}));}
-  function notify(){for(const l of [...leases])for(const fn of [...l.listeners])try{fn(open);}catch(error){win.console.warn("[Zen Home] subscriber",error);}}
+  function notify(){for(const l of [...leases])for(const fn of [...l.listeners])try{fn(open);}catch(error){win.console.warn("[Zen Home] subscriber",nocturneErrorClass(error));}}
   function allowed(){return !dead&&host.isConnected&&panels.isConnected&&!root.hasAttribute("customizing")&&root.getAttribute("inDOMFullscreen")!=="true"&&root.getAttribute("inFullscreen")!=="true"&&!root.hasAttribute("popup-window");}
   // Home is a primary destination, not a modal toggle.
   function isHomePlaceholder(tab,uri){
@@ -2430,7 +2445,7 @@ function acquireZenHome(win, services) {
     focusHome=null;
   }
   function navigate(item){
-    try{win.openTrustedLinkIn(item.url,"tab");leaveHome();}catch(error){win.console.warn("[Zen Home] shortcut navigation",error);}
+    try{win.openTrustedLinkIn(item.url,"tab");leaveHome();}catch(error){win.console.warn("[Zen Home] shortcut navigation",nocturneErrorClass(error));}
   }
   // Animate only the Home-origin native floating search session.
   function searchActive(){
@@ -2587,7 +2602,7 @@ function acquireZenHome(win, services) {
         searchInput.setAttribute("placeholder",searchSessionLabel);
       }
       startSearchSnapshot();startSearchMorph(token,geometry);
-    }catch(error){finishSearchVisual();win.console.warn("[Zen Home] native search",error);}
+    }catch(error){finishSearchVisual();win.console.warn("[Zen Home] native search",nocturneErrorClass(error));}
   }
   // Freeze the visual result tree only: no native custom elements,
   // event handlers, selectable IDs or interactive links.
@@ -2735,7 +2750,7 @@ function acquireZenHome(win, services) {
       if(typeof bar?._zenHandleUrlbarClose==="function")bar._zenHandleUrlbarClose(false,false);
       else bar?.view?.close();
       bar?.blur?.();
-    }catch(error){win.console.warn("[Zen Home] search cancel",error);finishSearchVisual();}
+    }catch(error){win.console.warn("[Zen Home] search cancel",nocturneErrorClass(error));finishSearchVisual();}
   }
   function cancelHomeSearch(reason="escape"){
     if(!searchToken||!searchBar||!searchGeometry||searchClosing||!nativeSearchOpen(searchBar))return false;
@@ -3019,7 +3034,7 @@ function acquireZenHome(win, services) {
           if(workspaceCommandState(win).blocked){pendingWatch?.refresh();return;}
           switching=true;
           pendingWatch?.refresh();
-          try{await switchHomeWorkspace(manager,ws.uuid);}catch(error){win.console.warn("[Zen Home] workspace",error);}
+          try{await switchHomeWorkspace(manager,ws.uuid);}catch(error){win.console.warn("[Zen Home] workspace",nocturneErrorClass(error));}
           finally{switching=false;if(open){refreshWorkspaceSelection();pendingWatch?.refresh();}}
         });
         b.setAttribute("data-zh-workspace-id",ws.uuid);b.setAttribute("data-zh-workspace-name",String(ws.name||"Workspace"));
@@ -3057,7 +3072,7 @@ function acquireZenHome(win, services) {
       // Startup is not a keyboard navigation action. Avoid a native
       // focus outline flashing before the search field enters.
       if(!startup&&!staged)content.querySelector(".zh-search")?.focus({preventScroll:true});return true;
-    }catch(error){close();restore();win.console.warn("[Zen Home] open",error);return false;}
+    }catch(error){close();restore();win.console.warn("[Zen Home] open",nocturneErrorClass(error));return false;}
   }
   function destroy(){
     if(dead)return;close();dead=true;for(const fn of cleanups.splice(0))try{fn();}catch{}
@@ -3165,7 +3180,7 @@ function acquireZenHome(win, services) {
     }};
     if(typeof browser.addTabsProgressListener==="function"){browser.addTabsProgressListener(progress);cleanups.push(()=>browser.removeTabsProgressListener(progress));}
     win[KEY]=registry;const lease=registry.acquire();ensurePrimaryHome();return lease;
-  }catch(error){destroy();win.console.warn("[Zen Home] init",error);return null;}
+  }catch(error){destroy();win.console.warn("[Zen Home] init",nocturneErrorClass(error));return null;}
 }
 
 // Synchronous acquisition scope. Each release is attempted at most once;
@@ -4328,7 +4343,7 @@ function installTabStrip() {
       // Normally unused. Preserve a functional native editor.
       stopAddressAnimations();
       a.engine="fallback";delete a.epoch;
-      window.console.warn("[OnePlane] Native address animation unavailable:",error);
+      window.console.warn("[OnePlane] Native address animation unavailable:",nocturneErrorClass(error));
       addressClipHome={bar,value:bar.style.getPropertyValue("clip-path"),priority:bar.style.getPropertyPriority("clip-path")};
       a.start=window.performance.now();
       const draw=now=>{
@@ -5043,7 +5058,7 @@ function installTabStrip() {
           if(placementSample&&placementPopupPoint&&placementPreview?.state==="closed")placementPreview.openPopupAtScreen(placementPopupPoint.x,placementPopupPoint.y,false);
         },{once:true});
       }else placementPreview.openPopupAtScreen(x,y,false);
-    }catch(error){console.warn("[OnePlane] Display preview:",error);try{placementPreview?.hidePopup();}catch{}}
+    }catch(error){console.warn("[OnePlane] Display preview:",nocturneErrorClass(error));try{placementPreview?.hidePopup();}catch{}}
   }
   function targetScreen(target){
     if(!target)return null;
@@ -5060,7 +5075,7 @@ function installTabStrip() {
       const destinationScale=screen.defaultCSSScaleFactor/screen.contentsScaleFactor;
       const zoom=window.browsingContext?.fullZoom||1;
       return displayStartupFeatures(target,openerScale,destinationScale,zoom);
-    }catch(error){console.warn("[OnePlane] Startup display features:",error);return null;}
+    }catch(error){console.warn("[OnePlane] Startup display features:",nocturneErrorClass(error));return null;}
   }
   function logPlacement(stage,target,actual=null,extra=null){
     console.info("[OnePlane] Display placement "+stage,JSON.stringify({target:target?.full,rect:target?{x:target.x,y:target.y,width:target.width,height:target.height}:null,mode:target?.mode,actual,extra}));
@@ -5171,7 +5186,7 @@ function installTabStrip() {
       }
       logPlacement("size-unverified",target,nativeWindowRect(win));
       return false;
-    }catch(error){if(alive()){logPlacement("exception",target,nativeWindowRect(win),{reason:"native-error"});console.warn("[OnePlane] Native display placement:",error);}return false;}
+    }catch(error){if(alive()){logPlacement("exception",target,nativeWindowRect(win),{reason:"native-error"});console.warn("[OnePlane] Native display placement:",nocturneErrorClass(error));}return false;}
   }
   // Both creation paths schedule this immediately. Native window placement
   // must finish even when workspace initialization or activation fails.
@@ -5560,7 +5575,7 @@ function installTabStrip() {
       if(commandBlocked()){pendingWatch?.refresh();return;}
       busy=true;status.textContent="";
       const session=hubSession,native=manager(),current=()=>!destroyed&&manager()===native&&canManage();
-      try{return await runWorkspaceCommand(window,native,"hub-data",current,fn,{data:true});}catch(error){if(hubViewCurrent(session))status.textContent=String(error.message||error);console.warn("[OnePlane] Workspace Engine:",error);}
+      try{return await runWorkspaceCommand(window,native,"hub-data",current,fn,{data:true});}catch(error){if(hubViewCurrent(session))status.textContent="Workspace command could not be completed.";console.warn("[OnePlane] Workspace Engine:",nocturneErrorClass(error));}
       finally{busy=false;settleHubView(session);}
     }
     function renderFreeSetup(snapshot){
@@ -6427,7 +6442,7 @@ function installTabStrip() {
         if(child&&!child.closed&&child[PROJECTION]===projection)delete child[PROJECTION];
         if(hubViewCurrent(session))status.textContent="Could not open synced workspace. Check window sync settings.";
         projectionLog(child,"failed",{reason:"native-error"});
-        console.warn("[OnePlane] Workspace projection:",error);
+        console.warn("[OnePlane] Workspace projection:",nocturneErrorClass(error));
       }finally{
         releaseProjection();
         projectionBusy=false;projectionStartedAt=null;settleHubView(session);
@@ -6655,7 +6670,7 @@ function installTabStrip() {
     typeof window!=="undefined"&&window.__nocturneTrace?.("hub.workspace.request",()=>({hasTransition:!!transition}),{sample:1800});
         await requestWorkspaceSwitch(window,native,id,"hub-select",()=>!destroyed&&manager()===native);
         if(hubViewCurrent(session)){contextId=null;confirmation=null;scheduleHubGeometry();}
-      }catch(error){if(hubViewCurrent(session))status.textContent="Could not switch workspace.";console.warn("[OnePlane] Hub switch:",error);}
+      }catch(error){if(hubViewCurrent(session))status.textContent="Could not switch workspace.";console.warn("[OnePlane] Hub switch:",nocturneErrorClass(error));}
       finally{busy=false;settleHubView(session);}
     }
     async function create(event){
@@ -6670,7 +6685,7 @@ function installTabStrip() {
         if(!result?.uuid||!native.getWorkspaceFromId(result.uuid))throw Error("Native workspace creation unavailable");
       },{data:true});
         if(hubViewCurrent(session)){name.value="";contextId=null;confirmation=null;scheduleHubGeometry();}
-      }catch(error){if(hubViewCurrent(session))status.textContent=error?.code==="data-busy"?error.message:"Could not create workspace.";console.warn("[OnePlane] Hub create:",error);}
+      }catch(error){if(hubViewCurrent(session))status.textContent=error?.code==="data-busy"?"Another native Workspace data command is pending.":"Could not create workspace.";console.warn("[OnePlane] Hub create:",nocturneErrorClass(error));}
       finally{busy=false;settleHubView(session);}
     }
     function ensure(){
@@ -6695,7 +6710,7 @@ function installTabStrip() {
       try{
         if(!showPopup()){close();return;}
         (panel.querySelector('.op-hub-space[aria-current="true"]:not(:disabled)')||panel.querySelector(".op-hub-space:not(:disabled)")||mode).focus({preventScroll:true});
-      }catch(error){close();console.warn("[OnePlane] Hub open:",error);}
+      }catch(error){close();console.warn("[OnePlane] Hub open:",nocturneErrorClass(error));}
     }
     function key(event){
       if(!open||event.key!=="Escape"||event.defaultPrevented||window.__nocturneOverlay?.allowsEscape("hub",event)===false)return;
@@ -6709,7 +6724,7 @@ function installTabStrip() {
     function toggleMode(){
       const cmd=command();if(typeof cmd?.doCommand!=="function"||!open)return;
       setHold(true);
-      try{cmd.doCommand();changed();}catch(error){console.warn("[OnePlane] Compact Mode:",error);}
+      try{cmd.doCommand();changed();}catch(error){console.warn("[OnePlane] Compact Mode:",nocturneErrorClass(error));}
     }
     function onInput(){add.disabled=busy||workspaceCommandPresentationBlocked(hubCommandState())||!name.value.trim();}
     function onOutside(event){
@@ -6859,7 +6874,7 @@ function installTabStrip() {
         if(!active()){phase="cancelled";return blocked;}
         phase="run";
       }catch(error){
-        console.warn("[OnePlane] Could not scope workspace URI lookup:",error);
+        console.warn("[OnePlane] Could not scope workspace URI lookup:",nocturneErrorClass(error));
         return undefined;
       }finally{
         if(phase!=="run")restoreAll();
@@ -6939,7 +6954,7 @@ function installTabStrip() {
           if(!Reflect.deleteProperty(proto,key))throw Error("URL bar registry removal failed");
         }
       };
-    }catch(error){console.warn("[OnePlane] URL bar workspace isolation unavailable:",error);}
+    }catch(error){console.warn("[OnePlane] URL bar workspace isolation unavailable:",nocturneErrorClass(error));}
     return ()=>{
       if(released)return;released=true;
       let failed=0;
@@ -6974,7 +6989,7 @@ function installTabStrip() {
     toolbarWrapper?.setAttribute("oneplane-tab-menu-hold","true");reconcilePanel();
     const rect=button.getBoundingClientRect(),x=event.screenX||window.mozInnerScreenX+rect.left,y=event.screenY||window.mozInnerScreenY+rect.bottom;
     try{popup.openPopupAtScreen(x,y,true,event);}
-    catch(error){cleanup();console.warn("[OnePlane] Native tab menu:",error);}
+    catch(error){cleanup();console.warn("[OnePlane] Native tab menu:",nocturneErrorClass(error));}
   }
   const contourPrefPrefix="zen.oneplane.fade-";
   let contourUntil=0, contourKey="",contourMode="",contourPainting=false,contourRevision=0,contourCommittedRevision=-1,contourProvider=null;
@@ -9011,7 +9026,7 @@ function installTabStrip() {
           document.getElementById("Browser:OpenLocation")?.doCommand();
         }
         window.__nocturneTrace?.("drag.search.restore",{outcome:"requested",token:state.gestureToken},{sample:1000});
-      } catch(error) { console.error("[OnePlane] Restore startup search:",error); }
+      } catch(error) { console.error("[OnePlane] Restore startup search:",nocturneErrorClass(error)); }
     },80);
   }
   function restoreReturnedHover(source,point){
@@ -9135,7 +9150,7 @@ function installTabStrip() {
     } catch (error) {
       event.preventDefault();
       cancelActiveDrag("native-start-failed");
-      console.error("[OnePlane] Tab drag start:", error);
+      console.error("[OnePlane] Tab drag start:",nocturneErrorClass(error));
     }
   }
   function onStripDragOver(event) {
@@ -9223,7 +9238,7 @@ function installTabStrip() {
             // This existing Zen API enforces the native tabsContainer and
             // UUID even if the two windows happen to share a workspace ID.
             dest.manager.moveTabToWorkspace(adopted,dest.spaceId);
-          }catch(error){console.error("[OnePlane] Native workspace adoption:",error);}
+          }catch(error){console.error("[OnePlane] Native workspace adoption:",nocturneErrorClass(error));}
         }
         outcome=nativeEmptyAdoptionOutcome(adopted,dest);
         schedule();return;
@@ -9263,10 +9278,10 @@ function installTabStrip() {
       }
       schedule();
     }catch(error){
-      outcome="error";console.error("[OnePlane] Tab or split group move:",error);
+      outcome="error";console.error("[OnePlane] Tab or split group move:",nocturneErrorClass(error));
     }finally{
       window.__nocturneTrace?.("drag.native.outcome",{operation,outcome},{sample:1600});
-      try{markSourceHandled();}catch(error){console.error("[OnePlane] Drag source settle:",error);}
+      try{markSourceHandled();}catch(error){console.error("[OnePlane] Drag source settle:",nocturneErrorClass(error));}
       if(incoming&&incomingDrag===incoming){incomingDrag=null;releaseDragReveal();}
       clearDropMarker();
       finishStripCommit();
@@ -9519,7 +9534,7 @@ function installTabStrip() {
       if(seed)logPlacement("tab-open",p,null,seed);
       const win=browser.replaceTabWithWindow(tab,{replaceLastTab:true,...(seed||{})});
       if(win&&p)placeAfterStartup(win,p);
-    } catch (error) { console.error("[OnePlane] Detach tab:", error); }
+    } catch (error) { console.error("[OnePlane] Detach tab:",nocturneErrorClass(error)); }
   }
   const dragController = {
     source: () => draggedTab,
@@ -10649,7 +10664,7 @@ function installTabStrip() {
     url.after(row);url.append(compactSearch);
     hub.ensure();ensureDownloadHost();checkMount();
     releaseDragEngine=installDragEngine();
-    try{releaseWorkspaceLinkScope=installWorkspaceLinkScope();}catch(error){console.warn("[OnePlane] Workspace link isolation:",error);}
+    try{releaseWorkspaceLinkScope=installWorkspaceLinkScope();}catch(error){console.warn("[OnePlane] Workspace link isolation:",nocturneErrorClass(error));}
     target.prepend(leftSpacer);
     row.after(rightSpacer);
     tabbox.append(shield, splitZone);
@@ -10781,7 +10796,7 @@ let cleanupErrors=0,cleanupErrorStart=0,completeDiagnostics=null,cancelFreeStart
 // Each release is isolated: one feature failure must not prevent native
 // preference restoration or the remaining controller cleanup.
 function cleanupStep(label,fn){
-  try{fn();}catch(error){cleanupErrors++;console.warn("[Nocturne] Cleanup "+label+":",error);try{window.__nocturneTrace?.("layout.cleanup.error",{resource:label,name:error?.name||"Error"});}catch{}}
+  try{fn();}catch(error){cleanupErrors++;console.warn("[Nocturne] Cleanup "+label+":",nocturneErrorClass(error));try{window.__nocturneTrace?.("layout.cleanup.error",{resource:label,name:error?.name||"Error"});}catch{}}
 }
 function cleanup(nativeExit=false) {
   if (disposed) return;
@@ -10875,7 +10890,7 @@ async function initializeFreeAtStartup(allowed=()=>true){
       runtime.setBoolPref(key,true);
       console.info("[OnePlane] Free startup",JSON.stringify({selected:true}));
     },{data:true});
-  }catch(error){console.warn("[OnePlane] Free startup:",error);}
+  }catch(error){console.warn("[OnePlane] Free startup:",nocturneErrorClass(error));}
 }
 
 // A slow Free command must not prevent the entire Layout from mounting.
@@ -10981,7 +10996,7 @@ async function activate() {
       window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
     }));
   } catch (error) {
-    console.error("[OnePlane] Layout activation failed:", error);
+    console.error("[OnePlane] Layout activation failed:",nocturneErrorClass(error));
     cleanup();
   }
 }
@@ -11019,7 +11034,7 @@ if (!root.hasAttribute("popup-window") && typeof window.addUnloadListener === "f
       }
     }
   }catch(error){
-    console.error("[OnePlane] Layout registration failed:",error);
+    console.error("[OnePlane] Layout registration failed:",nocturneErrorClass(error));
     cleanup();
   }
 }
