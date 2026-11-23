@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.153",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.154",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -166,7 +166,12 @@
     ["assembly.bloom.fallback",{reason:new Set(["budget"])}],
     ["disassembly.bypass",{reason:new Set(["bookmark-preflight-failed","engine-replaced","tab-engine-unavailable","tab-acquisition-failed","bookmark-acquisition-failed","control-acquisition-failed"])}],
     ["drag.source.resolve",{reason:new Set(["ambiguous"])}],
-    ["drag.search.restore",{reason:new Set(["native-address-input","drag-cancel","new-pointerdown","new-keydown","source-pointer","reschedule","dragstart","native-tab-select","native-tab-change","destroy","state-changed"])}]
+    ["drag.search.restore",{reason:new Set(["native-address-input","drag-cancel","new-pointerdown","new-keydown","source-pointer","reschedule","dragstart","native-tab-select","native-tab-change","destroy","state-changed"])}],
+    ["center.motion.release",{reason:new Set(["release","superseded","geometry-changed","topology-changed","no-visible-cards","disposed","setup-failed"])}],
+    ["center.bookmarks.release",{reason:new Set(["release","superseded","disposed","setup-failed","dispose"])}],
+    ["center.fold.handoff",{status:new Set(["not-comparable","membership-changed","local-stable","geometry-changed"])}],
+    ["drag.lifecycle.cancel",{reason:new Set(["native-topology-changed","native-session-ended","native-session-unavailable","superseded","new-pointerdown","mouse-release-without-pointerup","keyboard-interruption","focus-lost","document-hidden","unhandled-native-end","pagehide","unload","chrome-frame-unready","native-start-failed","strip-phase","toolbar-phase","unsupported-layout","trash-capture-failed","trash-invalid","capture-failed","workspace-cancel","pointermove","pointerup","pointercancel","lostpointercapture"])}],
+    ["drag.native.outcome",{reason:new Set(["stale-source","native-target-stale","native-hidden-or-empty","native-glance-remap","native-split-unavailable","native-essentials-unsupported","native-may-clone","native-split-group-unready","native-split-limit","native-postcondition","selection-retargeted"])}]
   ]);
   const CSS_FIELDS=new Set(["opacity","visibility","display","translate","scale","transform","transition","height","width","hoverProgress","centerX","centerAlpha","startupBase","mask","bmMask","contour","bmContour","measure","progress","startupProgress"]);
   const CSS_VALUE=/^[#A-Za-z0-9.,()%+ :-]{1,180}$/;

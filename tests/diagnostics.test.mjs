@@ -739,3 +739,34 @@ test("NC4-089-R7c-P2 source-declared Assembly/Disassembly/Drag reason enums",()=
   assert.ok(!f.api.dump().includes("AccountSecretTokenError"));
   f.api.dispose();
 });
+
+test("NC4-089-R7c-P3 Center and native Drag dynamic reason/status contracts are source-backed",()=>{
+  const groups=[
+    ["center.motion.release","reason",["src/core/center-motion.js.part"],["release","superseded","geometry-changed","topology-changed","no-visible-cards","disposed","setup-failed"]],
+    ["center.bookmarks.release","reason",["src/core/center-motion.js.part"],["release","superseded","disposed","setup-failed","dispose"]],
+    ["center.fold.handoff","status",["src/core/center-motion.js.part"],["not-comparable","membership-changed","local-stable","geometry-changed"]],
+    ["drag.lifecycle.cancel","reason",["src/interactions/drag-engine.js.part","src/interactions/drag-controller.js.part","src/interactions/strip-drag.js.part","src/layout/visibility.js.part","src/hub/controller.js.part"],["native-topology-changed","native-session-ended","native-session-unavailable","superseded","new-pointerdown","mouse-release-without-pointerup","keyboard-interruption","focus-lost","document-hidden","unhandled-native-end","pagehide","unload","chrome-frame-unready","native-start-failed","strip-phase","toolbar-phase","unsupported-layout","trash-capture-failed","trash-invalid","capture-failed","workspace-cancel","pointermove","pointerup","pointercancel","lostpointercapture"]],
+    ["drag.native.outcome","reason",["src/interactions/split-drop.js.part"],["stale-source","native-target-stale","native-hidden-or-empty","native-glance-remap","native-split-unavailable","native-essentials-unsupported","native-may-clone","native-split-group-unready","native-split-limit","native-postcondition","selection-retargeted"]]
+  ];
+  const f=fixture(),trace=f.win.__nocturneTrace;
+  for(const [event,key,paths,values] of groups){
+    const producers=paths.map(p=>readFileSync(new URL("../"+p,import.meta.url),"utf8")).join("\n");
+    assert.ok(producers.includes(event)||event==="drag.lifecycle.cancel",event+" missing producer");
+    for(const value of values){
+      assert.ok(producers.includes('"'+value+'"'),event+" missing emitted "+value);
+      trace(event,{[key]:value,failed:0});
+      const output=JSON.parse(f.api.dump()).events.at(-1);
+      assert.equal(output.data[key],value,event+": "+value);
+      assert.equal(output.data.failed,0);
+    }
+    for(const invalid of ["PersonalWorkError","NS_ERROR_ACCOUNT_SECRET","privateAccount99"]){
+      trace(event,{[key]:invalid});
+      const output=JSON.parse(f.api.dump()).events.at(-1);
+      assert.equal(output.data[key],null,event+": "+invalid);
+    }
+  }
+  assert.ok(!f.api.dump().includes("PersonalWorkError"));
+  assert.ok(!f.api.dump().includes("NS_ERROR_ACCOUNT_SECRET"));
+  assert.ok(!f.api.dump().includes("privateAccount99"));
+  f.api.dispose();
+});
