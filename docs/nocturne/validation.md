@@ -687,3 +687,5 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [x] Add an extracted production-source test: event captured with delayed flush, pref switched off before submission, timer fires, no additional file write; disabled lazy event not evaluated.
 - [x] Add an extracted production-source test: writer already entered `IOUtils.writeUTF8` while pref on, pref switched off, that authorized write completes with no newly captured event; a later flush is rejected.
 - [ ] Real Zen preference toggle during a slow disk write and after a deferred flush remains **native OPEN**. No old-file deletion or guaranteed in-flight native cancellation is promised.
+
+**Canonical closure:** PR #14, production `112fe9821dd7ee79ee9acee3cee331aaabb248c7`; [CI 45089400036](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45089400036) **SUCCESS** — 811 Node, 15 Python, 12 runtime parser checks, deterministic build, release-policy and public immutable/current Sine package. NC4-088 timing policy source/CI CLOSED, real pref toggles/native disk timing OPEN; no version bump or runtime change.
