@@ -1,3 +1,9 @@
+## 0.3.0-preview.142 — Smart Search native controller ownership (NC4-086)
+
+A7 source-level reproduction showed that an obsolete UrlbarController could continue resolving live-window Smart Search state after the native controller was replaced; a controller alias reporting a foreign window could resolve a different window's state. The existing provider now requires current native child/parent controller identity, consistent provider manager ownership, and agreement between active window and controller registries. Late Sine cleanup clears only its own state, not replacement mappings or target tokens. No new observer, timer, provider, UI, feature, preference or query-budget change.
+
+Three source regressions cover stale controller/engagement, conflicting window aliases and late-dispose registry lifetime. Actual Zen 1.24.2b/Sine 2.3.3 multi-window/controller hot-replacement acceptance remains OPEN.
+
 ## 0.3.0-preview.141 — Page Progress retired network request identity reliability
 
 A7 / NC4-087 source-extracted reproduction: when 19+ distinct top-level native NETWORK START request identities overlap, the previous hard-capped 16-entry strong Set evicts the oldest. A late STOP from that explicitly superseded request then incorrectly marks the current page load complete/canceled. The existing Page Progress owner now uses a WeakSet of superseded native nsIRequest objects for the lifetime of the active network transaction; old identities are not evicted by an arbitrary count or kept alive by the indicator, and the set is released on the accepted terminal event/unload. Existing Gecko aggregate progress for subrequests and the fallback for unknown STOP identities, visuals, timers, hosts and prefs remain unchanged.

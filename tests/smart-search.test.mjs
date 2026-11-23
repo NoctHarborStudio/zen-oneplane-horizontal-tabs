@@ -46,6 +46,7 @@ test("provider uses actual query window and switches exact duplicate URL tab",as
  const Shared={PROVIDER_TYPE:{PROFILE:1},RESULT_SOURCE:{TABS:4},RESULT_TYPE:{DYNAMIC:8},getIconForUrl:u=>"icon"};
  const P=api.makeProvider(class{},Shared,class{constructor(p){Object.assign(this,p)}},f.utils,f.session,registry,{getProvider:()=>({getPriority:()=>1})},{isWindowPrivate:()=>false});
  const controller={browserWindow:f.win},results=[];
+ f.win.gURLBar={controller,parentController:controller}; // Native owner identity is required.
  assert.equal(await P.isActive(context,controller),true);
  assert.equal(await P.isActive(context,{browserWindow:{}}),false);
  await P.startQuery({...context,maxResults:9},(_,r)=>results.push(r),controller);
@@ -55,6 +56,80 @@ test("provider uses actual query window and switches exact duplicate URL tab",as
  f.win.gBrowser.selectedTab=f.a;f.b.closing=true;
  P.onEngagement(context,controller,{result:results[1],selType:"enter"});
  assert.equal(f.win.gBrowser.selectedTab,f.a);
+});
+
+
+test("NC4-086 provider requires the current native controller after replacement",async()=>{
+ const f=fixture(),manager={getProvider:()=>({getPriority:()=>1})};
+ const registry={windows:new WeakMap(),byId:new Map(),controllers:new WeakMap()};
+ const state={win:f.win,sequence:0,targets:new Map(),activity:new WeakMap()};
+ const first={browserWindow:f.win,manager},child={browserWindow:f.win,parentController:first};
+ f.win.gURLBar={controller:child,parentController:first};
+ registry.windows.set(f.win,state);registry.controllers.set(first,state);
+ const shared={PROVIDER_TYPE:{PROFILE:1},RESULT_SOURCE:{TABS:4},RESULT_TYPE:{DYNAMIC:8},getIconForUrl:()=>"icon"};
+ const P=api.makeProvider(class{},shared,class{constructor(p){Object.assign(this,p)}},f.utils,f.session,registry,manager,{isWindowPrivate:()=>false});
+ assert.equal(await P.isActive(context,first),true);
+ const results=[];await P.startQuery({...context,maxResults:9},(_,r)=>results.push(r),first);
+ assert.equal(results.length,3);
+ const second={browserWindow:f.win,manager},newChild={browserWindow:f.win,parentController:second};
+ f.win.gURLBar={controller:newChild,parentController:second};
+ assert.equal(await P.isActive(context,first),false);
+ assert.equal(P.state(first),null);
+ assert.equal(P.state({browserWindow:f.win}),null);
+ const previous=f.win.gBrowser.selectedTab;
+ P.onEngagement(context,first,{result:results[1],selType:"enter"});
+ assert.equal(f.win.gBrowser.selectedTab,previous,"stale native controller cannot select a tab");
+ assert.equal(await P.isActive(context,second),true);
+ assert.equal(P.state(newChild)?.state,state);
+ f.win.gURLBar.parentController={browserWindow:f.win,manager:{}};
+ assert.equal(P.state(f.win.gURLBar.parentController),null,"replaced manager cannot use previous provider");
+});
+
+test("NC4-086 provider rejects controller aliases reported for a different window",()=>{
+ const manager={getProvider:()=>({getPriority:()=>1})};
+ const a={closed:false,gURLBar:{}},b={closed:false,gURLBar:{}},stateA={win:a},stateB={win:b};
+ const parent={browserWindow:b,manager};
+ a.gURLBar={controller:{parentController:parent},parentController:parent};
+ b.gURLBar={controller:{parentController:parent},parentController:parent};
+ const registry={windows:new WeakMap([[a,stateA],[b,stateB]]),byId:new Map(),controllers:new WeakMap([[parent,stateA]])};
+ const shared={PROVIDER_TYPE:{PROFILE:1},RESULT_SOURCE:{TABS:4}};
+ const P=api.makeProvider(class{},shared,class{},null,null,registry,manager,{isWindowPrivate:()=>false});
+ assert.equal(P.state(parent),null,"reported window and registered controller owner disagree");
+ parent.browserWindow=a;
+ assert.equal(P.state(parent)?.state,stateA,"exact live owner remains usable");
+});
+
+test("NC4-086 stale dispose cannot erase newer registry mappings or targets",()=>{
+ const providers=new Map(),manager={
+   getProvider:n=>providers.get(n),
+   registerProvider:p=>providers.set(p.name,p),
+   unregisterProvider:p=>providers.delete(p.name)
+ };
+ const w={windowUtils:{outerWindowID:711},gBrowser:{},addUnloadListener(){},addEventListener(){},removeEventListener(){}};
+ const parent={browserWindow:w,manager};
+ w.gURLBar={controller:{browserWindow:w,parentController:parent},parentController:parent};
+ const modules={
+   "moz-src:///browser/components/urlbar/UrlbarProvidersManager.sys.mjs":{ProvidersManager:{}},
+   "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs":{UrlbarProvider:class{},UrlbarUtils:{}},
+   "chrome://browser/content/urlbar/UrlbarShared.mjs":{UrlbarShared:{PROVIDER_TYPE:{PROFILE:1}}},
+   "chrome://browser/content/urlbar/UrlbarResult.mjs":{UrlbarResult:class{}},
+   "moz-src:///browser/components/sessionstore/SessionStore.sys.mjs":{SessionStore:{}},
+   "resource://gre/modules/PrivateBrowsingUtils.sys.mjs":{PrivateBrowsingUtils:{isWindowPrivate:()=>false}}
+ };
+ const services={prefs:{},obs:{addObserver(){},removeObserver(){}}};
+ new Function("window","document","Services","ChromeUtils","console",source)(
+   w,{documentElement:{hasAttribute:()=>false}},services,{importESModule:p=>modules[p]},{info(){},warn(){}});
+ const reg=manager.__zenRefinedSmartSearchRegistry;
+ assert.ok(reg);assert.equal(reg.count,1);
+ const replacement={win:w,targets:new Map([["keep",{}]])};
+ reg.windows.set(w,replacement);reg.byId.set(711,replacement);reg.controllers.set(parent,replacement);reg.count++;
+ w.__zenRefinedSmartSearch();
+ assert.equal(reg.windows.get(w),replacement);
+ assert.equal(reg.byId.get(711),replacement);
+ assert.equal(reg.controllers.get(parent),replacement);
+ assert.equal(replacement.targets.size,1);
+ assert.equal(reg.count,1);
+ assert.equal(providers.size,1);
 });
 
 test("actual script registers with Gecko 160 SessionStore path and survives missing optional metadata",()=>{
