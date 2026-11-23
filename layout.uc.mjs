@@ -171,7 +171,10 @@
     ["center.bookmarks.release",{reason:new Set(["release","superseded","disposed","setup-failed","dispose"])}],
     ["center.fold.handoff",{status:new Set(["not-comparable","membership-changed","local-stable","geometry-changed"])}],
     ["drag.lifecycle.cancel",{reason:new Set(["native-topology-changed","native-session-ended","native-session-unavailable","superseded","new-pointerdown","mouse-release-without-pointerup","keyboard-interruption","focus-lost","document-hidden","unhandled-native-end","pagehide","unload","chrome-frame-unready","native-start-failed","strip-phase","toolbar-phase","unsupported-layout","trash-capture-failed","trash-invalid","capture-failed","workspace-cancel","pointermove","pointerup","pointercancel","lostpointercapture"])}],
-    ["drag.native.outcome",{reason:new Set(["stale-source","native-target-stale","native-hidden-or-empty","native-glance-remap","native-split-unavailable","native-essentials-unsupported","native-may-clone","native-split-group-unready","native-split-limit","native-postcondition","selection-retargeted"])}]
+    ["drag.native.outcome",{reason:new Set(["stale-source","native-target-stale","native-hidden-or-empty","native-glance-remap","native-split-unavailable","native-essentials-unsupported","native-may-clone","native-split-group-unready","native-split-limit","native-postcondition","selection-retargeted"])}],
+    // Final Nocturne-owned reason domains: exact drag watcher and Workspace journal outcomes.
+    ["downloads.drag.end",{reason:new Set(["dragend","native-session-ended","native-session-unavailable"])}],
+    ["workspace.data.journal",{reason:new Set(["preflight-error","unconfirmed","source-active","move-preflight","native-move-error","move-metadata-or-state","move-reconcile","purge-preflight","native-remove-error","purge-state-changed"])}]
   ]);
   const CSS_FIELDS=new Set(["opacity","visibility","display","translate","scale","transform","transition","height","width","hoverProgress","centerX","centerAlpha","startupBase","mask","bmMask","contour","bmContour","measure","progress","startupProgress"]);
   const CSS_VALUE=/^[#A-Za-z0-9.,()%+ :-]{1,180}$/;
@@ -5103,7 +5106,28 @@ function installTabStrip() {
     }catch(error){console.warn("[OnePlane] Startup display features:",nocturneErrorClass(error));return null;}
   }
   function logPlacement(stage,target,actual=null,extra=null){
-    console.info("[OnePlane] Display placement "+stage,JSON.stringify({target:target?.full,rect:target?{x:target.x,y:target.y,width:target.width,height:target.height}:null,mode:target?.mode,actual,extra}));
+    // Direct Console diagnostics must honor opt-out as the shared recorder does.
+    // Never forward whole native objects or arbitrary reason strings to Console.
+    try{
+      if(!prefs.getBoolPref("zen.nocturne.diagnostics.enabled",true))return;
+      const stages=["target-disconnected","before","already-matched","maximize-request","maximize","move-1","move-2","size-1","size-2","size-unverified","exception","startup-cleanup-error","startup-settled","startup-observed"];
+      const modes=["left","right","bottom","center","maximize","left-top","left-bottom","right-top","right-bottom"];
+      const reasons=["verified","unverified","child-input","domwindowclosed","stale","closed-state","probe-error","layout-dispose","timeout","native-error","acquisition-error"];
+      const rect=v=>v&&["x","y","width","height"].every(k=>Number.isFinite(v[k]))?
+        {x:v.x,y:v.y,width:v.width,height:v.height}:null;
+      let metadata=null;
+      if(typeof extra==="number")metadata=Number.isFinite(extra)?extra:null;
+      else if(extra&&typeof extra==="object"){
+        metadata={};
+        if(typeof extra.ok==="boolean")metadata.ok=extra.ok;
+        if(typeof extra.zenReady==="boolean")metadata.zenReady=extra.zenReady;
+        if(Number.isFinite(extra.released))metadata.released=extra.released;
+        if(Number.isFinite(extra.failed))metadata.failed=extra.failed;
+        if(reasons.includes(extra.reason))metadata.reason=extra.reason;
+      }
+      console.info("[OnePlane] Display placement "+(stages.includes(stage)?stage:"unknown"),
+        JSON.stringify({target:rect(target?.full),rect:rect(target),mode:modes.includes(target?.mode)?target.mode:null,actual:rect(actual),extra:metadata}));
+    }catch{} // A diagnostic failure cannot interrupt native window placement.
   }
   // The startup window already has the selected target rectangle. If
   // nsIBaseWindow geometry is unavailable, check the child's native Screen
