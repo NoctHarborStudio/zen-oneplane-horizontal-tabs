@@ -1,6 +1,7 @@
 import {readFileSync} from "node:fs";
 import test from "node:test";
 import assert from "node:assert/strict";
+import {nocturneErrorClass} from "../src/core/error-class.mjs";
 import {hubWorkspaceSnapshot,hubPanelWidth,hubWorkspaceBrowserEligible,hubTrashAgeMatches,hubWorkspaceOrder,hubTrashTabEligible,hubTrashRange,hubTrashRelativeAge,hubTrashAgeOptions,hubTrashFlightGeometry} from "../src/algorithms/hub-workspaces.mjs";
 test("native identities and current state; no mutation",()=>{
   const native=[{uuid:"a",name:"Study",icon:"📚"},{uuid:"b",name:"Free",icon:"chrome://x.svg"},{uuid:"a",name:"duplicate"}];
@@ -143,7 +144,7 @@ function uriScopeFixture({splitMismatch=false,restoreFailure=false,foreign=false
  const Services={wm:{getEnumerator(){const q=[window,other];return {hasMoreElements:()=>q.length>0,getNext:()=>q.shift()};}}};
  const helper={openTrustedLinkIn(...args){opens.push(args);},switchToTabHavingURI(...args){calls.push(args);return native(...args);}};
  const ChromeUtils={importESModule:p=>p.includes("URILoadingHelper")?{URILoadingHelper:helper}:{UrlbarParentController:Controller}};
- const install=new Function("window","root","browser","Services","ChromeUtils","hubWorkspaceBrowserEligible","console",segment+"return installWorkspaceLinkScope;")(window,{hasAttribute:()=>true},window.gBrowser,Services,ChromeUtils,(t,w)=>t?.workspace===w,{warn(){}});
+ const install=new Function("window","root","browser","Services","ChromeUtils","hubWorkspaceBrowserEligible","console","nocturneErrorClass",segment+"return installWorkspaceLinkScope;")(window,{hasAttribute:()=>true},window.gBrowser,Services,ChromeUtils,(t,w)=>t?.workspace===w,{warn(){}},nocturneErrorClass);
  const release=install(),controller=new Controller();controller.browserWindow=window;
  return {window,other,original,originalProto,Controller,controller,release,logs,opens,calls,nativeLists,providerCalls,history,removed,helper,setNative:fn=>native=fn,lookup:(...args)=>window.switchToTabHavingURI(...args)};
 }

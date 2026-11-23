@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {runInNewContext} from "node:vm";
+import {nocturneErrorClass} from "../src/core/error-class.mjs";
 const s=readFileSync(new URL("../src/core/bootstrap.js.part",import.meta.url),"utf8");
 const a=s.indexOf("async function initializeFreeAtStartup"),b=s.indexOf("async function activate",a);
 const service=["disposable-scope.mjs","workspace-commands.mjs"].map(p=>readFileSync(new URL("../src/core/"+p,import.meta.url),"utf8").replace(/^export (function|const) /gm,"$1 ")).join("\n");
@@ -17,7 +18,7 @@ function harness(stored="",names=["Space"],projection=false){
   const listeners=new Map();
   const window={gZenWorkspaces:native,gBrowser,closed:false,__oneplaneWorkspaceProjection:projection,
     addEventListener(type,fn){listeners.set(type,fn);},removeEventListener(type,fn){if(listeners.get(type)===fn)listeners.delete(type);}};
-  const context={window,disposed:false,cancelFreeStartupWait:null,ChromeUtils:{importESModule:()=>({BrowserWindowTracker:anchor})},Services:{prefs:{getDefaultBranch:()=>({getBoolPref:(k,f)=>host[k]??f,setBoolPref:(k,v)=>host[k]=v})}},prefs:{getStringPref:(k,f)=>map.get(k)||f,setStringPref:(k,v)=>map.set(k,v)},console:{info(){},warn(){}}};
+  const context={window,nocturneErrorClass,disposed:false,cancelFreeStartupWait:null,ChromeUtils:{importESModule:()=>({BrowserWindowTracker:anchor})},Services:{prefs:{getDefaultBranch:()=>({getBoolPref:(k,f)=>host[k]??f,setBoolPref:(k,v)=>host[k]=v})}},prefs:{getStringPref:(k,f)=>map.get(k)||f,setStringPref:(k,v)=>map.set(k,v)},console:{info(){},warn(){}}};
   const run=runInNewContext(service+"\n"+s.slice(a,b)+"\n({run:initializeFreeAtStartup,wait:waitFreeAtStartup,gate:()=>workspaceCommandGate(window)})",context);
   return {...run,calls,native,entries,context,map,window,listeners};
 }

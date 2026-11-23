@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
+import {nocturneErrorClass} from "../src/core/error-class.mjs";
 const read=p=>readFileSync(new URL("../src/"+p,import.meta.url),"utf8");
 const native=read("native/tab-adapter.js.part");
 const ctrl=read("interactions/drag-controller.js.part");
@@ -49,7 +50,7 @@ function fixture(){
    if(mode==="wrong-owner")adopted.owner={tabs:[adopted]};
    return adopted;
  }};
- const run=new Function("fixture",ctrlCode+[
+ const run=new Function("fixture","nocturneErrorClass",ctrlCode+[
    'const {window,tab,owner,browser,row,event,calls,nativeFns}=fixture;',
    'const DRAG_CONTROLLER="drag",readDraggedTab=()=>tab,tabOwner=fixture.tabOwner;',
    'const validNativeTab=fixture.validNativeTab,readStripTopology=fixture.readStripTopology;',
@@ -65,7 +66,7 @@ function fixture(){
  return {tab,owner,window,manager,container,nativeNodes,mirrors,projected,attrs,
    browser,event,nativeFns,calls,source,
    run:()=>run({window,tab,owner,browser,row,event,calls,nativeFns,tabOwner,validNativeTab,readStripTopology,
-     destination:()=>dest}),setDestination:value=>dest=value,mode:value=>mode=value,settled:()=>settled};
+     destination:()=>dest},nocturneErrorClass),setDestination:value=>dest=value,mode:value=>mode=value,settled:()=>settled};
 }
 
 test("native empty workspace and actual strip/plus coordinates gate drop",()=>{
