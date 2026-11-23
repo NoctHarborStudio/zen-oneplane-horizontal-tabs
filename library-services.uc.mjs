@@ -320,7 +320,9 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
       }else result=await native.getHistory(options);
       if(closed||token!==epoch||!allowed())return null;
       const rows=[],seen=new Set();let rawCount=0;const cutoff=now()-range*86400000;
-      const groups=Array.isArray(result)?[[null,result]]:result instanceof Map?[...result]:[];
+      // PlacesQuery is loaded in a different Gecko global; instanceof Map is realm-specific.
+       // Native date/site groups are iterable, while flat native search results are arrays.
+       const groups=Array.isArray(result)?[[null,result]]:result&&typeof result[Symbol.iterator]==="function"?result:[];
       for(const [group,items] of groups)for(const v of items){
         if(++rawCount>count)continue;
         const time=Number(v?.date);

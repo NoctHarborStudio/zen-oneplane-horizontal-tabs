@@ -43,6 +43,22 @@ test("history supports grouped and search results, invalidates old query, closes
  const old=s.query();const result=await s.query({text:"example"});resolve(new Map([[1,[v]]]));assert.equal(await old,null);
  assert.equal(result.rows[0].id,"g-1000");observer();assert.equal(notify,1);s.close();observer();assert.equal(notify,1);assert.equal(closed,1);
 });
+test("history accepts native Places maps from a different JavaScript realm",async()=>{
+  const {runInNewContext}=await import("node:vm");
+  const grouped=runInNewContext("new Map([[1700000000000,[{guid:'cross-global',url:'https://example.test/visit',title:'Cross-global visit',date:new Date(1700000000000)}]]])");
+  assert.equal(grouped instanceof Map,false,"must exercise the cross-realm failure, not a local Map");
+  assert.equal(Object.prototype.toString.call(grouped),"[object Map]");
+  const native={getHistory:async()=>grouped,searchHistory:async()=>[],close(){}};
+  const session=createHistorySession({now:()=>1700000001000,createQuery:()=>native});
+  try{
+    const result=await session.query({limit:50});
+    assert.equal(result.rows.length,1);
+    assert.equal(result.rows[0].url,"https://example.test/visit");
+    assert.equal(result.rows[0].group,"1700000000000");
+    assert.equal(result.rows[0].time,1700000000000);
+    assert.equal(result.hasMore,false);
+  }finally{session.close();}
+});
 test("grouped Places results retain native grouping and bounded pagination",async()=>{
  const v={guid:"g",url:"https://example.com",date:new Date(1000)};let args;
  const s=createHistorySession({now:()=>2000,createQuery:()=>({getHistory:async a=>{args=a;return new Map([[42,[v,v]]]);},searchHistory:async()=>[],close(){}})});
