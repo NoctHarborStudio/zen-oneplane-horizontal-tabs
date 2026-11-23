@@ -1,7 +1,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.146",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.147",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -70,6 +70,25 @@
     ["resultType",new Set(["undefined","object","boolean","number","string","function","symbol","bigint"])],
     ["os",new Set(["WINNT","Darwin","Linux","Android","FreeBSD","OpenBSD","NetBSD"])]
   ]);
+  // Event-specific codes come only from fixed Nocturne producers, never user/native text.
+  // Unlisted events keep their previous bounded grammar until separately audited.
+  const EVENT_STRING_ENUMS=new Map([
+    ["library.open.rejected",{reason:new Set(["busy","disabled","section","startup","window","overlay-missing","services-missing","exception","mount","geometry","overlay-busy","surface-hidden"])}],
+    ["library.shortcut",{reason:new Set(["busy","disabled","section","startup","window","overlay-missing","services-missing","exception","mount","geometry","overlay-busy","surface-hidden","private","history-unready","downloads-unready","toggle-rejected"])}],
+    ["library.media.scan.wait",{status:new Set(["deadline","late-complete","late-error"])}],
+    ["library.media.refresh",{status:new Set(["committed","error"])}],
+    ["downloads.native.transfer",{reason:new Set(["ineligible","file-unavailable","payload-written","native-error"])}],
+    ["downloads.drag.payload",{reason:new Set(["native-source-or-file-unavailable"])}],
+    ["home.search.close-start",{reason:new Set(["escape","home-background","native-close","native-event","native-observer"])}],
+    ["home.search.close-finish",{reason:new Set(["escape","home-background","native-close","native-event","native-observer"])}],
+    ["home.search.snapshot-unavailable",{reason:new Set()}],
+    ["page-progress.network",{reason:new Set(["overlap-start","stale-stop"])}],
+    ["library.file.drag.recovered",{reason:new Set(["native-session-ended","native-session-unavailable"])}],
+    ["library.surface.fallback",{reason:new Set(["popover-unavailable"])}],
+    ["center.bloom.fallback",{reason:new Set(["preflight","budget"])}],
+    ["center.motion.skip",{reason:new Set(["no-row","no-visible-cards"])}],
+    ["center.fold.reject",{reason:new Set(["partial-clip","coordinate-frame"])}]
+  ]);
   const CSS_FIELDS=new Set(["opacity","visibility","display","translate","scale","transform","transition","height","width","hoverProgress","centerX","centerAlpha","startupBase","mask","bmMask","contour","bmContour","measure","progress","startupProgress"]);
   const CSS_VALUE=/^[#A-Za-z0-9.,()%+ :-]{1,180}$/;
   // Popup CSS is sampled from known chrome elements, not page content.
@@ -98,6 +117,7 @@
       }
       if(event==="downloads.drag.popup-shown"&&key==="via")return v==="watch"?v:null;
       if(event.startsWith("downloads.drag.")&&key==="flip")return POPUP_FLIP.has(v)?v:null;
+      if(parent===""&&(key==="reason"||key==="status")){const values=EVENT_STRING_ENUMS.get(event)?.[key];if(values&&!values.has(v))return null;}
       if(key==="name"&&!/^(?:Error|[A-Z][A-Za-z0-9]{0,45}(?:Error|Exception)|NS_ERROR_[A-Z0-9_]{1,45})$/.test(v))return null;
       if(key==="label"&&!MARK_LABEL.test(v))return null;
       if(STRING_ENUMS.has(key))return STRING_ENUMS.get(key).has(v)?v:null;

@@ -1,3 +1,11 @@
+## 0.3.0-preview.147 — Audit event-specific diagnostic reasons and Home Search console output (NC4-089-R5)
+
+Independent source tracing found that known Library, media scan/refresh, native Download transfer, Home Search, Page Progress and selected motion events admitted arbitrary short `reason`/`status` tokens in the process-local recorder. The existing sanitizer now applies **event-scoped finite values** to 15 audited events while leaving other event families unchanged until reviewed. A dedicated Home Search snapshot error uses the existing restricted `name` exception-class field instead of generic `reason`.
+
+The existing Home Search `console.info` forwarded its unsanitized `fields` object directly to Browser Console, bypassing the recorder's filtering. It now logs only the fixed event name while the sanitized structured metadata continues through `__nocturneTrace`. Source-backed tests cover producer values, rejected arbitrary tokens, exception-class preservation, and the console echo. No changes to browser data, UI rendering, native commands, services, motion timing, scanner, writer, or preferences.
+
+These tests establish the audited producer families only; remaining event-specific semantic inventory, native Zen/Sine privacy/performance, and NC4-022/082/083 Library memory/cancellation gates are OPEN.
+
 ## 0.3.0-preview.146 — Preserve Closed Tabs error-class diagnostics (NC4-089-R4)
 
 Independent producer/recorder audit found that `library.scope.error` emitted a native Closed Tabs observer failure class under `error`, a key rejected by the scoped diagnostic string filter. The existing Closed Tabs callback now emits `name`, the same restricted exception-class field already used by Layout and Hub. A production-source-extracted regression triggers actual observer disposal failure and confirms that the class survives while raw exception messages remain absent.
