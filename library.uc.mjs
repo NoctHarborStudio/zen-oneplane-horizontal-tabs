@@ -238,7 +238,11 @@ function libraryShortcutSection(event,os="WINNT"){
   if(!event||event.defaultPrevented||event.isComposing||event.repeat||event.altKey||event.shiftKey)return null;
   if(os==="Darwin"?(!event.metaKey||event.ctrlKey):(!event.ctrlKey||event.metaKey))return null;
   const key=String(event.key||"").toLowerCase();
-  return key==="h"?"history":key==="j"?"downloads":null;
+  // Native Zen shortcuts can remain bound to a physical key while Gecko's
+  // event.key changes with the active keyboard layout (e.g. Cyrillic).
+  if(key==="h")return "history";
+  if(key==="j")return "downloads";
+  return event.code==="KeyH"?"history":event.code==="KeyJ"?"downloads":null;
 }
 /* L5–L6: one Library shell for five native-backed sections. */
 (()=>{
@@ -247,7 +251,7 @@ function libraryShortcutSection(event,os="WINNT"){
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,{flush:true});
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.157",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.158",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";

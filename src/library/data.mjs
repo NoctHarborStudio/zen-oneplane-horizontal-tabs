@@ -107,5 +107,9 @@ export function libraryShortcutSection(event,os="WINNT"){
   if(!event||event.defaultPrevented||event.isComposing||event.repeat||event.altKey||event.shiftKey)return null;
   if(os==="Darwin"?(!event.metaKey||event.ctrlKey):(!event.ctrlKey||event.metaKey))return null;
   const key=String(event.key||"").toLowerCase();
-  return key==="h"?"history":key==="j"?"downloads":null;
+  // Native Zen shortcuts can remain bound to a physical key while Gecko's
+  // event.key changes with the active keyboard layout (e.g. Cyrillic).
+  if(key==="h")return "history";
+  if(key==="j")return "downloads";
+  return event.code==="KeyH"?"history":event.code==="KeyJ"?"downloads":null;
 }
