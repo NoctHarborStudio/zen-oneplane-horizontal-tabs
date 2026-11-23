@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {startupTimeline,startupFits,startupLateEffect,createStartupOutcome,startupBoundaryOutcome} from "../src/algorithms/startup-timeline.mjs";
 const source=readFileSync(new URL("../startup-animation.uc.mjs",import.meta.url),"utf8");
+const assemblyErrorContext=source.slice(source.indexOf("const ASSEMBLY_ERROR_CLASSES="),source.indexOf("function canStartBeforePaint("));
 const css=readFileSync(new URL("../chrome.css",import.meta.url),"utf8");
 const first=source.slice(source.indexOf("function canStartBeforePaint("),source.indexOf("// No replay on Sine"));
 const before=new Function(first+"return canStartBeforePaint;")();
@@ -168,7 +169,7 @@ test("Boot teardown continues after timer failure and preserves replacement mark
 });
 
 function directEffectFixture({paused=true,pauseFails=false,cancelDuringAnimate=false}={}){
- const code=source.slice(source.indexOf("  function play(n,"),source.indexOf("  function save("));
+ const code=assemblyErrorContext+source.slice(source.indexOf("  function play(n,"),source.indexOf("  function save("));
  return new Function("paused","pauseFails","cancelDuringAnimate",`
   let dead=false,bootPreparing=paused,ownedTimeline=null,animations=new Map(),events=[],callbacks=[],EASE="ease";
   const a={cancelled:0,finished:{then(ok,fail){callbacks.push({ok,fail});}},pause(){if(pauseFails)throw Error("pause");},cancel(){this.cancelled++;}};
@@ -193,7 +194,7 @@ test("disposal during direct animate cancels late returned effect",()=>{
  const h=directEffectFixture({cancelDuringAnimate:true});assert.equal(h.run(),false);assert.equal(h.a.cancelled,1);assert.equal(h.animations.size,0);
 });
 function foldFixture({mode="null"}={}){
- const code=source.slice(source.indexOf("  function acquireStartupBookmarks("),source.indexOf("  function scheduleLate("));
+ const code=assemblyErrorContext+source.slice(source.indexOf("  function acquireStartupBookmarks("),source.indexOf("  function scheduleLate("));
  return new Function("mode",`
  let dead=false,centerHandle={},seen=new Set(),bootPreparing=true,scale=1;const MANAGED="managed",events=[];
  const attrs=new Map(),n={getAttribute:k=>attrs.get(k)??null,setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k)};
@@ -300,7 +301,7 @@ test("startup resource preflight samples Home without a horizontal row and reset
  assert.deepEqual(run(),{native:{homeIcons:{total:2,pending:1},iconStatus:null,revision:1},first:2,changed:3,revision:4,iconStatus:{total:1,pending:1},calls:2});
 });
 test("startup readiness exception uses existing fail-open cleanup",()=>{
- const code=source.slice(source.indexOf("  function tick(){"),source.indexOf("  function checkReadiness(){"));
+ const code=assemblyErrorContext+source.slice(source.indexOf("  function tick(){"),source.indexOf("  function checkReadiness(){"));
  const run=new Function(`
  let raf=1,dead=false,playing=false,calls=0,events=[];function checkReadiness(){throw Error("readiness");}function finish(){calls++;dead=true;}function decision(e){events.push(e);}
  ${code}
@@ -334,7 +335,7 @@ test("late native Home remains visible without replaying its startup stage",()=>
 });
 
 test("Assembly completion cannot extend the inherited deadline or execute stale timers",()=>{
- const code=source.slice(source.indexOf("  function armFinish("),source.indexOf("  function mountBoot("));
+ const code=assemblyErrorContext+source.slice(source.indexOf("  function armFinish("),source.indexOf("  function mountBoot("));
  const run=new Function(`
  let dead=false,settling=false,ownedTimeline=null,deadline=8000,timerEpoch=0,timer=0,time=7000,calls=0;
  const timers=[],window={setTimeout(fn,delay){timers.push({fn,delay});return timers.length;},clearTimeout(){throw Error("clear");}};
@@ -485,7 +486,7 @@ test("boundary distinguishes incomplete, retired and legacy completion",()=>{
  ledger.close();
 });
 test("normal boundary allows one capped grace period and no stale timer completion",()=>{
- const code=source.slice(source.indexOf("  function armFinish("),source.indexOf("  function mountBoot("));
+ const code=assemblyErrorContext+source.slice(source.indexOf("  function armFinish("),source.indexOf("  function mountBoot("));
  const run=new Function(`
  let dead=false,settling=false,deadline=8000,timerEpoch=0,timer=0,time=1000,playStart=0;
  const plan={lateLimit:1100},ownedTimeline={outcome:{snapshot:()=>({pending:1,cancelled:0})}},timers=[],events=[];
@@ -591,7 +592,7 @@ test("epoch-capable legacy handles without outcome capability remain unverified"
  assert.deepEqual(run(),{legacy:1,starts:2});
 });
 test("finish timer acquisition failure cannot strand Assembly",()=>{
- const code=source.slice(source.indexOf("  function armFinish("),source.indexOf("  function mountBoot("));
+ const code=assemblyErrorContext+source.slice(source.indexOf("  function armFinish("),source.indexOf("  function mountBoot("));
  const run=new Function(`
  let dead=false,deadline=8000,timerEpoch=0,timer=0,time=1000,log=[];
  const window={setTimeout(){throw Error("timer");}},now=()=>time;

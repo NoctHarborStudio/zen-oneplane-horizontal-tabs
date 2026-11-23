@@ -212,7 +212,7 @@ test("Home retires an effect returned after synchronous release and rejects a re
 });
 
 function assemblyFixture({boot=false,remaining=8000,mode="bloom",failDirect=false,failHome=false,oldEngine=false}={}){
- const source=read("startup-animation.uc.mjs"),code=source.slice(source.indexOf("  function bindStartupEpoch("),source.indexOf("  function schedule(){"));
+ const source=read("startup-animation.uc.mjs"),assemblyErrorContext=source.slice(source.indexOf("const ASSEMBLY_ERROR_CLASSES="),source.indexOf("function canStartBeforePaint(")),code=assemblyErrorContext+source.slice(source.indexOf("  function bindStartupEpoch("),source.indexOf("  function schedule(){"));
  const calls=[],effects=[],state={time:0,remaining,resume:null,reason:null};
  function node(name){const attrs=new Map();return {name,attrs,children:[],getAttribute:k=>attrs.get(k)??null,hasAttribute:k=>attrs.has(k),setAttribute:(k,v)=>attrs.set(k,v),querySelector(k){return k===".oneplane-title-island"?island:plus;},querySelectorAll:()=>[card]};}
  const island=node("island"),plus=node("plus"),card=node("card"),row=node("row"),surface=node("panel"),url=node("url"),items=node("items"),homeNode=node("home");
