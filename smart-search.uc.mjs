@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="search.script",data={version:"0.3.0-preview.147"};
+  const event="search.script",data={version:"0.3.0-preview.148"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -21,6 +21,14 @@ try{if(typeof window!=="undefined"){
   // Scope every query to its actual chrome window. Never use the global
   // most-recent window as a fallback; a background/private window may differ.
   function outerId(win){try{return win?.windowUtils?.outerWindowID||null;}catch{return null;}}
+  // Native/provider exceptions may embed a tab URL, title or query in their message.
+  // The local status surface and Browser Console admit only an error class.
+  function diagnosticErrorClass(error){
+    try{
+      const name=error?.name;
+      return typeof name==="string"&&/^(?:Error|[A-Z][A-Za-z0-9]{0,45}(?:Error|Exception)|NS_ERROR_[A-Z0-9_]{1,45})$/.test(name)?name:"Error";
+    }catch{return "Error";}
+  }
   function queryAllowed(context,source,enabled,openpage){
     return enabled&&openpage&&!context.isPrivate&&
       typeof context.searchString==="string"&&context.searchString.length===0&&
@@ -198,7 +206,7 @@ try{if(typeof window!=="undefined"){
             payload:{dynamicType:TYPE,zrToken:token,zrTitle:e.title,zrDetail:detail,
               zrIcon:Shared.getIconForUrl(e.url),zrTime:relativeTime(e.last,e.selected),zrCurrent:!!e.selected}
           }));if(state.diagnostic)state.diagnostic.emitted++;}
-          catch(e){if(state.diagnostic)state.diagnostic.error=String(e);console.warn("[Zen Refined] Smart Search result:",e);}
+          catch(e){if(state.diagnostic)state.diagnostic.error=diagnosticErrorClass(e);console.warn("[Zen Refined] Smart Search result:",diagnosticErrorClass(e));}
         }
         if(state.diagnostic)console.info("[Zen Refined] Smart Search results: candidates="+state.diagnostic.candidates+" emitted="+state.diagnostic.emitted+" limit="+context.maxResults);
       }
@@ -235,7 +243,7 @@ try{if(typeof window!=="undefined"){
         try{
           win.gBrowser.selectedTab=entry.tab;
           if(win.gBrowser.selectedTab===entry.tab)entry.tab.linkedBrowser.focus?.();
-        }catch(e){console.warn("[Zen Refined] Recent tab selection:",e);}
+        }catch(e){console.warn("[Zen Refined] Recent tab selection:",diagnosticErrorClass(e));}
       }
     };
   }
@@ -317,7 +325,7 @@ try{if(typeof window!=="undefined"){
         console.info("[Zen Refined] Smart Search startup refresh: attempt="+recoveryAttempts);
       }
       try{bar.view?.clearTopSitesCache?.();bar.startQuery({allowAutofill:false,resetSearchState:false});}
-      catch(e){console.warn("[Zen Refined] Smart Search refresh:",e);}
+      catch(e){console.warn("[Zen Refined] Smart Search refresh:",diagnosticErrorClass(e));}
     },delay);
   }
   function onActivation(e){
@@ -345,7 +353,7 @@ try{if(typeof window!=="undefined"){
       // Leave Enter, Escape, Ctrl+Tab and ordinary typed queries untouched.
       view.selectedRowIndex=next;
       e.preventDefault();e.stopImmediatePropagation();
-    }catch(e){console.warn("[Zen Refined] Smart Search Tab:",e);}
+    }catch(e){console.warn("[Zen Refined] Smart Search Tab:",diagnosticErrorClass(e));}
   }
   function onEscape(e){if(["Escape","Tab","ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Enter"].includes(e.key)){cancelRefresh();finishRecovery();}}
   function onResultPointer(e){if(e.target?.closest?.(".urlbarView-row")){cancelRefresh();finishRecovery();}}
@@ -464,8 +472,8 @@ try{if(typeof window!=="undefined"){
       }else onReady();
       console.info("[Zen Refined] Smart Search provider ready (preview.34, manager="+(direct===manager?"address-bar":"singleton")+")");
     }catch(e){
-      diagnostic.stage="error";diagnostic.error=String(e);
-      console.warn("[Nocturne] Smart Search unavailable:",e);
+      diagnostic.stage="error";diagnostic.error=diagnosticErrorClass(e);
+      console.warn("[Nocturne] Smart Search unavailable:",diagnosticErrorClass(e));
       dispose(true);
     }
   }
@@ -478,7 +486,7 @@ try{if(typeof window!=="undefined"){
       if(window[STATUS]===status)delete window[STATUS];
     };
     if(disposed){if(!keep)finish();return;}disposed=true;
-    const safe=fn=>{try{fn();}catch(e){console.warn("[Nocturne] Smart Search cleanup:",e);}};
+    const safe=fn=>{try{fn();}catch(e){console.warn("[Nocturne] Smart Search cleanup:",diagnosticErrorClass(e));}};
     if(observer)try{Services.obs.removeObserver(observer,"browser-delayed-startup-finished");}catch{}
     observer=null;
     safe(cancelRefresh);safe(clearLayout);safe(()=>resizeObserver?.disconnect());safe(()=>openObserver?.disconnect());

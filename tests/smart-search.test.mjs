@@ -5,6 +5,34 @@ const source=readFileSync(new URL("../smart-search.uc.mjs",import.meta.url),"utf
 const start=source.indexOf("function outerId("),end=source.indexOf("let manager=null",start);
 const api=new Function("prefs","PREF","LIMIT","NAME","TYPE",source.slice(start,end)+"return {queryAllowed,selectRecent,availableTab,eligibleUrl,collect,validTarget,remember,makeProvider,relativeTime,resultBudget,groupPlan,zeroPrefix};")({getBoolPref:()=>true,getIntPref:()=>4},"enable","limit","provider","zr-recent-tab");
 const context={searchString:"",isPrivate:false,sources:[4]};
+test("NC4-089-R6 Smart Search native-result errors keep class without a URL in diagnostics or console",async()=>{
+ const warnings=[];
+ const extracted=new Function("prefs","PREF","LIMIT","NAME","TYPE","console",source.slice(start,end)+
+   "return {makeProvider,diagnosticErrorClass};")(
+   {getBoolPref:()=>true,getIntPref:()=>4},"enable","limit","provider","zr-recent-tab",
+   {info(){},warn:(...args)=>warnings.push(args)}
+ );
+ const sensitive="https://private.example/account?query=secret";
+ assert.equal(extracted.diagnosticErrorClass(new TypeError(sensitive)),"TypeError");
+ assert.equal(extracted.diagnosticErrorClass({name:"SecretAccount",message:sensitive}),"Error");
+ assert.equal(extracted.diagnosticErrorClass({name:"NS_ERROR_FAILURE",message:sensitive}),"NS_ERROR_FAILURE");
+ assert.equal(extracted.diagnosticErrorClass({get name(){throw Error(sensitive)}}),"Error");
+ const f=fixture(),diagnostic={error:null,candidates:0,emitted:0};
+ const state={sequence:0,targets:new Map(),diagnostic,activity:new WeakMap()},registry={windows:new WeakMap()};
+ registry.windows.set(f.win,state);
+ const shared={PROVIDER_TYPE:{PROFILE:1},RESULT_SOURCE:{TABS:4},RESULT_TYPE:{DYNAMIC:8},getIconForUrl:()=>"icon"};
+ const P=extracted.makeProvider(class{},shared,class{constructor(p){Object.assign(this,p)}},f.utils,f.session,
+   registry,{getProvider:()=>({getPriority:()=>1})},{isWindowPrivate:()=>false});
+ const controller={browserWindow:f.win};f.win.gURLBar={controller,parentController:controller};
+ await P.startQuery({...context,maxResults:9},()=>{throw new TypeError(sensitive);},controller);
+ assert.equal(diagnostic.candidates,3);
+ assert.equal(diagnostic.error,"TypeError");
+ assert.equal(diagnostic.emitted,0);
+ assert.equal(warnings.length,3);
+ assert.ok(warnings.every(args=>args.length===2&&args[1]==="TypeError"));
+ assert.ok(!JSON.stringify({diagnostic,warnings}).includes(sensitive));
+});
+
 test("only unrestricted empty normal-window tab queries",()=>{
  assert.equal(api.queryAllowed(context,4,true,true),true);
  for(const c of [{searchString:"x"},{searchString:" "},{isPrivate:true},{searchMode:{}},{restrictSource:4},{sources:[2]}])assert.equal(api.queryAllowed({...context,...c},4,true,true),false);
@@ -148,7 +176,7 @@ test("actual script registers with Gecko 160 SessionStore path and survives miss
   if(hasStore)modules["moz-src:///browser/components/sessionstore/SessionStore.sys.mjs"]={SessionStore:{}};
   const chrome={importESModule(path){names.push(path);if(!modules[path])throw Error("missing "+path);return modules[path];}};
   const services={prefs:{},obs:{addObserver(){throw Error("unexpected wait")}}};
-  new Function("window","document","Services","ChromeUtils","console",source)(w,{documentElement:{hasAttribute:()=>false}},services,chrome,{info:m=>logs.push(m),warn:m=>logs.push(m)});
+  new Function("window","document","Services","ChromeUtils","console",source)(w,{documentElement:{hasAttribute:()=>false}},services,chrome,{info:m=>logs.push(m),warn:(...args)=>logs.push(args)});
   assert.equal(w.__zenRefinedSmartSearchStatus().registered,true);
   assert.equal(w.__zenRefinedSmartSearchStatus().stage,"ready");
   assert.equal(names.includes("moz-src:///browser/components/sessionstore/SessionStore.sys.mjs"),true);
@@ -316,10 +344,14 @@ test("partial Smart Search install failure rolls back provider and keeps diagnos
   };
   if(hasStore)modules["moz-src:///browser/components/sessionstore/SessionStore.sys.mjs"]={SessionStore:{}};
   const chrome={importESModule(path){names.push(path);if(!modules[path])throw Error("missing "+path);return modules[path];}};
-  const services={prefs:{addObserver(){throw Error("injected late failure");}},obs:{addObserver(){throw Error("unexpected wait")}}};
-  new Function("window","document","Services","ChromeUtils","console",source)(w,{documentElement:{hasAttribute:()=>false}},services,chrome,{info:m=>logs.push(m),warn:m=>logs.push(m)});
+  const services={prefs:{addObserver(){throw Error("injected late failure: https://private.example/account?query=secret");}},obs:{addObserver(){throw Error("unexpected wait")}}};
+  new Function("window","document","Services","ChromeUtils","console",source)(w,{documentElement:{hasAttribute:()=>false}},services,chrome,{info:m=>logs.push(m),warn:(...args)=>logs.push(args)});
   assert.equal(w.__zenRefinedSmartSearchStatus().registered,false);assert.equal(providers.size,0);
   assert.equal(w.__zenRefinedSmartSearchStatus().stage,"error");
+  assert.equal(w.__zenRefinedSmartSearchStatus().error,"Error");
+   assert.ok(!JSON.stringify(logs).includes("private.example"));
+   assert.ok(logs.every(entry=>typeof entry==="string"||entry.every(x=>typeof x==="string")));
+
   assert.equal(names.includes("moz-src:///browser/components/sessionstore/SessionStore.sys.mjs"),true);
   assert.equal(names.includes("resource:///modules/sessionstore/SessionStore.sys.mjs"),!hasStore);
   w.__zenRefinedSmartSearch();assert.equal(providers.size,0);assert.equal(w.__zenRefinedSmartSearchStatus,undefined);

@@ -1,3 +1,11 @@
+## 0.3.0-preview.148 — Smart Search exception metadata privacy (NC4-089-R6)
+
+A producer/source re-audit found that Smart Search's native provider error paths wrote the unfiltered `String(error)` to its externally readable diagnostic status and passed raw exception objects to Browser Console. Native/provider messages may contain URLs, tab titles or search context. The existing Smart Search entrypoint now retains only a bounded exception class (or `Error` fallback) in status and all its own warning paths; normal result/selection behavior and numeric counters are unchanged.
+
+Source-backed regression coverage forces the **actual provider callback** to throw an exception containing a sensitive URL and verifies only `TypeError` remains in both the diagnostic status and captured console arguments. The existing partial-install failure fixture now verifies that a native exception URL does not survive registration rollback/status and Console warnings. No new data owner, logger, telemetry stream, window/DOM state, native operation, timeouts, persistence or features.
+
+This closes the audited Smart Search exception producer at source/CI level only. Other direct `console.warn/error` owners, generic per-event semantic inventories, Zen/Sine native privacy/performance acceptance and Library NC4-022/082/083 upstream thumbnail/scanner limits remain OPEN.
+
 ## 0.3.0-preview.147 — Audit event-specific diagnostic reasons and Home Search console output (NC4-089-R5)
 
 Independent source tracing found that known Library, media scan/refresh, native Download transfer, Home Search, Page Progress and selected motion events admitted arbitrary short `reason`/`status` tokens in the process-local recorder. The existing sanitizer now applies **event-scoped finite values** to 15 audited events while leaving other event families unchanged until reviewed. A dedicated Home Search snapshot error uses the existing restricted `name` exception-class field instead of generic `reason`.
