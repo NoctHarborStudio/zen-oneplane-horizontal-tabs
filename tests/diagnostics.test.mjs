@@ -20,6 +20,104 @@ function fixture({isPrivate=false,on=true,prior=null,failWrite=false,writeHook=(
  reload();
  return {reload,win,doc,timers,frames,logs,writes,io,listeners,attrs,unload:()=>unload(),setTime:t=>time=t,disable:()=>enabled=false,api:win.__nocturneDiagnostics};
 }
+test("NC4-089-R3 restores finite Workspace error codes from source producers",()=>{
+ const f=fixture(),trace=f.win.__nocturneTrace;
+ const command=readFileSync(new URL("../src/core/workspace-commands.mjs",import.meta.url),"utf8");
+ const hub=readFileSync(new URL("../src/hub/controller.js.part",import.meta.url),"utf8");
+ const codes=new Set([...command.matchAll(/workspaceCommandError\(["']([^"']+)["']/g),
+   ...hub.matchAll(/workspaceCommandError\(["']([^"']+)["']/g)].map(m=>m[1]));
+ for(const code of ["selection-unverified","selection-mismatch","inspection-error","return-unavailable","return-target","return-unverified"])codes.add(code);
+ for(const code of codes)trace("workspace.command.end",{code,ok:false});
+ const events=JSON.parse(f.api.dump()).events.filter(e=>e.event==="workspace.command.end");
+ assert.equal(events.length,codes.size);
+ assert.deepEqual(events.map(e=>e.data.code),[...codes]);
+ trace("workspace.command.end",{code:"profile-secret",ok:false});
+ assert.equal(JSON.parse(f.api.dump()).events.at(-1).data.code,null);
+ f.api.dispose();
+});
+test("NC4-089-R3 preserves only known chrome attribute names and lifecycle states",()=>{
+ const f=fixture();
+ f.win.__nocturneTrace("chrome.attributes",[
+   {node:"root",attr:"data-zr-startup-phase",value:"playing"},
+   {node:"root",attr:"data-op-startup-ready",value:"pending"},
+   {node:"root",attr:"oneplane-active",value:"true"},
+   {node:"root",attr:"data-op-startup-ready",value:"user-secret"},
+   {node:"root",attr:"data-op-startup-ready",value:""},
+   {node:"root",attr:"data-op-startup-ready",value:null},
+   {node:"root",attr:"data-op-dragging",value:"true"},
+   {node:"unrecognized-node",attr:"data-op-startup-ready",value:"true"},
+   {node:"root",attr:"url",value:"https://example.org"},
+   {node:"root",attr:"data-op-startup-ready",value:"https://example.org/private"}
+ ]);
+ const last=JSON.parse(f.api.dump()).events.at(-1);
+ assert.equal(last.event,"chrome.attributes");
+ assert.deepEqual(last.data,[
+   {node:"root",attr:"data-zr-startup-phase",value:"playing"},
+   {node:"root",attr:"data-op-startup-ready",value:"pending"},
+   {node:"root",attr:"oneplane-active",value:"true"},
+   {node:"root",attr:"data-op-startup-ready",value:null},
+   {node:"root",attr:"data-op-startup-ready",value:""},
+   {node:"root",attr:"data-op-startup-ready",value:null},
+   {node:"root",attr:"data-op-startup-ready",value:null}
+ ]);
+ assert.ok(!f.api.dump().includes("user-secret"));
+ assert.ok(!f.api.dump().includes("example.org"));
+ assert.ok(f.logs.every(s=>!s.includes("user-secret")&&!s.includes("example.org")));
+ f.api.dispose();
+});
+test("NC4-089-R3 restores bounded Popup Bunny CSS evidence without private text",()=>{
+ const f=fixture(),trace=f.win.__nocturneTrace;
+ trace("downloads.drag.popup-shown",{state:"open",via:"watch",surface:{
+   background:"rgb(42, 42, 42)",appearance:"-moz-panel",opacity:"1",radius:"3px",
+   stage:"rgba(0, 0, 0, 0)",part:"rgb(255, 255, 255)",panelBackground:"rgb(24, 24, 24)",flip:"both"
+ }});
+ trace("downloads.drag.start",{os:"Linux",seed:[320,48]});
+ const events=JSON.parse(f.api.dump()).events;
+ const popup=events.find(e=>e.event==="downloads.drag.popup-shown").data;
+ assert.equal(popup.via,"watch");
+ assert.equal(popup.surface.background,"rgb(42, 42, 42)");
+ assert.equal(popup.surface.appearance,"-moz-panel");
+ assert.equal(popup.surface.stage,"rgba(0, 0, 0, 0)");
+ assert.equal(popup.surface.part,"rgb(255, 255, 255)");
+ assert.equal(popup.surface.panelBackground,"rgb(24, 24, 24)");
+ assert.equal(popup.surface.radius,"3px");
+ assert.equal(popup.surface.flip,"both");
+ assert.equal(events.find(e=>e.event==="downloads.drag.start").data.os,"Linux");
+ trace("downloads.drag.popup-shown",{state:"open",via:"password",surface:{
+   background:"url(https://example.org/secret)",stage:"private-user-secret",part:"private-user-secret",panelBackground:"private-user-secret",
+   radius:"private-user-secret",appearance:"private-user-secret",flip:"private-user-secret"
+ }});
+ const unsafe=JSON.parse(f.api.dump()).events.at(-1);
+ assert.equal(unsafe.data.via,null);
+ for(const key of ["background","stage","part","panelBackground","radius","appearance","flip"])
+   assert.equal(unsafe.data.surface[key],null,key);
+ assert.ok(!f.api.dump().includes("example.org"));
+ assert.ok(!f.api.dump().includes("private-user-secret"));
+ f.api.dispose();
+});
+test("NC4-089-R3 actual Popup source and scope-error producers retain typed evidence",()=>{
+ const f=fixture();
+ const popupSource=readFileSync(new URL("../downloads-indicator.uc.mjs",import.meta.url),"utf8");
+ const start=popupSource.indexOf("  function filePopupSurface("),end=popupSource.indexOf("  function prepareFilePopup()",start);
+ assert.ok(start>0&&end>start);
+ const getComputedStyle=node=>({backgroundColor:node.kind==="stage"?"rgba(0, 0, 0, 0)":"rgb(42, 42, 42)",
+   appearance:"-moz-panel",opacity:"1",borderTopLeftRadius:"3px",getPropertyValue:()=> "rgb(24, 24, 24)"});
+ const win={getComputedStyle},fileStage={kind:"stage"};
+ const popup={kind:"popup",shadowRoot:{querySelector:()=>({kind:"part"})},getAttribute:()=> "both"};
+ const sample=new Function("window","fileStage",popupSource.slice(start,end)+";return filePopupSurface;")(win,fileStage)(popup);
+ f.win.__nocturneTrace("downloads.drag.popup-shown",{state:"open",surface:sample});
+ const saved=JSON.parse(f.api.dump()).events.at(-1).data.surface;
+ assert.equal(saved.background,"rgb(42, 42, 42)");
+ assert.equal(saved.stage,"rgba(0, 0, 0, 0)");
+ assert.equal(saved.flip,"both");
+ for(const path of ["../src/core/window-scope.js.part","../src/hub/controller.js.part"]){
+   const code=readFileSync(new URL(path,import.meta.url),"utf8");
+   assert.match(code,/__nocturneTrace\?\.\("layout\.scope\.error",\{owner:"[^"]+",resource,name:error\?\.name\|\|"Error"\}/);
+ }
+ f.win.__nocturneTrace("layout.scope.error",{owner:"layout",resource:"scope",name:"TypeError"});
+ assert.equal(JSON.parse(f.api.dump()).events.at(-1).data.name,"TypeError");
+ f.api.dispose();
+});
 test("NC4-089-R2 preserves known native and animation diagnostic strings",()=>{
  const f=fixture(),emit=f.win.__nocturneTrace;
  const examples=[

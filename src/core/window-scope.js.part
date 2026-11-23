@@ -8,7 +8,7 @@ function installTabStrip() {
   }
 
   const mountScope=createDisposableScope({onError:(resource,error)=>{
-    try{window.__nocturneTrace?.("layout.scope.error",{owner:"layout",resource,error:error?.name||"Error"},{flush:true});}catch{}
+    try{window.__nocturneTrace?.("layout.scope.error",{owner:"layout",resource,name:error?.name||"Error"},{flush:true});}catch{}
   }});
   let releaseDragController=()=>true;
   const html = (tag, cls) => {

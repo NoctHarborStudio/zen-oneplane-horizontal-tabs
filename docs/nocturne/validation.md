@@ -707,3 +707,12 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [x] Add new source-backed cases for valid finite native/animation categories, unexpected-string rejection, and extracted production Home `searchLog()` plus address-phase source contract.
 - [x] [CI 45111169738](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45111169738) **SUCCESS** on production `e191d2be0405b23129ff33960fb92767315e2d49`: 818 Node, 15 Python, 12 runtime parsers, deterministic build, release/version history, immutable and current public Sine archives.
 - [ ] Verify real Zen 1.24.2b/Sine 2.3.3 diagnostic values in normal/private and multiple windows with diagnostics on/off, and confirm no user strings or unexpectedly null lifecycle reasons. Native/complete per-event schema gate remains OPEN.
+
+### A0/A7 / NC4-089-R3 — remaining diagnostic producer metadata gaps (preview.145)
+
+- [x] Independently reproduce preview.144 lost Workspace native return/selection error codes, `chrome.attributes` node/attr/value, Popup Bunny computed CSS and platform, and Layout/Hub scope error-class data.
+- [x] Retain only source-declared finite Workspace/OS values; bound and validate chrome attribute and popup CSS metadata in the existing single recorder. Assert that URL, path and arbitrary user strings never enter source fixture dumps or console echo.
+- [x] Four new source-backed tests: source-defined native Workspace codes, internal mutation metadata privacy/semantics, popup CSS acceptance/rejection, extracted real download-popup and scope-error owners.
+- [ ] Verify preview.145 full canonical CI, release provenance and current public Sine archive, then record production commit.
+- [ ] Native Zen 1.24.2b/Sine 2.3.3: normal/private and multi-window diagnostic event sampling and opt-out; compare event/popup evidence to actual chrome UI, verify local file and Browser Console contain no user/private data, and compare profiler cost with diagnostics off. Source-level CSS values and Sine fixture are not native acceptance.
+- [ ] Full per-event semantic producer inventory for generic status/reason fields and third-party extension error edge cases remains OPEN; do not claim a universal content sanitizer.

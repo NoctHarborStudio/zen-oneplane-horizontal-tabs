@@ -1459,7 +1459,7 @@
     const listeners=[[button,"click",toggle],[button,"pointerdown",stopDrag],[button,"mousedown",stopDrag],[button,"dblclick",stopDouble],
       [panel,"keydown",key],[form,"submit",create],[mode,"click",toggleMode],[returnButton,"click",()=>void returnProjection()],[window,"deactivate",deactivate],[name,"input",onInput],[window,"resize",scheduleHubGeometry]];
     const hubScope=createDisposableScope({onError:(resource,error)=>{
-      try{window.__nocturneTrace?.("layout.scope.error",{owner:"hub",resource,error:error?.name||"Error"},{flush:true});}catch{}
+      try{window.__nocturneTrace?.("layout.scope.error",{owner:"hub",resource,name:error?.name||"Error"},{flush:true});}catch{}
     }});
     let unregisterOverlay=()=>true,mounted=false,overlayGeneration=0;
     function bindOverlay(){
