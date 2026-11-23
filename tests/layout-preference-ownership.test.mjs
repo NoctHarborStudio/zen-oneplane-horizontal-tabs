@@ -2,6 +2,7 @@ import {createDisposableScope} from "../src/core/disposable-scope.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
+import {nocturneErrorClass} from "../src/core/error-class.mjs";
 const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 const source=read("src/core/preferences.js.part"),boot=read("src/core/bootstrap.js.part");
 const KEY="zen.oneplane.original-layout",CTRL="__oneplaneLayoutController",A="zen.view.use-single-toolbar",B="zen.tabs.vertical.right-side";
@@ -14,9 +15,9 @@ function fixture(){
   let n=0,release=()=>{},sine;const window={...resources,closed:false,CustomEvent:class{constructor(type){this.type=type;}},gZenCompactModeManager:{hideToolbar(){}},dispatchEvent:e=>{events.push(e.type);onEvent(window,e);},requestAnimationFrame(){},addEventListener:(k,f)=>unload.set(k,f),removeEventListener:k=>unload.delete(k),setTimeout(fn){timers.set(++n,fn);return n;},clearTimeout:id=>timers.delete(id)};
   if(register)window.addUnloadListener=fn=>{sine=fn;};
   windows.push(window);
-  const run=new Function("Services","window","document","console","getRelease","createDisposableScope",source+"\n"+(register?boot:boot.slice(0,boot.indexOf("const reloadingLayout=")))+
+  const run=new Function("Services","window","document","console","getRelease","createDisposableScope","nocturneErrorClass",source+"\n"+(register?boot:boot.slice(0,boot.indexOf("const reloadingLayout=")))+
     "\n"+(register?"":"const reloadingLayout=true,startupRecord={};window[CONTROLLER]=controller;")+"function installTabStrip(){return getRelease();}return {activate,cleanup,markClosing,nativeUnload,controller};");
-  const h=run(Services,window,document,{warn(){},error(){},info(){}},()=>release,createDisposableScope);
+  const h=run(Services,window,document,{warn(){},error(){},info(){}},()=>release,createDisposableScope,nocturneErrorClass);
   return {...h,window,document,events,timers,sine:()=>sine?.(),listeners:unload,fireUnload:event=>unload.get("unload")?.(event),onRelease(fn){release=fn;},tick(){const q=[...timers.values()];timers.clear();q.forEach(fn=>fn());}};
  }
  return {mount,values,writes,prefs,Services,observers};

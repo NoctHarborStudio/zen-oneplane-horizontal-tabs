@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
+import {nocturneErrorClass} from "../src/core/error-class.mjs";
 const read=p=>readFileSync(new URL("../src/"+p,import.meta.url),"utf8");
 const native=read("native/tab-adapter.js.part"),ctrl=read("interactions/drag-controller.js.part"),split=read("interactions/split-drop.js.part");
 const nativeCode=native.slice(native.indexOf("  function nativeStripPlacement("),native.indexOf("  function tabFromItem("));
@@ -56,7 +57,7 @@ test("native adoption distinguishes null, wrong owner, transferred off-target an
 });
 function foreignDrop(mode){
  const code=ctrl.slice(ctrl.indexOf("  function onStripDrop("));
- return new Function("mode",code+
+ return new Function("mode","nocturneErrorClass",code+
   'const calls=[],window={__nocturneTrace:(n,data)=>calls.push(["trace",data.operation,data.outcome])},tab={},owner={},target={},DRAG_CONTROLLER="drag";let incomingDrag={token:7};'+
   'owner.drag={group:()=>null,markHandled:()=>calls.push("settled")};'+
   'const readDraggedTab=()=>tab,tabOwner=()=>owner,retireChangedDragViewport=()=>false,retireChangedDragChromeFrame=()=>false;'+
@@ -66,7 +67,7 @@ function foreignDrop(mode){
   'const clearDropMarker=()=>{},finishStripCommit=()=>calls.push("finish"),schedule=()=>{},releaseDragReveal=()=>{},console={error:()=>calls.push("error")};'+
   'const browser={tabs:[target],adoptTab:()=>{calls.push("adopt");if(mode==="throw")throw Error("native");return mode==="null"?null:{};}};'+
   'const event={isTrusted:true,preventDefault(){},stopPropagation(){}};onStripDrop(event);return calls;'
- )(mode);
+ )(mode,nocturneErrorClass);
 }
 test("rejected, partial and throwing adoption each settle source exactly once",()=>{
  for(const [mode,outcome] of [["null","rejected"],["partial","transferred-off-target"],["throw","error"]]){

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {createDownloadsService} from "../src/services/downloads-service.mjs";
+import {nocturneErrorClass} from "../src/core/error-class.mjs";
 const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 const downloads=read("downloads-indicator.uc.mjs");
 const segment=downloads.slice(downloads.indexOf("  async function install(){"),downloads.indexOf("  function sync(){"));
@@ -54,13 +55,13 @@ test("Dock disable and re-enable share the same in-flight native subscription",a
 });
 test("layout cleanup continues after feature disposal throws",()=>{
  const src=read("src/core/bootstrap.js.part"),cleanup=src.slice(0,src.indexOf("const controller ="));
- const result=new Function(`let disposed=false,applied=true,ownsPreferences=true,closing=false,closeTimer=0,startupObserver=null,preferenceMutation=false,pendingCleanup=null;
+ const result=new Function("nocturneErrorClass",`let disposed=false,applied=true,ownsPreferences=true,closing=false,closeTimer=0,startupObserver=null,preferenceMutation=false,pendingCleanup=null;
  const root={removeAttribute(){}};const window={dispatchEvent(){},CustomEvent:class{},removeEventListener(){},layout:{}};
  const CONTROLLER="layout",controller=window.layout;function markClosing(){}function nativeUnload(){}function updateNativeAfterCleanup(){}let restored=false;
  function otherActiveWindow(){return false}function restorePrefs(){restored=true}
  let removeTabStrip=()=>{throw Error("injected feature cleanup failure")};const console={warn(){}};
  const CustomEvent=window.CustomEvent;${cleanup}cleanup();
- return {disposed,applied,restored,controllerStillRegistered:window.layout===controller};`)();
+ return {disposed,applied,restored,controllerStillRegistered:window.layout===controller};`)(nocturneErrorClass);
  assert.deepEqual(result,{disposed:true,applied:false,restored:true,controllerStillRegistered:false});
 });
 
