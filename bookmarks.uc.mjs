@@ -16,6 +16,8 @@ const root = document.documentElement;
 const prefs = Services.prefs;
 let disposed = false;
 let startupObserver = null;
+const BOOKMARKS_ERROR_CLASSES=new Set(["Error","TypeError","RangeError","ReferenceError","SyntaxError","URIError","EvalError","AggregateError","DOMException","AbortError","NotAllowedError","InvalidStateError","NotFoundError","NotSupportedError","SecurityError","DataCloneError","NetworkError","TimeoutError","QuotaExceededError","WorkspaceCommandError","NS_ERROR_FAILURE","NS_ERROR_ABORT","NS_ERROR_NOT_AVAILABLE","NS_ERROR_UNEXPECTED","NS_ERROR_NOT_INITIALIZED","NS_ERROR_FILE_NOT_FOUND","NS_ERROR_XPC_BAD_CONVERT_JS"]);
+function bookmarksErrorClass(error){try{const name=error?.name;return typeof name==="string"&&BOOKMARKS_ERROR_CLASSES.has(name)?name:"Error";}catch{return "Error";}}
 
 function install() {
   const toolbar = document.getElementById("PersonalToolbar");
@@ -892,7 +894,7 @@ function start() {
     shared=currentBookmarkRegistry();
     shared.acquire(lease);
   }
-  catch (error) { console.error("[Zen Refined] Magnetic Bookmarks:", error); cleanup(); }
+  catch (error) { console.error("[Zen Refined] Magnetic Bookmarks:", bookmarksErrorClass(error)); cleanup(); }
 }
 
 if (!root.hasAttribute("popup-window") && typeof window.addUnloadListener === "function") {

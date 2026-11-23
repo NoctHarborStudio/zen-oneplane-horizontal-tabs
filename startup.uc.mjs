@@ -38,8 +38,10 @@ function readBackup(){
 }
 function trace(event,data){try{window.__nocturneTrace?.(event,data,{flush:true});}catch{}}
 function checkpoint(backup){prefs.setStringPref(BACKUP,JSON.stringify(backup));}
+const STARTUP_ERROR_CLASSES=new Set(["Error","TypeError","RangeError","ReferenceError","SyntaxError","URIError","EvalError","AggregateError","DOMException","AbortError","NotAllowedError","InvalidStateError","NotFoundError","NotSupportedError","SecurityError","DataCloneError","NetworkError","TimeoutError","QuotaExceededError","WorkspaceCommandError","NS_ERROR_FAILURE","NS_ERROR_ABORT","NS_ERROR_NOT_AVAILABLE","NS_ERROR_UNEXPECTED","NS_ERROR_NOT_INITIALIZED","NS_ERROR_FILE_NOT_FOUND","NS_ERROR_XPC_BAD_CONVERT_JS"]);
+function startupErrorClass(error){try{const name=error?.name;return typeof name==="string"&&STARTUP_ERROR_CLASSES.has(name)?name:"Error";}catch{return "Error";}}
 
-function persist(){try{prefs.savePrefFile(null);}catch(error){console.warn("[Zen Refined] Could not save startup preferences",error);}}
+function persist(){try{prefs.savePrefFile(null);}catch(error){console.warn("[Zen Refined] Could not save startup preferences",startupErrorClass(error));}}
 function apply(){
     typeof window!=="undefined"&&window.__nocturneTrace?.("startup-prefs.apply",()=>(null),{sample:1800});
   const backup=readBackup();let changed=false;
@@ -54,7 +56,7 @@ function apply(){
       }
       if(disposed)break;
       prefs.setBoolPref(name,false);changed=true;
-    }catch(error){console.warn("[Zen Refined] Startup preference",name,error);}
+    }catch(error){console.warn("[Zen Refined] Startup preference",name,startupErrorClass(error));}
   }
   if(changed)persist();
 }
@@ -73,7 +75,7 @@ function restore(){
       old.released=true;
       // Retain progress even when another key or backup deletion fails.
       try{checkpoint(backup);}catch{checkpointFailed=true;}
-    }catch(error){failed++;console.warn("[Zen Refined] Startup restore",name,error?.name||"Error");}
+    }catch(error){failed++;console.warn("[Zen Refined] Startup restore",name,startupErrorClass(error));}
   }
   if(Object.keys(backup).length){
     if(!failed){
@@ -94,7 +96,7 @@ function sync(){
     do{
       pendingSync=false;
       try{if(prefs.getBoolPref(OPTION,true))apply();else restore();}
-      catch(error){trace("startup-prefs.sync.error",{name:error?.name||"Error"});console.warn("[Zen Refined] Startup preference sync",error?.name||"Error");}
+      catch(error){trace("startup-prefs.sync.error",{name:startupErrorClass(error)});console.warn("[Zen Refined] Startup preference sync",startupErrorClass(error));}
     }while(pendingSync&&!disposed);
   }finally{
     mutating=false;
@@ -135,7 +137,7 @@ function cleanup(modUnload=false){
   if(disposed)return;disposed=true;
   const wasObserving=observing,interrupted=mutating;
   if(window[PENDING]===cleanup)delete window[PENDING];
-  const step=fn=>{try{fn();}catch(error){trace("startup-prefs.cleanup.error",{name:error?.name||"Error"});}};
+  const step=fn=>{try{fn();}catch(error){trace("startup-prefs.cleanup.error",{name:startupErrorClass(error)});}};
   step(()=>{if(closeTimer)window.clearTimeout(closeTimer);});
   step(stopObserving);
   step(()=>window.removeEventListener("beforeunload",beforeClose,true));
@@ -157,7 +159,7 @@ function finishCleanup(){
       restoring=true;mutating=true;
       try{restore();}finally{mutating=false;}
     }
-  }catch(error){trace("startup-prefs.cleanup.error",{name:error?.name||"Error"});console.warn("[Zen Refined] Startup ownership cleanup",error?.name||"Error");}
+  }catch(error){trace("startup-prefs.cleanup.error",{name:startupErrorClass(error)});console.warn("[Zen Refined] Startup ownership cleanup",startupErrorClass(error));}
   finally{
     cleanup.active=false;
     if(window[KEY]===cleanup)delete window[KEY];
@@ -168,7 +170,7 @@ function finishCleanup(){
     if(successor&&(wasObserving||restoring)&&!Services.startup.shuttingDown)
       successor.observe(interrupted||restoring);
     trace("startup-prefs.cleanup",{interrupted,successor:!!successor,modUnload});
-  }catch(error){trace("startup-prefs.cleanup.error",{name:error?.name||"Error"});}
+  }catch(error){trace("startup-prefs.cleanup.error",{name:startupErrorClass(error)});}
 }
 function nativeUnload(){cleanup(false);}
 cleanup.active=false;cleanup.observe=observe;
