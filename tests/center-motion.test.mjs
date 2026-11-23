@@ -6,7 +6,8 @@ const source=read("src/core/center-motion.js.part");
 const foldSource=read("src/algorithms/magnetic-fold.mjs").replace(/^export function /gm,"function ");
 const {magnetState,keyframes,portalGap,portalClip}=new Function(foldSource+"return createMagneticFoldMath();")();
 const bloomSource=read("src/algorithms/startup-bloom.mjs").replace(/^export function /gm,"function ");
-const runtimeSource=foldSource+bloomSource+source;
+const errorClassSource=read("src/core/error-class.mjs").replace(/^export function /gm,"function ");
+const runtimeSource=errorClassSource+foldSource+bloomSource+source;
 const card=(x,y,lower=false)=>({x,y,cx:500,cy:26,unit:1,opacity:1,lower});
 test("Magnetic Fold reaches the real two-dimensional hub and reverses exactly",()=>{
  for(const c of [card(200,26),card(770,26),card(340,61,true),card(500,61,true)]){

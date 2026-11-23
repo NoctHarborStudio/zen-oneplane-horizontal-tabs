@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
+import {nocturneErrorClass} from "../src/core/error-class.mjs";
 const read=p=>readFileSync(new URL("../src/"+p,import.meta.url),"utf8");
 const src=read("interactions/split-drop.js.part");
 const snippets=src.slice(src.indexOf("  function nativeSplitMembers("));
@@ -63,7 +64,7 @@ function fixture(mode="normal",o={}){
  const env={window,browser,splitZone,event,validNativeTab,tabOwner,isSplit,splitGroup,groupMembers,dragLifecycle,
   get nativeDragToken(){return nativeDragToken},get draggedTab(){return draggedTab},get draggedGroup(){return draggedGroup},
   readDraggedTab,retireChangedDragViewport,retireChangedDragChromeFrame,dragPhaseInputAllowed,splitDropAllowed,splitDropPoint,
-  splitSide,toolbarDragReturnZone,emptySplitTarget,unsplitTab,schedule,console,sourceHandled,cancelActiveDrag};
+  splitSide,toolbarDragReturnZone,emptySplitTarget,unsplitTab,schedule,console,sourceHandled,cancelActiveDrag,nocturneErrorClass};
  const api=new Function("env","with(env){"+snippets+"return {check:nativeSplitPreflight,over:onSplitDragOver,drop:onSplitDrop};}")(env);
  return {api,tab,current,group,tabs,calls,event,browser,nativeCalls:()=>nativeCalls,token:()=>nativeDragToken};
 }

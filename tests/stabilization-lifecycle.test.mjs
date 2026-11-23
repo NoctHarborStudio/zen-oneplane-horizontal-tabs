@@ -73,7 +73,7 @@ test("layout preference restore isolates failed keys and retains complete backup
  const cleared=[],traces=[];let fail=true,raw=JSON.stringify(backup);
  const prefs={getStringPref:()=>raw,setStringPref(k,v){raw=v;},getBoolPref:k=>values.get(k),setBoolPref(k,v){if(k==="a"&&fail)throw Error("locked");values.set(k,v);},
   clearUserPref(k){cleared.push(k);if(k==="backup")raw="";else values.set(k,true);}};
- const restore=new Function("prefs","window","console","TARGET","KEY",code+"return restorePrefs;")(prefs,{__nocturneTrace:(event,data)=>traces.push({event,data})},{warn(){}},{a:true,b:false,c:true},"backup");
+ const restore=new Function("prefs","window","console","TARGET","KEY","nocturneErrorClass",code+"return restorePrefs;")(prefs,{__nocturneTrace:(event,data)=>traces.push({event,data})},{warn(){}},{a:true,b:false,c:true},"backup",nocturneErrorClass);
  assert.equal(restore(),false);assert.equal(values.get("b"),true);assert.equal(values.get("c"),false);
  assert.deepEqual(JSON.parse(raw),{a:backup.a,b:{...backup.b,released:true},c:{...backup.c,released:true}});
  assert.deepEqual(cleared,["b"]);
@@ -101,7 +101,7 @@ test("failed backup removal checkpoints release progress before retry",()=>{
  let raw=JSON.stringify({a:{value:false,user:true}}),value=true,fail=true,sets=0;
  const prefs={getStringPref:()=>raw,setStringPref(k,v){raw=v;},getBoolPref:()=>value,
   setBoolPref(k,v){sets++;value=v;},clearUserPref(){if(fail)throw Error("locked backup");raw="";}};
- const restore=new Function("prefs","window","console","TARGET","KEY",code+"return restorePrefs;")(prefs,{}, {warn(){}},{a:true},"backup");
+ const restore=new Function("prefs","window","console","TARGET","KEY","nocturneErrorClass",code+"return restorePrefs;")(prefs,{}, {warn(){}},{a:true},"backup",nocturneErrorClass);
  assert.equal(restore(),false);assert.equal(JSON.parse(raw).a.released,true);
  value=true;fail=false;assert.equal(restore(),true);assert.equal(value,true);assert.equal(sets,1);assert.equal(raw,"");
 });
