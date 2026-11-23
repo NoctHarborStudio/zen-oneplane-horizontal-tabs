@@ -716,3 +716,12 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [x] [CI 45114926054](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45114926054) **SUCCESS** on `5c88a841ebc76a097e20b25b954477d4fbc323c4`: 822 Node, 15 Python, all 12 runtime parsers, reproducible build, release history and immutable/current public Sine package.
 - [ ] Native Zen 1.24.2b/Sine 2.3.3: normal/private and multi-window diagnostic event sampling and opt-out; compare event/popup evidence to actual chrome UI, verify local file and Browser Console contain no user/private data, and compare profiler cost with diagnostics off. Source-level CSS values and Sine fixture are not native acceptance.
 - [ ] Full per-event semantic producer inventory for generic status/reason fields and third-party extension error edge cases remains OPEN; do not claim a universal content sanitizer.
+
+### A0/A7 / NC4-089-R4 — Closed Tabs scope-error source regression (preview.146)
+
+- [x] Reproduce preview.145 producer/recorder mismatch: `library.scope.error` uses non-admitted `error` instead of `name` and loses exception class.
+- [x] Use the existing `name` error-class grammar, with no writer/private-window/opt-out policy changes.
+- [x] New regression extracts the actual production callback, makes the Closed Tabs observer disposal throw and verifies error-class retention without raw exception message in dump/console.
+- [x] Production [PR #18](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/pull/18), `c9011b7dcbf9335f0116fd68048dbf7d7475c846`; [CI 45116100787](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45116100787) **SUCCESS**: 823 Node, 15 Python, 12 runtime scripts, reproducible generated package and public Sine archive.
+- [ ] Real Zen 1.24.2b/Sine 2.3.3 observer/error edge, diagnostics enabled/disabled, private/multi-window privacy and profiler acceptance remain OPEN; do not inject native failures in a primary profile.
+- [ ] Continue explicit per-event semantic inventory of generic `reason`/`status` strings and third-party error edge cases. No universal content-sanitizer certification is claimed.
