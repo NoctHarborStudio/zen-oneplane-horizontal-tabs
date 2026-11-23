@@ -1,7 +1,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.156",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.157",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -112,7 +112,10 @@
     ["center.bookmarks.release",{reason:new Set(["release","superseded","disposed","setup-failed","dispose"])}],
     ["center.fold.handoff",{status:new Set(["not-comparable","membership-changed","local-stable","geometry-changed"])}],
     ["drag.lifecycle.cancel",{reason:new Set(["native-topology-changed","native-session-ended","native-session-unavailable","superseded","new-pointerdown","mouse-release-without-pointerup","keyboard-interruption","focus-lost","document-hidden","unhandled-native-end","pagehide","unload","chrome-frame-unready","native-start-failed","strip-phase","toolbar-phase","unsupported-layout","trash-capture-failed","trash-invalid","capture-failed","workspace-cancel","pointermove","pointerup","pointercancel","lostpointercapture"])}],
-    ["drag.native.outcome",{reason:new Set(["stale-source","native-target-stale","native-hidden-or-empty","native-glance-remap","native-split-unavailable","native-essentials-unsupported","native-may-clone","native-split-group-unready","native-split-limit","native-postcondition","selection-retargeted"])}]
+    ["drag.native.outcome",{reason:new Set(["stale-source","native-target-stale","native-hidden-or-empty","native-glance-remap","native-split-unavailable","native-essentials-unsupported","native-may-clone","native-split-group-unready","native-split-limit","native-postcondition","selection-retargeted"])}],
+    // Final Nocturne-owned reason domains: exact drag watcher and Workspace journal outcomes.
+    ["downloads.drag.end",{reason:new Set(["dragend","native-session-ended","native-session-unavailable"])}],
+    ["workspace.data.journal",{reason:new Set(["preflight-error","unconfirmed","source-active","move-preflight","native-move-error","move-metadata-or-state","move-reconcile","purge-preflight","native-remove-error","purge-state-changed"])}]
   ]);
   const CSS_FIELDS=new Set(["opacity","visibility","display","translate","scale","transform","transition","height","width","hoverProgress","centerX","centerAlpha","startupBase","mask","bmMask","contour","bmContour","measure","progress","startupProgress"]);
   const CSS_VALUE=/^[#A-Za-z0-9.,()%+ :-]{1,180}$/;

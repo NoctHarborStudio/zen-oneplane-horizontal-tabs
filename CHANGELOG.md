@@ -1,3 +1,11 @@
+## 0.3.0-preview.157 — A7 NC4-089-R7c-P4 finite diagnostics and Console opt-out
+
+**Audit finding 1:** `downloads.drag.end.reason` and `workspace.data.journal.reason` still used the generic token grammar despite their source-owned finite result sets. Preserve every verified dragend/native-session and Workspace journal outcome, and reject unknown strings before local JSON persistence or mirrored Browser Console. No native operation, workspace tab mutation, download drag identity or animation was changed.
+
+**Audit finding 2:** Display Engine's `logPlacement` printed native window/monitor geometry through direct `console.info` even when `zen.nocturne.diagnostics.enabled=false`; this direct path was not protected by the recorder's opt-out/sanitizer. The existing logger now exits when opted out and logs only finite stages/modes, numeric rectangle fields and allowlisted lifecycle metadata; arbitrary native object fields and invalid reasons cannot enter Console. No change to window placement, focus, geometry calculation, monitor selection or scheduling.
+
+Two new source-backed regressions check all allowed reason tokens plus hostile strings, exercise the exact Display logger with opt-out (no property access) and with diagnostics enabled (known geometry retained, foreign fields suppressed). Source/CI evidence is distinct from installed Zen/Sine: diagnostic privacy, multiwindow and performance need native acceptance. The full R7c producer inventory and other console paths are not universally certified by this bounded repair.
+
 ## 0.3.0-preview.156 — Cross-realm native History results (A7)
 
 Fix native History silently displaying an empty list when `PlacesQuery.getHistory()` returns its grouped `Map` from a different Gecko JavaScript global. The previous `instanceof Map` check relied on matching constructors across realms; the Library now accepts the native iterable groups while retaining cross-realm `Array.isArray` handling for flat search results, the original 120-day limit, bounded pagination, URL/identity rules, and one native History owner. An isolated VM regression reproduces the previous empty rendering with a cross-realm Map, and verifies the normalized visit is visible. Does not change the native history database, privacy, commands, UI design, scanner safety gate, or any destructive action.

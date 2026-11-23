@@ -770,3 +770,54 @@ test("NC4-089-R7c-P3 Center and native Drag dynamic reason/status contracts are 
   assert.ok(!f.api.dump().includes("privateAccount99"));
   f.api.dispose();
 });
+
+test("NC4-089-R7c-P4 limits downloaded-file drag and Workspace journal reasons",()=>{
+  const families=[
+    ["downloads.drag.end",["downloads-indicator.uc.mjs"],["dragend","native-session-ended","native-session-unavailable"]],
+    ["workspace.data.journal",["src/hub/controller.js.part","src/core/workspace-commands.mjs"],["preflight-error","unconfirmed","source-active","move-preflight","native-move-error","move-metadata-or-state","move-reconcile","purge-preflight","native-remove-error","purge-state-changed"]]
+  ];
+  const f=fixture();
+  for(const [event,paths,values] of families){
+    const producers=paths.map(path=>readFileSync(new URL("../"+path,import.meta.url),"utf8")).join("\n");
+    for(const reason of values){
+      assert.ok(producers.includes('"'+reason+'"'),event+" source missing "+reason);
+      f.win.__nocturneTrace(event,{reason,confirmed:1});
+      const last=JSON.parse(f.api.dump()).events.at(-1);
+      assert.equal(last.data.reason,reason);
+      assert.equal(last.data.confirmed,1);
+    }
+    for(const invalid of ["PrivateAccount99","NS_ERROR_PERSONAL_SECRET","secret-workspace-token"]){
+      f.win.__nocturneTrace(event,{reason:invalid});
+      assert.equal(JSON.parse(f.api.dump()).events.at(-1).data.reason,null,event+": "+invalid);
+      assert.ok(!f.api.dump().includes(invalid));
+      assert.ok(f.logs.every(log=>!String(log).includes(invalid)));
+    }
+  }
+  f.api.dispose();
+});
+
+test("NC4-089-R7c-P4 display Console geometry obeys diagnostics opt-out and finite payloads",()=>{
+  const engine=readFileSync(new URL("../src/interactions/display-engine.js.part",import.meta.url),"utf8");
+  const start=engine.indexOf("  function logPlacement("),end=engine.indexOf("  // The startup window already",start);
+  assert.ok(start>=0&&end>start);
+  const logs=[];let enabled=false;
+  const pref={getBoolPref(k,fallback){assert.equal(k,"zen.nocturne.diagnostics.enabled");assert.equal(fallback,true);return enabled;}};
+  const log=new Function("prefs","console",engine.slice(start,end)+"return logPlacement;")(pref,{info:(...args)=>logs.push(args)});
+  // Opt-out must return before touching a native getter or serializing metadata.
+  log("before",{get full(){throw Error("not read when disabled");}});
+  assert.equal(logs.length,0);
+  enabled=true;
+  const rect={x:-1920,y:0,width:1920,height:1080};
+  log("startup-settled",{...rect,full:rect,mode:"right"},rect,
+    {ok:true,released:2,failed:0,reason:"verified",secret:"PrivateAccount99",url:"https://private.example/"});
+  assert.equal(logs.length,1);
+  assert.equal(logs[0][0],"[OnePlane] Display placement startup-settled");
+  const json=JSON.parse(logs[0][1]);
+  assert.deepEqual(json,{target:rect,rect,mode:"right",actual:rect,extra:{ok:true,released:2,failed:0,reason:"verified"}});
+  log("private-user-title",{...rect,full:rect,mode:"privateUserTitle"},rect,{reason:"secret-workspace-token"});
+  assert.equal(logs[1][0],"[OnePlane] Display placement unknown");
+  assert.equal(JSON.parse(logs[1][1]).extra.reason,undefined);
+  assert.ok(!JSON.stringify(logs).includes("PrivateAccount99"));
+  assert.ok(!JSON.stringify(logs).includes("private.example"));
+  assert.ok(!JSON.stringify(logs).includes("secret-workspace-token"));
+});

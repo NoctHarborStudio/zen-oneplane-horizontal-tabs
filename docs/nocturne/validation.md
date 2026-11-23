@@ -793,3 +793,12 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [x] **User-observed native smoke PASS (2026-11-23):** After installing preview.156, the user confirmed that History works in Zen Browser. The previously reported blank-list symptom is no longer reproduced in that reported scenario. No visited sites or browsing data are recorded.
 - [ ] **Broader native parity remains OPEN:** independently compare Nocturne History with Native history on test visits; verify search, 120-day cutoff, pagination, observers, private/multiwindow, lifecycle. The user confirmation does not establish these distinct cases. The `Last hour` selector is a destructive-action interval, not a history display filter.
 - [ ] If the native fallback has entries but Nocturne stays empty, collect bounded local diagnostic evidence and investigate the exact `PlacesQuery` shape/readiness/observer and Gecko realm boundaries. Source compatibility does not establish native root cause or a full A7 PASS.
+
+### A7 / NC4-089-R7c-P4 — source audit and native follow-up (preview.157)
+
+- [x] Inspect actual Diagnostics serializer and source producers for drag/Workspace journal reason, independent Display Console, opt-out and whitelist coverage.
+- [x] Finite source-backed reason domains for `downloads.drag.end` and `workspace.data.journal`, preserving all known outcomes; unknown tokens become null in recorder and mirrored Console.
+- [x] Direct Display Engine Console logger checks `zen.nocturne.diagnostics.enabled` and serializes only finite stages/modes/reasons, validated numeric geometry and declared counters/flags; no native window mutation or drag timing changed.
+- [x] Two source-backed regressions added for hostile reason tokens and direct Display Console opt-out/field filtering.
+- [ ] Installed Zen/Sine: compare diagnostics enabled/disabled, normal/private/two-window Display placement and download drag; verify no unrequested Console geometry after opt-out, no regressions in native placement/OS drag, and measured profiler overhead.
+- [ ] Further audit unreviewed direct-console producers and generic structured diagnostic fields before claiming blanket R7c or A7 closure; Library native scanning safety and five scenario families remain independent OPEN gates.
