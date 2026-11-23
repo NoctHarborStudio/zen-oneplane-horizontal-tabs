@@ -758,3 +758,17 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [ ] Steam Store page showed `ServiceTransportProvider` content error. No source evidence of a Nocturne cause; compare with a no-mod session only if persistent. Do not count as a Nocturne regression.
 - [ ] NC4-022/082/083 and full A7/A8 native acceptance remain OPEN.
 
+### A0/A7 / NC4-089-R7a — Layout direct-console exception redaction, preview.150
+
+- [x] Re-read actual current Layout/Home/Hub/Drag/Display/Bootstrap catch paths, distinguish main sanitized recorder from direct Browser Console and arbitrary visible Hub status text. Nine active Layout source owners affected, independently of generic `reason/status` event schemas.
+- [x] Reuse one pure, finite standard/native exception class helper at the single Layout build scope, instead of adding a process logger or independently mutable error registry. Fail closed for hostile names and throwing getters; keep native commands, UI ownership, timeouts and lifecycle unchanged.
+- [x] Regression executes an actual Home subscriber failure with URL-bearing message, checks only `TypeError` reaches Console and asserts fixed Hub status plus all targeted source uses. Pure helper has independent malformed-name tests.
+- [x] [PR #26](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/pull/26) published preview.150 `52b06fc36cf47a083c9c057bbfad38eae6d2a77e`; [CI 45134434548](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45134434548) **FAIL** (17 source-extracted sandbox `ReferenceError` tests). Do **not** count as a pass.
+- [x] [PR #27](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/pull/27) updates six fixture harnesses to inject the real pure function; [CI 45134865787](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45134865787) **SUCCESS**: 829 Node, 15 Python, runtime syntax, reproducible build and public Sine package. Final preview.150 HEAD `e7212fbc015869daffc2bbc6517770bba4081aea`, release files unchanged after test-only correction.
+- [ ] R7b: standalone Sine script direct-console exception messages (Magnetic Bookmarks, Page Progress, Startup preference/reveal and Workspace Transition), plus review any other user-data/error console paths in installed root entrypoints.
+- [ ] R7c: source-producer inventory of generic per-event `reason`/`status` and remaining dynamic Console fields, with adversarial cases; no universal sanitizer certification.
+- [ ] A7 P0 Library: NC4-022 decoded raster/animated thumbnail memory, NC4-082 pre-truncation native file accumulation, NC4-083 hung native scan/cancellation API. Prior 15-second deadline only bounds UI wait. Decide upstream native capability versus explicitly accepted icon-only/no-scan policy before claiming safe large-folder support.
+- [ ] A7 native NA-1: at least the five pinned scenario families (Media P0, scan lifecycle, Downloads, History/Closed, Page Progress) plus private/multiwindow and profiler. User reported Dock reinsert flicker, cross-monitor follower stutter and unconfirmed post-preview.149 Home pending layout; A5/visual/perf acceptance remains OPEN.
+
+**Remaining-effort estimate (not a deadline):** approximately two bounded source/CI diagnostics passes (R7b/R7c) plus one or more Library safety/capability decisions/remediation passes; at least five native scenario families and separate visual/drag/profiler signoffs. Source repair count can grow if those checks expose defects. No fixed completion date or native PASS claim.
+
