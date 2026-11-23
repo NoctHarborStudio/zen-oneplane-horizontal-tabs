@@ -776,7 +776,7 @@ function acquireZenHome(win, services) {
       if(!view?.querySelector(".urlbarView-row:not([hidden])"))return;
       const began=snapshotNow(),frozen=freezeSearchResults(view,searchBar.getBoundingClientRect());
       if(frozen?.rows){frozen.capturedAt=snapshotNow();frozen.captureMs=frozen.capturedAt-began;searchSnapshot=frozen;searchSnapshotDirty=false;}
-    }catch(error){searchLog("snapshot unavailable",{reason:error?.name||"Error"});}
+    }catch(error){searchLog("snapshot-unavailable",{reason:error?.name||"Error"});}
   }
   function scheduleSearchSnapshot(){
     if(!searchToken||searchClosing||searchReturn||!snapshotReady(searchBar))return;

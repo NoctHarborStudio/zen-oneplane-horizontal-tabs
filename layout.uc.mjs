@@ -60,7 +60,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.143",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.144",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -114,6 +114,20 @@
   const MARK_LABEL=/^[a-z][a-z0-9_-]{0,39}$/;
   const SAFE_TOKEN=/^[A-Za-z0-9_.:-]{1,80}$/;
   const STRING_FIELDS=new Set(["owner","reason","stage","status","phase","mode","state","kind","type","section","operation","action","result","outcome","resource","source","target","direction","writer","version","label","name","context","scope","placement","transition","effect","substage","settlement","strategy","decision","method","cause","gesture","origin","policy","side"]);
+  const STRING_ENUMS=new Map([
+    ["previous",new Set(["inline","content","outside"])],
+    ["requested",new Set(["inline","content","outside"])],
+    ["drop",new Set(["none","copy","move","link"])],
+    ["code",new Set(["busy","confirmed","data-busy","data-lease-lost","data-lease-required","data-unavailable","free-ambiguous","free-changed","free-exists","free-order-unverified","gate-unavailable","missing-target","native-busy","not-started","peer-busy","peer-lease-lost","peer-unavailable","rename-unavailable","stale","error","rejected","unverified"])],
+    ["engine",new Set(["waapi-shape","waapi-polygon"])],
+    ["easing",new Set(["ease-out"])],
+    ["from",new Set(["out","swap","in"])],
+    ["to",new Set(["out","swap","in"])],
+    ["startup",new Set(["waiting","playing","settling"])],
+    ["ready",new Set(["pending","true"])],
+    ["homeState",new Set(["unavailable","pending","skipped","ready","failed"])],
+    ["resultType",new Set(["undefined","object","boolean","number","string","function","symbol","bigint"])]
+  ]);
   const CSS_FIELDS=new Set(["opacity","visibility","display","translate","scale","transform","transition","height","width","hoverProgress","centerX","centerAlpha","startupBase","mask","bmMask","contour","bmContour","measure","progress","startupProgress"]);
   const CSS_VALUE=/^[#A-Za-z0-9.,()%+ :-]{1,180}$/;
   let pb=null;try{pb=win.PrivateBrowsingUtils||ChromeUtils.importESModule("resource://gre/modules/PrivateBrowsingUtils.sys.mjs").PrivateBrowsingUtils;}catch{}
@@ -127,6 +141,7 @@
       if(/[\\\\/@?#]/.test(v)||/^(?:about|data|chrome|resource|file|https?|ftp|javascript):/i.test(v))return null;
       if(key==="name"&&!/^(?:Error|[A-Z][A-Za-z0-9]{0,45}(?:Error|Exception)|NS_ERROR_[A-Z0-9_]{1,45})$/.test(v))return null;
       if(key==="label"&&!MARK_LABEL.test(v))return null;
+      if(STRING_ENUMS.has(key))return STRING_ENUMS.get(key).has(v)?v:null;
       if(!CSS_FIELDS.has(key)&&!STRING_FIELDS.has(key)&&!key.startsWith("data-")&&!key.startsWith("zen-")&&!["customizing","inDOMFullscreen","inFullscreen"].includes(key))return null;
       return (CSS_FIELDS.has(key)?CSS_VALUE:SAFE_TOKEN).test(v)?v:null;
     }
@@ -2633,7 +2648,7 @@ function acquireZenHome(win, services) {
       if(!view?.querySelector(".urlbarView-row:not([hidden])"))return;
       const began=snapshotNow(),frozen=freezeSearchResults(view,searchBar.getBoundingClientRect());
       if(frozen?.rows){frozen.capturedAt=snapshotNow();frozen.captureMs=frozen.capturedAt-began;searchSnapshot=frozen;searchSnapshotDirty=false;}
-    }catch(error){searchLog("snapshot unavailable",{reason:error?.name||"Error"});}
+    }catch(error){searchLog("snapshot-unavailable",{reason:error?.name||"Error"});}
   }
   function scheduleSearchSnapshot(){
     if(!searchToken||searchClosing||searchReturn||!snapshotReady(searchBar))return;
@@ -4200,7 +4215,7 @@ function installTabStrip() {
     addressPhaseTimer=timer;
   }
   function beginAddressPhase(name,from,to,duration,layoutWidth=Math.max(from.width,to.width)){
-    typeof window!=="undefined"&&window.__nocturneTrace?.("address.begin",()=>({name,fromWidth:from.width,toWidth:to.width,duration,layoutWidth}),{sample:1800});
+    typeof window!=="undefined"&&window.__nocturneTrace?.("address.begin",()=>({phase:name,fromWidth:from.width,toWidth:to.width,duration,layoutWidth}),{sample:1800});
     // Cancel only after sampling the previous visual position. Keep
     // the native editor, selection, results and popup anchors intact.
     const previous=addressTransition?.bar||addressSettleOwner?.bar;

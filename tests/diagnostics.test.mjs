@@ -20,6 +20,60 @@ function fixture({isPrivate=false,on=true,prior=null,failWrite=false,writeHook=(
  reload();
  return {reload,win,doc,timers,frames,logs,writes,io,listeners,attrs,unload:()=>unload(),setTime:t=>time=t,disable:()=>enabled=false,api:win.__nocturneDiagnostics};
 }
+test("NC4-089-R2 preserves known native and animation diagnostic strings",()=>{
+ const f=fixture(),emit=f.win.__nocturneTrace;
+ const examples=[
+  ["drag.mode.request",{previous:"inline",requested:"outside"}],
+  ["drag.mode.applied",{mode:"outside",previous:"content"}],
+  ["drag.end",{drop:"copy"}],
+  ["workspace.command.rejected",{kind:"hub-data",code:"native-busy"}],
+  ["workspace.command.end",{code:"data-lease-lost",ok:false}],
+  ["address.begin",{phase:"opening-wave"}],
+  ["address.finish",{engine:"waapi-shape"}],
+  ["workspace.phase",{from:"out",to:"swap"}],
+  ["workspace.bypass",{startup:"playing",ready:"pending"}],
+  ["assembly.ready",{homeState:"failed"}],
+  ["disassembly.native.after",{resultType:"undefined"}],
+  ["tabs.partition.height",{easing:"ease-out"}]
+ ];
+ for(const [event,data] of examples)emit(event,data);
+ const byEvent=new Map(JSON.parse(f.api.dump()).events.map(e=>[e.event,e.data]));
+ for(const [event,data] of examples)for(const [k,v] of Object.entries(data))
+  assert.equal(byEvent.get(event)?.[k],v,event+"."+k);
+ f.api.dispose();
+});
+test("NC4-089-R2 rejects unexpected event-specific string payloads",()=>{
+ const f=fixture(),emit=f.win.__nocturneTrace;
+ const examples=[
+  ["drag.mode.request",{previous:"private-account",requested:"sensitive"}],
+  ["drag.end",{drop:"secret-value"}],
+  ["workspace.command.end",{code:"private-code"}],
+  ["address.finish",{engine:"private-engine"}],
+  ["workspace.phase",{from:"secret-from",to:"secret-to"}],
+  ["workspace.bypass",{startup:"secret-startup",ready:"secret-ready"}],
+  ["assembly.ready",{homeState:"secret-home"}],
+  ["disassembly.native.after",{resultType:"secret-type"}],
+  ["tabs.partition.height",{easing:"secret-easing"}]
+ ];
+ for(const [event,data] of examples)emit(event,data);
+ const byEvent=new Map(JSON.parse(f.api.dump()).events.map(e=>[e.event,e.data]));
+ for(const [event,data] of examples)for(const k of Object.keys(data))
+  assert.equal(byEvent.get(event)?.[k],null,event+"."+k);
+ f.api.dispose();
+});
+test("NC4-089-R2 extracted Home producer and address phase survive the recorder",()=>{
+ const f=fixture(),home=readFileSync(new URL("../src/home/shared-home.js.part",import.meta.url),"utf8");
+ const address=readFileSync(new URL("../src/toolbar/address-controller.js.part",import.meta.url),"utf8");
+ const start=home.indexOf("  function searchLog("),end=home.indexOf("  // A card starts appearing",start);
+ assert.ok(start>0&&end>start);
+ assert.ok(home.includes('searchLog("snapshot-unavailable",{reason:error?.name||"Error"})'));
+ assert.ok(address.includes('__nocturneTrace?.("address.begin",()=>({phase:name,'));
+ const searchLog=new Function("win",home.slice(start,end)+";return searchLog;")(f.win);
+ searchLog("snapshot-unavailable",{reason:"Error"});
+ const found=JSON.parse(f.api.dump()).events.find(e=>e.event==="home.search.snapshot-unavailable");
+ assert.ok(found);assert.equal(found.data.reason,"Error");
+ f.api.dispose();
+});
 test("NC4-089 drops unstructured content fields, URI/path values and malicious keys",()=>{
  const f=fixture(),trace=f.win.__nocturneTrace;
  trace("drag.lifecycle.begin",{
