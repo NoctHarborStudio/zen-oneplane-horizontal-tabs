@@ -223,7 +223,7 @@ test("direct reveal rollback continues after individual style restoration failur
  const owned=new Map([[n,new Map([["bad",{value:""}],["good",{value:""}]])]]);
  function decision(e,d){events.push(d.failed);}
  ${code}restore(n);return {events,size:owned.size};`);
- assert.deepEqual(run(),{events:["bad","good","effect","move","clip",1],size:0});
+ assert.deepEqual(run(),{events:["bad","good","effect","move","clip","data-zr-startup-island-entry",1],size:0});
 });
 
 test("native readiness frame callbacks cannot schedule successors after disposal",()=>{

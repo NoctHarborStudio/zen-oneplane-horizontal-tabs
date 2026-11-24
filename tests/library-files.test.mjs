@@ -352,9 +352,9 @@ test("NC4-022/082/083 paused media UI hides folder controls and keeps download p
     "resetFolders","historyFilter","historyDrawer","historyRange","clearHistory","body"].map(x=>[x,{}]));
  shell.historyFilter.setAttribute=()=>{};shell.historyDrawer.toggleAttribute=()=>{};
  shell.periodButtons=new Map();shell.orderButtons=new Map();
- const syncTools=new Function("shell","fileSection","state","prefs","MEDIA_PREF","win","confirmation","clearing","active",
+ const syncTools=new Function("shell","fileSection","state","prefs","MEDIA_PREF","win","confirmation","clearing","active","syncScrollbar",
     controller.slice(start,end)+"return syncTools;")(
-    shell,()=>["downloads","documents","pictures"].includes(state.section),state,prefs,MEDIA_PREF,win,false,false,()=>true);
+    shell,()=>["downloads","documents","pictures"].includes(state.section),state,prefs,MEDIA_PREF,win,false,false,()=>true,()=>{});
  for(const section of ["pictures","documents"]){
    state.section=section;syncTools();
    assert.equal(shell.refresh.hidden,true);assert.equal(shell.addFolder.hidden,true);
@@ -370,7 +370,7 @@ test("NC4-022/082/083 paused media UI hides folder controls and keeps download p
  const notices=[],starts=[];
  const renderBody=new Function("rows","shell","state","notice","syncTools","placeholder","data",
    "prefs","MEDIA_PREF","win",
-   controller.slice(rbStart,rbEnd)+"return renderBody;")(
+   "let scrollPending=false,renderedSection=null;"+controller.slice(rbStart,rbEnd)+"return renderBody;")(
    {clear(){}},{body:{scrollTop:0},search:{disabled:false}},
    state,x=>notices.push(x),()=>{},()=>{}, {start:(...args)=>starts.push(args)},
    prefs,MEDIA_PREF,win);
