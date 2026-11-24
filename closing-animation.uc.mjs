@@ -480,7 +480,7 @@ try{if(typeof window!=="undefined"){
     const tabTiming=centerFlowStage("tabs",CENTER_FLOW_CLOSE_MS,true),bookmarkTiming=centerFlowStage("bookmarks",CENTER_FLOW_CLOSE_MS,true);
     centerHandle=engine?.start?.(row,{owner:"close",direction:"out",duration:flow?tabTiming.duration:620,delay:flow?tabTiming.delay:0,paused:flow,retainOnDispose:()=>controller.committing});
     if(needsTabs&&!centerHandle?.count)return bypass("tab-acquisition-failed");
-    bookmarkHandle=engine?.bookmarks?.({owner:"close",direction:"out",duration:flow?bookmarkTiming.duration:650,delay:flow?bookmarkTiming.delay:0,paused:flow,retainOnDispose:()=>controller.committing});
+    bookmarkHandle=engine?.bookmarks?.({owner:"close",direction:"out",duration:flow?bookmarkTiming.duration:650,delay:flow?bookmarkTiming.delay:0,paused:flow,flow,retainOnDispose:()=>controller.committing});
     if(needsBookmarks&&typeof engine?.bookmarks==="function"&&!bookmarkHandle)return bypass("bookmark-acquisition-failed");
     if((centerHandle||bookmarkHandle)&&window.__nocturneCenterMotion!==engine)return bypass("engine-replaced");
     let sealAt=flow?CENTER_FLOW_CLOSE_MS:DURATION-110;

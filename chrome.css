@@ -2719,6 +2719,15 @@
   opacity:var(--zr-fold-bookmark-progress)!important;
   transform-origin:center center!important;transition:none!important;
 }
+
+/* Center Flow owns the individual native bookmarks only during Assembly /
+ * Disassembly. Existing magnetic hover and native flex slots stay intact. */
+:root:is([data-zr-startup-phase],[data-zr-closing]) #PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems[data-zr-fold-bookmarks] > [data-zr-flow-bookmark] {
+  translate:var(--zr-flow-bookmark-x,0px) 0!important;
+  clip-path:inset(-8px var(--zr-flow-bookmark-right,-8px) -8px var(--zr-flow-bookmark-left,-8px))!important;
+  opacity:var(--zr-flow-bookmark-alpha,1)!important;
+  transition:none!important;
+}
 :root[data-zr-workspace-phase] #PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems[data-zr-workspace-motion] {
   scale:calc(.08 + .92 * var(--zr-workspace-progress)) 1!important;
   transform-origin:center center!important;

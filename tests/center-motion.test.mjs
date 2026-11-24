@@ -711,3 +711,26 @@ test("Fold geometry lease accepts only the exact owned Island entrance and prese
  f.a.dx=1;assert.equal(f.valid(),false);f.a.dx=0;
  n.entry=false;assert.equal(f.valid(),false);n.progress=1;assert.ok(f.valid());
 });
+
+test("flow bookmark ownership releases every native child and the list on failure",()=>{
+ const f=bookmarkFixture(),children=[];
+ for(const [left,width] of [[20,50],[75,40],[120,55]]){
+  const attrs=new Map(),node={hidden:false,collapsed:false,getAttribute:k=>attrs.get(k)??null,setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k),
+   getBoundingClientRect:()=>({left,right:left+width,top:20,bottom:40,width,height:20}),
+   animate(){return f.node.animate();}};
+  children.push(node);
+ }
+ f.node.children=children;f.node.getBoundingClientRect=()=>({left:0,right:200,width:200});
+ f.window.getComputedStyle=()=>({display:"flex",visibility:"visible",opacity:"1"});
+ const engine=f.mount(),handle=engine.bookmarks({owner:"startup",flow:true,paused:true});
+ assert.ok(handle);assert.equal(f.effects.length,3);
+ assert.ok(children.every(n=>n.getAttribute("data-zr-flow-bookmark")==="true"));
+ handle.release();assert.ok(f.effects.every(a=>a.cancelled===1));
+ assert.ok(children.every(n=>n.getAttribute("data-zr-flow-bookmark")===null));
+ assert.equal(f.node.getAttribute(foldMark),null);
+ children[1].animate=()=>{throw Error("bookmark effect");};
+ assert.equal(engine.bookmarks({owner:"startup",flow:true}),null);
+ assert.equal(f.effects.at(-1).cancelled,1);
+ assert.ok(children.every(n=>n.getAttribute("data-zr-flow-bookmark")===null));
+ assert.equal(f.node.getAttribute(foldMark),null);
+});

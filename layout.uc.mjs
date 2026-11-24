@@ -928,7 +928,12 @@ function startupBloomAssemblyPlan(start,scale){
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win[KEY]?.dispose?.({replacement:true})===false)return;
   const MARK="data-zr-center-card",OWNER="data-zr-center-motion",PENDING="data-zr-center-pending";
-  const B="--zr-fold-bookmark-progress";
+  const B="--zr-fold-bookmark-progress",BOOK_FLOW="data-zr-flow-bookmark";
+  const BOOK_PROPS=["--zr-flow-bookmark-x","--zr-flow-bookmark-alpha","--zr-flow-bookmark-left","--zr-flow-bookmark-right"];
+  let bookFlowRegistered=true;
+  for(const [name,syntax,initialValue] of [[BOOK_PROPS[0],"<length>","0px"],[BOOK_PROPS[1],"<number>","1"],[BOOK_PROPS[2],"<length>","-8px"],[BOOK_PROPS[3],"<length>","-8px"]]){
+    try{win.CSS.registerProperty({name,syntax,inherits:false,initialValue});}catch(e){if(e.name!=="InvalidModificationError")bookFlowRegistered=false;}
+  }
   const MODE="data-zr-center-mode",BLOOM_MARK="data-zr-center-bloom-card";
   try{win.CSS.registerProperty({name:B,syntax:"<number>",inherits:false,initialValue:"1"});}catch{}
   // Gecko user sheets may not register @property. The JS registration
@@ -1522,30 +1527,33 @@ function startupBloomAssemblyPlan(start,scale){
     motionBusy=true;
     try{return acquireBookmark(options);}catch(error){trace("center.bookmarks.error",{stage:"prepare",name:nocturneErrorClass(error)},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
   }
-  function acquireBookmark({owner="unknown",direction="in",duration=520,delay=0,paused=false,retainOnDispose=null,observeEffect=null}={}){
+  function acquireBookmark({owner="unknown",direction="in",duration=520,delay=0,paused=false,retainOnDispose=null,observeEffect=null,flow=false}={}){
     activeBookmark?.release("superseded");
     if(dead||!current())return null;
     const n=document.getElementById("PlacesToolbarItems"),markKey="data-zr-fold-bookmarks";
     if(!n||!n.getBoundingClientRect().width)return null;
     const id=++bookmarkSequence,frames=Array.from({length:21},(_,i)=>{const p=smooth(direction==="out"?1-i/20:i/20);return {offset:i/20,[B]:String(p)};});
     const old=n.style.getPropertyValue(B),priority=n.style.getPropertyPriority(B),mark=n.getAttribute(markKey);
-    let a=null,released=false;
+    const running=[],saved=[];
+    let released=false;
+    const exact=()=>!released&&!dead&&current()&&activeBookmark===handle;
     const handle={owner,retainOnDispose,startupOutcomeVersion:1,finished:Promise.resolve(),
-      resume(){if(!released)try{a?.play();}catch{}},
+      resume(){if(!released)for(const a of running)try{a.play();}catch{}},
       resumeAt(start){
-        if(released||dead||!current()||activeBookmark!==handle||!a)throw Error("bookmark-epoch-stale");
-        start(a);
+        if(!exact()||!running.length)throw Error("bookmark-epoch-stale");
+        for(const a of running){if(!exact())throw Error("bookmark-epoch-stale");start(a);}
       },
-      seal(){if(!released)try{a?.finish();}catch{}},
+      seal(){if(!released)for(const a of running)try{a.finish();}catch{}},
       release(reason="release"){
         if(released)return;released=true;
         const wasBusy=motionBusy;motionBusy=true;
         let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
         try{
-          step(()=>a?.cancel());
+          for(const a of running)step(()=>a.cancel());
           if(activeBookmark===handle){
             activeBookmark=null;
             if(current()){
+              for(const {node,value} of saved)step(()=>{if(value===null)node.removeAttribute(BOOK_FLOW);else node.setAttribute(BOOK_FLOW,value);});
               step(()=>{if(old)n.style.setProperty(B,old,priority);else n.style.removeProperty(B);});
               step(()=>{if(mark===null)n.removeAttribute(markKey);else n.setAttribute(markKey,mark);});
               step(()=>win.__zenMagneticBookmarksShared?.syncAddressState?.());
@@ -1556,14 +1564,42 @@ function startupBloomAssemblyPlan(start,scale){
       }};
     activeBookmark=handle;
     try{
-      n.style.setProperty(B,frames[0][B]);n.setAttribute(markKey,"true");
+      n.style.setProperty(B,flow?"1":frames[0][B]);n.setAttribute(markKey,"true");
       win.__zenMagneticBookmarksShared?.syncAddressState?.();
-      if(dead||!current()){handle.release("disposed");return null;}
-      a=n.animate(frames,{duration,delay,easing:"linear",fill:"both"});
-      handle.finished=a.finished.catch(()=>{});
-      if(owner==="startup")observeEffect?.(a,"bookmarks",()=>!released&&!dead&&current()&&activeBookmark===handle);
-      if(paused){a.pause();a.currentTime=0;}
-      trace("center.bookmarks.acquire",{id,owner,direction,duration},{sample:duration+250});
+      if(!exact()){handle.release("disposed");return null;}
+      const animate=(node,keys)=>{
+        if(!exact())throw Error("bookmark-flow-stale");
+        const a=node.animate(keys,{duration,delay,easing:"linear",fill:"both"});
+        running.push(a);a.finished.catch(()=>{});
+        if(owner==="startup")observeEffect?.(a,"bookmarks",exact);
+        if(paused){a.pause();a.currentTime=0;}
+      };
+      if(flow){
+        if(!bookFlowRegistered)throw Error("bookmark-flow-registration");
+        const rect=n.getBoundingClientRect();
+        const cards=[...n.children].flatMap(node=>{
+          if(node.hidden||node.collapsed)return [];
+          const r=node.getBoundingClientRect(),s=win.getComputedStyle(node),opacity=Number(s.opacity);
+          if(r.width<=1||r.height<=1||s.display==="none"||s.visibility==="hidden"||!(opacity>0)||
+             r.right<=rect.left||r.left>=rect.right)return [];
+          return [{node,r,x:r.left+r.width/2,y:r.top+r.height/2,opacity}];
+        });
+        if(!cards.length||cards.length>256)throw Error("bookmark-flow-geometry");
+        const cx=(Math.min(...cards.map(c=>c.r.left))+Math.max(...cards.map(c=>c.r.right)))/2;
+        const plan=createCenterFlowPlan(cards.map(c=>({...c,cx,cy:c.y,lower:false,hub:null})));
+        for(const [i,c] of cards.entries()){
+          if(!exact())throw Error("bookmark-flow-stale");
+          saved.push({node:c.node,value:c.node.getAttribute(BOOK_FLOW)});c.node.setAttribute(BOOK_FLOW,"true");
+          const keys=Array.from({length:81},(_,k)=>{
+            const f=plan.sample(i,(direction==="out"?80-k:k)/80);
+            return {offset:k/80,[BOOK_PROPS[0]]:f.x+"px",[BOOK_PROPS[1]]:String(f.a),
+              [BOOK_PROPS[2]]:f.clip[3]+"px",[BOOK_PROPS[3]]:f.clip[1]+"px"};
+          });
+          animate(c.node,keys);
+        }
+      }else animate(n,frames);
+      handle.finished=Promise.all(running.map(a=>a.finished.catch(()=>{})));
+      trace("center.bookmarks.acquire",{id,owner,direction,duration,flow,count:running.length},{sample:duration+250});
       if(dead||released||!current()){handle.release("disposed");return null;}
       return handle;
     }catch(error){handle.release("setup-failed");trace("center.bookmarks.error",{id,owner,name:nocturneErrorClass(error)},{flush:true});return null;}
@@ -2688,7 +2724,7 @@ function acquireZenHome(win, services) {
         [...content.children].map((node,i)=>({node,delay:(timeline.home+Math.min(i*65,195))*timeline.scale,duration:timeline.homeLength*timeline.scale}));
       for(const {node,kind,delay:baseDelay,duration} of targets){
         const delay=Math.max(0,baseDelay-(timeline.startEffect?0:elapsed));
-        const opacity=timeline.flow?Number(win.getComputedStyle(node).opacity):1;
+        const opacity=timeline.flow&&node!==content?Number(win.getComputedStyle(node).opacity):1;
         if(!Number.isFinite(opacity)||opacity<=0)continue;
         const frames=timeline.flow?homeFlowFrames(kind,opacity):[{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}];
         const a=node.animate(frames,{delay,duration,easing:timeline.flow?EDGE_CONTROL_EASE:"cubic-bezier(.2,.75,.25,1)",fill:"both"});

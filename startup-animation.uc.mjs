@@ -963,6 +963,13 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       group.forEach(({n},i)=>bloomDirect(n,timing[i]));return;
     }
     if(!visible.length)return;
+    if(ownedTimeline?.flow){
+      // A late/rejected native list is released to its resting pose,
+      // not replayed with a different trajectory.
+      for(const {n} of visible){seen.add(n);n.setAttribute(MANAGED,"true");}
+      decision("assembly.bookmarks.rest",{count:visible.length,late});
+      return;
+    }
     const bmCenter=(Math.min(...visible.map(x=>x.r.left))+Math.max(...visible.map(x=>x.r.right)))/2;
     const max=Math.max(1,...visible.map(x=>Math.abs(x.r.left+x.r.width/2-bmCenter)));
     for(const {n,r} of visible){
@@ -980,7 +987,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
         prepared.push({n,mark:n.getAttribute(MANAGED)});
         seen.add(n);n.setAttribute(MANAGED,"true");
       }
-      handle=engine.bookmarks?.({owner:"startup",direction:"in",duration:Math.round((timeline.bookmarksLength||420)*scale),delay:Math.round(timeline.bookmarks*scale),paused:timeline.paused,observeEffect:timeline.observeEffect})||null;
+      handle=engine.bookmarks?.({owner:"startup",direction:"in",duration:Math.round((timeline.bookmarksLength||420)*scale),delay:Math.round(timeline.bookmarks*scale),paused:timeline.paused,observeEffect:timeline.observeEffect,flow:!!timeline.flow})||null;
       if(dead||window.__nocturneCenterMotion!==engine){handle?.release();handle=null;}
       return handle;
     }catch(error){

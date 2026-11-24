@@ -484,7 +484,7 @@ function acquireZenHome(win, services) {
         [...content.children].map((node,i)=>({node,delay:(timeline.home+Math.min(i*65,195))*timeline.scale,duration:timeline.homeLength*timeline.scale}));
       for(const {node,kind,delay:baseDelay,duration} of targets){
         const delay=Math.max(0,baseDelay-(timeline.startEffect?0:elapsed));
-        const opacity=timeline.flow?Number(win.getComputedStyle(node).opacity):1;
+        const opacity=timeline.flow&&node!==content?Number(win.getComputedStyle(node).opacity):1;
         if(!Number.isFinite(opacity)||opacity<=0)continue;
         const frames=timeline.flow?homeFlowFrames(kind,opacity):[{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}];
         const a=node.animate(frames,{delay,duration,easing:timeline.flow?EDGE_CONTROL_EASE:"cubic-bezier(.2,.75,.25,1)",fill:"both"});
