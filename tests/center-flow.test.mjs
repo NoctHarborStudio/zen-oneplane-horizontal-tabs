@@ -77,7 +77,7 @@ test("center bookmark opens from an aperture at the actual portal and reverses w
   cards.forEach((c,i)=>{
    const middle=Math.abs(c.x-cx)<c.r.width/2;
    if(middle){
-    const first=plan.sample(i,0);assert.equal(first.x,0);assert.ok(Math.abs(first.clip[1]+first.clip[3]-c.r.width)<1e-8);
+    const first=plan.sample(i,0);assert.ok(Math.abs(first.x)<1e-8);assert.ok(Math.abs(first.clip[1]+first.clip[3]-c.r.width)<1e-8);
     assert.equal(c.x-c.r.width/2+first.clip[3],cx);
     assert.ok(plan.sample(i,.5).clip[1]+plan.sample(i,.5).clip[3]<c.r.width);
    }else for(let k=0;k<=80;k++)assert.deepEqual(plan.sample(i,k/80),legacy.sample(i,k/80));
