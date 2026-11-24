@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="search.script",data={version:"0.3.0-preview.172"};
+  const event="search.script",data={version:"0.3.0-preview.173"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -28,6 +28,18 @@ try{if(typeof window!=="undefined"){
       const name=error?.name;
       return typeof name==="string"&&/^(?:Error|[A-Z][A-Za-z0-9]{0,45}(?:Error|Exception)|NS_ERROR_[A-Z0-9_]{1,45})$/.test(name)?name:"Error";
     }catch{return "Error";}
+  }
+  const recentDefaultIcon="chrome://global/skin/icons/defaultFavicon.svg";
+  const recentHomeMaskSource="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'/%3E";
+  function recentResultIcon(entry,Shared,home){
+    const src=Shared.getIconForUrl(entry.url)||recentDefaultIcon;
+    if(!home)return src;
+    const native=entry.tab.getAttribute("image")||entry.tab.querySelector?.(".tab-icon-image")?.getAttribute("src")||"";
+    const isDefault=v=>v===recentDefaultIcon;
+    // Explicit fallback or internal tab with no native favicon. Do not
+    // replace cached website icons simply because the tab image is absent.
+    const internalMissing=/^about:/i.test(entry.url)&&(!native||isDefault(native)||native==="page-icon:"+entry.url);
+    return isDefault(src)||isDefault(native)||internalMissing?recentHomeMaskSource:src;
   }
   function queryAllowed(context,source,enabled,openpage){
     return enabled&&openpage&&!context.isPrivate&&
@@ -204,7 +216,7 @@ try{if(typeof window!=="undefined"){
             type:Shared.RESULT_TYPE.DYNAMIC,source:Shared.RESULT_SOURCE.TABS,
             suggestedIndex:i,
             payload:{dynamicType:TYPE,zrToken:token,zrTitle:e.title,zrDetail:detail,
-              zrIcon:Shared.getIconForUrl(e.url),zrTime:relativeTime(e.last,e.selected),zrCurrent:!!e.selected}
+              zrIcon:recentResultIcon(e,Shared,win.gURLBar?.hasAttribute?.("data-zr-home-search")===true),zrTime:relativeTime(e.last,e.selected),zrCurrent:!!e.selected}
           }));if(state.diagnostic)state.diagnostic.emitted++;}
           catch(e){if(state.diagnostic)state.diagnostic.error=diagnosticErrorClass(e);console.warn("[Zen Refined] Smart Search result:",diagnosticErrorClass(e));}
         }
@@ -225,7 +237,7 @@ try{if(typeof window!=="undefined"){
         const p=result.payload;
         return {
           time:{textContent:p.zrTime},
-          icon:{attributes:{src:p.zrIcon||"chrome://global/skin/icons/defaultFavicon.svg"}},
+          icon:{attributes:{src:p.zrIcon||recentDefaultIcon,"data-zr-home-default":p.zrIcon===recentHomeMaskSource?"true":"false"}},
           title:{textContent:p.zrTitle,attributes:{dir:"auto"}},
           detail:{textContent:p.zrDetail,attributes:{dir:"auto"}},
           action:{textContent:p.zrCurrent?"Current tab":"Switch to Tab"}

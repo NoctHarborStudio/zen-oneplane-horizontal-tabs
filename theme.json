@@ -4,7 +4,7 @@
   "description": "A unified Zen Browser UI: OnePlane horizontal tabs, Home, Hub, Smart Search, Magnetic Bookmarks, Downloads Dock, Page Progress and coordinated motion.",
   "homepage": "https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/tree/preview",
   "author": "NoctHarborStudio",
-  "version": "0.3.0-preview.172",
+  "version": "0.3.0-preview.173",
   "style": {
     "chrome": "chrome.css"
   },
@@ -19,7 +19,7 @@
     "productivity"
   ],
   "createdAt": "2026-11-15",
-  "updatedAt": "2026-11-24T04:25:00.000Z",
+  "updatedAt": "2026-11-24T04:37:32.998Z",
   "fork": [
     "zen"
   ],

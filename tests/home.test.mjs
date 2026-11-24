@@ -299,16 +299,16 @@ test("Home search waits for a real result height and animates both directions",(
  function nativeSearchOpen(){return true}
  function finishSearchMotion(){bar.removeAttribute("data-zr-home-search-motion")}
  function scheduleSearchSnapshot(){}
- return {start:()=>startSearchMorph(searchToken,searchGeometry),close:()=>{searchClosing=true;animateSearchHeight(searchToken,400,56,460,true,()=>{})},get current(){return searchCurrentHeight}};
+ return {start:()=>startSearchMorph(searchToken,searchGeometry),close:()=>{searchClosing=true;animateSearchHeight(searchToken,400,56,368,true,()=>{})},get current(){return searchCurrentHeight}};
  `);
  const a=run(win,bar);
  const frame=now=>{const jobs=[...queue.values()];queue.clear();for(const fn of jobs)fn(now)};
  a.start();frame(0);frame(16);assert.equal(a.current,56);
  height=400;frame(32);assert.equal(a.current,56);
  frame(48);frame(150);assert.ok(a.current>56&&a.current<400);
- frame(400);assert.ok(a.current>56&&a.current<400);frame(640);assert.equal(a.current,400);
- a.close();frame(656);frame(750);assert.ok(a.current>56&&a.current<400);
- frame(1120);assert.equal(a.current,56);
+ frame(400);assert.ok(a.current>56&&a.current<400);frame(496);assert.equal(a.current,400);
+ a.close();frame(512);frame(600);assert.ok(a.current>56&&a.current<400);
+ frame(880);assert.equal(a.current,56);
 });
 test("Home search closing preserves native ownership and has blur fallback",()=>{
  assert.ok(core.includes("bar._zenHandleUrlbarClose(false,false)"));
@@ -348,7 +348,8 @@ test("Home search handoff shares header tokens, exact anchor and no New tab labe
  assert.ok(core.includes('panel.removeAttribute("data-zh-search-ready")'));
  assert.ok(!core.includes('html("span","","New tab")'));
  assert.ok(!core.includes("shell.style.opacity="));
- assert.ok(core.includes("round?280:560"));
+ assert.ok(core.includes("round?224:448"));
+ assert.ok(core.includes("height>dest.height+8?368:144"));
  assert.ok(core.includes("eased=t*t*(3-2*t)"));
 });
 
@@ -547,4 +548,13 @@ test("Home snapshot preserves native context paint and fractional border geometr
  assert.ok(core.includes('rect.top-barRect.top-inset.top'));
  assert.ok(core.includes('background-size:6px 6px,var(--zh-search-rule,1px)'));
  assert.ok(core.includes('background-size:var(--zh-search-rule,1px) calc(100% - 16px)'));
+});
+
+test("Home frozen default glyph uses the same computed CSS mask as the live recent icon",()=>{
+ const props=new Function(extract("  const snapshotProperties=","  function snapshotNow(")+"return snapshotProperties")();
+ for(const key of ["background-color","mask-image","mask-size","mask-position","mask-repeat","mask-origin","mask-clip","mask-mode","mask-composite"])assert.ok(props.includes(key),key);
+ assert.ok(core.includes('.urlbarView-favicon[data-zr-home-default="true"]'));
+ assert.ok(core.includes("background-color:currentColor!important"));
+ assert.ok(core.includes('if(source.getAttribute("data-zr-home-default")==="true")stableDefaultIcons++'));
+ assert.ok(core.includes("stableDefaultIcons:frozen?.stableDefaultIcons||0"));
 });

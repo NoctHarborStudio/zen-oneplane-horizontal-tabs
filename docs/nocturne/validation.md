@@ -883,3 +883,9 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [x] Preserve resolved SVG context paint including opacity and exact known default final URI; preserve ordinary image sources. Use whole-device-pixel rule widths and resolved border origin; no additional observers or animation callbacks.
 - [x] Source-backed tests for context paint and fallback handling, fractional DPR, border inset and Home-scoped rail/divider rule.
 - [ ] Installed Zen: compare full opening and first return frame, including Settings/Troubleshooting globes and both recent timeline rails plus middle divider. Check Escape/outside click and partial return, real colored favicons, light/dark and mixed DPI. Native visual parity and presented cadence remain unverified.
+
+### HS3.3b / preview.173 — explicit Home default icon and -20% durations
+
+- [x] User accepts preview.171 rail correction; preview.172 logs confirm 9 controlled returns but zero detected context/default images.
+- [x] Source fixtures cover Home-only default selection, ordinary site source preservation, mask property capture and reduced duration frame driver.
+- [ ] Native Zen: Settings/Troubleshooting in recent tabs should have the same globe in open and return; verify stableDefaultIcons > 0 when present, light/dark, real favicons, Escape/background, interrupted reveal and 368 ms full return. Do not claim universal missing-favicon detection or presented FPS.

@@ -234,6 +234,15 @@ function acquireZenHome(win, services) {
 #urlbar[data-zr-home-search][zen-floating-urlbar="true"] #urlbar-results[data-zr-smart-grid]{
   background-size:var(--zh-search-rule,1px) calc(100% - 16px);
 }
+/* The provider marks only known missing recent-tab favicons. Paint the
+   same ordinary CSS alpha mask in the live and frozen view; no Gecko
+   context-fill or second page-icon request is needed for this glyph. */
+#urlbar[data-zr-home-search][zen-floating-urlbar="true"] .urlbarView-favicon[data-zr-home-default="true"]{
+  background-color:currentColor!important;
+  mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25'%3E%3Ccircle cx='8' cy='8' r='6.9'/%3E%3Cellipse cx='8' cy='8' rx='3.1' ry='6.9'/%3E%3Cpath d='M1.1 8h13.8M2.4 4.6h11.2M2.4 11.4h11.2'/%3E%3C/svg%3E")!important;
+  mask-size:contain!important;mask-position:center!important;mask-repeat:no-repeat!important;
+  mask-origin:content-box!important;mask-clip:content-box!important;mask-mode:alpha!important;
+}
 /* Home already animates the whole result view. Keep both chronological
    rails stable; ordinary non-Home search retains its own timeline motion. */
 #urlbar[data-zr-home-search][zen-floating-urlbar="true"] #urlbar-results[data-zr-smart-grid][data-zr-timeline] > .urlbarView-row[data-zr-rail]::after{
@@ -692,7 +701,7 @@ function acquireZenHome(win, services) {
               if(probe.firstRevealMs===null)probe.firstRevealMs=searchProbeNow()-probe.started;
               probe.rounds++;
             }
-            animateSearchHeight(token,from,to,round?280:560,false,()=>{
+            animateSearchHeight(token,from,to,round?224:448,false,()=>{
               const latest=naturalSearchHeight(bar,geometry);
               searchLastHeight=latest;
               if(Math.abs(latest-to)>5&&round<2){reveal(to,latest,round+1);return;}
@@ -742,7 +751,7 @@ function acquireZenHome(win, services) {
   // event handlers, selectable IDs or interactive links.
   // Resolved longhands preserve one-sided separators and multi-layer
   // pseudo-elements. Mixed border shorthands were empty in the old copy.
-  const snapshotProperties=("display position box-sizing width height min-width min-height max-width max-height top right bottom left margin-top margin-right margin-bottom margin-left padding-top padding-right padding-bottom padding-left border-top-width border-right-width border-bottom-width border-left-width border-top-style border-right-style border-bottom-style border-left-style border-top-color border-right-color border-bottom-color border-left-color border-top-left-radius border-top-right-radius border-bottom-right-radius border-bottom-left-radius outline-width outline-style outline-color outline-offset box-shadow background-color background-image background-size background-position background-position-x background-position-y background-repeat background-origin background-clip color opacity font-family font-size font-weight font-style font-stretch font-variant-numeric font-feature-settings line-height letter-spacing text-align text-overflow white-space overflow-x overflow-y overflow-wrap direction writing-mode align-items align-self align-content justify-items justify-self justify-content flex-direction flex-wrap flex-grow flex-shrink flex-basis order row-gap column-gap grid-template-columns grid-template-rows grid-auto-rows grid-auto-columns grid-auto-flow grid-row-start grid-row-end grid-column-start grid-column-end vertical-align object-fit object-position list-style-image fill fill-opacity stroke stroke-opacity -moz-context-properties color-scheme mask-image mask-size mask-position mask-repeat transform transform-origin scale translate visibility z-index scrollbar-width scrollbar-color").split(" ");
+  const snapshotProperties=("display position box-sizing width height min-width min-height max-width max-height top right bottom left margin-top margin-right margin-bottom margin-left padding-top padding-right padding-bottom padding-left border-top-width border-right-width border-bottom-width border-left-width border-top-style border-right-style border-bottom-style border-left-style border-top-color border-right-color border-bottom-color border-left-color border-top-left-radius border-top-right-radius border-bottom-right-radius border-bottom-left-radius outline-width outline-style outline-color outline-offset box-shadow background-color background-image background-size background-position background-position-x background-position-y background-repeat background-origin background-clip color opacity font-family font-size font-weight font-style font-stretch font-variant-numeric font-feature-settings line-height letter-spacing text-align text-overflow white-space overflow-x overflow-y overflow-wrap direction writing-mode align-items align-self align-content justify-items justify-self justify-content flex-direction flex-wrap flex-grow flex-shrink flex-basis order row-gap column-gap grid-template-columns grid-template-rows grid-auto-rows grid-auto-columns grid-auto-flow grid-row-start grid-row-end grid-column-start grid-column-end vertical-align object-fit object-position list-style-image fill fill-opacity stroke stroke-opacity -moz-context-properties color-scheme mask-image mask-size mask-position mask-repeat mask-origin mask-clip mask-mode mask-composite transform transform-origin scale translate visibility z-index scrollbar-width scrollbar-color").split(" ");
   function snapshotNow(){return win.performance?.now?.()??Date.now();}
   function snapshotReady(bar){
     // Zen removes zen-newtab before notifying Home of cancellation.
@@ -822,7 +831,7 @@ function acquireZenHome(win, services) {
   function freezeSearchResults(view,barRect){
     const rect=view.getBoundingClientRect();
     if(!(rect.width>0&&rect.height>0))return null;
-    const scroll=[];let budget=900,pseudos=0,rails=0,contextIcons=0,defaultIcons=0;
+    const scroll=[];let budget=900,pseudos=0,rails=0,contextIcons=0,defaultIcons=0,stableDefaultIcons=0;
     const inset=snapshotBorderInset(win.getComputedStyle(searchBar));
     function styleCopy(target,style){
       for(const key of snapshotProperties){
@@ -853,6 +862,7 @@ function acquireZenHome(win, services) {
         const context=style.getPropertyValue("-moz-context-properties");
         if(context&&context!=="none")contextIcons++;
         if(src===snapshotDefaultIcon)defaultIcons++;
+        if(source.getAttribute("data-zr-home-default")==="true")stableDefaultIcons++;
       }
       if(src){target.src=src;target.alt="";target.draggable=false;}
       else if(image&&style.listStyleImage&&style.listStyleImage!=="none"){
@@ -873,7 +883,7 @@ function acquireZenHome(win, services) {
     Object.assign(holder.style,{left:(rect.left-barRect.left-inset.left)+"px",top:(rect.top-barRect.top-inset.top)+"px",width:rect.width+"px",height:rect.height+"px"});
     Object.assign(frozen.style,{position:"relative",inset:"auto",margin:"0",boxSizing:"border-box",width:rect.width+"px",height:rect.height+"px",opacity:"1"});
     holder.append(frozen);
-    return {node:holder,scroll,rows:view.querySelectorAll(".urlbarView-row:not([hidden])").length,pseudos,rails,contextIcons,defaultIcons,inset,rect:{left:barRect.left,top:barRect.top,width:barRect.width,height:barRect.height}};
+    return {node:holder,scroll,rows:view.querySelectorAll(".urlbarView-row:not([hidden])").length,pseudos,rails,contextIcons,defaultIcons,stableDefaultIcons,inset,rect:{left:barRect.left,top:barRect.top,width:barRect.width,height:barRect.height}};
   }
   function captureSearchSnapshot(){
     if(!searchToken||!searchBar||searchClosing||searchReturn||!searchGeometry||
@@ -903,7 +913,7 @@ function acquireZenHome(win, services) {
       // Identical attribute writes from a query refresh are not visual changes.
       if(records.some(r=>r.type!=="attributes"||r.oldValue!==r.target.getAttribute(r.attributeName)))scheduleSearchSnapshot();
     });
-    searchSnapshotObserver.observe(view,{subtree:true,childList:true,characterData:true,attributes:true,attributeOldValue:true,attributeFilter:["hidden","src","selected","style","stale","data-zr-group","data-zr-cell","data-zr-first","data-zr-rail","data-zr-column","data-zr-top","data-zr-narrow","data-zr-smart-grid","data-zr-timeline"]});
+    searchSnapshotObserver.observe(view,{subtree:true,childList:true,characterData:true,attributes:true,attributeOldValue:true,attributeFilter:["hidden","src","selected","style","stale","data-zr-group","data-zr-cell","data-zr-first","data-zr-rail","data-zr-column","data-zr-top","data-zr-narrow","data-zr-smart-grid","data-zr-timeline","data-zr-home-default"]});
     scheduleSearchSnapshot();
   }
   function stopSearchSnapshot(){
@@ -1022,8 +1032,8 @@ function acquireZenHome(win, services) {
     for(const node of content.querySelectorAll("[data-zh-enter]"))node.removeAttribute("data-zh-enter");
     paintReturnParts(parts,startBox.top+height,0,finalBottom);
     panel.setAttribute("data-zh-search-ready","");panel.setAttribute("data-zh-return","");
-    const duration=height>dest.height+8?460:180;
-    searchLog("close-start",{reason,rows:frozen?.rows||0,rails:frozen?.rails||0,pseudos:frozen?.pseudos||0,contextIcons:frozen?.contextIcons||0,defaultIcons:frozen?.defaultIcons||0,originInsetX:frozen?.inset.left??null,originInsetY:frozen?.inset.top??null,ruleWidth:searchRuleWidth(win.devicePixelRatio),height:Math.round(height),header:Math.round(dest.height),duration,parts:parts.length,snapshotDirty:searchSnapshotDirty,snapshotAge:frozen?Math.round(snapshotNow()-frozen.capturedAt):null,captureMs:frozen?Math.round(frozen.captureMs):null,handoffMs:Math.round(snapshotNow()-handoffStarted)});
+    const duration=height>dest.height+8?368:144;
+    searchLog("close-start",{reason,rows:frozen?.rows||0,rails:frozen?.rails||0,pseudos:frozen?.pseudos||0,contextIcons:frozen?.contextIcons||0,defaultIcons:frozen?.defaultIcons||0,stableDefaultIcons:frozen?.stableDefaultIcons||0,originInsetX:frozen?.inset.left??null,originInsetY:frozen?.inset.top??null,ruleWidth:searchRuleWidth(win.devicePixelRatio),height:Math.round(height),header:Math.round(dest.height),duration,parts:parts.length,snapshotDirty:searchSnapshotDirty,snapshotAge:frozen?Math.round(snapshotNow()-frozen.capturedAt):null,captureMs:frozen?Math.round(frozen.captureMs):null,handoffMs:Math.round(snapshotNow()-handoffStarted)});
     const token=searchToken;let start=null,previous=null,maxFrameGap=0,firstFrameDelay=0;
     const moveTop=Math.abs(startBox.top-dest.top)>.1,moveLeft=Math.abs(startBox.left-dest.left)>.1,moveWidth=Math.abs(startBox.width-dest.width)>.1;
     const tick=now=>{

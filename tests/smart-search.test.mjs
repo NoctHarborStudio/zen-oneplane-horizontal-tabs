@@ -364,3 +364,17 @@ test("native recent-tab detail retains the UTF-8 workspace and container separat
  assert.ok(source.includes("Zen Refined — Smart Search"),"source header must not be mojibake");
  assert.ok(!source.includes(" В· ")&&!source.includes("вЂ"),"corrupted text must not ship");
 });
+
+test("Home recent icons use a stable mask only for identified default favicons",()=>{
+ const get=new Function(source.slice(source.indexOf("  const recentDefaultIcon="),source.indexOf("  function queryAllowed("))+"return {recentResultIcon,recentHomeMaskSource,recentDefaultIcon};")();
+ const shared={getIconForUrl:u=>"page-icon:"+u};
+ const entry=(url,image)=>({url,tab:{getAttribute:()=>image||null}});
+ const about=entry("about:preferences");
+ assert.equal(get.recentResultIcon(about,shared,true),get.recentHomeMaskSource);
+ assert.equal(get.recentResultIcon(about,shared,false),"page-icon:about:preferences");
+ assert.equal(get.recentResultIcon(entry("about:support","page-icon:about:support"),shared,true),get.recentHomeMaskSource);
+ assert.equal(get.recentResultIcon(entry("about:config","chrome://browser/skin/settings.svg"),shared,true),"page-icon:about:config");
+ assert.equal(get.recentResultIcon(entry("https://example.test"),shared,true),"page-icon:https://example.test");
+ assert.equal(get.recentResultIcon(entry("https://example.test",get.recentDefaultIcon),shared,true),get.recentHomeMaskSource);
+ assert.ok(source.includes('"data-zr-home-default":p.zrIcon===recentHomeMaskSource?"true":"false"'));
+});
