@@ -1429,15 +1429,9 @@
     function openHistory(event){
       event.preventDefault();event.stopPropagation();
       if(destroyed||!supported())return;
-      let accepted=false,nativeFallback=false;
+      let accepted=false;
       try{accepted=window.__nocturneLibrary?.toggle?.("history")===true;}catch{}
-      if(!accepted){
-        try{
-          const native=document.getElementById("Browser:ShowAllHistory");
-          if(typeof native?.doCommand==="function"){native.doCommand();nativeFallback=true;}
-        }catch{}
-      }
-      try{window.__nocturneTrace?.("library.button",{accepted,nativeFallback},{flush:true});}catch{}
+      try{window.__nocturneTrace?.("library.button",{accepted,nativeFallback:false},{flush:true});}catch{}
     }
     function toggle(event){
       event.preventDefault();event.stopPropagation();
