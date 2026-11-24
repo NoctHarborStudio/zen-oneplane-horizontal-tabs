@@ -67,13 +67,13 @@ test("layout cleanup continues after feature disposal throws",()=>{
 
 test("layout preference restore isolates failed keys and retains complete backup",()=>{
  const src=read("src/core/preferences.js.part");
- const code=src.slice(src.indexOf("function restorePrefs("),src.indexOf("function markClosing"));
+ const code=src.slice(src.indexOf("function validNativeValue("),src.indexOf("function snapshot()"))+src.slice(src.indexOf("function restorePrefs("),src.indexOf("function markClosing"));
  const backup={a:{value:false,user:true},b:{value:true,user:false},c:{value:false,user:true}};
  const values=new Map([["a",true],["b",false],["c",false]]);
  const cleared=[],traces=[];let fail=true,raw=JSON.stringify(backup);
  const prefs={getStringPref:()=>raw,setStringPref(k,v){raw=v;},getBoolPref:k=>values.get(k),setBoolPref(k,v){if(k==="a"&&fail)throw Error("locked");values.set(k,v);},
   clearUserPref(k){cleared.push(k);if(k==="backup")raw="";else values.set(k,true);}};
- const restore=new Function("prefs","window","console","TARGET","KEY","nocturneErrorClass","NATIVE_LIBRARY",code+"return restorePrefs;")(prefs,{__nocturneTrace:(event,data)=>traces.push({event,data})},{warn(){}},{a:true,b:false,c:true},"backup",nocturneErrorClass,"zen.library.enabled");
+ const restore=new Function("prefs","window","console","TARGET","KEY","nocturneErrorClass","NATIVE_LIBRARY","NATIVE_FRAME",code+"return restorePrefs;")(prefs,{__nocturneTrace:(event,data)=>traces.push({event,data})},{warn(){}},{a:true,b:false,c:true},"backup",nocturneErrorClass,"zen.library.enabled","zen.theme.content-element-separation");
  assert.equal(restore(),false);assert.equal(values.get("b"),true);assert.equal(values.get("c"),false);
  assert.deepEqual(JSON.parse(raw),{a:backup.a,b:{...backup.b,released:true},c:{...backup.c,released:true}});
  assert.deepEqual(cleared,["b"]);
@@ -86,22 +86,22 @@ test("layout preference restore isolates failed keys and retains complete backup
 
 test("new activation captures released preference keys without losing unresolved originals",()=>{
  const src=read("src/core/preferences.js.part");
- const code=src.slice(src.indexOf("function snapshot()"),src.indexOf("function otherActiveWindow"));
+ const code=src.slice(src.indexOf("function validNativeValue("),src.indexOf("function otherActiveWindow"));
  const nativeKey="zen.library.enabled",saved={a:{value:false,user:true},b:{value:true,user:false,released:true},startup:{value:false,user:false},[nativeKey]:{value:true,user:false,owned:true}};
  let raw=JSON.stringify(saved);
  const prefs={PREF_BOOL:128,getPrefType:()=>128,getStringPref:()=>raw,setStringPref(k,v){raw=v;},
   getBoolPref:k=>false,prefHasUserValue:k=>true};
- const snapshot=new Function("prefs","TARGET","STARTUP","KEY","NATIVE_LIBRARY",code+"return snapshot;")(prefs,{a:true,b:false,[nativeKey]:false},"startup","backup",nativeKey);
+ const snapshot=new Function("prefs","TARGET","STARTUP","KEY","NATIVE_LIBRARY","NATIVE_FRAME",code+"return snapshot;")(prefs,{a:true,b:false,[nativeKey]:false},"startup","backup",nativeKey,"zen.theme.content-element-separation");
  assert.deepEqual(snapshot(),{a:saved.a,b:{value:false,user:true,owned:false},startup:saved.startup,[nativeKey]:saved[nativeKey]});
  assert.deepEqual(JSON.parse(raw),{a:saved.a,b:{value:false,user:true,owned:false},startup:saved.startup,[nativeKey]:saved[nativeKey]});
 });
 test("failed backup removal checkpoints release progress before retry",()=>{
  const src=read("src/core/preferences.js.part");
- const code=src.slice(src.indexOf("function restorePrefs("),src.indexOf("function markClosing"));
+ const code=src.slice(src.indexOf("function validNativeValue("),src.indexOf("function snapshot()"))+src.slice(src.indexOf("function restorePrefs("),src.indexOf("function markClosing"));
  let raw=JSON.stringify({a:{value:false,user:true}}),value=true,fail=true,sets=0;
  const prefs={getStringPref:()=>raw,setStringPref(k,v){raw=v;},getBoolPref:()=>value,
   setBoolPref(k,v){sets++;value=v;},clearUserPref(){if(fail)throw Error("locked backup");raw="";}};
- const restore=new Function("prefs","window","console","TARGET","KEY","nocturneErrorClass","NATIVE_LIBRARY",code+"return restorePrefs;")(prefs,{}, {warn(){}},{a:true},"backup",nocturneErrorClass,"zen.library.enabled");
+ const restore=new Function("prefs","window","console","TARGET","KEY","nocturneErrorClass","NATIVE_LIBRARY","NATIVE_FRAME",code+"return restorePrefs;")(prefs,{}, {warn(){}},{a:true},"backup",nocturneErrorClass,"zen.library.enabled","zen.theme.content-element-separation");
  assert.equal(restore(),false);assert.equal(JSON.parse(raw).a.released,true);
  value=true;fail=false;assert.equal(restore(),true);assert.equal(value,true);assert.equal(sets,1);assert.equal(raw,"");
 });
@@ -140,14 +140,14 @@ test("Hub overlay stale generation cannot handle Escape after rebinding",()=>{
 
 test("MB-014 native exit retains only owned sidebar preference; live disable restores baseline",()=>{
  const src=read("src/core/preferences.js.part");
- const code=src.slice(src.indexOf("function restorePrefs("),src.indexOf("function markClosing"));
+ const code=src.slice(src.indexOf("function validNativeValue("),src.indexOf("function snapshot()"))+src.slice(src.indexOf("function restorePrefs("),src.indexOf("function markClosing"));
  const side="zen.view.compact.hide-tabbar",other="zen.view.compact.hide-toolbar";
  for(const scenario of ["owned","no-op","external-change"]){
   const original={value:scenario==="no-op",user:true,owned:scenario!=="no-op"};
   const values=new Map([[side,scenario!=="external-change"],[other,true]]);
   let raw=JSON.stringify({[side]:original,[other]:{value:false,user:true,owned:true}});
   const prefs={getStringPref:()=>raw,setStringPref(k,v){raw=v;},getBoolPref:k=>values.get(k),prefHasUserValue:()=>true,setBoolPref(k,v){values.set(k,v)},clearUserPref(k){if(k==="backup")raw="";else throw Error("unexpected clear")}};
-  const restore=new Function("prefs","window","console","TARGET","KEY","nocturneErrorClass","NATIVE_LIBRARY",code+"return restorePrefs;")(prefs,{}, {warn(){}},{[side]:true,[other]:true},"backup",nocturneErrorClass,"zen.library.enabled");
+  const restore=new Function("prefs","window","console","TARGET","KEY","nocturneErrorClass","NATIVE_LIBRARY","NATIVE_FRAME",code+"return restorePrefs;")(prefs,{}, {warn(){}},{[side]:true,[other]:true},"backup",nocturneErrorClass,"zen.library.enabled","zen.theme.content-element-separation");
   assert.equal(restore(true),true);
   assert.equal(values.get(other),false);
   if(scenario==="owned"){
