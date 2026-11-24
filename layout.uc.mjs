@@ -86,7 +86,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.216",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.217",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -2401,9 +2401,9 @@ function acquireZenHome(win, services) {
   --zh-search-color:var(--toolbox-textcolor,var(--toolbar-color,currentColor));
   --zh-search-glass:var(--nocturne-home-search-paint,color-mix(in srgb,var(--zh-search-color) 8%,transparent));
   --zh-search-blur:var(--nocturne-home-search-blur,0px);
-  --zh-search-stroke:var(--nocturne-glass-border,color-mix(in srgb,var(--zh-search-color) 14%,transparent));
+  --zh-search-stroke:var(--nocturne-home-search-border,color-mix(in srgb,var(--zh-search-color) 14%,transparent));
   --zh-search-label:color-mix(in srgb,var(--zh-search-color) 76%,transparent);
-  --zh-search-radius:var(--nocturne-glass-radius,14px);
+  --zh-search-radius:var(--nocturne-home-search-radius,14px);
   --zh-search-font:400 14px system-ui,sans-serif;
   --zh-search-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='m16 16 4 4'/%3E%3C/svg%3E");
 }
@@ -4827,7 +4827,8 @@ function normalizeAutomaticTabRows(plan,count,boundary) {
     if(!bar){clearAddressAnimation();return;}
     const full=Math.max(1,layoutWidth);
     const header=Math.max(1,parseFloat(url.style.getPropertyValue("--op-url-header-height"))||addressAnchor?.height||30);
-    const radius=parseFloat(window.getComputedStyle(bar).getPropertyValue("--op-url-radius"))||8;
+    const configuredRadius=parseFloat(window.getComputedStyle(bar).getPropertyValue("--op-url-radius"));
+    const radius=Number.isFinite(configuredRadius)?Math.max(0,configuredRadius):12;
     const shape=window.CSS?.supports("clip-path",addressFluidClip(Math.max(1,from.width),header,from.reveal,radius,true))??false;
     const frames=addressFluidFrames(name,from,to,full,header,radius,shape);
     const a={name,from,to,duration,bar,start:window.performance.now(),engine:shape?"waapi-shape":"waapi-polygon"};

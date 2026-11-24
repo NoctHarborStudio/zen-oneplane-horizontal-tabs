@@ -12,8 +12,8 @@ test("search surfaces independently inherit global opacity and blur, including e
   assert.ok(base.includes(token+": var(--nocturne-glass-"+prop+")"));
   for(const option of pref.options.filter(o=>o.value!==-1))assert.ok(base.includes('(-moz-pref("'+key+'", '+option.value+')) { '+token+': '+option.value+unit+'; }'));
  }
- assert.ok(base.includes("var(--nocturne-glass-tint) var(--nocturne-address-opacity)"));
- assert.ok(base.includes("var(--nocturne-glass-tint) var(--nocturne-home-search-opacity)"));
+ assert.ok(base.includes("var(--nocturne-address-tint) var(--nocturne-address-opacity)"));
+ assert.ok(base.includes("var(--nocturne-home-search-tint) var(--nocturne-home-search-opacity)"));
 });
 test("one address paint, no nested blur; live Home and resting Home share material",()=>{
  assert.ok(base.includes("--op-url-surface: var(--nocturne-address-paint"));
@@ -24,8 +24,8 @@ test("one address paint, no nested blur; live Home and resting Home share materi
  assert.ok(home.includes("--zh-glass:var(--zh-search-glass)"));
  assert.ok(home.includes("backdrop-filter:blur(var(--zh-search-blur));"));
  assert.ok(home.includes("backdrop-filter:blur(var(--zh-search-blur))!important"));
- assert.ok(home.includes("--zh-search-radius:var(--nocturne-glass-radius,14px)"));
- assert.ok(base.includes("--op-url-radius: var(--nocturne-glass-radius, 12px)"));
+ assert.ok(home.includes("--zh-search-radius:var(--nocturne-home-search-radius,14px)"));
+ assert.ok(base.includes("--op-url-radius: var(--nocturne-address-radius, 12px)"));
  assert.ok(home.includes("background:transparent!important;border:0!important;outline:0!important;box-shadow:none!important;backdrop-filter:none!important"));
 });
 test("accessibility overrides both global and local material",()=>{

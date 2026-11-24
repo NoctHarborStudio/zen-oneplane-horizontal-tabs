@@ -35,8 +35,10 @@
     --nocturne-glass-opacity: 70%;
     --nocturne-glass-blur: 24px;
     --nocturne-glass-radius: 12px;
-    --nocturne-glass-border: color-mix(in srgb, currentColor 12%, transparent);
-    --nocturne-glass-shadow: 0 8px 24px #0003;
+    --nocturne-glass-border-strength: 12%;
+    --nocturne-glass-shadow-strength: 20%;
+    --nocturne-glass-border: color-mix(in srgb, currentColor var(--nocturne-glass-border-strength), transparent);
+    --nocturne-glass-shadow: 0 8px 24px rgb(0 0 0 / var(--nocturne-glass-shadow-strength));
     --nocturne-glass-foreground: var(--toolbar-color, CanvasText);
     --nocturne-glass-control-fill: color-mix(in srgb, currentColor 8%, transparent);
     @media (-moz-pref("zen.nocturne.material.opacity", 0)) { --nocturne-glass-opacity: 0%; }
@@ -57,6 +59,158 @@
     @media (-moz-pref("zen.nocturne.material.blur", 24)) { --nocturne-glass-blur: 24px; }
     @media (-moz-pref("zen.nocturne.material.blur", 32)) { --nocturne-glass-blur: 32px; }
     @media (-moz-pref("zen.nocturne.material.blur", 40)) { --nocturne-glass-blur: 40px; }
+    /* Each property inherits independently. A missing or -1 local value has no media override. */
+    @media (-moz-pref("zen.nocturne.material.tint", 0)) { --nocturne-glass-tint: light-dark(#f4f5f9, #15171e); }
+    @media (-moz-pref("zen.nocturne.material.tint", 1)) { --nocturne-glass-tint: light-dark(#edf2fb, #151d2c); }
+    @media (-moz-pref("zen.nocturne.material.tint", 2)) { --nocturne-glass-tint: light-dark(#faf3e9, #261d18); }
+    @media (-moz-pref("zen.nocturne.material.tint", 3)) { --nocturne-glass-tint: light-dark(#f5f5f5, #1b1b1b); }
+    @media (-moz-pref("zen.nocturne.material.radius", 0)) { --nocturne-glass-radius: 0px; }
+    @media (-moz-pref("zen.nocturne.material.radius", 4)) { --nocturne-glass-radius: 4px; }
+    @media (-moz-pref("zen.nocturne.material.radius", 8)) { --nocturne-glass-radius: 8px; }
+    @media (-moz-pref("zen.nocturne.material.radius", 12)) { --nocturne-glass-radius: 12px; }
+    @media (-moz-pref("zen.nocturne.material.radius", 16)) { --nocturne-glass-radius: 16px; }
+    @media (-moz-pref("zen.nocturne.material.radius", 20)) { --nocturne-glass-radius: 20px; }
+    @media (-moz-pref("zen.nocturne.material.border", 0)) { --nocturne-glass-border-strength: 0%; }
+    @media (-moz-pref("zen.nocturne.material.border", 6)) { --nocturne-glass-border-strength: 6%; }
+    @media (-moz-pref("zen.nocturne.material.border", 12)) { --nocturne-glass-border-strength: 12%; }
+    @media (-moz-pref("zen.nocturne.material.border", 18)) { --nocturne-glass-border-strength: 18%; }
+    @media (-moz-pref("zen.nocturne.material.border", 24)) { --nocturne-glass-border-strength: 24%; }
+    @media (-moz-pref("zen.nocturne.material.border", 36)) { --nocturne-glass-border-strength: 36%; }
+    @media (-moz-pref("zen.nocturne.material.shadow", 0)) { --nocturne-glass-shadow-strength: 0%; }
+    @media (-moz-pref("zen.nocturne.material.shadow", 10)) { --nocturne-glass-shadow-strength: 10%; }
+    @media (-moz-pref("zen.nocturne.material.shadow", 20)) { --nocturne-glass-shadow-strength: 20%; }
+    @media (-moz-pref("zen.nocturne.material.shadow", 30)) { --nocturne-glass-shadow-strength: 30%; }
+    @media (-moz-pref("zen.nocturne.material.shadow", 40)) { --nocturne-glass-shadow-strength: 40%; }
+    @media (-moz-pref("zen.nocturne.material.shadow", 50)) { --nocturne-glass-shadow-strength: 50%; }
+    --nocturne-top-plane-tint: var(--nocturne-glass-tint);
+    @media (-moz-pref("zen.nocturne.material.top-plane.tint", 0)) { --nocturne-top-plane-tint: light-dark(#f4f5f9, #15171e); }
+    @media (-moz-pref("zen.nocturne.material.top-plane.tint", 1)) { --nocturne-top-plane-tint: light-dark(#edf2fb, #151d2c); }
+    @media (-moz-pref("zen.nocturne.material.top-plane.tint", 2)) { --nocturne-top-plane-tint: light-dark(#faf3e9, #261d18); }
+    @media (-moz-pref("zen.nocturne.material.top-plane.tint", 3)) { --nocturne-top-plane-tint: light-dark(#f5f5f5, #1b1b1b); }
+    --nocturne-address-tint: var(--nocturne-glass-tint);
+    @media (-moz-pref("zen.nocturne.material.address.tint", 0)) { --nocturne-address-tint: light-dark(#f4f5f9, #15171e); }
+    @media (-moz-pref("zen.nocturne.material.address.tint", 1)) { --nocturne-address-tint: light-dark(#edf2fb, #151d2c); }
+    @media (-moz-pref("zen.nocturne.material.address.tint", 2)) { --nocturne-address-tint: light-dark(#faf3e9, #261d18); }
+    @media (-moz-pref("zen.nocturne.material.address.tint", 3)) { --nocturne-address-tint: light-dark(#f5f5f5, #1b1b1b); }
+    --nocturne-address-radius: var(--nocturne-glass-radius);
+    @media (-moz-pref("zen.nocturne.material.address.radius", 0)) { --nocturne-address-radius: 0px; }
+    @media (-moz-pref("zen.nocturne.material.address.radius", 4)) { --nocturne-address-radius: 4px; }
+    @media (-moz-pref("zen.nocturne.material.address.radius", 8)) { --nocturne-address-radius: 8px; }
+    @media (-moz-pref("zen.nocturne.material.address.radius", 12)) { --nocturne-address-radius: 12px; }
+    @media (-moz-pref("zen.nocturne.material.address.radius", 16)) { --nocturne-address-radius: 16px; }
+    @media (-moz-pref("zen.nocturne.material.address.radius", 20)) { --nocturne-address-radius: 20px; }
+    --nocturne-address-border-strength: var(--nocturne-glass-border-strength);
+    @media (-moz-pref("zen.nocturne.material.address.border", 0)) { --nocturne-address-border-strength: 0%; }
+    @media (-moz-pref("zen.nocturne.material.address.border", 6)) { --nocturne-address-border-strength: 6%; }
+    @media (-moz-pref("zen.nocturne.material.address.border", 12)) { --nocturne-address-border-strength: 12%; }
+    @media (-moz-pref("zen.nocturne.material.address.border", 18)) { --nocturne-address-border-strength: 18%; }
+    @media (-moz-pref("zen.nocturne.material.address.border", 24)) { --nocturne-address-border-strength: 24%; }
+    @media (-moz-pref("zen.nocturne.material.address.border", 36)) { --nocturne-address-border-strength: 36%; }
+    --nocturne-address-border: color-mix(in srgb, currentColor var(--nocturne-address-border-strength), transparent);
+    --nocturne-home-search-tint: var(--nocturne-glass-tint);
+    @media (-moz-pref("zen.nocturne.material.home-search.tint", 0)) { --nocturne-home-search-tint: light-dark(#f4f5f9, #15171e); }
+    @media (-moz-pref("zen.nocturne.material.home-search.tint", 1)) { --nocturne-home-search-tint: light-dark(#edf2fb, #151d2c); }
+    @media (-moz-pref("zen.nocturne.material.home-search.tint", 2)) { --nocturne-home-search-tint: light-dark(#faf3e9, #261d18); }
+    @media (-moz-pref("zen.nocturne.material.home-search.tint", 3)) { --nocturne-home-search-tint: light-dark(#f5f5f5, #1b1b1b); }
+    --nocturne-home-search-radius: var(--nocturne-glass-radius);
+    @media (-moz-pref("zen.nocturne.material.home-search.radius", 0)) { --nocturne-home-search-radius: 0px; }
+    @media (-moz-pref("zen.nocturne.material.home-search.radius", 4)) { --nocturne-home-search-radius: 4px; }
+    @media (-moz-pref("zen.nocturne.material.home-search.radius", 8)) { --nocturne-home-search-radius: 8px; }
+    @media (-moz-pref("zen.nocturne.material.home-search.radius", 12)) { --nocturne-home-search-radius: 12px; }
+    @media (-moz-pref("zen.nocturne.material.home-search.radius", 16)) { --nocturne-home-search-radius: 16px; }
+    @media (-moz-pref("zen.nocturne.material.home-search.radius", 20)) { --nocturne-home-search-radius: 20px; }
+    --nocturne-home-search-border-strength: var(--nocturne-glass-border-strength);
+    @media (-moz-pref("zen.nocturne.material.home-search.border", 0)) { --nocturne-home-search-border-strength: 0%; }
+    @media (-moz-pref("zen.nocturne.material.home-search.border", 6)) { --nocturne-home-search-border-strength: 6%; }
+    @media (-moz-pref("zen.nocturne.material.home-search.border", 12)) { --nocturne-home-search-border-strength: 12%; }
+    @media (-moz-pref("zen.nocturne.material.home-search.border", 18)) { --nocturne-home-search-border-strength: 18%; }
+    @media (-moz-pref("zen.nocturne.material.home-search.border", 24)) { --nocturne-home-search-border-strength: 24%; }
+    @media (-moz-pref("zen.nocturne.material.home-search.border", 36)) { --nocturne-home-search-border-strength: 36%; }
+    --nocturne-home-search-border: color-mix(in srgb, currentColor var(--nocturne-home-search-border-strength), transparent);
+    --nocturne-hub-tint: var(--nocturne-glass-tint);
+    @media (-moz-pref("zen.nocturne.material.hub.tint", 0)) { --nocturne-hub-tint: light-dark(#f4f5f9, #15171e); }
+    @media (-moz-pref("zen.nocturne.material.hub.tint", 1)) { --nocturne-hub-tint: light-dark(#edf2fb, #151d2c); }
+    @media (-moz-pref("zen.nocturne.material.hub.tint", 2)) { --nocturne-hub-tint: light-dark(#faf3e9, #261d18); }
+    @media (-moz-pref("zen.nocturne.material.hub.tint", 3)) { --nocturne-hub-tint: light-dark(#f5f5f5, #1b1b1b); }
+    --nocturne-hub-radius: var(--nocturne-glass-radius);
+    @media (-moz-pref("zen.nocturne.material.hub.radius", 0)) { --nocturne-hub-radius: 0px; }
+    @media (-moz-pref("zen.nocturne.material.hub.radius", 4)) { --nocturne-hub-radius: 4px; }
+    @media (-moz-pref("zen.nocturne.material.hub.radius", 8)) { --nocturne-hub-radius: 8px; }
+    @media (-moz-pref("zen.nocturne.material.hub.radius", 12)) { --nocturne-hub-radius: 12px; }
+    @media (-moz-pref("zen.nocturne.material.hub.radius", 16)) { --nocturne-hub-radius: 16px; }
+    @media (-moz-pref("zen.nocturne.material.hub.radius", 20)) { --nocturne-hub-radius: 20px; }
+    --nocturne-hub-border-strength: var(--nocturne-glass-border-strength);
+    @media (-moz-pref("zen.nocturne.material.hub.border", 0)) { --nocturne-hub-border-strength: 0%; }
+    @media (-moz-pref("zen.nocturne.material.hub.border", 6)) { --nocturne-hub-border-strength: 6%; }
+    @media (-moz-pref("zen.nocturne.material.hub.border", 12)) { --nocturne-hub-border-strength: 12%; }
+    @media (-moz-pref("zen.nocturne.material.hub.border", 18)) { --nocturne-hub-border-strength: 18%; }
+    @media (-moz-pref("zen.nocturne.material.hub.border", 24)) { --nocturne-hub-border-strength: 24%; }
+    @media (-moz-pref("zen.nocturne.material.hub.border", 36)) { --nocturne-hub-border-strength: 36%; }
+    --nocturne-hub-shadow-strength: var(--nocturne-glass-shadow-strength);
+    @media (-moz-pref("zen.nocturne.material.hub.shadow", 0)) { --nocturne-hub-shadow-strength: 0%; }
+    @media (-moz-pref("zen.nocturne.material.hub.shadow", 10)) { --nocturne-hub-shadow-strength: 10%; }
+    @media (-moz-pref("zen.nocturne.material.hub.shadow", 20)) { --nocturne-hub-shadow-strength: 20%; }
+    @media (-moz-pref("zen.nocturne.material.hub.shadow", 30)) { --nocturne-hub-shadow-strength: 30%; }
+    @media (-moz-pref("zen.nocturne.material.hub.shadow", 40)) { --nocturne-hub-shadow-strength: 40%; }
+    @media (-moz-pref("zen.nocturne.material.hub.shadow", 50)) { --nocturne-hub-shadow-strength: 50%; }
+    --nocturne-hub-border: color-mix(in srgb, currentColor var(--nocturne-hub-border-strength), transparent);
+    --nocturne-hub-shadow: 0 8px 24px rgb(0 0 0 / var(--nocturne-hub-shadow-strength));
+    --nocturne-downloads-tint: var(--nocturne-glass-tint);
+    @media (-moz-pref("zen.nocturne.material.downloads.tint", 0)) { --nocturne-downloads-tint: light-dark(#f4f5f9, #15171e); }
+    @media (-moz-pref("zen.nocturne.material.downloads.tint", 1)) { --nocturne-downloads-tint: light-dark(#edf2fb, #151d2c); }
+    @media (-moz-pref("zen.nocturne.material.downloads.tint", 2)) { --nocturne-downloads-tint: light-dark(#faf3e9, #261d18); }
+    @media (-moz-pref("zen.nocturne.material.downloads.tint", 3)) { --nocturne-downloads-tint: light-dark(#f5f5f5, #1b1b1b); }
+    --nocturne-downloads-radius: var(--nocturne-glass-radius);
+    @media (-moz-pref("zen.nocturne.material.downloads.radius", 0)) { --nocturne-downloads-radius: 0px; }
+    @media (-moz-pref("zen.nocturne.material.downloads.radius", 4)) { --nocturne-downloads-radius: 4px; }
+    @media (-moz-pref("zen.nocturne.material.downloads.radius", 8)) { --nocturne-downloads-radius: 8px; }
+    @media (-moz-pref("zen.nocturne.material.downloads.radius", 12)) { --nocturne-downloads-radius: 12px; }
+    @media (-moz-pref("zen.nocturne.material.downloads.radius", 16)) { --nocturne-downloads-radius: 16px; }
+    @media (-moz-pref("zen.nocturne.material.downloads.radius", 20)) { --nocturne-downloads-radius: 20px; }
+    --nocturne-downloads-border-strength: var(--nocturne-glass-border-strength);
+    @media (-moz-pref("zen.nocturne.material.downloads.border", 0)) { --nocturne-downloads-border-strength: 0%; }
+    @media (-moz-pref("zen.nocturne.material.downloads.border", 6)) { --nocturne-downloads-border-strength: 6%; }
+    @media (-moz-pref("zen.nocturne.material.downloads.border", 12)) { --nocturne-downloads-border-strength: 12%; }
+    @media (-moz-pref("zen.nocturne.material.downloads.border", 18)) { --nocturne-downloads-border-strength: 18%; }
+    @media (-moz-pref("zen.nocturne.material.downloads.border", 24)) { --nocturne-downloads-border-strength: 24%; }
+    @media (-moz-pref("zen.nocturne.material.downloads.border", 36)) { --nocturne-downloads-border-strength: 36%; }
+    --nocturne-downloads-shadow-strength: var(--nocturne-glass-shadow-strength);
+    @media (-moz-pref("zen.nocturne.material.downloads.shadow", 0)) { --nocturne-downloads-shadow-strength: 0%; }
+    @media (-moz-pref("zen.nocturne.material.downloads.shadow", 10)) { --nocturne-downloads-shadow-strength: 10%; }
+    @media (-moz-pref("zen.nocturne.material.downloads.shadow", 20)) { --nocturne-downloads-shadow-strength: 20%; }
+    @media (-moz-pref("zen.nocturne.material.downloads.shadow", 30)) { --nocturne-downloads-shadow-strength: 30%; }
+    @media (-moz-pref("zen.nocturne.material.downloads.shadow", 40)) { --nocturne-downloads-shadow-strength: 40%; }
+    @media (-moz-pref("zen.nocturne.material.downloads.shadow", 50)) { --nocturne-downloads-shadow-strength: 50%; }
+    --nocturne-downloads-border: color-mix(in srgb, currentColor var(--nocturne-downloads-border-strength), transparent);
+    --nocturne-downloads-shadow: 0 8px 24px rgb(0 0 0 / var(--nocturne-downloads-shadow-strength));
+    --nocturne-library-tint: var(--nocturne-glass-tint);
+    @media (-moz-pref("zen.nocturne.material.library.tint", 0)) { --nocturne-library-tint: light-dark(#f4f5f9, #15171e); }
+    @media (-moz-pref("zen.nocturne.material.library.tint", 1)) { --nocturne-library-tint: light-dark(#edf2fb, #151d2c); }
+    @media (-moz-pref("zen.nocturne.material.library.tint", 2)) { --nocturne-library-tint: light-dark(#faf3e9, #261d18); }
+    @media (-moz-pref("zen.nocturne.material.library.tint", 3)) { --nocturne-library-tint: light-dark(#f5f5f5, #1b1b1b); }
+    --nocturne-library-radius: var(--nocturne-glass-radius);
+    @media (-moz-pref("zen.nocturne.material.library.radius", 0)) { --nocturne-library-radius: 0px; }
+    @media (-moz-pref("zen.nocturne.material.library.radius", 4)) { --nocturne-library-radius: 4px; }
+    @media (-moz-pref("zen.nocturne.material.library.radius", 8)) { --nocturne-library-radius: 8px; }
+    @media (-moz-pref("zen.nocturne.material.library.radius", 12)) { --nocturne-library-radius: 12px; }
+    @media (-moz-pref("zen.nocturne.material.library.radius", 16)) { --nocturne-library-radius: 16px; }
+    @media (-moz-pref("zen.nocturne.material.library.radius", 20)) { --nocturne-library-radius: 20px; }
+    --nocturne-library-border-strength: var(--nocturne-glass-border-strength);
+    @media (-moz-pref("zen.nocturne.material.library.border", 0)) { --nocturne-library-border-strength: 0%; }
+    @media (-moz-pref("zen.nocturne.material.library.border", 6)) { --nocturne-library-border-strength: 6%; }
+    @media (-moz-pref("zen.nocturne.material.library.border", 12)) { --nocturne-library-border-strength: 12%; }
+    @media (-moz-pref("zen.nocturne.material.library.border", 18)) { --nocturne-library-border-strength: 18%; }
+    @media (-moz-pref("zen.nocturne.material.library.border", 24)) { --nocturne-library-border-strength: 24%; }
+    @media (-moz-pref("zen.nocturne.material.library.border", 36)) { --nocturne-library-border-strength: 36%; }
+    --nocturne-library-shadow-strength: var(--nocturne-glass-shadow-strength);
+    @media (-moz-pref("zen.nocturne.material.library.shadow", 0)) { --nocturne-library-shadow-strength: 0%; }
+    @media (-moz-pref("zen.nocturne.material.library.shadow", 10)) { --nocturne-library-shadow-strength: 10%; }
+    @media (-moz-pref("zen.nocturne.material.library.shadow", 20)) { --nocturne-library-shadow-strength: 20%; }
+    @media (-moz-pref("zen.nocturne.material.library.shadow", 30)) { --nocturne-library-shadow-strength: 30%; }
+    @media (-moz-pref("zen.nocturne.material.library.shadow", 40)) { --nocturne-library-shadow-strength: 40%; }
+    @media (-moz-pref("zen.nocturne.material.library.shadow", 50)) { --nocturne-library-shadow-strength: 50%; }
+    --nocturne-library-border: color-mix(in srgb, currentColor var(--nocturne-library-border-strength), transparent);
+    --nocturne-library-shadow: 0 8px 24px rgb(0 0 0 / var(--nocturne-library-shadow-strength));
     --nocturne-address-opacity: var(--nocturne-glass-opacity);
     --nocturne-address-blur: var(--nocturne-glass-blur);
     @media (-moz-pref("zen.nocturne.material.address.opacity", 0)) { --nocturne-address-opacity: 0%; }
@@ -77,7 +231,7 @@
     @media (-moz-pref("zen.nocturne.material.address.blur", 24)) { --nocturne-address-blur: 24px; }
     @media (-moz-pref("zen.nocturne.material.address.blur", 32)) { --nocturne-address-blur: 32px; }
     @media (-moz-pref("zen.nocturne.material.address.blur", 40)) { --nocturne-address-blur: 40px; }
-    --nocturne-address-paint: color-mix(in srgb, var(--nocturne-glass-tint) var(--nocturne-address-opacity), transparent);
+    --nocturne-address-paint: color-mix(in srgb, var(--nocturne-address-tint) var(--nocturne-address-opacity), transparent);
     --nocturne-home-search-opacity: var(--nocturne-glass-opacity);
     --nocturne-home-search-blur: var(--nocturne-glass-blur);
     @media (-moz-pref("zen.nocturne.material.home-search.opacity", 0)) { --nocturne-home-search-opacity: 0%; }
@@ -98,7 +252,7 @@
     @media (-moz-pref("zen.nocturne.material.home-search.blur", 24)) { --nocturne-home-search-blur: 24px; }
     @media (-moz-pref("zen.nocturne.material.home-search.blur", 32)) { --nocturne-home-search-blur: 32px; }
     @media (-moz-pref("zen.nocturne.material.home-search.blur", 40)) { --nocturne-home-search-blur: 40px; }
-    --nocturne-home-search-paint: color-mix(in srgb, var(--nocturne-glass-tint) var(--nocturne-home-search-opacity), transparent);
+    --nocturne-home-search-paint: color-mix(in srgb, var(--nocturne-home-search-tint) var(--nocturne-home-search-opacity), transparent);
     --nocturne-hub-opacity: var(--nocturne-glass-opacity);
     @media (-moz-pref("zen.nocturne.material.hub.opacity", 0)) { --nocturne-hub-opacity: 0%; }
     @media (-moz-pref("zen.nocturne.material.hub.opacity", 10)) { --nocturne-hub-opacity: 10%; }
@@ -119,7 +273,7 @@
     @media (-moz-pref("zen.nocturne.material.hub.blur", 24)) { --nocturne-hub-blur: 24px; }
     @media (-moz-pref("zen.nocturne.material.hub.blur", 32)) { --nocturne-hub-blur: 32px; }
     @media (-moz-pref("zen.nocturne.material.hub.blur", 40)) { --nocturne-hub-blur: 40px; }
-    --nocturne-hub-paint: color-mix(in srgb, var(--nocturne-glass-tint) var(--nocturne-hub-opacity), transparent);
+    --nocturne-hub-paint: color-mix(in srgb, var(--nocturne-hub-tint) var(--nocturne-hub-opacity), transparent);
     --nocturne-downloads-opacity: var(--nocturne-glass-opacity);
     @media (-moz-pref("zen.nocturne.material.downloads.opacity", 0)) { --nocturne-downloads-opacity: 0%; }
     @media (-moz-pref("zen.nocturne.material.downloads.opacity", 10)) { --nocturne-downloads-opacity: 10%; }
@@ -140,7 +294,7 @@
     @media (-moz-pref("zen.nocturne.material.downloads.blur", 24)) { --nocturne-downloads-blur: 24px; }
     @media (-moz-pref("zen.nocturne.material.downloads.blur", 32)) { --nocturne-downloads-blur: 32px; }
     @media (-moz-pref("zen.nocturne.material.downloads.blur", 40)) { --nocturne-downloads-blur: 40px; }
-    --nocturne-downloads-paint: color-mix(in srgb, var(--nocturne-glass-tint) var(--nocturne-downloads-opacity), transparent);
+    --nocturne-downloads-paint: color-mix(in srgb, var(--nocturne-downloads-tint) var(--nocturne-downloads-opacity), transparent);
     --nocturne-library-opacity: var(--nocturne-glass-opacity);
     @media (-moz-pref("zen.nocturne.material.library.opacity", 0)) { --nocturne-library-opacity: 0%; }
     @media (-moz-pref("zen.nocturne.material.library.opacity", 10)) { --nocturne-library-opacity: 10%; }
@@ -161,7 +315,7 @@
     @media (-moz-pref("zen.nocturne.material.library.blur", 24)) { --nocturne-library-blur: 24px; }
     @media (-moz-pref("zen.nocturne.material.library.blur", 32)) { --nocturne-library-blur: 32px; }
     @media (-moz-pref("zen.nocturne.material.library.blur", 40)) { --nocturne-library-blur: 40px; }
-    --nocturne-library-paint: color-mix(in srgb, var(--nocturne-glass-tint) var(--nocturne-library-opacity), transparent);
+    --nocturne-library-paint: color-mix(in srgb, var(--nocturne-library-tint) var(--nocturne-library-opacity), transparent);
     @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
       --nocturne-library-opacity: 100%;
       --nocturne-library-blur: 0px;
@@ -175,6 +329,21 @@
       --nocturne-home-search-blur: 0px;
     }
     @media (forced-colors: active) {
+      --nocturne-glass-foreground: CanvasText;
+      --nocturne-top-plane-tint: Canvas;
+      --nocturne-address-tint: Canvas;
+      --nocturne-address-border: CanvasText;
+      --nocturne-home-search-tint: Canvas;
+      --nocturne-home-search-border: CanvasText;
+      --nocturne-hub-tint: Canvas;
+      --nocturne-hub-border: CanvasText;
+      --nocturne-hub-shadow: none;
+      --nocturne-downloads-tint: Canvas;
+      --nocturne-downloads-border: CanvasText;
+      --nocturne-downloads-shadow: none;
+      --nocturne-library-tint: Canvas;
+      --nocturne-library-border: CanvasText;
+      --nocturne-library-shadow: none;
       --nocturne-library-paint: Canvas;
       --nocturne-hub-paint: Canvas;
       --nocturne-downloads-paint: Canvas;
@@ -229,7 +398,7 @@
     --op-tab-open: 180px;
     --op-url: 180px;
     --op-url-expanded-width: calc(100vw - 220px);
-    --op-url-radius: var(--nocturne-glass-radius, 12px);
+    --op-url-radius: var(--nocturne-address-radius, 12px);
     --op-url-header-height: calc(var(--op-height) - 4px);
     --op-url-compact-width: var(--op-url);
     --op-url-surface: var(--nocturne-address-paint, light-dark(#e0e4ec, #30343e));
@@ -480,7 +649,7 @@
       transform: none !important;
       animation: none !important;
       transition: none !important;
-      box-shadow: inset 0 0 0 1px var(--nocturne-glass-border, transparent) !important;
+      box-shadow: inset 0 0 0 1px var(--nocturne-address-border, transparent) !important;
       /* The compact control sits on the already blurred top plane. */
       backdrop-filter: none !important;
       overflow: clip !important;
@@ -681,7 +850,7 @@
       /* The translating security control must still occlude the text
          beneath it during the existing fluid wave. Keep a solid local
          cover until its motion contract is migrated. */
-      background-color: var(--nocturne-glass-tint, light-dark(#e0e4ec, #30343e)) !important;
+      background-color: var(--nocturne-address-tint, light-dark(#e0e4ec, #30343e)) !important;
       position:relative;
       z-index:2;
     }
@@ -708,7 +877,7 @@
       display:none!important;position:absolute;inset:2px 0;z-index:2;
       align-items:center;justify-content:center;appearance:none;
       border:0;border-radius:var(--op-url-radius);background:var(--op-url-surface);
-      box-shadow:inset 0 0 0 1px var(--nocturne-glass-border,transparent);
+      box-shadow:inset 0 0 0 1px var(--nocturne-address-border,transparent);
       color:inherit;cursor:pointer;-moz-window-dragging:no-drag;
     }
     #urlbar-container[data-op-address-icon]:not([data-op-empty],[data-op-home]):not(:has(#urlbar:is([focused],[open],[breakout-extend],[zen-floating-urlbar],:popover-open))) > #oneplane-compact-search {
@@ -1783,7 +1952,7 @@
       @media (-moz-pref("zen.nocturne.material.top-plane.blur", 24)) { --nocturne-surface-blur: 24px; }
       @media (-moz-pref("zen.nocturne.material.top-plane.blur", 32)) { --nocturne-surface-blur: 32px; }
       @media (-moz-pref("zen.nocturne.material.top-plane.blur", 40)) { --nocturne-surface-blur: 40px; }
-      --op-surface-paint: color-mix(in srgb, var(--nocturne-glass-tint) var(--nocturne-surface-opacity), transparent);
+      --op-surface-paint: color-mix(in srgb, var(--nocturne-top-plane-tint) var(--nocturne-surface-opacity), transparent);
       backdrop-filter: blur(var(--nocturne-surface-blur)) !important;
       mask-image: var(--op-contour-mask, linear-gradient(to bottom, black 0%, black 55%, transparent 100%)) !important;
     }
@@ -1893,7 +2062,7 @@
       #zen-appcontent-navbar-wrapper > #oneplane-toolbar-surface[data-op-material-flat] {
         --nocturne-surface-opacity: 100%;
         --nocturne-surface-blur: 0px;
-        --op-surface-paint: var(--nocturne-glass-tint);
+        --op-surface-paint: var(--nocturne-top-plane-tint);
         mask-image: none !important;
         height: max(100%, var(--op-measured-toolbar-height, var(--op-height))) !important;
         backdrop-filter: none !important;
@@ -2163,17 +2332,17 @@
   position:fixed !important;
   inset:var(--op-hub-top,40px) auto auto var(--op-hub-left,4px) !important;
   margin:0 !important; padding:0 !important; border:0 !important;
-  border-radius:var(--nocturne-glass-radius,12px) !important;
-  clip-path:inset(0 0 0% 0 round var(--nocturne-glass-radius,12px));
+  border-radius:var(--nocturne-hub-radius,12px) !important;
+  clip-path:inset(0 0 0% 0 round var(--nocturne-hub-radius,12px));
   width:var(--op-hub-width,250px) !important;
   max-width:calc(100vw - 8px) !important;
   max-height:calc(100vh - var(--op-hub-top,40px) - 8px) !important;
   box-sizing:border-box !important;
-  --op-hub-bg:var(--nocturne-glass-tint,Canvas);
+  --op-hub-bg:var(--nocturne-hub-tint,Canvas);
   background:var(--nocturne-hub-paint,var(--op-hub-bg)) !important;
   color:var(--nocturne-glass-foreground,CanvasText) !important;
   backdrop-filter:blur(var(--nocturne-hub-blur,0px)) !important;
-  box-shadow:inset 0 0 0 1px var(--nocturne-glass-border,transparent),var(--nocturne-glass-shadow,0 8px 24px #0003);
+  box-shadow:inset 0 0 0 1px var(--nocturne-hub-border,transparent),var(--nocturne-hub-shadow,0 8px 24px #0003);
   overflow:auto !important;
   pointer-events:auto !important;
   -moz-window-dragging:no-drag !important;
@@ -2318,13 +2487,13 @@
 #nocturne-library-preview :is(.nl-glass,.nl-panel){
   position:relative;grid-area:1/1;
   box-sizing:border-box;width:min(960px,calc(100% - 40px));height:min(740px,calc(100% - 40px));
-  min-width:0;min-height:0;border-radius:var(--nocturne-glass-radius,12px);
+  min-width:0;min-height:0;border-radius:var(--nocturne-library-radius,12px);
 }
 #nocturne-library-preview .nl-glass{
   pointer-events:none;opacity:1;
   /* Only the stationary decorative sibling owns tint and blur. */
   background:var(--nocturne-library-paint,Canvas);backdrop-filter:blur(var(--nocturne-library-blur,0px));
-  border:1px solid var(--nocturne-glass-border,transparent);box-shadow:var(--nocturne-glass-shadow,0 8px 24px #0003);
+  border:1px solid var(--nocturne-library-border,transparent);box-shadow:var(--nocturne-library-shadow,0 8px 24px #0003);
 }
 #nocturne-library-preview .nl-panel{
   display:flex;flex-direction:column;gap:14px;
@@ -2353,9 +2522,9 @@
 #nocturne-library-preview .nl-body{flex:1;min-height:0;min-width:0;box-sizing:border-box;overflow:auto;overscroll-behavior:contain;scrollbar-width:none;padding-inline-end:14px;}
 #nocturne-library-preview .nl-history-filter{
   position:absolute;inset:0 14px auto 0;z-index:2;max-height:100%;box-sizing:border-box;overflow:auto;
-  display:flex;flex-direction:column;gap:12px;padding:14px;border:1px solid var(--nocturne-glass-border,transparent);
+  display:flex;flex-direction:column;gap:12px;padding:14px;border:1px solid var(--nocturne-library-border,transparent);
   /* The drawer covers live rows, so use the solid tint, not another glass. */
-  border-radius:var(--nocturne-glass-radius,12px);background:var(--nocturne-glass-tint,Canvas);color:inherit;box-shadow:var(--nocturne-glass-shadow,0 8px 24px #0003);
+  border-radius:var(--nocturne-library-radius,12px);background:var(--nocturne-library-tint,Canvas);color:inherit;box-shadow:var(--nocturne-library-shadow,0 8px 24px #0003);
   opacity:0;transform:translateY(-10px);visibility:hidden;pointer-events:none;
   transition:opacity 300ms cubic-bezier(.22,.72,.2,1),transform 360ms cubic-bezier(.22,.72,.2,1),visibility 0s 360ms;
 }
@@ -2591,7 +2760,7 @@
 #zr-download-outside[data-open] { visibility:visible;pointer-events:auto !important; }
 #zr-download-dock {
   --zr-download-fg:var(--nocturne-glass-foreground,CanvasText);
-  --zr-download-outline:var(--nocturne-glass-border,transparent);
+  --zr-download-outline:var(--nocturne-downloads-border,transparent);
   --zr-download-row:var(--nocturne-glass-control-fill,transparent);
   position:fixed !important;left:0 !important;top:0 !important;
   translate:var(--zr-overlay-x,6px) var(--zr-overlay-y,8px);
@@ -2600,8 +2769,8 @@
   width:var(--zr-overlay-width,430px);
   max-height:calc(100vh - var(--zr-overlay-y,8px) - 12px);
   padding:12px;gap:10px;
-  border:1px solid var(--zr-download-outline);border-radius:12px;
-  box-shadow:var(--nocturne-glass-shadow,0 8px 24px #0003);
+  border:1px solid var(--zr-download-outline);border-radius:var(--nocturne-downloads-radius,12px);
+  box-shadow:var(--nocturne-downloads-shadow,0 8px 24px #0003);
   opacity:0;visibility:hidden;pointer-events:none;
 }
 #zr-download-dock[data-full] { height:calc(100vh - var(--zr-overlay-y,8px) - 12px); }
@@ -2628,7 +2797,7 @@
    same border, paint, padding and dimensions before and after motion.
    The resting clip also avoids a shadow appearing only on the last frame. */
 #zr-download-dock[data-side="top"] {
-  clip-path:inset(0px round 12px);
+  clip-path:inset(0px round var(--nocturne-downloads-radius,12px));
   box-shadow:none;
   overflow:hidden;
 }

@@ -1,6 +1,6 @@
 // Nocturne preview.45: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="downloads.script",data={version:"0.3.0-preview.216"};
+  const event="downloads.script",data={version:"0.3.0-preview.217"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -197,19 +197,20 @@ try{if(typeof window!=="undefined"){
     return `path("${d}")`;
   }
   const WAVE_EXTENSION=32;
-  function panelGeometry(r,width,height,x,y){
+  function panelGeometry(r,width,height,x,y,radius=12){
     if(r.hosted){
       // Rotate the canonical contour within the RESTING border box.
       // The hosted seed sits just inside the top edge below the icon.
       // Unlike a sidebar, the toolbar must never be painted over.
       const seedX=clamp(r.x-x,Math.min(1,width/2),Math.max(width/2,width-1));
       const depth=Math.min(6,height/2),edge=height-depth;
-      const g=sideWaveGeometry({side:"top",edge,x:edge,y:seedX},height,width,0,0);
+      const g=sideWaveGeometry({side:"top",edge,x:edge,y:seedX},height,width,0,0,radius);
       return {...g,x,y,width,height,orientation:"top"};
     }
-    return sideWaveGeometry(r,width,height,x,y);
+    return sideWaveGeometry(r,width,height,x,y,radius);
   }
-  function sideWaveGeometry(r,width,height,x,y){
+  function sideWaveGeometry(r,width,height,x,y,radius=12){
+    radius=Number.isFinite(radius)?Math.max(0,Math.min(radius,width/2,height/2)):12;
     // The animated border box really includes the bridge to the sidebar.
     // Coordinates are measured from the far edge of the resting panel.
     // No translating a clipped rectangle through the gap.
@@ -219,7 +220,7 @@ try{if(typeof window!=="undefined"){
     const cy=clamp(r.y-y,1,Math.max(1,height-1));
     const strip=Math.min(12,cy,Math.max(0,height-cy));
     const bridge=Math.min(extent,anchor+12);
-    const at="translate(0px,0px)",full="inset(0px 0px 0px 0px round 12px)";
+    const at="translate(0px,0px)",full="inset(0px 0px 0px 0px round "+radius+"px)";
     const dot=(p,rad,opacity)=>{
       const radius=Math.min(rad,cy,Math.max(.001,height-cy),Math.max(.001,extent-anchor));
       return [p,anchor-radius,anchor+radius,cy-radius,cy-radius,cy+radius,cy+radius,radius,radius,opacity];
@@ -235,14 +236,14 @@ try{if(typeof window!=="undefined"){
       [.55,0,bridge,0,Math.max(0,cy-strip)*.5,Math.max(cy+strip,height*.365),Math.max(cy+strip,height*.10),12,12,1],
       [.72,0,bridge,0,0,Math.max(cy+strip,height*.80),Math.max(cy+strip,height*.288),12,12,1],
       [.87,0,bridge,0,0,height,Math.max(cy+strip,height*.78),12,12,1],
-      [.94,0,bridge,0,0,height,height,12,12,1],
-      [1,0,width,0,0,height,height,12,12,1]
+      [.94,0,bridge,0,0,height,height,radius,radius,1],
+      [1,0,width,0,0,height,height,radius,radius,1]
     ];
     const frames=points.map(([offset,l,rightEdge,tl,tr,bl,br,rl,rr,opacity])=>({
       offset,clipPath:wavePath(extent,r.side,l,rightEdge,tl,tr,Math.min(height,bl),Math.min(height,br),rl,rr),
       transform:at,opacity,easing:"cubic-bezier(.42,0,.58,1)"
     }));
-    return {frames,at,full,x,y,width,height,extent,anchor,bridge};
+    return {frames,at,full,x,y,width,height,extent,anchor,bridge,radius};
   }
   function reverseWave(frames,progress=1){
     // Reverse the exact same contour and displacement, not a different
@@ -281,7 +282,9 @@ try{if(typeof window!=="undefined"){
     if(!following||!dockHeight)dockHeight=dock.offsetHeight||Math.max(1,h-y-12);
     setVar(dockBackdrop,"--zr-outside-left",(hosted||right?0:Math.max(0,r.edge))+"px");
     setVar(dockBackdrop,"--zr-outside-right",(!hosted&&right?Math.max(0,w-r.edge):0)+"px");
-    return following?undefined:panelGeometry({...r,hosted},width,dockHeight,x,y);
+    if(following)return;
+    const radius=parseFloat(window.getComputedStyle(dock).borderTopLeftRadius);
+    return panelGeometry({...r,hosted},width,dockHeight,x,y,radius);
   }
   function cancelPanel(){
     ++panelToken;entering=false;
@@ -559,7 +562,7 @@ try{if(typeof window!=="undefined"){
       // restarting the entrance or changing the shared top/width.
       const bottom=Math.max(0,g.height-before.height);
       animatePanel([
-        {clipPath:`inset(0px 0px ${bottom}px 0px round 12px)`,transform:g.at,opacity:1,offset:0,easing:"cubic-bezier(.3,.7,.2,1)"},
+        {clipPath:`inset(0px 0px ${bottom}px 0px round ${g.radius}px)`,transform:g.at,opacity:1,offset:0,easing:"cubic-bezier(.3,.7,.2,1)"},
         {clipPath:g.full,transform:g.at,opacity:1,offset:1}
       ],420);
       const shift=before.listY-dockList.getBoundingClientRect().top;

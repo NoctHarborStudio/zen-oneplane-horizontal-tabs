@@ -13,13 +13,13 @@
 #nocturne-library-preview :is(.nl-glass,.nl-panel){
   position:relative;grid-area:1/1;
   box-sizing:border-box;width:min(960px,calc(100% - 40px));height:min(740px,calc(100% - 40px));
-  min-width:0;min-height:0;border-radius:var(--nocturne-glass-radius,12px);
+  min-width:0;min-height:0;border-radius:var(--nocturne-library-radius,12px);
 }
 #nocturne-library-preview .nl-glass{
   pointer-events:none;opacity:1;
   /* Only the stationary decorative sibling owns tint and blur. */
   background:var(--nocturne-library-paint,Canvas);backdrop-filter:blur(var(--nocturne-library-blur,0px));
-  border:1px solid var(--nocturne-glass-border,transparent);box-shadow:var(--nocturne-glass-shadow,0 8px 24px #0003);
+  border:1px solid var(--nocturne-library-border,transparent);box-shadow:var(--nocturne-library-shadow,0 8px 24px #0003);
 }
 #nocturne-library-preview .nl-panel{
   display:flex;flex-direction:column;gap:14px;
@@ -48,9 +48,9 @@
 #nocturne-library-preview .nl-body{flex:1;min-height:0;min-width:0;box-sizing:border-box;overflow:auto;overscroll-behavior:contain;scrollbar-width:none;padding-inline-end:14px;}
 #nocturne-library-preview .nl-history-filter{
   position:absolute;inset:0 14px auto 0;z-index:2;max-height:100%;box-sizing:border-box;overflow:auto;
-  display:flex;flex-direction:column;gap:12px;padding:14px;border:1px solid var(--nocturne-glass-border,transparent);
+  display:flex;flex-direction:column;gap:12px;padding:14px;border:1px solid var(--nocturne-library-border,transparent);
   /* The drawer covers live rows, so use the solid tint, not another glass. */
-  border-radius:var(--nocturne-glass-radius,12px);background:var(--nocturne-glass-tint,Canvas);color:inherit;box-shadow:var(--nocturne-glass-shadow,0 8px 24px #0003);
+  border-radius:var(--nocturne-library-radius,12px);background:var(--nocturne-library-tint,Canvas);color:inherit;box-shadow:var(--nocturne-library-shadow,0 8px 24px #0003);
   opacity:0;transform:translateY(-10px);visibility:hidden;pointer-events:none;
   transition:opacity 300ms cubic-bezier(.22,.72,.2,1),transform 360ms cubic-bezier(.22,.72,.2,1),visibility 0s 360ms;
 }

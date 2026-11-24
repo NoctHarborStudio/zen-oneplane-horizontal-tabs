@@ -1,3 +1,7 @@
+## 0.3.0-preview.217 — Global and local Glass settings (DS-M4/M5/M6)
+
+Add theme-adaptive tint presets, corner radius, outline and shadow strengths with independent per-property role inheritance wherever those treatments apply. Keep flat top-plane geometry and search clipping semantics. Downloads wave terminal corners and compact-to-full reveal use the resolved resting radius; address motion accepts an explicit zero radius. Preserve forced-colors fallback and native data/motion timing. Native visual acceptance pending.
+
 ## 0.3.0-preview.216 — Recover verified flat strip placement (ML1b-R)
 
 Recover detached mirror units from the complete existing order, not the filtered DOM. Verify flat and centered control flags and reuse one flat placement path for mode changes and geometry recovery. Retain existing Automatic allocation, native data and Elastic Chain. Native acceptance pending.

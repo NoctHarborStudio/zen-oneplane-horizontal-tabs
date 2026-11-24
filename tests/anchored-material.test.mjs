@@ -12,7 +12,7 @@ test("anchored panels inherit each property and allow zero overrides",()=>{
   for(const o of pref.options.filter(x=>x.value!==-1))assert.ok(base.includes('(-moz-pref("'+key+'", '+o.value+')) { '+token+': '+o.value+unit+'; }'));
  }
  for(const role of ["hub","downloads"]){
-  assert.ok(base.includes("var(--nocturne-glass-tint) var(--nocturne-"+role+"-opacity)"));
+  assert.ok(base.includes("var(--nocturne-"+role+"-tint) var(--nocturne-"+role+"-opacity)"));
   assert.ok(base.includes("--nocturne-"+role+"-opacity: 100%"));
   assert.ok(base.includes("--nocturne-"+role+"-blur: 0px"));
   assert.ok(base.includes("--nocturne-"+role+"-paint: Canvas"));
@@ -22,7 +22,7 @@ test("Hub resolves material in CSS and clip uses the actual resting radius",()=>
  const controller=read("src/hub/controller.js.part");
  assert.ok(hub.includes("background:var(--nocturne-hub-paint,var(--op-hub-bg))"));
  assert.ok(hub.includes("backdrop-filter:blur(var(--nocturne-hub-blur,0px))"));
- assert.ok(hub.includes("round var(--nocturne-glass-radius,12px)"));
+ assert.ok(hub.includes("round var(--nocturne-hub-radius,12px)"));
  assert.ok(controller.includes('const radius=computed.borderTopLeftRadius||"12px"'));
  assert.ok(!controller.includes('panel.style.setProperty("--op-hub-bg"'));
  assert.ok(!controller.includes('panel.style.setProperty("--op-hub-fg"'));

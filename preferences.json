@@ -970,6 +970,808 @@
     ]
   },
   {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.tint",
+    "label": "Glass — global tint",
+    "value": "number",
+    "defaultValue": 0,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Adaptive",
+        "value": 0
+      },
+      {
+        "label": "Cool",
+        "value": 1
+      },
+      {
+        "label": "Warm",
+        "value": 2
+      },
+      {
+        "label": "Neutral",
+        "value": 3
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.radius",
+    "label": "Glass — global radius",
+    "value": "number",
+    "defaultValue": 12,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "0px",
+        "value": 0
+      },
+      {
+        "label": "4px",
+        "value": 4
+      },
+      {
+        "label": "8px",
+        "value": 8
+      },
+      {
+        "label": "12px",
+        "value": 12
+      },
+      {
+        "label": "16px",
+        "value": 16
+      },
+      {
+        "label": "20px",
+        "value": 20
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.border",
+    "label": "Glass — global border",
+    "value": "number",
+    "defaultValue": 12,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "0%",
+        "value": 0
+      },
+      {
+        "label": "6%",
+        "value": 6
+      },
+      {
+        "label": "12%",
+        "value": 12
+      },
+      {
+        "label": "18%",
+        "value": 18
+      },
+      {
+        "label": "24%",
+        "value": 24
+      },
+      {
+        "label": "36%",
+        "value": 36
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.shadow",
+    "label": "Glass — global shadow",
+    "value": "number",
+    "defaultValue": 20,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "0%",
+        "value": 0
+      },
+      {
+        "label": "10%",
+        "value": 10
+      },
+      {
+        "label": "20%",
+        "value": 20
+      },
+      {
+        "label": "30%",
+        "value": 30
+      },
+      {
+        "label": "40%",
+        "value": 40
+      },
+      {
+        "label": "50%",
+        "value": 50
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.top-plane.tint",
+    "label": "Glass — top-plane tint override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "Adaptive",
+        "value": 0
+      },
+      {
+        "label": "Cool",
+        "value": 1
+      },
+      {
+        "label": "Warm",
+        "value": 2
+      },
+      {
+        "label": "Neutral",
+        "value": 3
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.address.tint",
+    "label": "Glass — address tint override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "Adaptive",
+        "value": 0
+      },
+      {
+        "label": "Cool",
+        "value": 1
+      },
+      {
+        "label": "Warm",
+        "value": 2
+      },
+      {
+        "label": "Neutral",
+        "value": 3
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.address.radius",
+    "label": "Glass — address radius override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "0px",
+        "value": 0
+      },
+      {
+        "label": "4px",
+        "value": 4
+      },
+      {
+        "label": "8px",
+        "value": 8
+      },
+      {
+        "label": "12px",
+        "value": 12
+      },
+      {
+        "label": "16px",
+        "value": 16
+      },
+      {
+        "label": "20px",
+        "value": 20
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.address.border",
+    "label": "Glass — address border override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "0%",
+        "value": 0
+      },
+      {
+        "label": "6%",
+        "value": 6
+      },
+      {
+        "label": "12%",
+        "value": 12
+      },
+      {
+        "label": "18%",
+        "value": 18
+      },
+      {
+        "label": "24%",
+        "value": 24
+      },
+      {
+        "label": "36%",
+        "value": 36
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.home-search.tint",
+    "label": "Glass — home-search tint override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "Adaptive",
+        "value": 0
+      },
+      {
+        "label": "Cool",
+        "value": 1
+      },
+      {
+        "label": "Warm",
+        "value": 2
+      },
+      {
+        "label": "Neutral",
+        "value": 3
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.home-search.radius",
+    "label": "Glass — home-search radius override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "0px",
+        "value": 0
+      },
+      {
+        "label": "4px",
+        "value": 4
+      },
+      {
+        "label": "8px",
+        "value": 8
+      },
+      {
+        "label": "12px",
+        "value": 12
+      },
+      {
+        "label": "16px",
+        "value": 16
+      },
+      {
+        "label": "20px",
+        "value": 20
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.home-search.border",
+    "label": "Glass — home-search border override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "0%",
+        "value": 0
+      },
+      {
+        "label": "6%",
+        "value": 6
+      },
+      {
+        "label": "12%",
+        "value": 12
+      },
+      {
+        "label": "18%",
+        "value": 18
+      },
+      {
+        "label": "24%",
+        "value": 24
+      },
+      {
+        "label": "36%",
+        "value": 36
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.hub.tint",
+    "label": "Glass — hub tint override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "Adaptive",
+        "value": 0
+      },
+      {
+        "label": "Cool",
+        "value": 1
+      },
+      {
+        "label": "Warm",
+        "value": 2
+      },
+      {
+        "label": "Neutral",
+        "value": 3
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.hub.radius",
+    "label": "Glass — hub radius override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "0px",
+        "value": 0
+      },
+      {
+        "label": "4px",
+        "value": 4
+      },
+      {
+        "label": "8px",
+        "value": 8
+      },
+      {
+        "label": "12px",
+        "value": 12
+      },
+      {
+        "label": "16px",
+        "value": 16
+      },
+      {
+        "label": "20px",
+        "value": 20
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.hub.border",
+    "label": "Glass — hub border override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "0%",
+        "value": 0
+      },
+      {
+        "label": "6%",
+        "value": 6
+      },
+      {
+        "label": "12%",
+        "value": 12
+      },
+      {
+        "label": "18%",
+        "value": 18
+      },
+      {
+        "label": "24%",
+        "value": 24
+      },
+      {
+        "label": "36%",
+        "value": 36
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.hub.shadow",
+    "label": "Glass — hub shadow override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "0%",
+        "value": 0
+      },
+      {
+        "label": "10%",
+        "value": 10
+      },
+      {
+        "label": "20%",
+        "value": 20
+      },
+      {
+        "label": "30%",
+        "value": 30
+      },
+      {
+        "label": "40%",
+        "value": 40
+      },
+      {
+        "label": "50%",
+        "value": 50
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.downloads.tint",
+    "label": "Glass — downloads tint override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "Adaptive",
+        "value": 0
+      },
+      {
+        "label": "Cool",
+        "value": 1
+      },
+      {
+        "label": "Warm",
+        "value": 2
+      },
+      {
+        "label": "Neutral",
+        "value": 3
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.downloads.radius",
+    "label": "Glass — downloads radius override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "0px",
+        "value": 0
+      },
+      {
+        "label": "4px",
+        "value": 4
+      },
+      {
+        "label": "8px",
+        "value": 8
+      },
+      {
+        "label": "12px",
+        "value": 12
+      },
+      {
+        "label": "16px",
+        "value": 16
+      },
+      {
+        "label": "20px",
+        "value": 20
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.downloads.border",
+    "label": "Glass — downloads border override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "0%",
+        "value": 0
+      },
+      {
+        "label": "6%",
+        "value": 6
+      },
+      {
+        "label": "12%",
+        "value": 12
+      },
+      {
+        "label": "18%",
+        "value": 18
+      },
+      {
+        "label": "24%",
+        "value": 24
+      },
+      {
+        "label": "36%",
+        "value": 36
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.downloads.shadow",
+    "label": "Glass — downloads shadow override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "0%",
+        "value": 0
+      },
+      {
+        "label": "10%",
+        "value": 10
+      },
+      {
+        "label": "20%",
+        "value": 20
+      },
+      {
+        "label": "30%",
+        "value": 30
+      },
+      {
+        "label": "40%",
+        "value": 40
+      },
+      {
+        "label": "50%",
+        "value": 50
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.library.tint",
+    "label": "Glass — library tint override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "Adaptive",
+        "value": 0
+      },
+      {
+        "label": "Cool",
+        "value": 1
+      },
+      {
+        "label": "Warm",
+        "value": 2
+      },
+      {
+        "label": "Neutral",
+        "value": 3
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.library.radius",
+    "label": "Glass — library radius override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "0px",
+        "value": 0
+      },
+      {
+        "label": "4px",
+        "value": 4
+      },
+      {
+        "label": "8px",
+        "value": 8
+      },
+      {
+        "label": "12px",
+        "value": 12
+      },
+      {
+        "label": "16px",
+        "value": 16
+      },
+      {
+        "label": "20px",
+        "value": 20
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.library.border",
+    "label": "Glass — library border override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "0%",
+        "value": 0
+      },
+      {
+        "label": "6%",
+        "value": 6
+      },
+      {
+        "label": "12%",
+        "value": 12
+      },
+      {
+        "label": "18%",
+        "value": 18
+      },
+      {
+        "label": "24%",
+        "value": 24
+      },
+      {
+        "label": "36%",
+        "value": 36
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.library.shadow",
+    "label": "Glass — library shadow override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "0%",
+        "value": 0
+      },
+      {
+        "label": "10%",
+        "value": 10
+      },
+      {
+        "label": "20%",
+        "value": 20
+      },
+      {
+        "label": "30%",
+        "value": 30
+      },
+      {
+        "label": "40%",
+        "value": 40
+      },
+      {
+        "label": "50%",
+        "value": 50
+      }
+    ]
+  },
+  {
     "type": "checkbox",
     "property": "zen.nocturne.material.legacy-toolbar",
     "label": "Use legacy shaped toolbar background (restart required)",

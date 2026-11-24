@@ -143,7 +143,7 @@ test("hosted wave keeps a single resting box and surface in every state",()=>{
  const css=readFileSync(new URL("../src/styles/refined-features.css.part",import.meta.url),"utf8");
  assert.ok(css.includes('#zr-download-dock:is([data-entering],[data-closing]):not([data-side="top"]) {'));
  assert.ok(css.includes('#zr-download-dock:is([data-entering],[data-closing]):not([data-side="top"])::before {'));
- assert.ok(css.includes('#zr-download-dock[data-side="top"] {\n  clip-path:inset(0px round 12px);'));
+ assert.ok(css.includes('#zr-download-dock[data-side="top"] {\n  clip-path:inset(0px round var(--nocturne-downloads-radius,12px));'));
  assert.ok(!css.includes('[data-side="top"] {\n  width:var(--zr-overlay-width,430px);'));
  assert.ok(!css.includes('padding-top:calc(12px + var(--zr-wave-extension,32px))'));
  assert.ok(source.includes('const orientation=hosted?"top":r.side;'));

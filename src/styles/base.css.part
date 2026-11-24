@@ -35,8 +35,10 @@
     --nocturne-glass-opacity: 70%;
     --nocturne-glass-blur: 24px;
     --nocturne-glass-radius: 12px;
-    --nocturne-glass-border: color-mix(in srgb, currentColor 12%, transparent);
-    --nocturne-glass-shadow: 0 8px 24px #0003;
+    --nocturne-glass-border-strength: 12%;
+    --nocturne-glass-shadow-strength: 20%;
+    --nocturne-glass-border: color-mix(in srgb, currentColor var(--nocturne-glass-border-strength), transparent);
+    --nocturne-glass-shadow: 0 8px 24px rgb(0 0 0 / var(--nocturne-glass-shadow-strength));
     --nocturne-glass-foreground: var(--toolbar-color, CanvasText);
     --nocturne-glass-control-fill: color-mix(in srgb, currentColor 8%, transparent);
     @media (-moz-pref("zen.nocturne.material.opacity", 0)) { --nocturne-glass-opacity: 0%; }
@@ -57,6 +59,158 @@
     @media (-moz-pref("zen.nocturne.material.blur", 24)) { --nocturne-glass-blur: 24px; }
     @media (-moz-pref("zen.nocturne.material.blur", 32)) { --nocturne-glass-blur: 32px; }
     @media (-moz-pref("zen.nocturne.material.blur", 40)) { --nocturne-glass-blur: 40px; }
+    /* Each property inherits independently. A missing or -1 local value has no media override. */
+    @media (-moz-pref("zen.nocturne.material.tint", 0)) { --nocturne-glass-tint: light-dark(#f4f5f9, #15171e); }
+    @media (-moz-pref("zen.nocturne.material.tint", 1)) { --nocturne-glass-tint: light-dark(#edf2fb, #151d2c); }
+    @media (-moz-pref("zen.nocturne.material.tint", 2)) { --nocturne-glass-tint: light-dark(#faf3e9, #261d18); }
+    @media (-moz-pref("zen.nocturne.material.tint", 3)) { --nocturne-glass-tint: light-dark(#f5f5f5, #1b1b1b); }
+    @media (-moz-pref("zen.nocturne.material.radius", 0)) { --nocturne-glass-radius: 0px; }
+    @media (-moz-pref("zen.nocturne.material.radius", 4)) { --nocturne-glass-radius: 4px; }
+    @media (-moz-pref("zen.nocturne.material.radius", 8)) { --nocturne-glass-radius: 8px; }
+    @media (-moz-pref("zen.nocturne.material.radius", 12)) { --nocturne-glass-radius: 12px; }
+    @media (-moz-pref("zen.nocturne.material.radius", 16)) { --nocturne-glass-radius: 16px; }
+    @media (-moz-pref("zen.nocturne.material.radius", 20)) { --nocturne-glass-radius: 20px; }
+    @media (-moz-pref("zen.nocturne.material.border", 0)) { --nocturne-glass-border-strength: 0%; }
+    @media (-moz-pref("zen.nocturne.material.border", 6)) { --nocturne-glass-border-strength: 6%; }
+    @media (-moz-pref("zen.nocturne.material.border", 12)) { --nocturne-glass-border-strength: 12%; }
+    @media (-moz-pref("zen.nocturne.material.border", 18)) { --nocturne-glass-border-strength: 18%; }
+    @media (-moz-pref("zen.nocturne.material.border", 24)) { --nocturne-glass-border-strength: 24%; }
+    @media (-moz-pref("zen.nocturne.material.border", 36)) { --nocturne-glass-border-strength: 36%; }
+    @media (-moz-pref("zen.nocturne.material.shadow", 0)) { --nocturne-glass-shadow-strength: 0%; }
+    @media (-moz-pref("zen.nocturne.material.shadow", 10)) { --nocturne-glass-shadow-strength: 10%; }
+    @media (-moz-pref("zen.nocturne.material.shadow", 20)) { --nocturne-glass-shadow-strength: 20%; }
+    @media (-moz-pref("zen.nocturne.material.shadow", 30)) { --nocturne-glass-shadow-strength: 30%; }
+    @media (-moz-pref("zen.nocturne.material.shadow", 40)) { --nocturne-glass-shadow-strength: 40%; }
+    @media (-moz-pref("zen.nocturne.material.shadow", 50)) { --nocturne-glass-shadow-strength: 50%; }
+    --nocturne-top-plane-tint: var(--nocturne-glass-tint);
+    @media (-moz-pref("zen.nocturne.material.top-plane.tint", 0)) { --nocturne-top-plane-tint: light-dark(#f4f5f9, #15171e); }
+    @media (-moz-pref("zen.nocturne.material.top-plane.tint", 1)) { --nocturne-top-plane-tint: light-dark(#edf2fb, #151d2c); }
+    @media (-moz-pref("zen.nocturne.material.top-plane.tint", 2)) { --nocturne-top-plane-tint: light-dark(#faf3e9, #261d18); }
+    @media (-moz-pref("zen.nocturne.material.top-plane.tint", 3)) { --nocturne-top-plane-tint: light-dark(#f5f5f5, #1b1b1b); }
+    --nocturne-address-tint: var(--nocturne-glass-tint);
+    @media (-moz-pref("zen.nocturne.material.address.tint", 0)) { --nocturne-address-tint: light-dark(#f4f5f9, #15171e); }
+    @media (-moz-pref("zen.nocturne.material.address.tint", 1)) { --nocturne-address-tint: light-dark(#edf2fb, #151d2c); }
+    @media (-moz-pref("zen.nocturne.material.address.tint", 2)) { --nocturne-address-tint: light-dark(#faf3e9, #261d18); }
+    @media (-moz-pref("zen.nocturne.material.address.tint", 3)) { --nocturne-address-tint: light-dark(#f5f5f5, #1b1b1b); }
+    --nocturne-address-radius: var(--nocturne-glass-radius);
+    @media (-moz-pref("zen.nocturne.material.address.radius", 0)) { --nocturne-address-radius: 0px; }
+    @media (-moz-pref("zen.nocturne.material.address.radius", 4)) { --nocturne-address-radius: 4px; }
+    @media (-moz-pref("zen.nocturne.material.address.radius", 8)) { --nocturne-address-radius: 8px; }
+    @media (-moz-pref("zen.nocturne.material.address.radius", 12)) { --nocturne-address-radius: 12px; }
+    @media (-moz-pref("zen.nocturne.material.address.radius", 16)) { --nocturne-address-radius: 16px; }
+    @media (-moz-pref("zen.nocturne.material.address.radius", 20)) { --nocturne-address-radius: 20px; }
+    --nocturne-address-border-strength: var(--nocturne-glass-border-strength);
+    @media (-moz-pref("zen.nocturne.material.address.border", 0)) { --nocturne-address-border-strength: 0%; }
+    @media (-moz-pref("zen.nocturne.material.address.border", 6)) { --nocturne-address-border-strength: 6%; }
+    @media (-moz-pref("zen.nocturne.material.address.border", 12)) { --nocturne-address-border-strength: 12%; }
+    @media (-moz-pref("zen.nocturne.material.address.border", 18)) { --nocturne-address-border-strength: 18%; }
+    @media (-moz-pref("zen.nocturne.material.address.border", 24)) { --nocturne-address-border-strength: 24%; }
+    @media (-moz-pref("zen.nocturne.material.address.border", 36)) { --nocturne-address-border-strength: 36%; }
+    --nocturne-address-border: color-mix(in srgb, currentColor var(--nocturne-address-border-strength), transparent);
+    --nocturne-home-search-tint: var(--nocturne-glass-tint);
+    @media (-moz-pref("zen.nocturne.material.home-search.tint", 0)) { --nocturne-home-search-tint: light-dark(#f4f5f9, #15171e); }
+    @media (-moz-pref("zen.nocturne.material.home-search.tint", 1)) { --nocturne-home-search-tint: light-dark(#edf2fb, #151d2c); }
+    @media (-moz-pref("zen.nocturne.material.home-search.tint", 2)) { --nocturne-home-search-tint: light-dark(#faf3e9, #261d18); }
+    @media (-moz-pref("zen.nocturne.material.home-search.tint", 3)) { --nocturne-home-search-tint: light-dark(#f5f5f5, #1b1b1b); }
+    --nocturne-home-search-radius: var(--nocturne-glass-radius);
+    @media (-moz-pref("zen.nocturne.material.home-search.radius", 0)) { --nocturne-home-search-radius: 0px; }
+    @media (-moz-pref("zen.nocturne.material.home-search.radius", 4)) { --nocturne-home-search-radius: 4px; }
+    @media (-moz-pref("zen.nocturne.material.home-search.radius", 8)) { --nocturne-home-search-radius: 8px; }
+    @media (-moz-pref("zen.nocturne.material.home-search.radius", 12)) { --nocturne-home-search-radius: 12px; }
+    @media (-moz-pref("zen.nocturne.material.home-search.radius", 16)) { --nocturne-home-search-radius: 16px; }
+    @media (-moz-pref("zen.nocturne.material.home-search.radius", 20)) { --nocturne-home-search-radius: 20px; }
+    --nocturne-home-search-border-strength: var(--nocturne-glass-border-strength);
+    @media (-moz-pref("zen.nocturne.material.home-search.border", 0)) { --nocturne-home-search-border-strength: 0%; }
+    @media (-moz-pref("zen.nocturne.material.home-search.border", 6)) { --nocturne-home-search-border-strength: 6%; }
+    @media (-moz-pref("zen.nocturne.material.home-search.border", 12)) { --nocturne-home-search-border-strength: 12%; }
+    @media (-moz-pref("zen.nocturne.material.home-search.border", 18)) { --nocturne-home-search-border-strength: 18%; }
+    @media (-moz-pref("zen.nocturne.material.home-search.border", 24)) { --nocturne-home-search-border-strength: 24%; }
+    @media (-moz-pref("zen.nocturne.material.home-search.border", 36)) { --nocturne-home-search-border-strength: 36%; }
+    --nocturne-home-search-border: color-mix(in srgb, currentColor var(--nocturne-home-search-border-strength), transparent);
+    --nocturne-hub-tint: var(--nocturne-glass-tint);
+    @media (-moz-pref("zen.nocturne.material.hub.tint", 0)) { --nocturne-hub-tint: light-dark(#f4f5f9, #15171e); }
+    @media (-moz-pref("zen.nocturne.material.hub.tint", 1)) { --nocturne-hub-tint: light-dark(#edf2fb, #151d2c); }
+    @media (-moz-pref("zen.nocturne.material.hub.tint", 2)) { --nocturne-hub-tint: light-dark(#faf3e9, #261d18); }
+    @media (-moz-pref("zen.nocturne.material.hub.tint", 3)) { --nocturne-hub-tint: light-dark(#f5f5f5, #1b1b1b); }
+    --nocturne-hub-radius: var(--nocturne-glass-radius);
+    @media (-moz-pref("zen.nocturne.material.hub.radius", 0)) { --nocturne-hub-radius: 0px; }
+    @media (-moz-pref("zen.nocturne.material.hub.radius", 4)) { --nocturne-hub-radius: 4px; }
+    @media (-moz-pref("zen.nocturne.material.hub.radius", 8)) { --nocturne-hub-radius: 8px; }
+    @media (-moz-pref("zen.nocturne.material.hub.radius", 12)) { --nocturne-hub-radius: 12px; }
+    @media (-moz-pref("zen.nocturne.material.hub.radius", 16)) { --nocturne-hub-radius: 16px; }
+    @media (-moz-pref("zen.nocturne.material.hub.radius", 20)) { --nocturne-hub-radius: 20px; }
+    --nocturne-hub-border-strength: var(--nocturne-glass-border-strength);
+    @media (-moz-pref("zen.nocturne.material.hub.border", 0)) { --nocturne-hub-border-strength: 0%; }
+    @media (-moz-pref("zen.nocturne.material.hub.border", 6)) { --nocturne-hub-border-strength: 6%; }
+    @media (-moz-pref("zen.nocturne.material.hub.border", 12)) { --nocturne-hub-border-strength: 12%; }
+    @media (-moz-pref("zen.nocturne.material.hub.border", 18)) { --nocturne-hub-border-strength: 18%; }
+    @media (-moz-pref("zen.nocturne.material.hub.border", 24)) { --nocturne-hub-border-strength: 24%; }
+    @media (-moz-pref("zen.nocturne.material.hub.border", 36)) { --nocturne-hub-border-strength: 36%; }
+    --nocturne-hub-shadow-strength: var(--nocturne-glass-shadow-strength);
+    @media (-moz-pref("zen.nocturne.material.hub.shadow", 0)) { --nocturne-hub-shadow-strength: 0%; }
+    @media (-moz-pref("zen.nocturne.material.hub.shadow", 10)) { --nocturne-hub-shadow-strength: 10%; }
+    @media (-moz-pref("zen.nocturne.material.hub.shadow", 20)) { --nocturne-hub-shadow-strength: 20%; }
+    @media (-moz-pref("zen.nocturne.material.hub.shadow", 30)) { --nocturne-hub-shadow-strength: 30%; }
+    @media (-moz-pref("zen.nocturne.material.hub.shadow", 40)) { --nocturne-hub-shadow-strength: 40%; }
+    @media (-moz-pref("zen.nocturne.material.hub.shadow", 50)) { --nocturne-hub-shadow-strength: 50%; }
+    --nocturne-hub-border: color-mix(in srgb, currentColor var(--nocturne-hub-border-strength), transparent);
+    --nocturne-hub-shadow: 0 8px 24px rgb(0 0 0 / var(--nocturne-hub-shadow-strength));
+    --nocturne-downloads-tint: var(--nocturne-glass-tint);
+    @media (-moz-pref("zen.nocturne.material.downloads.tint", 0)) { --nocturne-downloads-tint: light-dark(#f4f5f9, #15171e); }
+    @media (-moz-pref("zen.nocturne.material.downloads.tint", 1)) { --nocturne-downloads-tint: light-dark(#edf2fb, #151d2c); }
+    @media (-moz-pref("zen.nocturne.material.downloads.tint", 2)) { --nocturne-downloads-tint: light-dark(#faf3e9, #261d18); }
+    @media (-moz-pref("zen.nocturne.material.downloads.tint", 3)) { --nocturne-downloads-tint: light-dark(#f5f5f5, #1b1b1b); }
+    --nocturne-downloads-radius: var(--nocturne-glass-radius);
+    @media (-moz-pref("zen.nocturne.material.downloads.radius", 0)) { --nocturne-downloads-radius: 0px; }
+    @media (-moz-pref("zen.nocturne.material.downloads.radius", 4)) { --nocturne-downloads-radius: 4px; }
+    @media (-moz-pref("zen.nocturne.material.downloads.radius", 8)) { --nocturne-downloads-radius: 8px; }
+    @media (-moz-pref("zen.nocturne.material.downloads.radius", 12)) { --nocturne-downloads-radius: 12px; }
+    @media (-moz-pref("zen.nocturne.material.downloads.radius", 16)) { --nocturne-downloads-radius: 16px; }
+    @media (-moz-pref("zen.nocturne.material.downloads.radius", 20)) { --nocturne-downloads-radius: 20px; }
+    --nocturne-downloads-border-strength: var(--nocturne-glass-border-strength);
+    @media (-moz-pref("zen.nocturne.material.downloads.border", 0)) { --nocturne-downloads-border-strength: 0%; }
+    @media (-moz-pref("zen.nocturne.material.downloads.border", 6)) { --nocturne-downloads-border-strength: 6%; }
+    @media (-moz-pref("zen.nocturne.material.downloads.border", 12)) { --nocturne-downloads-border-strength: 12%; }
+    @media (-moz-pref("zen.nocturne.material.downloads.border", 18)) { --nocturne-downloads-border-strength: 18%; }
+    @media (-moz-pref("zen.nocturne.material.downloads.border", 24)) { --nocturne-downloads-border-strength: 24%; }
+    @media (-moz-pref("zen.nocturne.material.downloads.border", 36)) { --nocturne-downloads-border-strength: 36%; }
+    --nocturne-downloads-shadow-strength: var(--nocturne-glass-shadow-strength);
+    @media (-moz-pref("zen.nocturne.material.downloads.shadow", 0)) { --nocturne-downloads-shadow-strength: 0%; }
+    @media (-moz-pref("zen.nocturne.material.downloads.shadow", 10)) { --nocturne-downloads-shadow-strength: 10%; }
+    @media (-moz-pref("zen.nocturne.material.downloads.shadow", 20)) { --nocturne-downloads-shadow-strength: 20%; }
+    @media (-moz-pref("zen.nocturne.material.downloads.shadow", 30)) { --nocturne-downloads-shadow-strength: 30%; }
+    @media (-moz-pref("zen.nocturne.material.downloads.shadow", 40)) { --nocturne-downloads-shadow-strength: 40%; }
+    @media (-moz-pref("zen.nocturne.material.downloads.shadow", 50)) { --nocturne-downloads-shadow-strength: 50%; }
+    --nocturne-downloads-border: color-mix(in srgb, currentColor var(--nocturne-downloads-border-strength), transparent);
+    --nocturne-downloads-shadow: 0 8px 24px rgb(0 0 0 / var(--nocturne-downloads-shadow-strength));
+    --nocturne-library-tint: var(--nocturne-glass-tint);
+    @media (-moz-pref("zen.nocturne.material.library.tint", 0)) { --nocturne-library-tint: light-dark(#f4f5f9, #15171e); }
+    @media (-moz-pref("zen.nocturne.material.library.tint", 1)) { --nocturne-library-tint: light-dark(#edf2fb, #151d2c); }
+    @media (-moz-pref("zen.nocturne.material.library.tint", 2)) { --nocturne-library-tint: light-dark(#faf3e9, #261d18); }
+    @media (-moz-pref("zen.nocturne.material.library.tint", 3)) { --nocturne-library-tint: light-dark(#f5f5f5, #1b1b1b); }
+    --nocturne-library-radius: var(--nocturne-glass-radius);
+    @media (-moz-pref("zen.nocturne.material.library.radius", 0)) { --nocturne-library-radius: 0px; }
+    @media (-moz-pref("zen.nocturne.material.library.radius", 4)) { --nocturne-library-radius: 4px; }
+    @media (-moz-pref("zen.nocturne.material.library.radius", 8)) { --nocturne-library-radius: 8px; }
+    @media (-moz-pref("zen.nocturne.material.library.radius", 12)) { --nocturne-library-radius: 12px; }
+    @media (-moz-pref("zen.nocturne.material.library.radius", 16)) { --nocturne-library-radius: 16px; }
+    @media (-moz-pref("zen.nocturne.material.library.radius", 20)) { --nocturne-library-radius: 20px; }
+    --nocturne-library-border-strength: var(--nocturne-glass-border-strength);
+    @media (-moz-pref("zen.nocturne.material.library.border", 0)) { --nocturne-library-border-strength: 0%; }
+    @media (-moz-pref("zen.nocturne.material.library.border", 6)) { --nocturne-library-border-strength: 6%; }
+    @media (-moz-pref("zen.nocturne.material.library.border", 12)) { --nocturne-library-border-strength: 12%; }
+    @media (-moz-pref("zen.nocturne.material.library.border", 18)) { --nocturne-library-border-strength: 18%; }
+    @media (-moz-pref("zen.nocturne.material.library.border", 24)) { --nocturne-library-border-strength: 24%; }
+    @media (-moz-pref("zen.nocturne.material.library.border", 36)) { --nocturne-library-border-strength: 36%; }
+    --nocturne-library-shadow-strength: var(--nocturne-glass-shadow-strength);
+    @media (-moz-pref("zen.nocturne.material.library.shadow", 0)) { --nocturne-library-shadow-strength: 0%; }
+    @media (-moz-pref("zen.nocturne.material.library.shadow", 10)) { --nocturne-library-shadow-strength: 10%; }
+    @media (-moz-pref("zen.nocturne.material.library.shadow", 20)) { --nocturne-library-shadow-strength: 20%; }
+    @media (-moz-pref("zen.nocturne.material.library.shadow", 30)) { --nocturne-library-shadow-strength: 30%; }
+    @media (-moz-pref("zen.nocturne.material.library.shadow", 40)) { --nocturne-library-shadow-strength: 40%; }
+    @media (-moz-pref("zen.nocturne.material.library.shadow", 50)) { --nocturne-library-shadow-strength: 50%; }
+    --nocturne-library-border: color-mix(in srgb, currentColor var(--nocturne-library-border-strength), transparent);
+    --nocturne-library-shadow: 0 8px 24px rgb(0 0 0 / var(--nocturne-library-shadow-strength));
     --nocturne-address-opacity: var(--nocturne-glass-opacity);
     --nocturne-address-blur: var(--nocturne-glass-blur);
     @media (-moz-pref("zen.nocturne.material.address.opacity", 0)) { --nocturne-address-opacity: 0%; }
@@ -77,7 +231,7 @@
     @media (-moz-pref("zen.nocturne.material.address.blur", 24)) { --nocturne-address-blur: 24px; }
     @media (-moz-pref("zen.nocturne.material.address.blur", 32)) { --nocturne-address-blur: 32px; }
     @media (-moz-pref("zen.nocturne.material.address.blur", 40)) { --nocturne-address-blur: 40px; }
-    --nocturne-address-paint: color-mix(in srgb, var(--nocturne-glass-tint) var(--nocturne-address-opacity), transparent);
+    --nocturne-address-paint: color-mix(in srgb, var(--nocturne-address-tint) var(--nocturne-address-opacity), transparent);
     --nocturne-home-search-opacity: var(--nocturne-glass-opacity);
     --nocturne-home-search-blur: var(--nocturne-glass-blur);
     @media (-moz-pref("zen.nocturne.material.home-search.opacity", 0)) { --nocturne-home-search-opacity: 0%; }
@@ -98,7 +252,7 @@
     @media (-moz-pref("zen.nocturne.material.home-search.blur", 24)) { --nocturne-home-search-blur: 24px; }
     @media (-moz-pref("zen.nocturne.material.home-search.blur", 32)) { --nocturne-home-search-blur: 32px; }
     @media (-moz-pref("zen.nocturne.material.home-search.blur", 40)) { --nocturne-home-search-blur: 40px; }
-    --nocturne-home-search-paint: color-mix(in srgb, var(--nocturne-glass-tint) var(--nocturne-home-search-opacity), transparent);
+    --nocturne-home-search-paint: color-mix(in srgb, var(--nocturne-home-search-tint) var(--nocturne-home-search-opacity), transparent);
     --nocturne-hub-opacity: var(--nocturne-glass-opacity);
     @media (-moz-pref("zen.nocturne.material.hub.opacity", 0)) { --nocturne-hub-opacity: 0%; }
     @media (-moz-pref("zen.nocturne.material.hub.opacity", 10)) { --nocturne-hub-opacity: 10%; }
@@ -119,7 +273,7 @@
     @media (-moz-pref("zen.nocturne.material.hub.blur", 24)) { --nocturne-hub-blur: 24px; }
     @media (-moz-pref("zen.nocturne.material.hub.blur", 32)) { --nocturne-hub-blur: 32px; }
     @media (-moz-pref("zen.nocturne.material.hub.blur", 40)) { --nocturne-hub-blur: 40px; }
-    --nocturne-hub-paint: color-mix(in srgb, var(--nocturne-glass-tint) var(--nocturne-hub-opacity), transparent);
+    --nocturne-hub-paint: color-mix(in srgb, var(--nocturne-hub-tint) var(--nocturne-hub-opacity), transparent);
     --nocturne-downloads-opacity: var(--nocturne-glass-opacity);
     @media (-moz-pref("zen.nocturne.material.downloads.opacity", 0)) { --nocturne-downloads-opacity: 0%; }
     @media (-moz-pref("zen.nocturne.material.downloads.opacity", 10)) { --nocturne-downloads-opacity: 10%; }
@@ -140,7 +294,7 @@
     @media (-moz-pref("zen.nocturne.material.downloads.blur", 24)) { --nocturne-downloads-blur: 24px; }
     @media (-moz-pref("zen.nocturne.material.downloads.blur", 32)) { --nocturne-downloads-blur: 32px; }
     @media (-moz-pref("zen.nocturne.material.downloads.blur", 40)) { --nocturne-downloads-blur: 40px; }
-    --nocturne-downloads-paint: color-mix(in srgb, var(--nocturne-glass-tint) var(--nocturne-downloads-opacity), transparent);
+    --nocturne-downloads-paint: color-mix(in srgb, var(--nocturne-downloads-tint) var(--nocturne-downloads-opacity), transparent);
     --nocturne-library-opacity: var(--nocturne-glass-opacity);
     @media (-moz-pref("zen.nocturne.material.library.opacity", 0)) { --nocturne-library-opacity: 0%; }
     @media (-moz-pref("zen.nocturne.material.library.opacity", 10)) { --nocturne-library-opacity: 10%; }
@@ -161,7 +315,7 @@
     @media (-moz-pref("zen.nocturne.material.library.blur", 24)) { --nocturne-library-blur: 24px; }
     @media (-moz-pref("zen.nocturne.material.library.blur", 32)) { --nocturne-library-blur: 32px; }
     @media (-moz-pref("zen.nocturne.material.library.blur", 40)) { --nocturne-library-blur: 40px; }
-    --nocturne-library-paint: color-mix(in srgb, var(--nocturne-glass-tint) var(--nocturne-library-opacity), transparent);
+    --nocturne-library-paint: color-mix(in srgb, var(--nocturne-library-tint) var(--nocturne-library-opacity), transparent);
     @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
       --nocturne-library-opacity: 100%;
       --nocturne-library-blur: 0px;
@@ -175,6 +329,21 @@
       --nocturne-home-search-blur: 0px;
     }
     @media (forced-colors: active) {
+      --nocturne-glass-foreground: CanvasText;
+      --nocturne-top-plane-tint: Canvas;
+      --nocturne-address-tint: Canvas;
+      --nocturne-address-border: CanvasText;
+      --nocturne-home-search-tint: Canvas;
+      --nocturne-home-search-border: CanvasText;
+      --nocturne-hub-tint: Canvas;
+      --nocturne-hub-border: CanvasText;
+      --nocturne-hub-shadow: none;
+      --nocturne-downloads-tint: Canvas;
+      --nocturne-downloads-border: CanvasText;
+      --nocturne-downloads-shadow: none;
+      --nocturne-library-tint: Canvas;
+      --nocturne-library-border: CanvasText;
+      --nocturne-library-shadow: none;
       --nocturne-library-paint: Canvas;
       --nocturne-hub-paint: Canvas;
       --nocturne-downloads-paint: Canvas;
@@ -229,7 +398,7 @@
     --op-tab-open: 180px;
     --op-url: 180px;
     --op-url-expanded-width: calc(100vw - 220px);
-    --op-url-radius: var(--nocturne-glass-radius, 12px);
+    --op-url-radius: var(--nocturne-address-radius, 12px);
     --op-url-header-height: calc(var(--op-height) - 4px);
     --op-url-compact-width: var(--op-url);
     --op-url-surface: var(--nocturne-address-paint, light-dark(#e0e4ec, #30343e));

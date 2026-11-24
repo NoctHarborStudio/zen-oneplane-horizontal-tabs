@@ -246,7 +246,7 @@ test("shared material preferences match CSS options and local inheritance; legac
  assert.equal(get("zen.nocturne.material.legacy-toolbar").restart,true);
  assert.ok(read("src/layout/surface.js.part").includes('if(!prefs.getBoolPref("zen.nocturne.material.legacy-toolbar",false))'));
  assert.ok(read("src/layout/contour-settings.js.part").includes("flat:true,transparency:0,strength:100,hold:0"));
- assert.ok(css.includes("var(--nocturne-glass-tint) var(--nocturne-surface-opacity)"));
+ assert.ok(css.includes("var(--nocturne-top-plane-tint) var(--nocturne-surface-opacity)"));
  assert.ok(css.includes("forced-colors: active"));
  assert.ok(read("src/core/window-lifecycle.js.part").includes('if(bookmarks&&!surface.hasAttribute("data-op-material-flat"))'));
 });

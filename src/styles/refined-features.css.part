@@ -158,7 +158,7 @@
 #zr-download-outside[data-open] { visibility:visible;pointer-events:auto !important; }
 #zr-download-dock {
   --zr-download-fg:var(--nocturne-glass-foreground,CanvasText);
-  --zr-download-outline:var(--nocturne-glass-border,transparent);
+  --zr-download-outline:var(--nocturne-downloads-border,transparent);
   --zr-download-row:var(--nocturne-glass-control-fill,transparent);
   position:fixed !important;left:0 !important;top:0 !important;
   translate:var(--zr-overlay-x,6px) var(--zr-overlay-y,8px);
@@ -167,8 +167,8 @@
   width:var(--zr-overlay-width,430px);
   max-height:calc(100vh - var(--zr-overlay-y,8px) - 12px);
   padding:12px;gap:10px;
-  border:1px solid var(--zr-download-outline);border-radius:12px;
-  box-shadow:var(--nocturne-glass-shadow,0 8px 24px #0003);
+  border:1px solid var(--zr-download-outline);border-radius:var(--nocturne-downloads-radius,12px);
+  box-shadow:var(--nocturne-downloads-shadow,0 8px 24px #0003);
   opacity:0;visibility:hidden;pointer-events:none;
 }
 #zr-download-dock[data-full] { height:calc(100vh - var(--zr-overlay-y,8px) - 12px); }
@@ -195,7 +195,7 @@
    same border, paint, padding and dimensions before and after motion.
    The resting clip also avoids a shadow appearing only on the last frame. */
 #zr-download-dock[data-side="top"] {
-  clip-path:inset(0px round 12px);
+  clip-path:inset(0px round var(--nocturne-downloads-radius,12px));
   box-shadow:none;
   overflow:hidden;
 }

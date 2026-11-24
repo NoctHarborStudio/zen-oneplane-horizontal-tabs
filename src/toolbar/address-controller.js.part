@@ -97,7 +97,8 @@
     if(!bar){clearAddressAnimation();return;}
     const full=Math.max(1,layoutWidth);
     const header=Math.max(1,parseFloat(url.style.getPropertyValue("--op-url-header-height"))||addressAnchor?.height||30);
-    const radius=parseFloat(window.getComputedStyle(bar).getPropertyValue("--op-url-radius"))||8;
+    const configuredRadius=parseFloat(window.getComputedStyle(bar).getPropertyValue("--op-url-radius"));
+    const radius=Number.isFinite(configuredRadius)?Math.max(0,configuredRadius):12;
     const shape=window.CSS?.supports("clip-path",addressFluidClip(Math.max(1,from.width),header,from.reveal,radius,true))??false;
     const frames=addressFluidFrames(name,from,to,full,header,radius,shape);
     const a={name,from,to,duration,bar,start:window.performance.now(),engine:shape?"waapi-shape":"waapi-polygon"};

@@ -11,7 +11,7 @@ test("Library and History share one inherited material, with zero override suppo
   assert.ok(base.includes(token+": var(--nocturne-glass-"+prop+")"));
   for(const o of pref.options.filter(x=>x.value!==-1))assert.ok(base.includes('(-moz-pref("'+key+'", '+o.value+')) { '+token+': '+o.value+unit+'; }'));
  }
- assert.ok(base.includes("var(--nocturne-glass-tint) var(--nocturne-library-opacity)"));
+ assert.ok(base.includes("var(--nocturne-library-tint) var(--nocturne-library-opacity)"));
  assert.ok(base.includes("--nocturne-library-opacity: 100%"));
  assert.ok(base.includes("--nocturne-library-blur: 0px"));
  assert.ok(base.includes("--nocturne-library-paint: Canvas"));
@@ -24,8 +24,8 @@ test("Stationary glass alone blurs; content and shade keep independent motion",(
  assert.ok(glass.includes("backdrop-filter:blur(var(--nocturne-library-blur,0px))"));
  assert.ok(!panel.includes("backdrop-filter"));
  assert.ok(!filter.includes("backdrop-filter"));
- assert.ok(filter.includes("background:var(--nocturne-glass-tint,Canvas)"));
- assert.ok(css.includes("min-width:0;min-height:0;border-radius:var(--nocturne-glass-radius,12px)"));
+ assert.ok(filter.includes("background:var(--nocturne-library-tint,Canvas)"));
+ assert.ok(css.includes("min-width:0;min-height:0;border-radius:var(--nocturne-library-radius,12px)"));
  assert.ok(css.includes(".nl-shade{position:absolute;inset:0;background:#0005;}"));
  const controller=read("src/library/controller.js.part");
  assert.ok(controller.includes("layer.append(shade,glass,panel)"));

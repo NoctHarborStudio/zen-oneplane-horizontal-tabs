@@ -81,9 +81,9 @@ function acquireZenHome(win, services) {
   --zh-search-color:var(--toolbox-textcolor,var(--toolbar-color,currentColor));
   --zh-search-glass:var(--nocturne-home-search-paint,color-mix(in srgb,var(--zh-search-color) 8%,transparent));
   --zh-search-blur:var(--nocturne-home-search-blur,0px);
-  --zh-search-stroke:var(--nocturne-glass-border,color-mix(in srgb,var(--zh-search-color) 14%,transparent));
+  --zh-search-stroke:var(--nocturne-home-search-border,color-mix(in srgb,var(--zh-search-color) 14%,transparent));
   --zh-search-label:color-mix(in srgb,var(--zh-search-color) 76%,transparent);
-  --zh-search-radius:var(--nocturne-glass-radius,14px);
+  --zh-search-radius:var(--nocturne-home-search-radius,14px);
   --zh-search-font:400 14px system-ui,sans-serif;
   --zh-search-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='m16 16 4 4'/%3E%3C/svg%3E");
 }
