@@ -294,3 +294,20 @@ test("Library uses stationary glass and an independent filter drawer with reserv
  assert.doesNotMatch(css,/\.nl-panel\{[^}]*backdrop-filter:/s);
  assert.match(css,/\.nl-history-filter\[data-open\]/);
 });
+
+
+test("Library motion probe is bounded, opt-out-aware and releases scheduled frames",()=>{
+ const source=read("src/library/controller.js.part");
+ const begin=source.indexOf("  function startMotionProbe("),end=source.indexOf("  function play(",begin);
+ const frames=new Map(),events=[];let id=0,t=0,enabled=true;
+ const win={performance:{now:()=>t},requestAnimationFrame(fn){frames.set(++id,fn);return id;},cancelAnimationFrame(key){frames.delete(key);}};
+ const run=new Function("win","prefs","trace",`let motionProbe=null,dead=false,animations=[],state={section:"history",phase:"opening",motionEpoch:3};${source.slice(begin,end)}return {startMotionProbe,cancelMotion};`)(win,{getBoolPref:()=>enabled},(name,detail)=>events.push({name,detail}));
+ run.startMotionProbe(480);
+ for(const time of [16,24,32,64,72]){t=time;const [key,fn]=frames.entries().next().value;frames.delete(key);fn(t);}
+ run.cancelMotion(true);assert.equal(frames.size,0);
+ assert.equal(events[0].name,"motion.frames");assert.equal(events[0].detail.frames,4);
+ assert.equal(events[0].detail.p50,8);assert.equal(events[0].detail.max,32);assert.equal(events[0].detail.over25,1);
+ enabled=false;run.startMotionProbe(480);assert.equal(frames.size,0);
+ enabled=true;run.startMotionProbe(0);assert.equal(frames.size,0);
+ run.startMotionProbe(480);run.cancelMotion();assert.equal(frames.size,0);assert.equal(events[1].detail.completed,false);
+});

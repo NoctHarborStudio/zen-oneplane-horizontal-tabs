@@ -11,7 +11,7 @@
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
   const labels={downloads:"All Downloads",documents:"Documents",history:"History",pictures:"Pictures",closed:"Recently Closed"};
   const summaries={downloads:"Download records and file actions",documents:"Downloaded documents and opted-in folders",history:"Browsing history and search",pictures:"Downloaded pictures and opted-in folders",closed:"Recently closed tabs in this window"};
-  let state=createLibraryState(),dead=false,lease=()=>{},shell=null,animations=[],frame=0,returnFocus=null,rows=new Map(),backgroundAction=false,renderedSection=null,dragSource=null,pendingResult=null,clearing=false,confirmation=false,actionSerial=0,pendingClose=false,dragOwner=null,indicatorReady=false,lastFailure=null,fallbackDragTimer=0,fallbackDragMissing=0,fallbackDragUnknown=0;
+  let state=createLibraryState(),dead=false,lease=()=>{},shell=null,animations=[],motionProbe=null,frame=0,returnFocus=null,rows=new Map(),backgroundAction=false,renderedSection=null,dragSource=null,pendingResult=null,clearing=false,confirmation=false,actionSerial=0,pendingClose=false,dragOwner=null,indicatorReady=false,lastFailure=null,fallbackDragTimer=0,fallbackDragMissing=0,fallbackDragUnknown=0;
   const data=createLibraryData({getServices:()=>win.__nocturneLibraryServices,onResult:result=>{const measure=state.phase==="opening"||state.phase==="switching",start=measure?win.performance.now():0;renderResults(result);if(measure)trace("render",{section:state.section,phase:state.phase,rows:result.rows.length,duration:win.performance.now()-start},{flush:false});},onError:renderError,onNotice:notice,onScanWait:status=>trace("media.scan.wait",{status,section:state.section}),schedule:(fn,ms)=>win.setTimeout(fn,ms),cancel:id=>win.clearTimeout(id)});
   const fileSection=()=>["downloads","documents","pictures"].includes(state.section);
   const enabled=()=>prefs.getBoolPref(PREF,false),active=()=>state.phase!=="closed";
@@ -112,7 +112,7 @@
     shade.addEventListener("pointerdown",e=>{if(e.button===0){e.preventDefault();close();}});
     panel.addEventListener("keydown",e=>{
       if(e.key!=="Tab")return;
-      const nodes=[dismiss,tabs.get(state.section),...(search.disabled?[]:[search]),...tools.querySelectorAll("button:not([disabled]):not([hidden]),select:not([disabled]):not([hidden])"),...(!historyDrawer.inert&&!historyDrawer.hidden?[...historyDrawer.querySelectorAll("button:not([disabled])")]:[]),body,...body.querySelectorAll("button:not([disabled])")],i=nodes.indexOf(doc.activeElement);
+      const nodes=[dismiss,tabs.get(state.section),...(search.disabled?[]:[search]),...tools.querySelectorAll("button:not([disabled]):not([hidden]),select:not([disabled]):not([hidden])"),...(!historyDrawer.inert&&!historyDrawer.hidden?[...historyDrawer.querySelectorAll("button:not([disabled])")]:[body,...body.querySelectorAll("button:not([disabled])")])],i=nodes.indexOf(doc.activeElement);
       const next=e.shiftKey?(i<=0?nodes.length-1:i-1):(i<0||i===nodes.length-1?0:i+1);
       e.preventDefault();nodes[next].focus();
     });
@@ -146,7 +146,7 @@
     if(!shell)return;
     const {historyDrawer,historyFilter}=shell;
     open=!!open&&state.section==="history"&&active()&&state.phase!=="closing";
-    historyDrawer.inert=!open;historyDrawer.toggleAttribute("data-open",open);
+    historyDrawer.inert=!open;shell.body.inert=open;historyDrawer.toggleAttribute("data-open",open);
     historyFilter.setAttribute("aria-expanded",String(open));
     if(!open&&focus)historyFilter.focus({preventScroll:true});
     syncHistoryFilter();
@@ -381,7 +381,29 @@
     placeholder("Loading…","Reading native browser records.");data.start(state.section,state.query,{sort:state.sort,filter:state.filter});
   }
   function sample(n){const c=win.getComputedStyle(n);return {opacity:c.opacity,transform:c.transform};}
-  function cancelMotion(){for(const a of animations)try{a.cancel();}catch{}animations=[];}
+  function startMotionProbe(ms){
+    if(!ms||!prefs.getBoolPref("zen.nocturne.diagnostics.enabled",true))return;
+    const probe={section:state.section,phase:state.phase,epoch:state.motionEpoch,start:win.performance.now(),last:null,gaps:[],frame:0};
+    motionProbe=probe;
+    const tick=t=>{
+      probe.frame=0;
+      if(motionProbe!==probe||dead||!prefs.getBoolPref("zen.nocturne.diagnostics.enabled",true))return;
+      if(probe.last!==null&&t>probe.last)probe.gaps.push(t-probe.last);
+      probe.last=t;
+      if(probe.gaps.length<300&&t-probe.start<ms+120)probe.frame=win.requestAnimationFrame(tick);
+    };
+    probe.frame=win.requestAnimationFrame(tick);
+  }
+  function stopMotionProbe(completed){
+    const p=motionProbe;motionProbe=null;if(!p)return;
+    if(p.frame)win.cancelAnimationFrame(p.frame);
+    if(!prefs.getBoolPref("zen.nocturne.diagnostics.enabled",true))return;
+    const gaps=p.gaps.slice().sort((a,b)=>a-b);
+    const percentile=q=>gaps.length?gaps[Math.max(0,Math.ceil(gaps.length*q)-1)]:null;
+    trace("motion.frames",{section:p.section,phase:p.phase,epoch:p.epoch,completed,frames:gaps.length,
+      elapsed:win.performance.now()-p.start,p50:percentile(.5),p95:percentile(.95),p99:percentile(.99),max:percentile(1),over25:gaps.filter(g=>g>25).length},{flush:false});
+  }
+  function cancelMotion(completed=false){stopMotionProbe(completed);for(const a of animations)try{a.cancel();}catch{}animations=[];}
   function play(n,frames,ms){
     if(!ms||typeof n.animate!=="function")return Promise.resolve();
     try{const a=n.animate(frames,{duration:ms,easing:"cubic-bezier(.2,.75,.2,1)",fill:"both"});animations.push(a);return a.finished.catch(()=>{});}catch{return Promise.resolve();}
@@ -394,15 +416,15 @@
     const probe=prefs.getBoolPref("zen.nocturne.diagnostics.enabled",true)&&state.phase==="opening";
     let before=null;
     if(probe)try{before=sample(shell.panel);}catch{}
-    state=reduceLibrary(state,{type:"MOTION_DONE",epoch});cancelMotion();
+    state=reduceLibrary(state,{type:"MOTION_DONE",epoch});cancelMotion(true);
     if(before)try{
       const after=sample(shell.panel);
       trace("motion.settled",{section:state.section,opacityStable:before.opacity===after.opacity,transformStable:before.transform===after.transform,beforeOpacity:Number(before.opacity),afterOpacity:Number(after.opacity)});
     }catch{}
   }
-  function hide(restore=true){
+  function hide(restore=true,completed=false){
     stopFallbackDragWatch();
-    data.stop();rows.clear();renderedSection=null;dragSource=null;dragOwner=null;indicatorReady=false;pendingResult=null;pendingClose=false;confirmation=false;clearing=false;++actionSerial;cancelMotion();if(frame)win.cancelAnimationFrame(frame);frame=0;
+    data.stop();rows.clear();renderedSection=null;dragSource=null;dragOwner=null;indicatorReady=false;pendingResult=null;pendingClose=false;confirmation=false;clearing=false;++actionSerial;cancelMotion(completed);if(frame)win.cancelAnimationFrame(frame);frame=0;
     if(shell){setHistoryDrawer(false);try{if(shell.topLayer&&shell.layer.matches(":popover-open"))shell.layer.hidePopover();}catch{}shell.layer.removeAttribute("data-library-open");shell.layer.hidden=true;shell.indicator.hidden=true;shell.panel.inert=false;shell.body.replaceChildren();shell.search.value="";}
     const target=returnFocus;returnFocus=null;if(!restore||win.closed)return;
     try{if(target?.isConnected&&typeof target.focus==="function")target.focus({preventScroll:true});else win.gBrowser?.selectedBrowser?.focus();}catch{}
@@ -416,9 +438,9 @@
     const next=reduceLibrary(state,{type:"CLOSE"});if(next===state)return false;
     state=next;setHistoryDrawer(false);data.stop();const epoch=state.motionEpoch,panel=sample(shell.panel),shade=sample(shell.shade),glass=sample(shell.glass);
     cancelMotion();shell.panel.inert=true;
-    trace("motion.begin",{phase:"closing",section:state.section,duration:duration(360)},{sample:900});
+    trace("motion.begin",{phase:"closing",section:state.section,duration:duration(360)},{flush:false});startMotionProbe(duration(360));
     void Promise.all([play(shell.panel,[panel,{opacity:0,transform:"translateY(8px)"}],duration(360)),play(shell.glass,[glass,{opacity:0}],duration(360)),play(shell.shade,[shade,{opacity:0}],duration(320))]).then(()=>{
-      if(!current(epoch))return;state=reduceLibrary(state,{type:"MOTION_DONE",epoch});hide();
+      if(!current(epoch))return;state=reduceLibrary(state,{type:"MOTION_DONE",epoch});hide(true,true);
     });return true;
   }
   function showLayer(){
@@ -451,7 +473,7 @@
     if(first){returnFocus=doc.activeElement;if(!showLayer()){closeNow();return fail("surface-hidden");}}
     setHistoryDrawer(false);renderHeader();
     if(state.phase==="opening"){
-      trace("motion.begin",{phase:"opening",section:state.section,duration:duration(reopening?360:480)},{sample:1100});
+      trace("motion.begin",{phase:"opening",section:state.section,duration:duration(reopening?360:480)},{flush:false});startMotionProbe(duration(reopening?360:480));
       void Promise.all([play(shell.panel,[panel,{opacity:1,transform:"translateY(0px)"}],duration(reopening?360:480)),play(shell.glass,[glass,{opacity:1}],duration(reopening?360:480)),play(shell.shade,[shade,{opacity:1}],duration(340))]).then(()=>settle(epoch));
       renderBody();(shell.search.disabled?shell.tabs.get(state.section):shell.search).focus({preventScroll:true});
     }else{
@@ -460,7 +482,7 @@
         return play(shell.body,[{opacity:0,transform:"translateX(6px)"},{opacity:1,transform:"none"}],duration(240)).then(()=>settle(epoch));
       });
     }
-    trace("open.accepted",{section,phase:state.phase,topLayer:shell.topLayer});return true;
+    trace("open.accepted",{section,phase:state.phase,topLayer:shell.topLayer},{flush:false});return true;
   }
   function toggle(section="history"){return active()&&state.phase!=="closing"&&state.section===section?close():open(section);}
   function bindOverlay(){
@@ -499,7 +521,7 @@
     else if(section==="history"&&!service.historyReady?.())reason="history-unready";
     else if(section==="downloads"&&!service.downloads?.isReady?.()){reason="downloads-unready";void service.downloads?.start?.().catch(()=>{});}
     if(!reason&&!toggle(section))reason=lastFailure||"toggle-rejected";
-    trace("shortcut",{section,origin,accepted:!reason,reason});
+    trace("shortcut",{section,origin,accepted:!reason,reason},{flush:false});
     // While our Library is enabled, never dispatch a rejected request to Zen.
     // The native preference is leased by Layout during opt-in cutover.
     if(reason&&!enabled()&&prefs.getBoolPref("zen.library.enabled",true))return false;

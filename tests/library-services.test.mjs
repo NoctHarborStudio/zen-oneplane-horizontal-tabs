@@ -372,3 +372,23 @@ test("per-window Downloads snapshots and native leases remain isolated on the sa
  assert.equal(b.getSnapshot()[0].id,rb.id);assert.equal(b.withNative(rb.id,d=>d===download),true);
  await b.dispose();assert.equal(views.size,0);
 });
+
+
+test("History supports native mostvisited sorting and exact calendar period cutoffs",async()=>{
+ const now=new Date(2026,10,24,12).getTime(),today=new Date(2026,10,24).getTime(),week=new Date(2026,10,23).getTime(),month=new Date(2026,10,1).getTime();
+ const dates=[today-1,today,week-1,week,month-1,month];
+ const rows=dates.map((date,i)=>({url:"https://example.test/"+i,date:new Date(date)}));
+ const calls=[],native={async getHistory(options){calls.push(options);return rows;},async searchHistory(){return rows;},close(){}};
+ const session=createHistorySession({now:()=>now,createQuery:()=>native});
+ try{
+   for(const [period,cutoff] of [["today",today],["week",week],["month",month]]){
+     const result=await session.query({period,sort:"mostvisited",limit:20});
+     assert.deepEqual(result.rows.map(row=>row.time),dates.filter(date=>date>=cutoff));
+     assert.equal(calls.at(-1).sortBy,"mostvisited");
+     assert.equal(calls.at(-1).limit,21);
+   }
+   const result=await session.query({text:"test",period:"today",sort:"site",limit:20});
+   assert.deepEqual(result.rows.map(row=>row.time),dates.filter(date=>date>=today));
+   assert.equal(calls.at(-1).sortBy,"site");
+ }finally{session.close();}
+});
