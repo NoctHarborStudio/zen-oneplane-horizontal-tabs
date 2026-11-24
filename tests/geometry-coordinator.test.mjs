@@ -107,12 +107,18 @@ test("preflight cancels old work before diagnostics and preserves new invalidati
 test("all resting centering refuses drag and address cascade before any geometry reads",()=>{
  const code=source.slice(source.indexOf("  function restingGeometryBlocked("),source.indexOf("  // Read actual resting rows"));
  const run=new Function("marker","cascadeState","requireResting",`
- let centering=false,dead=false,stripOrderSnapshot=[];const toolbarWrapper={},root={hasAttribute:()=>false};
+ let centering=false,dead=false,stripOrderSnapshot=[];
+ let committedStripPlacement={order:stripOrderSnapshot};
+ const toolbarWrapper={},root={hasAttribute:()=>false};
  function geometryWriteAllowed(){return !restingGeometryBlocked()}
  const row={hasAttribute:k=>k===marker},hoverSupported=()=>true;
  const window={innerWidth:1200},target={getBoundingClientRect(){throw Error("read");}};
  ${code}
- return centerToolbar(requireResting);`);
+ try{return centerToolbar(requireResting);}finally{
+   if(centering)throw Error("centering lease retained");
+   if(!restingGeometryBlocked()&&committedStripPlacement!==null)throw Error("failed center retained placement");
+   if(restingGeometryBlocked()&&!committedStripPlacement)throw Error("blocked center invalidated placement");
+ }`);
  for(const marker of ["data-op-dragging","data-op-island-incoming","data-op-lane-drag","data-op-live-drag","data-op-magnetic-pull"])
   for(const force of [false,true])assert.equal(run(marker,"idle",force),false);
  for(const phase of ["hiding","showing"])for(const force of [false,true])assert.equal(run(null,phase,force),false);
