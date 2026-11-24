@@ -80,7 +80,8 @@ test("cold assembly stages panel, cards, bookmarks and Home on one bounded timel
  const pure=readFileSync(new URL("../src/algorithms/startup-timeline.mjs",import.meta.url),"utf8");
  const bloom=readFileSync(new URL("../src/algorithms/startup-bloom.mjs",import.meta.url),"utf8");
  const inline=s=>s.replace(/^import [^\n]+\n/gm,"").replace(/^export (function|const) /gm,"$1 ");
- assert.ok(source.startsWith(inline(bloom)+inline(pure)));
+ const island=readFileSync(new URL("../src/algorithms/home-island-motion.mjs",import.meta.url),"utf8");
+ assert.ok(source.startsWith(inline(bloom)+inline(island)+inline(pure)));
  for(const scale of [.4,1,1.4]){
    const t=plan(123,scale);
    assert.ok(t.panel+t.panelLength<t.cards);
@@ -89,7 +90,7 @@ test("cold assembly stages panel, cards, bookmarks and Home on one bounded timel
    assert.equal(t.start,123);assert.equal(t.scale,scale);
  }
  assert.ok(source.includes('reveal(surface,{y:-18,delay:timeline.panel,length:timeline.panelLength})'));
- assert.ok(source.includes('delay:Math.round(timeline.cards*scale)'));
+ assert.ok(source.includes('delay:Math.ceil(timeline.cards*scale)'));
  assert.ok(source.includes('warmStartupIcons?.()'));
  assert.ok(source.includes('playStartup?.(timeline)'));
  assert.ok(source.includes('finishStartup?.()'));
