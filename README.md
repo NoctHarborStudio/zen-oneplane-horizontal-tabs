@@ -6,6 +6,10 @@ Nocturne brings OnePlane and Zen Refined together into a single browser-chrome m
 
 > **Development preview — not a stable release.** Target: Zen 1.24.2b / Sine 2.3.3. Features are implemented at different levels of native-browser validation. Use a disposable profile. See the [live preview README](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/README.md), [changelog](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/blob/preview/CHANGELOG.md) and [Actions](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions) for the current package and verification status.
 
+> **JavaScript required:** In Zen Settings → Sine Settings, explicitly enable JavaScript for unofficial mods, then restart Zen. Nocturne requires these scripts to work correctly; enabling the CSS alone is not sufficient. Only allow scripts you trust.
+>
+> **Uninstall warning:** Basic manual testing indicates that Zen generally works after disabling or removing Nocturne, but complete restoration of the pre-installation browser state is not yet guaranteed. Some native browser UI elements, features or settings may not return to their original behavior after removal. Back up your profile or use a disposable profile before installing.
+
 ## Features
 
 | Feature | Description |
@@ -36,7 +40,7 @@ Native tab/session data, folders, split views and workspace identities remain ow
    NoctHarborStudio/zen-oneplane-horizontal-tabs/tree/preview
    ```
 
-3. Review the [source](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/tree/preview) before allowing unofficial mod scripts. Restart Zen if scripts have not loaded.
+3. Review the [source](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/tree/preview), enable JavaScript for unofficial mods in Sine Settings, and restart Zen. This is required for Nocturne to work.
 
 **Migrating from OnePlane + Zen Refined:** disable the separate Zen Refined mod and restart before updating OnePlane. The existing OnePlane entry becomes Nocturne; its ID, installation URL and existing preference namespaces are retained. Do not run legacy Refined alongside Nocturne. Keep it disabled rather than deleting it until rollback has been tested.
 
