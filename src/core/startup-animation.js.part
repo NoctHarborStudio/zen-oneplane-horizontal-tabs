@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.195"};
+  const event="assembly.script",data={version:"0.3.0-preview.196"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -55,9 +55,12 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     check.nativeSelectedEmpty=selected?selected.hasAttribute("zen-empty-tab"):null;
     check.nativeRootEmpty=root.getAttribute("zen-has-empty-tab")==="true";
     check.nativeSidebarFlags=sidebar?Object.fromEntries(["zen-has-hover","zen-user-show","zen-has-empty-tab","flash-popup","has-popup-menu","movingtab","zen-compact-mode-active"].map(key=>[key,sidebar.hasAttribute(key)])):null;
+    check.nativeMicaPref=typeof prefs.PREF_BOOL==="number"&&prefs.getPrefType?.("widget.windows.mica")===prefs.PREF_BOOL?prefs.getBoolPref("widget.windows.mica",false):null;
+    check.nativeWindowTransparency=prefs.getBoolPref("widget.transparent-windows",false);
+    check.nativeBackdropType=typeof prefs.PREF_INT==="number"&&prefs.getPrefType?.("widget.windows.mica.toplevel-backdrop")===prefs.PREF_INT?prefs.getIntPref("widget.windows.mica.toplevel-backdrop"):null;
   }}catch{}
   decision("assembly.eligible.check",{...check,reason,reducedMotion:reduced.matches,motionEnabled:!reduced.matches});
-  if(reason){root.setAttribute("data-nocturne-startup-background-done","true");window.__nocturneEarlyBoot?.cleanup?.();return;}
+  if(reason){window.__nocturneEarlyBoot?.cleanup?.();return;}
   window[SEEN]=true;
   // 760 ms is still a supported user choice. Legacy saved defaults and
   // explicit selections cannot be distinguished: never rewrite either.
@@ -131,7 +134,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     }catch(error){decision("assembly.timer.error",{name:assemblyErrorClass(error)});finish("setup-failed");}
   }
   function mountBoot(){
-    if(!prefs.getBoolPref(BOOT_PREF,true)){root.setAttribute("data-nocturne-startup-background-done","true");removeBoot();return;}
+    if(!prefs.getBoolPref(BOOT_PREF,true)){removeBoot();return;}
     try{
       // Chrome-only, no network assets, no blur, no page mutation.
       const early=earlyBoot;
@@ -160,18 +163,10 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
         guardProbe.nativeSidebarClipped=/^inset\(50%(?: 50%){0,3}\)$/.test(s.clipPath);
         guardProbe.nativeSidebarOpacity=Number(s.opacity);
       }
-      const background=document.getElementById("zen-browser-background");
-      if(background){
-        const s=window.getComputedStyle(background,"::after");
-        guardProbe.nativeBackgroundGuard=s.animationName.split(",").some(name=>name.trim()==="nocturne-startup-background-guard");
-        guardProbe.nativeBackgroundSolid=s.backgroundColor==="rgb(17, 18, 25)"&&s.backgroundImage==="none"&&Number(s.opacity)===1;
-      }
+      guardProbe.nativeMicaMedia=window.matchMedia?.("(-moz-windows-mica)")?.matches??null;
     }}catch{}
-      // Release the CSS guard behind the existing opaque Boot, even if
-      // Prelude was already adopted. Do not reset this window-lifetime latch.
-      root.setAttribute("data-nocturne-startup-background-done","true");
       decision("boot.show",{age:bootAt-started,adopted:!!early,backgroundAt:early?.at??bootAt,lead,minimum:BOOT_MIN,exit:BOOT_EXIT,...guardProbe});
-    }catch(error){root.setAttribute("data-nocturne-startup-background-done","true");removeBoot();decision("boot.error",{name:assemblyErrorClass(error)});}
+    }catch(error){removeBoot();decision("boot.error",{name:assemblyErrorClass(error)});}
   }
   function removeBoot(){
     let failed=0;

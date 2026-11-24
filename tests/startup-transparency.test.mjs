@@ -643,7 +643,7 @@ test("MB-014 uses a bounded clip only for the native empty-tab sidebar",()=>{
  const retired=readFileSync(new URL("../early-startup.css",import.meta.url),"utf8");
  const css=readFileSync(new URL("../src/styles/base.css.part",import.meta.url),"utf8");
  const pre=readFileSync(new URL("../src/core/boot-prelude.js.part",import.meta.url),"utf8");
- const guard=css.slice(0,css.indexOf("/* MB-014: stabilize the existing native background"));
+ const guard=css.slice(0,css.indexOf("/* Registered once"));
  assert.equal(manifest.style.content,undefined);assert.ok(!retired.includes("@keyframes"));
  assert.match(guard,/@-moz-document url\("chrome:\/\/browser\/content\/browser\.xhtml"\)/);
  assert.ok(guard.includes('[zen-compact-mode="true"][zen-has-empty-tab="true"]'));
@@ -661,26 +661,24 @@ test("MB-014 uses a bounded clip only for the native empty-tab sidebar",()=>{
  }
 });
 
-test("MB-014 native background guard matches Boot color and fails open without JavaScript",()=>{
- const css=readFileSync(new URL("../src/styles/base.css.part",import.meta.url),"utf8");
+test("MB-014 observes native Mica without a competing owner or background guard",()=>{
+ const base=readFileSync(new URL("../src/styles/base.css.part",import.meta.url),"utf8");
  const pre=readFileSync(new URL("../src/core/boot-prelude.js.part",import.meta.url),"utf8");
- const guard=css.slice(css.indexOf("/* MB-014: stabilize the existing native background"),css.indexOf("/* Registered once"));
- assert.ok(guard.includes(':root:is([zen-before-loaded="true"], [zen-has-empty-tab="true"])'));
- assert.ok(guard.includes(":not([data-nocturne-startup-background-done],"));
- for(const flag of ["data-op-startup-ready","customizing","inDOMFullscreen","inFullscreen","popup-window","zen-welcome-stage","zen-private-window","zen-unsynced-window","chromehidden","privatebrowsingmode"])assert.ok(guard.includes("["+flag),flag);
- assert.ok(guard.includes('not (-moz-pref("zen.nocturne.motion.enabled", false))'));
- assert.ok(guard.includes('not (-moz-pref("zen.nocturne.boot.enabled", false))'));
- assert.ok(guard.includes('not (-moz-pref("zen.refined.startup.animation", false))'));
- assert.match(guard,/from, to \{ background-color: #111219; background-image: none; opacity: 1; \}/);
- assert.match(guard,/#zen-browser-background::after\s*\{\s*animation: nocturne-startup-background-guard 2000ms linear 1 normal none !important;/);
- assert.match(guard,/#zen-browser-background > \.zen-browser-grain\s*\{\s*animation: nocturne-startup-grain-guard 2000ms linear 1 normal none !important;/);
- assert.doesNotMatch(guard,/pointer-events\s*:|display\s*:|visibility\s*:/);
- for(const [s,v,cover] of [[pre,"probe","root.append(node)"],[source,"guardProbe","boot.append(bootMark)"]]){
-  const mount=s.indexOf(cover),sample=s.indexOf(v+".nativeBackgroundGuard",mount),latch=s.indexOf('root.setAttribute("data-nocturne-startup-background-done","true")',sample);
-  assert.ok(mount>=0&&sample>mount&&latch>sample);assert.ok(s.includes('background:"#111219"'));
-  assert.ok(!s.includes('removeAttribute("data-nocturne-startup-background-done")'));
+ const startupPrefs=readFileSync(new URL("../startup.uc.mjs",import.meta.url),"utf8");
+ const configured=JSON.parse(readFileSync(new URL("../preferences.json",import.meta.url),"utf8"));
+ assert.equal(configured.filter(x=>x.property==="widget.windows.mica").length,1);
+ assert.ok(!startupPrefs.includes('"widget.windows.mica"'));
+ for(const s of [base,css,pre,source]){
+  assert.ok(!s.includes("nocturne-startup-background-guard"));
+  assert.ok(!s.includes("nocturne-startup-grain-guard"));
+  assert.ok(!s.includes("data-nocturne-startup-background-done"));
  }
- assert.match(source,/if\(reason\)\{root.setAttribute\("data-nocturne-startup-background-done","true"\)/);
+ for(const [s,v,cover] of [[pre,"probe","root.append(node)"],[source,"check","boot.append(bootMark)"]]){
+  for(const key of ["nativeMicaPref","nativeWindowTransparency","nativeBackdropType"])assert.ok(s.includes(v+"."+key));
+  assert.ok(s.indexOf("nativeMicaMedia")>s.indexOf(cover));
+  assert.ok(s.includes('matchMedia?.("(-moz-windows-mica)")'));
+  assert.ok(s.includes('background:"#111219"'));
+ }
  assert.match(source,/const fade=overlay.animate\(\[\{opacity:1\},\{opacity:0\}\]/);
 });
 
@@ -688,7 +686,7 @@ test("fresh Sine profile leaves optional defaults absent but startup CSS honors 
   const sourceCSS=readFileSync(new URL("../src/styles/base.css.part",import.meta.url),"utf8");
   const gate='@media (not (-moz-pref("zen.nocturne.motion.enabled", false))) and (not (-moz-pref("zen.refined.startup.animation", false))) and (not (-moz-pref("zen.nocturne.boot.enabled", false)))';
   for(const data of [sourceCSS,css]){
-    assert.equal(data.split(gate).length-1,2);
+    assert.equal(data.split(gate).length-1,1);
     assert.equal(data.includes('and (-moz-pref("zen.refined.startup.animation")) and (-moz-pref("zen.nocturne.boot.enabled"))'),false);
   }
   const configured=JSON.parse(readFileSync(new URL("../preferences.json",import.meta.url),"utf8"));

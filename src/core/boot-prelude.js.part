@@ -11,8 +11,6 @@
      root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"||
      win.performance.now()>=3500||!prefs.getBoolPref("zen.refined.startup.animation",true)||
      !prefs.getBoolPref("zen.nocturne.boot.enabled",true)||!prefs.getBoolPref("zen.nocturne.motion.enabled",true)){
-    // A terminal skip must not re-arm the CSS guard on a later empty tab.
-    root.setAttribute("data-nocturne-startup-background-done","true");
     return;
   }
   let node=null,timer=0,claimed=false,cleaned=false,phaseOwned=false,bootOwned=false;
@@ -51,6 +49,9 @@
     probe.nativeSelectedEmpty=selected?selected.hasAttribute("zen-empty-tab"):null;
     probe.nativeRootEmpty=root.getAttribute("zen-has-empty-tab")==="true";
     probe.nativeSidebarFlags=sidebar?Object.fromEntries(["zen-has-hover","zen-user-show","zen-has-empty-tab","flash-popup","has-popup-menu","movingtab","zen-compact-mode-active"].map(key=>[key,sidebar.hasAttribute(key)])):null;
+    probe.nativeMicaPref=typeof prefs.PREF_BOOL==="number"&&prefs.getPrefType?.("widget.windows.mica")===prefs.PREF_BOOL?prefs.getBoolPref("widget.windows.mica",false):null;
+    probe.nativeWindowTransparency=prefs.getBoolPref("widget.transparent-windows",false);
+    probe.nativeBackdropType=typeof prefs.PREF_INT==="number"&&prefs.getPrefType?.("widget.windows.mica.toplevel-backdrop")===prefs.PREF_INT?prefs.getIntPref("widget.windows.mica.toplevel-backdrop"):null;
   }}catch{}
   try{
     node=document.createElementNS("http://www.w3.org/1999/xhtml","div");
@@ -73,20 +74,12 @@
         probe.nativeSidebarClipped=/^inset\(50%(?: 50%){0,3}\)$/.test(s.clipPath);
         probe.nativeSidebarOpacity=Number(s.opacity);
       }
-      const background=document.getElementById("zen-browser-background");
-      if(background){
-        const s=win.getComputedStyle(background,"::after");
-        probe.nativeBackgroundGuard=s.animationName.split(",").some(name=>name.trim()==="nocturne-startup-background-guard");
-        probe.nativeBackgroundSolid=s.backgroundColor==="rgb(17, 18, 25)"&&s.backgroundImage==="none"&&Number(s.opacity)===1;
-      }
+      probe.nativeMicaMedia=win.matchMedia?.("(-moz-windows-mica)")?.matches??null;
     }}catch{}
-    // Window-lifetime latch: the opaque Boot is now mounted; native theme
-    // restoration happens behind it, and later empty tabs cannot replay it.
-    root.setAttribute("data-nocturne-startup-background-done","true");
     const data={age:record.at,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished,...probe};
     if(win.__nocturneTrace)win.__nocturneTrace("boot.prelude",data,{sample:1800});
     else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"boot.prelude",t:record.at,data});}
     if(cleaned||claimed||win[KEY]!==record)return;
     timer=win.setTimeout(expire,Math.max(0,record.deadline-win.performance.now()));win.addUnloadListener(cleanup);
-  }catch{root.setAttribute("data-nocturne-startup-background-done","true");cleanup();}
+  }catch{cleanup();}
 })();

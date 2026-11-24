@@ -1,3 +1,7 @@
+## 0.3.0-preview.196 — MB-014 native backdrop isolation
+
+Retire the ineffective startup gradient/grain override and its window latch; retain the bounded empty-tab sidebar clip and existing Boot/close motion. Reuse the existing user-controlled Windows Mica preference for a cold-start A/B test; record native pref, window transparency, backdrop type and Gecko Mica media state without writing native appearance prefs. Native verification pending.
+
 ## 0.3.0-preview.195 — Default bookmark toolbar visibility
 
 Set native `browser.toolbars.bookmarks.visibility` to `always` by default using the existing process-wide reversible startup preference owner. Expose an independent default-on option, restore the previous native value on opt-out/live unload when still owned, and preserve compact-panel, fullscreen and Magnetic Bookmarks behavior. Add ownership fixtures and bounded policy diagnostics. Native validation pending.
