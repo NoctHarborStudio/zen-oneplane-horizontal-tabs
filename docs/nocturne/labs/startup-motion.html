@@ -53,6 +53,21 @@ function homeIslandPose(t){
 function homeIslandFrames(reverse=false){
   return Array.from({length:81},(_,i)=>({offset:i/80,...homeIslandPose((reverse?80-i:i)/80)}));
 }
+
+// Shared horizontal edge choreography. Each side travels as one group;
+// the widest measured extent determines the offscreen starting position.
+const EDGE_CONTROL_EASE="cubic-bezier(.45,0,.55,1)";
+const EDGE_CONTROL_SELECTOR="toolbarbutton,button,.titlebar-button,[role=button],#titlebar-min,#titlebar-max,#titlebar-restore,#titlebar-close";
+function edgeControlOffsets(rects,center,width){
+  if(!Number.isFinite(center)||!Number.isFinite(width)||width<=0)throw RangeError("edge-control-viewport");
+  const sides=rects.map(r=>{
+    if(![r.left,r.right].every(Number.isFinite)||r.right<=r.left)throw RangeError("edge-control-rect");
+    return (r.left+r.right)/2<center?-1:1;
+  });
+  const left=Math.max(0,...rects.filter((_,i)=>sides[i]<0).map(r=>r.right))+8;
+  const right=Math.max(0,...rects.filter((_,i)=>sides[i]>0).map(r=>width-r.left))+8;
+  return sides.map(side=>side<0?-left:right);
+}
 // Pure timing plan for Center Assembly; base offsets are unscaled milliseconds.
 // The runtime owns the epoch and lifecycle; this module owns no DOM or timers.
 function startupTimeline(start,scale,mode="fold",islandEntry=false){

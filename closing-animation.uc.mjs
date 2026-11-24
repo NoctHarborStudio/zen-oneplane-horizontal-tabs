@@ -25,6 +25,21 @@ function homeIslandPose(t){
 function homeIslandFrames(reverse=false){
   return Array.from({length:81},(_,i)=>({offset:i/80,...homeIslandPose((reverse?80-i:i)/80)}));
 }
+
+// Shared horizontal edge choreography. Each side travels as one group;
+// the widest measured extent determines the offscreen starting position.
+const EDGE_CONTROL_EASE="cubic-bezier(.45,0,.55,1)";
+const EDGE_CONTROL_SELECTOR="toolbarbutton,button,.titlebar-button,[role=button],#titlebar-min,#titlebar-max,#titlebar-restore,#titlebar-close";
+function edgeControlOffsets(rects,center,width){
+  if(!Number.isFinite(center)||!Number.isFinite(width)||width<=0)throw RangeError("edge-control-viewport");
+  const sides=rects.map(r=>{
+    if(![r.left,r.right].every(Number.isFinite)||r.right<=r.left)throw RangeError("edge-control-rect");
+    return (r.left+r.right)/2<center?-1:1;
+  });
+  const left=Math.max(0,...rects.filter((_,i)=>sides[i]<0).map(r=>r.right))+8;
+  const right=Math.max(0,...rects.filter((_,i)=>sides[i]>0).map(r=>width-r.left))+8;
+  return sides.map(side=>side<0?-left:right);
+}
 // Chrome-only brand mark shared by Boot and Center Disassembly.
 function createNocturneBrandMark(document){
   const html=tag=>document.createElementNS("http://www.w3.org/1999/xhtml",tag);
@@ -289,11 +304,11 @@ try{if(typeof window!=="undefined"){
     const ir=visible(island),rr=visible(row),url=get("urlbar-container"),ur=visible(url);
     const center=ir?ir.r.left+ir.r.width/2:rr?rr.r.left+rr.r.width/2:ur?ur.r.left+ur.r.width/2:window.innerWidth/2;
     const result=[];
-    function add(n,x=0,y=0,clip=false,delay=0,length=350,islandY=null){
+    function add(n,x=0,y=0,clip=false,delay=0,length=350,islandY=null,edge=false){
       if(!n||result.length>=100||result.some(t=>t.n===n||t.n.contains(n)||n.contains(t.n)))return;
       const t=visible(n);if(!t)return;
       const move=t.s.translate==="none"||/^0(?:px|%)?(?: 0(?:px|%)?){0,2}$/.test(t.s.translate);
-      result.push({n,x:move?x:0,y:move?y:0,clip,delay,length,islandY,opacity:Number(t.s.opacity)});
+      result.push({n,x:move?x:0,y:move?y:0,clip,delay,length,islandY,edge,opacity:Number(t.s.opacity)});
     }
     const floating=get("urlbar");
     const floatVisible=floating&&(floating.getAttribute("zen-floating-urlbar")==="true"||floating.hasAttribute("zen-newtab"));
@@ -302,7 +317,7 @@ try{if(typeof window!=="undefined"){
       const t=visible(n);if(t)add(n,0,-14,false,Math.max(0,55-Math.abs(t.r.left+t.r.width/2-center)*.09),280);
     }
     if(rr){
-      add(row.querySelector(".oneplane-new-tab"),-26,0,false,80,300);
+      // The plus button exits with the measured edge group.
       if(ir)add(island,0,0,true,570,80,homeIslandDistance(ir.r.bottom));
     }else{
       const sidebar=get("zen-tabs-wrapper")||get("TabsToolbar");
@@ -311,15 +326,19 @@ try{if(typeof window!=="undefined"){
     if(!floatVisible)add(url,0,0,true,165,330);
     const candidates=new Set();
     let captions=null;try{captions=window.gZenVerticalTabsManager?.actualWindowButtons;}catch{}
-    for(const parent of [get("nav-bar-customization-target"),get("nav-bar"),captions,get("titlebar-buttonbox"),get("zen-sidebar-top-buttons")]){
+    const plus=row?.querySelector(".oneplane-new-tab");
+    for(const parent of [get("nav-bar-customization-target"),get("nav-bar"),captions,get("titlebar-buttonbox"),get("titlebar-buttonbox-container"),get("zen-window-controls"),get("zen-sidebar-top-buttons")]){
       if(!parent)continue;
-      for(const n of parent.querySelectorAll("toolbarbutton,button,.titlebar-button,[role=button]"))candidates.add(n);
+      for(const n of parent.querySelectorAll(EDGE_CONTROL_SELECTOR)){
+        if(row?.contains(n)||url?.contains(n)||n===url||n.id?.startsWith("oneplane-center-")||n.localName==="toolbarspring"||!visible(n))continue;
+        candidates.add(n);
+      }
     }
-    const leaves=[...candidates].filter(n=>![...candidates].some(c=>c!==n&&n.contains(c)));
-    for(const n of leaves){
-      if(row?.contains(n)||url?.contains(n))continue;
-      const t=visible(n);if(t)add(n,t.r.left+t.r.width/2<center?14:-14,-4,false,85+Math.min(90,Math.abs(t.r.left-center)*.12),310);
-    }
+    if(visible(plus))candidates.add(plus);
+    const group=[...candidates].filter(n=>![...candidates].some(c=>c!==n&&c.contains(n))).map(n=>visible(n)).filter(Boolean);
+    const offsets=edgeControlOffsets(group.map(t=>t.r),center,window.innerWidth);
+    group.forEach(({n},i)=>add(n,offsets[i],0,false,120,390,null,true));
+    window.__nocturneTrace?.("disassembly.controls.edge",{left:offsets.filter(x=>x<0).length,right:offsets.filter(x=>x>0).length});
     return result;
   }
   function restore(){
@@ -387,7 +406,7 @@ try{if(typeof window!=="undefined"){
     if(needsBookmarks&&typeof engine?.bookmarks==="function"&&!bookmarkHandle)return bypass("bookmark-acquisition-failed");
     if((centerHandle||bookmarkHandle)&&window.__nocturneCenterMotion!==engine)return bypass("engine-replaced");
     let sealAt=DURATION-110;
-    for(const {n,x,y,clip,delay:baseDelay,length:baseLength,opacity,islandY} of targets){
+    for(const {n,x,y,clip,delay:baseDelay,length:baseLength,opacity,islandY,edge} of targets){
       const foldIsland=islandRegistered&&Number.isFinite(islandY)&&islandY<0;
       const delay=foldIsland?DURATION-110:baseDelay,length=foldIsland?HOME_ISLAND_DURATION:baseLength;
       try{
@@ -409,7 +428,7 @@ try{if(typeof window!=="undefined"){
           if(clip){from.clipPath="inset(-8px round 8px)";to.clipPath="inset(-8px 49% -8px 49% round 8px)";}
           frames=[from,to];
         }
-        const effect=n.animate(frames,{delay,duration:length,easing:foldIsland?"linear":"cubic-bezier(.4,0,.35,1)",fill:"both"});
+        const effect=n.animate(frames,{delay,duration:length,easing:foldIsland?"linear":edge?EDGE_CONTROL_EASE:"cubic-bezier(.4,0,.35,1)",fill:"both"});
         animations.add(effect);effect.finished.catch(()=>{});
         if(foldIsland){sealAt=Math.max(sealAt,delay+length);window.__nocturneTrace?.("disassembly.island.exit",{curve:"delayed-reveal",y:islandY,delay,duration:length},{flush:true});}
       }catch{return bypass("control-acquisition-failed");}

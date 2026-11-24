@@ -120,6 +120,21 @@ function homeIslandPose(t){
 function homeIslandFrames(reverse=false){
   return Array.from({length:81},(_,i)=>({offset:i/80,...homeIslandPose((reverse?80-i:i)/80)}));
 }
+
+// Shared horizontal edge choreography. Each side travels as one group;
+// the widest measured extent determines the offscreen starting position.
+const EDGE_CONTROL_EASE="cubic-bezier(.45,0,.55,1)";
+const EDGE_CONTROL_SELECTOR="toolbarbutton,button,.titlebar-button,[role=button],#titlebar-min,#titlebar-max,#titlebar-restore,#titlebar-close";
+function edgeControlOffsets(rects,center,width){
+  if(!Number.isFinite(center)||!Number.isFinite(width)||width<=0)throw RangeError("edge-control-viewport");
+  const sides=rects.map(r=>{
+    if(![r.left,r.right].every(Number.isFinite)||r.right<=r.left)throw RangeError("edge-control-rect");
+    return (r.left+r.right)/2<center?-1:1;
+  });
+  const left=Math.max(0,...rects.filter((_,i)=>sides[i]<0).map(r=>r.right))+8;
+  const right=Math.max(0,...rects.filter((_,i)=>sides[i]>0).map(r=>width-r.left))+8;
+  return sides.map(side=>side<0?-left:right);
+}
 // Pure timing plan for Center Assembly; base offsets are unscaled milliseconds.
 // The runtime owns the epoch and lifecycle; this module owns no DOM or timers.
 function startupTimeline(start,scale,mode="fold",islandEntry=false){
@@ -662,7 +677,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     step(()=>{if(n.hasAttribute?.("data-zr-startup-bloom-shape"))n.removeAttribute("data-zr-startup-bloom-shape");});
     if(failed)decision("assembly.effect.cleanup",{failed});
   }
-  function reveal(n,{x=0,y=0,clip=false,delay=0,length=350,easing=EASE,late=false,bloomTiming=null,bloomShape=false,islandY=null}={}){
+  function reveal(n,{x=0,y=0,clip=false,delay=0,length=350,easing=EASE,late=false,bloomTiming=null,bloomShape=false,islandY=null,edgeEntry=false}={}){
     if(dead||ownedTimeline?.closed||!n||seen.has(n)||!bounds(n,true))return false;
     // Remove the pending gate before sampling native opacity. All changes
     // occur synchronously, before the next paint.
@@ -682,7 +697,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       bloomShape&&cs.scale!=="none"&&!/^1(?: 1){0,2}$/.test(cs.scale)))return false;
     if(n.matches?.(".oneplane-tab,.oneplane-split-group"))window.__nocturneTrace?.("assembly.card.rest",()=>({opacity,x,y}),{throttle:80});
     const alreadyPainted=baseline.has(n)||late&&!clip&&!n.matches?.("#PlacesToolbarItems > *");
-    const initial=bloomTiming||islandY!==null?0:alreadyPainted ? .72 : 0;
+    const initial=bloomTiming||islandY!==null||edgeEntry?0:alreadyPainted ? .72 : 0;
     if(alreadyPainted)clip=false;
     const nativeTranslate=cs.translate||"none";
     const canMove=nativeTranslate==="none"||/^0(?:px|%)?(?: 0(?:px|%)?){0,2}$/.test(nativeTranslate);
@@ -835,13 +850,18 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     // Native captions are moved outside customization-target by OnePlane.
     // Include the actual buttons, not the parent and child simultaneously.
     let captions=null;try{captions=window.gZenVerticalTabsManager?.actualWindowButtons;}catch{}
-    const buttonSelector="toolbarbutton,button,.titlebar-button,[role=button],#titlebar-min,#titlebar-max,#titlebar-restore,#titlebar-close";
+    const buttonSelector=EDGE_CONTROL_SELECTOR;
     const roots=[target,nav,captions,get("titlebar-buttonbox"),get("titlebar-buttonbox-container"),get("zen-window-controls"),get("zen-sidebar-top-buttons")].filter(Boolean);
     for(const parent of roots){
       for(const n of parent.querySelectorAll(buttonSelector))if(eligible(n))candidates.add(n);
     }
-    // Animate controls, never whole toolbar wrappers or background surfaces.
-    const leaves=[...candidates].filter(n=>![...candidates].some(c=>c!==n&&n.contains(c)));
+    // The plus button lives inside the tab row, but belongs to the
+    // edge controls rather than to the tab conveyor.
+    const plus=row?.querySelector(".oneplane-new-tab");
+    if(bounds(plus,true)&&ownedTimeline?.mode!=="bloom")candidates.add(plus);
+    // Choose outermost eligible buttons so a gated nested button cannot
+    // hide its own moving parent or multiply its alpha.
+    const leaves=[...candidates].filter(n=>![...candidates].some(c=>c!==n&&c.contains(n)));
     const left=[],right=[];
     for(const n of leaves){
       const r=bounds(n,true);if(!r)continue;
@@ -854,11 +874,18 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       const timing=startupBloomStagger(group.length,ownedTimeline.bloom.tabs);
       group.forEach(({n},i)=>bloomDirect(n,timing[i]));return;
     }
-    for(const [side,group] of [[-1,left],[1,right]])for(let i=0;i<group.length;i++){
-      const {n}=group[i];
-      if(seen.has(n)||[...seen].some(other=>other.contains(n)||n.contains(other)))continue;
-      reveal(n,{x:-side*14,y:-4,delay:260+(ownedTimeline?.islandShift||0)+Math.min(i*32,160),length:390,late});
+    const group=[...left,...right].filter(({n})=>!seen.has(n)&&![...seen].some(other=>other.contains(n)||n.contains(other)));
+    // Late or uncovered previously painted controls must not replay a
+    // group that has already departed. Ungate the entire exact subtree.
+    const admit=group.filter(({n})=>!late&&(bootPreparing||!baseline.has(n)));
+    const offsets=edgeControlOffsets(admit.map(({r})=>r),center,window.innerWidth);
+    for(const {n} of group){
+      for(const child of candidates)if(child!==n&&n.contains(child)){seen.add(child);child.setAttribute(MANAGED,"true");}
+      const index=admit.findIndex(t=>t.n===n);
+      if(index<0){seen.add(n);n.setAttribute(MANAGED,"true");continue;}
+      reveal(n,{x:offsets[index],delay:260+(ownedTimeline?.islandShift||0),length:390,easing:EDGE_CONTROL_EASE,edgeEntry:true});
     }
+    decision("assembly.controls.edge",{left:offsets.filter(x=>x<0).length,right:offsets.filter(x=>x>0).length,late});
   }
   function revealBookmarks(center,late=false){
     const items=get("PlacesToolbarItems");
@@ -1053,7 +1080,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
           if(bounds(plus,true))bloomStage(plus,timeline.bloom.tabs);
           if(ir)bloomIsland(island,timeline.bloom);
         }else{
-          if(bounds(plus,true))slide(plus,-26,0,400+(timeline.islandShift||0),350);
+          // The plus button is admitted with the measured edge group.
           if(ir&&timeline.islandLength){
             // Center Motion already captured the final, untransformed portal.
             // Keep the native -50% translate intact; only transform the Island.
