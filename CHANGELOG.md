@@ -1,3 +1,7 @@
+## 0.3.0-preview.184 — Experimental branded close finale
+
+Keep the approved Home exit and existing native close gate. After the folds, crossfade into the existing Nocturne brand background (320ms), reveal the shared Boot logo (460ms), then animate chrome-root opacity to zero (500ms) before the existing 110ms sealed dwell. This is an experiment with Gecko document compositing, not proof of OS-window transparency. No native API, system preference or session changes. Restore all visual leases if a modal prompt opens or native close returns without closing; bounded recovery during native delegation. Native visual validation pending.
+
 ## 0.3.0-preview.183 — Home live-return performance (HS4)
 
 Remove the frozen result-tree renderer, its speculative cache, mutation and scroll subscriptions, timer, geometry ResizeObserver, and separate return RAF. Controlled Escape/background cancellation and reversal continue to animate the original Zen view using the existing geometry, easing, and durations. If Zen has independently closed or replaced the session, release the Home visual lease immediately without recreating results or stealing focus. Native validation of external cancellation and reversal remains open. Preserve the verified physical-pixel rails and live default-icon styling.

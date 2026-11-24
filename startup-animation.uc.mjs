@@ -242,9 +242,25 @@ function startupBoundaryOutcome(counts,legacy=0){
   if(counts?.retired)return "completed-with-retired";
   return "completed";
 }
+// Chrome-only brand mark shared by Boot and Center Disassembly.
+function createNocturneBrandMark(document){
+  const html=tag=>document.createElementNS("http://www.w3.org/1999/xhtml",tag);
+  const bootMark=html("div");
+  Object.assign(bootMark.style,{display:"grid",justifyItems:"center",gap:"20px",willChange:"transform, opacity"});
+  const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+  svg.setAttribute("viewBox","0 0 72 72");svg.setAttribute("width","72");svg.setAttribute("height","72");
+  const moon=document.createElementNS(svg.namespaceURI,"path");
+  moon.setAttribute("d","M43 8 A29 29 0 1 0 62 53 A26 26 0 0 1 43 8Z");moon.setAttribute("fill","#c4c8e5");
+  const star=document.createElementNS(svg.namespaceURI,"path");
+  star.setAttribute("d","M55 12 L57 19 L64 21 L57 23 L55 30 L53 23 L46 21 L53 19Z");star.setAttribute("fill","#e4e5ef");svg.append(moon,star);
+  const label=html("div");label.textContent="NOCTURNE";
+  Object.assign(label.style,{font:"300 24px system-ui, sans-serif",letterSpacing:"7px",paddingInlineStart:"7px"});
+  bootMark.append(svg,label);
+  return bootMark;
+}
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.183"};
+  const event="assembly.script",data={version:"0.3.0-preview.184"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -381,17 +397,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       boot=early?.node||html("div");boot.id="nocturne-boot";boot.setAttribute("aria-hidden","true");boot.inert=true;
       Object.assign(boot.style,{position:"fixed",inset:"0",zIndex:"2147483647",display:"grid",placeItems:"center",background:"#111219",color:"#e4e5ef",pointerEvents:"none",overflow:"hidden",willChange:"opacity"});
       boot.style.setProperty("-moz-window-dragging","default","important");
-      bootMark=html("div");
-      Object.assign(bootMark.style,{display:"grid",justifyItems:"center",gap:"20px",willChange:"transform, opacity"});
-      const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
-      svg.setAttribute("viewBox","0 0 72 72");svg.setAttribute("width","72");svg.setAttribute("height","72");
-      const moon=document.createElementNS(svg.namespaceURI,"path");
-      moon.setAttribute("d","M43 8 A29 29 0 1 0 62 53 A26 26 0 0 1 43 8Z");moon.setAttribute("fill","#c4c8e5");
-      const star=document.createElementNS(svg.namespaceURI,"path");
-      star.setAttribute("d","M55 12 L57 19 L64 21 L57 23 L55 30 L53 23 L46 21 L53 19Z");star.setAttribute("fill","#e4e5ef");svg.append(moon,star);
-      const label=html("div");label.textContent="NOCTURNE";
-      Object.assign(label.style,{font:"300 24px system-ui, sans-serif",letterSpacing:"7px",paddingInlineStart:"7px"});
-      bootMark.append(svg,label);boot.append(bootMark);if(!early)root.append(boot);
+      bootMark=createNocturneBrandMark(document);boot.append(bootMark);if(!early)root.append(boot);
       
       if(dead)return;
       bootOwned=true;root.setAttribute("data-nocturne-boot","waiting");bootAt=now();

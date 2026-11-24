@@ -653,7 +653,7 @@ test("MB-014 uses a bounded clip only for the native empty-tab sidebar",()=>{
  assert.match(guard,/from, to \{ clip-path: inset\(50%\); \}/);
  assert.match(guard,/animation: nocturne-empty-sidebar-guard 2000ms linear 1 normal none !important;/);
  assert.doesNotMatch(guard,/\b(?:opacity|visibility|display|pointer-events)\s*:/);
- for(const [s,v,cover] of [[pre,"probe","root.append(node)"],[source,"check","bootMark.append(svg,label)"]]){
+ for(const [s,v,cover] of [[pre,"probe","root.append(node)"],[source,"check","boot.append(bootMark)"]]){
   const start=s.indexOf("// MB-014: keep only structural reads"),end=s.indexOf("\n  }}catch{}",start),block=s.slice(start,end);
   assert.ok(start>=0&&end>start);assert.ok(block.includes(v+".nativeSelectedEmpty"));assert.ok(block.includes(v+".nativeSidebarFlags"));
   assert.doesNotMatch(block,/getBoundingClientRect|getComputedStyle|sheetRegistered/);
@@ -675,7 +675,7 @@ test("MB-014 native background guard matches Boot color and fails open without J
  assert.match(guard,/#zen-browser-background::after\s*\{\s*animation: nocturne-startup-background-guard 2000ms linear 1 normal none !important;/);
  assert.match(guard,/#zen-browser-background > \.zen-browser-grain\s*\{\s*animation: nocturne-startup-grain-guard 2000ms linear 1 normal none !important;/);
  assert.doesNotMatch(guard,/pointer-events\s*:|display\s*:|visibility\s*:/);
- for(const [s,v,cover] of [[pre,"probe","root.append(node)"],[source,"guardProbe","bootMark.append(svg,label)"]]){
+ for(const [s,v,cover] of [[pre,"probe","root.append(node)"],[source,"guardProbe","boot.append(bootMark)"]]){
   const mount=s.indexOf(cover),sample=s.indexOf(v+".nativeBackgroundGuard",mount),latch=s.indexOf('root.setAttribute("data-nocturne-startup-background-done","true")',sample);
   assert.ok(mount>=0&&sample>mount&&latch>sample);assert.ok(s.includes('background:"#111219"'));
   assert.ok(!s.includes('removeAttribute("data-nocturne-startup-background-done")'));

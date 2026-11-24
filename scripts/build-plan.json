@@ -412,6 +412,10 @@
       "kind": "esm-inline"
     },
     {
+      "path": "src/core/boot-brand.mjs",
+      "kind": "esm-inline"
+    },
+    {
       "path": "src/core/startup-animation.js.part",
       "kind": "section"
     }
@@ -445,6 +449,14 @@
   "closingAnimation": [
     {
       "path": "src/algorithms/home-island-motion.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/core/boot-brand.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/core/close-finale.mjs",
       "kind": "esm-inline"
     },
     {

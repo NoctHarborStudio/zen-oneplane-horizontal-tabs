@@ -565,3 +565,5 @@ Preview.181: `assembly.island.entry` and `disassembly.island.exit` report acquir
 ### Preview.183 — HS4 Home live-only
 
 Retire snapshot-unavailable and snapshot/resizeReads counters with their removed producers. Keep bounded phase frame gaps and natural-height measureCalls/measureMs. close-start/close-finish/close-reverse include local probe id when enabled. native-settle has bounded reason native-event/native-observer/owner-changed/live-invalid plus id and closing/hadLiveReturn booleans. No result content, new observer, timer or per-frame events. Absence of removed counters indicates the removed code path, not a measured performance result.
+
+Preview.184: `disassembly.finale.begin` records cover/logo/fade/end timings; `disassembly.finale.seal` records computed numeric root/cover/logo opacity (expected 0/1/1). These measure document CSS, not desktop-window alpha. `disassembly.finale.modal`, `.recover` and `.skip` distinguish visual interruption, bounded native-invocation recovery and failed acquisition. Existing native-before/after, seal and cleanup remain unchanged; no frame-loop or personal data.

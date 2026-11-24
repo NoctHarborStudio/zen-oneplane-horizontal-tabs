@@ -37,7 +37,7 @@ test("close restore releases remaining properties and markers after center failu
  const run=new Function(`
  const log=[],window={windowUtils:{USER_SHEET:1,removeSheet(){log.push("sheet");}},__nocturneTrace(e,d){if(e==="disassembly.cleanup")log.push(d.failed);}};
  const root={hasAttribute:()=>true,removeAttribute(){log.push("root");}};
- let centerHandle={release(){throw Error("center");}},bookmarkHandle={release(){log.push("bookmark");}},sheet={},style={remove(){log.push("style");}};
+ let centerHandle={release(){throw Error("center");}},bookmarkHandle={release(){log.push("bookmark");}},sheet={},style={remove(){log.push("style");}},finale=null;
  const n={style:{removeProperty(k){if(k==="bad")throw Error("style");log.push(k);}},removeAttribute:k=>log.push(k)};
  const animations=new Set([{cancel(){throw Error("animation");}}]),owned=new Map([[n,{styles:new Map([["bad",{value:""}],["good",{value:""}]]),attrs:new Map([["mark",null]])}]]);
  ${code}restore();return {log,size:owned.size,animations:animations.size};`);
@@ -65,8 +65,9 @@ test("close reentry during seal does not seal twice or schedule another dwell",(
  gate.request({},[]);timer();assert.equal(calls,1);assert.equal(seals,1);assert.equal(scheduled,1);
 });
 
-function closeAcquisitionFixture({tabs=true,bookmarks=true,missingEngine=false,missingBookmarks=false,failTab=false,failBookmark=false,failControl=false,replaceEngine=false,preflight=false,failPreflight=false,registered=false,cancelNative=false}={}){
+function closeAcquisitionFixture({tabs=true,bookmarks=true,missingEngine=false,missingBookmarks=false,failTab=false,failBookmark=false,failControl=false,replaceEngine=false,preflight=false,failPreflight=false,registered=false,cancelNative=false,brand=false,modalDuringNative=false}={}){
  const effects=[],events=[],timers=[],reasons=[],measurements=[];
+ const finaleState={released:0,sealed:0,modal:null,visibleDuringNative:null};
  let suspended=false;
  function node(name,children=[]){
   const attrs=new Map(),props=new Map();
@@ -96,16 +97,20 @@ function closeAcquisitionFixture({tabs=true,bookmarks=true,missingEngine=false,m
   win.__nocturneCenterMotion=engine;
  }
  const code=source.slice(source.indexOf("  function visible("),source.indexOf("  function eligible("));
- const setup=new Function("window","root","get","factory","events","timers","closedState","Services","homeIslandDistance","homeIslandFrames","registerHomeIslandMotion","HOME_ISLAND_DURATION","HOME_ISLAND_TRAVEL","HOME_ISLAND_SCALE","cancelNative",`
+ const setup=new Function("window","root","get","factory","events","timers","closedState","Services","homeIslandDistance","homeIslandFrames","registerHomeIslandMotion","HOME_ISLAND_DURATION","HOME_ISLAND_TRAVEL","HOME_ISLAND_SCALE","cancelNative","brand","modalDuringNative","finaleState",`
   const MARK="data-zr-close-effect",MOVE="data-zr-close-move",CLIP="data-zr-close-clip",PROGRESS="--zr-close-progress",DURATION=760;
-  let centerHandle=null,bookmarkHandle=null,sheet=null,style=null;
+  let centerHandle=null,bookmarkHandle=null,sheet=null,style=null,finale=null;
+  const document={};function createCloseFinale({start,onModal}){
+    if(!brand)return null;finaleState.modal=onModal;
+    return {end:start+1280,logoAt:start+320,fadeAt:start+780,release(){finaleState.released++;},seal(){finaleState.sealed++;}};
+  }
   const animations=new Set(),owned=new Map();
   ${code}
-  const controller=factory({eligible:()=>true,begin,clear:restore,seal(){centerHandle?.seal();bookmarkHandle?.seal();for(const a of animations)a.finish();},isClosed:()=>closedState.value,later(fn,ms){fn.ms=ms;timers.push(fn);return timers.length;},cancelLater(){},invoke(){events.push("native");closedState.value=!cancelNative;return "closed";}});
+  const controller=factory({eligible:()=>true,begin,clear:restore,seal(){centerHandle?.seal();bookmarkHandle?.seal();for(const a of animations)a.finish();finale?.seal();},isClosed:()=>closedState.value,later(fn,ms){fn.ms=ms;timers.push(fn);return timers.length;},cancelLater(){},invoke(){events.push("native");if(modalDuringNative){finaleState.modal();finaleState.visibleDuringNative=!root.hasAttribute("data-zr-closing");}closedState.value=!cancelNative;return "closed";}});
   return controller;
  `);
- const state={value:closed},gate=setup(win,root,get,factory,events,timers,state,{io:{newURI:s=>s}},homeIslandDistance,homeIslandFrames,registerHomeIslandMotion,HOME_ISLAND_DURATION,HOME_ISLAND_TRAVEL,HOME_ISLAND_SCALE,cancelNative);
- return {gate,root,effects,events,timers,reasons,measurements,island};
+ const state={value:closed},gate=setup(win,root,get,factory,events,timers,state,{io:{newURI:s=>s}},homeIslandDistance,homeIslandFrames,registerHomeIslandMotion,HOME_ISLAND_DURATION,HOME_ISLAND_TRAVEL,HOME_ISLAND_SCALE,cancelNative,brand,modalDuringNative,finaleState);
+ return {gate,root,effects,events,timers,reasons,measurements,island,finaleState};
 }
 test("visible horizontal tabs with missing or failed proxy acquisition bypass close motion",()=>{
  for(const options of [{missingEngine:true},{failTab:true}]){
@@ -160,4 +165,23 @@ test("Home exit is exact reversed B after both folds; cancelled native close res
  assert.equal(h.events.filter(x=>x==="native").length,1);assert.ok(!h.island.hasAttribute("data-zr-close-island-exit"));
  assert.equal(h.island.style.getPropertyValue(HOME_ISLAND_TRAVEL),"");assert.equal(h.island.style.getPropertyValue(HOME_ISLAND_SCALE),"");
  assert.ok(h.effects.every(a=>a.cancelled===1));
+});
+
+test("brand finale extends the existing transaction and restores cancelled native close",()=>{
+ const h=closeAcquisitionFixture({registered:true,brand:true,cancelNative:true});h.gate.request({},[]);
+ assert.equal(h.timers[0].ms,2470);h.timers[0]();assert.equal(h.finaleState.sealed,1);
+ assert.equal(h.timers[1].ms,110);h.timers[1]();
+ assert.equal(h.events.filter(x=>x==="native").length,1);assert.equal(h.finaleState.released,1);
+ assert.equal(h.root.hasAttribute("data-zr-closing"),false);
+});
+test("modal during a pending close cancels without dispatching native close",()=>{
+ const h=closeAcquisitionFixture({registered:true,brand:true});h.gate.request({},[]);h.finaleState.modal();
+ h.timers[0]();assert.equal(h.events.filter(x=>x==="native").length,0);
+ assert.equal(h.finaleState.released,1);assert.equal(h.root.hasAttribute("data-zr-closing"),false);
+});
+test("modal during native delegation restores the window before native returns",()=>{
+ const h=closeAcquisitionFixture({registered:true,brand:true,modalDuringNative:true,cancelNative:true});
+ h.gate.request({},[]);h.timers[0]();h.timers[1]();
+ assert.equal(h.finaleState.visibleDuringNative,true);
+ assert.equal(h.finaleState.released,1);assert.equal(h.events.filter(x=>x==="native").length,1);
 });

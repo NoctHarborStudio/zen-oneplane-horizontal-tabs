@@ -25,9 +25,67 @@ function homeIslandPose(t){
 function homeIslandFrames(reverse=false){
   return Array.from({length:81},(_,i)=>({offset:i/80,...homeIslandPose((reverse?80-i:i)/80)}));
 }
+// Chrome-only brand mark shared by Boot and Center Disassembly.
+function createNocturneBrandMark(document){
+  const html=tag=>document.createElementNS("http://www.w3.org/1999/xhtml",tag);
+  const bootMark=html("div");
+  Object.assign(bootMark.style,{display:"grid",justifyItems:"center",gap:"20px",willChange:"transform, opacity"});
+  const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+  svg.setAttribute("viewBox","0 0 72 72");svg.setAttribute("width","72");svg.setAttribute("height","72");
+  const moon=document.createElementNS(svg.namespaceURI,"path");
+  moon.setAttribute("d","M43 8 A29 29 0 1 0 62 53 A26 26 0 0 1 43 8Z");moon.setAttribute("fill","#c4c8e5");
+  const star=document.createElementNS(svg.namespaceURI,"path");
+  star.setAttribute("d","M55 12 L57 19 L64 21 L57 23 L55 30 L53 23 L46 21 L53 19Z");star.setAttribute("fill","#e4e5ef");svg.append(moon,star);
+  const label=html("div");label.textContent="NOCTURNE";
+  Object.assign(label.style,{font:"300 24px system-ui, sans-serif",letterSpacing:"7px",paddingInlineStart:"7px"});
+  bootMark.append(svg,label);
+  return bootMark;
+}
+// Experimental chrome-root fade. CSS opacity is not proof of OS-window alpha.
+const CLOSE_COVER_MS=320,CLOSE_LOGO_MS=460,CLOSE_FADE_MS=500;
+function createCloseFinale({win,doc,root,start,onModal}){
+  let cover=null,mark=null,active=true,listening=false;
+  const effects=[];
+  const release=()=>{
+    if(!active)return 0;active=false;let failed=0;
+    const step=fn=>{try{fn();}catch{failed++;}};
+    if(listening)step(()=>win.removeEventListener("DOMWillOpenModalDialog",onModal,true));
+    listening=false;
+    // Remove the opaque cover before releasing the root's fade in one task.
+    step(()=>cover?.remove());
+    for(const effect of effects)step(()=>effect.cancel());
+    effects.length=0;cover=null;mark=null;return failed;
+  };
+  try{
+    if(!Number.isFinite(start)||start<0||Number(win.getComputedStyle(root).opacity)!==1)return null;
+    win.addEventListener("DOMWillOpenModalDialog",onModal,true);listening=true;
+    cover=doc.createElementNS("http://www.w3.org/1999/xhtml","div");
+    cover.id="nocturne-close-brand";cover.inert=true;cover.setAttribute("aria-hidden","true");
+    Object.assign(cover.style,{position:"fixed",inset:"0",zIndex:"2147483647",display:"grid",placeItems:"center",background:"#111219",color:"#e4e5ef",pointerEvents:"none",overflow:"hidden",opacity:"0"});
+    cover.style.setProperty("-moz-window-dragging","default","important");
+    mark=createNocturneBrandMark(doc);mark.style.opacity="0";cover.append(mark);root.append(cover);
+    const epoch=doc.timeline.currentTime;
+    const animate=(node,frames,delay,duration,easing)=>{
+      const effect=node.animate(frames,{delay,duration,easing,fill:"both"});
+      effects.push(effect);effect.finished.catch(()=>{});
+      if(Number.isFinite(epoch))effect.startTime=epoch;
+    };
+    animate(cover,[{opacity:0},{opacity:1}],start,CLOSE_COVER_MS,"ease-in-out");
+    const logoAt=start+CLOSE_COVER_MS,fadeAt=logoAt+CLOSE_LOGO_MS,end=fadeAt+CLOSE_FADE_MS;
+    animate(mark,[{opacity:0,transform:"translateY(7px) scale(.96)"},{opacity:1,transform:"translateY(0) scale(1)"}],logoAt,CLOSE_LOGO_MS,"cubic-bezier(.2,.75,.25,1)");
+    animate(root,[{opacity:1},{opacity:0}],fadeAt,CLOSE_FADE_MS,"ease-in-out");
+    return {end,logoAt,fadeAt,release,
+      seal(){
+        if(!active)return null;
+        for(const effect of effects)try{effect.finish();}catch{}
+        const read=node=>{try{const a=Number(win.getComputedStyle(node).opacity);return Number.isFinite(a)?a:null;}catch{return null;}};
+        return {rootOpacity:read(root),coverOpacity:read(cover),logoOpacity:read(mark)};
+      }};
+  }catch{release();return null;}
+}
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="disassembly.script",data={version:"0.3.0-preview.183"};
+  const event="disassembly.script",data={version:"0.3.0-preview.184"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -45,7 +103,7 @@ try{if(typeof window!=="undefined"){
   if(typeof window.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   window[KEY]?.();
   let dead=false,owner=null,original=null,wrapped=null,observer=null,style=null,sheet=null;
-  const animations=new Set(),owned=new Map();let centerHandle=null,bookmarkHandle=null;
+  const animations=new Set(),owned=new Map();let centerHandle=null,bookmarkHandle=null,finale=null;
 
   function makeCloseController({eligible,begin,clear,seal=()=>{},isClosed=()=>false,later,cancelLater,invoke}){
     let pending=null,timer=null,committing=false,starting=false,finishing=false,queued=null;
@@ -158,6 +216,8 @@ try{if(typeof window!=="undefined"){
   function restore(){
     let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
     step(()=>window.__nocturneTrace?.("disassembly.restore",()=>({effects:animations.size,owned:owned.size,closing:root.hasAttribute("data-zr-closing")}),{sample:1000,flush:true}));
+    const ending=finale;finale=null;
+    step(()=>{failed+=ending?.release()||0;});
     for(const a of animations)step(()=>a.cancel());
     animations.clear();
     const center=centerHandle,bookmark=bookmarkHandle;centerHandle=null;bookmarkHandle=null;
@@ -245,8 +305,22 @@ try{if(typeof window!=="undefined"){
         if(foldIsland){sealAt=Math.max(sealAt,delay+length);window.__nocturneTrace?.("disassembly.island.exit",{curve:"delayed-reveal",y:islandY,delay,duration:length},{flush:true});}
       }catch{return bypass("control-acquisition-failed");}
     }
+    // Keep the previous close path if the experimental finale cannot be acquired.
+    finale=createCloseFinale({win:window,doc:document,root,start:sealAt,onModal:modalOpened});
+    if(finale){
+      window.__nocturneTrace?.("disassembly.finale.begin",{coverAt:sealAt,logoAt:finale.logoAt,fadeAt:finale.fadeAt,end:finale.end},{flush:true});
+      sealAt=finale.end;
+    }else window.__nocturneTrace?.("disassembly.finale.skip",{acquired:false},{flush:true});
     typeof window!=="undefined"&&window.__nocturneTrace?.("disassembly.effects",()=>({count:animations.size,owned:owned.size,duration:sealAt+110}),{sample:1000,flush:true});
-    return animations.size>0||!!centerHandle?.count||!!bookmarkHandle?sealAt+110:false;
+    return animations.size>0||!!centerHandle?.count||!!bookmarkHandle||!!finale?sealAt+110:false;
+  }
+  function modalOpened(){
+    // Native prompts must never inherit the chrome-root fade. If a prompt
+    // appears during preparation, cancel the visual close; during native
+    // delegation release the visual owners without reentering the command.
+    if(!finale)return;
+    window.__nocturneTrace?.("disassembly.finale.modal",{committing:controller.committing},{flush:true});
+    if(controller.committing)restore();else controller.dispose();
   }
   function eligible(args){
     const event=args[0];
@@ -258,15 +332,29 @@ try{if(typeof window!=="undefined"){
   const controller=makeCloseController({
     eligible,begin,clear:restore,isClosed:()=>window.closed,
     seal:()=>{
-      centerHandle?.seal();bookmarkHandle?.seal();for(const a of animations)try{a.finish();}catch{}
+      try{centerHandle?.seal();}catch{}try{bookmarkHandle?.seal();}catch{}for(const a of animations)try{a.finish();}catch{}
+      const probe=finale?.seal();if(probe)window.__nocturneTrace?.("disassembly.finale.seal",probe,{flush:true});
       window.__nocturneTrace?.("disassembly.sealed",()=>({effects:animations.size,closing:root.hasAttribute("data-zr-closing")}),{flush:true});
     },
     later:(fn,ms)=>window.setTimeout(fn,ms),cancelLater:id=>window.clearTimeout(id),
     invoke:(receiver,args)=>{
       typeof window!=="undefined"&&window.__nocturneTrace?.("disassembly.native.before",()=>({closing:root.hasAttribute('data-zr-closing'),owned:owned.size}),{flush:true,sample:1200});
-      const result=Reflect.apply(original,receiver,args);
-      typeof window!=="undefined"&&window.__nocturneTrace?.("disassembly.native.after",()=>({resultType:typeof result,closed:window.closed}),{flush:true});
-      return result;
+      // A synchronous modal may run a nested event loop. A bounded
+      // recovery watchdog restores the entire chrome if the command stays
+      // pending even when no modal event reaches this window.
+      const ending=finale;let recovery=null;
+      if(ending){
+        try{recovery=window.setTimeout(()=>{
+          if(finale===ending&&controller.committing&&!window.closed){
+            window.__nocturneTrace?.("disassembly.finale.recover",{pending:true},{flush:true});restore();
+          }
+        },180);}catch{restore();}
+      }
+      try{
+        const result=Reflect.apply(original,receiver,args);
+        typeof window!=="undefined"&&window.__nocturneTrace?.("disassembly.native.after",()=>({resultType:typeof result,closed:window.closed}),{flush:true});
+        return result;
+      }finally{if(recovery!==null)try{window.clearTimeout(recovery);}catch{}}
     }
   });
   function preferenceChanged(){if(!dead&&(reduced.matches||!prefs.getBoolPref(PREF,true)))controller.flush();}
