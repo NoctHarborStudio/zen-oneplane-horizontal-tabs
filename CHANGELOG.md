@@ -1,3 +1,7 @@
+## 0.3.0-preview.161 — Library text motion handoff experiment
+
+User confirms History launcher works and reports a brief change in text sharpness/brightness at the end of Library appearance. Remove panel scale(.97), retain opacity and 8px vertical travel with the existing durations and easing, and use the same translateY(0px) / opacity:1 pose in WAAPI and resting CSS. Existing backdrop filter and UI styling stay unchanged. A bounded opening-settlement diagnostic compares computed opacity/transform on both sides of effect cancellation when diagnostics are enabled; no per-frame reads or private content. Two source regressions cover endpoint invariants and epoch/opt-out sampling. This is a targeted experiment for suspected Gecko raster/compositor handoff, not proof of native visual resolution. Preview.160 parallel window-caption corrections retained.
+
 ## 0.3.0-preview.160 — native caption controls stay in the upper row
 
 Zen 1.24.2b can move `.titlebar-buttonbox-container` directly into `#nav-bar` before Nocturne runs, leaving the caption node without Nocturne's `data-zr-native-captions` marker. Existing CSS capped only the marked branch. When `data-op-overflow-row` extended the toolbar to two rows, the native close/minimize/maximize hit area could stretch vertically.
