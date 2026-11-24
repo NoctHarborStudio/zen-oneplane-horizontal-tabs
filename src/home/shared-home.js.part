@@ -274,6 +274,7 @@ function acquireZenHome(win, services) {
   let searchInput=null,searchOriginalPlaceholder=null,searchSessionLabel=null;
   let searchSnapshot=null,searchSnapshotTimer=0,searchSnapshotObserver=null,searchSnapshotDirty=true,searchSnapshotView=null;
   let searchReturnParts=[],searchLastRect=null;
+  let searchProbeSequence=0;
   let pinScrollTop=0,pinCustom=false,pinViewMode="home",pendingWatch=null;
   function updateWorkspacePending(state){
     const status=content.querySelector(".zh-workspace-pending");
@@ -518,6 +519,7 @@ function acquireZenHome(win, services) {
     return Boolean(bar&&(bar.view?.isOpen||bar.hasAttribute("zen-newtab")||bar.hasAttribute("open")));
   }
   function finishSearchMotion(){
+    finishSearchProbe(searchToken,"open","interrupted");
     if(searchFrame)win.cancelAnimationFrame(searchFrame);
     searchFrame=0;
     const a=searchMotion;searchMotion=null;
@@ -527,6 +529,7 @@ function acquireZenHome(win, services) {
     try{a?.cancel();}catch{}
   }
   function finishSearchVisual(){
+    finishSearchProbe(searchToken,"close","interrupted");
     finishSearchMotion();
     if(searchTimer)win.clearTimeout(searchTimer);searchTimer=0;
     if(searchReturnFrame)win.cancelAnimationFrame(searchReturnFrame);searchReturnFrame=0;
@@ -567,6 +570,53 @@ function acquireZenHome(win, services) {
     const t=Math.max(0,Math.min(1,progress)),eased=t*t*(3-2*t);
     return from+(to-from)*eased;
   }
+  // HS3.1 baseline: reuse the existing animation callbacks. No observer,
+  // timer, layout read or per-frame trace is added by the probe.
+  function searchProbeNow(){return win.performance?.now?.()??Date.now();}
+  function newSearchProbePhase(){
+    return {started:searchProbeNow(),last:null,frames:0,gaps:[],gapMax:0,dropped:0,waitFrames:0,rounds:0,firstRevealMs:null,measureCalls:0,measureMs:0,resizeReads:0,finished:false};
+  }
+  function startSearchProbe(token){
+    try{
+      if(typeof win.__nocturneTrace!=="function"||!prefs.getBoolPref("zen.nocturne.diagnostics.enabled",true))return;
+      token.homeProbe={id:++searchProbeSequence,open:newSearchProbePhase(),close:null,snapshotCalls:0,snapshotSuccess:0,snapshotMs:0,snapshotMaxMs:0,snapshotDuringOpen:0};
+    }catch{}
+  }
+  function beginSearchCloseProbe(token){
+    const p=token?.homeProbe;if(p&&!p.close)p.close=newSearchProbePhase();
+  }
+  function searchProbeFrame(token,phase,now){
+    const p=token?.homeProbe?.[phase];if(!p||p.finished||!Number.isFinite(now))return;
+    p.frames++;
+    if(p.last!==null&&now>=p.last){
+      const gap=now-p.last;p.gapMax=Math.max(p.gapMax,gap);
+      if(p.gaps.length<512)p.gaps.push(gap);else p.dropped++;
+    }
+    p.last=now;
+  }
+  function searchProbeSnapshot(token,elapsed,success){
+    const p=token?.homeProbe;if(!p)return;
+    p.snapshotCalls++;p.snapshotSuccess+=Number(success);p.snapshotMs+=elapsed;
+    p.snapshotMaxMs=Math.max(p.snapshotMaxMs,elapsed);
+    if(!p.open.finished)p.snapshotDuringOpen++;
+  }
+  function finishSearchProbe(token,phase,reason){
+    const owner=token?.homeProbe,p=owner?.[phase];if(!p||p.finished)return;
+    p.finished=true;
+    try{
+      if(!prefs.getBoolPref("zen.nocturne.diagnostics.enabled",true))return;
+      const sorted=p.gaps.slice().sort((a,b)=>a-b);
+      const percentile=q=>sorted.length?sorted[Math.ceil(q*sorted.length)-1]:null;
+      win.__nocturneTrace?.("home.search."+phase+"-baseline",{
+        id:owner.id,reason,elapsed:searchProbeNow()-p.started,frames:p.frames,gapCount:sorted.length,gapDropped:p.dropped,
+        p50:percentile(.5),p95:percentile(.95),p99:percentile(.99),max:sorted.length?p.gapMax:null,
+        waitFrames:p.waitFrames,rounds:p.rounds,firstRevealMs:p.firstRevealMs,
+        measureCalls:p.measureCalls,measureMs:p.measureMs,resizeReads:p.resizeReads,
+        snapshotCalls:owner.snapshotCalls,snapshotSuccess:owner.snapshotSuccess,snapshotMs:owner.snapshotMs,
+        snapshotMaxMs:owner.snapshotMaxMs,snapshotDuringOpen:owner.snapshotDuringOpen
+      });
+    }catch{}
+  }
   function paintSearchHeight(bar,height,alpha){
     searchCurrentHeight=height;
     bar.style?.setProperty("--zh-reveal-height",height+"px");
@@ -576,10 +626,13 @@ function acquireZenHome(win, services) {
     // Remove the height constraint for this synchronous measurement only;
     // restore before painting. Unlike measuring the prepared header, this
     // includes the asynchronous native results and the actual box border.
+    const probe=searchToken?.homeProbe?.open;
+    const began=probe&&!probe.finished?searchProbeNow():null;
     const phase=bar.getAttribute("data-zr-home-search-motion");
     bar.removeAttribute("data-zr-home-search-motion");
     const h=bar.getBoundingClientRect().height;
     if(phase)bar.setAttribute("data-zr-home-search-motion",phase);
+    if(began!==null){probe.measureCalls++;probe.measureMs+=searchProbeNow()-began;}
     return Math.max(geometry.header,Math.min(geometry.room,h||geometry.header));
   }
   function animateSearchHeight(token,from,to,duration,closing,done){
@@ -595,6 +648,7 @@ function acquireZenHome(win, services) {
       searchFrame=0;
       if(!open||searchToken!==token||searchBar!==bar||searchClosing!==closing)return;
       if(start===null)start=now;
+      searchProbeFrame(token,closing?"close":"open",now);
       const p=Math.min(1,(now-start)/duration),height=revealValue(from,to,p);
       paintSearchHeight(bar,height,alpha(height));
       if(p<1)searchFrame=win.requestAnimationFrame(tick);else done();
@@ -603,6 +657,7 @@ function acquireZenHome(win, services) {
   }
   function startSearchMorph(token,geometry){
     if(!searchBar||!geometry||win.matchMedia("(prefers-reduced-motion: reduce)").matches){
+      finishSearchProbe(token,"open","bypass");
       panel.setAttribute("data-zh-search-ready","");finishSearchMotion();return;
     }
     // Keep the source visible until the native floating box is ready.
@@ -611,7 +666,8 @@ function acquireZenHome(win, services) {
     const step=()=>{
       searchFrame=0;
       if(!open||searchToken!==token||!searchBar||searchClosing)return;
-      const bar=searchBar;
+      const bar=searchBar,probe=token.homeProbe?.open;
+      if(probe&&!probe.finished)probe.waitFrames++;
       if(bar.hasAttribute("open")&&bar.getAttribute("zen-floating-urlbar")==="true"){
         const target=naturalSearchHeight(bar,geometry);
         if(!panel.hasAttribute("data-zh-search-ready")){
@@ -621,10 +677,15 @@ function acquireZenHome(win, services) {
         if(target>geometry.header+8){
           searchLastHeight=target;
           const reveal=(from,to,round)=>{
+            if(probe&&!probe.finished){
+              if(probe.firstRevealMs===null)probe.firstRevealMs=searchProbeNow()-probe.started;
+              probe.rounds++;
+            }
             animateSearchHeight(token,from,to,round?280:560,false,()=>{
               const latest=naturalSearchHeight(bar,geometry);
               searchLastHeight=latest;
               if(Math.abs(latest-to)>5&&round<2){reveal(to,latest,round+1);return;}
+              finishSearchProbe(token,"open","complete");
               finishSearchMotion();scheduleSearchSnapshot();
             });
           };
@@ -632,7 +693,7 @@ function acquireZenHome(win, services) {
         }
       }
       if(++attempts<120&&nativeSearchOpen(bar))searchFrame=win.requestAnimationFrame(step);
-      else{panel.setAttribute("data-zh-search-ready","");finishSearchMotion();}
+      else{finishSearchProbe(token,"open","readiness-ended");panel.setAttribute("data-zh-search-ready","");finishSearchMotion();}
     };
     searchFrame=win.requestAnimationFrame(step);
   }
@@ -644,7 +705,7 @@ function acquireZenHome(win, services) {
     const source=content.querySelector(".zh-search");
     const from=source?.getBoundingClientRect();
     const geometry=homeSearchGeometry(from,win.innerWidth,win.innerHeight);
-    const token={};searchToken=token;searchBar=bar;searchGeometry=geometry;
+    const token={};searchToken=token;searchBar=bar;searchGeometry=geometry;startSearchProbe(token);
     searchLastHeight=searchCurrentHeight=geometry?.header||56;
     applySearchGeometry(bar,geometry);
     bar.setAttribute("data-zr-home-search","");
@@ -777,8 +838,11 @@ function acquireZenHome(win, services) {
     try{
       const view=searchBar.querySelector?.(".urlbarView");
       if(!view?.querySelector(".urlbarView-row:not([hidden])"))return;
-      const began=snapshotNow(),frozen=freezeSearchResults(view,searchBar.getBoundingClientRect());
-      if(frozen?.rows){frozen.capturedAt=snapshotNow();frozen.captureMs=frozen.capturedAt-began;searchSnapshot=frozen;searchSnapshotDirty=false;}
+      const began=snapshotNow();let frozen;
+      try{
+        frozen=freezeSearchResults(view,searchBar.getBoundingClientRect());
+        if(frozen?.rows){frozen.capturedAt=snapshotNow();frozen.captureMs=frozen.capturedAt-began;searchSnapshot=frozen;searchSnapshotDirty=false;}
+      }finally{if(searchToken?.homeProbe)searchProbeSnapshot(searchToken,snapshotNow()-began,!!frozen?.rows);}
     }catch(error){searchLog("snapshot-unavailable",{name:error?.name||"Error"});}
   }
   function scheduleSearchSnapshot(){
@@ -818,6 +882,7 @@ function acquireZenHome(win, services) {
     if(!searchToken||!searchBar||!searchGeometry||searchClosing||!nativeSearchOpen(searchBar))return false;
     if(win.matchMedia("(prefers-reduced-motion: reduce)").matches)return false;
     if(searchBar.getAttribute("zen-floating-urlbar")!=="true")return false;
+    beginSearchCloseProbe(searchToken);
     captureSearchSnapshot();
     animateSearchReturn(reason,true);
     if(!searchReturn)return false;
@@ -827,6 +892,7 @@ function acquireZenHome(win, services) {
   function animateSearchReturn(reason="native-close",live=false){
     if(!searchToken||searchReturn)return;
     if(!searchGeometry||win.matchMedia("(prefers-reduced-motion: reduce)").matches){finishSearchVisual();return;}
+    beginSearchCloseProbe(searchToken);
     const handoffStarted=snapshotNow(),g=searchGeometry,bar=searchBar;
     captureSearchSnapshot();
     const measured=live?bar?.getBoundingClientRect():(searchLastRect||searchSnapshot?.rect);
@@ -868,6 +934,7 @@ function acquireZenHome(win, services) {
       searchReturnFrame=0;if(!open||searchToken!==token||searchReturn!==shell)return;
       if(start===null){start=now;firstFrameDelay=Math.max(0,snapshotNow()-handoffStarted);}
       if(previous!==null)maxFrameGap=Math.max(maxFrameGap,now-previous);previous=now;
+      searchProbeFrame(token,"close",now);
       const p=Math.min(1,(now-start)/duration),h=revealValue(height,dest.height,p),top=revealValue(startBox.top,dest.top,p);
       shell.style.height=h+"px";
       if(moveTop)shell.style.top=top+"px";
@@ -877,6 +944,7 @@ function acquireZenHome(win, services) {
       paintReturnParts(parts,top+h,p,finalBottom);
       if(p<1)searchReturnFrame=win.requestAnimationFrame(tick);
       else{
+        finishSearchProbe(token,"close","complete");
         searchLog("close-finish",{reason,rows:frozen?.rows||0,elapsed:Math.round(now-start),maxFrameGap:Math.round(maxFrameGap),firstFrameDelay:Math.round(firstFrameDelay)});
         finishSearchVisual();content.querySelector(".zh-search")?.focus({preventScroll:true});
       }
@@ -1189,6 +1257,8 @@ function acquireZenHome(win, services) {
       if(typeof win.ResizeObserver==="function"){
         const sizes=new win.ResizeObserver(()=>{
           if(searchToken&&!searchClosing&&!searchReturn&&snapshotReady(searchBar)){
+            const probe=searchToken.homeProbe?.open;
+            if(probe&&!probe.finished)probe.resizeReads++;
             const rect=searchBar.getBoundingClientRect();
             if(rect.height>0){searchLastHeight=rect.height;searchLastRect=rect;}
           }

@@ -105,7 +105,7 @@ test("NC4-089-R5 enforces source-declared event-specific reasons and statuses",(
    ["library.media.scan.wait","status"],["library.media.refresh","status"],
    ["downloads.native.transfer","reason"],["downloads.drag.payload","reason"],
    ["home.search.close-start","reason"],["home.search.close-finish","reason"],
-   ["home.search.snapshot-unavailable","reason"],["page-progress.network","reason"],
+   ["home.search.snapshot-unavailable","reason"],["home.search.open-baseline","reason"],["home.search.close-baseline","reason"],["page-progress.network","reason"],
    ["library.file.drag.recovered","reason"],["library.surface.fallback","reason"],
    ["center.bloom.fallback","reason"],["center.motion.skip","reason"],["center.fold.reject","reason"]
  ]){

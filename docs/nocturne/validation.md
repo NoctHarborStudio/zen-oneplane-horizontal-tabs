@@ -835,3 +835,11 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [x] User confirms the History button works; reports brief text sharpness/brightness change at animation completion.
 - [x] Remove panel scaling, preserve fade/travel and durations, match terminal CSS/WAAPI pose, add bounded opt-out-aware settlement diagnostic and two source regressions.
 - [ ] In installed Zen, compare opening and closing on Home and ordinary page; check fast reopen, reduced motion, and no sharpness/brightness jump at the last frame. If still present, collect diagnostics and isolate backdrop-filter/group opacity. Source/CI is not proof of native text rendering.
+
+### HS3.1 / preview.163 — Home Search Motion baseline
+
+- [x] Add bounded summary instrumentation to existing reveal/return/capture/measurement paths; preserve native commands and current motion.
+- [x] Add source-backed probe tests for nearest-rank gaps, cap, cumulative capture counts, duplicate settlement and opt-out; recorder rejects unknown reasons.
+- [ ] CI and generated-package validation.
+- [ ] Native baseline: open Home search, wait for full zero-prefix results, Escape; repeat, then click Home background, cancel mid-reveal, type and cancel. Compare `home.search.*-baseline` and existing close events. Note monitor refresh and diagnostics on/off; Gecko Profiler for real paint/compositor evidence.
+- [ ] HS3.2–HS6: isolated snapshot/geometry/close experiments, native visual parity and lifecycle acceptance; no claim of a fix in this release.

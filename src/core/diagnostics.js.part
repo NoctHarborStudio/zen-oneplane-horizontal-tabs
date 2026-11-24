@@ -1,7 +1,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.162",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.163",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -85,6 +85,8 @@
     ["home.search.close-start",{reason:new Set(["escape","home-background","native-close","native-event","native-observer"])}],
     ["home.search.close-finish",{reason:new Set(["escape","home-background","native-close","native-event","native-observer"])}],
     ["home.search.snapshot-unavailable",{reason:new Set()}],
+    ["home.search.open-baseline",{reason:new Set(["complete","interrupted","bypass","readiness-ended"])}],
+    ["home.search.close-baseline",{reason:new Set(["complete","interrupted"])}],
     ["page-progress.network",{reason:new Set(["overlap-start","stale-stop"])}],
     ["library.file.drag.recovered",{reason:new Set(["native-session-ended","native-session-unavailable"])}],
     ["library.surface.fallback",{reason:new Set(["popover-unavailable"])}],

@@ -1,3 +1,7 @@
+## 0.3.0-preview.163 — HS3.1 Home search baseline instrumentation
+
+Measure existing Home search reveal/return callbacks before changing the motion engine. Two bounded per-session phase summaries report RAF gaps (nearest-rank p50/p95/p99/max), readiness attempts, reveal rounds, existing natural-height measurement cost, resize reads and cumulative snapshot capture cost. No new RAF, timer, observer, layout read, native search hook or change to animation timing/appearance. New events use finite reason enums and numeric-only measurements; diagnostics opt-out prevents probe allocation/emission. Source fixtures verify bounded samples and single phase settlement. Real Zen baseline and profiler comparison remain required; not a visual repair.
+
 ## 0.3.0-preview.162 — MB-014 Sine-only early CSS probe
 
 Add an inert, 2000ms fail-open CSS surface scoped to browser.xhtml and Zen's native zen-before-loaded marker; respect existing animation/Boot preferences and reduced motion. The per-window handoff latch is set after the existing Boot node mounts or when startup is skipped/failed; never re-arm after handoff. Log native watermark/marker, Sine CSS presence and CSS-cover state at Prelude/Assembly entry. No profile files, native prefs, background module or Sine loader modifications. This measures the earliest supported package CSS path, not a guarantee of pre-Sine or OS first paint. Native visual verification pending.

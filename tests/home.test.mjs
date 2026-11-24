@@ -441,3 +441,26 @@ test("Home startup animation is held until the boot controller resumes it",()=>{
  assert.ok(core.includes('if(timeline.paused){a.pause();a.currentTime=0;}'));
  assert.ok(core.includes('resumeStartup:resumeStartupHome'));
 });
+
+test("Home baseline records bounded frame gaps, snapshot work and one summary per phase",()=>{
+ const code=extract("  function searchProbeNow(","  function paintSearchHeight(");
+ let clock=10,enabled=true;const traces=[];
+ const win={performance:{now:()=>clock},__nocturneTrace:(event,data)=>traces.push({event,data})};
+ const prefs={getBoolPref:()=>enabled};
+ const api=new Function("win","prefs",code+`let searchProbeSequence=0;return {startSearchProbe,beginSearchCloseProbe,searchProbeFrame,searchProbeSnapshot,finishSearchProbe};`)(win,prefs);
+ const token={};api.startSearchProbe(token);assert.equal(token.homeProbe.id,1);
+ for(const now of [10,15,25,45,85])api.searchProbeFrame(token,"open",now);
+ api.searchProbeSnapshot(token,13,true);api.searchProbeSnapshot(token,3,false);
+ clock=100;api.finishSearchProbe(token,"open","complete");api.finishSearchProbe(token,"open","interrupted");
+ assert.equal(traces.length,1);const d=traces[0].data;
+ assert.equal(traces[0].event,"home.search.open-baseline");
+ assert.deepEqual([d.frames,d.gapCount,d.p50,d.p95,d.p99,d.max],[5,4,10,40,40,40]);
+ assert.deepEqual([d.snapshotCalls,d.snapshotSuccess,d.snapshotMs,d.snapshotDuringOpen],[2,1,16,2]);
+ api.beginSearchCloseProbe(token);api.beginSearchCloseProbe(token);
+ for(let i=0;i<520;i++)api.searchProbeFrame(token,"close",100+i*4);
+ api.searchProbeSnapshot(token,8,true);clock=2300;api.finishSearchProbe(token,"close","complete");
+ assert.equal(traces.length,2);assert.equal(traces[1].data.gapCount,512);assert.equal(traces[1].data.gapDropped,7);
+ assert.equal(traces[1].data.snapshotDuringOpen,2);assert.equal(traces[1].data.snapshotCalls,3);
+ enabled=false;const off={};api.startSearchProbe(off);assert.equal(off.homeProbe,undefined);
+ enabled=true;api.startSearchProbe(off);enabled=false;api.finishSearchProbe(off,"open","interrupted");assert.equal(traces.length,2);
+});
