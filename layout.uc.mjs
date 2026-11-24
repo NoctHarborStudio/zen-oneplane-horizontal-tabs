@@ -86,7 +86,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.196",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.197",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -2293,7 +2293,7 @@ function acquireZenHome(win, services) {
   const content=html("main","zh-content");panel.append(content);
   let open=false,editing=false,dead=false,switching=false,adding=false,dragId=null,focusHome=null,oldInert=false,covered=false,motion=null,searchToken=null,startupHome=false,homeOnPlaceholder=false;
   let searchFrame=0,searchBar=null,nativeCancelTab=null;
-  let searchGeometry=null,searchLastHeight=0,searchCurrentHeight=0,searchClosing=false;
+  let searchGeometry=null,searchLastHeight=0,searchClosing=false;
   let searchInput=null,searchOriginalPlaceholder=null,searchSessionLabel=null;
   let searchReturnParts=[];
   let searchProbeSequence=0;
@@ -2552,8 +2552,7 @@ function acquireZenHome(win, services) {
   function finishSearchVisual(){
     finishSearchProbe(searchToken,"close","interrupted");
     finishSearchMotion();
-    for(const part of searchReturnParts)for(const key of ["alpha","base","clip","shift"])part.node.style.removeProperty("--zh-return-"+key);
-    searchReturnParts=[];
+    clearLiveReturnParts();
     if(searchBar){
       searchBar.removeAttribute("data-zr-home-search");searchBar.removeAttribute("data-zh-closing");
       for(const key of ["left","top","width","header","room","rule"])searchBar.style?.removeProperty("--zh-search-"+key);
@@ -2563,8 +2562,8 @@ function acquireZenHome(win, services) {
       else searchInput.setAttribute("placeholder",searchOriginalPlaceholder);
     }
     searchInput=null;searchOriginalPlaceholder=null;searchSessionLabel=null;
-    searchBar=null;searchToken=null;searchGeometry=null;searchLastHeight=0;searchCurrentHeight=0;searchClosing=false;
-    panel.removeAttribute("data-zh-search");panel.removeAttribute("data-zh-search-ready");panel.removeAttribute("data-zh-return");panel.removeAttribute("data-zh-commit");panel.removeAttribute("data-zh-search-resumed");content.removeAttribute("inert");
+    searchBar=null;searchToken=null;searchGeometry=null;searchLastHeight=0;searchClosing=false;
+    panel.removeAttribute("data-zh-search");panel.removeAttribute("data-zh-search-ready");panel.removeAttribute("data-zh-commit");panel.removeAttribute("data-zh-search-resumed");content.removeAttribute("inert");
   }
   function homeSearchGeometry(from,viewportWidth,viewportHeight){
     if(!from||!(from.width>0)||!(from.height>0))return null;
@@ -2632,7 +2631,6 @@ function acquireZenHome(win, services) {
     }catch{}
   }
   function paintSearchHeight(bar,height,alpha){
-    searchCurrentHeight=height;
     bar.style?.setProperty("--zh-reveal-height",height+"px");
     bar.style?.setProperty("--zh-results-alpha",String(Math.max(0,Math.min(1,alpha))));
   }
@@ -2723,7 +2721,7 @@ function acquireZenHome(win, services) {
     const from=source?.getBoundingClientRect();
     const geometry=homeSearchGeometry(from,win.innerWidth,win.innerHeight);
     const token={};searchToken=token;searchBar=bar;searchGeometry=geometry;startSearchProbe(token);
-    searchLastHeight=searchCurrentHeight=geometry?.header||56;
+    searchLastHeight=geometry?.header||56;
     applySearchGeometry(bar,geometry);
     bar.setAttribute("data-zr-home-search","");
     if(geometry&&prefs.getBoolPref("zen.nocturne.motion.enabled",true)){
@@ -2844,23 +2842,29 @@ function acquireZenHome(win, services) {
     if(searchBar?.hasAttribute("has-popup-open"))return false;
     return cancelHomeSearch("home-background");
   }
+  function ownsNativeSearch(token,bar){
+    return Boolean(token&&searchToken===token&&bar&&searchBar===bar&&win.gURLBar===bar&&
+      typeof token.nativeClose==="function"&&bar._zenHandleUrlbarClose===token.nativeClose);
+  }
+  function nativeSearchReplaced(token,bar){
+    return Boolean(token&&bar&&(win.gURLBar!==bar||
+      (bar._zenHandleUrlbarClose&&bar._zenHandleUrlbarClose!==token.nativeClose)));
+  }
   function finishNativeCancel(){
-    const bar=searchBar;
-    // Never close a replacement session using our old lease.
-    if(searchToken?.nativeClose&&bar?._zenHandleUrlbarClose!==searchToken.nativeClose)return false;
-    // Use Zen's own session closure; do not replace its provider or patch
-    // its methods. Native cancellation still runs even if animation fails.
+    const token=searchToken,bar=searchBar;
+    // Only the exact callback captured at activation belongs to Home.
+    // A missing callback means Zen has already started teardown.
+    if(!ownsNativeSearch(token,bar))return false;
     try{
-      if(typeof bar?._zenHandleUrlbarClose==="function")bar._zenHandleUrlbarClose(false,false);
-      else bar?.view?.close();
-      bar?.blur?.();return true;
+      bar._zenHandleUrlbarClose(false,false);
+      // A native callback may synchronously start a different session.
+      if(!nativeSearchReplaced(token,bar))bar.blur?.();
+      return true;
     }catch(error){win.console.warn("[Zen Home] search cancel",nocturneErrorClass(error));finishSearchVisual();return false;}
   }
   // Only Home-owned, still-live Zen sessions may defer native cancellation.
-  // Never wrap the native handler: native selection, blur and tab switch win.
   function ownsLiveSearch(token,bar){
-    return Boolean(token&&searchToken===token&&searchBar===bar&&win.gURLBar===bar&&
-      typeof token.nativeClose==="function"&&bar._zenHandleUrlbarClose===token.nativeClose&&liveSearchReady(bar));
+    return ownsNativeSearch(token,bar)&&liveSearchReady(bar);
   }
   function clearLiveReturnParts(){
     for(const part of searchReturnParts)for(const key of ["alpha","base","clip","shift"])part.node.style.removeProperty("--zh-return-"+key);
@@ -2954,6 +2958,7 @@ function acquireZenHome(win, services) {
   }
   function onSearchClosed(event){
     const detail=event.detail;
+    if(dead)return;
     if(!open){
       // A result pick or tab switch is navigation, not a Home request.
       // Zen can dispatch this before the native view has finished closing.
@@ -2965,6 +2970,8 @@ function acquireZenHome(win, services) {
       return;
     }
     if(!searchToken||detail?.closeSeq!==searchToken.id)return;
+    // Zen dispatches its asynchronous close event before checking isOwner.
+    if(nativeSearchReplaced(searchToken,searchBar)){settleNativeSearch("owner-changed");return;}
     if(detail.onElementPicked||detail.onSwitch)leaveHome();
     else if(searchToken.liveReturn?.phase==="commit")settleLiveSearch(true);
     else settleNativeSearch("native-event");
@@ -2976,16 +2983,13 @@ function acquireZenHome(win, services) {
       }
       return;
     }
+    if(nativeSearchReplaced(searchToken,searchBar)){settleNativeSearch("owner-changed");return;}
     if(searchToken.liveReturn){
       const state=searchToken.liveReturn;
       if(state.phase==="commit"){
         if(!nativeSearchOpen(searchBar))settleLiveSearch(true);
-        else if(searchBar._zenHandleUrlbarClose&&searchBar._zenHandleUrlbarClose!==searchToken.nativeClose)settleNativeSearch("owner-changed");
       }else if(!ownsLiveSearch(searchToken,searchBar))settleNativeSearch("live-invalid");
       return;
-    }
-    if(searchToken.nativeClose&&searchBar._zenHandleUrlbarClose&&searchBar._zenHandleUrlbarClose!==searchToken.nativeClose){
-      settleNativeSearch("owner-changed");return;
     }
     if(!nativeSearchOpen(searchBar))settleNativeSearch("native-observer");
   }
@@ -3212,7 +3216,9 @@ function acquireZenHome(win, services) {
     }catch(error){close();restore();win.console.warn("[Zen Home] open",nocturneErrorClass(error));return false;}
   }
   function destroy(){
-    if(dead)return;if(searchToken?.liveReturn&&ownsLiveSearch(searchToken,searchBar))finishNativeCancel();close();dead=true;for(const fn of cleanups.splice(0))try{fn();}catch{}
+    if(dead)return;dead=true;
+    if(ownsNativeSearch(searchToken,searchBar))finishNativeCancel();
+    close();for(const fn of cleanups.splice(0))try{fn();}catch{}
     panel.remove();style.remove();if(win[KEY]===registry)delete win[KEY];
   }
   const registry={apiVersion:1,startupLeaseVersion:1,startupOutcomeVersion:1,startupBloomVersion:1,warmStartupIcons,playStartup:playStartupHome,resumeStartup:resumeStartupHome,finishStartup:finishStartupHome,acquire(){

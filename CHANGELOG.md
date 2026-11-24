@@ -1,3 +1,7 @@
+## 0.3.0-preview.197 — Home search lifecycle (HS5)
+
+Use one exact native callback lease for controlled cancellation and final Home destruction. Reject stale close notifications if Zen has replaced the session; do not blur a replacement created during cancellation. Remove a write-only animation height variable and consolidate return-part cleanup. Keep the verified live glyph, motion timings and geometry. No new observer, timer or native hook.
+
 ## 0.3.0-preview.196 — MB-014 native backdrop isolation
 
 Retire the ineffective startup gradient/grain override and its window latch; retain the bounded empty-tab sidebar clip and existing Boot/close motion. Reuse the existing user-controlled Windows Mica preference for a cold-start A/B test; record native pref, window transparency, backdrop type and Gecko Mica media state without writing native appearance prefs. Native verification pending.

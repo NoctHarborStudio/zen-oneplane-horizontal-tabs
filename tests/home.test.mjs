@@ -70,11 +70,10 @@ test("Workspace command notices preserve Home geometry without hiding native pen
 test("Home native search preserves surface on cancel and ignores stale close",()=>{
  const code=extract("  function searchActive(","  function move(");
  const run=new Function("win","panel","content",code+`
- let open=true,searchToken=null,searchBar=null,searchFrame=0,searchMotion=null,searchTimer=0,closed=0;const prefs={getBoolPref:()=>false};
- let searchGeometry=null,searchLastHeight=0,searchCurrentHeight=0,searchClosing=false,searchReturn=null,searchReturnFrame=0;
+ let open=true,dead=false,searchToken=null,searchBar=null,searchFrame=0,closed=0;const prefs={getBoolPref:()=>false};
+ let searchGeometry=null,searchLastHeight=0,searchClosing=false;
  let searchInput=null,searchOriginalPlaceholder=null,searchSessionLabel=null;
- let searchSnapshot=null,searchSnapshotTimer=0,searchSnapshotObserver=null,searchSnapshotDirty=true,searchSnapshotView=null;
- let searchReturnParts=[],searchLastRect=null;const doc={getElementById:()=>null};
+ let searchReturnParts=[];const doc={getElementById:()=>null};
  function close(){open=false;closed++;finishSearchVisual()}
  function leaveHome(){close()}
  function ensurePrimaryHome(){}
@@ -292,14 +291,14 @@ test("Home search waits for a real result height and animates both directions",(
   setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k),getAttribute:k=>attrs.get(k),hasAttribute:k=>attrs.has(k),
   getBoundingClientRect:()=>({height:attrs.has("data-zr-home-search-motion")?Number.parseFloat(styles.get("--zh-reveal-height"))||56:height})};
  bar.setAttribute("open","");bar.setAttribute("zen-floating-urlbar","true");bar.setAttribute("data-zr-home-search-motion","prepare");
+ bar.styleValue=()=>styles.get("--zh-reveal-height");
  const win={requestAnimationFrame(fn){queue.set(++seq,fn);return seq;},cancelAnimationFrame(id){queue.delete(id);},matchMedia:()=>({matches:false})};
  const run=new Function("win","bar",code+`
- let open=true,searchToken={},searchBar=bar,searchFrame=0,searchClosing=false,searchLastHeight=56,searchCurrentHeight=56,searchGeometry={header:56,room:600};const prefs={getBoolPref:(k,f)=>f};
+ let open=true,searchToken={},searchBar=bar,searchFrame=0,searchClosing=false,searchLastHeight=56,searchGeometry={header:56,room:600};const prefs={getBoolPref:(k,f)=>f};
  const panel={hasAttribute:k=>attrsMock.has(k),setAttribute:(k,v)=>attrsMock.set(k,v)};const attrsMock=new Map();
  function nativeSearchOpen(){return true}
  function finishSearchMotion(){bar.removeAttribute("data-zr-home-search-motion")}
- function scheduleSearchSnapshot(){}
- return {start:()=>startSearchMorph(searchToken,searchGeometry),close:()=>{searchClosing=true;animateSearchHeight(searchToken,400,56,368,true,()=>{})},get current(){return searchCurrentHeight}};
+ return {start:()=>startSearchMorph(searchToken,searchGeometry),close:()=>{searchClosing=true;animateSearchHeight(searchToken,400,56,368,true,()=>{})},get current(){return Number.parseFloat(bar.styleValue?.()||"56")}};
  `);
  const a=run(win,bar);
  const frame=now=>{const jobs=[...queue.values()];queue.clear();for(const fn of jobs)fn(now)};
@@ -310,7 +309,7 @@ test("Home search waits for a real result height and animates both directions",(
  a.close();frame(512);frame(600);assert.ok(a.current>56&&a.current<400);
  frame(880);assert.equal(a.current,56);
 });
-test("Home search closing preserves native ownership and has blur fallback",()=>{
+test("Home search closing preserves native ownership and guarded blur",()=>{
  assert.ok(core.includes("bar._zenHandleUrlbarClose(false,false)"));
  assert.ok(core.includes("driveLiveSearch(token,state,true,reason)"));
  assert.ok(core.includes("function settleNativeSearch(reason)"));
@@ -508,7 +507,7 @@ test("Home preserves its existing live default glyph until visual acceptance",()
 });
 
 test("Home controlled close keeps native session until last frame and reverses from current geometry",()=>{
- const code=extract("  function ownsLiveSearch(","  function settleNativeSearch(");
+ const code=extract("  function ownsNativeSearch(","  function settleNativeSearch(").replace(/  function finishNativeCancel\(\)\{[\s\S]*?(?=  \/\/ Only Home-owned)/,"");
  const jobs=[],writes=[],native=()=>writes.push("native");
  const token={nativeClose:native,liveReturn:null},attrs=new Map();
  let height=400,alpha=1;
@@ -540,11 +539,12 @@ test("Home external close restores only the original surface without forcing foc
  const calls=[],owner=()=>{},bar={_zenHandleUrlbarClose:owner};
  let nativeOpen=true;
  const api=new Function("win","bar","owner","calls","isOpen",code+`
- let open=true,searchClosing=false,searchToken=null,searchBar=bar,nativeCancelTab=null;
+ let open=true,dead=false,searchClosing=false,searchToken=null,searchBar=bar,nativeCancelTab=null;
  function searchLog(event,data){calls.push([event,data.reason])}
  function settleLiveSearch(focus=false){calls.push(["settle",focus]);searchToken=null;searchBar=null;}
  function leaveHome(){calls.push(["leave"]);searchToken=null;}
  function nativeSearchOpen(){return isOpen()}
+ function nativeSearchReplaced(token,b){return !!(b._zenHandleUrlbarClose&&b._zenHandleUrlbarClose!==token.nativeClose)}
  function ownsLiveSearch(token,b){return b._zenHandleUrlbarClose===token.nativeClose&&isOpen()}
  return {reset(state=null){searchBar=bar;searchToken={id:7,nativeClose:owner,liveReturn:state};searchClosing=!!state;},observeSearch,onSearchClosed};
  `)({gURLBar:bar},bar,owner,calls,()=>nativeOpen);
@@ -554,5 +554,41 @@ test("Home external close restores only the original surface without forcing foc
  nativeOpen=true;api.reset();bar._zenHandleUrlbarClose=()=>{};api.observeSearch();assert.deepEqual(calls.splice(0),[["native-settle","owner-changed"],["settle",false]]);
  bar._zenHandleUrlbarClose=owner;api.reset({phase:"commit"});api.onSearchClosed({detail:{closeSeq:7}});assert.deepEqual(calls.splice(0),[["settle",true]]);
  api.reset();api.onSearchClosed({detail:{closeSeq:7,onElementPicked:true}});assert.deepEqual(calls.splice(0),[["leave"]]);
- api.reset({phase:"fold"});bar._zenHandleUrlbarClose=()=>{};api.observeSearch();assert.deepEqual(calls.splice(0),[["native-settle","live-invalid"],["settle",false]]);
+ api.reset({phase:"fold"});bar._zenHandleUrlbarClose=()=>{};api.observeSearch();assert.deepEqual(calls.splice(0),[["native-settle","owner-changed"],["settle",false]]);
+ bar._zenHandleUrlbarClose=owner;api.reset({phase:"commit"});bar._zenHandleUrlbarClose=()=>{};api.onSearchClosed({detail:{closeSeq:7}});assert.deepEqual(calls.splice(0),[["native-settle","owner-changed"],["settle",false]]);
+});
+
+test("HS5 exact native lease prevents duplicate cancellation and blur of a replacement",()=>{
+ const code=extract("  function ownsNativeSearch(","  function clearLiveReturnParts(");
+ const calls=[],replacement=()=>calls.push("replacement"),bar={blur:()=>calls.push("blur")};
+ let replace=false;
+ const owner=()=>{calls.push("native");bar._zenHandleUrlbarClose=replace?replacement:null};
+ bar._zenHandleUrlbarClose=owner;
+ const win={gURLBar:bar,console:{warn(){}}};
+ const api=new Function("win","bar","owner",code+`
+ let searchToken={nativeClose:owner},searchBar=bar;
+ function finishSearchVisual(){}
+ function liveSearchReady(){return false}
+ return {finishNativeCancel,ownsNative:()=>ownsNativeSearch(searchToken,bar),ownsLive:()=>ownsLiveSearch(searchToken,bar)};
+ `)(win,bar,owner);
+ assert.equal(api.ownsNative(),true);assert.equal(api.ownsLive(),false);
+ assert.equal(api.finishNativeCancel(),true);assert.deepEqual(calls.splice(0),["native","blur"]);
+ assert.equal(api.finishNativeCancel(),false);assert.deepEqual(calls,[]);
+ bar._zenHandleUrlbarClose=owner;replace=true;
+ assert.equal(api.finishNativeCancel(),true);assert.deepEqual(calls.splice(0),["native"]);
+ assert.equal(api.finishNativeCancel(),false);assert.deepEqual(calls,[]);
+ bar._zenHandleUrlbarClose=owner;win.gURLBar={};assert.equal(api.finishNativeCancel(),false);
+});
+test("HS5 destroy closes an owned native session even before results are ready and is reentrancy safe",()=>{
+ const code=extract("  function destroy(){","  const registry=");
+ const calls=[],win={},registry={},KEY="home",panel={remove:()=>calls.push("panel")},style={remove:()=>calls.push("style")};win[KEY]=registry;
+ const api=new Function("win","registry","KEY","panel","style","calls",code+`
+ let dead=false,searchToken={},searchBar={},owned=true;const cleanups=[()=>calls.push("cleanup")];
+ function ownsNativeSearch(){return owned}
+ function finishNativeCancel(){calls.push("native");destroy()}
+ function close(){calls.push("close")}
+ return {destroy,setOwned:v=>owned=v};
+ `)(win,registry,KEY,panel,style,calls);
+ api.destroy();api.destroy();
+ assert.deepEqual(calls,["native","close","cleanup","panel","style"]);assert.equal(win[KEY],undefined);
 });
