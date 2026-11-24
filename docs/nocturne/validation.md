@@ -843,3 +843,13 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [ ] CI and generated-package validation.
 - [ ] Native baseline: open Home search, wait for full zero-prefix results, Escape; repeat, then click Home background, cancel mid-reveal, type and cancel. Compare `home.search.*-baseline` and existing close events. Note monitor refresh and diagnostics on/off; Gecko Profiler for real paint/compositor evidence.
 - [ ] HS3.2–HS6: isolated snapshot/geometry/close experiments, native visual parity and lifecycle acceptance; no claim of a fix in this release.
+
+### Preview.164 — Library Filter, native suppression, scroll gutter and animation investigation
+
+- [x] Verify Zen native preference toggle/swipe gate and Firefox 160 PlacesQuery date/site/lastvisited/mostvisited contracts.
+- [x] Existing Layout lease: opt-in native disable with migration, exact value restoration on final release; explicit stock buttons and Hub fallback removed; recognized command rejection consumed when cutover active. No native-history database change.
+- [x] Native-backed calendar period and sort choices; preserve bounded pagination, stale guards and separate Recently Closed. Drawer Done/Escape/inert and reduced-motion rules.
+- [x] Stationary glass sibling, scrollbar inline-end padding/gutter, longer motion and bounded callback gap metrics. Source regressions added.
+- [ ] Installed Zen/Sine: full restart with experimental Library enabled; confirm stock Zen Library does not open via Ctrl+H/J, toolbar icon, menu, edge swipe, and refused/unready commands. Check opt-out/disable and multiwindow restoration on disposable profile.
+- [ ] On Home and ordinary page, scroll History and verify no Copy/Remove overlap; Filter slide, all period/sort choices, search/pagination, keyboard focus, Escape and quick reopen. Test narrow viewport/overflow and reduced motion.
+- [ ] Compare native opening/closing visual cadence, diagnostics-on/off, callback gap aggregates and Gecko Profiler presented frames/render pipeline where needed. Callback intervals are not presented FPS.

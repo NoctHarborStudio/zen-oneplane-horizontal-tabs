@@ -24,17 +24,18 @@ test("Library L3 is opt-in, built independently, and guards experimental native 
  const pref=JSON.parse(read("preferences.json")).find(x=>x.property==="zen.nocturne.library.preview");assert.equal(pref.defaultValue,false);
 });
 
-test("shortcut routing only consumes the event on a successful open and reports refusal",()=>{
+test("shortcut routing consumes rejected requests during Nocturne cutover and preserves native opt-out",()=>{
  const source=read("src/library/controller.js.part");
  const code=source.slice(source.indexOf("  function route("),source.indexOf("  function onServicesGone("));
- const calls=[];let allowed=true,opened=true,ready=true;
- const win={__nocturneLibraryServices:{historyReady:()=>ready}},prefs={getBoolPref:()=>allowed};
+ const calls=[];let allowed=true,opened=true,ready=true,nativeEnabled=true;
+ const win={__nocturneLibraryServices:{historyReady:()=>ready}},prefs={getBoolPref:k=>k==="zen.library.enabled"?nativeEnabled:allowed};
  const run=new Function("win","prefs","enabled","privateWindow","toggle","trace",`const SHORTCUT="history",DOWNLOADS_SHORTCUT="downloads";let nativeFallback=false,lastFailure=null;${code}return route;`)(win,prefs,()=>allowed,()=>false,()=>opened,(e,d)=>calls.push(d));
  let consumed=0;const event={preventDefault(){consumed++;},stopImmediatePropagation(){consumed++;}};
  assert.equal(run(event,"history","keydown"),true);assert.equal(consumed,2);
- opened=false;assert.equal(run(event,"history","command"),false);assert.equal(consumed,2);
- ready=false;assert.equal(run(event,"history","keydown"),false);assert.equal(calls.at(-1).reason,"history-unready");
+ opened=false;assert.equal(run(event,"history","command"),true);assert.equal(consumed,4);
+ ready=false;assert.equal(run(event,"history","keydown"),true);assert.equal(calls.at(-1).reason,"history-unready");
  allowed=false;assert.equal(run(event,"history","keydown"),false);assert.equal(calls.at(-1).reason,"disabled");
+ nativeEnabled=false;assert.equal(run(event,"history","keydown"),true);assert.equal(calls.at(-1).reason,"disabled");
  assert.match(source,/function showLayer\(/);assert.match(source,/layer.removeAttribute\("popover"\)/);
 });
 
@@ -98,7 +99,7 @@ test("History row deletion blocks overlapping range clear, then releases gate on
 
 test("Library Downloads bulk clear truthfully reports a skipped native entry",async()=>{
  const source=read("src/library/controller.js.part");
- const code=source.slice(source.indexOf("  async function clearDownloads("),source.indexOf("  function openNativeDownloads("));
+ const code=source.slice(source.indexOf("  async function clearDownloads("),source.indexOf("  async function changeFolders("));
  assert.ok(code.includes("result.failed||result.skipped"));
  const result={requested:2,removed:1,skipped:1,failed:0},notices=[],events=[];let retries=0;
  const win={__nocturneLibraryServices:{downloads:{clearCompleted:async()=>result}}},state={section:"downloads",phase:"open"};
@@ -115,7 +116,7 @@ test("Library Downloads bulk clear truthfully reports a skipped native entry",as
 
 test("Library Downloads clear treats a concurrent Dock clear as busy, not success",async()=>{
  const source=read("src/library/controller.js.part");
- const code=source.slice(source.indexOf("  async function clearDownloads("),source.indexOf("  function openNativeDownloads("));
+ const code=source.slice(source.indexOf("  async function clearDownloads("),source.indexOf("  async function changeFolders("));
  const events=[],notices=[];let retried=0;
  const win={__nocturneLibraryServices:{downloads:{clearCompleted:async predicate=>{
    assert.equal(typeof predicate,"function");return null;
@@ -274,4 +275,39 @@ test("Library terminal motion probe respects epoch and opt-out and samples both 
  const result=run(true,"opening",2);
  assert.deepEqual(result.calls,["sample","cancel","sample"]);
  assert.deepEqual(result.events,[{name:"motion.settled",data:{section:"history",opacityStable:true,transformStable:true,beforeOpacity:1,afterOpacity:1}}]);
+});
+
+
+test("Library uses stationary glass and an independent filter drawer with reserved scroll padding",()=>{
+ const source=read("src/library/controller.js.part"),css=read("src/styles/library.css.part");
+ assert.match(source,/layer\.append\(shade,glass,panel\)/);
+ assert.match(source,/play\(shell\.glass,\[glass,\{opacity:1\}\]/);
+ assert.match(source,/duration\(reopening\?360:480\)/);
+ assert.match(source,/duration\(360\)\),play\(shell\.glass/);
+ assert.match(source,/historyDrawer\.inert=!open/);
+ assert.match(source,/setHistoryDrawer\(false,true\)/);
+ assert.match(source,/periodButtons,"FILTER"/);
+ assert.match(source,/orderButtons,"SORT"/);
+ assert.doesNotMatch(source,/button\("Native (?:history|downloads)"/);
+ assert.match(css,/scrollbar-gutter:stable;padding-inline-end:14px/);
+ assert.match(css,/\.nl-glass\{[^}]*backdrop-filter:blur\(30px\)/s);
+ assert.doesNotMatch(css,/\.nl-panel\{[^}]*backdrop-filter:/s);
+ assert.match(css,/\.nl-history-filter\[data-open\]/);
+});
+
+
+test("Library motion probe is bounded, opt-out-aware and releases scheduled frames",()=>{
+ const source=read("src/library/controller.js.part");
+ const begin=source.indexOf("  function startMotionProbe("),end=source.indexOf("  function play(",begin);
+ const frames=new Map(),events=[];let id=0,t=0,enabled=true;
+ const win={performance:{now:()=>t},requestAnimationFrame(fn){frames.set(++id,fn);return id;},cancelAnimationFrame(key){frames.delete(key);}};
+ const run=new Function("win","prefs","trace",`let motionProbe=null,dead=false,animations=[],state={section:"history",phase:"opening",motionEpoch:3};${source.slice(begin,end)}return {startMotionProbe,cancelMotion};`)(win,{getBoolPref:()=>enabled},(name,detail)=>events.push({name,detail}));
+ run.startMotionProbe(480);
+ for(const time of [16,24,32,64,72]){t=time;const [key,fn]=frames.entries().next().value;frames.delete(key);fn(t);}
+ run.cancelMotion(true);assert.equal(frames.size,0);
+ assert.equal(events[0].name,"motion.frames");assert.equal(events[0].detail.frames,4);
+ assert.equal(events[0].detail.p50,8);assert.equal(events[0].detail.max,32);assert.equal(events[0].detail.over25,1);
+ enabled=false;run.startMotionProbe(480);assert.equal(frames.size,0);
+ enabled=true;run.startMotionProbe(0);assert.equal(frames.size,0);
+ run.startMotionProbe(480);run.cancelMotion();assert.equal(frames.size,0);assert.equal(events[1].detail.completed,false);
 });
