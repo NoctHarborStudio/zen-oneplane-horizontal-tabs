@@ -312,7 +312,7 @@ test("Home search waits for a real result height and animates both directions",(
 });
 test("Home search closing preserves native ownership and has blur fallback",()=>{
  assert.ok(core.includes("bar._zenHandleUrlbarClose(false,false)"));
- assert.ok(core.includes("animateSearchReturn(reason,true)"));
+ assert.ok(core.includes("driveLiveSearch(token,state,true,reason)"));
  assert.ok(core.includes("function animateSearchReturn(reason="));
  assert.ok(core.includes('panel.removeAttribute("data-zh-return")'));
  assert.ok(core.includes("if(detail.onElementPicked||detail.onSwitch)leaveHome();"));
@@ -369,11 +369,11 @@ test("Home cards reveal continuously as the search edge clears each row",()=>{
  assert.ok(near.alpha>.99&&near.clip<=1);
  assert.deepEqual(state(260,100,264,1,264),{alpha:1,clip:0,shift:0});
 });
-test("Home closes with a frozen native results layer and no early full Home opacity",()=>{
+test("Home retains a temporary fallback only for unexpected native close",()=>{
  assert.ok(core.includes("function freezeSearchResults(view,barRect)"));
  assert.ok(core.includes('const target=html(tag);styleCopy(target,style)'));
  assert.ok(core.includes('shell.append(frozen.node)'));
- assert.ok(core.includes('captureSearchSnapshot();\n    animateSearchReturn(reason,true);'));
+ assert.ok(core.includes('else animateSearchReturn("native-event")'));
  assert.ok(core.includes('opacity:calc(var(--zh-return-alpha,0) * var(--zh-return-base,1))'));
  assert.ok(core.includes('paintReturnParts(parts,top+h,p,finalBottom)'));
  assert.ok(core.includes('searchLog("close-start",{reason,rows:'));
@@ -557,4 +557,33 @@ test("Home frozen default glyph uses the same computed CSS mask as the live rece
  assert.ok(core.includes("background-color:currentColor!important"));
  assert.ok(core.includes('if(source.getAttribute("data-zr-home-default")==="true")stableDefaultIcons++'));
  assert.ok(core.includes("stableDefaultIcons:frozen?.stableDefaultIcons||0"));
+});
+
+test("Home controlled close keeps native session until last frame and reverses from current geometry",()=>{
+ const code=extract("  function ownsLiveSearch(","  function animateSearchReturn(");
+ const jobs=[],writes=[],native=()=>writes.push("native");
+ const token={nativeClose:native,liveReturn:null},attrs=new Map();
+ let height=400,alpha=1;
+ const bar={_zenHandleUrlbarClose:native,getBoundingClientRect:()=>({height}),querySelector:()=>({querySelectorAll:()=>[1,2]}),setAttribute:(k,v)=>attrs.set(k,v)};
+ const api=new Function("win","token","bar","jobs","writes","attrs","setHeight","setAlpha",code+`
+ let searchToken=token,searchBar=bar,searchGeometry={header:56,room:600,top:40},searchLastHeight=400,searchClosing=false,searchReturnParts=[];
+ const panel={setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k)};
+ const content={querySelectorAll:()=>[],querySelector:()=>({focus:()=>writes.push("focus")})};
+ function snapshotReady(){return true} function stopSearchSnapshot(){writes.push("stop-snapshot")}
+ function startSearchSnapshot(){writes.push("start-snapshot")} function finishSearchProbe(){} function beginSearchCloseProbe(){}
+ function prepareReturnParts(){return []} function paintReturnParts(){} function finishSearchMotion(){} function snapshotNow(){return 0}
+ function searchLog(){} function naturalSearchHeight(){return 400} function revealValue(a,b,p){return a+(b-a)*p}
+ function finishNativeCancel(){bar._zenHandleUrlbarClose();return true}
+ function finishSearchVisual(){searchToken=null;writes.push("cleanup")}
+ function animateSearchHeight(t,from,to,duration,closing,done,live){
+  jobs.length=0;jobs.push({from,to,duration,closing,step(p){if(!live.valid()){live.invalid();return}const h=revealValue(from,to,p);setHeight(h);setAlpha(live.alpha(h,p));live.paint(h,p);if(p===1)done()}})
+ }
+ const open=true;return {cancelHomeSearch,reverseLiveSearch,ownsLiveSearch}
+ ` )({gURLBar:bar,matchMedia:()=>({matches:false}),getComputedStyle:()=>({opacity:String(alpha)}),console:{warn(){}}},token,bar,jobs,writes,attrs,h=>height=h,a=>alpha=a);
+ assert.equal(api.cancelHomeSearch(),true);assert.deepEqual(writes,["stop-snapshot"]);
+ assert.equal(jobs[0].duration,368);jobs[0].step(.5);assert.equal(height,228);
+ assert.equal(api.reverseLiveSearch(),true);assert.equal(jobs[0].from,228);assert.equal(jobs[0].to,400);jobs[0].step(1);
+ assert.equal(height,400);assert.equal(token.liveReturn,null);assert.ok(!writes.includes("native"));
+ assert.equal(api.cancelHomeSearch(),true);jobs[0].step(1);assert.equal(writes.filter(x=>x==="native").length,1);assert.equal(token.liveReturn.phase,"commit");
+ bar._zenHandleUrlbarClose=()=>{};assert.equal(api.ownsLiveSearch(token,bar),false);
 });

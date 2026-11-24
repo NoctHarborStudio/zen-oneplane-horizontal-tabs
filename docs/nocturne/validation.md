@@ -898,3 +898,7 @@ Check direct 800ms transitions, rapid same-direction and reverse retargets, no d
 
 ### Preview.177 — section retarget continuity
 Test normal direct 1000ms transitions, rapid History → Pictures → Recently Closed and reverse to History while still visible. Existing visible rows must move without being overwritten at click; new content enters from outside the viewport. Test repeated reversals, all five sections, close mid-flight, reduced motion, scrollbar and text consistency. Pure planner fixtures cover all ordered pairs, same-direction and reverse retargets and offscreen pruning. Runtime syntax and planner smoke checked; native handoff and CI pending.
+
+### HS3.4 / preview.179 — native live return experiment
+
+- [ ] Native Zen: verify live Escape and background close, no globe color change, click header or type mid-fold to reverse, close again while reversing, select results, tab switch, external blur, resize, window close, reduced motion and reload. Confirm close-start/finish mode=native-live and close-reverse; no late native close after a reversal. Temporary unexpected-native-close fallback remains until these gates pass.

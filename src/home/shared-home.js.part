@@ -268,6 +268,8 @@ function acquireZenHome(win, services) {
 }
 #zen-home-search-return .zh-return-header{box-sizing:border-box}
 #zen-shared-home[data-zh-return] .zh-search{visibility:hidden}
+ #zen-shared-home[data-zh-return][data-zh-commit] .zh-search{visibility:visible}
+ #zen-shared-home[data-zh-search][data-zh-search-resumed] :is(.zh-section,.zh-footer){transition:none!important}
 #zen-shared-home[data-zh-return] .zh-section{opacity:1;transition:none!important;animation:none!important;pointer-events:none}
 #zen-shared-home[data-zh-return] :is(.zh-section h3,.zh-pin,.zh-pins .zh-empty,.zh-editbar,.zh-space,.zh-footer){
   opacity:calc(var(--zh-return-alpha,0) * var(--zh-return-base,1));
@@ -338,6 +340,7 @@ function acquireZenHome(win, services) {
   function onSelectedTab(){
     typeof win!=="undefined"&&win.__nocturneTrace?.("home.selected",()=>({open}),{sample:1800});
     nativeCancelTab=null;
+    if(searchToken?.liveReturn&&searchToken.tab!==browser.selectedTab)finishSearchVisual();
     if(switching||!allowed())return;
     if(isHomePlaceholder(browser.selectedTab)){
       if(open)homeOnPlaceholder=true;else ensurePrimaryHome();
@@ -562,7 +565,7 @@ function acquireZenHome(win, services) {
     }
     searchInput=null;searchOriginalPlaceholder=null;searchSessionLabel=null;
     searchBar=null;searchToken=null;searchGeometry=null;searchLastHeight=0;searchCurrentHeight=0;searchClosing=false;
-    panel.removeAttribute("data-zh-search");panel.removeAttribute("data-zh-search-ready");panel.removeAttribute("data-zh-return");content.removeAttribute("inert");
+    panel.removeAttribute("data-zh-search");panel.removeAttribute("data-zh-search-ready");panel.removeAttribute("data-zh-return");panel.removeAttribute("data-zh-commit");panel.removeAttribute("data-zh-search-resumed");content.removeAttribute("inert");
   }
   function homeSearchGeometry(from,viewportWidth,viewportHeight){
     if(!from||!(from.width>0)||!(from.height>0))return null;
@@ -655,22 +658,25 @@ function acquireZenHome(win, services) {
     if(began!==null){probe.measureCalls++;probe.measureMs+=searchProbeNow()-began;}
     return Math.max(geometry.header,Math.min(geometry.room,h||geometry.header));
   }
-  function animateSearchHeight(token,from,to,duration,closing,done){
+  function animateSearchHeight(token,from,to,duration,closing,done,live=null){
     if(searchFrame)win.cancelAnimationFrame(searchFrame);
     searchFrame=0;
     const bar=searchBar;if(!bar)return;
     bar.setAttribute("data-zr-home-search-motion","run");
     const header=searchGeometry?.header||56;
     const alpha=h=>Math.min(1,Math.max(0,(h-header)/Math.max(120,Math.abs(to-from)*.55)));
-    paintSearchHeight(bar,from,alpha(from));
+    paintSearchHeight(bar,from,live?live.alpha(from,0):alpha(from));
+    live?.paint(from,0);
     let start=null;
     const tick=now=>{
       searchFrame=0;
       if(!open||searchToken!==token||searchBar!==bar||searchClosing!==closing)return;
+      if(live&&!live.valid()){live.invalid();return;}
       if(start===null)start=now;
       searchProbeFrame(token,closing?"close":"open",now);
       const p=Math.min(1,(now-start)/duration),height=revealValue(from,to,p);
-      paintSearchHeight(bar,height,alpha(height));
+      paintSearchHeight(bar,height,live?live.alpha(height,p):alpha(height));
+      live?.paint(height,p);
       if(p<1)searchFrame=win.requestAnimationFrame(tick);else done();
     };
     searchFrame=win.requestAnimationFrame(tick);
@@ -738,6 +744,8 @@ function acquireZenHome(win, services) {
       if(win.gZenUIManager?.handleNewTab(false,false,"tab",true,token)!==true){
         finishSearchVisual();win.console.warn("[Zen Home] floating search unavailable");return;
       }
+      token.nativeClose=bar._zenHandleUrlbarClose;
+      token.tab=win.gBrowser?.selectedTab;
       searchInput=bar.inputField||doc.getElementById("urlbar-input");
       if(searchInput){
         searchOriginalPlaceholder=searchInput.getAttribute("placeholder");
@@ -886,7 +894,7 @@ function acquireZenHome(win, services) {
     return {node:holder,scroll,rows:view.querySelectorAll(".urlbarView-row:not([hidden])").length,pseudos,rails,contextIcons,defaultIcons,stableDefaultIcons,inset,rect:{left:barRect.left,top:barRect.top,width:barRect.width,height:barRect.height}};
   }
   function captureSearchSnapshot(){
-    if(!searchToken||!searchBar||searchClosing||searchReturn||!searchGeometry||
+    if(!searchToken||!searchBar||searchToken.liveReturn||searchClosing||searchReturn||!searchGeometry||
        !snapshotReady(searchBar))return;
     if(searchSnapshot&&!searchSnapshotDirty)return;
     try{
@@ -900,7 +908,7 @@ function acquireZenHome(win, services) {
     }catch(error){searchLog("snapshot-unavailable",{name:error?.name||"Error"});}
   }
   function scheduleSearchSnapshot(){
-    if(!searchToken||searchClosing||searchReturn||!snapshotReady(searchBar))return;
+    if(!searchToken||searchToken.liveReturn||searchClosing||searchReturn||!snapshotReady(searchBar))return;
     searchSnapshotDirty=true;
     if(searchSnapshotTimer)return;
     searchSnapshotTimer=win.setTimeout(()=>{searchSnapshotTimer=0;captureSearchSnapshot();},80);
@@ -942,7 +950,7 @@ function acquireZenHome(win, services) {
     return contains(home.getBoundingClientRect())&&!contains(bar.getBoundingClientRect());
   }
   function onSearchPointerDown(event){
-    if(!open||!searchToken||searchClosing||searchReturn||!searchBar)return;
+    if(!open||!searchToken||searchReturn||!searchBar||(searchClosing&&!searchToken.liveReturn))return;
     const bar=searchBar,target=event.target,id=searchToken.homeProbe?.id??null;
     // The Address shield owns the complete pointer sequence. It delegates
     // cancellation through the Home lease on click (or its existing fallback).
@@ -952,7 +960,11 @@ function acquireZenHome(win, services) {
       return;
     }
     const background=isHomeSearchBackgroundPress(event,panel,content,bar,host,panels);
-    const consumed=background&&cancelHomeSearch("home-background");
+    if(!background&&searchToken.liveReturn?.phase==="fold"&&bar.contains?.(target)&&event.button===0&&event.isPrimary!==false&&!event.defaultPrevented){
+      const rect=bar.getBoundingClientRect();
+      if(event.clientX>=rect.left&&event.clientX<rect.right&&event.clientY>=rect.top&&event.clientY<rect.bottom)reverseLiveSearch();
+    }
+    const consumed=background&&(searchClosing||cancelHomeSearch("home-background"));
     // One bounded, structural record per press, without coordinates, node
     // identifiers, input or result data. Explains missed native handoffs.
     win.__nocturneTrace?.("home.search.pointer-boundary",()=>({
@@ -962,7 +974,7 @@ function acquireZenHome(win, services) {
     }));
     if(consumed){
       // Cancel the default focus change before native blur can dismantle
-      // the popover; cancelHomeSearch has already run Zen's own close.
+      // the popover; Home owns the complete deferred cancellation gesture.
       event.preventDefault();event.stopImmediatePropagation();
       return;
     }
@@ -976,24 +988,105 @@ function acquireZenHome(win, services) {
   }
   function finishNativeCancel(){
     const bar=searchBar;
+    // Never close a replacement session using our old lease.
+    if(searchToken?.nativeClose&&bar?._zenHandleUrlbarClose!==searchToken.nativeClose)return false;
     // Use Zen's own session closure; do not replace its provider or patch
     // its methods. Native cancellation still runs even if animation fails.
     try{
       if(typeof bar?._zenHandleUrlbarClose==="function")bar._zenHandleUrlbarClose(false,false);
       else bar?.view?.close();
-      bar?.blur?.();
-    }catch(error){win.console.warn("[Zen Home] search cancel",nocturneErrorClass(error));finishSearchVisual();}
+      bar?.blur?.();return true;
+    }catch(error){win.console.warn("[Zen Home] search cancel",nocturneErrorClass(error));finishSearchVisual();return false;}
+  }
+  // Only Home-owned, still-live Zen sessions may defer native cancellation.
+  // Never wrap the native handler: native selection, blur and tab switch win.
+  function ownsLiveSearch(token,bar){
+    return Boolean(token&&searchToken===token&&searchBar===bar&&win.gURLBar===bar&&
+      typeof token.nativeClose==="function"&&bar._zenHandleUrlbarClose===token.nativeClose&&snapshotReady(bar));
+  }
+  function clearLiveReturnParts(){
+    for(const part of searchReturnParts)for(const key of ["alpha","base","clip","shift"])part.node.style.removeProperty("--zh-return-"+key);
+    searchReturnParts=[];panel.removeAttribute("data-zh-return");
+  }
+  function settleLiveSearch(focus=false){
+    finishSearchVisual();
+    if(focus&&open)content.querySelector(".zh-search")?.focus({preventScroll:true});
+  }
+  function driveLiveSearch(token,state,closing,reason){
+    const bar=searchBar,g=searchGeometry,header=g.header;
+    if(!ownsLiveSearch(token,bar))return false;
+    const from=Math.max(header,Math.min(g.room,bar.getBoundingClientRect().height||header));
+    const target=closing?header:Math.max(header,naturalSearchHeight(bar,g));
+    const view=bar.querySelector(".urlbarView");
+    const value=Number.parseFloat(win.getComputedStyle(view||bar).opacity);
+    const fromAlpha=Math.max(0,Math.min(1,Number.isFinite(value)?value:1));
+    const fromProgress=state.progress;
+    const duration=closing?(from>header+8?368:144):448;
+    const distance=Math.abs(target-from),full=Math.max(1,state.fullHeight-header,target-header,from-header);
+    const time=Math.max(1,Math.round(duration*Math.min(1,distance/full)));
+    const ms=state.started?time:duration;state.started=true;
+    state.phase=closing?"fold":"reverse";searchClosing=closing;
+    if(closing){
+      beginSearchCloseProbe(token);
+      searchLog("close-start",{reason,mode:"native-live",rows:view?.querySelectorAll(".urlbarView-row:not([hidden])").length||0,height:Math.round(from),header:Math.round(header),duration:ms});
+    }else{
+      finishSearchProbe(token,"close","interrupted");if(token.homeProbe)token.homeProbe.close=null;
+      searchLog("close-reverse",{mode:"native-live",height:Math.round(from),duration:ms});
+    }
+    const began=snapshotNow();
+    animateSearchHeight(token,from,target,ms,closing,()=>{
+      if(!ownsLiveSearch(token,bar)){settleLiveSearch();return;}
+      if(!closing){
+        token.liveReturn=null;searchClosing=false;
+        panel.setAttribute("data-zh-search-resumed","");
+        clearLiveReturnParts();finishSearchMotion();startSearchSnapshot();
+        return;
+      }
+      finishSearchProbe(token,"close","complete");
+      searchLog("close-finish",{reason,mode:"native-live",elapsed:Math.round(snapshotNow()-began)});
+      // Only after the final frame, hand ownership back to Zen. Keep the
+      // visual gate until the native close acknowledgement.
+      state.phase="commit";panel.setAttribute("data-zh-commit","");
+      bar.setAttribute("data-zh-closing","");
+      if(!finishNativeCancel())settleLiveSearch();
+    },{
+      valid:()=>token.liveReturn===state&&ownsLiveSearch(token,bar),
+      invalid:()=>settleLiveSearch(),
+      alpha:(height,p)=>closing?fromAlpha*Math.min(1,Math.max(0,(height-header)/Math.max(1,Math.min(80,from-header)))):revealValue(fromAlpha,1,p),
+      paint:(height,p)=>{
+        state.progress=revealValue(fromProgress,closing?1:0,p);
+        paintReturnParts(searchReturnParts,g.top+height,state.progress,g.top+header);
+      }
+    });
+    return true;
+  }
+  function reverseLiveSearch(){
+    const token=searchToken,state=token?.liveReturn;
+    if(state?.phase!=="fold")return false;
+    try{return driveLiveSearch(token,state,false,"escape");}
+    catch(error){win.console.warn("[Zen Home] live search reverse",nocturneErrorClass(error));settleLiveSearch();return false;}
   }
   function cancelHomeSearch(reason="escape"){
-    if(!searchToken||!searchBar||!searchGeometry||searchClosing||!nativeSearchOpen(searchBar))return false;
+    const token=searchToken,bar=searchBar;
+    if(!token||!bar||!searchGeometry||searchClosing||!ownsLiveSearch(token,bar))return false;
     if(win.matchMedia("(prefers-reduced-motion: reduce)").matches)return false;
-    if(searchBar.getAttribute("zen-floating-urlbar")!=="true")return false;
-    beginSearchCloseProbe(searchToken);
-    captureSearchSnapshot();
-    animateSearchReturn(reason,true);
-    if(!searchReturn)return false;
-    finishNativeCancel();
-    return true;
+    try{
+      let state=token.liveReturn;
+      if(!state){
+        const height=bar.getBoundingClientRect().height;
+        state=token.liveReturn={phase:"fold",progress:0,fullHeight:Math.max(height,searchLastHeight),started:false};
+        stopSearchSnapshot();
+        finishSearchProbe(token,"open","interrupted");
+        searchReturnParts=prepareReturnParts();
+        for(const part of searchReturnParts)part.node.style.setProperty("--zh-return-base",String(part.base));
+        for(const node of content.querySelectorAll("[data-zh-enter]"))node.removeAttribute("data-zh-enter");
+        panel.setAttribute("data-zh-search-ready","");panel.setAttribute("data-zh-return","");
+      }
+      return driveLiveSearch(token,state,true,reason);
+    }catch(error){
+      win.console.warn("[Zen Home] live search cancel",nocturneErrorClass(error));
+      settleLiveSearch();return false;
+    }
   }
   function animateSearchReturn(reason="native-close",live=false){
     if(!searchToken||searchReturn)return;
@@ -1071,6 +1164,7 @@ function acquireZenHome(win, services) {
     }
     if(!searchToken||detail?.closeSeq!==searchToken.id)return;
     if(detail.onElementPicked||detail.onSwitch)leaveHome();
+    else if(searchToken.liveReturn)settleLiveSearch(searchToken.liveReturn.phase==="commit");
     else animateSearchReturn("native-event");
   }
   function observeSearch(){
@@ -1081,6 +1175,14 @@ function acquireZenHome(win, services) {
       return;
     }
     if(searchReturn)return;
+    if(searchToken.liveReturn){
+      const state=searchToken.liveReturn;
+      if(state.phase==="commit"){
+        if(!nativeSearchOpen(searchBar))settleLiveSearch(true);
+        else if(searchBar._zenHandleUrlbarClose&&searchBar._zenHandleUrlbarClose!==searchToken.nativeClose)settleLiveSearch();
+      }else if(!ownsLiveSearch(searchToken,searchBar))settleLiveSearch();
+      return;
+    }
     if(nativeSearchOpen(searchBar)){
       if(searchTimer)win.clearTimeout(searchTimer);searchTimer=0;return;
     }
@@ -1311,7 +1413,7 @@ function acquireZenHome(win, services) {
     }catch(error){close();restore();win.console.warn("[Zen Home] open",nocturneErrorClass(error));return false;}
   }
   function destroy(){
-    if(dead)return;close();dead=true;for(const fn of cleanups.splice(0))try{fn();}catch{}
+    if(dead)return;if(searchToken?.liveReturn&&ownsLiveSearch(searchToken,searchBar))finishNativeCancel();close();dead=true;for(const fn of cleanups.splice(0))try{fn();}catch{}
     panel.remove();style.remove();if(win[KEY]===registry)delete win[KEY];
   }
   const registry={apiVersion:1,startupLeaseVersion:1,startupOutcomeVersion:1,startupBloomVersion:1,warmStartupIcons,playStartup:playStartupHome,resumeStartup:resumeStartupHome,finishStartup:finishStartupHome,acquire(){
@@ -1353,7 +1455,7 @@ function acquireZenHome(win, services) {
     listen(win,"ZenURLBarClosed",onSearchClosed);
     listen(win,"resize",()=>{
       if(!searchToken||!searchBar)return;
-      if(searchClosing||searchReturn){finishNativeCancel();finishSearchVisual();return;}
+      if(searchClosing||searchReturn||searchToken.liveReturn){finishNativeCancel();finishSearchVisual();return;}
       panel.setAttribute("data-zh-search-ready","");finishSearchMotion();
       const from=content.querySelector(".zh-search")?.getBoundingClientRect();
       searchGeometry=homeSearchGeometry(from,win.innerWidth,win.innerHeight);
@@ -1381,6 +1483,7 @@ function acquireZenHome(win, services) {
       if(e.target?.closest?.("#PlacesToolbarItems .bookmark-item:not([container]),#OtherBookmarks .bookmark-item:not([container]),#back-button,#forward-button,#reload-button,#stop-reload-button"))leaveHome();
     },true);
     listen(win,"keydown",e=>{
+      if(open&&searchToken?.liveReturn?.phase==="fold"&&e.key!=="Escape"&&!e.defaultPrevented&&!e.altKey&&!e.ctrlKey&&!e.metaKey&&searchBar?.contains?.(e.target)&&!["Shift","Control","Alt","Meta"].includes(e.key))reverseLiveSearch();
       if(e.key==="Escape"&&(e.defaultPrevented||win.__nocturneOverlay?.allowsEscape("home-search",e)===false))return;
       if(open&&e.key==="Escape"&&searchReturn){e.preventDefault();e.stopImmediatePropagation();return;}
       if(open&&e.key==="Escape"&&searchToken&&!searchReturn){
