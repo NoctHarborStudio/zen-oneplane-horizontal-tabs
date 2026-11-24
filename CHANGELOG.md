@@ -1,3 +1,7 @@
+## 0.3.0-preview.198 — Home search final audit (HS6)
+
+Replace the refresh-dependent 120-frame readiness cap with a 2000ms monotonic deadline. End readiness and opening animation if the captured Zen callback is no longer owned; release the readiness gate when motion is disabled or the deadline expires. Preserve the existing single live DOM, animation durations, easing and geometry. Add regression coverage for refresh rates, suspended RAF, owner loss and motion bypass. Native final acceptance remains pending.
+
 ## 0.3.0-preview.197 — Home search lifecycle (HS5)
 
 Use one exact native callback lease for controlled cancellation and final Home destruction. Reject stale close notifications if Zen has replaced the session; do not blur a replacement created during cancellation. Remove a write-only animation height variable and consolidate return-part cleanup. Keep the verified live glyph, motion timings and geometry. No new observer, timer or native hook.

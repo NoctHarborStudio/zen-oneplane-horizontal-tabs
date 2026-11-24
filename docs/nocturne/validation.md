@@ -918,3 +918,8 @@ Source-backed planner and original-node lifecycle fixtures cover all ordered pai
 ### HS5 / preview.197 — exact Home native lease
 
 - [ ] Native: reverse a close by clicking the live field or typing; close again; select result while folding; switch tabs or shift focus externally; toggle mod off/reload while Home search is open or folding. No stale close, stuck inert state, duplicate close or focus stolen from a replacement. Keep prior glyph/rail visuals and durations. Existing HS4 performance and native external-close gates remain open.
+
+### HS6 / preview.198 — final Home Search acceptance
+
+- Source/fixture: verify one live renderer and frame driver, elapsed readiness deadline at 60/144/180Hz and after a delayed RAF, captured native owner loss, motion bypass, repeated reversal and disposal. No old snapshot or resize-prewarm producer.
+- [ ] Native Zen: open and close with Escape and background, reverse mid-close by clicking or typing and close again, pick a result during return, switch tabs/focus, resize, disable/reload mod while search is active, and verify motion-disabled behavior. Test slow results and background/resume if reproducible. Compare glyph/rail continuity, retained focus, absence of stuck gates and bounded frame summaries. Font/size/workspace geometry changes are still a native gate. Do not mark HS6 fully accepted until native evidence arrives.

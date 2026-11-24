@@ -410,19 +410,19 @@ bookmarks.uc.mjs:51–68 syncAddressState checks address wave and workspace only
 
 shared-home.js.part:580–645 recursively copies up to 900 nodes, computed style longhands and pseudos, repeated capture via 80ms timer. Budget caps nodes not style calls, decode or total time; return writes per-card styles each RAF (556–578,721–733). No measured regression yet.
 
-**Required:** A6/A8: profile capture and return separately, cap time/bytes and capture frequency; compare stable snapshot vs lightweight render, preserve visual approval.
+**Resolution (HS4):** speculative snapshot renderer, timer and ResizeObserver removed in preview.183. Preview.195 logs confirm five ordinary native-live closures. No snapshot budget is needed. Native reversal and external-close acceptance remain open.
 
 #### NC4-056 — Home search animation readiness is frame-count based (S/R/P1)
 
 shared-home.js.part:457–490 retries up to 120 RAF callbacks waiting for results; elapsed time varies with display rate/background throttling. It can release visual gate before late results at high refresh or hold it longer at low refresh.
 
-**Required:** A6: monotonic deadline plus native result readiness; test 60/144Hz, background, slow provider and focus interruption.
+**Resolution (HS6 source):** replace 120-frame limit with a 2000ms monotonic readiness deadline, preserve native readiness checks and terminate on loss of the captured callback. Extracted-source fixtures exercise 60/144/180Hz, delayed RAF, owner loss and disabled motion. Native slow-provider/background acceptance remains open.
 
 #### NC4-057 — Home search return geometry can become stale (S/R/P1)
 
 shared-home.js.part:680–738 snapshots result box and destination then drives height/top/width per RAF; window resize ends visual immediately (1023–1031). Other content layout/font/viewport changes during return are not explicitly retargeted. Native scenario pending.
 
-**Required:** A6/A4: geometry revision, bounded settle on invalid destination, verify return-to-source under font/size/workspace changes.
+**Status (HS6):** HS4 removed copied geometry and the separate return shell. The live return still uses per-transition Home card geometry; resize settles immediately, Home structural render is suppressed during a search. Native font/size/workspace changes remain an explicit validation gate.
 
 #### NC4-058 — Center Motion proxy setup scales with all visible DOM descendants (S/R/P2)
 

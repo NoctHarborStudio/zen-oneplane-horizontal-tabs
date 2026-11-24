@@ -292,7 +292,7 @@ test("Home search waits for a real result height and animates both directions",(
   getBoundingClientRect:()=>({height:attrs.has("data-zr-home-search-motion")?Number.parseFloat(styles.get("--zh-reveal-height"))||56:height})};
  bar.setAttribute("open","");bar.setAttribute("zen-floating-urlbar","true");bar.setAttribute("data-zr-home-search-motion","prepare");
  bar.styleValue=()=>styles.get("--zh-reveal-height");
- const win={requestAnimationFrame(fn){queue.set(++seq,fn);return seq;},cancelAnimationFrame(id){queue.delete(id);},matchMedia:()=>({matches:false})};
+ const win={performance:{now:()=>0},requestAnimationFrame(fn){queue.set(++seq,fn);return seq;},cancelAnimationFrame(id){queue.delete(id);},matchMedia:()=>({matches:false})};
  const run=new Function("win","bar",code+`
  let open=true,searchToken={},searchBar=bar,searchFrame=0,searchClosing=false,searchLastHeight=56,searchGeometry={header:56,room:600};const prefs={getBoolPref:(k,f)=>f};
  const panel={hasAttribute:k=>attrsMock.has(k),setAttribute:(k,v)=>attrsMock.set(k,v)};const attrsMock=new Map();
@@ -591,4 +591,35 @@ test("HS5 destroy closes an owned native session even before results are ready a
  `)(win,registry,KEY,panel,style,calls);
  api.destroy();api.destroy();
  assert.deepEqual(calls,["native","close","cleanup","panel","style"]);assert.equal(win[KEY],undefined);
+});
+
+test("HS6 readiness has the same elapsed deadline at 60, 144 and 180 Hz and never animates a replaced owner",()=>{
+ const code=extract("  function revealValue(","  function search(){");
+ function setup(){
+  const jobs=new Map(),attrs=new Map([["open",""],["zen-floating-urlbar","true"],["data-zr-home-search-motion","prepare"]]),styles=new Map();
+  let serial=0,clock=0,height=56,owned=true,motion=true,settled=0,reads=0;
+  const bar={style:{setProperty:(k,v)=>styles.set(k,v),removeProperty:k=>styles.delete(k)},setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k),getAttribute:k=>attrs.get(k),hasAttribute:k=>attrs.has(k),getBoundingClientRect:()=>{reads++;return {height}}};
+  const win={performance:{now:()=>clock},requestAnimationFrame:f=>{jobs.set(++serial,f);return serial},cancelAnimationFrame:id=>jobs.delete(id)};
+  const api=new Function("win","bar","getOwned","getMotion","settle",code+`
+   let open=true,searchToken={nativeClose:()=>{}},searchBar=bar,searchFrame=0,searchClosing=false,searchLastHeight=56,searchGeometry={header:56,room:600};
+   const prefs={getBoolPref:()=>getMotion()},panelAttrs=new Set();
+   const panel={hasAttribute:k=>panelAttrs.has(k),setAttribute:k=>panelAttrs.add(k)};
+   function nativeSearchOpen(){return true}
+   function ownsNativeSearch(){return getOwned()}
+   function settleNativeSearch(){settle();finishSearchMotion();searchToken=null}
+   function finishSearchMotion(){if(searchFrame)win.cancelAnimationFrame(searchFrame);searchFrame=0;bar.removeAttribute("data-zr-home-search-motion")}
+   return {start:()=>startSearchMorph(searchToken,searchGeometry),ready:()=>panelAttrs.has("data-zh-search-ready")};
+  `)(win,bar,()=>owned,()=>motion,()=>settled++);
+  api.start();
+  return {frame(now){clock=now;const batch=[...jobs.values()];jobs.clear();for(const f of batch)f(now)},pending:()=>jobs.size,ready:api.ready,reads:()=>reads,settled:()=>settled,lose:()=>owned=false,disable:()=>motion=false,height:v=>height=v};
+ }
+ for(const hz of [60,144,180]){
+  const s=setup();
+  for(let i=0;i<2*hz;i++){s.frame(i*1000/hz);assert.equal(s.pending(),1)}
+  const reads=s.reads();s.frame(2000);assert.equal(s.pending(),0);assert.equal(s.ready(),true);assert.equal(s.reads(),reads);
+ }
+ const delayed=setup();delayed.height(400);delayed.frame(2500);assert.equal(delayed.pending(),0);assert.equal(delayed.reads(),0);
+ const lost=setup();lost.lose();lost.frame(16);assert.equal(lost.pending(),0);assert.equal(lost.settled(),1);assert.equal(lost.reads(),0);
+ const disabled=setup();disabled.disable();disabled.frame(16);assert.equal(disabled.pending(),0);assert.equal(disabled.ready(),true);
+ const mid=setup();mid.height(400);mid.frame(16);mid.lose();mid.frame(32);assert.equal(mid.pending(),0);assert.equal(mid.settled(),1);
 });

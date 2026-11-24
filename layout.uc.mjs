@@ -86,7 +86,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.197",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.198",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -2661,6 +2661,7 @@ function acquireZenHome(win, services) {
       searchFrame=0;
       if(!open||searchToken!==token||searchBar!==bar||searchClosing!==closing)return;
       if(live&&!live.valid()){live.invalid();return;}
+      if(!live&&token.nativeClose&&!ownsNativeSearch(token,bar)){settleNativeSearch("live-invalid");return;}
       if(start===null)start=now;
       searchProbeFrame(token,closing?"close":"open",now);
       const p=Math.min(1,(now-start)/duration),height=revealValue(from,to,p);
@@ -2677,13 +2678,16 @@ function acquireZenHome(win, services) {
     }
     // Keep the source visible until the native floating box is ready.
     // Then reveal the results from the same header without a flash.
-    let attempts=0;
-    const step=()=>{
+    // Preserve the former 60 Hz maximum, independent of display refresh.
+    const deadline=searchProbeNow()+2000;
+    const step=now=>{
       searchFrame=0;
       if(!open||searchToken!==token||!searchBar||searchClosing)return;
       const bar=searchBar,probe=token.homeProbe?.open;
+      if(token.nativeClose&&!ownsNativeSearch(token,bar)){settleNativeSearch("live-invalid");return;}
       if(probe&&!probe.finished)probe.waitFrames++;
-      if(bar.hasAttribute("open")&&bar.getAttribute("zen-floating-urlbar")==="true"){
+      const waiting=now<deadline&&prefs.getBoolPref("zen.nocturne.motion.enabled",true)&&nativeSearchOpen(bar);
+      if(waiting&&bar.hasAttribute("open")&&bar.getAttribute("zen-floating-urlbar")==="true"){
         const target=naturalSearchHeight(bar,geometry);
         if(!panel.hasAttribute("data-zh-search-ready")){
           panel.setAttribute("data-zh-search-ready","");
@@ -2707,7 +2711,7 @@ function acquireZenHome(win, services) {
           reveal(geometry.header,target,0);return;
         }
       }
-      if(++attempts<120&&nativeSearchOpen(bar))searchFrame=win.requestAnimationFrame(step);
+      if(waiting)searchFrame=win.requestAnimationFrame(step);
       else{finishSearchProbe(token,"open","readiness-ended");panel.setAttribute("data-zh-search-ready","");finishSearchMotion();}
     };
     searchFrame=win.requestAnimationFrame(step);
