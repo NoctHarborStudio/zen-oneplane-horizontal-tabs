@@ -58,9 +58,9 @@ test("actual native unload never schedules layout fallback",async()=>{
 test("native hideToolbar setter is never called on initial or joining acquisition",async()=>{
  const f=fixture(),a=f.mount(),b=f.mount(),hide="zen.view.compact.hide-toolbar",tab="zen.view.compact.hide-tabbar";let calls=0;
  for(const h of [a,b])h.window.gZenCompactModeManager.hideToolbar=()=>{calls++;f.prefs.setBoolPref(hide,true);f.prefs.setBoolPref(tab,false);};
- await a.activate();f.prefs.setBoolPref(hide,false);f.prefs.setBoolPref(tab,true);await b.activate();
- assert.equal(calls,0);assert.equal(f.prefs.getBoolPref(hide),false);assert.equal(f.prefs.getBoolPref(tab),true);
- a.cleanup();b.cleanup();assert.equal(f.prefs.getBoolPref(hide),false);assert.equal(f.prefs.getBoolPref(tab),true);
+ await a.activate();f.prefs.setBoolPref(hide,false);f.prefs.setBoolPref(tab,false);await b.activate();
+ assert.equal(calls,0);assert.equal(f.prefs.getBoolPref(hide),false);assert.equal(f.prefs.getBoolPref(tab),false);
+ a.cleanup();b.cleanup();assert.equal(f.prefs.getBoolPref(hide),false);assert.equal(f.prefs.getBoolPref(tab),false);
 });
 test("cleanup during initial snapshot retains lease until write returns and removes unused backup",async()=>{
  const f=fixture(),a=f.mount(),set=f.prefs.setStringPref;
@@ -104,7 +104,11 @@ test("descendant unload does not release Layout lease or consume native fallback
  a.nativeUnload({target:{}});a.nativeUnload({target:a.window,originalTarget:{}});
  assert.equal(a.controller.ownsPreferences,true);assert.ok(f.values.has(KEY));
  a.nativeUnload({target:a.document,originalTarget:a.document});
- assert.equal(a.controller.ownsPreferences,false);assert.equal(f.values.has(KEY),false);
+ assert.equal(a.controller.ownsPreferences,false);assert.equal(f.values.has(KEY),true);
+ const tab="zen.view.compact.hide-tabbar";assert.equal(f.prefs.getBoolPref(tab),true);
+ const saved=JSON.parse(f.values.get(KEY));assert.equal(saved[tab].owned,true);assert.equal(saved[tab].value,false);
+ a.window.closed=true;const b=f.mount();await b.activate();b.cleanup();
+ assert.equal(f.prefs.getBoolPref(tab),false);assert.equal(f.values.has(KEY),false);
 });
 test("actual bootstrap claims owner before listeners and completes after lease release on Sine or native path",async()=>{
  for(const nativeExit of [false,true]){

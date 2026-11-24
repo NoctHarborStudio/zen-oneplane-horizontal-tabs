@@ -151,7 +151,7 @@ test("boot prelude cleans the old Layout before replacement fragments mount",()=
  const attrs=new Map(),root={hasAttribute:k=>attrs.has(k),setAttribute:(k,v)=>attrs.set(k,v)};
  new Function("window","document","Services",prelude)(window,{documentElement:root},{prefs:{}});
  assert.equal(cleaned,1);
- assert.equal(attrs.get("data-nocturne-early-css-done"),"true");
+ assert.equal(attrs.has("data-nocturne-early-css-done"),false);
 });
 
 function bookmarkFixture({width=200}={}){

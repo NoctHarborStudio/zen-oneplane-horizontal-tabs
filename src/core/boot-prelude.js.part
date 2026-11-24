@@ -42,51 +42,13 @@
   }
   const probe={nativeBeforeLoaded:root.hasAttribute("zen-before-loaded"),nativeWatermark:prefs.getBoolPref("zen.watermark.enabled",false)};
   try{if(prefs.getBoolPref("zen.nocturne.diagnostics.enabled",true)){
-    // MB-014: bounded read-only snapshot, taken before Boot mounts.
-    probe.nativeProbeAt=win.performance.now();
+    // MB-014: keep only structural reads before the cover; no style/layout flush.
     probe.nativeHideTabbar=prefs.getBoolPref("zen.view.compact.hide-tabbar",false);
-    probe.nativeCompactStartup=prefs.getBoolPref("zen.view.compact.enable-at-startup",false);
     probe.nativeCompact=root.getAttribute("zen-compact-mode")==="true";
-    probe.nativeOpenOnStartup=prefs.getBoolPref("zen.urlbar.open-on-startup",true);
-    probe.nativeContinueSession=prefs.getBoolPref("zen.workspaces.continue-where-left-off",false);
-    probe.nativeHoverEnabled=prefs.getBoolPref("zen.view.compact.show-sidebar-and-toolbar-on-hover",true);
-    probe.nativeFlashEnabled=prefs.getBoolPref("zen.view.compact.toolbar-flash-popup",false);
-    probe.nativeAnimateSidebar=prefs.getBoolPref("zen.view.compact.animate-sidebar",true);
-    const selected=win.gBrowser?.selectedTab;
+    const selected=win.gBrowser?.selectedTab,sidebar=document.getElementById("navigator-toolbox");
     probe.nativeSelectedEmpty=selected?selected.hasAttribute("zen-empty-tab"):null;
     probe.nativeRootEmpty=root.getAttribute("zen-has-empty-tab")==="true";
-    probe.nativeRenaming=root.getAttribute("zen-renaming-tab")==="true";
-    probe.nativeSuppressAdjust=root.getAttribute("supress-primary-adjustment")==="true";
-    const sidebar=document.getElementById("navigator-toolbox"),titlebar=document.getElementById("titlebar"),toolbar=document.getElementById("zen-appcontent-navbar-wrapper"),bar=document.getElementById("urlbar");
-    const keys=["zen-has-hover","zen-user-show","zen-has-empty-tab","flash-popup","has-popup-menu","movingtab","zen-compact-mode-active"];
-    const flags=node=>node?Object.fromEntries(keys.map(key=>[key,node.hasAttribute(key)])):null;
-    const snapshot=node=>{
-      if(!node)return null;
-      const r=node.getBoundingClientRect(),s=win.getComputedStyle(node);
-      return {rect:[r.x,r.y,r.width,r.height],opacity:s.opacity,visibility:s.visibility,display:s.display,translate:s.translate,transform:s.transform,
-        intersects:r.width>1&&r.height>1&&r.right>0&&r.left<win.innerWidth&&r.bottom>0&&r.top<win.innerHeight};
-    };
-    probe.nativeSidebarFlags=flags(sidebar);
-    probe.nativeToolbarFlags=flags(toolbar);
-    probe.nativeRootFlags=flags(root);
-    probe.nativeSidebarHover=sidebar?.matches(":hover")??null;
-    probe.nativeSidebarCSS=snapshot(sidebar);
-    probe.nativeTitlebarCSS=snapshot(titlebar);
-    probe.nativeSidebarOnscreen=!!(probe.nativeSidebarCSS?.intersects&&probe.nativeSidebarCSS.visibility!=="hidden"&&Number(probe.nativeSidebarCSS.opacity)>0);
-    probe.nativeSidebarReveal=!!(probe.nativeSidebarFlags&&Object.values(probe.nativeSidebarFlags).some(Boolean));
-    probe.nativeSidebarAnimating=!!(sidebar?.hasAttribute("animate")||root.hasAttribute("zen-compact-animating"));
-    probe.nativeTitlebarHidden=probe.nativeTitlebarCSS?probe.nativeTitlebarCSS.visibility==="hidden":null;
-    probe.nativeTitlebarOnscreen=!!(probe.nativeTitlebarCSS?.intersects&&probe.nativeTitlebarCSS.visibility==="visible"&&Number(probe.nativeTitlebarCSS.opacity)>0&&Number(probe.nativeSidebarCSS?.opacity)>0);
-    probe.nativeAddressFlags=bar?Object.fromEntries(["zen-newtab","breakout","breakout-extend","open","focused","zen-floating-urlbar"].map(key=>[key,bar.hasAttribute(key)])):null;
-    probe.chromeCSSPresent=win.getComputedStyle(root).getPropertyValue("--nocturne-startup-diagnostic-css").trim()==="1";
-    // A registered sheet does not establish when it was registered or whether
-    // it matched this document. The obsolete global experiment is not reenabled.
-    try{
-      const file=Services.dirsvc.get("UChrm",Ci.nsIFile);file.append("sine-mods");file.append("content.css");
-      const service=Cc["@mozilla.org/content/style-sheet-service;1"].getService(Ci.nsIStyleSheetService);
-      probe.sineContentRegistered=service.sheetRegistered(Services.io.newFileURI(file),service.USER_SHEET);
-    }catch{probe.sineContentRegistered=null;}
-    probe.nativeProbeElapsed=win.performance.now()-probe.nativeProbeAt;
+    probe.nativeSidebarFlags=sidebar?Object.fromEntries(["zen-has-hover","zen-user-show","zen-has-empty-tab","flash-popup","has-popup-menu","movingtab","zen-compact-mode-active"].map(key=>[key,sidebar.hasAttribute(key)])):null;
   }}catch{}
   try{
     node=document.createElementNS("http://www.w3.org/1999/xhtml","div");
@@ -100,6 +62,16 @@
     if(cleaned||claimed||win[KEY]!==record)return;
     phaseOwned=true;root.setAttribute(PHASE,"waiting");
     if(cleaned||claimed||win[KEY]!==record)return;
+    try{if(prefs.getBoolPref("zen.nocturne.diagnostics.enabled",true)){
+      const sidebar=document.getElementById("navigator-toolbox");
+      if(sidebar){
+        const s=win.getComputedStyle(sidebar);
+        probe.chromeCSSPresent=s.getPropertyValue("--nocturne-startup-diagnostic-css").trim()==="1";
+        probe.nativeSidebarGuard=s.animationName.split(",").some(name=>name.trim()==="nocturne-empty-sidebar-guard");
+        probe.nativeSidebarClipped=/^inset\(50%(?: 50%){0,3}\)$/.test(s.clipPath);
+        probe.nativeSidebarOpacity=Number(s.opacity);
+      }
+    }}catch{}
     const data={age:record.at,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished,...probe};
     if(win.__nocturneTrace)win.__nocturneTrace("boot.prelude",data,{sample:1800});
     else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"boot.prelude",t:record.at,data});}

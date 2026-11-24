@@ -1,6 +1,18 @@
-/* MB-014 read-only CSS presence marker; no visibility or animation change. */
+/* MB-014: Zen deliberately reveals its native sidebar on the empty tab.
+   Clip only that surface before the regular Layout rule takes over.
+   An independent clip-path effect avoids fighting Zen's opacity watermark.
+   No fill: on missing/failed Layout the native surface becomes usable again. */
 @-moz-document url("chrome://browser/content/browser.xhtml") {
   :root { --nocturne-startup-diagnostic-css: 1; }
+  @keyframes nocturne-empty-sidebar-guard {
+    from, to { clip-path: inset(50%); }
+  }
+  @media (prefers-reduced-motion: no-preference) and (-moz-pref("zen.refined.startup.animation")) and (-moz-pref("zen.nocturne.boot.enabled")) {
+    :root[zen-compact-mode="true"][zen-has-empty-tab="true"]:not([customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window], [zen-welcome-stage], [chromehidden]:not([chromehidden=""]), [privatebrowsingmode]:not([privatebrowsingmode="false"])):not([oneplane-active="true"]:has(#nav-bar-customization-target > #oneplane-tabs[data-ready="true"]))
+      #navigator-toolbox[zen-has-empty-tab]:not([zen-user-show], [zen-has-hover], [has-popup-menu], [movingtab], [flash-popup], [zen-compact-mode-active], [animate="true"]) {
+      animation: nocturne-empty-sidebar-guard 2000ms linear 1 normal none !important;
+    }
+  }
 }
 /* Registered once by the stylesheet. Native WAAPI can interpolate
    selection opacity without a script callback on every display frame. */
