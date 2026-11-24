@@ -1,10 +1,10 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="startup-prefs.script",data={version:"0.3.0-preview.194"};
+  const event="startup-prefs.script",data={version:"0.3.0-preview.195"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
-/* Nocturne — native startup placeholders and DOM fullscreen fade policy.
+/* Nocturne — native startup placeholders, DOM fullscreen fade and bookmark visibility policy.
  * Each preference group has an independent reversible backup and option.
  * Persist ownership across normal exits because the skeleton is created
  * before Sine loads. Restore the exact previous user/default state on off.
@@ -17,7 +17,9 @@ const FULLSCREEN_TARGETS=["full-screen-api.transition-duration.enter","full-scre
 const prefs=Services.prefs;
 const PLACEHOLDERS={option:OPTION,backup:BACKUP,targets:TARGETS,type:"boolean",target:false};
 const FULLSCREEN={option:FULLSCREEN_OPTION,backup:FULLSCREEN_BACKUP,targets:FULLSCREEN_TARGETS,type:"string",target:"0 0"};
-const GROUPS=[PLACEHOLDERS,FULLSCREEN];
+const BOOKMARKS_OPTION="zen.nocturne.bookmarks.always-show",BOOKMARKS_BACKUP="zen.nocturne.bookmarks.previous-visibility";
+const BOOKMARKS={option:BOOKMARKS_OPTION,backup:BOOKMARKS_BACKUP,targets:["browser.toolbars.bookmarks.visibility"],type:"string",target:"always"};
+const GROUPS=[PLACEHOLDERS,FULLSCREEN,BOOKMARKS];
 const available=(g,name)=>!prefs.prefIsLocked(name)&&prefs.getPrefType(name)===(g.type==="string"?prefs.PREF_STRING:prefs.PREF_BOOL);
 const readValue=(g,name)=>g.type==="string"?prefs.getStringPref(name):prefs.getBoolPref(name);
 const writeValue=(g,name,value)=>g.type==="string"?prefs.setStringPref(name,value):prefs.setBoolPref(name,value);
@@ -113,7 +115,11 @@ function sync(){
         try{if(prefs.getBoolPref(g.option,true))apply(g);else restore(g);}
         catch(error){trace("startup-prefs.sync.error",{name:startupErrorClass(error)});console.warn("[Nocturne] Native preference sync",startupErrorClass(error));}
       }
-      if(!disposed)traceFullscreenPolicy();
+      if(!disposed){
+        traceFullscreenPolicy();
+        try{trace("bookmarks.visibility.policy",{enabled:prefs.getBoolPref(BOOKMARKS_OPTION,true),
+          alwaysShown:available(BOOKMARKS,BOOKMARKS.targets[0])&&readValue(BOOKMARKS,BOOKMARKS.targets[0])===BOOKMARKS.target});}catch{}
+      }
     }while(pendingSync&&!disposed);
   }finally{
     mutating=false;

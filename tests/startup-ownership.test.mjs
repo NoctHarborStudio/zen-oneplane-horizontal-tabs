@@ -6,12 +6,13 @@ const run=new Function("Services","window","document","console",source);
 const OPTION="zen.refined.startup.disable-placeholders",BACKUP="zen.refined.startup.previous-placeholders";
 const TARGETS=["browser.startup.blankWindow","browser.startup.preXulSkeletonUI"];
 const FULL_OPTION="zen.nocturne.fullscreen.disable-animation",FULL_BACKUP="zen.nocturne.fullscreen.previous-transition",FULL_TARGETS=["full-screen-api.transition-duration.enter","full-screen-api.transition-duration.leave"];
+const BM_OPTION="zen.nocturne.bookmarks.always-show",BM_BACKUP="zen.nocturne.bookmarks.previous-visibility",BM_TARGET="browser.toolbars.bookmarks.visibility";
 function fixture(initial={}){
- const values=new Map(Object.entries(initial)),defaults=new Map([...TARGETS.map(k=>[k,true]),...FULL_TARGETS.map(k=>[k,"200 200"])]),windows=[],observers=new Set();
+ const values=new Map(Object.entries(initial)),defaults=new Map([...TARGETS.map(k=>[k,true]),...FULL_TARGETS.map(k=>[k,"200 200"]),[BM_TARGET,"newtab"]]),windows=[],observers=new Set();
  const prefs={PREF_BOOL:128,PREF_STRING:32,getStringPref:(k,d)=>values.get(k)??defaults.get(k)??d,setStringPref:(k,v)=>values.set(k,v),
   getBoolPref:(k,d)=>values.get(k)??defaults.get(k)??d,setBoolPref:(k,v)=>values.set(k,v),
-  prefHasUserValue:k=>values.has(k),clearUserPref:k=>values.delete(k),prefIsLocked:()=>false,getPrefType:k=>FULL_TARGETS.includes(k)?32:128,
-  savePrefFile(){},addObserver(k,f){assert.ok([OPTION,FULL_OPTION].includes(k));observers.add(f);},removeObserver(k,f){observers.delete(f);}};
+  prefHasUserValue:k=>values.has(k),clearUserPref:k=>values.delete(k),prefIsLocked:()=>false,getPrefType:k=>FULL_TARGETS.includes(k)||k===BM_TARGET?32:128,
+  savePrefFile(){},addObserver(k,f){assert.ok([OPTION,FULL_OPTION,BM_OPTION].includes(k));observers.add(f);},removeObserver(k,f){observers.delete(f);}};
  const Services={prefs,startup:{shuttingDown:false},wm:{getEnumerator(){const items=[...windows];return {hasMoreElements:()=>items.length>0,getNext:()=>items.shift()};}}};
  const document={documentElement:{hasAttribute:()=>false}};
  function mount(existing){
@@ -21,7 +22,7 @@ function fixture(initial={}){
   run(Services,window,document,{warn(){}});
   return {window,unload:()=>unload(),close(){events.get("beforeunload")?.({target:window});events.get("unload")?.();window.closed=true;},nativeUnload(){events.get("unload")?.();window.closed=true;}};
  }
- return {mount,values,observers,Services,prefs,states:()=>TARGETS.map(k=>prefs.getBoolPref(k)),option(v){values.set(OPTION,v);for(const f of [...observers])f();},fullOption(v){values.set(FULL_OPTION,v);for(const f of [...observers])f();},fullscreen:()=>FULL_TARGETS.map(k=>prefs.getStringPref(k))};
+ return {mount,values,observers,Services,prefs,states:()=>TARGETS.map(k=>prefs.getBoolPref(k)),option(v){values.set(OPTION,v);for(const f of [...observers])f();},fullOption(v){values.set(FULL_OPTION,v);for(const f of [...observers])f();},fullscreen:()=>FULL_TARGETS.map(k=>prefs.getStringPref(k)),bookmark:()=>prefs.getStringPref(BM_TARGET),bookmarkOption(v){values.set(BM_OPTION,v);for(const f of [...observers])f();}};
 }
 test("two windows share one startup observer and last mod unload restores defaults",()=>{
  const f=fixture(),a=f.mount(),b=f.mount();assert.deepEqual(f.states(),[false,false]);assert.equal(f.observers.size,1);
@@ -136,4 +137,19 @@ test("locked or missing native fullscreen preference is isolated from placeholde
 });
 test("invalid fullscreen backup does not block startup placeholder ownership",()=>{
  const f=fixture({[FULL_BACKUP]:"invalid"}),a=f.mount();assert.deepEqual(f.fullscreen(),["200 200","200 200"]);assert.deepEqual(f.states(),[false,false]);a.unload();assert.equal(f.values.get(FULL_BACKUP),"invalid");
+});
+
+test("bookmark toolbar defaults to Always Show and shares the native preference lease",()=>{
+ const f=fixture(),a=f.mount(),b=f.mount();assert.equal(f.bookmark(),"always");assert.equal(f.observers.size,1);
+ a.unload();assert.equal(f.bookmark(),"always");b.unload();assert.equal(f.bookmark(),"newtab");assert.equal(f.values.has(BM_TARGET),false);assert.equal(f.values.has(BM_BACKUP),false);
+});
+test("bookmark opt-out restores the prior native user value independently of motion",()=>{
+ const f=fixture({[BM_TARGET]:"never"}),a=f.mount();assert.equal(f.bookmark(),"always");
+ f.bookmarkOption(false);assert.equal(f.bookmark(),"never");assert.deepEqual(f.fullscreen(),["0 0","0 0"]);
+ f.bookmarkOption(true);f.values.set(BM_TARGET,"newtab");f.bookmarkOption(false);assert.equal(f.bookmark(),"newtab");a.unload();
+ const g=fixture({[BM_OPTION]:false,[BM_TARGET]:"never"}),b=g.mount();assert.equal(g.bookmark(),"never");assert.equal(g.values.has(BM_BACKUP),false);b.unload();
+});
+test("bookmark policy leaves an original Always Show value and locked pref untouched",()=>{
+ const f=fixture({[BM_TARGET]:"always"}),a=f.mount();assert.equal(f.values.has(BM_BACKUP),false);a.unload();assert.equal(f.bookmark(),"always");
+ const g=fixture();g.prefs.prefIsLocked=k=>k===BM_TARGET;const b=g.mount();assert.equal(g.bookmark(),"newtab");assert.equal(g.values.has(BM_BACKUP),false);b.unload();
 });

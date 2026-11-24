@@ -587,6 +587,13 @@
   },
   {
     "type": "checkbox",
+    "property": "zen.nocturne.bookmarks.always-show",
+    "label": "Always show bookmarks toolbar (restore native setting when off)",
+    "defaultValue": true,
+    "restart": true
+  },
+  {
+    "type": "checkbox",
     "property": "zen.refined.bookmarks.enabled",
     "label": "Enable Magnetic Bookmarks",
     "defaultValue": true

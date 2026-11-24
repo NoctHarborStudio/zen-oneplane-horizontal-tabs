@@ -1,3 +1,7 @@
+## 0.3.0-preview.195 — Default bookmark toolbar visibility
+
+Set native `browser.toolbars.bookmarks.visibility` to `always` by default using the existing process-wide reversible startup preference owner. Expose an independent default-on option, restore the previous native value on opt-out/live unload when still owned, and preserve compact-panel, fullscreen and Magnetic Bookmarks behavior. Add ownership fixtures and bounded policy diagnostics. Native validation pending.
+
 ## 0.3.0-preview.194 — Home tab hover titles
 
 Give explicit hovered/dragged tab titles precedence over the resting Home island label, retaining existing indicator cooldown and workspace transition ownership. After the hover returns to rest, an open Home displays Home again. Add regression coverage for selected, hovered, detached, untitled and split-group targets.
