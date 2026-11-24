@@ -578,3 +578,7 @@ Preview.200 adds existing-sampler rectangle targets for the customization target
 Preview.201 close experiment: disassembly.dwm.baseline, disassembly.dwm.switch, disassembly.dwm.seal and disassembly.dwm.restore record enum/HRESULT/ownership, never HWND or paths. No continuous sampling; readback is not proof of displayed alpha.
 
 Preview.202 replaces DWM probe with disassembly.alpha.acquire/end/seal/release/fallback: acquisition and readback, frame count, alpha, committed and failed. No handle/path or per-frame trace. API readback does not certify actual DWM presentation.
+
+### Preview.203 — Vanishing Home
+
+The drag-scoped events `drag.vanish.begin`, `drag.vanish.target`, `drag.vanish.end`, `drag.vanish.restore` and `drag.vanish.restore-error` track virtual row activation, insertion target, pull/restore and failures. Use the gesture token to correlate with native settlement. Bounded frame callback gaps describe callback pacing, not presented FPS. No URLs or titles. The snapshot includes the Vanishing Home, ghost and insertion-tail source markers; verify their cleanup after cancellation or settlement.

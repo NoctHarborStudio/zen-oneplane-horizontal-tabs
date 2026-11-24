@@ -1,6 +1,6 @@
   function indicatorTarget() {
     const s=row.getBoundingClientRect();
-    if(s.width<=0||s.height<=0||row.hasAttribute("data-op-lane-drag")||row.hasAttribute("data-op-overflow-row"))return null;
+    if(s.width<=0||s.height<=0||row.hasAttribute("data-op-lane-drag")||row.hasAttribute("data-op-overflow-row")||row.hasAttribute("data-op-vanishing-ghost"))return null;
     const dragging=Boolean(dragNode && row.hasAttribute("data-op-dragging"));
     const homeOpen=row.hasAttribute("data-op-home-open");
     const item=dragging?dragNode:indicatorHover && list.contains(indicatorHover)?

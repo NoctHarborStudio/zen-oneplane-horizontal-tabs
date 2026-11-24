@@ -45,7 +45,8 @@ test("one and two rows share the same card center, padding and final-row reserve
  assert.ok(base.includes("--op-hover-reserve:18px;"));
  assert.ok(base.includes("--op-hover-bottom-pad:10px;"));
  assert.ok(base.includes("--op-lane-inline-pad:1px;"));
- assert.ok(base.includes("--op-row-center:calc((var(--op-top-row-height) - var(--op-hover-bottom-pad)) / 2);"));
+ assert.ok(base.includes("--op-control-row-height:calc(var(--op-top-row-height) - var(--op-hover-bottom-pad));"));
+ assert.ok(base.includes("--op-row-center:calc(var(--op-control-row-height) / 2);"));
  assert.equal((tabs.match(/padding:0 var\(--op-lane-inline-pad\) var\(--op-hover-bottom-pad\);/g)||[]).length,2);
  assert.equal((tabs.match(/top:var\(--op-row-center\);/g)||[]).length,2);
  assert.ok(tabs.includes("top:calc(var(--op-top-row-height) + var(--op-row-center))!important;"));
@@ -187,9 +188,9 @@ test("native window buttons use the first-row size even when Zen placed them in 
  const direct="> :is([data-zr-native-captions],.titlebar-buttonbox-container)";
  assert.equal(captions.split(direct).length-1,3);
  assert.ok(captions.includes("align-self:flex-start!important;align-items:center!important"));
- assert.ok(captions.includes("height:var(--op-top-row-height,52px)!important;min-height:0!important;max-height:var(--op-top-row-height,52px)!important"));
+ assert.ok(captions.includes("height:var(--op-control-row-height,42px)!important;min-height:0!important;max-height:var(--op-control-row-height,42px)!important"));
  assert.ok(captions.includes("margin-block:0!important;flex-shrink:0!important"));
- assert.ok(captions.includes("min-height:0!important;height:var(--op-top-row-height,52px)!important;max-height:var(--op-top-row-height,52px)!important"));
+ assert.ok(captions.includes("min-height:0!important;height:var(--op-control-row-height,42px)!important;max-height:var(--op-control-row-height,42px)!important"));
  assert.ok(captions.includes(direct+" .titlebar-button"));
  assert.ok(chrome.endsWith(refined));
  assert.ok(base.includes("#nav-bar:has(#oneplane-tabs[data-op-overflow-row])"));
