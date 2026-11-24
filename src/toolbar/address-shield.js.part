@@ -19,6 +19,13 @@
   }
   function dismissUrl() {
     releaseShield();
+    // Home owns floating Home search presentation. Dispatch at the shield's
+    // existing click boundary, after the entire dismissing gesture is consumed.
+    if (homeLease?.dismissSearch?.()) {
+      holdToolbarAfterDismiss();
+      window.__nocturneTrace?.("home.search.shield-dismiss",{handled:true});
+      return;
+    }
     if (startAddressClose()) return;
     finishDismissUrl();
   }

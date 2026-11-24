@@ -512,3 +512,7 @@ Preview.164 diagnostics from three archived starts showed Assembly after prior G
 ### Preview.167 Library lifecycle
 
 `library.unload.ignored` reports foreign-document once per controller generation, `library.dispose.begin/end` report replacement/window-unload/sine-unload, phase/ownership and failed cleanup count; `library.button` adds finite accepted/rejected/api-missing/exception reason and overlay/services booleans. No event target identity, URL, key, query, or error text recorded. Native logs are bounded; the third supplied .164 session dropped 489 early events and cannot establish the exact disposal cause.
+
+### Preview.168 — shield routing
+
+`home.search.pointer-boundary` records `shield:true` when the exact existing Address shield receives the press. This is not a consumed Home pointerdown: the shield owns the full gesture. `home.search.shield-dismiss` with `handled:true` identifies successful delegation to Home at the shield's normal dismissal boundary. Existing close-start/finish and baseline events establish whether Home used the live home-background route. No private payload or extra observer/timer.

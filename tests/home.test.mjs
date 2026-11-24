@@ -466,18 +466,19 @@ test("Home baseline records bounded frame gaps, snapshot work and one summary pe
 });
 
 test("Home background cancellation classifies pointer presses at the window boundary",()=>{
- const code=extract("  function isHomeSearchBackgroundPress(","  function finishNativeCancel(");
+ const code=extract("  function isHomeSearchBackgroundPress(","  function dismissHomeSearch(");
  const rect=(left,top,right,bottom)=>({left,top,right,bottom});
+ const shield={},doc={getElementById:()=>shield};
  const panel={getBoundingClientRect:()=>rect(0,0,1000,800)},child={},content={hasAttribute:k=>k==="inert",contains:n=>n===child},host={},panels={},row={},toolbar={};
  let popup=false,popover=true;
  const bar={hasAttribute:k=>k==="has-popup-open"&&popup,matches:s=>s===":popover-open"&&popover,contains:n=>n===bar||n===row,getBoundingClientRect:()=>rect(200,150,800,450)};
  const calls=[];
- const api=new Function("win","panel","content","host","panels","bar","calls",code+`
+ const api=new Function("win","doc","panel","content","host","panels","bar","calls",code+`
  let open=true,searchToken={},searchClosing=false,searchReturn=null,searchBar=bar;
  function cancelHomeSearch(reason){calls.push(reason);return true;}
  function captureSearchSnapshot(){calls.push("capture");}
  return {classify:event=>isHomeSearchBackgroundPress(event,panel,content,bar,host,panels),dispatch:onSearchPointerDown,setClosing:value=>searchClosing=value};
- `)({},panel,content,host,panels,bar,calls);
+ `)({},doc,panel,content,host,panels,bar,calls);
  const press=(target,x=100,y=500,extra={})=>({target,clientX:x,clientY:y,button:0,isPrimary:true,defaultPrevented:false,preventDefault(){calls.push("prevent");},stopImmediatePropagation(){calls.push("stop");},...extra});
  for(const target of [panel,content,child,host,panels,bar])assert.equal(api.classify(press(target)),true);
  for(const event of [press(row),press(toolbar),press(bar,400,300),press(panel,400,300),press(panel,-1,500),press(panel,100,900),press(panel,100,500,{button:2}),press(panel,100,500,{isPrimary:false}),press(panel,100,500,{defaultPrevented:true})])assert.equal(api.classify(event),false);
@@ -488,7 +489,34 @@ test("Home background cancellation classifies pointer presses at the window boun
  api.dispatch(press(bar));assert.deepEqual(calls.splice(0),["home-background","prevent","stop"]);
  api.dispatch(press(row,400,300));assert.deepEqual(calls.splice(0),[]);
  api.dispatch(press(toolbar));assert.deepEqual(calls.splice(0),["capture"]);
+ api.dispatch(press(shield));assert.deepEqual(calls.splice(0),[]);
  api.setClosing(true);api.dispatch(press(panel));assert.deepEqual(calls,[]);
  assert.ok(core.includes('listen(win,"pointerdown",onSearchPointerDown,true)'));
  assert.ok(!core.includes('listen(panel,"pointerdown"'));
+});
+
+test("Address dismiss shield delegates Home search before ordinary address close",()=>{
+ const source=readFileSync(new URL("../src/toolbar/address-shield.js.part",import.meta.url),"utf8");
+ const code=source.slice(source.indexOf("  function dismissUrl()"),source.indexOf("  function finishDismissUrl()"));
+ const calls=[];let homeHandled=true,inlineHandled=false;
+ const invoke=new Function("homeLease","releaseShield","holdToolbarAfterDismiss","startAddressClose","finishDismissUrl","window",code+"return dismissUrl;")(
+  {dismissSearch:()=>{calls.push("home");return homeHandled;}},()=>calls.push("release"),()=>calls.push("hold"),()=>{calls.push("inline");return inlineHandled;},()=>calls.push("native"),{});
+ invoke();assert.deepEqual(calls.splice(0),["release","home","hold"]);
+ homeHandled=false;inlineHandled=true;invoke();assert.deepEqual(calls.splice(0),["release","home","inline"]);
+ inlineHandled=false;invoke();assert.deepEqual(calls.splice(0),["release","home","inline","native"]);
+ const homeCode=extract("  function dismissHomeSearch(","  function finishNativeCancel(");
+ const api=new Function("calls",homeCode+`
+ let open=true,searchToken={},searchReturn=null,searchClosing=false,popup=false;
+ const searchBar={hasAttribute:k=>k==="has-popup-open"&&popup};
+ function cancelHomeSearch(reason){calls.push(reason);return true;}
+ return {dismissHomeSearch,set:(o,t,r,c,p)=>{open=o;searchToken=t;searchReturn=r;searchClosing=c;popup=p;}};
+ `)(calls);
+ assert.equal(api.dismissHomeSearch(),true);assert.deepEqual(calls.splice(0),["home-background"]);
+ api.set(true,{},null,false,true);assert.equal(api.dismissHomeSearch(),false);
+ api.set(true,{}, {},false,false);assert.equal(api.dismissHomeSearch(),true);
+ api.set(true,{},null,true,false);assert.equal(api.dismissHomeSearch(),true);
+ api.set(false,{},null,false,false);assert.equal(api.dismissHomeSearch(),false);
+ api.set(true,null,null,false,false);assert.equal(api.dismissHomeSearch(),false);
+ assert.deepEqual(calls,[]);
+ assert.ok(core.includes("dismissSearch:()=>!released&&dismissHomeSearch()"));
 });

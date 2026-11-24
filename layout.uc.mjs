@@ -69,7 +69,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.167",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.168",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -2879,6 +2879,13 @@ function acquireZenHome(win, services) {
   function onSearchPointerDown(event){
     if(!open||!searchToken||searchClosing||searchReturn||!searchBar)return;
     const bar=searchBar,target=event.target,id=searchToken.homeProbe?.id??null;
+    // The Address shield owns the complete pointer sequence. It delegates
+    // cancellation through the Home lease on click (or its existing fallback).
+    // Never intercept its pointerdown or duplicate its native close.
+    if(target===doc.getElementById("oneplane-url-dismiss")){
+      win.__nocturneTrace?.("home.search.pointer-boundary",{id,shield:true,background:true,consumed:false});
+      return;
+    }
     const background=isHomeSearchBackgroundPress(event,panel,content,bar,host,panels);
     const consumed=background&&cancelHomeSearch("home-background");
     // One bounded, structural record per press, without coordinates, node
@@ -2895,6 +2902,12 @@ function acquireZenHome(win, services) {
       return;
     }
     if(!bar.contains?.(event.target))captureSearchSnapshot();
+  }
+  function dismissHomeSearch(){
+    if(!open||!searchToken)return false;
+    if(searchReturn||searchClosing)return true;
+    if(searchBar?.hasAttribute("has-popup-open"))return false;
+    return cancelHomeSearch("home-background");
   }
   function finishNativeCancel(){
     const bar=searchBar;
@@ -3239,6 +3252,7 @@ function acquireZenHome(win, services) {
   const registry={apiVersion:1,startupLeaseVersion:1,startupOutcomeVersion:1,startupBloomVersion:1,warmStartupIcons,playStartup:playStartupHome,resumeStartup:resumeStartupHome,finishStartup:finishStartupHome,acquire(){
     if(dead)return null;const lease={listeners:new Set()};leases.add(lease);let released=false;
     return {get open(){return !released&&open;},show:()=>!released&&show(),close:(focus=false)=>{if(!released)leaveHome(focus);},
+      dismissSearch:()=>!released&&dismissHomeSearch(),
       showOnStartup(){
         if(released||win[STARTUP])return false;
         if(show(true)){win[STARTUP]=true;return true;}return false;
@@ -3754,6 +3768,13 @@ function installTabStrip() {
   }
   function dismissUrl() {
     releaseShield();
+    // Home owns floating Home search presentation. Dispatch at the shield's
+    // existing click boundary, after the entire dismissing gesture is consumed.
+    if (homeLease?.dismissSearch?.()) {
+      holdToolbarAfterDismiss();
+      window.__nocturneTrace?.("home.search.shield-dismiss",{handled:true});
+      return;
+    }
     if (startAddressClose()) return;
     finishDismissUrl();
   }

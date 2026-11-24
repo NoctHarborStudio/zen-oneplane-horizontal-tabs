@@ -866,3 +866,10 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - Source-backed full Library controller fixture: capture-mode foreign and retargeted unload, live API and listener retention, generation replacement, stale old callback, exact window unload, Sine disable, observer and overlay lease cleanup. Dependency unload guards and launcher outcome fixtures also included.
 - Native gate: installed Zen/Sine full restart, open History on Home and a loaded page, navigate/reload/close a tab, open History again from the icon and Ctrl+H, repeat Ctrl+J, switch windows/workspaces and verify disable/reload. No native stock History fallback while opted in. Check new bounded lifecycle diagnostics if failure persists.
 - CI and native acceptance pending; do not interpret source tests as proof of native Gecko event delivery.
+
+### HS3.2 / preview.168 — actual Address shield dispatch
+
+- [x] Reproduce failed preview.165 classifier from preview.167 native telemetry (0/4 background accepted).
+- [x] Identify Address shield layer and dispatch; integrate Home lease before ordinary inline/native fallback; keep complete pointer sequence.
+- [x] Source-backed tests for shield delegation, inactive/released/returning and popup guards; shield pointerdown does not trigger duplicate capture.
+- [ ] Installed Zen: click Home background during and after reveal; check shield-dismiss handled=true, close-start home-background, no flash. Check Escape, ordinary page address dismissal and result selection. Icons and reveal performance remain open.
