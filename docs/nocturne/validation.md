@@ -902,3 +902,6 @@ Test normal direct 1000ms transitions, rapid History → Pictures → Recently C
 ### HS3.4 / preview.179 — native live return experiment
 
 - [ ] Native Zen: verify live Escape and background close, no globe color change, click header or type mid-fold to reverse, close again while reversing, select results, tab switch, external blur, resize, window close, reduced motion and reload. Confirm close-start/finish mode=native-live and close-reverse; no late native close after a reversal. Temporary unexpected-native-close fallback remains until these gates pass.
+
+### Preview.180 — original page lifecycle
+Source-backed planner and original-node lifecycle fixtures cover all ordered pairs, reversal identity, saved query/filter/sort/limit, abort/removal, and 100 sequential transitions without attached old views. Native query limit fixture covers 50–500 bounds and session closure. Native gate: direct transitions, rapid reversals and third targets, search/filter/load more/scroll, Escape mid-flight/reopen, reduced motion, media/download action and reload/disable. Observe one page after settle and zero after hide. Compare text and RAF aggregates; native visual/performance acceptance OPEN.

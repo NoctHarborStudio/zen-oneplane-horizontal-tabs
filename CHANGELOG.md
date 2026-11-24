@@ -1,3 +1,7 @@
+## 0.3.0-preview.180 — Library original page lifecycle
+
+Replace the cloned outgoing page and hidden-cover handoff with original page views. Keep the existing 1000ms ease-in-out layout-left motion and stationary scrollbar. One active native query session, abort-scoped page controls, unique accessibility IDs, original node reuse on reversal, bounded pagination restoration and deterministic disposal on settlement, close, interruption and unload. No persistent offscreen cache. Native verification pending.
+
 ## 0.3.0-preview.179 — Home live search return
 
 Controlled Home Escape/background cancellation folds the original native view before invoking its session-owned close callback. Click or type in the live surface during the fold to reverse from the current height; native navigation and external close always win. Existing snapshot path is retained only for unexpected native close pending visual validation; its observer/cache are suspended during controlled motion. No new frame loop or native handler override.

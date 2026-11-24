@@ -60,7 +60,7 @@ export function createLibraryData({getServices,onResult,onError,onNotice=()=>{},
   }
   function start(next,query="",options={}){
     stop();if(dead||!["history","closed","downloads","documents","pictures"].includes(next))return false;
-    section=next;text=query;sort=options.sort||"new";filter=options.filter||"all";source=getServices();
+    section=next;text=query;sort=options.sort||"new";filter=options.filter||"all";limit=Number.isInteger(options.limit)?Math.max(50,Math.min(500,options.limit)):50;source=getServices();
     if(!source){onError();return false;}
     const owner=source,sessionToken=sessionEpoch;
     const valid=()=>!dead&&source===owner&&section===next&&sessionToken===sessionEpoch&&getServices()===owner;

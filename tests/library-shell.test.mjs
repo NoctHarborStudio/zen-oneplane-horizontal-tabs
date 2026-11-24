@@ -264,7 +264,7 @@ test("Library terminal motion probe respects epoch and opt-out and samples both 
  assert.ok(start>=0&&end>start);
  const run=(enabled,phase,epoch)=>{
    const events=[],calls=[],shell={panel:{}};
-   const f=new Function("prefs","shell","sample","cancelMotion","reduceLibrary","trace","calls",`let state={phase:${JSON.stringify(phase)},section:"history",motionEpoch:2}; const current=e=>e===state.motionEpoch;const clearSectionFlight=()=>{},scrollPending=false;${source.slice(start,end)}return settle;`)(
+   const f=new Function("prefs","shell","sample","cancelMotion","reduceLibrary","trace","calls",`let state={phase:${JSON.stringify(phase)},section:"history",motionEpoch:2}; const current=e=>e===state.motionEpoch;const clearSectionFlight=()=>{},resumePage=()=>{},outgoingPages=[],scrollPending=false;${source.slice(start,end)}return settle;`)(
      {getBoolPref:()=>enabled},shell,()=>{calls.push("sample");return {opacity:"1",transform:"matrix(1, 0, 0, 1, 0, 0)"};},
      ()=>calls.push("cancel"),s=>({...s,phase:"open"}),(name,data)=>events.push({name,data}),calls);
    f(epoch);return {calls,events};
@@ -274,7 +274,7 @@ test("Library terminal motion probe respects epoch and opt-out and samples both 
  assert.deepEqual(run(true,"switching",2).calls,["cancel"]);
  const result=run(true,"opening",2);
  assert.deepEqual(result.calls,["sample","cancel","sample"]);
- assert.deepEqual(result.events,[{name:"motion.settled",data:{section:"history",opacityStable:true,transformStable:true,beforeOpacity:1,afterOpacity:1}}]);
+ assert.deepEqual(result.events.filter(x=>x.name==="motion.settled"),[{name:"motion.settled",data:{section:"history",opacityStable:true,transformStable:true,beforeOpacity:1,afterOpacity:1}}]);
 });
 
 
@@ -381,15 +381,15 @@ test("Library direct swipe preserves visible tiles and introduces new content ou
  assert.equal(left.target,-1.6);assert.equal(left.tiles.length,2);
  assert.equal(plan("pictures","closed",[{section:"history",x:-1},b,{section:"documents",x:1.4}]).tiles.length,1);
  assert.match(source,/SECTION_MS=1000,SECTION_EASING="cubic-bezier\(\.45,0,\.55,1\)"/);
- assert.match(source,/copy.inert=true;copy.setAttribute\("aria-hidden","true"\)/);
- assert.match(source,/copy.querySelectorAll\("\[id\]"\)/);
+ assert.doesNotMatch(source,/cloneNode\(|snapshotPage|sectionCover/);
+ assert.match(source,/node.inert=true;node.setAttribute\("aria-hidden","true"\)/);
  assert.doesNotMatch(source,/queuedSection|section\.queued|drainSectionRequest/);
- assert.match(source,/if\(!sectionCover\)/);
- assert.match(source,/shell.page.style.visibility=sectionCover\?"hidden":""/);
+ assert.match(source,/motion.reused\?\.view\|\|createPage\(to\)/);
+ assert.match(source,/view.controller.abort\(\);view.rows.clear\(\);view.controls.page.remove\(\)/);
  assert.match(css,/\.nl-page-viewport\{[^}]*overflow:hidden/);
  assert.match(css,/\.nl-page-outgoing\{[^}]*pointer-events:none/);
  assert.doesNotMatch(css,/\.nl-page\{[^}]*transform:/);
- assert.match(source,/for\(const tile of previous\)if\(!retained.has\(tile.node\)\)tile.node.remove\(\)/);
+ assert.match(source,/for\(const tile of previous\)if\(!retained.has\(tile.view\)\)removePage\(tile.view\)/);
 });
 test("Library stationary scrollbar derives size and position from native extent",()=>{
  const source=read("src/library/controller.js.part"),css=read("src/styles/library.css.part");
@@ -403,4 +403,53 @@ test("Library stationary scrollbar derives size and position from native extent"
  assert.match(source,/page.append\(search,tools,status,contentArea\)/);
  assert.match(source,/scrollObserver\?\.disconnect\(\)/);
  assert.match(css,/\.nl-body\{[^}]*scrollbar-width:none/);
+});
+
+test("Library page factory, native ownership and cleanup use originals",()=>{
+ const source=read("src/library/controller.js.part");
+ const a=source.indexOf("  function removePage("),b=source.indexOf("  function syncIndicator(",a);
+ const x=source.indexOf("  function clearSectionFlight("),y=source.indexOf("  function startMotionProbe(",x);
+ const nodes=[],removed=[],aborted=[],observed=[],calls=[],sections=["downloads","documents","history","pictures","closed"];
+ const view=section=>{
+   const node={style:{left:"0%"},isConnected:false,inert:false,classList:{add(){},remove(){}},setAttribute(){},removeAttribute(){},remove(){this.isConnected=false;removed.push(this);}};
+   const v={section,controller:{abort(){aborted.push(node);}},rows:new Map([["r",{}]]),saved:null,limit:100,paused:false,controls:{page:node,body:{}}};
+   nodes.push(v);return v;
+ };
+ const shell={view:null,viewport:{getBoundingClientRect:()=>({width:100}),insertBefore(node){node.isConnected=true;}},scrollbar:{}};
+ const state={section:"history",query:"q",sort:"site",filter:"week"};
+ const fixture=new Function("shell","state","createPage","win","scrollObserver","data","LIBRARY_SECTIONS","calls",`
+ let rows=new Map(),outgoingPages=[],scrollPending=false,renderedSection=null;
+ const syncTools=()=>{},syncScrollbar=()=>{},cancelMotion=()=>{};
+ ${source.slice(a,b)}
+ ${source.slice(x,y)}
+ return {bindPage,prepareSection,clearSectionFlight,releaseActivePage,resumePage,retained:()=>outgoingPages.slice(),rows:()=>rows};
+ `)(shell,state,view,{getComputedStyle:n=>({left:n.style.left})},{disconnect(){observed.push(null);},observe(n){observed.push(n);}}, {start(...args){calls.push(args);}},sections,calls);
+ const first=view("history");fixture.bindPage(first);const original=first.controls.page;
+ let motion=fixture.prepareSection("history","pictures");const pictures=shell.view;
+ assert.equal(fixture.retained()[0].view,first);assert.equal(first.controls.page,original);assert.equal(original.inert,true);
+ assert.equal(first.rows.size,1);assert.deepEqual(first.saved,{query:"q",filter:"week",sort:"site"});
+ original.style.left="-60%";pictures.controls.page.style.left="40%";
+ state.section="pictures";state.query="";state.sort="new";state.filter="all";
+ motion=fixture.prepareSection("pictures","history");
+ assert.equal(motion.reused.view,first);assert.equal(shell.view,first);assert.equal(shell.page,original);assert.equal(first.paused,true);
+ assert.equal(fixture.rows(),first.rows);assert.equal(calls.length,0);
+ Object.assign(state,{section:"history",...first.saved});fixture.clearSectionFlight();fixture.resumePage();
+ assert.equal(shell.page,original);assert.equal(original.inert,false);assert.equal(original.style.left,"0%");
+ assert.equal(pictures.rows.size,0);assert.equal(pictures.controls.page.isConnected,false);
+ assert.deepEqual(calls,[["history","q",{sort:"site",filter:"week",limit:100}]]);
+ fixture.releaseActivePage();assert.equal(shell.view,null);assert.equal(first.rows.size,0);assert.equal(aborted.length,2);assert.equal(removed.length,2);
+ // Repeated transitions and interruptions must not leave a detached owner.
+ fixture.bindPage(view("history"));
+ for(let i=0;i<100;i++){
+   const from=state.section,to=sections[(sections.indexOf(from)+1)%sections.length];
+   fixture.prepareSection(from,to);state.section=to;
+   assert.equal(fixture.retained().length,1);
+   fixture.clearSectionFlight();assert.equal(fixture.retained().length,0);
+   assert.equal(nodes.filter(v=>v.controls.page.isConnected).length,1);
+ }
+ fixture.releaseActivePage();fixture.releaseActivePage();fixture.clearSectionFlight();
+ assert.equal(nodes.filter(v=>v.controls.page.isConnected).length,0);
+ assert.equal(new Set(aborted).size,nodes.length);
+ assert.equal(aborted.length,nodes.length);assert.equal(removed.length,nodes.length);
+
 });

@@ -556,3 +556,6 @@ User confirmed the sidebar no longer flashes in preview.176; the three startup s
 ### Preview.179 — Home live return
 
 Controlled close-start/close-finish include mode=native-live; close-reverse records height and duration only. Existing close baseline records interrupted/complete. The frozen layer's counters remain meaningful only for the temporary unexpected native-close fallback. No search content or new recurring probe.
+
+### Preview.180 Library original page cleanup
+`library.section.motion` includes `original:true` and actual surface count; `library.section.cleanup` counts attached pages and retained views at settlement/hide (expected 1/0 and 0/0). No content, query or file identifiers in these events. Existing frame summaries remain bounded.

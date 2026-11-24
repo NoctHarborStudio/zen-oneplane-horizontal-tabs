@@ -387,3 +387,15 @@ test("NC4-022/082/083 paused media UI hides folder controls and keeps download p
  data.start("documents");await tick();assert.deepEqual(outputs.at(-1).rows.map(x=>x.name),["notes.pdf"]);
  data.dispose();
 });
+
+test("Library reactivated native query retains bounded pagination without a second owner",async()=>{
+ const limits=[],outputs=[];let closes=0;
+ const source={openHistory:()=>({query:async args=>{limits.push(args.limit);return {rows:[],limit:args.limit,hasMore:false};},close(){closes++;}})};
+ const data=createLibraryData({getServices:()=>source,onResult:r=>outputs.push(r),onError:()=>assert.fail("query failed"),schedule:setTimeout,cancel:clearTimeout});
+ data.start("history","",{limit:150});await tick();
+ data.start("history","",{limit:900});await tick();
+ data.start("history","",{limit:-1});await tick();
+ data.start("history","",{limit:NaN});await tick();
+ assert.deepEqual(limits,[150,500,50,50]);assert.equal(closes,3);
+ data.dispose();assert.equal(closes,4);
+});

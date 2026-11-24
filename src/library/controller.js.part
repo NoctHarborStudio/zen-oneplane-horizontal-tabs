@@ -5,13 +5,13 @@
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,options);
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.179",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.180",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
   const labels={downloads:"All Downloads",documents:"Documents",history:"History",pictures:"Pictures",closed:"Recently Closed"};
   const summaries={downloads:"Download records and file actions",documents:"Downloaded documents and opted-in folders",history:"Browsing history and search",pictures:"Downloaded pictures and opted-in folders",closed:"Recently closed tabs in this window"};
-  let outgoingPages=[],sectionCover=null,scrollPending=false,scrollDrag=null,scrollObserver=null;
+  let outgoingPages=[],pageSerial=0,scrollPending=false,scrollDrag=null,scrollObserver=null;
   const SECTION_MS=1000,SECTION_EASING="cubic-bezier(.45,0,.55,1)";
   let state=createLibraryState(),dead=false,lease=()=>{},shell=null,animations=[],motionProbe=null,frame=0,returnFocus=null,rows=new Map(),backgroundAction=false,renderedSection=null,dragSource=null,pendingResult=null,clearing=false,confirmation=false,actionSerial=0,pendingClose=false,dragOwner=null,indicatorReady=false,lastFailure=null,fallbackDragTimer=0,fallbackDragMissing=0,fallbackDragUnknown=0;
   const data=createLibraryData({getServices:()=>win.__nocturneLibraryServices,onResult:result=>{const measure=state.phase==="opening"||state.phase==="switching",start=measure?win.performance.now():0;renderResults(result);if(measure)trace("render",{section:state.section,phase:state.phase,rows:result.rows.length,duration:win.performance.now()-start},{flush:false});},onError:renderError,onNotice:notice,onScanWait:status=>trace("media.scan.wait",{status,section:state.section}),schedule:(fn,ms)=>win.setTimeout(fn,ms),cancel:id=>win.clearTimeout(id)});
@@ -51,7 +51,7 @@
     left.setAttribute("role","presentation");right.setAttribute("role","presentation");
     for(const section of LIBRARY_SECTIONS){
       const button=make("button","nl-tab",labels[section]);button.type="button";button.id="nl-tab-"+section;
-      button.setAttribute("role","tab");button.setAttribute("aria-controls","nl-body");
+      button.setAttribute("role","tab");
       button.addEventListener("click",()=>open(section));
       button.addEventListener("keydown",e=>{
         let i=LIBRARY_SECTIONS.indexOf(section);
@@ -63,24 +63,53 @@
       if(section==="history")button.classList.add("nl-primary");else (["downloads","documents"].includes(section)?left:right).append(button);
     }
     const indicator=make("span","nl-nav-indicator");indicator.hidden=true;indicator.setAttribute("aria-hidden","true");nav.append(left,tabs.get("history"),right,indicator);
+    const viewport=make("div","nl-page-viewport");
+    const scrollbar=make("div","nl-scrollbar"),thumb=make("span","nl-scroll-thumb");
+    scrollbar.setAttribute("role","scrollbar");scrollbar.setAttribute("aria-label","Library scroll");
+    scrollbar.setAttribute("aria-orientation","vertical");
+    scrollbar.setAttribute("aria-valuemin","0");scrollbar.setAttribute("aria-valuemax","100");scrollbar.setAttribute("aria-disabled","true");scrollbar.tabIndex=-1;
+    scrollbar.append(thumb);viewport.append(scrollbar);
+    scrollbar.addEventListener("pointerdown",startScrollDrag);
+    scrollbar.addEventListener("pointermove",moveScrollDrag);
+    for(const event of ["pointerup","pointercancel","lostpointercapture"])scrollbar.addEventListener(event,endScrollDrag);
+    scrollbar.addEventListener("keydown",scrollbarKey);
+    panel.append(header,nav,viewport);layer.append(shade,glass,panel);root.append(layer);
+    shade.addEventListener("pointerdown",e=>{if(e.button===0){e.preventDefault();close();}});
+    panel.addEventListener("keydown",e=>{
+      if(e.key!=="Tab"||!shell?.view)return;
+      const {search,tools,body,historyDrawer,page}=shell;
+      const pageNodes=page.inert?[]:[...(search.disabled?[]:[search]),...(scrollbar.tabIndex===0?[scrollbar]:[]),...tools.querySelectorAll("button:not([disabled]):not([hidden]),select:not([disabled]):not([hidden])"),...(!historyDrawer.inert&&!historyDrawer.hidden?[...historyDrawer.querySelectorAll("button:not([disabled])")]:[body,...body.querySelectorAll("button:not([disabled])")])];
+      const nodes=[dismiss,tabs.get(state.section),...pageNodes],i=nodes.indexOf(doc.activeElement);
+      const next=e.shiftKey?(i<=0?nodes.length-1:i-1):(i<0||i===nodes.length-1?0:i+1);
+      e.preventDefault();nodes[next].focus();
+    });
+    shell={layer,shade,glass,panel,viewport,scrollbar,thumb,title,tabs,nav,indicator,topLayer,view:null};
+    if(typeof win.ResizeObserver==="function")scrollObserver=new win.ResizeObserver(()=>{if(shell?.view&&!shell.view.paused)syncScrollbar(state.phase==="switching");});
+    return true;
+  }
+  function createPage(section){
+    const id=++pageSerial,page=make("div","nl-page"),controller=new win.AbortController();
+    const bind=(node,event,fn,options={})=>node.addEventListener(event,e=>{
+      if(!dead&&shell?.page===page&&!page.inert&&active()&&state.phase!=="closing")fn(e);
+    },{...options,signal:controller.signal});
     const search=make("input","nl-search");search.type="search";search.autocomplete="off";search.maxLength=1024;search.setAttribute("aria-label","Search Library");
-    search.addEventListener("input",()=>{state=reduceLibrary(state,{type:"QUERY",value:search.value});if(renderedSection===state.section)data.search(state.query);});
-    search.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();if(renderedSection===state.section)data.search(state.query,true);}});
-    const body=make("div","nl-body");body.id="nl-body";body.setAttribute("role","tabpanel");body.tabIndex=0;
+    bind(search,"input",()=>{state=reduceLibrary(state,{type:"QUERY",value:search.value});if(renderedSection===state.section)data.search(state.query);});
+    bind(search,"keydown",e=>{if(e.key==="Enter"){e.preventDefault();if(renderedSection===state.section)data.search(state.query,true);}});
+    const body=make("div","nl-body");body.id="nl-body-"+id;body.setAttribute("role","tabpanel");body.tabIndex=0;
     const tools=make("div","nl-tools"),status=make("div","nl-status");status.setAttribute("role","status");status.hidden=true;
     const sort=make("select","nl-select");sort.setAttribute("aria-label","Sort files");
     for(const [v,t] of [["new","Newest"],["old","Oldest"],["size","Largest"]]){const o=make("option","",t);o.value=v;sort.append(o);}
     const filter=make("select","nl-select");filter.setAttribute("aria-label","Filter downloads");
     for(const [v,t] of [["all","All"],["active","Active"],["completed","Completed"],["other","Other"]]){const o=make("option","",t);o.value=v;filter.append(o);}
     function options(){state=reduceLibrary(reduceLibrary(state,{type:"SORT",value:sort.value}),{type:"FILTER",value:filter.value});data.options(state.sort,state.filter);}
-    sort.addEventListener("change",options);filter.addEventListener("change",options);
-    const button=(name,fn)=>{const b=make("button","nl-action",name);b.type="button";b.addEventListener("click",fn);return b;};
+    bind(sort,"change",options);bind(filter,"change",options);
+    const button=(name,fn)=>{const b=make("button","nl-action",name);b.type="button";bind(b,"click",fn);return b;};
     const clear=button("Clear finished records",()=>{confirmation=true;syncTools();});
     const yes=button("Confirm clear",()=>void clearDownloads());
     const no=button("Cancel",()=>{confirmation=false;syncTools();clear.focus();});
     const historyFilter=button("Filter",()=>setHistoryDrawer(shell.historyDrawer.inert));
-    historyFilter.setAttribute("aria-expanded","false");historyFilter.setAttribute("aria-controls","nl-history-filter");
-    const historyDrawer=make("section","nl-history-filter");historyDrawer.id="nl-history-filter";historyDrawer.inert=true;historyDrawer.hidden=true;
+    historyFilter.setAttribute("aria-expanded","false");historyFilter.setAttribute("aria-controls","nl-history-filter-"+id);
+    const historyDrawer=make("section","nl-history-filter");historyDrawer.id="nl-history-filter-"+id;historyDrawer.inert=true;historyDrawer.hidden=true;
     historyDrawer.setAttribute("aria-label","Filter history");
     const drawerHead=make("div","nl-filter-head");
     const done=button("Done",()=>setHistoryDrawer(false,true));drawerHead.append(make("strong","","Filter history"),done);
@@ -110,29 +139,33 @@
     const more=button("Load more",()=>{more.disabled=true;if(!data.more())more.disabled=false;});more.classList.add("nl-more");
     tools.append(sort,filter,clear,yes,no,historyFilter,historyRange,clearHistory,refresh,addFolder,resetFolders);
     const contentArea=make("div","nl-content-area");contentArea.append(body,historyDrawer);
-    const viewport=make("div","nl-page-viewport"),page=make("div","nl-page");
-    page.append(search,tools,status,contentArea);viewport.append(page);
-    const scrollbar=make("div","nl-scrollbar"),thumb=make("span","nl-scroll-thumb");
-    scrollbar.setAttribute("role","scrollbar");scrollbar.setAttribute("aria-label","Library scroll");
-    scrollbar.setAttribute("aria-controls","nl-body");scrollbar.setAttribute("aria-orientation","vertical");
-    scrollbar.setAttribute("aria-valuemin","0");scrollbar.setAttribute("aria-valuemax","100");scrollbar.setAttribute("aria-disabled","true");scrollbar.tabIndex=-1;
-    scrollbar.append(thumb);viewport.append(scrollbar);
-    body.addEventListener("scroll",()=>syncScrollbar(state.phase==="switching"&&!scrollDrag),{passive:true});
-    scrollbar.addEventListener("pointerdown",startScrollDrag);
-    scrollbar.addEventListener("pointermove",moveScrollDrag);
-    for(const event of ["pointerup","pointercancel","lostpointercapture"])scrollbar.addEventListener(event,endScrollDrag);
-    scrollbar.addEventListener("keydown",scrollbarKey);
-    panel.append(header,nav,viewport);layer.append(shade,glass,panel);root.append(layer);
-    shade.addEventListener("pointerdown",e=>{if(e.button===0){e.preventDefault();close();}});
-    panel.addEventListener("keydown",e=>{
-      if(e.key!=="Tab")return;
-      const nodes=[dismiss,tabs.get(state.section),...(search.disabled?[]:[search]),...(scrollbar.tabIndex===0?[scrollbar]:[]),...tools.querySelectorAll("button:not([disabled]):not([hidden]),select:not([disabled]):not([hidden])"),...(!historyDrawer.inert&&!historyDrawer.hidden?[...historyDrawer.querySelectorAll("button:not([disabled])")]:[body,...body.querySelectorAll("button:not([disabled])")])],i=nodes.indexOf(doc.activeElement);
-      const next=e.shiftKey?(i<=0?nodes.length-1:i-1):(i<0||i===nodes.length-1?0:i+1);
-      e.preventDefault();nodes[next].focus();
-    });
-    shell={layer,shade,glass,panel,viewport,page,scrollbar,thumb,title,tabs,search,body,tools,status,sort,filter,clear,yes,no,refresh,more,nav,indicator,historyFilter,historyDrawer,periodButtons,orderButtons,historyRange,clearHistory,addFolder,resetFolders,topLayer};
-    if(typeof win.ResizeObserver==="function"){scrollObserver=new win.ResizeObserver(()=>syncScrollbar(state.phase==="switching"));scrollObserver.observe(body);}
-    return true;
+    page.append(search,tools,status,contentArea);
+    bind(body,"scroll",()=>syncScrollbar(state.phase==="switching"&&!scrollDrag),{passive:true});
+    return {section,controller,rows:new Map(),saved:null,limit:50,paused:false,
+      controls:{page,search,body,tools,status,sort,filter,clear,yes,no,refresh,more,historyFilter,historyDrawer,periodButtons,orderButtons,historyRange,clearHistory,addFolder,resetFolders}};
+  }
+  function removePage(view){
+    if(!view||view.removed)return;
+    view.removed=true;view.controller.abort();view.rows.clear();view.controls.page.remove();view.saved=null;
+  }
+  function bindPage(view,paused=false){
+    scrollObserver?.disconnect();shell.view=view;Object.assign(shell,view.controls);rows=view.rows;
+    const page=view.controls.page;
+    page.classList.remove("nl-page-outgoing");page.inert=paused;page.removeAttribute("aria-hidden");view.paused=paused;
+    if(!page.isConnected)shell.viewport.insertBefore(page,shell.scrollbar);
+    if(!paused)scrollObserver?.observe(view.controls.body);
+  }
+  function releaseActivePage(){
+    if(!shell?.view)return;
+    scrollObserver?.disconnect();const view=shell.view;shell.view=null;
+    for(const key of Object.keys(view.controls))shell[key]=null;
+    rows=new Map();removePage(view);
+  }
+  function resumePage(){
+    const view=shell?.view;if(!view?.paused)return;
+    view.paused=false;shell.page.inert=false;scrollObserver?.observe(shell.body);
+    scrollPending=false;syncTools();syncScrollbar(false);
+    renderedSection=state.section;data.start(state.section,state.query,{sort:state.sort,filter:state.filter,limit:view.limit});
   }
   function syncIndicator(animate=true){
     if(!shell||!active())return;
@@ -146,10 +179,12 @@
     }
     indicator.style.transform="translate("+x+"px,"+y+"px)";indicator.style.width=width+"px";indicatorReady=true;indicator.hidden=false;
   }
-  function renderHeader(){
+  function renderHeader(preserve=false){
     const {title,tabs,search,body}=shell;title.textContent=labels[state.section];
-    for(const [id,b] of tabs){const selected=id===state.section;b.setAttribute("aria-selected",String(selected));b.tabIndex=selected?0:-1;}
-    search.placeholder="Search "+labels[state.section].toLowerCase();search.value=state.query;body.setAttribute("aria-labelledby","nl-tab-"+state.section);syncTools();syncIndicator();
+    for(const [id,b] of tabs){const selected=id===state.section;b.setAttribute("aria-selected",String(selected));b.tabIndex=selected?0:-1;if(selected)b.setAttribute("aria-controls",body.id);else b.removeAttribute("aria-controls");}
+    shell.scrollbar.setAttribute("aria-controls",body.id);
+    search.placeholder="Search "+labels[state.section].toLowerCase();body.setAttribute("aria-labelledby","nl-tab-"+state.section);
+    if(!preserve){search.value=state.query;syncTools();}syncIndicator();
   }
   function notice(message,onlyIf){
     if(!shell||!active()||state.phase==="closing")return;
@@ -280,7 +315,7 @@
     let actionPress=false;
     node.addEventListener("pointerdown",e=>{actionPress=!!e.target.closest?.("button");});
     node.addEventListener("dragstart",e=>{
-      if(actionPress||e.target.closest?.("button")||entry.record?.kind!=="download"||dragSource||clearing){e.preventDefault();return;}
+      if(!shell?.body?.contains(node)||shell.page.inert||actionPress||e.target.closest?.("button")||entry.record?.kind!=="download"||dragSource||clearing){e.preventDefault();return;}
       const finish=()=>finishDrag(node);
       const dock=win.__zenRefinedDownloadIndicator;
       let fallback=false;
@@ -345,7 +380,7 @@
   }
   function renderResults(result){
     if(!active()||state.phase==="closing"||renderedSection!==state.section)return;
-    if(dragSource){pendingResult=result;return;}syncTools();
+    if(dragSource){pendingResult=result;return;}if(shell.view&&Number.isFinite(result.limit))shell.view.limit=result.limit;syncTools();
     const body=shell.body,focusId=doc.activeElement?.closest?.("[data-record-id]")?.dataset?.recordId,focused=doc.activeElement;
     const oldScroll=body.scrollTop,ordered=[],live=new Set(),headings=new Map(),dayRuns=new Map();let lastDay=null;
     // The current DOM owns date headings. Reuse its exact nodes across
@@ -394,6 +429,8 @@
     scrollPending=false;syncScrollbar(state.phase==="switching");
   }
   function renderBody(){
+    if(shell.view?.paused)return;
+    if(shell.view)shell.view.limit=50;
     scrollPending=state.phase==="switching";rows.clear();shell.body.scrollTop=0;renderedSection=state.section;
     shell.search.disabled=false;notice("");syncTools();
     if(["documents","pictures"].includes(state.section)&&prefs.getBoolPref(MEDIA_PREF,false)&&win.__nocturneLibraryServices?.mediaScanAvailable!==true)
@@ -408,7 +445,7 @@
     return {max,size,top:(height-size)*ratio,ratio};
   }
   function syncScrollbar(animate=false){
-    if(!shell||!active()||state.phase==="closing"||scrollPending)return;
+    if(!shell?.view||!active()||state.phase==="closing"||scrollPending||shell.view.paused)return;
     const {body,viewport,scrollbar,thumb}=shell,rect=body.getBoundingClientRect(),vr=viewport.getBoundingClientRect();
     const h=body.clientHeight,m=scrollbarMetrics(h,body.scrollHeight,body.scrollTop);
     const available=m.max>0&&!body.inert&&h>0,ms=animate?duration(SECTION_MS):0;
@@ -425,7 +462,7 @@
     if(max>0&&travel>0){body.scrollTop=max*Math.max(0,Math.min(1,(e.clientY-r.top-scrollDrag.offset)/travel));syncScrollbar(false);}
   }
   function startScrollDrag(e){
-    if(e.button!==0||scrollPending||shell.scrollbar.getAttribute("aria-disabled")==="true")return;
+    if(e.button!==0||scrollPending||shell.view?.paused||shell.scrollbar.getAttribute("aria-disabled")==="true")return;
     e.preventDefault();const r=shell.thumb.getBoundingClientRect();
     scrollDrag={id:e.pointerId,offset:e.clientY>=r.top&&e.clientY<=r.bottom?e.clientY-r.top:r.height/2};
     shell.scrollbar.setPointerCapture(e.pointerId);setScrollFromPointer(e);
@@ -437,31 +474,29 @@
     try{if(shell?.scrollbar.hasPointerCapture(id))shell.scrollbar.releasePointerCapture(id);}catch{}
   }
   function scrollbarKey(e){
-    if(scrollPending||shell.scrollbar.getAttribute("aria-disabled")==="true")return;
+    if(scrollPending||shell.view?.paused||shell.scrollbar.getAttribute("aria-disabled")==="true")return;
     const b=shell.body,delta={ArrowUp:-40,ArrowDown:40,PageUp:-b.clientHeight,PageDown:b.clientHeight};
     if(e.key==="Home")b.scrollTop=0;else if(e.key==="End")b.scrollTop=b.scrollHeight;
     else if(Object.hasOwn(delta,e.key))b.scrollTop+=delta[e.key];else return;
     e.preventDefault();e.stopPropagation();syncScrollbar(false);
   }
-  // Freeze every currently visible tile before cancelling the old flight.
-  // A new destination starts outside the viewport; visible content is never
-  // replaced by another section at the same screen position.
-  function snapshotPage(){
-    const page=shell.page,copy=page.cloneNode(true);
-    copy.classList.add("nl-page-outgoing");copy.inert=true;copy.setAttribute("aria-hidden","true");
-    for(const n of copy.querySelectorAll("[id]"))n.removeAttribute("id");
-    const sourceControls=page.querySelectorAll("input,select"),copyControls=copy.querySelectorAll("input,select");
-    for(let i=0;i<sourceControls.length;i++)copyControls[i].value=sourceControls[i].value;
-    const scroll=shell.body.scrollTop,drawerScroll=shell.historyDrawer.scrollTop;
-    shell.viewport.insertBefore(copy,shell.scrollbar);
-    copy.querySelector(".nl-body").scrollTop=scroll;
-    copy.querySelector(".nl-history-filter").scrollTop=drawerScroll;
-    return copy;
-  }
+  // The animation owns real page views, never a cloned or hidden replacement.
   function clearSectionFlight(){
-    for(const tile of outgoingPages)tile.node.remove();
-    outgoingPages=[];sectionCover=null;
-    if(shell?.page){shell.page.style.left="0%";shell.page.style.visibility="";}
+    for(const tile of outgoingPages)removePage(tile.view);
+    outgoingPages=[];
+    if(shell?.page)shell.page.style.left="0%";
+  }
+  function pagePosition(node,width){
+    const value=win.getComputedStyle(node).left,n=parseFloat(value);
+    return value.endsWith("%")?n/100:width>0?n/width:NaN;
+  }
+  function freezeSectionFlight(){
+    if(!shell?.view)return;
+    const width=shell.viewport.getBoundingClientRect().width;
+    for(const view of [shell.view,...outgoingPages.map(tile=>tile.view)]){
+      const node=view.controls.page,x=pagePosition(node,width);
+      if(Number.isFinite(x))node.style.left=(x*100)+"%";
+    }
   }
   function sectionPlan(from,to,tiles){
     const direction=LIBRARY_SECTIONS.indexOf(to)>LIBRARY_SECTIONS.indexOf(from)?1:-1;
@@ -476,32 +511,25 @@
       incoming:frames(target,0)};
   }
   function prepareSection(from,to){
-    const width=shell.viewport.getBoundingClientRect().width;
-    const position=node=>{
-      const value=win.getComputedStyle(node).left,number=parseFloat(value);
-      return value.endsWith("%")?number/100:width>0?number/width:NaN;
-    };
-    const previous=outgoingPages;
-    const tiles=previous.map(tile=>({...tile,x:position(tile.node)}));
-    // If the live page is covered by its retained visual tile, it is not
-    // visible and must not be captured again on a second interruption.
-    if(!sectionCover){
-      const x=position(shell.page);
-      if(Number.isFinite(x)&&Math.abs(x)<1)tiles.push({node:snapshotPage(),section:from,x});
-    }
+    const width=shell.viewport.getBoundingClientRect().width,old=shell.view;
+    if(!old)return null;
+    const previous=[...outgoingPages,{view:old,section:from}];
+    const tiles=previous.map(tile=>({...tile,x:pagePosition(tile.view.controls.page,width)}));
     const motion=sectionPlan(from,to,tiles);
-    // In a hidden/zero-width viewport fall back to the existing live content.
-    if(!motion.tiles.length){
-      cancelMotion();clearSectionFlight();return null;
-    }
-    for(const {tile,frames} of motion.tiles)tile.node.style.left=frames[0].left;
-    shell.page.style.left=motion.incoming[0].left;
+    if(!motion.tiles.length)return null;
+    old.saved={query:state.query,filter:state.filter,sort:state.sort};
+    scrollObserver?.disconnect();
+    for(const {tile,frames} of motion.tiles)tile.view.controls.page.style.left=frames[0].left;
     cancelMotion();
-    const retained=new Set(motion.tiles.map(({tile})=>tile.node));
-    for(const tile of previous)if(!retained.has(tile.node))tile.node.remove();
-    outgoingPages=motion.tiles.map(({tile})=>({node:tile.node,section:tile.section}));
-    sectionCover=motion.reused?.node||null;
-    shell.page.style.visibility=sectionCover?"hidden":"";
+    const retained=new Set(motion.tiles.map(({tile})=>tile.view));
+    for(const tile of previous)if(!retained.has(tile.view))removePage(tile.view);
+    const target=motion.reused?.view||createPage(to);
+    target.controls.page.style.left=motion.incoming[0].left;
+    outgoingPages=motion.tiles.filter(({tile})=>tile.view!==target).map(({tile})=>({view:tile.view,section:tile.section}));
+    for(const tile of outgoingPages){
+      const node=tile.view.controls.page;node.classList.add("nl-page-outgoing");node.inert=true;node.setAttribute("aria-hidden","true");
+    }
+    bindPage(target,!!motion.reused);
     return motion;
   }
   function startMotionProbe(ms){
@@ -540,16 +568,18 @@
     let before=null;
     if(probe)try{before=sample(shell.panel);}catch{}
     state=reduceLibrary(state,{type:"MOTION_DONE",epoch});cancelMotion(true);clearSectionFlight();
+    if(state.phase==="open")trace("section.cleanup",{section:state.section,pages:shell?.viewport?.querySelectorAll?.(".nl-page").length??(shell?.view?1:0),retained:outgoingPages.length},{flush:false});
     if(before)try{
       const after=sample(shell.panel);
       trace("motion.settled",{section:state.section,opacityStable:before.opacity===after.opacity,transformStable:before.transform===after.transform,beforeOpacity:Number(before.opacity),afterOpacity:Number(after.opacity)});
     }catch{}
-    if(state.phase==="open"&&scrollPending){scrollPending=false;syncScrollbar(false);}
+    if(state.phase==="open")try{resumePage();if(scrollPending){scrollPending=false;syncScrollbar(false);}}catch(error){trace("open.error",{name:error?.name||"Error"});closeNow(false);}
   }
   function hide(restore=true,completed=false){
     stopFallbackDragWatch();
     data.stop();rows.clear();renderedSection=null;dragSource=null;dragOwner=null;indicatorReady=false;pendingResult=null;pendingClose=false;confirmation=false;clearing=false;++actionSerial;scrollPending=false;endScrollDrag();cancelMotion(completed);clearSectionFlight();if(frame)win.cancelAnimationFrame(frame);frame=0;
-    if(shell){setHistoryDrawer(false);try{if(shell.topLayer&&shell.layer.matches(":popover-open"))shell.layer.hidePopover();}catch{}shell.layer.removeAttribute("data-library-open");shell.layer.hidden=true;shell.indicator.hidden=true;shell.scrollbar.hidden=true;shell.scrollbar.style.height="0px";shell.thumb.style.height="0px";shell.panel.inert=false;shell.body.replaceChildren();shell.search.value="";}
+    if(shell){releaseActivePage();try{if(shell.topLayer&&shell.layer.matches(":popover-open"))shell.layer.hidePopover();}catch{}shell.layer.removeAttribute("data-library-open");shell.layer.hidden=true;shell.indicator.hidden=true;shell.scrollbar.hidden=true;shell.scrollbar.style.height="0px";shell.thumb.style.height="0px";shell.panel.inert=false;for(const tab of shell.tabs.values())tab.removeAttribute("aria-controls");shell.scrollbar.removeAttribute("aria-controls");}
+    trace("section.cleanup",{section:state.section,pages:shell?.viewport?.querySelectorAll?.(".nl-page").length??0,retained:outgoingPages.length},{flush:false});
     const target=returnFocus;returnFocus=null;if(!restore||win.closed)return;
     try{if(target?.isConnected&&typeof target.focus==="function")target.focus({preventScroll:true});else win.gBrowser?.selectedBrowser?.focus();}catch{}
   }
@@ -561,7 +591,7 @@
     if(confirmation){confirmation=false;syncTools();return true;}
     const next=reduceLibrary(state,{type:"CLOSE"});if(next===state)return false;
     state=next;setHistoryDrawer(false);data.stop();const epoch=state.motionEpoch,panel=sample(shell.panel),shade=sample(shell.shade),glass=sample(shell.glass);
-    scrollPending=false;endScrollDrag();cancelMotion();clearSectionFlight();shell.panel.inert=true;
+    scrollPending=false;endScrollDrag();freezeSectionFlight();cancelMotion();shell.panel.inert=true;
     trace("motion.begin",{phase:"closing",section:state.section,duration:duration(360)},{flush:false});startMotionProbe(duration(360));
     void Promise.all([play(shell.panel,[panel,{opacity:0,transform:"translateY(8px)"}],duration(360)),play(shell.glass,[glass,{opacity:0}],duration(360)),play(shell.shade,[shade,{opacity:0}],duration(320))]).then(()=>{
       if(!current(epoch))return;state=reduceLibrary(state,{type:"MOTION_DONE",epoch});hide(true,true);
@@ -584,7 +614,7 @@
     const overlay=win.__nocturneOverlay;
     if(!overlay)return fail("overlay-missing");
     if(!win.__nocturneLibraryServices)return fail("services-missing");
-    try{return openInternal(section,overlay);}catch(error){trace("open.error",{name:error?.name||"Error"});try{closeNow(false);}catch{}return fail("exception");}
+    try{return openInternal(section,overlay);}catch(error){trace("open.error",{name:error?.name||"Error"});try{if(active())closeNow(false);else{data.stop();cancelMotion();clearSectionFlight();releaseActivePage();}}catch{}return fail("exception");}
   }
   function openInternal(section,overlay){
     if(!mount())return fail("mount");
@@ -595,22 +625,24 @@
     const panel=first?{opacity:0,transform:"translateY(8px)"}:sample(shell.panel),shade=first?{opacity:0}:sample(shell.shade),glass=first?{opacity:0}:sample(shell.glass);
     const ms=next.phase==="switching"?duration(SECTION_MS):0,from=before.section;
     endScrollDrag();
+    data.stop();renderedSection=null;confirmation=false;pendingResult=null;++actionSerial;scrollPending=next.phase==="switching";
     const motion=ms?prepareSection(from,section):null;
-    if(!motion){cancelMotion();clearSectionFlight();}
-    data.stop();renderedSection=null;confirmation=false;pendingResult=null;++actionSerial;state=next;scrollPending=state.phase==="switching";const epoch=state.motionEpoch;shell.panel.inert=false;
+    if(!motion){cancelMotion();clearSectionFlight();releaseActivePage();bindPage(createPage(section));}
+    state=motion?.reused&&shell.view.saved?{...next,...shell.view.saved}:next;
+    const epoch=state.motionEpoch;shell.panel.inert=false;
     if(first){returnFocus=doc.activeElement;if(!showLayer()){closeNow();return fail("surface-hidden");}}
-    setHistoryDrawer(false);renderHeader();
+    if(!motion?.reused)setHistoryDrawer(false);renderHeader(!!motion?.reused);
     if(state.phase==="opening"){
       trace("motion.begin",{phase:"opening",section:state.section,duration:duration(reopening?360:480)},{flush:false});startMotionProbe(duration(reopening?360:480));
       void Promise.all([play(shell.panel,[panel,{opacity:1,transform:"translateY(0px)"}],duration(reopening?360:480)),play(shell.glass,[glass,{opacity:1}],duration(reopening?360:480)),play(shell.shade,[shade,{opacity:1}],duration(340))]).then(()=>settle(epoch));
       renderBody();(shell.search.disabled?shell.tabs.get(state.section):shell.search).focus({preventScroll:true});
     }else{
-      renderBody();
-      trace("section.motion",{source:from,section:state.section,direction:(motion?.direction??(LIBRARY_SECTIONS.indexOf(state.section)>LIBRARY_SECTIONS.indexOf(from)?1:-1))>0?"left":"right",duration:motion?ms:0,epoch,interrupted:before.phase==="switching",start:motion?.target??0,surfaces:(motion?.tiles.length??0)+1,reused:!!motion?.reused,mode:"layout-left"},{flush:false});
+      if(motion?.reused){shell.tabs.get(state.section).focus({preventScroll:true});}else renderBody();
+      trace("section.motion",{source:from,section:state.section,direction:(motion?.direction??(LIBRARY_SECTIONS.indexOf(state.section)>LIBRARY_SECTIONS.indexOf(from)?1:-1))>0?"left":"right",duration:motion?ms:0,epoch,interrupted:before.phase==="switching",start:motion?.target??0,surfaces:outgoingPages.length+1,reused:!!motion?.reused,mode:"layout-left",original:true},{flush:false});
       if(!motion){settle(epoch);}
       else{
         startMotionProbe(ms);
-        void Promise.all([...motion.tiles.map(({tile,frames})=>play(tile.node,frames,ms,SECTION_EASING)),play(shell.page,motion.incoming,ms,SECTION_EASING)]).then(()=>settle(epoch));
+        void Promise.all([...motion.tiles.filter(({tile})=>tile.view!==shell.view).map(({tile,frames})=>play(tile.view.controls.page,frames,ms,SECTION_EASING)),play(shell.page,motion.incoming,ms,SECTION_EASING)]).then(()=>settle(epoch));
       }
     }
     trace("open.accepted",{section,phase:state.phase,topLayer:shell.topLayer},{flush:false});return true;
@@ -618,12 +650,12 @@
   function toggle(section="history"){return active()&&state.phase!=="closing"&&state.section===section?close():open(section);}
   function bindOverlay(){
     lease();const overlay=win.__nocturneOverlay;
-    lease=overlay?.register(OWNER,{priority:60,isActive:active,canYield:()=>!dragSource&&!clearing,yield(){if(dragSource||clearing)return false;closeNow(false);return true;},onEscape(){if(shell&&!shell.historyDrawer.inert){setHistoryDrawer(false,true);return true;}return close()||active();}})||(()=>{});
+    lease=overlay?.register(OWNER,{priority:60,isActive:active,canYield:()=>!dragSource&&!clearing,yield(){if(dragSource||clearing)return false;closeNow(false);return true;},onEscape(){if(shell?.historyDrawer&&!shell.historyDrawer.inert){setHistoryDrawer(false,true);return true;}return close()||active();}})||(()=>{});
     if(active()&&!overlay?.request(OWNER))closeNow();
   }
   function onPref(){if(!enabled()){if(dragSource)pendingClose=true;else closeNow();}}
   function onTab(){if(active()&&!backgroundAction){if(dragSource)pendingClose=true;else closeNow(false);}}
-  function onDragStart(e){if(active()&&!shell?.body.contains(e.target))onTab();}
+  function onDragStart(e){if(active()&&!shell?.body?.contains(e.target))onTab();}
   // Pref observers of independent Sine scripts have no guaranteed order.
   // Wait until all synchronous Gecko pref notifications finish before opening
   // the new media session, otherwise a later service observer revokes it.
@@ -684,7 +716,7 @@
     dead=true;let failed=0;
     const step=fn=>{try{fn();}catch{failed++;}};
     trace("dispose.begin",{reason,phase:state.phase,owns:win[KEY]===api});
-    step(()=>closeNow(false));step(stopFallbackDragWatch);step(()=>data.dispose());step(()=>lease());step(()=>cancelMotion());step(clearSectionFlight);step(endScrollDrag);step(()=>scrollObserver?.disconnect());scrollObserver=null;
+    step(()=>closeNow(false));step(stopFallbackDragWatch);step(()=>data.dispose());step(()=>lease());step(()=>cancelMotion());step(clearSectionFlight);step(releaseActivePage);step(endScrollDrag);step(()=>scrollObserver?.disconnect());scrollObserver=null;
     if(frame)step(()=>win.cancelAnimationFrame(frame));frame=0;
     for(const [name,fn] of listeners)step(()=>win.removeEventListener(name,fn,true));
     for(const [pref,fn] of [[PREF,onPref],[MEDIA_PREF,onMediaPref],["zen.nocturne.library.custom-folders",onMediaPref]])step(()=>prefs.removeObserver(pref,fn));
