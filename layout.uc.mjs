@@ -82,7 +82,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.175",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.176",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -7586,7 +7586,17 @@ function installTabStrip() {
         // the plus independently; Bloom intentionally scales real cards.
         const r=mode==="fold"&&n!==plus&&n!==row?n.getBoundingClientRect():null;
         const local=r?[r.left-rr.left,r.top-rr.top,r.width,r.height]:[];
-        return {connected,parent:n.parentElement,offsetParent:n.offsetParent,metrics,scroll,local};
+        // Only Assembly's exact Island marker permits a transformed rect.
+        // Compare its painted rectangle against the projected resting slot;
+        // integer offset metrics and every other geometry check remain live.
+        let islandMotion=null;
+        if(r&&n===island&&n.hasAttribute?.("data-zr-startup-island-entry")){
+          const cs=window.getComputedStyle(n);
+          const p=Number.parseFloat(cs.getPropertyValue("--zr-startup-progress"));
+          const y=Number.parseFloat(cs.getPropertyValue("--zr-startup-island-y"));
+          islandMotion=[p,y];
+        }
+        return {connected,parent:n.parentElement,offsetParent:n.offsetParent,metrics,scroll,local,islandMotion};
       });
       const flags=["data-op-show-island","data-op-island-tight","data-op-home-icon","data-op-overflow-row",
         "data-op-adaptive-compact","data-op-bottom-plus"].map(k=>row.hasAttribute(k));
@@ -7596,6 +7606,13 @@ function installTabStrip() {
     const sane=s=>finite(s.view)&&s.view.every(v=>v>0)&&finite(s.outer)&&s.outer.every(v=>v>0)&&
       s.slots.every(x=>!x.connected||finite(x.metrics)&&finite(x.scroll)&&finite(x.local));
     const same=(a,b,epsilon=0)=>a.length===b.length&&a.every((v,i)=>Math.abs(v-b[i])<=epsilon);
+    const sameLocal=(a,b)=>{
+      if(!b.islandMotion)return same(a.local,b.local,.5);
+      const [p,y]=b.islandMotion,[left,top,width,height]=a.local;
+      if(a.islandMotion||!Number.isFinite(p)||p<0||p>1||!Number.isFinite(y)||y>=0)return false;
+      const s=Math.max(.02,p);
+      return same([left+width*(1-s)/2,top+height*(1-s)/2+y*(1-p),width*s,height*s],b.local,.5);
+    };
     const before=measure();
     if(!sane(before))return null;
     return ()=>{
@@ -7606,7 +7623,7 @@ function installTabStrip() {
         before.slots.every((a,i)=>{
           const b=after.slots[i];
           return a.connected===b.connected&&a.parent===b.parent&&(!a.connected||
-            a.offsetParent===b.offsetParent&&same(a.metrics,b.metrics)&&same(a.scroll,b.scroll,.25)&&same(a.local,b.local,.5));
+            a.offsetParent===b.offsetParent&&same(a.metrics,b.metrics)&&same(a.scroll,b.scroll,.25)&&sameLocal(a,b));
         });
     };
   }

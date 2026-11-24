@@ -564,7 +564,8 @@ function geometryFixture(mode="fold"){
    offsetWidth:w,offsetHeight:30,clientWidth:w,clientHeight:30,scrollLeft:0,scrollTop:0,scrollWidth:w,scrollHeight:30,
    dx:0,scale:1,getBoundingClientRect(){return {left:this.offsetLeft+this.dx,top:this.offsetTop,width:this.offsetWidth*this.scale,height:30};}});
  const row=node(0,500),list=node(),leftLane=node(),rightLane=node(),bottomLane=node(),island=node(),plus=node(),a=node(10,30),b=node(50,30);
- const flags=new Set();row.hasAttribute=k=>flags.has(k);
+ const flags=new Set();row.hasAttribute=k=>flags.has(k);island.hasAttribute=k=>k==="data-zr-startup-island-entry"&&!!island.entry;
+ window.getComputedStyle=n=>({getPropertyValue:k=>k==="--zr-startup-progress"?String(n.progress):k==="--zr-startup-island-y"?String(n.entryY)+"px":""});
  for(const n of [list,leftLane,rightLane,bottomLane,island,plus,a,b]){n.parentElement=row;n.offsetParent=row;}
  bottomLane.isConnected=false;list.querySelectorAll=()=>[a,b];
  function captureCenterGeometry${code}
@@ -698,4 +699,15 @@ test("diagnostic reentry during second handoff frame cannot remove successor mar
  const a=engine.start(f.row,{owner:"startup"});a.seal();a.release();
  for(let i=0;i<2;i++){const [key,fn]=[...f.frames][0];f.frames.delete(key);fn();}
  assert.ok(b);assert.equal(f.root.getAttribute(ownerMark),"workspace");assert.equal(f.row.children.length,2);b.release();assertProxyClean(f);
+});
+
+
+test("Fold geometry lease accepts only the exact owned Island entrance and preserves all other slots",()=>{
+ const f=geometryFixture(),n=f.island;
+ n.entry=true;n.entryY=-42;n.progress=0;
+ n.getBoundingClientRect=function(){const s=Math.max(.02,this.progress);return {left:this.offsetLeft+this.offsetWidth*(1-s)/2+this.dx,top:this.offsetTop+this.offsetHeight*(1-s)/2+this.entryY*(1-this.progress),width:this.offsetWidth*s,height:this.offsetHeight*s};};
+ for(const p of [0,.15625,.5,.84375,1]){n.progress=p;assert.ok(f.valid(),String(p));}
+ n.progress=.5;n.dx=1;assert.equal(f.valid(),false);n.dx=0;assert.ok(f.valid());
+ f.a.dx=1;assert.equal(f.valid(),false);f.a.dx=0;
+ n.entry=false;assert.equal(f.valid(),false);n.progress=1;assert.ok(f.valid());
 });

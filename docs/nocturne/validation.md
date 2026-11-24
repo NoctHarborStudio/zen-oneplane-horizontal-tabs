@@ -892,3 +892,6 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 
 ### Preview.174 — Library retarget/scrollbar/raster experiment
 Check direct 800ms transitions, rapid same-direction and reverse retargets, no duplicate scrollbar, thumb shrinking to zero on empty sections and expanding to native extent on return, wheel/drag/keyboard scroll, filter drawer, resize, reduced motion and Escape during flight. Compare text during/after motion and RAF aggregates (not presented FPS) with preview.172. Tests exercise all ordered pairs, interruption geometry and scrollbar metrics. Other owners' startup CI failures remain separate. Native visual/performance gate OPEN.
+
+
+- Preview.176 native gate: after the Boot, the small Home Island travels down from above the window, reaches its final size/position before the magnetic tabs begin, and the existing tab wave retains its appearance and duration. Repeat with the Boot off, reduced motion, narrow/compact layouts and interrupted startup. Inspect `assembly.island.entry`, `assembly.timeline` and unexpected `center.geometry.invalidate` events. Pending native acceptance.

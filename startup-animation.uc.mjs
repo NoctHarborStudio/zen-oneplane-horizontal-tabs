@@ -95,16 +95,25 @@ function startupBloomAssemblyPlan(start,scale){
 }
 // Pure timing plan for Center Assembly; base offsets are unscaled milliseconds.
 // The runtime owns the epoch and lifecycle; this module owns no DOM or timers.
-function startupTimeline(start,scale,mode="fold"){
+function startupTimeline(start,scale,mode="fold",islandEntry=false){
   if(mode==="bloom")return startupBloomAssemblyPlan(start,scale);
   if(mode!=="fold")throw RangeError("unknown startup motion mode");
   const duration=Math.round(scale*1050);
+  // Keep the existing Fold cadence after the Island reaches its real slot.
+  // Native/hidden Island startup and the experimental Bloom path are unchanged.
+  const islandLength=420,shift=islandEntry?islandLength-245:0;
   return {
-    start,scale,panel:0,panelLength:220,cards:245,cardsLength:650,
-    bookmarks:470,home:650,homeLength:330,end:1190,
-    finishLength:Math.max(duration+80,1190*scale),
-    lateLimit:duration+420
+    start,scale,panel:0,panelLength:220,cards:245+shift,cardsLength:650,
+    bookmarks:470+shift,home:650+shift,homeLength:330,end:1190+shift,
+    finishLength:Math.max(duration+80,1190*scale)+shift*scale,
+    lateLimit:duration+420+shift*scale,
+    ...(islandEntry?{islandStart:0,islandLength,islandShift:shift}:{})
   };
+}
+
+// The centered Magnetic Fold card uses the same 41 smoothstep samples.
+function startupIslandProgress(){
+  return Array.from({length:41},(_,i)=>{const p=i/40;return p*p*(3-2*p);});
 }
 
 function startupFits(plan,now,deadline,overhead=0){
@@ -213,7 +222,7 @@ function startupBoundaryOutcome(counts,legacy=0){
 }
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.175"};
+  const event="assembly.script",data={version:"0.3.0-preview.176"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -615,11 +624,11 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     owned.delete(n);
     let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
     for(const [k,v] of record)step(()=>{if(v.value)n.style.setProperty(k,v.value,v.priority);else n.style.removeProperty(k);});
-    for(const mark of [EFFECT,MOVE,CLIP])step(()=>n.removeAttribute(mark));
+    for(const mark of [EFFECT,MOVE,CLIP,"data-zr-startup-island-entry"])step(()=>n.removeAttribute(mark));
     step(()=>{if(n.hasAttribute?.("data-zr-startup-bloom-shape"))n.removeAttribute("data-zr-startup-bloom-shape");});
     if(failed)decision("assembly.effect.cleanup",{failed});
   }
-  function reveal(n,{x=0,y=0,clip=false,delay=0,length=350,easing=EASE,late=false,bloomTiming=null,bloomShape=false}={}){
+  function reveal(n,{x=0,y=0,clip=false,delay=0,length=350,easing=EASE,late=false,bloomTiming=null,bloomShape=false,islandY=null}={}){
     if(dead||ownedTimeline?.closed||!n||seen.has(n)||!bounds(n,true))return false;
     // Remove the pending gate before sampling native opacity. All changes
     // occur synchronously, before the next paint.
@@ -639,7 +648,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       bloomShape&&cs.scale!=="none"&&!/^1(?: 1){0,2}$/.test(cs.scale)))return false;
     if(n.matches?.(".oneplane-tab,.oneplane-split-group"))window.__nocturneTrace?.("assembly.card.rest",()=>({opacity,x,y}),{throttle:80});
     const alreadyPainted=baseline.has(n)||late&&!clip&&!n.matches?.("#PlacesToolbarItems > *");
-    const initial=bloomTiming?0:alreadyPainted ? .72 : 0;
+    const initial=bloomTiming||islandY!==null?0:alreadyPainted ? .72 : 0;
     if(alreadyPainted)clip=false;
     const nativeTranslate=cs.translate||"none";
     const canMove=nativeTranslate==="none"||/^0(?:px|%)?(?: 0(?:px|%)?){0,2}$/.test(nativeTranslate);
@@ -672,9 +681,15 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       if(x||y){save(n,"--zr-startup-dx",x+"px");save(n,"--zr-startup-dy",y+"px");n.setAttribute(MOVE,"true");}
       if(clip)n.setAttribute(CLIP,"true");
       if(bloomShape)n.setAttribute("data-zr-startup-bloom-shape","true");
+      if(islandY!==null){
+        save(n,"--zr-startup-island-y",islandY+"px");
+        n.setAttribute("data-zr-startup-island-entry","true");
+      }
       const resting=bloomTiming&&bloomShape?n.getBoundingClientRect():null;
       const verify=bloomTiming?(a,promise)=>prepareBloomDirect(n,a,promise,timeline,start,time,opacity,resting):null;
-      acquired=play(n,[{[PROGRESS]:String(initial)},{[PROGRESS]:"1"}],start,time,false,easing,()=>restore(n),!late,startLate,verify);
+      const frames=islandY===null?[{[PROGRESS]:String(initial)},{[PROGRESS]:"1"}]:
+        startupIslandProgress().map(p=>({[PROGRESS]:String(p)}));
+      acquired=play(n,frames,start,time,false,islandY===null?easing:"linear",()=>restore(n),!late,startLate,verify);
       if(!acquired)restore(n);
     }else{
       const from={opacity:opacity*initial},to={opacity};
@@ -804,7 +819,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     for(const [side,group] of [[-1,left],[1,right]])for(let i=0;i<group.length;i++){
       const {n}=group[i];
       if(seen.has(n)||[...seen].some(other=>other.contains(n)||n.contains(other)))continue;
-      reveal(n,{x:-side*14,y:-4,delay:260+Math.min(i*32,160),length:390,late});
+      reveal(n,{x:-side*14,y:-4,delay:260+(ownedTimeline?.islandShift||0)+Math.min(i*32,160),length:390,late});
     }
   }
   function revealBookmarks(center,late=false){
@@ -822,7 +837,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     const max=Math.max(1,...visible.map(x=>Math.abs(x.r.left+x.r.width/2-bmCenter)));
     for(const {n,r} of visible){
       const dx=Math.abs(r.left+r.width/2-bmCenter);
-      reveal(n,{x:0,y:-16,delay:430+dx/max*115,length:430,easing:FADE,late});
+      reveal(n,{x:0,y:-16,delay:430+(ownedTimeline?.islandShift||0)+dx/max*115,length:430,easing:FADE,late});
     }
   }
   function acquireStartupBookmarks(engine,items,timeline){
@@ -861,7 +876,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       const bar=floatingBar();
       if(bar&&!seen.has(bar)){
         if(ownedTimeline?.mode==="bloom"){seen.add(bar);bar.setAttribute(MANAGED,"true");}
-        else openFromCenter(bar,590,440,true);
+        else openFromCenter(bar,590+(timeline?.islandShift||0),440,true);
       }
       if(!bookmarkHandle)revealBookmarks(window.innerWidth/2,true);
       else for(const n of get("PlacesToolbarItems")?.children||[]){n.setAttribute(MANAGED,"true");seen.add(n);}
@@ -936,6 +951,11 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       const ur=bounds(url,true),rr=one?bounds(row,true):null;
       const island=one?row?.querySelector(".oneplane-title-island"):null,ir=bounds(island,true);
       const center=ir?ir.left+ir.width/2:one&&rr?rr.left+rr.width/2:ur?ur.left+ur.width/2:window.innerWidth/2;
+      // Capture all resting rectangles before adding an Island transform.
+      // A covered Boot or a newly inserted Island may enter from zero;
+      // do not re-hide an already-painted, uncovered Island.
+      if(plan.mode!=="bloom"&&ir&&registered&&Number.isFinite(ir.bottom)&&
+         (bootPreparing||!baseline.has(island)))plan=startupTimeline(0,scale,"fold",true);
       playStart=now();
       const overhead=bootPreparing?BOOT_EXIT+150:0;
       if(!startupFits(plan,playStart,deadline,overhead)){
@@ -965,7 +985,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       decision("assembly.timeline",{mode:bloom?"bloom":"fold",panel:!!surface,cardsAt:timeline.cards*scale,homeAt:timeline.home*scale});
       // The native floating field may be a top-layer popover; never clip
       // its parent during its independent entrance.
-      if(!bloom&&ur&&!floating)openFromCenter(url,45,410);
+      if(!bloom&&ur&&!floating)openFromCenter(url,45+(timeline.islandShift||0),410);
       if(dead)return;
       if(one&&rr){
         const cards=[...row.querySelectorAll(".oneplane-tab,.oneplane-split-group")];
@@ -995,8 +1015,15 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
           if(bounds(plus,true))bloomStage(plus,timeline.bloom.tabs);
           if(ir)bloomIsland(island,timeline.bloom);
         }else{
-          if(bounds(plus,true))slide(plus,-26,0,400,350);
-          if(ir)reveal(island,{delay:150,length:190});
+          if(bounds(plus,true))slide(plus,-26,0,400+(timeline.islandShift||0),350);
+          if(ir&&timeline.islandLength){
+            // Center Motion already captured the final, untransformed portal.
+            // Keep the native -50% translate intact; only transform the Island.
+            const y=-Math.max(1,ir.bottom+2);
+            const acquired=reveal(island,{delay:timeline.islandStart,length:timeline.islandLength,islandY:y});
+            decision("assembly.island.entry",{acquired,y,width:ir.width,height:ir.height,
+              duration:timeline.islandLength*scale,cardsAt:timeline.cards*scale});
+          }else if(ir)reveal(island,{delay:150,length:190});
         }
       }else{
         // Move actual native tabs instead of fading the acrylic sidebar.
@@ -1014,7 +1041,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       if(dead)return;
       if(one&&window.__nocturneCenterMotion!==engine){finish();return;}
       if(!bookmarkHandle)revealBookmarks(center);
-      if(floating){if(bloom)bloomStage(floating,timeline.bloom.search);else openFromCenter(floating,590,440);}
+      if(floating){if(bloom)bloomStage(floating,timeline.bloom.search);else openFromCenter(floating,590+(timeline.islandShift||0),440);}
       if(dead)return;
       if(bloom)verifyBloomDirect(timeline);
       if(dead)return;
@@ -1247,6 +1274,10 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       }
       ${base}[data-zr-startup-move] {
         translate: calc(var(--zr-startup-dx) * (1 - var(${PROGRESS}))) calc(var(--zr-startup-dy) * (1 - var(${PROGRESS}))) !important;
+      }
+      ${base}[data-zr-startup-island-entry] {
+        transform: translateY(calc(var(--zr-startup-island-y) * (1 - var(${PROGRESS})))) scale(max(.02, var(${PROGRESS}))) !important;
+        transform-origin: center center !important;
       }
       ${base}[data-zr-startup-bloom-shape] {
         scale: calc(.45 + .55 * var(${PROGRESS})) 1 !important;

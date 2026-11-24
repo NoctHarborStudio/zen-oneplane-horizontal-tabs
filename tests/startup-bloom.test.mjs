@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {startupBloomTimeline,startupBloomStagger,startupBloomOrder,startupBloomFrames,startupBloomAssemblyPlan,startupBloomHomeSchedule} from "../src/algorithms/startup-bloom.mjs";
-import {startupTimeline,startupFits,startupLateEffect,createStartupOutcome} from "../src/algorithms/startup-timeline.mjs";
+import {startupTimeline,startupIslandProgress,startupFits,startupLateEffect,createStartupOutcome} from "../src/algorithms/startup-timeline.mjs";
 const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 const near=(a,b)=>Math.abs(a-b)<1e-7;
 
@@ -81,7 +81,7 @@ test("generated comparison Lab uses shared Fold, startup timeline and candidate 
   return kind==="esm-inline"?s.replace(/^import [^\n]+\n/gm,"").replace(/^([ \t]*)export (function|const) /gm,"$1$2 "):s;
  }).join("");
  assert.equal(html,assemble(plan.startupMotionLab));
- assert.ok(html.includes("const plan=startupTimeline(0,scale);"));
+ assert.ok(html.includes('const plan=startupTimeline(0,scale,"fold",true);'));
  assert.ok(html.includes('const plan=startupTimeline(0,scale,"bloom").bloom;'));
  assert.ok(html.includes("startupBloomHomeSchedule(plan,"));
  assert.ok(html.includes("fold.keyframes(card)"));
@@ -227,13 +227,13 @@ function assemblyFixture({boot=false,remaining=8000,mode="bloom",failDirect=fals
  const run=new Function("window","document","root","nodes","state","calls","effect","startupTimeline","startupFits","createStartupOutcome","codeBoot","mode","failDirect",`
  let dead=false,playing=false,settling=false,bootPreparing=false,boot=codeBoot?{}:null,registered=true,scale=1,duration=1050;
  let pendingEngine=null,playStart=0,finishAt=0,ownedTimeline=null,homeRegistry=null,centerHandle=null,bookmarkHandle=null,lateObserver=null,lateResize=null;
- const plan=startupTimeline(0,1,mode),started=0,deadline=state.remaining,BOOT_EXIT=320,PHASE="phase",READY="ready",MANAGED="managed";
+ let plan=startupTimeline(0,1,mode);const started=0,deadline=state.remaining,BOOT_EXIT=320,PHASE="phase",READY="ready",MANAGED="managed";
  const seen=new Set(),baseline=new Set(),animations=new Map();
  function now(){return state.time;}function decision(e,d){calls.push([e,d]);}
  function finish(reason){dead=true;state.reason=reason;}function get(id){return nodes[id]||null;}
- function bounds(n){return n?{left:0,width:100}:null;}function floatingBar(){return null;}
+ function bounds(n){return n?{left:0,top:10,bottom:40,width:100,height:30}:null;}function floatingBar(){return null;}
  function direct(n){if(failDirect)throw Error("direct");calls.push(["direct",n.name]);const a=effect(n.name);animations.set(a,{});ownedTimeline.observeEffect(a,"direct",()=>animations.has(a));}
- function bloomStage(n){direct(n);}function bloomIsland(n){direct(n);}function reveal(n){direct(n);}function slide(n){direct(n);}function openFromCenter(n){direct(n);}
+ function bloomStage(n){direct(n);}function bloomIsland(n){direct(n);}function reveal(n,opts){calls.push(["reveal",n.name,opts]);direct(n);return true;}function slide(n){direct(n);}function openFromCenter(n){direct(n);}
  function controls(){calls.push(["controls"]);}function revealBookmarks(){calls.push(["bookmarks"]);}function verifyBloomDirect(){calls.push(["verify"]);}
  function acquireStartupBookmarks(){calls.push(["fold-bookmarks"]);return null;}
  function armFinish(t){calls.push(["timer",t??"watchdog"]);}function scheduleLate(){calls.push(["late"]);}
@@ -383,4 +383,24 @@ test("explicit Bloom interruption exits atomically rather than replaying direct 
  ${code}settle();settle();return events;
  `);
  assert.deepEqual(run(),["interrupted"]);
+});
+
+
+test("Fold Home Island entrance finishes before the unchanged magnetic card wave",()=>{
+ for(const scale of [400/1050,760/1050,1,1500/1050]){
+  const prior=startupTimeline(0,scale),p=startupTimeline(0,scale,"fold",true);
+  assert.equal(p.islandStart,0);assert.equal(p.islandStart+p.islandLength,p.cards);
+  assert.equal(p.cardsLength,prior.cardsLength);assert.equal(p.bookmarks-p.cards,prior.bookmarks-prior.cards);
+  assert.equal(p.home-p.cards,prior.home-prior.cards);assert.ok(near(p.finishLength,prior.finishLength+p.islandShift*scale));
+  assert.ok(near(p.lateLimit,prior.lateLimit+p.islandShift*scale));
+ }
+ const p=startupIslandProgress();assert.equal(p.length,41);assert.equal(p[0],0);assert.equal(p[20],.5);assert.equal(p.at(-1),1);
+ assert.ok(p.every((v,i)=>i===0||v>p[i-1]));
+ for(const boot of [false,true]){
+  const f=assemblyFixture({boot,mode:"fold"}),t=f.run().timeline;
+  assert.equal(t.cards,420);assert.equal(t.islandLength,420);
+  assert.ok(f.calls.some(x=>x[0]==="center"&&x[1]==="fold"&&x[2]===420&&x[3]===650));
+  assert.ok(f.calls.some(x=>x[0]==="reveal"&&x[1]==="island"&&x[2].delay===0&&x[2].length===420&&x[2].islandY===-42));
+  assert.ok(f.calls.some(x=>x[0]==="assembly.island.entry"&&x[1].acquired===true&&x[1].cardsAt===420));
+ }
 });

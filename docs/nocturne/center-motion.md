@@ -68,3 +68,8 @@ Correct the absolute host origin for proxies and portal; preflight actual unanim
 ### A3.6-R — handoff source audit (preview.100)
 
 The engine lock is claimed before release validation; nested invalidation/notification and diagnostic reentry cannot start a successor or release it. Existing slot/mode callbacks check the extended strip mode geometry lease. A lazy `center.fold.handoff` sample in the existing second RAF compares finished incoming Fold's captured row-local geometry with surviving real cards after external phase cleanup. It records row displacement separately, cancels on supersession, and is not a compositor measurement. Partial clipping fallback retained. Actual native paint, overhead and mixed ownership remain open; Bloom disabled.
+
+
+### Preview.176 — Fold Home Island entrance
+
+Startup only: when a measurable Home Island is covered by Boot or was not previously painted, Assembly prepares its existing resting slot before applying a 420ms (scaled) vertical entrance from above the window, .02 to 1 scale and 0 to native opacity. The original 650ms card wave begins at its landing boundary; the later stages retain their relative cadence. The same epoch, deadline and ownership rules apply. The geometry lease validates only this exact marked projection against the resting Island, keeping native centering, slot and scroll checks intact. Uncovered previously painted controls, missing Island and the experimental Bloom plan retain their original path. Native visual acceptance pending.

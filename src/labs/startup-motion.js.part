@@ -78,9 +78,11 @@
         [...ui.wsTiles.children].forEach((n,i)=>effect(n,startupBloomFrames("card"),home.workspaces[i]));
         effect(ui.footer,startupBloomFrames("fade"),home.footer);
       }else{
-        const plan=startupTimeline(0,scale);
+        const plan=startupTimeline(0,scale,"fold",true);
         stage(ui.panel,startupBloomFrames("fade"),{start:0,end:plan.panelLength*scale});
-        effect(ui.island,startupBloomFrames("fade"),{delay:150*scale,duration:190*scale});
+        const y=-Math.max(1,hr.bottom-rr.top+2);
+        effect(ui.island,startupIslandProgress().map(p=>({opacity:p,transform:"translateY("+y*(1-p)+"px) scale("+Math.max(.02,p)+")"})),
+          {delay:plan.islandStart*scale,duration:plan.islandLength*scale});
         run.layer=element("div","proxyLayer","",scene);run.layer.style.clipPath=fold.portalClip(hub,rr,rr.width,rr.height);
         for(const s of slots){
           const proxy=s.n.cloneNode(true);run.layer.append(proxy);
