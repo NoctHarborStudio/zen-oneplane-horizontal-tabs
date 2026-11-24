@@ -81,6 +81,10 @@
     cancelOverflowMotion();
     if(dragLifecycle.current())cancelActiveDrag("superseded");
     cancelStartupSearchRestore("dragstart");
+    if(syncing||centering||!stripPlacementCurrent()||!sameStripStructure(syncedTopology,readStripTopology())||!list.contains(image)){
+      window.__nocturneTrace?.("tabs.partition.drag-rejected",{},{throttle:500});
+      schedule();event.preventDefault();return;
+    }
     const grabbed = image.getBoundingClientRect();
     dragGrabRatio = Math.max(0,Math.min(1,(event.clientX-grabbed.left)/Math.max(1,grabbed.width)));
     dragGrabY = Math.max(0,Math.min(1,(event.clientY-grabbed.top)/Math.max(1,grabbed.height)));

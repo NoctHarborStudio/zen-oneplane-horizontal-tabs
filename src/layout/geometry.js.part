@@ -83,8 +83,10 @@
   function centerToolbar(){
     if(centering||!geometryWriteAllowed())return false;
     centering=true;
+    const order=stripOrderSnapshot;
+    let accepted=false;
     try {
-      const windowWidth=window.innerWidth,order=stripOrderSnapshot;
+      const windowWidth=window.innerWidth;
       const targetRect = target.getBoundingClientRect();
       // Center the collapsed tabs against the WINDOW, not the remaining toolbar.
       // Native window buttons and all left/right controls consume edge space.
@@ -166,7 +168,8 @@
         const metrics=toolbarPartitionMetrics({layout,widths,available,windowWidth,tabWidth,openWidth,iconHome});
         row.removeAttribute("data-op-island-tight");
         // Lane reparent/focus may synchronously publish a new topology.
-        if(!applyStripPartition(layout,order,stillCurrent,boundary)||!stillCurrent())return rejectStale();
+        if(!applyStripPartition(layout,order,stillCurrent,boundary))return stillCurrent()?false:rejectStale();
+        if(!stillCurrent())return rejectStale();
         row.toggleAttribute("data-op-island-compact",!iconHome&&layout.title===32);
         setLength(row,"--op-island-width",metrics.islandWidth);
         setLength(row,"--op-island-row-width",metrics.rowWidth);
@@ -186,8 +189,12 @@
       setLength(row, "--op-left-room", leftSpacer.getBoundingClientRect().width - 4);
       syncLaneScroll();
       refreshOverflowSlider();
-      return stillCurrent()||rejectStale();
-    } finally {centering=false;}
+      accepted=stillCurrent();
+      return accepted||rejectStale();
+    } finally {
+      if(!accepted&&committedStripPlacement?.order===order)committedStripPlacement=null;
+      centering=false;
+    }
   }
   // Read actual resting rows only after centering/partition writes.
   // This snapshot is scoped to one synchronous pass, not a cross-frame cache.

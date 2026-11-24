@@ -524,17 +524,19 @@ function topologyFixture(){
  const node=()=>({parentElement:list,closest:()=>null});
  const na=node(),nb=node();list.nodes=[na,nb];
  const entries=new Map([[a,{item:na}],[b,{item:nb}]]),splitEntries=new Map();
- let dead=false,frame=0,scheduled=0,synced=0;const window={};
+ let dead=false,centering=false,frame=0,scheduled=0,synced=0;const window={};
+ let committedStripPlacement={},placementValid=true;
+ const stripPlacementCurrent=(p=committedStripPlacement)=>placementValid&&p===committedStripPlacement;
  const splitGroup=t=>t.group,isSplit=t=>!!t.group;
  function schedule(){scheduled++;}function sync(){synced++;}
  ${code}
  syncedTopology=readStripTopology();
- return {a,b,browser,row,list,na,nb,entries,splitEntries,capture:()=>captureCenterTopology(row),end:onCenterMotionEnd,counts:()=>[scheduled,synced],tab};
+ return {a,b,browser,row,list,na,nb,entries,splitEntries,capture:()=>captureCenterTopology(row),end:onCenterMotionEnd,counts:()=>[scheduled,synced],tab,invalidate:()=>{placementValid=false},replacePlacement:()=>{committedStripPlacement={}},frozenSync:()=>{syncing=true}};
  `);
  return run();
 }
 test("projection topology lease detects equal-count reorder, replacement, split, pin, selection and mirror reparent",()=>{
- for(const fault of ["order","replace","split","pin","selection","mirror","parent","disconnect"]){
+ for(const fault of ["order","replace","split","pin","selection","mirror","parent","disconnect","placement","new-placement"]){
   const f=topologyFixture(),valid=f.capture();assert.ok(valid);assert.ok(valid());
   if(fault==="order")f.browser.visibleTabs.reverse();
   if(fault==="replace")f.browser.visibleTabs[1]=f.tab();
@@ -544,10 +546,14 @@ test("projection topology lease detects equal-count reorder, replacement, split,
   if(fault==="mirror")f.list.nodes.reverse();
   if(fault==="parent")f.nb.parentElement={};
   if(fault==="disconnect")f.row.isConnected=false;
+  if(fault==="placement")f.invalidate();
+  if(fault==="new-placement")f.replacePlacement();
   assert.equal(valid(),false,fault);
  }
 });
 test("projection rejects unsynced native signatures and reconciles changed topology synchronously on handoff",()=>{
+ const invalid=topologyFixture();invalid.invalidate();assert.equal(invalid.capture(),null);
+ const frozen=topologyFixture(),lease=frozen.capture();frozen.frozenSync();assert.equal(lease(),true);assert.equal(frozen.capture(),null);
  const f=topologyFixture();f.end();assert.deepEqual(f.counts(),[1,0]);
  f.browser.visibleTabs.reverse();assert.equal(f.capture(),null);
  f.end();assert.deepEqual(f.counts(),[1,1]);

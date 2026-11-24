@@ -1,3 +1,7 @@
+## 0.3.0-preview.214 — Verified strip placement (ML1b.2)
+
+Verify exact lane membership, native unit order and lower-row visibility before accepting a resting projection. Center Motion and new local tab drags reject stale/partial placements; existing native drag and geometry owners remain. Preserve frozen icon refresh and existing Automatic allocation/CSS. Native acceptance pending.
+
 ## 0.3.0-preview.213 — Library and History material (DS-M7)
 
 Migrate the existing stationary Library glass to shared tint, opacity, blur, radius, border and shadow. One Library/History override pair applies to the common shell across section changes; the internal History filter uses the solid tint without an additional blur. Keep modal shade, native data, scrolling and all motion timing unchanged. Record effective Library material settings in the existing sampler. Native visual acceptance pending.

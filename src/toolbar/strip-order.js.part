@@ -1,4 +1,40 @@
   let adaptiveHeightDirty=false,overflowRevealAnimation=null;
+  // One Layout-owned structural projection; not a geometry or native cache.
+  let committedStripPlacement=null;
+  function stripPlacementCurrent(placement=committedStripPlacement){
+    if(dead||!placement||placement!==committedStripPlacement||
+       placement.order!==stripOrderSnapshot)return false;
+    const {order,projection}=placement;
+    const matches=(lane,slots)=>{
+      let k=0;
+      for(const i of slots){
+        if(!Number.isInteger(i))continue;
+        if(lane.children[k++]!==order[i]||order[i]?.parentElement!==lane)return false;
+      }
+      return k===lane.children.length;
+    };
+    if(!projection){
+      return !row.hasAttribute("data-op-show-island")&&
+        [leftLane,rightLane,bottomLane].every(lane=>lane.parentElement!==list)&&
+        list.children.length===order.length&&order.every((node,i)=>list.children[i]===node&&node.parentElement===list);
+    }
+    const lanes=[leftLane,rightLane,bottomLane];
+    if(!row.hasAttribute("data-op-show-island")||list.children.length!==3||
+       lanes.some((lane,i)=>lane.parentElement!==list||list.children[i]!==lane)||
+       bottomLane.hidden===projection.hasSecondRow||
+       row.hasAttribute("data-op-overflow-row")!==projection.hasSecondRow)return false;
+    return ["top-left","top-right","bottom"].every((id,i)=>
+      matches(lanes[i],projection.regions.find(region=>region.id===id)?.slots??[]));
+  }
+  function publishStripPlacement(order,projection,current){
+    if(!current())return false;
+    const placement={order,projection};
+    committedStripPlacement=placement;
+    if(stripPlacementCurrent(placement))return true;
+    if(committedStripPlacement===placement)committedStripPlacement=null;
+    window.__nocturneTrace?.("tabs.partition.rejected",{centered:!!projection},{throttle:500});
+    return false;
+  }
   function mountLaneNodes(lane,nodes,current=()=>!dead){
     for(let i=0;i<nodes.length;i++){
       if(!current())return false;
@@ -20,6 +56,7 @@
     const lanes=["top-left","top-right","bottom"].map(id=>
       (projection.regions.find(region=>region.id===id)?.slots??[]).filter(Number.isInteger).map(i=>order[i]));
     if(!current())return false;
+    committedStripPlacement=null;
     if(leftLane.parentElement!==list)list.append(leftLane,rightLane,bottomLane);
     const active=document.activeElement;
     const selected=entries.get(browser.selectedTab)?.item,previousLane=selected?.closest(".oneplane-island-lane");
@@ -47,10 +84,11 @@
     if(active&&list.contains(active)&&document.activeElement!==active)active.focus?.({preventScroll:true});
     if(!current())return false;
     if(selected&&previousLane!==selected.closest(".oneplane-island-lane")&&!row.hasAttribute("data-op-home-open"))window.requestAnimationFrame(revealSelectedInStrip);
-    return current();
+    return publishStripPlacement(order,projection,current);
   }
   function placeStripOrder(order) {
     if(row.hasAttribute("data-op-dragging"))return;
+    committedStripPlacement=null;
     const snapshot=stripOrderSnapshot=order.slice();
     const useLanes=row.hasAttribute("data-op-show-island");
     if(useLanes){
@@ -68,6 +106,7 @@
       leftLane.remove();rightLane.remove();bottomLane.remove();if(!bottomLane.hidden)bottomLane.hidden=true;
       if(row.hasAttribute("data-op-overflow-row")){adaptiveHeightDirty=true;contourKey=null;scheduleGeometry();}
       for(const attr of ["data-op-overflow-row","data-op-adaptive-compact","data-op-bottom-plus"])row.removeAttribute(attr);
+      publishStripPlacement(snapshot,null,()=>!dead&&stripOrderSnapshot===snapshot);
     }
   }
 

@@ -86,7 +86,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.213",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.214",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -3936,6 +3936,42 @@ function normalizeAutomaticTabRows(plan,count,boundary) {
   return {mode:"automatic",sides:Array.from({length:count},(_,i)=>i<boundary?"left":"right"),regions,hasSecondRow:plan.hasSecondRow};
 }
   let adaptiveHeightDirty=false,overflowRevealAnimation=null;
+  // One Layout-owned structural projection; not a geometry or native cache.
+  let committedStripPlacement=null;
+  function stripPlacementCurrent(placement=committedStripPlacement){
+    if(dead||!placement||placement!==committedStripPlacement||
+       placement.order!==stripOrderSnapshot)return false;
+    const {order,projection}=placement;
+    const matches=(lane,slots)=>{
+      let k=0;
+      for(const i of slots){
+        if(!Number.isInteger(i))continue;
+        if(lane.children[k++]!==order[i]||order[i]?.parentElement!==lane)return false;
+      }
+      return k===lane.children.length;
+    };
+    if(!projection){
+      return !row.hasAttribute("data-op-show-island")&&
+        [leftLane,rightLane,bottomLane].every(lane=>lane.parentElement!==list)&&
+        list.children.length===order.length&&order.every((node,i)=>list.children[i]===node&&node.parentElement===list);
+    }
+    const lanes=[leftLane,rightLane,bottomLane];
+    if(!row.hasAttribute("data-op-show-island")||list.children.length!==3||
+       lanes.some((lane,i)=>lane.parentElement!==list||list.children[i]!==lane)||
+       bottomLane.hidden===projection.hasSecondRow||
+       row.hasAttribute("data-op-overflow-row")!==projection.hasSecondRow)return false;
+    return ["top-left","top-right","bottom"].every((id,i)=>
+      matches(lanes[i],projection.regions.find(region=>region.id===id)?.slots??[]));
+  }
+  function publishStripPlacement(order,projection,current){
+    if(!current())return false;
+    const placement={order,projection};
+    committedStripPlacement=placement;
+    if(stripPlacementCurrent(placement))return true;
+    if(committedStripPlacement===placement)committedStripPlacement=null;
+    window.__nocturneTrace?.("tabs.partition.rejected",{centered:!!projection},{throttle:500});
+    return false;
+  }
   function mountLaneNodes(lane,nodes,current=()=>!dead){
     for(let i=0;i<nodes.length;i++){
       if(!current())return false;
@@ -3957,6 +3993,7 @@ function normalizeAutomaticTabRows(plan,count,boundary) {
     const lanes=["top-left","top-right","bottom"].map(id=>
       (projection.regions.find(region=>region.id===id)?.slots??[]).filter(Number.isInteger).map(i=>order[i]));
     if(!current())return false;
+    committedStripPlacement=null;
     if(leftLane.parentElement!==list)list.append(leftLane,rightLane,bottomLane);
     const active=document.activeElement;
     const selected=entries.get(browser.selectedTab)?.item,previousLane=selected?.closest(".oneplane-island-lane");
@@ -3984,10 +4021,11 @@ function normalizeAutomaticTabRows(plan,count,boundary) {
     if(active&&list.contains(active)&&document.activeElement!==active)active.focus?.({preventScroll:true});
     if(!current())return false;
     if(selected&&previousLane!==selected.closest(".oneplane-island-lane")&&!row.hasAttribute("data-op-home-open"))window.requestAnimationFrame(revealSelectedInStrip);
-    return current();
+    return publishStripPlacement(order,projection,current);
   }
   function placeStripOrder(order) {
     if(row.hasAttribute("data-op-dragging"))return;
+    committedStripPlacement=null;
     const snapshot=stripOrderSnapshot=order.slice();
     const useLanes=row.hasAttribute("data-op-show-island");
     if(useLanes){
@@ -4005,6 +4043,7 @@ function normalizeAutomaticTabRows(plan,count,boundary) {
       leftLane.remove();rightLane.remove();bottomLane.remove();if(!bottomLane.hidden)bottomLane.hidden=true;
       if(row.hasAttribute("data-op-overflow-row")){adaptiveHeightDirty=true;contourKey=null;scheduleGeometry();}
       for(const attr of ["data-op-overflow-row","data-op-adaptive-compact","data-op-bottom-plus"])row.removeAttribute(attr);
+      publishStripPlacement(snapshot,null,()=>!dead&&stripOrderSnapshot===snapshot);
     }
   }
 
@@ -7914,8 +7953,10 @@ function normalizeAutomaticTabRows(plan,count,boundary) {
   function centerToolbar(){
     if(centering||!geometryWriteAllowed())return false;
     centering=true;
+    const order=stripOrderSnapshot;
+    let accepted=false;
     try {
-      const windowWidth=window.innerWidth,order=stripOrderSnapshot;
+      const windowWidth=window.innerWidth;
       const targetRect = target.getBoundingClientRect();
       // Center the collapsed tabs against the WINDOW, not the remaining toolbar.
       // Native window buttons and all left/right controls consume edge space.
@@ -7997,7 +8038,8 @@ function normalizeAutomaticTabRows(plan,count,boundary) {
         const metrics=toolbarPartitionMetrics({layout,widths,available,windowWidth,tabWidth,openWidth,iconHome});
         row.removeAttribute("data-op-island-tight");
         // Lane reparent/focus may synchronously publish a new topology.
-        if(!applyStripPartition(layout,order,stillCurrent,boundary)||!stillCurrent())return rejectStale();
+        if(!applyStripPartition(layout,order,stillCurrent,boundary))return stillCurrent()?false:rejectStale();
+        if(!stillCurrent())return rejectStale();
         row.toggleAttribute("data-op-island-compact",!iconHome&&layout.title===32);
         setLength(row,"--op-island-width",metrics.islandWidth);
         setLength(row,"--op-island-row-width",metrics.rowWidth);
@@ -8017,8 +8059,12 @@ function normalizeAutomaticTabRows(plan,count,boundary) {
       setLength(row, "--op-left-room", leftSpacer.getBoundingClientRect().width - 4);
       syncLaneScroll();
       refreshOverflowSlider();
-      return stillCurrent()||rejectStale();
-    } finally {centering=false;}
+      accepted=stillCurrent();
+      return accepted||rejectStale();
+    } finally {
+      if(!accepted&&committedStripPlacement?.order===order)committedStripPlacement=null;
+      centering=false;
+    }
   }
   // Read actual resting rows only after centering/partition writes.
   // This snapshot is scoped to one synchronous pass, not a cross-frame cache.
@@ -10099,6 +10145,10 @@ function vanishingHomeEase(progress) {
     cancelOverflowMotion();
     if(dragLifecycle.current())cancelActiveDrag("superseded");
     cancelStartupSearchRestore("dragstart");
+    if(syncing||centering||!stripPlacementCurrent()||!sameStripStructure(syncedTopology,readStripTopology())||!list.contains(image)){
+      window.__nocturneTrace?.("tabs.partition.drag-rejected",{},{throttle:500});
+      schedule();event.preventDefault();return;
+    }
     const grabbed = image.getBoundingClientRect();
     dragGrabRatio = Math.max(0,Math.min(1,(event.clientX-grabbed.left)/Math.max(1,grabbed.width)));
     dragGrabY = Math.max(0,Math.min(1,(event.clientY-grabbed.top)/Math.max(1,grabbed.height)));
@@ -11264,7 +11314,7 @@ function vanishingHomeEase(progress) {
     return true;
   }
   // Native order and group identity are authoritative. Keep only the
-  // last committed projection signature, never a second tab data store.
+  // last native mirror-sync signature; placement is verified separately.
   let syncedTopology=null,syncing=false;
   function readStripTopology(){
     const tabs=Array.from(browser.visibleTabs||browser.tabs||[]).filter(
@@ -11272,14 +11322,17 @@ function vanishingHomeEase(progress) {
     return {selected:browser.selectedTab,home:row.hasAttribute("data-op-home-open"),
       tabs:tabs.map(tab=>{const group=splitGroup(tab);return {tab,group,split:isSplit(tab,group),pinned:!!tab.pinned};})};
   }
-  function sameStripTopology(a,b){
-    return !!a&&!!b&&a.selected===b.selected&&a.home===b.home&&a.tabs.length===b.tabs.length&&
+  function sameStripStructure(a,b){
+    return !!a&&!!b&&a.tabs.length===b.tabs.length&&
       a.tabs.every((x,i)=>{const y=b.tabs[i];return x.tab===y.tab&&x.group===y.group&&x.split===y.split&&x.pinned===y.pinned;});
   }
+  function sameStripTopology(a,b){
+    return sameStripStructure(a,b)&&a.selected===b.selected&&a.home===b.home;
+  }
   function captureCenterTopology(expectedRow){
-    if(dead||syncing||expectedRow!==row||!row.isConnected||row.hasAttribute("data-op-dragging")||
+    if(dead||syncing||centering||!stripPlacementCurrent()||expectedRow!==row||!row.isConnected||row.hasAttribute("data-op-dragging")||
        !sameStripTopology(syncedTopology,readStripTopology()))return null;
-    const native=syncedTopology;
+    const native=syncedTopology,placement=committedStripPlacement;
     const selector=".oneplane-tab,.oneplane-split-group";
     const mirrors=[...list.querySelectorAll(selector)].map(node=>({node,parent:node.parentElement}));
     // The native signature alone is insufficient if the projection was
@@ -11293,7 +11346,7 @@ function vanishingHomeEase(progress) {
         !group&&n.closest(".oneplane-split-group");
     }))return null;
     return ()=>{
-      if(dead||!row.isConnected||row.hasAttribute("data-op-dragging")||syncedTopology!==native||
+      if(dead||!stripPlacementCurrent(placement)||!row.isConnected||row.hasAttribute("data-op-dragging")||syncedTopology!==native||
          !sameStripTopology(native,readStripTopology()))return false;
       const current=[...list.querySelectorAll(selector)];
       return current.length===mirrors.length&&mirrors.every(({node,parent},i)=>current[i]===node&&node.parentElement===parent);
@@ -11343,6 +11396,8 @@ function vanishingHomeEase(progress) {
     if(hoverModePending)applyHoverMode();
     if(dead||restingGeometryBlocked())return;
     const nativeTopology=readStripTopology();
+    committedStripPlacement=null;
+    syncedTopology=null;
     const homeOpen=nativeTopology.home;
     // Respect the current workspace and native visibility.
     const tabs=nativeTopology.tabs.map(x=>x.tab);
@@ -11430,11 +11485,12 @@ function vanishingHomeEase(progress) {
         if (entry.box.children[i + 1] !== node) entry.box.insertBefore(node, entry.box.children[i + 1] || null);
       }
     }
-    placeStripOrder(order);
+    // Retire obsolete wrappers before verifying exact lane children.
     for (const [group, entry] of splitEntries) {
       if (!groupItems.has(group)) { entry.box.remove(); splitEntries.delete(group); }
-      else measureSplitGroup(group);
     }
+    placeStripOrder(order);
+    for (const group of groupItems.keys())measureSplitGroup(group);
     // Count each actual visible tab, including split members, but never
     // the group wrapper, handle or plus. Use rendered order, not native
     // indexes, because a split can collect non-adjacent native tabs.
@@ -11447,9 +11503,9 @@ function vanishingHomeEase(progress) {
     centerToolbar();
     refreshIndicator();
     refreshIslandTitle();
-    // Only publish after the complete structural sync. A drag owns its
-    // temporary order and cannot authorize a Center Motion snapshot.
-    syncedTopology=row.hasAttribute("data-op-dragging")?null:nativeTopology;
+    // Native signature alone never authorizes motion or a fresh drag.
+    // A geometry-only retry can repair placement without repeating tab sync.
+    syncedTopology=!row.hasAttribute("data-op-dragging")&&sameStripTopology(nativeTopology,readStripTopology())?nativeTopology:null;
     typeof window!=="undefined"&&window.__nocturneTrace?.("tabs.sync",()=>({native:tabs.length,mirror:visualTabs.length,groups:groups.length,entries:entries.size,overflow:row.hasAttribute('data-op-overflow-row'),homeOpen,phase:root.getAttribute('data-zr-workspace-phase')}),{throttle:120,sample:1200});
     scheduleGeometry();
     if(selectedRevealPending&&!restingGeometryBlocked()&&cascadeState==="idle")window.requestAnimationFrame(revealSelectedInStrip);

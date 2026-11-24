@@ -5,22 +5,23 @@ import {planAdaptiveTabRows,normalizeAutomaticTabRows} from "../src/algorithms/t
 import {restingToolbarBudget} from "../src/algorithms/toolbar-center.mjs";
 const read=path=>readFileSync(new URL("../"+path,import.meta.url),"utf8");
 const source=read("src/toolbar/strip-order.js.part");
-const body=source.slice(source.indexOf("  function applyStripPartition("),source.indexOf("  function placeStripOrder("));
+const body=source.slice(source.indexOf("  // One Layout-owned"),source.indexOf("  function placeStripOrder(")).replace("  function mountLaneNodes(", "  function actualMountLaneNodes(");
 
 function fixture(order,stopAfter=Infinity){
-  const mounted=[],attrs=new Set(),row={hasAttribute:key=>attrs.has(key),toggleAttribute(key,on){if(on)attrs.add(key);else attrs.delete(key);}};
-  const list={contains:()=>false,append(...lanes){for(const lane of lanes)lane.parentElement=this;}};
+  const mounted=[],attrs=new Set(),row={hasAttribute:key=>key==="data-op-show-island"||attrs.has(key),toggleAttribute(key,on){if(on)attrs.add(key);else attrs.delete(key);}};
+  const list={children:[],contains:()=>false,append(...lanes){this.children=lanes;for(const lane of lanes)lane.parentElement=this;}};
   const leftLane={id:"left",parentElement:list},rightLane={id:"right",parentElement:list},bottomLane={id:"bottom",parentElement:list,hidden:true};
+  list.children=[leftLane,rightLane,bottomLane];for(const lane of list.children)lane.children=[];
   const api=new Function("normalizeAutomaticTabRows","order","mounted","row","list","leftLane","rightLane","bottomLane","stopAfter",`
     let dead=false,stripOrderSnapshot=order,adaptiveHeightDirty=false,overflowRevealAnimation=null,contourKey=null;
     const document={activeElement:null},entries=new Map(),browser={},root={hasAttribute:()=>true};
     const window={requestAnimationFrame(){throw Error("unexpected reveal")}};
-    const mountLaneNodes=(lane,nodes)=>{mounted.push([lane.id,nodes]);return true};
+    function mountLaneNodes(lane,nodes){mounted.push([lane.id,nodes]);lane.children=[...nodes];for(const node of nodes)node.parentElement=lane;return true}
     const scheduleGeometry=()=>{},scheduleContour=()=>{};
     ${body}
-    return {apply:(plan,boundary)=>applyStripPartition(plan,order,()=>mounted.length<stopAfter,boundary)};
+    return {apply:(plan,boundary)=>applyStripPartition(plan,order,()=>mounted.length<stopAfter,boundary),valid:()=>stripPlacementCurrent(),placement:()=>committedStripPlacement};
   `)(normalizeAutomaticTabRows,order,mounted,row,list,leftLane,rightLane,bottomLane,stopAfter);
-  return {...api,mounted,attrs,bottomLane};
+  return {...api,mounted,attrs,bottomLane,leftLane,rightLane,list};
 }
 
 test("actual Auto lane consumer keeps legacy native nodes, plus CSS flags and lower-row visibility",()=>{
@@ -30,7 +31,7 @@ test("actual Auto lane consumer keeps legacy native nodes, plus CSS flags and lo
     for(const available of [0,60,116,260,700,1200]){
       const budget=restingToolbarBudget({widths,groups,windowWidth:1200,right:100,tabWidth:36,dragRoom:16,iconHome:false,returnReserve:0});
       const plan=budget.planAt(available),f=fixture(order);
-      assert.equal(f.apply(plan,budget.boundary),true);
+      assert.equal(f.apply(plan,budget.boundary),true);assert.equal(f.valid(),true);
       assert.deepEqual(f.mounted,[["left",plan.topLeft.map(i=>order[i])],["right",plan.topRight.map(i=>order[i])],["bottom",plan.lower.map(i=>order[i])]]);
       for(const [,nodes] of f.mounted)for(const node of nodes)assert.equal(node,order[node.index]);
       assert.equal(f.attrs.has("data-op-overflow-row"),plan.hasSecondRow);
@@ -44,9 +45,9 @@ test("actual Auto lane consumer keeps legacy native nodes, plus CSS flags and lo
 test("startup provisional Auto plan shares adapter; stale or malformed plan cannot mount new nodes",()=>{
   const order=[{},{}],plan={topLeft:[0],topRight:[1],lower:[],hasSecondRow:false,mode:"wide",topPlus:true};
   const ok=fixture(order);assert.equal(ok.apply(plan,1),true);
-  assert.deepEqual(ok.mounted,[["left",[order[0]]],["right",[order[1]]],["bottom",[]]]);
+  assert.deepEqual(ok.mounted,[["left",[order[0]]],["right",[order[1]]],["bottom",[]]]);assert.equal(ok.valid(),true);
   const stale=fixture(order,0);assert.equal(stale.apply(plan,1),false);assert.equal(stale.mounted.length,0);
-  const interrupted=fixture(order,1);assert.equal(interrupted.apply(plan,1),false);assert.equal(interrupted.mounted.length,1);
+  const interrupted=fixture(order,1);assert.equal(interrupted.apply(plan,1),false);assert.equal(interrupted.mounted.length,1);assert.equal(interrupted.placement(),null);
   const invalid=fixture(order);assert.throws(()=>invalid.apply(plan,0),TypeError);assert.equal(invalid.mounted.length,0);
 });
 
@@ -57,4 +58,18 @@ test("production and provisional callers pass the exact source boundary, not a n
   assert.ok(source.includes("},snapshot,undefined,boundary)"));
   assert.ok(body.includes("normalizeAutomaticTabRows(plan,order.length,boundary)"));
   assert.ok(!JSON.stringify(JSON.parse(read("scripts/build-plan.json"))).includes("manual-tab-rows.mjs"));
+});
+
+test("published placement detects extra, reordered or reparented lane nodes at equal native count",()=>{
+  for(const fault of ["extra","order","parent","lane","row"]){
+    const order=[{},{},{}],f=fixture(order);
+    const plan={topLeft:[0,1],topRight:[2],lower:[],hasSecondRow:false,mode:"wide",topPlus:true};
+    assert.equal(f.apply(plan,2),true);assert.equal(f.valid(),true);
+    if(fault==="extra")f.leftLane.children.push({});
+    if(fault==="order")f.leftLane.children.reverse();
+    if(fault==="parent")order[1].parentElement=f.rightLane;
+    if(fault==="lane")f.list.children.reverse();
+    if(fault==="row")f.bottomLane.hidden=false;
+    assert.equal(f.valid(),false,fault);
+  }
 });

@@ -6,7 +6,7 @@
     return true;
   }
   // Native order and group identity are authoritative. Keep only the
-  // last committed projection signature, never a second tab data store.
+  // last native mirror-sync signature; placement is verified separately.
   let syncedTopology=null,syncing=false;
   function readStripTopology(){
     const tabs=Array.from(browser.visibleTabs||browser.tabs||[]).filter(
@@ -14,14 +14,17 @@
     return {selected:browser.selectedTab,home:row.hasAttribute("data-op-home-open"),
       tabs:tabs.map(tab=>{const group=splitGroup(tab);return {tab,group,split:isSplit(tab,group),pinned:!!tab.pinned};})};
   }
-  function sameStripTopology(a,b){
-    return !!a&&!!b&&a.selected===b.selected&&a.home===b.home&&a.tabs.length===b.tabs.length&&
+  function sameStripStructure(a,b){
+    return !!a&&!!b&&a.tabs.length===b.tabs.length&&
       a.tabs.every((x,i)=>{const y=b.tabs[i];return x.tab===y.tab&&x.group===y.group&&x.split===y.split&&x.pinned===y.pinned;});
   }
+  function sameStripTopology(a,b){
+    return sameStripStructure(a,b)&&a.selected===b.selected&&a.home===b.home;
+  }
   function captureCenterTopology(expectedRow){
-    if(dead||syncing||expectedRow!==row||!row.isConnected||row.hasAttribute("data-op-dragging")||
+    if(dead||syncing||centering||!stripPlacementCurrent()||expectedRow!==row||!row.isConnected||row.hasAttribute("data-op-dragging")||
        !sameStripTopology(syncedTopology,readStripTopology()))return null;
-    const native=syncedTopology;
+    const native=syncedTopology,placement=committedStripPlacement;
     const selector=".oneplane-tab,.oneplane-split-group";
     const mirrors=[...list.querySelectorAll(selector)].map(node=>({node,parent:node.parentElement}));
     // The native signature alone is insufficient if the projection was
@@ -35,7 +38,7 @@
         !group&&n.closest(".oneplane-split-group");
     }))return null;
     return ()=>{
-      if(dead||!row.isConnected||row.hasAttribute("data-op-dragging")||syncedTopology!==native||
+      if(dead||!stripPlacementCurrent(placement)||!row.isConnected||row.hasAttribute("data-op-dragging")||syncedTopology!==native||
          !sameStripTopology(native,readStripTopology()))return false;
       const current=[...list.querySelectorAll(selector)];
       return current.length===mirrors.length&&mirrors.every(({node,parent},i)=>current[i]===node&&node.parentElement===parent);
@@ -85,6 +88,8 @@
     if(hoverModePending)applyHoverMode();
     if(dead||restingGeometryBlocked())return;
     const nativeTopology=readStripTopology();
+    committedStripPlacement=null;
+    syncedTopology=null;
     const homeOpen=nativeTopology.home;
     // Respect the current workspace and native visibility.
     const tabs=nativeTopology.tabs.map(x=>x.tab);
@@ -172,11 +177,12 @@
         if (entry.box.children[i + 1] !== node) entry.box.insertBefore(node, entry.box.children[i + 1] || null);
       }
     }
-    placeStripOrder(order);
+    // Retire obsolete wrappers before verifying exact lane children.
     for (const [group, entry] of splitEntries) {
       if (!groupItems.has(group)) { entry.box.remove(); splitEntries.delete(group); }
-      else measureSplitGroup(group);
     }
+    placeStripOrder(order);
+    for (const group of groupItems.keys())measureSplitGroup(group);
     // Count each actual visible tab, including split members, but never
     // the group wrapper, handle or plus. Use rendered order, not native
     // indexes, because a split can collect non-adjacent native tabs.
@@ -189,9 +195,9 @@
     centerToolbar();
     refreshIndicator();
     refreshIslandTitle();
-    // Only publish after the complete structural sync. A drag owns its
-    // temporary order and cannot authorize a Center Motion snapshot.
-    syncedTopology=row.hasAttribute("data-op-dragging")?null:nativeTopology;
+    // Native signature alone never authorizes motion or a fresh drag.
+    // A geometry-only retry can repair placement without repeating tab sync.
+    syncedTopology=!row.hasAttribute("data-op-dragging")&&sameStripTopology(nativeTopology,readStripTopology())?nativeTopology:null;
     typeof window!=="undefined"&&window.__nocturneTrace?.("tabs.sync",()=>({native:tabs.length,mirror:visualTabs.length,groups:groups.length,entries:entries.size,overflow:row.hasAttribute('data-op-overflow-row'),homeOpen,phase:root.getAttribute('data-zr-workspace-phase')}),{throttle:120,sample:1200});
     scheduleGeometry();
     if(selectedRevealPending&&!restingGeometryBlocked()&&cascadeState==="idle")window.requestAnimationFrame(revealSelectedInStrip);
