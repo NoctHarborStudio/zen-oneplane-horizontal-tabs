@@ -1,8 +1,8 @@
 /* L5–L6: one Library shell for five native-backed sections. */
 (()=>{
   const win=window,doc=win.document,root=doc.documentElement,KEY="__nocturneLibrary",PREF="zen.nocturne.library.preview",OWNER="library",SHORTCUT="zen.nocturne.library.history-shortcut",DOWNLOADS_SHORTCUT="zen.nocturne.library.downloads-shortcut",MEDIA_PREF="zen.nocturne.library.local-media";
-  function trace(event,detail={}){
-    try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,{flush:true});
+  function trace(event,detail={},options={flush:true}){
+    try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,options);
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
   trace("script",{version:"0.3.0-preview.162",unload:typeof win.addUnloadListener==="function"});
@@ -11,8 +11,8 @@
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
   const labels={downloads:"All Downloads",documents:"Documents",history:"History",pictures:"Pictures",closed:"Recently Closed"};
   const summaries={downloads:"Download records and file actions",documents:"Downloaded documents and opted-in folders",history:"Browsing history and search",pictures:"Downloaded pictures and opted-in folders",closed:"Recently closed tabs in this window"};
-  let state=createLibraryState(),dead=false,lease=()=>{},shell=null,animations=[],frame=0,returnFocus=null,rows=new Map(),backgroundAction=false,renderedSection=null,dragSource=null,pendingResult=null,clearing=false,nativeFallback=false,confirmation=false,actionSerial=0,pendingClose=false,dragOwner=null,indicatorReady=false,lastFailure=null,fallbackDragTimer=0,fallbackDragMissing=0,fallbackDragUnknown=0;
-  const data=createLibraryData({getServices:()=>win.__nocturneLibraryServices,onResult:renderResults,onError:renderError,onNotice:notice,onScanWait:status=>trace("media.scan.wait",{status,section:state.section}),schedule:(fn,ms)=>win.setTimeout(fn,ms),cancel:id=>win.clearTimeout(id)});
+  let state=createLibraryState(),dead=false,lease=()=>{},shell=null,animations=[],frame=0,returnFocus=null,rows=new Map(),backgroundAction=false,renderedSection=null,dragSource=null,pendingResult=null,clearing=false,confirmation=false,actionSerial=0,pendingClose=false,dragOwner=null,indicatorReady=false,lastFailure=null,fallbackDragTimer=0,fallbackDragMissing=0,fallbackDragUnknown=0;
+  const data=createLibraryData({getServices:()=>win.__nocturneLibraryServices,onResult:result=>{const start=win.performance.now();renderResults(result);trace("render",{section:state.section,phase:state.phase,rows:result.rows.length,duration:win.performance.now()-start},{flush:false});},onError:renderError,onNotice:notice,onScanWait:status=>trace("media.scan.wait",{status,section:state.section}),schedule:(fn,ms)=>win.setTimeout(fn,ms),cancel:id=>win.clearTimeout(id)});
   const fileSection=()=>["downloads","documents","pictures"].includes(state.section);
   const enabled=()=>prefs.getBoolPref(PREF,false),active=()=>state.phase!=="closed";
   const duration=n=>libraryDuration(win.matchMedia("(prefers-reduced-motion: reduce)").matches,prefs.getIntPref("zen.oneplane.animation-duration",160)!==0,n);
@@ -38,6 +38,7 @@
     const topLayer=typeof layer.showPopover==="function"&&typeof layer.hidePopover==="function";
     if(topLayer)layer.setAttribute("popover","manual");
     const shade=make("div","nl-shade");shade.setAttribute("aria-hidden","true");
+    const glass=make("div","nl-glass");glass.setAttribute("aria-hidden","true");
     const panel=make("section","nl-panel");panel.setAttribute("role","dialog");panel.setAttribute("aria-modal","true");panel.setAttribute("aria-labelledby","nl-title");panel.tabIndex=-1;
     const header=make("header","nl-header"),brand=make("span","nl-brand","Nocturne Library");
     const title=make("h2","nl-title","History");title.id="nl-title";
@@ -75,8 +76,29 @@
     const clear=button("Clear finished records",()=>{confirmation=true;syncTools();});
     const yes=button("Confirm clear",()=>void clearDownloads());
     const no=button("Cancel",()=>{confirmation=false;syncTools();clear.focus();});
-    const native=button("Native downloads",openNativeDownloads);
-    const nativeHistory=button("Native history",()=>openNativeCommand("Browser:ShowAllHistory"));
+    const historyFilter=button("Filter",()=>setHistoryDrawer(shell.historyDrawer.inert));
+    historyFilter.setAttribute("aria-expanded","false");historyFilter.setAttribute("aria-controls","nl-history-filter");
+    const historyDrawer=make("section","nl-history-filter");historyDrawer.id="nl-history-filter";historyDrawer.inert=true;historyDrawer.hidden=true;
+    historyDrawer.setAttribute("aria-label","Filter history");
+    const drawerHead=make("div","nl-filter-head");
+    const done=button("Done",()=>setHistoryDrawer(false,true));drawerHead.append(make("strong","","Filter history"),done);
+    const periodButtons=new Map(),orderButtons=new Map();
+    function choices(label,values,buttons,type){
+      const group=make("div","nl-filter-group"),heading=make("h3","",label),items=make("div","nl-filter-options");
+      for(const [value,title] of values){
+        const choice=button(title,()=>{
+          state=reduceLibrary(state,{type,value});
+          syncHistoryFilter();shell.body.scrollTop=0;
+          if(renderedSection==="history")data.options(state.sort,state.filter);
+          trace("filter.changed",{section:"history",sort:state.sort==="new"?"date":state.sort,filter:state.filter},{flush:false});
+        });
+        choice.setAttribute("aria-pressed","false");buttons.set(value,choice);items.append(choice);
+      }
+      group.append(heading,items);return group;
+    }
+    historyDrawer.append(drawerHead,
+      choices("When was it visited?",[["all","Any time"],["today","Today"],["week","This Week"],["month","This Month"]],periodButtons,"FILTER"),
+      choices("Sort by",[["date","By Date"],["site","By Site"],["mostvisited","By Most Visited"],["lastvisited","By Last Visited"]],orderButtons,"SORT"));
     const historyRange=make("select","nl-select");historyRange.setAttribute("aria-label","History clearing time range");
     for(const [v,t] of [[1,"Last hour"],[24,"Last day"],[168,"Last 7 days"]]){const o=make("option","",t);o.value=String(v);historyRange.append(o);}
     const clearHistory=button("Clear history…",()=>void clearRecentHistory(Number(historyRange.value)));
@@ -84,16 +106,17 @@
     const resetFolders=button("Reset extra folders",()=>void changeFolders(true));
     const refresh=button("Refresh folders",()=>{if(win.__nocturneLibraryServices?.mediaScanAvailable!==true)return;const epoch=state.motionEpoch;notice("Scanning opted-in folders…");void data.refresh().then(ok=>{if(ok&&current(epoch))notice("");});});
     const more=button("Load more",()=>{more.disabled=true;if(!data.more())more.disabled=false;});more.classList.add("nl-more");
-    tools.append(sort,filter,clear,yes,no,native,nativeHistory,historyRange,clearHistory,refresh,addFolder,resetFolders);
-    panel.append(header,nav,search,tools,status,body);layer.append(shade,panel);root.append(layer);
+    tools.append(sort,filter,clear,yes,no,historyFilter,historyRange,clearHistory,refresh,addFolder,resetFolders);
+    const contentArea=make("div","nl-content-area");contentArea.append(body,historyDrawer);
+    panel.append(header,nav,search,tools,status,contentArea);layer.append(shade,glass,panel);root.append(layer);
     shade.addEventListener("pointerdown",e=>{if(e.button===0){e.preventDefault();close();}});
     panel.addEventListener("keydown",e=>{
       if(e.key!=="Tab")return;
-      const nodes=[dismiss,tabs.get(state.section),...(search.disabled?[]:[search]),...tools.querySelectorAll("button:not([disabled]):not([hidden]),select:not([disabled]):not([hidden])"),body,...body.querySelectorAll("button:not([disabled])")],i=nodes.indexOf(doc.activeElement);
+      const nodes=[dismiss,tabs.get(state.section),...(search.disabled?[]:[search]),...tools.querySelectorAll("button:not([disabled]):not([hidden]),select:not([disabled]):not([hidden])"),...(!historyDrawer.inert&&!historyDrawer.hidden?[...historyDrawer.querySelectorAll("button:not([disabled])")]:[]),body,...body.querySelectorAll("button:not([disabled])")],i=nodes.indexOf(doc.activeElement);
       const next=e.shiftKey?(i<=0?nodes.length-1:i-1):(i<0||i===nodes.length-1?0:i+1);
       e.preventDefault();nodes[next].focus();
     });
-    shell={layer,shade,panel,title,tabs,search,body,tools,status,sort,filter,clear,yes,no,native,refresh,more,nav,indicator,nativeHistory,historyRange,clearHistory,addFolder,resetFolders,topLayer};return true;
+    shell={layer,shade,glass,panel,title,tabs,search,body,tools,status,sort,filter,clear,yes,no,refresh,more,nav,indicator,historyFilter,historyDrawer,periodButtons,orderButtons,historyRange,clearHistory,addFolder,resetFolders,topLayer};return true;
   }
   function syncIndicator(animate=true){
     if(!shell||!active())return;
@@ -114,14 +137,29 @@
     if(onlyIf!==undefined&&shell.status.textContent!==onlyIf)return;
     shell.status.textContent=message;shell.status.hidden=!message;
   }
+  function syncHistoryFilter(){
+    if(!shell)return;
+    for(const [value,button] of shell.periodButtons)button.setAttribute("aria-pressed",String(value===state.filter));
+    for(const [value,button] of shell.orderButtons)button.setAttribute("aria-pressed",String(value===(state.sort==="new"?"date":state.sort)));
+  }
+  function setHistoryDrawer(open,focus=false){
+    if(!shell)return;
+    const {historyDrawer,historyFilter}=shell;
+    open=!!open&&state.section==="history"&&active()&&state.phase!=="closing";
+    historyDrawer.inert=!open;historyDrawer.toggleAttribute("data-open",open);
+    historyFilter.setAttribute("aria-expanded",String(open));
+    if(!open&&focus)historyFilter.focus({preventScroll:true});
+    syncHistoryFilter();
+  }
   function syncTools(){
     if(!shell)return;const f=fileSection(),d=state.section==="downloads",local=f&&!d&&prefs.getBoolPref(MEDIA_PREF,false)&&win.__nocturneLibraryServices?.mediaScanAvailable===true;
     shell.tools.hidden=!f&&state.section!=="history";shell.sort.hidden=!f;shell.sort.value=state.sort;
     shell.filter.hidden=!d;shell.filter.value=state.filter;
     shell.clear.hidden=!d||confirmation;shell.clear.disabled=clearing||!win.__nocturneLibraryServices?.downloads?.getSnapshot().some(r=>r.clearable);
     shell.yes.hidden=shell.no.hidden=!d||!confirmation;shell.yes.disabled=shell.no.disabled=clearing;
-    shell.native.hidden=!d;shell.refresh.hidden=shell.addFolder.hidden=shell.resetFolders.hidden=!local;
-    shell.nativeHistory.hidden=shell.historyRange.hidden=shell.clearHistory.hidden=state.section!=="history";
+    shell.refresh.hidden=shell.addFolder.hidden=shell.resetFolders.hidden=!local;
+    const isHistory=state.section==="history";shell.historyFilter.hidden=shell.historyRange.hidden=shell.clearHistory.hidden=!isHistory;
+    if(!isHistory)setHistoryDrawer(false);shell.historyDrawer.hidden=!isHistory;syncHistoryFilter();
     shell.clearHistory.disabled=clearing;
   }
   async function clearDownloads(){
@@ -138,12 +176,6 @@
       }
     }catch{if(token===actionSerial)notice("Could not clear completed records.");}
     finally{if(token===actionSerial){clearing=false;confirmation=false;syncTools();data.retry();}}
-  }
-  function openNativeDownloads(){return openNativeCommand("Tools:Downloads");}
-  function openNativeCommand(id){
-    const command=doc.getElementById(id);
-    if(!command||typeof command.doCommand!=="function"){notice("Native command unavailable.");return;}
-    closeNow(false);nativeFallback=true;try{command.doCommand();}finally{nativeFallback=false;}
   }
   async function changeFolders(reset){
     if(!active()||dragSource||clearing||!["documents","pictures"].includes(state.section)||!prefs.getBoolPref(MEDIA_PREF,false)||win.__nocturneLibraryServices?.mediaScanAvailable!==true)return;
@@ -311,10 +343,11 @@
       const safe=libraryWebURL(row.url);entry.main.disabled=row.kind==="history"&&!safe;entry.forget.disabled=row.kind==="history"&&!safe;entry.forget.textContent=row.kind==="closed"?"Forget":"Remove";
       if(safe&&entry.icon.getAttribute("src")!=="page-icon:"+safe){entry.icon.hidden=false;entry.icon.src="page-icon:"+safe;}
       if(!safe){entry.icon.removeAttribute("src");entry.icon.hidden=true;}
-      const date=new Date(row.time),day=date.toLocaleDateString();
-      entry.time.textContent=date.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+      const date=new Date(row.time),bySite=state.section==="history"&&state.sort==="site",ranked=state.section==="history"&&["mostvisited","lastvisited"].includes(state.sort);
+      const day=bySite?(row.group||(()=>{try{return new URL(row.url).hostname||"Other";}catch{return "Other";}})()):date.toLocaleDateString();
+      entry.time.textContent=(bySite||ranked?date.toLocaleDateString()+" ":"")+date.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
       if(Number.isFinite(date.getTime()))entry.time.dateTime=date.toISOString();
-      if(day!==lastDay){
+      if(!ranked&&day!==lastDay){
         // Site-sorted results can return to the same date later. Distinguish
         // repeated runs without merging the separate visual groups.
         const run=dayRuns.get(day)||0;dayRuns.set(day,run+1);
@@ -332,7 +365,7 @@
     }
     if(result.hasMore&&result.limit<500){
       shell.more.disabled=false;ordered.push(shell.more);
-    }else if(result.hasMore){ordered.push(make("p","nl-limit",state.section==="history"?"Checked the first 500 history records. Refine your search or open Native history.":"Showing up to 500 records. Use search to narrow results."));}
+    }else if(result.hasMore){ordered.push(make("p","nl-limit",state.section==="history"?"Checked the first 500 history records. Refine your search or filter.":"Showing up to 500 records. Use search to narrow results."));}
     // Keep the same DOM node in place for progress-only updates.
     const unchanged=body.children.length===ordered.length&&ordered.every((n,i)=>body.children[i]===n);
     if(!unchanged){const keep=new Set(ordered);for(const child of [...body.children])if(!keep.has(child))child.remove();
@@ -345,7 +378,7 @@
     shell.search.disabled=false;notice("");syncTools();
     if(["documents","pictures"].includes(state.section)&&prefs.getBoolPref(MEDIA_PREF,false)&&win.__nocturneLibraryServices?.mediaScanAvailable!==true)
       notice("Local folder scanning is temporarily paused for safety. Downloaded files remain available.");
-    placeholder("Loading…","Reading native browser records.");data.start(state.section,state.query);
+    placeholder("Loading…","Reading native browser records.");data.start(state.section,state.query,{sort:state.sort,filter:state.filter});
   }
   function sample(n){const c=win.getComputedStyle(n);return {opacity:c.opacity,transform:c.transform};}
   function cancelMotion(){for(const a of animations)try{a.cancel();}catch{}animations=[];}
@@ -370,7 +403,7 @@
   function hide(restore=true){
     stopFallbackDragWatch();
     data.stop();rows.clear();renderedSection=null;dragSource=null;dragOwner=null;indicatorReady=false;pendingResult=null;pendingClose=false;confirmation=false;clearing=false;++actionSerial;cancelMotion();if(frame)win.cancelAnimationFrame(frame);frame=0;
-    if(shell){try{if(shell.topLayer&&shell.layer.matches(":popover-open"))shell.layer.hidePopover();}catch{}shell.layer.removeAttribute("data-library-open");shell.layer.hidden=true;shell.indicator.hidden=true;shell.panel.inert=false;shell.body.replaceChildren();shell.search.value="";}
+    if(shell){setHistoryDrawer(false);try{if(shell.topLayer&&shell.layer.matches(":popover-open"))shell.layer.hidePopover();}catch{}shell.layer.removeAttribute("data-library-open");shell.layer.hidden=true;shell.indicator.hidden=true;shell.panel.inert=false;shell.body.replaceChildren();shell.search.value="";}
     const target=returnFocus;returnFocus=null;if(!restore||win.closed)return;
     try{if(target?.isConnected&&typeof target.focus==="function")target.focus({preventScroll:true});else win.gBrowser?.selectedBrowser?.focus();}catch{}
   }
@@ -381,9 +414,10 @@
     if(dragSource||clearing)return false;
     if(confirmation){confirmation=false;syncTools();return true;}
     const next=reduceLibrary(state,{type:"CLOSE"});if(next===state)return false;
-    state=next;data.stop();const epoch=state.motionEpoch,panel=sample(shell.panel),shade=sample(shell.shade);
+    state=next;setHistoryDrawer(false);data.stop();const epoch=state.motionEpoch,panel=sample(shell.panel),shade=sample(shell.shade),glass=sample(shell.glass);
     cancelMotion();shell.panel.inert=true;
-    void Promise.all([play(shell.panel,[panel,{opacity:0,transform:"translateY(8px)"}],duration(210)),play(shell.shade,[shade,{opacity:0}],duration(180))]).then(()=>{
+    trace("motion.begin",{phase:"closing",section:state.section,duration:duration(360)},{sample:900});
+    void Promise.all([play(shell.panel,[panel,{opacity:0,transform:"translateY(8px)"}],duration(360)),play(shell.glass,[glass,{opacity:0}],duration(360)),play(shell.shade,[shade,{opacity:0}],duration(320))]).then(()=>{
       if(!current(epoch))return;state=reduceLibrary(state,{type:"MOTION_DONE",epoch});hide();
     });return true;
   }
@@ -412,17 +446,18 @@
     if(!overlay.request(OWNER))return fail("overlay-busy");
     const before=state,next=reduceLibrary(state,{type:"OPEN",section});if(next===state)return true;
     const first=before.phase==="closed",reopening=before.phase==="closing";
-    const panel=first?{opacity:0,transform:"translateY(8px)"}:sample(shell.panel),shade=first?{opacity:0}:sample(shell.shade),body=sample(shell.body);
+    const panel=first?{opacity:0,transform:"translateY(8px)"}:sample(shell.panel),shade=first?{opacity:0}:sample(shell.shade),glass=first?{opacity:0}:sample(shell.glass),body=sample(shell.body);
     data.stop();renderedSection=null;confirmation=false;pendingResult=null;++actionSerial;cancelMotion();state=next;const epoch=state.motionEpoch;shell.panel.inert=false;
     if(first){returnFocus=doc.activeElement;if(!showLayer()){closeNow();return fail("surface-hidden");}}
-    renderHeader();
+    setHistoryDrawer(false);renderHeader();
     if(state.phase==="opening"){
+      trace("motion.begin",{phase:"opening",section:state.section,duration:duration(reopening?360:480)},{sample:1100});
+      void Promise.all([play(shell.panel,[panel,{opacity:1,transform:"translateY(0px)"}],duration(reopening?360:480)),play(shell.glass,[glass,{opacity:1}],duration(reopening?360:480)),play(shell.shade,[shade,{opacity:1}],duration(340))]).then(()=>settle(epoch));
       renderBody();(shell.search.disabled?shell.tabs.get(state.section):shell.search).focus({preventScroll:true});
-      void Promise.all([play(shell.panel,[panel,{opacity:1,transform:"translateY(0px)"}],duration(reopening?220:300)),play(shell.shade,[shade,{opacity:1}],duration(200))]).then(()=>settle(epoch));
     }else{
-      void play(shell.body,[body,{opacity:0,transform:"translateX(-6px)"}],duration(90)).then(()=>{
+      void play(shell.body,[body,{opacity:0,transform:"translateX(-6px)"}],duration(140)).then(()=>{
         if(!current(epoch))return;cancelMotion();renderBody();
-        return play(shell.body,[{opacity:0,transform:"translateX(6px)"},{opacity:1,transform:"none"}],duration(160)).then(()=>settle(epoch));
+        return play(shell.body,[{opacity:0,transform:"translateX(6px)"},{opacity:1,transform:"none"}],duration(240)).then(()=>settle(epoch));
       });
     }
     trace("open.accepted",{section,phase:state.phase,topLayer:shell.topLayer});return true;
@@ -430,7 +465,7 @@
   function toggle(section="history"){return active()&&state.phase!=="closing"&&state.section===section?close():open(section);}
   function bindOverlay(){
     lease();const overlay=win.__nocturneOverlay;
-    lease=overlay?.register(OWNER,{priority:60,isActive:active,canYield:()=>!dragSource&&!clearing,yield(){if(dragSource||clearing)return false;closeNow(false);return true;},onEscape(){return close()||active();}})||(()=>{});
+    lease=overlay?.register(OWNER,{priority:60,isActive:active,canYield:()=>!dragSource&&!clearing,yield(){if(dragSource||clearing)return false;closeNow(false);return true;},onEscape(){if(shell&&!shell.historyDrawer.inert){setHistoryDrawer(false,true);return true;}return close()||active();}})||(()=>{});
     if(active()&&!overlay?.request(OWNER))closeNow();
   }
   function onPref(){if(!enabled()){if(dragSource)pendingClose=true;else closeNow();}}
@@ -455,7 +490,7 @@
   }
   function onWorkspace(e){if(active()&&e.detail?.phase!=="idle"){if(dragSource)pendingClose=true;else closeNow(false);}}
   function route(e,section,origin){
-    if(!section||nativeFallback)return false;
+    if(!section)return false;
     const pref=section==="history"?SHORTCUT:DOWNLOADS_SHORTCUT,service=win.__nocturneLibraryServices;
     let reason=null;
     if(!enabled()||!prefs.getBoolPref(pref,false))reason="disabled";
@@ -465,7 +500,9 @@
     else if(section==="downloads"&&!service.downloads?.isReady?.()){reason="downloads-unready";void service.downloads?.start?.().catch(()=>{});}
     if(!reason&&!toggle(section))reason=lastFailure||"toggle-rejected";
     trace("shortcut",{section,origin,accepted:!reason,reason});
-    if(reason)return false;
+    // While our Library is enabled, never dispatch a rejected request to Zen.
+    // Disabled Nocturne retains the existing native command behavior.
+    if(reason&&!enabled())return false;
     e.preventDefault();e.stopImmediatePropagation();return true;
   }
   function onCommand(e){

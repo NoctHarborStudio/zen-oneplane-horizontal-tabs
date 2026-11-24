@@ -15,7 +15,7 @@ export function createLibraryData({getServices,onResult,onError,onNotice=()=>{},
   async function load(){
     if(dead||!session||!source)return;
     const token=++epoch,owner=source;
-    try{const result=await session.query(files(section)?{text,limit,sort,filter}:{text,limit});if(current(token,owner)&&result)onResult(result);}
+    try{const result=await session.query(files(section)?{text,limit,sort,filter}:section==="history"?{text,limit,...(sort!=="new"?{sort}:{}),...(filter!=="all"?{period:filter}:{})}:{text,limit});if(current(token,owner)&&result)onResult(result);}
     catch{if(current(token,owner))onError();}
   }
   function queue(throttle=false){
@@ -58,9 +58,9 @@ export function createLibraryData({getServices,onResult,onError,onNotice=()=>{},
     });
     return promise;
   }
-  function start(next,query=""){
+  function start(next,query="",options={}){
     stop();if(dead||!["history","closed","downloads","documents","pictures"].includes(next))return false;
-    section=next;text=query;source=getServices();
+    section=next;text=query;sort=options.sort||"new";filter=options.filter||"all";source=getServices();
     if(!source){onError();return false;}
     const owner=source,sessionToken=sessionEpoch;
     const valid=()=>!dead&&source===owner&&section===next&&sessionToken===sessionEpoch&&getServices()===owner;
