@@ -247,3 +247,31 @@ test("History heading reconcile preserves row focus and scroll on page extension
  assert.equal(f.headings().length,1);
  assert.notEqual(f.headings()[0],first[0],"new section/renderBody after empty does not revive stale headings");
 });
+
+
+test("Library appearance and dismissal preserve text scale and use the CSS terminal pose",()=>{
+ const source=readFileSync(new URL("../src/library/controller.js.part",import.meta.url),"utf8");
+ const css=readFileSync(new URL("../src/styles/library.css.part",import.meta.url),"utf8");
+ assert.equal(source.split('opacity:0,transform:"translateY(8px)"').length-1,2);
+ assert.ok(source.includes('play(shell.panel,[panel,{opacity:1,transform:"translateY(0px)"}]'));
+ assert.doesNotMatch(source,/translateY\(8px\) scale\(/);
+ assert.match(css,/transform:translateY\(0px\);opacity:1;/);
+});
+test("Library terminal motion probe respects epoch and opt-out and samples both sides of cancel",()=>{
+ const source=readFileSync(new URL("../src/library/controller.js.part",import.meta.url),"utf8");
+ const start=source.indexOf("  function settle(epoch)"),end=source.indexOf("  function hide(",start);
+ assert.ok(start>=0&&end>start);
+ const run=(enabled,phase,epoch)=>{
+   const events=[],calls=[],shell={panel:{}};
+   const f=new Function("prefs","shell","sample","cancelMotion","reduceLibrary","trace","calls",`let state={phase:${JSON.stringify(phase)},section:"history",motionEpoch:2}; const current=e=>e===state.motionEpoch;${source.slice(start,end)}return settle;`)(
+     {getBoolPref:()=>enabled},shell,()=>{calls.push("sample");return {opacity:"1",transform:"matrix(1, 0, 0, 1, 0, 0)"};},
+     ()=>calls.push("cancel"),s=>({...s,phase:"open"}),(name,data)=>events.push({name,data}),calls);
+   f(epoch);return {calls,events};
+ };
+ assert.deepEqual(run(true,"opening",1).calls,[]);
+ assert.deepEqual(run(false,"opening",2).calls,["cancel"]);
+ assert.deepEqual(run(true,"switching",2).calls,["cancel"]);
+ const result=run(true,"opening",2);
+ assert.deepEqual(result.calls,["sample","cancel","sample"]);
+ assert.deepEqual(result.events,[{name:"motion.settled",data:{section:"history",opacityStable:true,transformStable:true,beforeOpacity:1,afterOpacity:1}}]);
+});
