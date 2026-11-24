@@ -157,6 +157,9 @@
 }
 #zr-download-outside[data-open] { visibility:visible;pointer-events:auto !important; }
 #zr-download-dock {
+  --zr-download-fg:var(--nocturne-glass-foreground,CanvasText);
+  --zr-download-outline:var(--nocturne-glass-border,transparent);
+  --zr-download-row:var(--nocturne-glass-control-fill,transparent);
   position:fixed !important;left:0 !important;top:0 !important;
   translate:var(--zr-overlay-x,6px) var(--zr-overlay-y,8px);
   z-index:2147483002 !important;
@@ -165,7 +168,7 @@
   max-height:calc(100vh - var(--zr-overlay-y,8px) - 12px);
   padding:12px;gap:10px;
   border:1px solid var(--zr-download-outline);border-radius:12px;
-  box-shadow:0 8px 28px #0004;
+  box-shadow:var(--nocturne-glass-shadow,0 8px 24px #0003);
   opacity:0;visibility:hidden;pointer-events:none;
 }
 #zr-download-dock[data-full] { height:calc(100vh - var(--zr-overlay-y,8px) - 12px); }
@@ -281,13 +284,16 @@
   #zr-download-dock .zr-dock-header-confirm { transition:none !important;animation:none !important; }
 }
 
-/* A translucent native-painted surface, without fading its text or controls. */
+/* Shared tint is resolved once; keep the existing decorative wave backing. */
 #zr-download-dock { background:transparent;isolation:isolate; }
-#zr-download-dock::before { content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;background:var(--zr-download-surface);opacity:.88;pointer-events:none; }
+#zr-download-dock::before { content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;background:var(--nocturne-downloads-paint,var(--zr-download-surface));pointer-events:none; }
 #zr-download-dock:is([data-entering],[data-closing]):not([data-side="top"])::before {
   inset:-1px;border-radius:0;
 }
-#zr-download-dock:is([data-open],[data-closing]) { backdrop-filter:blur(12px); }
+#zr-download-dock:is([data-open],[data-closing]) { backdrop-filter:blur(var(--nocturne-downloads-blur,0px)); }
+@media (forced-colors: active) {
+  #zr-download-dock {--zr-download-fg:CanvasText;--zr-download-outline:CanvasText;--zr-download-row:Canvas;box-shadow:none;}
+}
 @media(-moz-pref("zen.nocturne.motion.enabled", false)) { #zr-download-dock > * { transition:none !important; } }
 
 /* One panel, only its internal list scrolls. */

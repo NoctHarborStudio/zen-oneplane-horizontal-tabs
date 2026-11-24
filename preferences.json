@@ -670,6 +670,206 @@
     ]
   },
   {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.hub.opacity",
+    "label": "Glass — Hub opacity override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "0%",
+        "value": 0
+      },
+      {
+        "label": "10%",
+        "value": 10
+      },
+      {
+        "label": "20%",
+        "value": 20
+      },
+      {
+        "label": "30%",
+        "value": 30
+      },
+      {
+        "label": "40%",
+        "value": 40
+      },
+      {
+        "label": "50%",
+        "value": 50
+      },
+      {
+        "label": "60%",
+        "value": 60
+      },
+      {
+        "label": "70%",
+        "value": 70
+      },
+      {
+        "label": "80%",
+        "value": 80
+      },
+      {
+        "label": "90%",
+        "value": 90
+      },
+      {
+        "label": "100%",
+        "value": 100
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.hub.blur",
+    "label": "Glass — Hub blur override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "0 px",
+        "value": 0
+      },
+      {
+        "label": "8 px",
+        "value": 8
+      },
+      {
+        "label": "12 px",
+        "value": 12
+      },
+      {
+        "label": "16 px",
+        "value": 16
+      },
+      {
+        "label": "24 px",
+        "value": 24
+      },
+      {
+        "label": "32 px",
+        "value": 32
+      },
+      {
+        "label": "40 px",
+        "value": 40
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.downloads.opacity",
+    "label": "Glass — Downloads opacity override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "0%",
+        "value": 0
+      },
+      {
+        "label": "10%",
+        "value": 10
+      },
+      {
+        "label": "20%",
+        "value": 20
+      },
+      {
+        "label": "30%",
+        "value": 30
+      },
+      {
+        "label": "40%",
+        "value": 40
+      },
+      {
+        "label": "50%",
+        "value": 50
+      },
+      {
+        "label": "60%",
+        "value": 60
+      },
+      {
+        "label": "70%",
+        "value": 70
+      },
+      {
+        "label": "80%",
+        "value": 80
+      },
+      {
+        "label": "90%",
+        "value": 90
+      },
+      {
+        "label": "100%",
+        "value": 100
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.downloads.blur",
+    "label": "Glass — Downloads blur override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "0 px",
+        "value": 0
+      },
+      {
+        "label": "8 px",
+        "value": 8
+      },
+      {
+        "label": "12 px",
+        "value": 12
+      },
+      {
+        "label": "16 px",
+        "value": 16
+      },
+      {
+        "label": "24 px",
+        "value": 24
+      },
+      {
+        "label": "32 px",
+        "value": 32
+      },
+      {
+        "label": "40 px",
+        "value": 40
+      }
+    ]
+  },
+  {
     "type": "checkbox",
     "property": "zen.nocturne.material.legacy-toolbar",
     "label": "Use legacy shaped toolbar background (restart required)",

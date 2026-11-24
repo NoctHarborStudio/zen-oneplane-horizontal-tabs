@@ -150,12 +150,13 @@
       const reduced=!prefs.getBoolPref("zen.nocturne.motion.enabled",true)||prefs.getIntPref("zen.oneplane.animation-duration",160)===0;
       if(reduced||typeof panel.animate!=="function"){stopMotion();done();return;}
       const computed=window.getComputedStyle(panel);
+      const radius=computed.borderTopLeftRadius||"12px";
       const from=motion?{clipPath:computed.clipPath,opacity:computed.opacity,translate:computed.translate}:show?
-        {clipPath:"inset(0 0 100% 0 round 8px)",opacity:0,translate:"0 -6px"}:
-        {clipPath:"inset(0 0 0% 0 round 8px)",opacity:1,translate:"0 0px"};
+        {clipPath:"inset(0 0 100% 0 round "+radius+")",opacity:0,translate:"0 -6px"}:
+        {clipPath:"inset(0 0 0% 0 round "+radius+")",opacity:1,translate:"0 0px"};
       stopMotion();
-      const to=show?{clipPath:"inset(0 0 0% 0 round 8px)",opacity:1,translate:"0 0px"}:
-        {clipPath:"inset(0 0 100% 0 round 8px)",opacity:0,translate:"0 -6px"};
+      const to=show?{clipPath:"inset(0 0 0% 0 round "+radius+")",opacity:1,translate:"0 0px"}:
+        {clipPath:"inset(0 0 100% 0 round "+radius+")",opacity:0,translate:"0 -6px"};
       try{
         const animation=panel.animate([from,to],{duration:show?460:390,easing:"cubic-bezier(.22,.72,.2,1)",fill:"both"});
         motion=animation;
@@ -175,19 +176,14 @@
     function updateGeometry(){
       if(!open||!supported())return;
       const b=button.getBoundingClientRect(),a=url.getBoundingClientRect();
-      const bar=document.getElementById("urlbar"),style=window.getComputedStyle(root);
+      const style=window.getComputedStyle(root);
       const compact=parseFloat(style.getPropertyValue("--op-url"))||180;
       // A blank tab collapses the address anchor. Reserve its usual width,
       // rather than collapsing the Hub or following a live search wave.
       const right=a.width>1?a.right:a.left+compact;
       const width=hubPanelWidth(b.left,right,window.innerWidth);
       panel.style.setProperty("--op-hub-width",width+"px");
-      // Share the actual toolbar contour color rather than the address capsule.
-      const bg=surface.hasAttribute("data-op-material-flat")?null:window.getComputedStyle(surface).backgroundColor;
-      panel.style.setProperty("--op-hub-bg",bg&&bg!=="rgba(0, 0, 0, 0)"&&bg!=="transparent"?bg:
-        window.getComputedStyle(toolbarWrapper).getPropertyValue("--op-surface-tint").trim()||"light-dark(#f4f5f9,#15171e)");
-      const color=bar&&window.getComputedStyle(bar).color;
-      if(color)panel.style.setProperty("--op-hub-fg",color);
+      // CSS inherits the shared material directly; no palette sampling.
       const x=Math.round(b.left),y=Math.round(b.bottom+4);
       panel.style.setProperty("--op-hub-left",x+"px");
       panel.style.setProperty("--op-hub-top",y+"px");

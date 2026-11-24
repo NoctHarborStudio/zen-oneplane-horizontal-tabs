@@ -1,6 +1,6 @@
 // Nocturne preview.45: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="downloads.script",data={version:"0.3.0-preview.211"};
+  const event="downloads.script",data={version:"0.3.0-preview.212"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -70,6 +70,9 @@ try{if(typeof window!=="undefined"){
   function refreshStatistics(){if(cardOpen)renderRecent();if(dockOpen)renderDock();if(cardOpen||dockOpen)positionOverlays();}
   function sortBytes(v){return v.known?v.total:v.success?v.bytes:null;}
   function syncTheme(...targets){
+    // The custom dock inherits Glass; native indicator and flight keep their palette.
+    targets=targets.filter(n=>n&&n!==dock);
+    if(!targets.length)return;
     // Sample only on structural changes / opening, never on byte updates.
     // Zen stores actual compact palette on the toolbox; root overlays do
     // not inherit these local values. Copy the resolved theme tokens.

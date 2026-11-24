@@ -598,3 +598,5 @@ Preview.206: existing toolbar-surface sample adds materialFlat, materialOpacity 
 Bookmark paint admission: `center.bookmarks.paint` reports transaction id, owner, sample fraction, count, bad targets and maximum numeric alpha/position/clip errors. `assembly.bookmarks.recheck` reports whether the pre-epoch retry acquired the current native list. These bounded checks detect CSS conflicts and changed membership, not presented frames. No bookmark labels or URLs are recorded.
 
 Live bookmark evidence: `sample.data.bookmarkFlow` is present near the active bookmark stage. It records the shared transaction id, direct-property mode, fraction, actual/expected clock, clock spread/error, actual/expected visible count, geometry/alpha/clip errors, topology and ancestor visibility/opacity. No labels or URLs, no new sampler or forced animation seek. Paused admission events remain separate.
+
+Preview.212: existing geometry snapshots include `oneplane-hub-panel` and `zr-download-dock` with numeric `materialOpacity` and `materialBlur` resolved from shared role tokens. No download names or workspace names are added.

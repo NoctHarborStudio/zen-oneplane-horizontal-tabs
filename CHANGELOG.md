@@ -1,3 +1,7 @@
+## 0.3.0-preview.212 — Hub and Downloads material (DS-M7)
+
+Migrate the Hub and custom Downloads dock to the shared Glass tint, opacity, blur, border and shadow, with independent inherited opacity/blur overrides. Hub now resolves the palette in CSS instead of sampling toolbar/address colors; its existing clip reveal uses the resting radius. Downloads retains its existing wave backing and native flight/indicator palette, with material alpha applied only once. Keep All Downloads routing and motion timing unchanged. Extend existing diagnostics with both panel rectangles and material values. Native visual acceptance pending.
+
 ## 0.3.0-preview.211 — Automatic strip structural plan (ML1b.1)
 
 Route existing centered tab-lane mounting through the common structural plan with the exact allocator boundary, retaining the original Auto width calculation, CSS, single plus and startup fallback. Manual allocation remains source/test-only. No tab/session changes. Native visual acceptance pending.

@@ -1,7 +1,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.211",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.212",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -331,7 +331,7 @@
   }
   const rootAttrs=["data-zr-center-handoff","data-zr-center-motion","data-zr-center-pending","oneplane-active","data-op-startup-ready","data-zr-startup-phase","data-nocturne-boot","data-zr-closing","data-zr-workspace-phase","data-op-bookmark-wave","zen-compact-mode","customizing","inDOMFullscreen","inFullscreen"];
   const attrs=[...rootAttrs,"data-op-panel-open","oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold","oneplane-home-hold","oneplane-workspace-hold","oneplane-download-hold","zen-has-hover","has-popup-menu","zen-compact-mode-active","data-ready","data-op-overflow-row","data-op-adaptive-compact","data-op-dragging","data-op-inline-drag","data-op-lane-drag","data-op-group-pull","data-op-live-drag","data-op-vanishing-home","data-op-vanishing-presentation","data-op-vanishing-ghost","data-op-vanishing-tail-source","data-op-drag-commit","data-op-url-phase","data-op-home-open","data-op-lane-ghost","data-op-magnetic-pull","data-op-magnetic-source","data-op-detached","data-op-pulling","data-op-drag-follow","data-op-reinsert","data-zr-workspace-geometry","data-zr-workspace-motion","data-zr-center-card","data-zr-workspace-height-motion","data-zr-workspace-surface","data-zr-workspace-page","data-zr-home-covered","data-zr-startup-effect","data-zr-close-effect","hidden","collapsed","open","focused"];
-  const targets=["titlebar-buttonbox","titlebar-max","titlebar-restore","titlebar-close","zr-page-progress","oneplane-tab-indicator","oneplane-overflow-slider","zen-appcontent-navbar-wrapper","zen-appcontent-navbar-container","oneplane-toolbar-surface","nav-bar","nav-bar-customization-target","oneplane-hub-button","oneplane-history-button","oneplane-download-indicator-slot","back-button","forward-button","stop-reload-button","oneplane-page-actions","oneplane-tabs","oneplane-overflow-tabs","PersonalToolbar","PlacesToolbarItems","urlbar-container","urlbar","tabbrowser-tabpanels","zen-shared-home","zr-download-indicator"];
+  const targets=["titlebar-buttonbox","titlebar-max","titlebar-restore","titlebar-close","zr-page-progress","oneplane-tab-indicator","oneplane-overflow-slider","zen-appcontent-navbar-wrapper","zen-appcontent-navbar-container","oneplane-toolbar-surface","nav-bar","nav-bar-customization-target","oneplane-hub-button","oneplane-history-button","oneplane-download-indicator-slot","back-button","forward-button","stop-reload-button","oneplane-page-actions","oneplane-tabs","oneplane-overflow-tabs","PersonalToolbar","PlacesToolbarItems","urlbar-container","urlbar","tabbrowser-tabpanels","zen-shared-home","zr-download-indicator","oneplane-hub-panel","zr-download-dock"];
   function attrState(n,keys=attrs){const out={};for(const k of keys)if(n.hasAttribute(k))out[k]=n.getAttribute(k)||true;return out;}
   function observeTargets(){
     if(!observer)return;
@@ -355,7 +355,9 @@
     const mask=n.style?.getPropertyValue("--op-contour-mask")||"",bm=n.style?.getPropertyValue("--zr-bm-contour-mask")||"";
     const hash=x=>{let h=0;for(let i=0;i<x.length;i++)h=(Math.imul(h,31)+x.charCodeAt(i))|0;return x.length?x.length+":"+h:null;};
     const material=n.id==="oneplane-toolbar-surface"?{materialFlat:n.hasAttribute("data-op-material-flat"),
-      materialOpacity:parseFloat(s.getPropertyValue("--nocturne-surface-opacity")),materialBlur:parseFloat(s.getPropertyValue("--nocturne-surface-blur"))}:{};
+      materialOpacity:parseFloat(s.getPropertyValue("--nocturne-surface-opacity")),materialBlur:parseFloat(s.getPropertyValue("--nocturne-surface-blur"))}:{}; 
+    const role=n.id==="oneplane-hub-panel"?"hub":n.id==="zr-download-dock"?"downloads":null;
+    if(role){material.materialOpacity=parseFloat(s.getPropertyValue("--nocturne-"+role+"-opacity"));material.materialBlur=parseFloat(s.getPropertyValue("--nocturne-"+role+"-blur"));}
     return {...material,rect:[round(r.left),round(r.top),round(r.width),round(r.height)],opacity:s.opacity,visibility:s.visibility,display:s.display,translate:s.translate,scale:s.scale,transform:s.transform,transition:s.transitionProperty,height:s.height,width:s.width,margin:[s.marginInlineStart,s.marginInlineEnd],hoverProgress:s.getPropertyValue("--op-hover-progress").trim()||null,
       measure:n.style?.getPropertyValue("--op-measured-toolbar-height")||null,contour:n.style?.getPropertyValue("--op-contour-height")||null,bmContour:n.style?.getPropertyValue("--zr-bm-contour-height")||null,
       mask:hash(mask),bmMask:hash(bm),centerX:s.getPropertyValue("--zr-center-x").trim()||null,centerAlpha:s.getPropertyValue("--zr-center-alpha").trim()||null,progress:s.getPropertyValue("--zr-workspace-progress").trim()||null,startupProgress:s.getPropertyValue("--zr-startup-progress").trim()||null,startupBase:n.style?.getPropertyValue("--zr-startup-base-opacity")||null,attrs:attrState(n),animations:anim};
