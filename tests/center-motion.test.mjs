@@ -148,8 +148,10 @@ test("disposed Center Motion cannot mutate the replacement generation's markers"
 test("boot prelude cleans the old Layout before replacement fragments mount",()=>{
  const prelude=readFileSync(new URL("../src/core/boot-prelude.js.part",import.meta.url),"utf8");
  let cleaned=0;const window={__nocturneLayoutStartup:{},__oneplaneLayoutController:{cleanup(){cleaned++;}},addUnloadListener(){}};
- new Function("window","document","Services",prelude)(window,{documentElement:{hasAttribute:()=>false}},{prefs:{}});
+ const attrs=new Map(),root={hasAttribute:k=>attrs.has(k),setAttribute:(k,v)=>attrs.set(k,v)};
+ new Function("window","document","Services",prelude)(window,{documentElement:root},{prefs:{}});
  assert.equal(cleaned,1);
+ assert.equal(attrs.get("data-nocturne-early-css-done"),"true");
 });
 
 function bookmarkFixture({width=200}={}){
