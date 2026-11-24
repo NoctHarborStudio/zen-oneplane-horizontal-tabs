@@ -73,7 +73,7 @@ test("layout preference restore isolates failed keys and retains complete backup
  const cleared=[],traces=[];let fail=true,raw=JSON.stringify(backup);
  const prefs={getStringPref:()=>raw,setStringPref(k,v){raw=v;},getBoolPref:k=>values.get(k),setBoolPref(k,v){if(k==="a"&&fail)throw Error("locked");values.set(k,v);},
   clearUserPref(k){cleared.push(k);if(k==="backup")raw="";else values.set(k,true);}};
- const restore=new Function("prefs","window","console","TARGET","KEY","nocturneErrorClass",code+"return restorePrefs;")(prefs,{__nocturneTrace:(event,data)=>traces.push({event,data})},{warn(){}},{a:true,b:false,c:true},"backup",nocturneErrorClass);
+ const restore=new Function("prefs","window","console","TARGET","KEY","nocturneErrorClass","NATIVE_LIBRARY",code+"return restorePrefs;")(prefs,{__nocturneTrace:(event,data)=>traces.push({event,data})},{warn(){}},{a:true,b:false,c:true},"backup",nocturneErrorClass,"zen.library.enabled");
  assert.equal(restore(),false);assert.equal(values.get("b"),true);assert.equal(values.get("c"),false);
  assert.deepEqual(JSON.parse(raw),{a:backup.a,b:{...backup.b,released:true},c:{...backup.c,released:true}});
  assert.deepEqual(cleared,["b"]);
@@ -87,13 +87,13 @@ test("layout preference restore isolates failed keys and retains complete backup
 test("new activation captures released preference keys without losing unresolved originals",()=>{
  const src=read("src/core/preferences.js.part");
  const code=src.slice(src.indexOf("function snapshot()"),src.indexOf("function otherActiveWindow"));
- const saved={a:{value:false,user:true},b:{value:true,user:false,released:true},startup:{value:false,user:false}};
+ const nativeKey="zen.library.enabled",saved={a:{value:false,user:true},b:{value:true,user:false,released:true},startup:{value:false,user:false},[nativeKey]:{value:true,user:false,owned:true}};
  let raw=JSON.stringify(saved);
  const prefs={PREF_BOOL:128,getPrefType:()=>128,getStringPref:()=>raw,setStringPref(k,v){raw=v;},
   getBoolPref:k=>false,prefHasUserValue:k=>true};
- const snapshot=new Function("prefs","TARGET","STARTUP","KEY",code+"return snapshot;")(prefs,{a:true,b:false},"startup","backup");
- assert.deepEqual(snapshot(),{a:saved.a,b:{value:false,user:true,owned:false},startup:saved.startup});
- assert.deepEqual(JSON.parse(raw),{a:saved.a,b:{value:false,user:true,owned:false},startup:saved.startup});
+ const snapshot=new Function("prefs","TARGET","STARTUP","KEY","NATIVE_LIBRARY",code+"return snapshot;")(prefs,{a:true,b:false,[nativeKey]:false},"startup","backup",nativeKey);
+ assert.deepEqual(snapshot(),{a:saved.a,b:{value:false,user:true,owned:false},startup:saved.startup,[nativeKey]:saved[nativeKey]});
+ assert.deepEqual(JSON.parse(raw),{a:saved.a,b:{value:false,user:true,owned:false},startup:saved.startup,[nativeKey]:saved[nativeKey]});
 });
 test("failed backup removal checkpoints release progress before retry",()=>{
  const src=read("src/core/preferences.js.part");
@@ -101,7 +101,7 @@ test("failed backup removal checkpoints release progress before retry",()=>{
  let raw=JSON.stringify({a:{value:false,user:true}}),value=true,fail=true,sets=0;
  const prefs={getStringPref:()=>raw,setStringPref(k,v){raw=v;},getBoolPref:()=>value,
   setBoolPref(k,v){sets++;value=v;},clearUserPref(){if(fail)throw Error("locked backup");raw="";}};
- const restore=new Function("prefs","window","console","TARGET","KEY","nocturneErrorClass",code+"return restorePrefs;")(prefs,{}, {warn(){}},{a:true},"backup",nocturneErrorClass);
+ const restore=new Function("prefs","window","console","TARGET","KEY","nocturneErrorClass","NATIVE_LIBRARY",code+"return restorePrefs;")(prefs,{}, {warn(){}},{a:true},"backup",nocturneErrorClass,"zen.library.enabled");
  assert.equal(restore(),false);assert.equal(JSON.parse(raw).a.released,true);
  value=true;fail=false;assert.equal(restore(),true);assert.equal(value,true);assert.equal(sets,1);assert.equal(raw,"");
 });
@@ -119,7 +119,7 @@ test("layout activation releases strip returned after synchronous cleanup and ne
  const run=new Function(`let disposed=false,applied=false,ownsPreferences=false,removeTabStrip=null,preferenceMutation=false;
  const reloadingLayout=true,startupRecord={},CONTROLLER="controller",controller={};const marks=[],calls=[];
  const root={hasAttribute:()=>false,setAttribute:k=>marks.push(k)};
- const prefs={getBoolPref:()=>true};const TARGET={};
+ const prefs={getBoolPref:()=>true};const TARGET={},NATIVE_LIBRARY="zen.library.enabled";
  const window={controller,gZenCompactModeManager:{hideToolbar(){}},dispatchEvent(){},CustomEvent:class{},requestAnimationFrame(){calls.push("raf")}};
  function otherActiveWindow(){return false;}function snapshot(){return {};}function cleanup(){disposed=true;}function finishCleanup(){}function cleanupStep(label,fn){fn();}
  function installTabStrip(){cleanup();return ()=>calls.push("strip cleanup");}const console={error(){}};
