@@ -5,12 +5,13 @@ const source=readFileSync(new URL("../startup.uc.mjs",import.meta.url),"utf8");
 const run=new Function("Services","window","document","console",source);
 const OPTION="zen.refined.startup.disable-placeholders",BACKUP="zen.refined.startup.previous-placeholders";
 const TARGETS=["browser.startup.blankWindow","browser.startup.preXulSkeletonUI"];
+const FULL_OPTION="zen.nocturne.fullscreen.disable-animation",FULL_BACKUP="zen.nocturne.fullscreen.previous-transition",FULL_TARGETS=["full-screen-api.transition-duration.enter","full-screen-api.transition-duration.leave"];
 function fixture(initial={}){
- const values=new Map(Object.entries(initial)),defaults=new Map(TARGETS.map(k=>[k,true])),windows=[],observers=new Set();
- const prefs={PREF_BOOL:128,getStringPref:(k,d)=>values.get(k)??d,setStringPref:(k,v)=>values.set(k,v),
+ const values=new Map(Object.entries(initial)),defaults=new Map([...TARGETS.map(k=>[k,true]),...FULL_TARGETS.map(k=>[k,"200 200"])]),windows=[],observers=new Set();
+ const prefs={PREF_BOOL:128,PREF_STRING:32,getStringPref:(k,d)=>values.get(k)??defaults.get(k)??d,setStringPref:(k,v)=>values.set(k,v),
   getBoolPref:(k,d)=>values.get(k)??defaults.get(k)??d,setBoolPref:(k,v)=>values.set(k,v),
-  prefHasUserValue:k=>values.has(k),clearUserPref:k=>values.delete(k),prefIsLocked:()=>false,getPrefType:()=>128,
-  savePrefFile(){},addObserver(k,f){assert.equal(k,OPTION);observers.add(f);},removeObserver(k,f){observers.delete(f);}};
+  prefHasUserValue:k=>values.has(k),clearUserPref:k=>values.delete(k),prefIsLocked:()=>false,getPrefType:k=>FULL_TARGETS.includes(k)?32:128,
+  savePrefFile(){},addObserver(k,f){assert.ok([OPTION,FULL_OPTION].includes(k));observers.add(f);},removeObserver(k,f){observers.delete(f);}};
  const Services={prefs,startup:{shuttingDown:false},wm:{getEnumerator(){const items=[...windows];return {hasMoreElements:()=>items.length>0,getNext:()=>items.shift()};}}};
  const document={documentElement:{hasAttribute:()=>false}};
  function mount(existing){
@@ -20,7 +21,7 @@ function fixture(initial={}){
   run(Services,window,document,{warn(){}});
   return {window,unload:()=>unload(),close(){events.get("beforeunload")?.({target:window});events.get("unload")?.();window.closed=true;},nativeUnload(){events.get("unload")?.();window.closed=true;}};
  }
- return {mount,values,observers,Services,prefs,states:()=>TARGETS.map(k=>prefs.getBoolPref(k)),option(v){values.set(OPTION,v);for(const f of [...observers])f();}};
+ return {mount,values,observers,Services,prefs,states:()=>TARGETS.map(k=>prefs.getBoolPref(k)),option(v){values.set(OPTION,v);for(const f of [...observers])f();},fullOption(v){values.set(FULL_OPTION,v);for(const f of [...observers])f();},fullscreen:()=>FULL_TARGETS.map(k=>prefs.getStringPref(k))};
 }
 test("two windows share one startup observer and last mod unload restores defaults",()=>{
  const f=fixture(),a=f.mount(),b=f.mount();assert.deepEqual(f.states(),[false,false]);assert.equal(f.observers.size,1);
@@ -112,4 +113,27 @@ test("failed startup backup removal keeps release progress and later edits",()=>
  f.option(false);assert.deepEqual(f.states(),[true,true]);assert.ok(JSON.parse(f.values.get(BACKUP))[TARGETS[0]].released);
  f.values.set(TARGETS[0],false);fail=false;f.option(false);
  assert.deepEqual(f.states(),[false,true]);assert.equal(f.values.has(BACKUP),false);a.unload();
+});
+
+test("DOM fullscreen fade is disabled by default, independently of placeholder option",()=>{
+ const f=fixture({[OPTION]:false}),a=f.mount(),b=f.mount();
+ assert.deepEqual(f.states(),[true,true]);assert.deepEqual(f.fullscreen(),["0 0","0 0"]);
+ a.unload();assert.deepEqual(f.fullscreen(),["0 0","0 0"]);
+ b.unload();assert.deepEqual(f.fullscreen(),["200 200","200 200"]);assert.equal(f.values.has(FULL_BACKUP),false);
+});
+test("fullscreen toggle restores user and default duration, preserves external changes and original zero",()=>{
+ const f=fixture({[FULL_TARGETS[0]]:"100 150"}),a=f.mount();
+ assert.deepEqual(f.fullscreen(),["0 0","0 0"]);f.fullOption(false);
+ assert.deepEqual(f.fullscreen(),["100 150","200 200"]);assert.equal(f.values.has(FULL_TARGETS[1]),false);
+ f.fullOption(true);f.values.set(FULL_TARGETS[1],"50 50");f.fullOption(false);
+ assert.deepEqual(f.fullscreen(),["100 150","50 50"]);assert.deepEqual(f.states(),[false,false]);a.unload();
+ const g=fixture({[FULL_TARGETS[0]]:"0 0",[FULL_OPTION]:false}),b=g.mount();
+ assert.deepEqual(g.fullscreen(),["0 0","200 200"]);g.fullOption(true);b.unload();assert.equal(g.values.get(FULL_TARGETS[0]),"0 0");
+});
+test("locked or missing native fullscreen preference is isolated from placeholders",()=>{
+ const f=fixture();f.prefs.prefIsLocked=k=>k===FULL_TARGETS[0];const type=f.prefs.getPrefType;f.prefs.getPrefType=k=>k===FULL_TARGETS[1]?0:type(k);
+ const a=f.mount();assert.deepEqual(f.fullscreen(),["200 200","200 200"]);assert.deepEqual(f.states(),[false,false]);assert.equal(f.values.has(FULL_BACKUP),false);a.unload();
+});
+test("invalid fullscreen backup does not block startup placeholder ownership",()=>{
+ const f=fixture({[FULL_BACKUP]:"invalid"}),a=f.mount();assert.deepEqual(f.fullscreen(),["200 200","200 200"]);assert.deepEqual(f.states(),[false,false]);a.unload();assert.equal(f.values.get(FULL_BACKUP),"invalid");
 });

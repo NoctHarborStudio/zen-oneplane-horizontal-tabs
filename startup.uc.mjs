@@ -1,18 +1,26 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="startup-prefs.script",data={version:"0.3.0-preview.192"};
+  const event="startup-prefs.script",data={version:"0.3.0-preview.193"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
-/* Zen Refined — startup placeholders. Only these two native prefs are
- * changed, and only while the corresponding Sine option is enabled.
+/* Nocturne — native startup placeholders and DOM fullscreen fade policy.
+ * Each preference group has an independent reversible backup and option.
  * Persist ownership across normal exits because the skeleton is created
  * before Sine loads. Restore the exact previous user/default state on off.
  */
 const OPTION="zen.refined.startup.disable-placeholders";
 const BACKUP="zen.refined.startup.previous-placeholders";
 const TARGETS=["browser.startup.blankWindow","browser.startup.preXulSkeletonUI"];
+const FULLSCREEN_OPTION="zen.nocturne.fullscreen.disable-animation",FULLSCREEN_BACKUP="zen.nocturne.fullscreen.previous-transition";
+const FULLSCREEN_TARGETS=["full-screen-api.transition-duration.enter","full-screen-api.transition-duration.leave"];
 const prefs=Services.prefs;
+const PLACEHOLDERS={option:OPTION,backup:BACKUP,targets:TARGETS,type:"boolean",target:false};
+const FULLSCREEN={option:FULLSCREEN_OPTION,backup:FULLSCREEN_BACKUP,targets:FULLSCREEN_TARGETS,type:"string",target:"0 0"};
+const GROUPS=[PLACEHOLDERS,FULLSCREEN];
+const available=(g,name)=>!prefs.prefIsLocked(name)&&prefs.getPrefType(name)===(g.type==="string"?prefs.PREF_STRING:prefs.PREF_BOOL);
+const readValue=(g,name)=>g.type==="string"?prefs.getStringPref(name):prefs.getBoolPref(name);
+const writeValue=(g,name,value)=>g.type==="string"?prefs.setStringPref(name,value):prefs.setBoolPref(name,value);
 const KEY="__zenRefinedStartupPlaceholders",PENDING=KEY+"Pending";
 const LEGACY_ID="9d788b55-d497-41da-8444-993c603e89e4";
 // Sine owns mod installation state. Read it only for diagnostics, never
@@ -27,66 +35,71 @@ async function warnLegacyConflict(getMods,logger){
   }catch{} // optional diagnostics must not block startup
   return false;
 }
-function readBackup(){
-  const backup=JSON.parse(prefs.getStringPref(BACKUP,"{}"));
+function readBackup(g){
+  const backup=JSON.parse(prefs.getStringPref(g.backup,"{}"));
   if(!backup||typeof backup!=="object"||Array.isArray(backup)||
-     Object.keys(backup).some(name=>!TARGETS.includes(name)||
-       typeof backup[name]?.user!=="boolean"||typeof backup[name]?.value!=="boolean"||
+     Object.keys(backup).some(name=>!g.targets.includes(name)||
+       typeof backup[name]?.user!=="boolean"||typeof backup[name]?.value!==g.type||
        (backup[name].released!==undefined&&typeof backup[name].released!=="boolean")))
     throw Error("Invalid startup preference backup");
   return backup;
 }
 function trace(event,data){try{window.__nocturneTrace?.(event,data,{flush:true});}catch{}}
-function checkpoint(backup){prefs.setStringPref(BACKUP,JSON.stringify(backup));}
+function checkpoint(g,backup){prefs.setStringPref(g.backup,JSON.stringify(backup));}
 const STARTUP_ERROR_CLASSES=new Set(["Error","TypeError","RangeError","ReferenceError","SyntaxError","URIError","EvalError","AggregateError","DOMException","AbortError","NotAllowedError","InvalidStateError","NotFoundError","NotSupportedError","SecurityError","DataCloneError","NetworkError","TimeoutError","QuotaExceededError","WorkspaceCommandError","NS_ERROR_FAILURE","NS_ERROR_ABORT","NS_ERROR_NOT_AVAILABLE","NS_ERROR_UNEXPECTED","NS_ERROR_NOT_INITIALIZED","NS_ERROR_FILE_NOT_FOUND","NS_ERROR_XPC_BAD_CONVERT_JS"]);
 function startupErrorClass(error){try{const name=error?.name;return typeof name==="string"&&STARTUP_ERROR_CLASSES.has(name)?name:"Error";}catch{return "Error";}}
 
 function persist(){try{prefs.savePrefFile(null);}catch(error){console.warn("[Zen Refined] Could not save startup preferences",startupErrorClass(error));}}
-function apply(){
+function apply(g){
     typeof window!=="undefined"&&window.__nocturneTrace?.("startup-prefs.apply",()=>(null),{sample:1800});
-  const backup=readBackup();let changed=false;
-  for(const name of TARGETS){
+  const backup=readBackup(g);let changed=false;
+  for(const name of g.targets){
     if(disposed)break;
     try{
-      if(prefs.prefIsLocked(name)||prefs.getPrefType(name)!==prefs.PREF_BOOL)continue;
-      if(prefs.getBoolPref(name)===false)continue;
+      if(!available(g,name))continue;
+      if(readValue(g,name)===g.target)continue;
       if(!Object.hasOwn(backup,name)||backup[name].released===true){
-        backup[name]={user:prefs.prefHasUserValue(name),value:prefs.getBoolPref(name)};
-        checkpoint(backup);
+        backup[name]={user:prefs.prefHasUserValue(name),value:readValue(g,name)};
+        checkpoint(g,backup);
       }
       if(disposed)break;
-      prefs.setBoolPref(name,false);changed=true;
+      writeValue(g,name,g.target);changed=true;
     }catch(error){console.warn("[Zen Refined] Startup preference",name,startupErrorClass(error));}
   }
   if(changed)persist();
 }
-function restore(){
+function restore(g){
   trace("startup-prefs.restore",null);
-  const backup=readBackup();let restored=0,skipped=0,failed=0,checkpointFailed=false;
-  for(const name of TARGETS){
+  const backup=readBackup(g);let restored=0,skipped=0,failed=0,checkpointFailed=false;
+  for(const name of g.targets){
     const old=backup[name];if(!old||old.released===true)continue;
     try{
-      if(prefs.prefIsLocked(name)||prefs.getPrefType(name)!==prefs.PREF_BOOL)throw Error("Startup preference unavailable");
+      if(!available(g,name))throw Error("Native preference unavailable");
       // Only a user value written by the mod can still be ours.
-      if(prefs.getBoolPref(name)===false&&prefs.prefHasUserValue(name)){
-        if(old.user)prefs.setBoolPref(name,old.value);else prefs.clearUserPref(name);
+      if(readValue(g,name)===g.target&&prefs.prefHasUserValue(name)){
+        if(old.user)writeValue(g,name,old.value);else prefs.clearUserPref(name);
         restored++;
       }else skipped++;
       old.released=true;
       // Retain progress even when another key or backup deletion fails.
-      try{checkpoint(backup);}catch{checkpointFailed=true;}
+      try{checkpoint(g,backup);}catch{checkpointFailed=true;}
     }catch(error){failed++;console.warn("[Zen Refined] Startup restore",name,startupErrorClass(error));}
   }
   if(Object.keys(backup).length){
     if(!failed){
-      try{prefs.clearUserPref(BACKUP);}
-      catch{failed++;try{checkpoint(backup);}catch{checkpointFailed=true;}}
+      try{prefs.clearUserPref(g.backup);}
+      catch{failed++;try{checkpoint(g,backup);}catch{checkpointFailed=true;}}
     }else{
-      try{checkpoint(backup);}catch{checkpointFailed=true;}
+      try{checkpoint(g,backup);}catch{checkpointFailed=true;}
     }
     persist();
   }
   trace("startup-prefs.restore.result",{restored,skipped,failed,checkpointFailed});
+}
+function traceFullscreenPolicy(){
+  try{trace("fullscreen.motion.policy",{enabled:prefs.getBoolPref(FULLSCREEN_OPTION,true),
+    enterDisabled:available(FULLSCREEN,FULLSCREEN_TARGETS[0])&&readValue(FULLSCREEN,FULLSCREEN_TARGETS[0])===FULLSCREEN.target,
+    leaveDisabled:available(FULLSCREEN,FULLSCREEN_TARGETS[1])&&readValue(FULLSCREEN,FULLSCREEN_TARGETS[1])===FULLSCREEN.target});}catch{}
 }
 function sync(){
   if(disposed)return;
@@ -95,8 +108,12 @@ function sync(){
   try{
     do{
       pendingSync=false;
-      try{if(prefs.getBoolPref(OPTION,true))apply();else restore();}
-      catch(error){trace("startup-prefs.sync.error",{name:startupErrorClass(error)});console.warn("[Zen Refined] Startup preference sync",startupErrorClass(error));}
+      for(const g of GROUPS){
+        if(disposed)break;
+        try{if(prefs.getBoolPref(g.option,true))apply(g);else restore(g);}
+        catch(error){trace("startup-prefs.sync.error",{name:startupErrorClass(error)});console.warn("[Nocturne] Native preference sync",startupErrorClass(error));}
+      }
+      if(!disposed)traceFullscreenPolicy();
     }while(pendingSync&&!disposed);
   }finally{
     mutating=false;
@@ -120,12 +137,16 @@ function otherOwner(){
 }
 function observe(reconcile=false){
   if(disposed||!cleanup.active)return;
-  if(!observing){prefs.addObserver(OPTION,sync);observing=true;}
+  if(!observing){
+    const acquired=[];
+    try{for(const g of GROUPS){prefs.addObserver(g.option,sync);acquired.push(g.option);}observing=true;}
+    catch(error){for(const key of acquired)try{prefs.removeObserver(key,sync);}catch{}throw error;}
+  }
   if(reconcile)sync();
 }
 function stopObserving(){
   if(!observing)return;observing=false;
-  try{prefs.removeObserver(OPTION,sync);}catch{}
+  for(const g of GROUPS)try{prefs.removeObserver(g.option,sync);}catch{}
 }
 function beforeClose(event){
   if(event.target!==window&&event.target!==document)return;
@@ -157,7 +178,7 @@ function finishCleanup(){
       // Keep the last lease published while native restore notifies
       // synchronous observers. New windows join rather than race restore.
       restoring=true;mutating=true;
-      try{restore();}finally{mutating=false;}
+      try{for(const g of GROUPS)try{restore(g);}catch(error){trace("startup-prefs.cleanup.error",{name:startupErrorClass(error)});}}finally{mutating=false;}
     }
   }catch(error){trace("startup-prefs.cleanup.error",{name:startupErrorClass(error)});console.warn("[Zen Refined] Startup ownership cleanup",startupErrorClass(error));}
   finally{

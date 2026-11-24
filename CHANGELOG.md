@@ -1,3 +1,7 @@
+## 0.3.0-preview.193 — Native fullscreen video transition control
+
+Disable Gecko DOM fullscreen enter/leave fades by default using the two existing string preferences (`0 0`). Expose an independent Nocturne toggle and reuse the process-wide native preference owner with a separate typed backup, restoring original user/default values on opt-out or live mod unload. Keep fullscreen warnings and F11 behavior untouched. Native validation pending.
+
 ## 0.3.0-preview.192 — Independent Nocturne motion policy
 
 Replace the OS reduced-motion gates in packaged CSS and runtime admission with one default-on Nocturne preference, `zen.nocturne.motion.enabled`. Preserve existing per-feature choices and their duration controls; supersede the startup-only override without changing its saved value or native accessibility settings. Record the system signal for diagnostics only, separately from the effective mod preference. Restart after changing the global policy; native Zen and operating-system animations remain outside Nocturne ownership. Native acceptance pending.

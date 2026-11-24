@@ -7,6 +7,12 @@
     "restart": true
   },
   {
+    "type": "checkbox",
+    "property": "zen.nocturne.fullscreen.disable-animation",
+    "label": "Disable fullscreen video animation",
+    "defaultValue": true
+  },
+  {
     "type": "dropdown",
     "property": "zen.oneplane.tab-width",
     "label": "Collapsed tab width",
