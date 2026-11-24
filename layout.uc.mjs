@@ -86,7 +86,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.208",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.209",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -2363,10 +2363,11 @@ function acquireZenHome(win, services) {
    these exact tokens. No separate hover/focus frame at the handoff. */
 :root{
   --zh-search-color:var(--toolbox-textcolor,var(--toolbar-color,currentColor));
-  --zh-search-glass:color-mix(in srgb,var(--zh-search-color) 8%,transparent);
-  --zh-search-stroke:color-mix(in srgb,var(--zh-search-color) 14%,transparent);
+  --zh-search-glass:var(--nocturne-home-search-paint,color-mix(in srgb,var(--zh-search-color) 8%,transparent));
+  --zh-search-blur:var(--nocturne-home-search-blur,0px);
+  --zh-search-stroke:var(--nocturne-glass-border,color-mix(in srgb,var(--zh-search-color) 14%,transparent));
   --zh-search-label:color-mix(in srgb,var(--zh-search-color) 76%,transparent);
-  --zh-search-radius:14px;
+  --zh-search-radius:var(--nocturne-glass-radius,14px);
   --zh-search-font:400 14px system-ui,sans-serif;
   --zh-search-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='m16 16 4 4'/%3E%3C/svg%3E");
 }
@@ -2377,13 +2378,15 @@ function acquireZenHome(win, services) {
 #zen-shared-home .zh-search{
   width:100%;height:56px;border:1px solid var(--zh-search-stroke);
   background:var(--zh-search-glass);border-radius:var(--zh-search-radius);
+  backdrop-filter:blur(var(--zh-search-blur));
   transition:none;
 }
 #zen-shared-home .zh-search:hover{background:var(--zh-search-glass)}
 #zen-shared-home .zh-search svg{width:17px;height:17px;flex:none;opacity:1}
 #zen-shared-home .zh-search span{min-width:0;overflow:hidden;text-overflow:ellipsis}
 #zen-shared-home .zh-search:focus-visible{outline-offset:2px}
-@media(prefers-reduced-transparency:reduce){:root{--zh-search-glass:light-dark(#f4f4f8,#252632)}}
+@media(prefers-reduced-transparency:reduce){:root{--zh-search-glass:var(--nocturne-home-search-paint,light-dark(#f4f4f8,#252632));--zh-search-blur:0px}}
+ @media(forced-colors:active){:root{--zh-search-glass:Canvas;--zh-search-blur:0px;--zh-search-stroke:CanvasText}}
 #zen-shared-home .zh-section{margin-block-start:36px}
 #zen-shared-home h3{font-size:13px;font-weight:500;opacity:.68;margin:0 0 14px}
 #zen-shared-home .zh-pins{display:flex;flex-wrap:wrap;justify-content:center;gap:12px}
@@ -2457,8 +2460,8 @@ function acquireZenHome(win, services) {
   --urlbar-background-overhang-open:0px!important;
   --urlbar-input-growth-open-inline:0px!important;
   --urlbar-input-growth-open-block:0px!important;
-  --urlbar-background-border-radius:14px!important;
-  --urlbar-background-border-top-radius-open:14px!important;
+  --urlbar-background-border-radius:var(--zh-search-radius)!important;
+  --urlbar-background-border-top-radius-open:var(--zh-search-radius)!important;
   --urlbar-container-height:var(--zh-search-header,56px)!important;
   --urlbar-margin-inline:0px!important;
   --urlbar-container-padding:0px!important;
@@ -2471,6 +2474,7 @@ function acquireZenHome(win, services) {
   margin:0!important;padding:0!important;box-sizing:border-box!important;
   position-anchor:none!important;position-area:none!important;
   background:var(--zh-glass)!important;border:1px solid var(--zh-stroke)!important;
+  backdrop-filter:blur(var(--zh-search-blur))!important;
   border-radius:var(--zh-search-radius)!important;outline:0!important;box-shadow:none!important;
   overflow:clip!important;clip-path:none!important;transform:none!important;translate:none!important;scale:1!important;
   animation:none!important;transition:none!important;opacity:1!important;
@@ -2478,7 +2482,7 @@ function acquireZenHome(win, services) {
 #urlbar[data-zr-home-search][zen-floating-urlbar="true"] > .urlbar-background,
 #urlbar[data-zr-home-search][zen-floating-urlbar="true"] .urlbarView-background{
   background:transparent!important;border:0!important;outline:0!important;box-shadow:none!important;backdrop-filter:none!important;
-  inset:0!important;margin:0!important;transform:none!important;scale:1!important;border-radius:14px!important;
+  inset:0!important;margin:0!important;transform:none!important;scale:1!important;border-radius:var(--zh-search-radius)!important;
 }
 #urlbar[data-zr-home-search][zen-floating-urlbar="true"] > .urlbar-input-container{
   box-sizing:border-box!important;min-height:calc(var(--zh-search-header,56px) - 2px)!important;height:calc(var(--zh-search-header,56px) - 2px)!important;
@@ -2504,7 +2508,7 @@ function acquireZenHome(win, services) {
 }
 #urlbar[data-zr-home-search][zen-floating-urlbar="true"]:not([searchmode]) #identity-box{display:none!important}
 #urlbar[data-zr-home-search][zen-floating-urlbar="true"] .urlbarView{
-  background:transparent!important;border:0!important;outline:0!important;box-shadow:none!important;border-radius:0 0 14px 14px!important;
+  background:transparent!important;border:0!important;outline:0!important;box-shadow:none!important;border-radius:0 0 var(--zh-search-radius) var(--zh-search-radius)!important;
   flex-shrink:0!important;
 }
 #urlbar[data-zr-home-search][zen-floating-urlbar="true"] #urlbar-results,

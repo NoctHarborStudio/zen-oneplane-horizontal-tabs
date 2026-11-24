@@ -1,3 +1,7 @@
+## 0.3.0-preview.209 — Search material (DS-M7)
+
+Migrate real address and Home Search surfaces to shared Glass tint, opacity, blur and radius with independent inherited opacity/blur overrides. Compact address avoids a second blur over the toolbar; expanded address and Home use the existing live boxes. Retain the address identity occlusion cover during the fluid wave. No timing, geometry algorithm, search lease or native data changes. Top-plane bookmark halo remains open per user feedback; no additional contour changes in this release.
+
 ## 0.3.0-preview.208 — Bookmark center aperture and verified startup
 
 Make the actual center bookmark fold inward from both sides instead of only fading in place; preserve all other conveyor paths and exact reverse frames. Verify effective opacity, translated native rectangles and computed clipping at bounded paused samples; recheck the native bookmark cohort before the common startup epoch and reacquire once if necessary. Preserve existing list fold as a startup-only fallback on rejected child acquisition. No new timer, native-data changes, or changes to tab choreography. Preview.205 diagnostics showed 3 successful startups and 2 closes, but did not establish actual bookmark paint or smoothness. Native visual validation remains open.
