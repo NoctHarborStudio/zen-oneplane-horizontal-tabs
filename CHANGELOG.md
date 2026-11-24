@@ -1,3 +1,7 @@
+## 0.3.0-preview.162 — MB-014 Sine-only early CSS probe
+
+Add an inert, 2000ms fail-open CSS surface scoped to browser.xhtml and Zen's native zen-before-loaded marker; respect existing animation/Boot preferences and reduced motion. The per-window handoff latch is set after the existing Boot node mounts or when startup is skipped/failed; never re-arm after handoff. Log native watermark/marker, Sine CSS presence and CSS-cover state at Prelude/Assembly entry. No profile files, native prefs, background module or Sine loader modifications. This measures the earliest supported package CSS path, not a guarantee of pre-Sine or OS first paint. Native visual verification pending.
+
 ## 0.3.0-preview.161 — Library text motion handoff experiment
 
 User confirms History launcher works and reports a brief change in text sharpness/brightness at the end of Library appearance. Remove panel scale(.97), retain opacity and 8px vertical travel with the existing durations and easing, and use the same translateY(0px) / opacity:1 pose in WAAPI and resting CSS. Existing backdrop filter and UI styling stay unchanged. A bounded opening-settlement diagnostic compares computed opacity/transform on both sides of effect cancellation when diagnostics are enabled; no per-frame reads or private content. Two source regressions cover endpoint invariants and epoch/opt-out sampling. This is a targeted experiment for suspected Gecko raster/compositor handoff, not proof of native visual resolution. Preview.160 parallel window-caption corrections retained.

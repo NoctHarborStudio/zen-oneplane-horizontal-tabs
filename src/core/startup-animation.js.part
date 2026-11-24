@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.161"};
+  const event="assembly.script",data={version:"0.3.0-preview.162"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -45,8 +45,14 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     !prefs.getBoolPref(ENABLE,true)?"disabled":reduced.matches?"reduced-motion":window.closed?"closed":
     root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"?"native-mode":
     !startupEligible(lateStart,check.delayed,check.ready,check.age,window.__nocturneLayoutStartup)?"late-established-window":null;
+  check.nativeBeforeLoaded=root.hasAttribute("zen-before-loaded");check.nativeWatermark=prefs.getBoolPref("zen.watermark.enabled",false);
+  try{if(prefs.getBoolPref("zen.nocturne.diagnostics.enabled",true)){
+    check.sineCSS=window.getComputedStyle(root).getPropertyValue("--nocturne-early-css-present").trim()==="1";
+    const pseudo=window.getComputedStyle(root,"::after");
+    check.cssCover=pseudo.animationName==="nocturne-early-css-expire"&&Number(pseudo.opacity)>0;
+  }}catch{}
   decision("assembly.eligible.check",{...check,reason});
-  if(reason){window.__nocturneEarlyBoot?.cleanup?.();return;}
+  if(reason){root.setAttribute("data-nocturne-early-css-done","true");window.__nocturneEarlyBoot?.cleanup?.();return;}
   window[SEEN]=true;
   // 760 ms is still a supported user choice. Legacy saved defaults and
   // explicit selections cannot be distinguished: never rewrite either.
@@ -119,7 +125,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     }catch(error){decision("assembly.timer.error",{name:assemblyErrorClass(error)});finish("setup-failed");}
   }
   function mountBoot(){
-    if(!prefs.getBoolPref(BOOT_PREF,true)){removeBoot();return;}
+    if(!prefs.getBoolPref(BOOT_PREF,true)){root.setAttribute("data-nocturne-early-css-done","true");removeBoot();return;}
     try{
       // Chrome-only, no network assets, no blur, no page mutation.
       const early=earlyBoot;
@@ -137,6 +143,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       const label=html("div");label.textContent="NOCTURNE";
       Object.assign(label.style,{font:"300 24px system-ui, sans-serif",letterSpacing:"7px",paddingInlineStart:"7px"});
       bootMark.append(svg,label);boot.append(bootMark);if(!early)root.append(boot);
+      root.setAttribute("data-nocturne-early-css-done","true");
       if(dead)return;
       bootOwned=true;root.setAttribute("data-nocturne-boot","waiting");bootAt=now();
       if(dead)return;
@@ -148,7 +155,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       if(dead){try{logo.finished.catch(()=>{});}catch{}try{logo.cancel();}catch{}return;}
       bootEffects.push(logo);logo.finished.catch(()=>{});
       decision("boot.show",{age:bootAt-started,adopted:!!early,backgroundAt:early?.at??bootAt,lead,minimum:BOOT_MIN,exit:BOOT_EXIT});
-    }catch(error){removeBoot();decision("boot.error",{name:assemblyErrorClass(error)});}
+    }catch(error){try{root.setAttribute("data-nocturne-early-css-done","true");}catch{}removeBoot();decision("boot.error",{name:assemblyErrorClass(error)});}
   }
   function removeBoot(){
     let failed=0;

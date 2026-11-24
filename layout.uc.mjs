@@ -10,7 +10,9 @@
      typeof win.addUnloadListener!=="function"||win.closed||root.hasAttribute("popup-window")||
      root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"||
      win.performance.now()>=3500||!prefs.getBoolPref("zen.refined.startup.animation",true)||
-     !prefs.getBoolPref("zen.nocturne.boot.enabled",true)||win.matchMedia("(prefers-reduced-motion: reduce)").matches)return;
+     !prefs.getBoolPref("zen.nocturne.boot.enabled",true)||win.matchMedia("(prefers-reduced-motion: reduce)").matches){
+    root.setAttribute("data-nocturne-early-css-done","true");return;
+  }
   let node=null,timer=0,claimed=false,cleaned=false,phaseOwned=false,bootOwned=false;
   const oldPhase=root.getAttribute(PHASE),oldBoot=root.getAttribute(BOOT);
   const restore=(key,value)=>{if(value===null)root.removeAttribute(key);else root.setAttribute(key,value);};
@@ -38,6 +40,12 @@
     // The orphan cover's budget has expired. A late Assembly must not replay.
     win.__zenRefinedStartupAnimationSeen=true;cleanup();
   }
+  const probe={nativeBeforeLoaded:root.hasAttribute("zen-before-loaded"),nativeWatermark:prefs.getBoolPref("zen.watermark.enabled",false)};
+  try{if(prefs.getBoolPref("zen.nocturne.diagnostics.enabled",true)){
+    probe.sineCSS=win.getComputedStyle(root).getPropertyValue("--nocturne-early-css-present").trim()==="1";
+    const pseudo=win.getComputedStyle(root,"::after");
+    probe.cssCover=pseudo.animationName==="nocturne-early-css-expire"&&Number(pseudo.opacity)>0;
+  }}catch{}
   try{
     node=document.createElementNS("http://www.w3.org/1999/xhtml","div");
     node.id="nocturne-boot";node.setAttribute("aria-hidden","true");node.inert=true;
@@ -45,22 +53,23 @@
     node.style.setProperty("-moz-window-dragging","default","important");
     record.node=node;record.at=win.performance.now();record.deadline=record.at+8000;win[KEY]=record;
     root.append(node);
+    root.setAttribute("data-nocturne-early-css-done","true");
     if(cleaned||claimed||win[KEY]!==record)return;
     bootOwned=true;root.setAttribute(BOOT,"waiting");
     if(cleaned||claimed||win[KEY]!==record)return;
     phaseOwned=true;root.setAttribute(PHASE,"waiting");
     if(cleaned||claimed||win[KEY]!==record)return;
-    const data={age:record.at,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished};
+    const data={age:record.at,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished,...probe};
     if(win.__nocturneTrace)win.__nocturneTrace("boot.prelude",data,{sample:1800});
     else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"boot.prelude",t:record.at,data});}
     if(cleaned||claimed||win[KEY]!==record)return;
     timer=win.setTimeout(expire,Math.max(0,record.deadline-win.performance.now()));win.addUnloadListener(cleanup);
-  }catch{cleanup();}
+  }catch{try{root.setAttribute("data-nocturne-early-css-done","true");}catch{}cleanup();}
 })();
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.161",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.162",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);

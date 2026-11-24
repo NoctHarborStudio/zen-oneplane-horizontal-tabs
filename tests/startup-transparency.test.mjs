@@ -635,3 +635,20 @@ test("startup geometry rejection releases startup rather than acquiring effects"
  for(const mode of ["ready","legacy","native"])assert.deepEqual(run(mode),["effects"],mode);
  assert.deepEqual(run("disposed"),[]);
 });
+
+
+test("MB-014 early CSS is scoped, inert, bounded and hands off only once",()=>{
+ const pre=readFileSync(new URL("../src/core/boot-prelude.js.part",import.meta.url),"utf8");
+ const base=readFileSync(new URL("../src/styles/base.css.part",import.meta.url),"utf8");
+ assert.ok(css.startsWith(base));
+ const rule=base.slice(0,base.indexOf("/* Registered once"));
+ for(const token of ['url("chrome://browser/content/browser.xhtml")','[zen-before-loaded="true"]','[data-nocturne-early-css-done]','[data-nocturne-boot]','[popup-window]','prefers-reduced-motion: no-preference','zen.refined.startup.animation','zen.nocturne.boot.enabled','pointer-events: none','2000ms steps(1, end) forwards','to { opacity: 0; }'])assert.ok(rule.includes(token),token);
+ const attrs=new Map([["zen-before-loaded","true"]]);const log=[];
+ const node={isConnected:false,style:{setProperty(){}},setAttribute(){},remove(){this.isConnected=false;}};
+ const root={hasAttribute:k=>attrs.has(k),getAttribute:k=>attrs.get(k)??null,setAttribute(k,v){attrs.set(k,v);log.push(k);},removeAttribute:k=>attrs.delete(k),append(n){n.isConnected=true;log.push("append");}};
+ let timer;const win={performance:{now:()=>10},matchMedia:()=>({matches:false}),setTimeout(fn){timer=fn;return 1;},clearTimeout(){},addUnloadListener(){},getComputedStyle(n,pseudo){return pseudo?{animationName:"nocturne-early-css-expire",opacity:"1"}:{getPropertyValue:()=>"1"};}};
+ const run=new Function("window","document","Services",pre);const doc={documentElement:root,createElementNS:()=>node};const services={prefs:{getBoolPref:()=>true}};
+ run(win,doc,services);assert.ok(log.indexOf("append")<log.indexOf("data-nocturne-early-css-done"));assert.equal(win.__nocturneEarlyTrace[0].data.cssCover,true);
+ timer();assert.equal(node.isConnected,false);assert.equal(attrs.get("data-nocturne-early-css-done"),"true");run(win,doc,services);assert.equal(node.isConnected,false);
+ assert.ok(source.includes('bootMark.append(svg,label);boot.append(bootMark);if(!early)root.append(boot);\n      root.setAttribute("data-nocturne-early-css-done","true");'));
+});
