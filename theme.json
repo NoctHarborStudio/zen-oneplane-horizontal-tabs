@@ -1,7 +1,7 @@
 {
   "id": "8b2e214c-e1ba-4b81-9fbf-e08161bf2da4",
   "name": "Nocturne",
-  "description": "A unified Zen Browser UI: OnePlane horizontal tabs, Home, Hub, Smart Search, Magnetic Bookmarks, Downloads Dock, Page Progress and coordinated motion.",
+  "description": "A unified Zen Browser UI with horizontal tabs, Home, Hub, Smart Search, Magnetic Bookmarks, Downloads, Library and motion. Requires JavaScript for unofficial mods in Sine. Development preview: full restoration of native browser behavior after uninstall is not guaranteed.",
   "homepage": "https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/tree/preview",
   "author": "NoctHarborStudio",
   "version": "0.3.0-preview.195",
