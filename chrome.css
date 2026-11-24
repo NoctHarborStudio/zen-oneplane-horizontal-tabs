@@ -7,7 +7,7 @@
   @keyframes nocturne-empty-sidebar-guard {
     from, to { clip-path: inset(50%); }
   }
-  @media (prefers-reduced-motion: no-preference) and (-moz-pref("zen.refined.startup.animation")) and (-moz-pref("zen.nocturne.boot.enabled")) {
+  @media (prefers-reduced-motion: no-preference) and (not (-moz-pref("zen.refined.startup.animation", false))) and (not (-moz-pref("zen.nocturne.boot.enabled", false))) {
     :root[zen-compact-mode="true"][zen-has-empty-tab="true"]:not([customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window], [zen-welcome-stage], [chromehidden]:not([chromehidden=""]), [privatebrowsingmode]:not([privatebrowsingmode="false"])):not([oneplane-active="true"]:has(#nav-bar-customization-target > #oneplane-tabs[data-ready="true"]))
       #navigator-toolbox[zen-has-empty-tab]:not([zen-user-show], [zen-has-hover], [has-popup-menu], [movingtab], [flash-popup], [zen-compact-mode-active], [animate="true"]) {
       animation: nocturne-empty-sidebar-guard 2000ms linear 1 normal none !important;
@@ -25,7 +25,7 @@
   @keyframes nocturne-startup-grain-guard {
     from, to { opacity: 0; }
   }
-  @media (prefers-reduced-motion: no-preference) and (-moz-pref("zen.refined.startup.animation")) and (-moz-pref("zen.nocturne.boot.enabled")) {
+  @media (prefers-reduced-motion: no-preference) and (not (-moz-pref("zen.refined.startup.animation", false))) and (not (-moz-pref("zen.nocturne.boot.enabled", false))) {
     :root:is([zen-before-loaded="true"], [zen-has-empty-tab="true"]):not([data-nocturne-startup-background-done], [data-op-startup-ready="true"], [customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window], [zen-welcome-stage], [zen-private-window="true"], [zen-unsynced-window="true"], [chromehidden]:not([chromehidden=""]), [privatebrowsingmode]:not([privatebrowsingmode="false"])) {
       #zen-browser-background::after {
         animation: nocturne-startup-background-guard 2000ms linear 1 normal none !important;

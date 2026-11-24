@@ -683,3 +683,18 @@ test("MB-014 native background guard matches Boot color and fails open without J
  assert.match(source,/if\(reason\)\{root.setAttribute\("data-nocturne-startup-background-done","true"\)/);
  assert.match(source,/const fade=overlay.animate\(\[\{opacity:1\},\{opacity:0\}\]/);
 });
+
+test("fresh Sine profile leaves optional defaults absent but startup CSS honors JavaScript true fallbacks",()=>{
+  const sourceCSS=readFileSync(new URL("../src/styles/base.css.part",import.meta.url),"utf8");
+  const gate='@media (prefers-reduced-motion: no-preference) and (not (-moz-pref("zen.refined.startup.animation", false))) and (not (-moz-pref("zen.nocturne.boot.enabled", false)))';
+  for(const data of [sourceCSS,css]){
+    assert.equal(data.split(gate).length-1,2);
+    assert.equal(data.includes('and (-moz-pref("zen.refined.startup.animation")) and (-moz-pref("zen.nocturne.boot.enabled"))'),false);
+  }
+  const configured=JSON.parse(readFileSync(new URL("../preferences.json",import.meta.url),"utf8"));
+  for(const key of ["zen.refined.startup.animation","zen.nocturne.boot.enabled"])
+    assert.equal(configured.find(x=>x.property===key)?.defaultValue,true);
+  const prelude=readFileSync(new URL("../src/core/boot-prelude.js.part",import.meta.url),"utf8");
+  assert.ok(prelude.includes('prefs.getBoolPref("zen.refined.startup.animation",true)'));
+  assert.ok(prelude.includes('prefs.getBoolPref("zen.nocturne.boot.enabled",true)'));
+});
