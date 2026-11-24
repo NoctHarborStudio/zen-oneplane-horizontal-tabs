@@ -49,7 +49,7 @@ def version(value):
     return tuple(map(int, match.groups()))
 
 def package_paths(manifest):
-    paths = ["theme.json", manifest["style"]["chrome"], manifest["preferences"], *manifest.get("scripts", {})]
+    paths = ["theme.json", manifest["style"]["chrome"], *([manifest["style"]["content"]] if "content" in manifest["style"] else []), manifest["preferences"], *manifest.get("scripts", {})]
     require(len(paths) == len(set(paths)), "Duplicate installed package path")
     for name in paths:
         require(isinstance(name, str) and name and "\\" not in name and ":" not in name

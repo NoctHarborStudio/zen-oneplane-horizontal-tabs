@@ -1,24 +1,3 @@
-/* MB-014 experiment: only while Zen's native startup marker is present.
-   Sine may install this sheet too late; never re-cover a settled window.
-   CSS timeout is independent of the scripts, and the surface is inert. */
-@-moz-document url("chrome://browser/content/browser.xhtml") {
-  :root { --nocturne-early-css-present: 1; }
-  @media (prefers-reduced-motion: no-preference) and (-moz-pref("zen.refined.startup.animation")) and (-moz-pref("zen.nocturne.boot.enabled")) {
-    :root[zen-before-loaded="true"]:not([data-nocturne-early-css-done], [data-nocturne-boot], [data-op-startup-ready="true"], [oneplane-active="true"], [popup-window], [customizing], [inDOMFullscreen="true"], [inFullscreen="true"])::after {
-      content: "" !important;
-      position: fixed !important;
-      inset: 0 !important;
-      z-index: 2147483647 !important;
-      background: #111219 !important;
-      pointer-events: none !important;
-      animation: nocturne-early-css-expire 2000ms steps(1, end) forwards !important;
-    }
-  }
-  @keyframes nocturne-early-css-expire {
-    from { opacity: 1; }
-    to { opacity: 0; }
-  }
-}
 /* Registered once by the stylesheet. Native WAAPI can interpolate
    selection opacity without a script callback on every display frame. */
 @property --op-url-selection-alpha {

@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.165"};
+  const event="assembly.script",data={version:"0.3.0-preview.166"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -47,9 +47,9 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     !startupEligible(lateStart,check.delayed,check.ready,check.age,window.__nocturneLayoutStartup)?"late-established-window":null;
   check.nativeBeforeLoaded=root.hasAttribute("zen-before-loaded");check.nativeWatermark=prefs.getBoolPref("zen.watermark.enabled",false);
   try{if(prefs.getBoolPref("zen.nocturne.diagnostics.enabled",true)){
-    check.sineCSS=window.getComputedStyle(root).getPropertyValue("--nocturne-early-css-present").trim()==="1";
-    const pseudo=window.getComputedStyle(root,"::after");
-    check.cssCover=pseudo.animationName==="nocturne-early-css-expire"&&Number(pseudo.opacity)>0;
+    check.globalCSS=window.getComputedStyle(root).getPropertyValue("--nocturne-early-global-css").trim()==="1";
+    const body=document.body&&window.getComputedStyle(document.body);
+    check.cssHidden=!!body&&body.animationName==="nocturne-early-native-hide"&&Number(body.opacity)===0;
   }}catch{}
   decision("assembly.eligible.check",{...check,reason});
   if(reason){root.setAttribute("data-nocturne-early-css-done","true");window.__nocturneEarlyBoot?.cleanup?.();return;}

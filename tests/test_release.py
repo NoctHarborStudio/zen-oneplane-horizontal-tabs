@@ -139,6 +139,20 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.check()
 
+    def test_optional_content_stylesheet_is_an_installed_file(self):
+        self.metadata(2)
+        manifest = json.loads((self.root / "theme.json").read_text())
+        manifest["style"]["content"] = "early-startup.css"
+        self.write("theme.json", json.dumps(manifest))
+        self.write("early-startup.css", "a{}")
+        self.commit("content publication")
+        self.check(self.first)
+        self.assertIn("early-startup.css", release.package_paths(manifest))
+        self.write("early-startup.css", "b{}")
+        self.commit("unversioned content change")
+        with self.assertRaisesRegex(ValueError, "Version must exceed"):
+            self.check()
+
     def test_dirty_installed_file_and_package_version_rejected(self):
         self.write("chrome.css", "dirty")
         with self.assertRaisesRegex(ValueError, "Working package differs"):

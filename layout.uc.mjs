@@ -42,9 +42,9 @@
   }
   const probe={nativeBeforeLoaded:root.hasAttribute("zen-before-loaded"),nativeWatermark:prefs.getBoolPref("zen.watermark.enabled",false)};
   try{if(prefs.getBoolPref("zen.nocturne.diagnostics.enabled",true)){
-    probe.sineCSS=win.getComputedStyle(root).getPropertyValue("--nocturne-early-css-present").trim()==="1";
-    const pseudo=win.getComputedStyle(root,"::after");
-    probe.cssCover=pseudo.animationName==="nocturne-early-css-expire"&&Number(pseudo.opacity)>0;
+    probe.globalCSS=win.getComputedStyle(root).getPropertyValue("--nocturne-early-global-css").trim()==="1";
+    const body=document.body&&win.getComputedStyle(document.body);
+    probe.cssHidden=!!body&&body.animationName==="nocturne-early-native-hide"&&Number(body.opacity)===0;
   }}catch{}
   try{
     node=document.createElementNS("http://www.w3.org/1999/xhtml","div");
@@ -69,7 +69,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.165",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.166",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
