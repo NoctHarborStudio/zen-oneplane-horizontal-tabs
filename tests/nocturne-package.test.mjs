@@ -13,9 +13,9 @@ test("Nocturne retains Sine identity and one entry per runtime owner",()=>{
 });
 test("Nocturne includes each preserved preference exactly once",()=>{
  const prefs=JSON.parse(read("preferences.json"));
- assert.equal(prefs.length,45);
+ assert.equal(prefs.length,47);
  assert.equal(new Set(prefs.map(p=>p.property)).size,prefs.length);
- assert.deepEqual(prefs.map(p=>p.property).sort(),["widget.transparent-windows","widget.windows.mica","widget.windows.mica.toplevel-backdrop","zen.nocturne.boot.enabled","zen.nocturne.diagnostics.enabled","zen.nocturne.home.transparent","zen.nocturne.library.downloads-shortcut","zen.nocturne.library.history-shortcut","zen.nocturne.library.local-media","zen.nocturne.library.preview","zen.nocturne.startup.force-motion","zen.oneplane.address-diagnostics","zen.oneplane.address-width","zen.oneplane.animation-duration","zen.oneplane.expanded-tab-width","zen.oneplane.experimental-display-snap","zen.oneplane.fade-curve","zen.oneplane.fade-hold","zen.oneplane.fade-length","zen.oneplane.fade-padding","zen.oneplane.fade-radius","zen.oneplane.fade-strength","zen.oneplane.fade-transparency","zen.oneplane.hover-close-delay","zen.oneplane.hover-mode","zen.oneplane.show-center-island","zen.oneplane.tab-indicator","zen.oneplane.tab-width","zen.refined.bookmarks.duration","zen.refined.bookmarks.enabled","zen.refined.bookmarks.glow","zen.refined.bookmarks.indicator","zen.refined.bookmarks.scale","zen.refined.bookmarks.stable-background","zen.refined.closing.animation","zen.refined.downloads.indicator","zen.refined.downloads.statistics","zen.refined.page-progress.enabled","zen.refined.smart-search.enabled","zen.refined.startup.animation","zen.refined.startup.animation-duration","zen.refined.startup.disable-placeholders","zen.refined.workspace.transition","zen.widget.linux.transparency","zen.widget.macos.window-vibrancy"]);
+ assert.deepEqual(prefs.map(p=>p.property).sort(),["widget.transparent-windows","widget.windows.mica","widget.windows.mica.toplevel-backdrop","zen.nocturne.boot.enabled","zen.nocturne.diagnostics.enabled","zen.nocturne.home.direct-alpha","zen.nocturne.home.tint-opacity","zen.nocturne.home.transparent","zen.nocturne.library.downloads-shortcut","zen.nocturne.library.history-shortcut","zen.nocturne.library.local-media","zen.nocturne.library.preview","zen.nocturne.startup.force-motion","zen.oneplane.address-diagnostics","zen.oneplane.address-width","zen.oneplane.animation-duration","zen.oneplane.expanded-tab-width","zen.oneplane.experimental-display-snap","zen.oneplane.fade-curve","zen.oneplane.fade-hold","zen.oneplane.fade-length","zen.oneplane.fade-padding","zen.oneplane.fade-radius","zen.oneplane.fade-strength","zen.oneplane.fade-transparency","zen.oneplane.hover-close-delay","zen.oneplane.hover-mode","zen.oneplane.show-center-island","zen.oneplane.tab-indicator","zen.oneplane.tab-width","zen.refined.bookmarks.duration","zen.refined.bookmarks.enabled","zen.refined.bookmarks.glow","zen.refined.bookmarks.indicator","zen.refined.bookmarks.scale","zen.refined.bookmarks.stable-background","zen.refined.closing.animation","zen.refined.downloads.indicator","zen.refined.downloads.statistics","zen.refined.page-progress.enabled","zen.refined.smart-search.enabled","zen.refined.startup.animation","zen.refined.startup.animation-duration","zen.refined.startup.disable-placeholders","zen.refined.workspace.transition","zen.widget.linux.transparency","zen.widget.macos.window-vibrancy"]);
 });
 test("Nocturne builds one bookmark stylesheet and one Refined feature stylesheet",()=>{
  const css=read("chrome.css");
@@ -49,4 +49,16 @@ test("Startup and transparency settings expose real native prefs without silentl
  for(const key of ["widget.transparent-windows","widget.windows.mica","zen.widget.macos.window-vibrancy","zen.widget.linux.transparency"]){assert.equal(get(key).type,"checkbox");assert.equal(Object.hasOwn(get(key),"defaultValue"),false);assert.equal(get(key).restart,true);}
  assert.equal(get("widget.windows.mica.toplevel-backdrop").defaultValue,2);
  assert.match(read("src/home/shared-home.js.part"),/-moz-pref\("zen.nocturne.home.transparent", false\)/);
+});
+
+test("experimental direct alpha keeps native backing changes scoped to visible normal Home",()=>{
+ const list=JSON.parse(read("preferences.json")),get=k=>list.find(x=>x.property===k);
+ assert.equal(get("zen.nocturne.home.direct-alpha").defaultValue,false);
+ assert.equal(get("zen.nocturne.home.tint-opacity").defaultValue,65);
+ assert.deepEqual(get("zen.nocturne.home.tint-opacity").options.map(x=>x.value),[0,25,45,65,85,100]);
+ const source=read("src/styles/base.css.part");
+ const block=source.slice(source.indexOf("/* Experimental Home-only direct alpha:"),source.indexOf("/* OnePlane — native toolbar tab view."));
+ for(const fragment of ['(-moz-platform: windows)','(forced-colors: none)','(-moz-pref("widget.transparent-windows"))','(not (-moz-pref("widget.windows.mica")))','(not (-moz-pref("zen.nocturne.home.transparent", false)))','[oneplane-active="true"]',':has(#zen-tabbox-wrapper[data-zr-home-host] > #zen-shared-home:not([hidden]))','[zen-private-window="true"]','[inDOMFullscreen="true"]','opacity: var(--nocturne-home-tint-opacity) !important','--nocturne-home-tint-opacity: .65'])assert.ok(block.includes(fragment),fragment);
+ assert.doesNotMatch(block,/backdrop-filter|pointer-events:|position:|z-index:|transform:|transition:|display:|visibility:/);
+ assert.ok(read("chrome.css").includes(block));
 });

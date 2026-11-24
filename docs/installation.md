@@ -31,3 +31,7 @@ The current preview is not a stable release. Source tests and CI are not a subst
 ## Layout backup and script permission
 
 The `zen.oneplane.original-layout` preference is an internal backup, created automatically. It is not a switch and should not be removed while the mod is active. No manual layout preparation or Nebula edits are required. Sine's global permission for unpublished JavaScript mods remains an explicit user choice; the mod does not modify it. A future marketplace submission may allow Sine to treat Nocturne as a store-origin script instead.
+
+## Experimental Windows Home direct alpha (preview.189)
+
+In Nocturne preferences enable **Home — transparent surface**, **Native window transparency**, and **Home — direct window alpha without Acrylic**. Disable **Windows Mica / Acrylic backdrop** in the same settings, set **Home — direct alpha tint opacity** (default 65%), and fully restart Zen. Test with Windows Transparency effects already disabled, then change the tint and leave/reopen Home. The candidate clears native chrome backing only while normal Home is visible and fades Zen's existing background as one layer. Fullscreen, private, popup, forced-colors and ordinary page views retain native styles. This is not a guarantee of window alpha support or Desktop Acrylic blur. No Windows registry modification or desktop capture. To revert, disable direct alpha and restore the previous native Mica choice. Native verification required.

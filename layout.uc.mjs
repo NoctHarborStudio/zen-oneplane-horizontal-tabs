@@ -93,7 +93,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.188",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.189",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -575,7 +575,7 @@
       if(type==="unload")requestDispose(true);
     });
     bindNative();observeTargets();
-    record("diagnostics.ready",()=>({version:VERSION,writer:writerMode,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished,size:[win.innerWidth,win.innerHeight],private:privateWindow(),reducedMotion:!!win.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches,reducedTransparency:!!win.matchMedia?.("(prefers-reduced-transparency: reduce)")?.matches,forceMotion:Services.prefs.getBoolPref("zen.nocturne.startup.force-motion",false),homeTransparent:Services.prefs.getBoolPref("zen.nocturne.home.transparent",true),nativeMica:!!win.matchMedia?.("(-moz-windows-mica)")?.matches,windowTransparency:Services.prefs.getBoolPref("widget.transparent-windows",false),windowsMica:Services.prefs.getBoolPref("widget.windows.mica",false),linuxTransparency:Services.prefs.getBoolPref("zen.widget.linux.transparency",false),macVibrancy:Services.prefs.getBoolPref("zen.widget.macos.window-vibrancy",false)}),{sample:6000,flush:true});
+    record("diagnostics.ready",()=>({version:VERSION,writer:writerMode,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished,size:[win.innerWidth,win.innerHeight],private:privateWindow(),reducedMotion:!!win.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches,reducedTransparency:!!win.matchMedia?.("(prefers-reduced-transparency: reduce)")?.matches,forceMotion:Services.prefs.getBoolPref("zen.nocturne.startup.force-motion",false),homeTransparent:Services.prefs.getBoolPref("zen.nocturne.home.transparent",true),directAlpha:Services.prefs.getBoolPref("zen.nocturne.home.direct-alpha",false),homeTintOpacity:Services.prefs.getIntPref("zen.nocturne.home.tint-opacity",65),nativeMica:!!win.matchMedia?.("(-moz-windows-mica)")?.matches,windowTransparency:Services.prefs.getBoolPref("widget.transparent-windows",false),windowsMica:Services.prefs.getBoolPref("widget.windows.mica",false),linuxTransparency:Services.prefs.getBoolPref("zen.widget.linux.transparency",false),macVibrancy:Services.prefs.getBoolPref("zen.widget.macos.window-vibrancy",false)}),{sample:6000,flush:true});
     const early=win.__nocturneEarlyTrace||[];delete win.__nocturneEarlyTrace;
     for(const item of early)record(item.event,()=>({earlyAt:item.t,...item.data}),{sample:2000});
   }catch(error){record("diagnostics.setup-error",{name:error?.name});dispose();}

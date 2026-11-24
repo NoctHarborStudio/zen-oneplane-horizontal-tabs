@@ -49,6 +49,32 @@
   inherits: false;
   initial-value: 0;
 }
+/* Experimental Home-only direct alpha: clear native opaque chrome backing,
+   retain the original Zen gradient/grain as a single adjustable tint.
+   Requires an alpha-capable Gecko widget with the Mica pref off.
+   Not desktop blur or a compositor capability guarantee; no desktop capture. */
+@-moz-document url("chrome://browser/content/browser.xhtml") {
+  @media (-moz-platform: windows) and (forced-colors: none) and (-moz-pref("zen.nocturne.home.direct-alpha")) and (not (-moz-pref("zen.nocturne.home.transparent", false))) and (-moz-pref("widget.transparent-windows")) and (not (-moz-pref("widget.windows.mica"))) {
+    :root[oneplane-active="true"]:not([customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window], [zen-before-loaded="true"], [zen-welcome-stage], [zen-private-window="true"], [zen-unsynced-window="true"], [privatebrowsingmode]:not([privatebrowsingmode="false"])):has(#zen-tabbox-wrapper[data-zr-home-host] > #zen-shared-home:not([hidden])) {
+      --nocturne-home-alpha-active: 1;
+      --nocturne-home-tint-opacity: .65;
+      @media (-moz-pref("zen.nocturne.home.tint-opacity", 0)) { --nocturne-home-tint-opacity: 0; }
+      @media (-moz-pref("zen.nocturne.home.tint-opacity", 25)) { --nocturne-home-tint-opacity: 0.25; }
+      @media (-moz-pref("zen.nocturne.home.tint-opacity", 45)) { --nocturne-home-tint-opacity: 0.45; }
+      @media (-moz-pref("zen.nocturne.home.tint-opacity", 85)) { --nocturne-home-tint-opacity: 0.85; }
+      @media (-moz-pref("zen.nocturne.home.tint-opacity", 100)) { --nocturne-home-tint-opacity: 1; }
+      appearance: none !important;
+      background: transparent !important;
+      --zen-themed-toolbar-bg-transparent: transparent !important;
+      & :is(body, #zen-main-app-wrapper, #browser, #appcontent, #zen-tabbox-wrapper, #tabbrowser-tabbox) {
+        background: transparent !important;
+      }
+      & #zen-browser-background {
+        opacity: var(--nocturne-home-tint-opacity) !important;
+      }
+    }
+  }
+}
 /* OnePlane — native toolbar tab view. No fixed-position overlay. */
  #oneplane-compact-search, #oneplane-hub-button, #oneplane-history-button, #oneplane-download-indicator-slot, #oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss, #oneplane-center-start, #oneplane-center-end, #oneplane-toolbar-surface, #oneplane-split-drop { display: none !important; }
 @media (min-width: 0px) {

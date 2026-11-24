@@ -155,6 +155,54 @@
   },
   {
     "type": "checkbox",
+    "property": "zen.nocturne.home.direct-alpha",
+    "label": "Home — direct window alpha without Acrylic (experimental; disable Mica)",
+    "defaultValue": false,
+    "disabledOn": [
+      "linux",
+      "macos"
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.home.tint-opacity",
+    "label": "Home — direct alpha tint opacity",
+    "value": "number",
+    "defaultValue": 65,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "0%",
+        "value": 0
+      },
+      {
+        "label": "25%",
+        "value": 25
+      },
+      {
+        "label": "45%",
+        "value": 45
+      },
+      {
+        "label": "65%",
+        "value": 65
+      },
+      {
+        "label": "85%",
+        "value": 85
+      },
+      {
+        "label": "100%",
+        "value": 100
+      }
+    ],
+    "disabledOn": [
+      "linux",
+      "macos"
+    ]
+  },
+  {
+    "type": "checkbox",
     "property": "widget.transparent-windows",
     "label": "Native window transparency (restart required)",
     "restart": true
