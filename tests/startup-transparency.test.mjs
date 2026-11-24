@@ -669,8 +669,8 @@ test("MB-014 native background guard matches Boot color and fails open without J
  assert.ok(guard.includes(":not([data-nocturne-startup-background-done],"));
  for(const flag of ["data-op-startup-ready","customizing","inDOMFullscreen","inFullscreen","popup-window","zen-welcome-stage","zen-private-window","zen-unsynced-window","chromehidden","privatebrowsingmode"])assert.ok(guard.includes("["+flag),flag);
  assert.ok(guard.includes("prefers-reduced-motion: no-preference"));
- assert.ok(guard.includes('-moz-pref("zen.nocturne.boot.enabled")'));
- assert.ok(guard.includes('-moz-pref("zen.refined.startup.animation")'));
+ assert.ok(guard.includes('not (-moz-pref("zen.nocturne.boot.enabled", false))'));
+ assert.ok(guard.includes('not (-moz-pref("zen.refined.startup.animation", false))'));
  assert.match(guard,/from, to \{ background-color: #111219; background-image: none; opacity: 1; \}/);
  assert.match(guard,/#zen-browser-background::after\s*\{\s*animation: nocturne-startup-background-guard 2000ms linear 1 normal none !important;/);
  assert.match(guard,/#zen-browser-background > \.zen-browser-grain\s*\{\s*animation: nocturne-startup-grain-guard 2000ms linear 1 normal none !important;/);

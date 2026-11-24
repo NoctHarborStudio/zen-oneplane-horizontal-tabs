@@ -1,8 +1,12 @@
-## 0.3.0-preview.185 — Fresh-install startup CSS default parity
+## 0.3.0-preview.186 — CI closure for fresh-install CSS parity
+
+Retain the first-run startup CSS fallback alignment from preview.185. Update the existing MB-014 regression assertions to recognize the explicit-false media queries and synchronize the pinned Magnetic Bookmarks diagnostic-version provenance without changing its functional behavior. Native first-paint and affected clean-profile feature behavior still need real Zen/Sine verification.
+
+## 0.3.0-preview.186 — Fresh-install startup CSS default parity
 
 Sine 2.3.3 does not materialize all preference defaults during installation. Align the two early chrome CSS safeguards with the same true-by-default startup options used by the Boot prelude, including on clean profiles with absent user preferences. Explicit false, reduced-motion and fail-open conditions remain effective; no global preference writes. Add a regression for source/generated CSS and document fresh-install feature gates (Library and shortcuts intentionally opt-in). CI/source checks cannot certify native first paint or explain other unreported feature failures.
 
-## 0.3.0-preview.185 — Experimental branded close finale
+## 0.3.0-preview.186 — Experimental branded close finale
 
 Keep the approved Home exit and existing native close gate. After the folds, crossfade into the existing Nocturne brand background (320ms), reveal the shared Boot logo (460ms), then animate chrome-root opacity to zero (500ms) before the existing 110ms sealed dwell. This is an experiment with Gecko document compositing, not proof of OS-window transparency. No native API, system preference or session changes. Restore all visual leases if a modal prompt opens or native close returns without closing; bounded recovery during native delegation. Native visual validation pending.
 
