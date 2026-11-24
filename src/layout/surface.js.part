@@ -15,12 +15,15 @@
   const surface = html("div");
   surface.id = "oneplane-toolbar-surface";
   surface.setAttribute("aria-hidden", "true");
+  // Shape selection is fixed for this Layout lease (restart to change).
+  if(!prefs.getBoolPref("zen.nocturne.material.legacy-toolbar",false))
+    surface.setAttribute("data-op-material-flat","");
   // A real element, not a native theme pseudo-element. Keep the background
   // behind the controls and above the web surface without receiving input.
   for (const [name, value] of Object.entries({
     position: "absolute", top: "0", left: "0", right: "0",
     "pointer-events": "none", "z-index": "0",
-    "background-color": "var(--op-surface-tint, rgba(21, 23, 30, .34))"
+    "background-color": "var(--op-surface-paint, var(--op-surface-tint, rgba(21, 23, 30, .34)))"
   })) surface.style.setProperty(name, value, "important");
   // Unified Contour: composite the solid silhouette and vertical ramp
   // into ONE alpha mask. Applying opacity to their union prevents the

@@ -1,7 +1,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.205",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.206",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -354,7 +354,9 @@
     let anim=[];try{anim=n.getAnimations().slice(0,6).map(a=>({state:a.playState,t:round(Number(a.currentTime)),duration:round(Number(a.effect?.getTiming()?.duration)),type:a.constructor?.name}));}catch{}
     const mask=n.style?.getPropertyValue("--op-contour-mask")||"",bm=n.style?.getPropertyValue("--zr-bm-contour-mask")||"";
     const hash=x=>{let h=0;for(let i=0;i<x.length;i++)h=(Math.imul(h,31)+x.charCodeAt(i))|0;return x.length?x.length+":"+h:null;};
-    return {rect:[round(r.left),round(r.top),round(r.width),round(r.height)],opacity:s.opacity,visibility:s.visibility,display:s.display,translate:s.translate,scale:s.scale,transform:s.transform,transition:s.transitionProperty,height:s.height,width:s.width,margin:[s.marginInlineStart,s.marginInlineEnd],hoverProgress:s.getPropertyValue("--op-hover-progress").trim()||null,
+    const material=n.id==="oneplane-toolbar-surface"?{materialFlat:n.hasAttribute("data-op-material-flat"),
+      materialOpacity:parseFloat(s.getPropertyValue("--nocturne-surface-opacity")),materialBlur:parseFloat(s.getPropertyValue("--nocturne-surface-blur"))}:{};
+    return {...material,rect:[round(r.left),round(r.top),round(r.width),round(r.height)],opacity:s.opacity,visibility:s.visibility,display:s.display,translate:s.translate,scale:s.scale,transform:s.transform,transition:s.transitionProperty,height:s.height,width:s.width,margin:[s.marginInlineStart,s.marginInlineEnd],hoverProgress:s.getPropertyValue("--op-hover-progress").trim()||null,
       measure:n.style?.getPropertyValue("--op-measured-toolbar-height")||null,contour:n.style?.getPropertyValue("--op-contour-height")||null,bmContour:n.style?.getPropertyValue("--zr-bm-contour-height")||null,
       mask:hash(mask),bmMask:hash(bm),centerX:s.getPropertyValue("--zr-center-x").trim()||null,centerAlpha:s.getPropertyValue("--zr-center-alpha").trim()||null,progress:s.getPropertyValue("--zr-workspace-progress").trim()||null,startupProgress:s.getPropertyValue("--zr-startup-progress").trim()||null,startupBase:n.style?.getPropertyValue("--zr-startup-base-opacity")||null,attrs:attrState(n),animations:anim};
   }

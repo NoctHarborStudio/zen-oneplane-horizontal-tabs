@@ -94,7 +94,8 @@ test("one contour writer; no bookmark SVG, override, contour RAF or fade prefere
  assert.ok(preflight.includes("const measured=measureToolbarGeometry(true);"));
  assert.ok(preflight.indexOf("syncAddressState?.();")<preflight.indexOf("const measured=measureToolbarGeometry(true);"));
 });
-function layoutFixture(){
+function layoutFixture(flat=false){
+ const settings=flat?{...defaults,flat:true,transparency:0,strength:100,hold:0}:defaults;
  const f=fakeSurface(),input=fixture(),attrs=new Set(),frames=[],events=[];
  let envelope={status:"off"},provider=null,reads=0,policy="off";
  const r=(box)=>({getBoundingClientRect(){reads++;return box;},hasAttribute:()=>false,getAttribute:()=>null});
@@ -111,7 +112,7 @@ function layoutFixture(){
  const api=new Function("window","document","root","row","navbar","toolbarWrapper","bookmarks","surface","contourGeometry","commitContourMask","defaults","attrs",
   'let dead=false,contourPainting=false,contourKey="",contourMode="",contourUntil=0,panelSwitchUntil=0,contourRevision=0,contourCommittedRevision=-1,contourProvider=null;const contourObserved=new Set();function hoverSupported(){return true}function restingGeometryBlocked(){return attrs.has("freeze")}function contourSettings(){return defaults}const GEOMETRY_CONTOUR=2;function queueGeometry(){window.requestAnimationFrame(()=>{})}'+c+
   'return {paintContour,stepContour,scheduleContour,onContourTransition,mode:()=>contourMode,key:()=>contourKey,setUntil:n=>contourUntil=n};')
-  (window,document,root,row,navbar,toolbarWrapper,bookmarks,f,contourGeometry,commitContourMask,defaults,attrs);
+  (window,document,root,row,navbar,toolbarWrapper,bookmarks,f,contourGeometry,commitContourMask,settings,attrs);
  return {f,input,attrs,frames,events,api,install,remove,get reads(){return reads;},set envelope(v){envelope=v;},set policy(v){policy=v;}};
 }
 test("Layout selects stable, holds without DOM reads, and falls back on provider removal",()=>{
@@ -191,4 +192,61 @@ test("resting contour is held during drag/cascade, including explicit force",()=
  assert.equal(x.api.paintContour(true),false);x.api.stepContour(1000);
  assert.equal(x.reads,reads);assert.equal(x.f.writes,writes);assert.equal(x.frames.length,0);
  x.attrs.clear();assert.equal(x.api.paintContour(true),true);
+});
+
+test("flat material covers the full row envelope, independent of bookmark position or growth",()=>{
+ const settings={...defaults,flat:true,transparency:0,strength:100,hold:0};
+ const input=fixture({settings,mode:"flat"});
+ const g=contourGeometry(input);
+ assert.deepEqual([g.base,g.deep,g.left,g.right,g.height],[94,94,null,null,164]);
+ for(const controls of [[],[{rect:rect(600,80,100,24),growthX:500,growthY:500}]]){
+  assert.equal(contourGeometry({...input,controls,availableGrowth:1000}).key,g.key);
+ }
+ const svg=decodeURIComponent(contourImage(g.width,g.height,g.base,g.deep,g.left,g.right,settings));
+ assert.ok(svg.includes('<g opacity="1">'));
+ assert.ok(svg.includes('stop-opacity="1.000000"'));
+ assert.ok(svg.includes('stop-opacity="0.000000"'));
+ assert.ok(!/<path[^>]* A/.test(svg));
+ const hidden=contourGeometry({...input,bookmark:null});
+ assert.deepEqual([hidden.base,hidden.deep,hidden.left,hidden.right],[52,52,null,null]);
+ const two=contourGeometry({...input,row:rect(300,20,400,104),nav:rect(100,20,800,104),bookmark:rect(120,124,760,42)});
+ assert.equal(two.base,146);
+ const shifted=contourGeometry({...input,shiftY:-20,nav:rect(100,0,800,48),row:rect(300,0,400,52),bookmark:rect(120,52,760,42)});
+ assert.equal(shifted.key,g.key);
+ assert.equal(contourGeometry({...input,shiftY:NaN}),null);
+});
+test("flat runtime ignores legacy envelope holds and retains exact commit and phase guards",()=>{
+ const x=layoutFixture(true);
+ x.install();x.envelope={status:"hold"};x.policy="hold";
+ assert.equal(x.api.paintContour(true),true);
+ assert.equal(x.api.mode(),"flat");const key=x.api.key(),writes=x.f.writes,reads=x.reads;
+ assert.equal(x.api.paintContour(false,true),true);assert.equal(x.reads,reads);
+ x.api.setUntil(2000);x.api.stepContour(1000);
+ assert.equal(x.frames.length,0);assert.equal(x.f.writes,writes);
+ assert.equal(x.api.key(),key);
+ x.attrs.add("data-zr-center-motion");assert.equal(x.api.paintContour(true),false);
+ x.attrs.clear();assert.equal(x.api.paintContour(true),true);
+ const y=layoutFixture(true);y.f.fail="--op-contour-mask";
+ assert.equal(y.api.paintContour(true),false);assert.equal(y.api.key(),"");
+ assert.equal(y.api.paintContour(true),true);
+});
+test("shared material preferences match CSS options and local inheritance; legacy remains opt-in",()=>{
+ const prefs=JSON.parse(read("preferences.json")),get=k=>prefs.find(x=>x.property===k);
+ const base=read("src/styles/base.css.part"),css=read("src/styles/contour.css.part");
+ assert.equal(get("zen.nocturne.material.opacity").defaultValue,70);
+ assert.equal(get("zen.nocturne.material.blur").defaultValue,24);
+ for(const [suffix,token,unit] of [["opacity","opacity","%"],["blur","blur","px"]]){
+  const global="zen.nocturne.material."+suffix,local="zen.nocturne.material.top-plane."+suffix;
+  assert.equal(get(local).defaultValue,-1);
+  assert.ok(css.includes("--nocturne-surface-"+token+": var(--nocturne-glass-"+token+")"));
+  for(const opt of get(global).options)assert.ok(base.includes('(-moz-pref("'+global+'", '+opt.value+')) { --nocturne-glass-'+token+': '+opt.value+unit+'; }'));
+  for(const opt of get(local).options.filter(x=>x.value!==-1))assert.ok(css.includes('(-moz-pref("'+local+'", '+opt.value+')) { --nocturne-surface-'+token+': '+opt.value+unit+'; }'));
+ }
+ assert.equal(get("zen.nocturne.material.legacy-toolbar").defaultValue,false);
+ assert.equal(get("zen.nocturne.material.legacy-toolbar").restart,true);
+ assert.ok(read("src/layout/surface.js.part").includes('if(!prefs.getBoolPref("zen.nocturne.material.legacy-toolbar",false))'));
+ assert.ok(read("src/layout/contour-settings.js.part").includes("flat:true,transparency:0,strength:100,hold:0"));
+ assert.ok(css.includes("var(--nocturne-glass-tint) var(--nocturne-surface-opacity)"));
+ assert.ok(css.includes("forced-colors: active"));
+ assert.ok(read("src/core/window-lifecycle.js.part").includes('if(bookmarks&&!surface.hasAttribute("data-op-material-flat"))'));
 });

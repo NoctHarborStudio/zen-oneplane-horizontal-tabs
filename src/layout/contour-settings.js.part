@@ -3,6 +3,10 @@
   let contourResize=null, contourObserver=null;
   const contourObserved=new Set();
   function contourSettings(){
-    return readContourSettings((name,def)=>prefs.getIntPref(contourPrefPrefix+name,def));
+    const settings=readContourSettings((name,def)=>prefs.getIntPref(contourPrefPrefix+name,def));
+    // Keep legacy preferences intact; the flat mask carries no material
+    // alpha and starts its fade continuously at the full-width row edge.
+    return surface.hasAttribute("data-op-material-flat")?
+      {...settings,flat:true,transparency:0,strength:100,hold:0}:settings;
   }
   const contourPreferenceObserver={observe(){scheduleContour();}};

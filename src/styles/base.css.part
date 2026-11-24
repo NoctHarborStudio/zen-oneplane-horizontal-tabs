@@ -27,6 +27,38 @@
   inherits: false;
   initial-value: 0;
 }
+/* DS-M2/M4 — shared material defaults. Only migrated consumers paint them.
+   Tint alpha is independent of content and motion opacity. */
+@-moz-document url("chrome://browser/content/browser.xhtml") {
+  :root {
+    --nocturne-glass-tint: light-dark(#f4f5f9, #15171e);
+    --nocturne-glass-opacity: 70%;
+    --nocturne-glass-blur: 24px;
+    --nocturne-glass-radius: 12px;
+    --nocturne-glass-border: color-mix(in srgb, currentColor 12%, transparent);
+    --nocturne-glass-shadow: 0 8px 24px #0003;
+    --nocturne-glass-foreground: var(--toolbar-color, CanvasText);
+    --nocturne-glass-control-fill: color-mix(in srgb, currentColor 8%, transparent);
+    @media (-moz-pref("zen.nocturne.material.opacity", 0)) { --nocturne-glass-opacity: 0%; }
+    @media (-moz-pref("zen.nocturne.material.opacity", 10)) { --nocturne-glass-opacity: 10%; }
+    @media (-moz-pref("zen.nocturne.material.opacity", 20)) { --nocturne-glass-opacity: 20%; }
+    @media (-moz-pref("zen.nocturne.material.opacity", 30)) { --nocturne-glass-opacity: 30%; }
+    @media (-moz-pref("zen.nocturne.material.opacity", 40)) { --nocturne-glass-opacity: 40%; }
+    @media (-moz-pref("zen.nocturne.material.opacity", 50)) { --nocturne-glass-opacity: 50%; }
+    @media (-moz-pref("zen.nocturne.material.opacity", 60)) { --nocturne-glass-opacity: 60%; }
+    @media (-moz-pref("zen.nocturne.material.opacity", 70)) { --nocturne-glass-opacity: 70%; }
+    @media (-moz-pref("zen.nocturne.material.opacity", 80)) { --nocturne-glass-opacity: 80%; }
+    @media (-moz-pref("zen.nocturne.material.opacity", 90)) { --nocturne-glass-opacity: 90%; }
+    @media (-moz-pref("zen.nocturne.material.opacity", 100)) { --nocturne-glass-opacity: 100%; }
+    @media (-moz-pref("zen.nocturne.material.blur", 0)) { --nocturne-glass-blur: 0px; }
+    @media (-moz-pref("zen.nocturne.material.blur", 8)) { --nocturne-glass-blur: 8px; }
+    @media (-moz-pref("zen.nocturne.material.blur", 12)) { --nocturne-glass-blur: 12px; }
+    @media (-moz-pref("zen.nocturne.material.blur", 16)) { --nocturne-glass-blur: 16px; }
+    @media (-moz-pref("zen.nocturne.material.blur", 24)) { --nocturne-glass-blur: 24px; }
+    @media (-moz-pref("zen.nocturne.material.blur", 32)) { --nocturne-glass-blur: 32px; }
+    @media (-moz-pref("zen.nocturne.material.blur", 40)) { --nocturne-glass-blur: 40px; }
+  }
+}
 /* Experimental Home-only direct alpha: clear native opaque chrome backing,
    retain the original Zen gradient/grain as a single adjustable tint.
    Requires an alpha-capable Gecko widget with the Mica pref off.

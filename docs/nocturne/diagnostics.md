@@ -588,3 +588,5 @@ The drag-scoped events `drag.vanish.begin`, `drag.vanish.target`, `drag.vanish.e
 Use the existing startup, disassembly, workspace and window lifecycle traces to correlate visible motion, native readiness, fallback and cleanup. Compare recorded frame gaps with a screen recording; callbacks are not presented FPS. Native acceptance remains open.
 
 Preview.205: boot.accelerate records one trusted primary-click acceleration, elapsed/adjusted minimum, playback rate, successful effect updates and exit status. boot.ready and boot.handoff include accelerated; no input values or pointer IDs recorded. Existing Assembly readiness, epoch and watchdog events distinguish waiting from successful reveal.
+
+Preview.206: existing toolbar-surface sample adds materialFlat, materialOpacity (percentage), materialBlur (px), and contour.paint uses mode flat with left/right null and base=deep. No additional sampling cadence, observer, URLs or titles. Compare computed tokens with native white/dark page appearance; mask shape tests alone cannot establish compositing.

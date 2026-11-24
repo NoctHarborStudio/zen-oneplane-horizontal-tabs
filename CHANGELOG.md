@@ -1,3 +1,7 @@
+## 0.3.0-preview.206 — Nocturne Glass first consumer (DS-M2/M4/M3)
+
+Define shared theme-adaptive material tokens, default tint opacity 70% and blur 24px, with independent top-plane inheritance/overrides. Default to one full-width toolbar surface over the tab and bookmark rows, followed by a uniform fade; mask alpha is shape-only, tint alpha applied once. Preserve the previous shaped contour as explicit restart-only opt-in and retain its preferences. Flat mode no longer reads bookmark-card envelopes or follows their transitions; existing row measurement, phase guards, native input and Magnetic Bookmarks motion remain. Preserve Hub's previous tint pending its migration. Existing diagnostics sample effective material properties. Native visual acceptance pending.
+
 ## 0.3.0-preview.205 — Accelerate startup splash on click
 
 A primary click accelerates only the branded Boot sequence (3x), without skipping the prepared Center Flow animation. Readiness and watchdog remain unchanged; repeated clicks do not compound speed. Consume the acceleration click rather than activating controls behind the cover. Native visual acceptance pending.

@@ -279,8 +279,207 @@
   },
   {
     "type": "dropdown",
+    "property": "zen.nocturne.material.opacity",
+    "label": "Glass — global tint opacity",
+    "value": "number",
+    "defaultValue": 70,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "0%",
+        "value": 0
+      },
+      {
+        "label": "10%",
+        "value": 10
+      },
+      {
+        "label": "20%",
+        "value": 20
+      },
+      {
+        "label": "30%",
+        "value": 30
+      },
+      {
+        "label": "40%",
+        "value": 40
+      },
+      {
+        "label": "50%",
+        "value": 50
+      },
+      {
+        "label": "60%",
+        "value": 60
+      },
+      {
+        "label": "70%",
+        "value": 70
+      },
+      {
+        "label": "80%",
+        "value": 80
+      },
+      {
+        "label": "90%",
+        "value": 90
+      },
+      {
+        "label": "100%",
+        "value": 100
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.blur",
+    "label": "Glass — global blur",
+    "value": "number",
+    "defaultValue": 24,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "0 px",
+        "value": 0
+      },
+      {
+        "label": "8 px",
+        "value": 8
+      },
+      {
+        "label": "12 px",
+        "value": 12
+      },
+      {
+        "label": "16 px",
+        "value": 16
+      },
+      {
+        "label": "24 px",
+        "value": 24
+      },
+      {
+        "label": "32 px",
+        "value": 32
+      },
+      {
+        "label": "40 px",
+        "value": 40
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.top-plane.opacity",
+    "label": "Glass — top plane opacity override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "0%",
+        "value": 0
+      },
+      {
+        "label": "10%",
+        "value": 10
+      },
+      {
+        "label": "20%",
+        "value": 20
+      },
+      {
+        "label": "30%",
+        "value": 30
+      },
+      {
+        "label": "40%",
+        "value": 40
+      },
+      {
+        "label": "50%",
+        "value": 50
+      },
+      {
+        "label": "60%",
+        "value": 60
+      },
+      {
+        "label": "70%",
+        "value": 70
+      },
+      {
+        "label": "80%",
+        "value": 80
+      },
+      {
+        "label": "90%",
+        "value": 90
+      },
+      {
+        "label": "100%",
+        "value": 100
+      }
+    ]
+  },
+  {
+    "type": "dropdown",
+    "property": "zen.nocturne.material.top-plane.blur",
+    "label": "Glass — top plane blur override",
+    "value": "number",
+    "defaultValue": -1,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Inherit global",
+        "value": -1
+      },
+      {
+        "label": "0 px",
+        "value": 0
+      },
+      {
+        "label": "8 px",
+        "value": 8
+      },
+      {
+        "label": "12 px",
+        "value": 12
+      },
+      {
+        "label": "16 px",
+        "value": 16
+      },
+      {
+        "label": "24 px",
+        "value": 24
+      },
+      {
+        "label": "32 px",
+        "value": 32
+      },
+      {
+        "label": "40 px",
+        "value": 40
+      }
+    ]
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.nocturne.material.legacy-toolbar",
+    "label": "Use legacy shaped toolbar background (restart required)",
+    "defaultValue": false,
+    "restart": true
+  },
+  {
+    "type": "dropdown",
     "property": "zen.oneplane.fade-transparency",
-    "label": "Toolbar surface transparency",
+    "label": "Legacy contour — Toolbar surface transparency",
     "value": "number",
     "defaultValue": 4,
     "placeholder": false,
@@ -326,7 +525,7 @@
   {
     "type": "dropdown",
     "property": "zen.oneplane.fade-strength",
-    "label": "Background Fade intensity",
+    "label": "Legacy contour — Background Fade intensity",
     "value": "number",
     "defaultValue": 100,
     "placeholder": false,
@@ -410,7 +609,7 @@
   {
     "type": "dropdown",
     "property": "zen.oneplane.fade-hold",
-    "label": "Background Fade solid start",
+    "label": "Legacy contour — Background Fade solid start",
     "value": "number",
     "defaultValue": 30,
     "placeholder": false,
@@ -510,7 +709,7 @@
   {
     "type": "dropdown",
     "property": "zen.oneplane.fade-radius",
-    "label": "Bookmark contour corner radius",
+    "label": "Legacy contour — Bookmark contour corner radius",
     "value": "number",
     "defaultValue": 24,
     "placeholder": false,
@@ -544,7 +743,7 @@
   {
     "type": "dropdown",
     "property": "zen.oneplane.fade-padding",
-    "label": "Bookmark contour padding",
+    "label": "Legacy contour — Bookmark contour padding",
     "value": "number",
     "defaultValue": 0,
     "placeholder": false,
@@ -669,7 +868,7 @@
   {
     "type": "checkbox",
     "property": "zen.refined.bookmarks.stable-background",
-    "label": "Stabilize OnePlane background during bookmark hover",
+    "label": "Legacy contour — Stabilize OnePlane background during bookmark hover",
     "defaultValue": true
   },
   {

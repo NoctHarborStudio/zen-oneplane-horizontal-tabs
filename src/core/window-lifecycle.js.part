@@ -222,7 +222,7 @@
       scheduleMeasuredGeometry(centerToolbar());
     });
     observeGeometry();
-    if(bookmarks){
+    if(bookmarks&&!surface.hasAttribute("data-op-material-flat")){
       contourResize=new ResizeObserver(scheduleContour);
       observeContourNodes();
       contourObserver=new MutationObserver(records=>{

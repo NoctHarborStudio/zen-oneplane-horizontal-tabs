@@ -23,6 +23,33 @@
       transition: opacity var(--op-panel-motion) var(--op-panel-ease),
         translate var(--op-panel-motion) var(--op-panel-ease) !important;
     }
+    /* Flat material: the SVG mask now expresses shape/fade only. Alpha
+       lives in the tint once; controls are siblings of this surface. */
+    #zen-appcontent-navbar-wrapper > #oneplane-toolbar-surface[data-op-material-flat] {
+      --nocturne-surface-opacity: var(--nocturne-glass-opacity);
+      --nocturne-surface-blur: var(--nocturne-glass-blur);
+      @media (-moz-pref("zen.nocturne.material.top-plane.opacity", 0)) { --nocturne-surface-opacity: 0%; }
+      @media (-moz-pref("zen.nocturne.material.top-plane.opacity", 10)) { --nocturne-surface-opacity: 10%; }
+      @media (-moz-pref("zen.nocturne.material.top-plane.opacity", 20)) { --nocturne-surface-opacity: 20%; }
+      @media (-moz-pref("zen.nocturne.material.top-plane.opacity", 30)) { --nocturne-surface-opacity: 30%; }
+      @media (-moz-pref("zen.nocturne.material.top-plane.opacity", 40)) { --nocturne-surface-opacity: 40%; }
+      @media (-moz-pref("zen.nocturne.material.top-plane.opacity", 50)) { --nocturne-surface-opacity: 50%; }
+      @media (-moz-pref("zen.nocturne.material.top-plane.opacity", 60)) { --nocturne-surface-opacity: 60%; }
+      @media (-moz-pref("zen.nocturne.material.top-plane.opacity", 70)) { --nocturne-surface-opacity: 70%; }
+      @media (-moz-pref("zen.nocturne.material.top-plane.opacity", 80)) { --nocturne-surface-opacity: 80%; }
+      @media (-moz-pref("zen.nocturne.material.top-plane.opacity", 90)) { --nocturne-surface-opacity: 90%; }
+      @media (-moz-pref("zen.nocturne.material.top-plane.opacity", 100)) { --nocturne-surface-opacity: 100%; }
+      @media (-moz-pref("zen.nocturne.material.top-plane.blur", 0)) { --nocturne-surface-blur: 0px; }
+      @media (-moz-pref("zen.nocturne.material.top-plane.blur", 8)) { --nocturne-surface-blur: 8px; }
+      @media (-moz-pref("zen.nocturne.material.top-plane.blur", 12)) { --nocturne-surface-blur: 12px; }
+      @media (-moz-pref("zen.nocturne.material.top-plane.blur", 16)) { --nocturne-surface-blur: 16px; }
+      @media (-moz-pref("zen.nocturne.material.top-plane.blur", 24)) { --nocturne-surface-blur: 24px; }
+      @media (-moz-pref("zen.nocturne.material.top-plane.blur", 32)) { --nocturne-surface-blur: 32px; }
+      @media (-moz-pref("zen.nocturne.material.top-plane.blur", 40)) { --nocturne-surface-blur: 40px; }
+      --op-surface-paint: color-mix(in srgb, var(--nocturne-glass-tint) var(--nocturne-surface-opacity), transparent);
+      backdrop-filter: blur(var(--nocturne-surface-blur)) !important;
+      mask-image: var(--op-contour-mask, linear-gradient(to bottom, black 0%, black 55%, transparent 100%)) !important;
+    }
     #zen-appcontent-navbar-wrapper[data-op-panel-open] > #oneplane-toolbar-surface {
       opacity: 1 !important;
       translate: 0 0;
@@ -85,7 +112,8 @@
         flex: 0 0 auto !important;
         transition: none !important;
       }
-      #zen-appcontent-navbar-wrapper > #oneplane-toolbar-surface {
+      #zen-appcontent-navbar-wrapper > #oneplane-toolbar-surface,
+      #zen-appcontent-navbar-wrapper > #oneplane-toolbar-surface[data-op-material-flat] {
         height: 100% !important;
         mask-image: none !important;
         backdrop-filter: none !important;
@@ -120,8 +148,23 @@
         height: max(100%, var(--op-measured-toolbar-height, var(--op-height))) !important;
         backdrop-filter: none !important;
       }
-      #zen-appcontent-navbar-wrapper :is(#nav-bar, #PersonalToolbar) {
+      #zen-appcontent-navbar-wrapper:has(> #oneplane-toolbar-surface:not([data-op-material-flat])) :is(#nav-bar, #PersonalToolbar) {
         background: var(--op-surface-tint) !important;
+      }
+    }
+    @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+      #zen-appcontent-navbar-wrapper > #oneplane-toolbar-surface[data-op-material-flat] {
+        --nocturne-surface-opacity: 100%;
+        --nocturne-surface-blur: 0px;
+        --op-surface-paint: var(--nocturne-glass-tint);
+        mask-image: none !important;
+        height: max(100%, var(--op-measured-toolbar-height, var(--op-height))) !important;
+        backdrop-filter: none !important;
+      }
+    }
+    @media (forced-colors: active) {
+      #zen-appcontent-navbar-wrapper > #oneplane-toolbar-surface[data-op-material-flat] {
+        --op-surface-paint: Canvas;
       }
     }
   }

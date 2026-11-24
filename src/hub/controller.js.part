@@ -183,7 +183,7 @@
       const width=hubPanelWidth(b.left,right,window.innerWidth);
       panel.style.setProperty("--op-hub-width",width+"px");
       // Share the actual toolbar contour color rather than the address capsule.
-      const bg=window.getComputedStyle(surface).backgroundColor;
+      const bg=surface.hasAttribute("data-op-material-flat")?null:window.getComputedStyle(surface).backgroundColor;
       panel.style.setProperty("--op-hub-bg",bg&&bg!=="rgba(0, 0, 0, 0)"&&bg!=="transparent"?bg:
         window.getComputedStyle(toolbarWrapper).getPropertyValue("--op-surface-tint").trim()||"light-dark(#f4f5f9,#15171e)");
       const color=bar&&window.getComputedStyle(bar).color;

@@ -50,11 +50,20 @@
   }
   export function contourGeometry({wrapper,nav,row,bookmark=null,controls=[],shiftY=0,trim=5,settings,mode="visible",availableGrowth=0}){
     const finiteRect=r=>r&&["left","top","right","bottom","width","height"].every(k=>Number.isFinite(r[k]));
-    if(!["visible","stable"].includes(mode)||!finiteRect(wrapper)||!finiteRect(nav)||!finiteRect(row)||
+    if(!["visible","stable","flat"].includes(mode)||!finiteRect(wrapper)||!finiteRect(nav)||!finiteRect(row)||
       !(wrapper.width>0&&nav.height>0)||![shiftY,trim,availableGrowth].every(Number.isFinite)||
       !settings||!["transparency","strength","length","hold","curve","radius","padding"].every(k=>Number.isFinite(settings[k]))||
       settings.length<=settings.hold||settings.length<=0)return null;
     const width=Math.max(1,Math.round(wrapper.width));
+    if(mode==="flat"){
+      // One uniform boundary across the entire occupied row envelope.
+      // Ignore individual bookmark positions, hover growth and padding.
+      const bottom=Math.max(nav.bottom,row.bottom,finiteRect(bookmark)&&bookmark.height>1?bookmark.bottom:-Infinity);
+      const base=Math.max(1,Math.ceil(bottom-wrapper.top-shiftY));
+      const height=Math.max(1,Math.ceil(base+settings.length+1));
+      const key=["flat",width,height,base,settings.transparency,settings.strength,settings.length,settings.hold,settings.curve].join(":");
+      return {width,height,base,deep:base,left:null,right:null,key};
+    }
     const base=Math.max(1,Math.round(Math.max(nav.bottom,row.bottom)-wrapper.top-shiftY-trim));
     let left=null,right=null,deep=base,largest=0;
     if(finiteRect(bookmark)&&(mode==="stable"?bookmark.height>=1:bookmark.height>1)){
