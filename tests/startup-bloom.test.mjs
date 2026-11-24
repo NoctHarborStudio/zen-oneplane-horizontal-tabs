@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {startupBloomTimeline,startupBloomStagger,startupBloomOrder,startupBloomFrames,startupBloomAssemblyPlan,startupBloomHomeSchedule} from "../src/algorithms/startup-bloom.mjs";
 import {startupTimeline,startupFits,startupLateEffect,createStartupOutcome} from "../src/algorithms/startup-timeline.mjs";
-import {HOME_ISLAND_DURATION,homeIslandFrames,homeIslandDistance} from "../src/algorithms/home-island-motion.mjs";
+import {HOME_ISLAND_DURATION,homeIslandFrames,homeIslandDistance,centerFlowTimeline,EDGE_CONTROL_EASE} from "../src/algorithms/home-island-motion.mjs";
 const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 const near=(a,b)=>Math.abs(a-b)<1e-7;
 
@@ -216,7 +216,7 @@ test("Home retires an effect returned after synchronous release and rejects a re
  h.release();assert.ok(g.effects.every(a=>a.cancelled===1));
 });
 
-function assemblyFixture({boot=false,remaining=8000,mode="bloom",failDirect=false,failHome=false,oldEngine=false}={}){
+function assemblyFixture({boot=false,remaining=8000,mode="bloom",failDirect=false,failHome=false,oldEngine=false,flow=false}={}){
  const source=read("startup-animation.uc.mjs"),assemblyErrorContext=source.slice(source.indexOf("const ASSEMBLY_ERROR_CLASSES="),source.indexOf("function canStartBeforePaint(")),code=assemblyErrorContext+source.slice(source.indexOf("  function bindStartupEpoch("),source.indexOf("  function schedule(){"));
  const calls=[],effects=[],state={time:0,remaining,resume:null,reason:null};
  function node(name){const attrs=new Map();return {name,attrs,children:[],getAttribute:k=>attrs.get(k)??null,hasAttribute:k=>attrs.has(k),setAttribute:(k,v)=>attrs.set(k,v),querySelector(k){return k===".oneplane-title-island"?island:plus;},querySelectorAll:()=>[card]};}
@@ -229,10 +229,10 @@ function assemblyFixture({boot=false,remaining=8000,mode="bloom",failDirect=fals
  const engine={startupBloomVersion:oldEngine?undefined:1,start(row,opts){calls.push(["center",opts.bloomTimeline?.mode??"fold",opts.delay,opts.duration]);const a=effect("tabs");opts.observeEffect(a,"tabs",()=>true);return {count:1,mode:"magnetic-bloom",startupOutcomeVersion:1,resumeAt(fn){fn(a);},release(){}};},releasePending(){}};
  const home={startupBloomVersion:1,startupOutcomeVersion:1,startupLeaseVersion:1,playStartup(t){calls.push(["home",t.mode??"fold"]);if(failHome)return;const a=effect("home");t.observeEffect(a,"home",()=>true);t.homeLease={startupOutcomeVersion:1,resumeAt(fn){fn(a);},release(){}};}};
  window={innerWidth:1000,__nocturneCenterMotion:engine,__zenSharedHomeV1:home,__nocturneLayoutStartup:{initial:true},__oneplaneLayoutController:{prepareWorkspaceGeometry(){}},__zenMagneticBookmarksShared:{syncAddressState(){}}};
- const run=new Function("window","document","root","nodes","state","calls","effect","startupTimeline","startupFits","createStartupOutcome","homeIslandDistance","codeBoot","mode","failDirect",`
+ const run=new Function("window","document","root","nodes","state","calls","effect","startupTimeline","startupFits","createStartupOutcome","homeIslandDistance","codeBoot","mode","failDirect","flow","centerFlowTimeline","EDGE_CONTROL_EASE",`
  let dead=false,playing=false,settling=false,bootPreparing=false,boot=codeBoot?{}:null,registered=true,islandRegistered=true,scale=1,duration=1050;
  let pendingEngine=null,playStart=0,finishAt=0,ownedTimeline=null,homeRegistry=null,centerHandle=null,bookmarkHandle=null,lateObserver=null,lateResize=null;
- let plan=startupTimeline(0,1,mode);const started=0,deadline=state.remaining,BOOT_EXIT=320,PHASE="phase",READY="ready",MANAGED="managed";
+ let plan=flow?centerFlowTimeline(0,1):startupTimeline(0,1,mode);const started=0,deadline=state.remaining,BOOT_EXIT=320,PHASE="phase",READY="ready",MANAGED="managed";
  const seen=new Set(),baseline=new Set(),animations=new Map();
  function now(){return state.time;}function decision(e,d){calls.push([e,d]);}
  function finish(reason){dead=true;state.reason=reason;}function get(id){return nodes[id]||null;}
@@ -246,7 +246,7 @@ function assemblyFixture({boot=false,remaining=8000,mode="bloom",failDirect=fals
  const MutationObserver=class{observe(){}};const ResizeObserver=undefined;const console={warn(){}};
  ${code}
  launch(true);return ()=>({timeline:ownedTimeline,finishAt,dead});
- `)(window,document,root,{"oneplane-tabs":row,"oneplane-toolbar-surface":surface,"urlbar-container":url,"PlacesToolbarItems":items,"zen-shared-home":homeNode},state,calls,effect,startupTimeline,startupFits,createStartupOutcome,homeIslandDistance,boot,mode,failDirect);
+ `)(window,document,root,{"oneplane-tabs":row,"oneplane-toolbar-surface":surface,"urlbar-container":url,"PlacesToolbarItems":items,"zen-shared-home":homeNode},state,calls,effect,startupTimeline,startupFits,createStartupOutcome,homeIslandDistance,boot,mode,failDirect,flow,centerFlowTimeline,EDGE_CONTROL_EASE);
  return {state,calls,effects,clock,window,run};
 }
 test("explicit Assembly Bloom passes exact timeline to Center and Home, resumes once after Boot",()=>{
@@ -410,4 +410,12 @@ test("Fold Home Island entrance finishes before the unchanged magnetic card wave
   assert.ok(f.calls.some(x=>x[0]==="reveal"&&x[1]==="island"&&x[2].delay===0&&x[2].length===540&&x[2].islandY===-66));
   assert.ok(f.calls.some(x=>x[0]==="assembly.island.entry"&&x[1].acquired===true&&x[1].cardsAt===540));
  }
+});
+
+test("Center Flow cold Assembly uses the shared 2400ms plan and common epoch",()=>{
+ const f=assemblyFixture({flow:true,mode:"fold"}),t=f.run().timeline;
+ assert.equal(t.finishLength,2400);
+ assert.ok(f.calls.some(x=>x[0]==="center"&&x[2]===824&&x[3]===1144));
+ assert.ok(f.calls.some(x=>x[0]==="reveal"&&x[1]==="island"&&x[2].delay===216&&x[2].length===780));
+ assert.ok(f.effects.every(a=>a.startTime===40));
 });

@@ -780,7 +780,10 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
         throw Error("assembly-bloom-owner");
       // Fold preserves its original order. Bloom measures the resting
       // strip/Island before any direct shape effects are prepared.
-      if(!bloom&&surface)reveal(surface,{y:timeline.flow?0:-18,delay:timeline.panel,length:timeline.panelLength,easing:timeline.flow?EDGE_CONTROL_EASE:EASE});
+      if(!bloom&&surface){
+        if(timeline.flow)reveal(surface,{y:0,delay:timeline.panel,length:timeline.panelLength,easing:EDGE_CONTROL_EASE});
+        else reveal(surface,{y:-18,delay:timeline.panel,length:timeline.panelLength});
+      }
       decision("assembly.timeline",{mode:bloom?"bloom":"fold",panel:!!surface,cardsAt:timeline.cards*scale,homeAt:timeline.home*scale});
       // The native floating field may be a top-layer popover; never clip
       // its parent during its independent entrance.
