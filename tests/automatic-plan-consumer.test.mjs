@@ -61,7 +61,7 @@ test("production and provisional callers pass the exact source boundary, not a n
 });
 
 test("published placement detects extra, reordered or reparented lane nodes at equal native count",()=>{
-  for(const fault of ["extra","order","parent","lane","row"]){
+  for(const fault of ["extra","order","parent","lane","row","plus","compact"]){
     const order=[{},{},{}],f=fixture(order);
     const plan={topLeft:[0,1],topRight:[2],lower:[],hasSecondRow:false,mode:"wide",topPlus:true};
     assert.equal(f.apply(plan,2),true);assert.equal(f.valid(),true);
@@ -70,6 +70,56 @@ test("published placement detects extra, reordered or reparented lane nodes at e
     if(fault==="parent")order[1].parentElement=f.rightLane;
     if(fault==="lane")f.list.children.reverse();
     if(fault==="row")f.bottomLane.hidden=false;
+    if(fault==="plus")f.attrs.add("data-op-bottom-plus");
+    if(fault==="compact")f.attrs.add("data-op-adaptive-compact");
     assert.equal(f.valid(),false,fault);
   }
+});
+
+function flatFixture(){
+  const attrs=new Set(["data-op-overflow-row","data-op-bottom-plus","data-op-adaptive-compact"]);
+  const row={hasAttribute:k=>attrs.has(k),removeAttribute:k=>attrs.delete(k)};
+  const node=id=>({id,children:[],parentElement:null,isConnected:false,
+    remove(){if(this.parentElement){const c=this.parentElement.children;c.splice(c.indexOf(this),1);this.parentElement=null;}},
+    insertBefore(child,before){child.remove();const i=before?this.children.indexOf(before):this.children.length;
+      this.children.splice(i,0,child);child.parentElement=this;}});
+  const list=node("list"),left=node("left"),right=node("right"),bottom=node("bottom");
+  for(const lane of [left,right,bottom])list.insertBefore(lane,null);
+  const a=node("a"),b=node("b"),c=node("c"),order=[a,b,c];left.insertBefore(a,null);bottom.insertBefore(c,null);
+  // b is genuinely detached, but still belongs to the complete snapshot.
+  bottom.hidden=false;let valid=true,scheduled=0;
+  const api=new Function("row","list","leftLane","rightLane","bottomLane","order","current","scheduleGeometry",`
+    let dead=false,stripOrderSnapshot=order,adaptiveHeightDirty=false,contourKey=null;
+    const window={};
+    ${source.slice(source.indexOf("  // One Layout-owned"),source.indexOf("  function placeStripOrder("))}
+    return {apply:()=>applyFlatStripPlacement(order,current),valid:()=>stripPlacementCurrent(),
+      invalidate:()=>{committedStripPlacement=null}};
+  `)(row,list,left,right,bottom,order,()=>valid,()=>scheduled++);
+  return {...api,row,attrs,list,left,right,bottom,order,stop:()=>{valid=false},resume:()=>{valid=true},scheduled:()=>scheduled};
+}
+test("flat recovery uses the same complete order, including detached units, and restores flags",()=>{
+  const f=flatFixture();
+  assert.equal(f.apply(),true);assert.equal(f.valid(),true);
+  assert.deepEqual(f.list.children.map(n=>n.id),["a","b","c"]);
+  assert.ok(f.order.every((n,i)=>f.list.children[i]===n));
+  assert.equal(f.bottom.hidden,true);assert.equal(f.attrs.size,0);assert.equal(f.scheduled(),1);
+  f.invalidate();assert.equal(f.valid(),false);assert.equal(f.apply(),true);assert.equal(f.valid(),true);
+  assert.equal(f.scheduled(),1);
+  f.attrs.add("data-op-bottom-plus");assert.equal(f.valid(),false);
+  assert.equal(f.apply(),true);assert.equal(f.valid(),true);
+});
+test("flat reparent interrupted synchronously does not publish and recovers with original nodes",()=>{
+  const f=flatFixture(),insert=f.list.insertBefore;
+  f.list.insertBefore=function(...args){insert.apply(this,args);f.stop();};
+  assert.equal(f.apply(),false);assert.equal(f.valid(),false);
+  f.list.insertBefore=insert;f.resume();
+  assert.equal(f.apply(),true);assert.equal(f.valid(),true);
+  assert.deepEqual(f.list.children.map(n=>n.id),["a","b","c"]);
+});
+test("mode switch and flat geometry retry cannot use filtered DOM or stale native witness",()=>{
+  const hover=read("src/toolbar/hover.js.part"),geometry=read("src/layout/geometry.js.part");
+  assert.ok(hover.includes("if(sameStripStructure(syncedTopology,readStripTopology()))placeStripOrder(stripOrderSnapshot);"));
+  assert.ok(!hover.includes("placeStripOrder(stripNodes())"));
+  assert.ok(geometry.includes("if(!syncing&&!sameStripStructure(syncedTopology,readStripTopology())){schedule();return false;}"));
+  assert.ok(geometry.includes("applyFlatStripPlacement(order,stillCurrent)"));
 });

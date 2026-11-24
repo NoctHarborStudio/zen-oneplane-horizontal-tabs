@@ -4,7 +4,7 @@
   function stripPlacementCurrent(placement=committedStripPlacement){
     if(dead||!placement||placement!==committedStripPlacement||
        placement.order!==stripOrderSnapshot)return false;
-    const {order,projection}=placement;
+    const {order,projection,compact}=placement;
     const matches=(lane,slots)=>{
       let k=0;
       for(const i of slots){
@@ -13,8 +13,10 @@
       }
       return k===lane.children.length;
     };
+    if(row.hasAttribute("data-op-adaptive-compact")!==compact)return false;
     if(!projection){
-      return !row.hasAttribute("data-op-show-island")&&
+      return !row.hasAttribute("data-op-show-island")&&bottomLane.hidden&&
+        !row.hasAttribute("data-op-overflow-row")&&!row.hasAttribute("data-op-bottom-plus")&&
         [leftLane,rightLane,bottomLane].every(lane=>lane.parentElement!==list)&&
         list.children.length===order.length&&order.every((node,i)=>list.children[i]===node&&node.parentElement===list);
     }
@@ -22,13 +24,14 @@
     if(!row.hasAttribute("data-op-show-island")||list.children.length!==3||
        lanes.some((lane,i)=>lane.parentElement!==list||list.children[i]!==lane)||
        bottomLane.hidden===projection.hasSecondRow||
-       row.hasAttribute("data-op-overflow-row")!==projection.hasSecondRow)return false;
+       row.hasAttribute("data-op-overflow-row")!==projection.hasSecondRow||
+       row.hasAttribute("data-op-bottom-plus")!==(projection.regions.find(r=>r.id==="bottom")?.slots.includes("plus-right")??false))return false;
     return ["top-left","top-right","bottom"].every((id,i)=>
       matches(lanes[i],projection.regions.find(region=>region.id===id)?.slots??[]));
   }
-  function publishStripPlacement(order,projection,current){
+  function publishStripPlacement(order,projection,current,compact=false){
     if(!current())return false;
-    const placement={order,projection};
+    const placement={order,projection,compact};
     committedStripPlacement=placement;
     if(stripPlacementCurrent(placement))return true;
     if(committedStripPlacement===placement)committedStripPlacement=null;
@@ -84,7 +87,24 @@
     if(active&&list.contains(active)&&document.activeElement!==active)active.focus?.({preventScroll:true});
     if(!current())return false;
     if(selected&&previousLane!==selected.closest(".oneplane-island-lane")&&!row.hasAttribute("data-op-home-open"))window.requestAnimationFrame(revealSelectedInStrip);
-    return publishStripPlacement(order,projection,current);
+    return publishStripPlacement(order,projection,current,plan.mode!=="wide");
+  }
+  function applyFlatStripPlacement(order,current){
+    if(!current())return false;
+    committedStripPlacement=null;
+    if(!mountLaneNodes(list,order,current))return false;
+    for(const lane of [leftLane,rightLane,bottomLane]){
+      if(!current())return false;
+      lane.remove();
+    }
+    if(!current())return false;
+    if(!bottomLane.hidden)bottomLane.hidden=true;
+    if(row.hasAttribute("data-op-overflow-row")){adaptiveHeightDirty=true;contourKey=null;scheduleGeometry();}
+    for(const attr of ["data-op-overflow-row","data-op-adaptive-compact","data-op-bottom-plus"]){
+      if(!current())return false;
+      row.removeAttribute(attr);
+    }
+    return publishStripPlacement(order,null,current);
   }
   function placeStripOrder(order) {
     if(row.hasAttribute("data-op-dragging"))return;
@@ -102,11 +122,8 @@
           topRight:order.slice(boundary).map((_,i)=>i+boundary),lower:[],hasSecondRow:false,mode:"wide",topPlus:true},snapshot,undefined,boundary))scheduleGeometry();
       }
     }else{
-      if(!mountLaneNodes(list,order,()=>!dead&&stripOrderSnapshot===snapshot))return;
-      leftLane.remove();rightLane.remove();bottomLane.remove();if(!bottomLane.hidden)bottomLane.hidden=true;
-      if(row.hasAttribute("data-op-overflow-row")){adaptiveHeightDirty=true;contourKey=null;scheduleGeometry();}
-      for(const attr of ["data-op-overflow-row","data-op-adaptive-compact","data-op-bottom-plus"])row.removeAttribute(attr);
-      publishStripPlacement(snapshot,null,()=>!dead&&stripOrderSnapshot===snapshot);
+      applyFlatStripPlacement(snapshot,()=>!dead&&stripOrderSnapshot===snapshot&&
+        !row.hasAttribute("data-op-show-island")&&!restingGeometryBlocked());
     }
   }
 

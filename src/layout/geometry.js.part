@@ -176,7 +176,15 @@
         setLength(row,"--op-right-plus-offset",metrics.plusOffset);
         setLength(row,"--op-overflow-width",metrics.overflowWidth);
         setLength(row,"--op-bottom-open",metrics.bottomOpen);
-      }else if(!centered)row.style.removeProperty("--op-right-plus-offset");
+      }else{
+        if(!stripPlacementCurrent()){
+          // Recovery consumes the existing complete mirror order, not visible DOM.
+          // Outside TabSync, a stale native signature must be reconciled first.
+          if(!syncing&&!sameStripStructure(syncedTopology,readStripTopology())){schedule();return false;}
+          if(!applyFlatStripPlacement(order,stillCurrent))return stillCurrent()?false:rejectStale();
+        }
+        row.style.removeProperty("--op-right-plus-offset");
+      }
       const bias=toolbarCenterBias(left,right,trailingReserve,centered);
       setLength(leftSpacer,"--op-center-bias",bias.left);
       setLength(rightSpacer,"--op-center-bias",bias.right);
@@ -189,8 +197,9 @@
       setLength(row, "--op-left-room", leftSpacer.getBoundingClientRect().width - 4);
       syncLaneScroll();
       refreshOverflowSlider();
-      accepted=stillCurrent();
-      return accepted||rejectStale();
+      if(!stillCurrent())return rejectStale();
+      accepted=stripPlacementCurrent();
+      return accepted;
     } finally {
       if(!accepted&&committedStripPlacement?.order===order)committedStripPlacement=null;
       centering=false;

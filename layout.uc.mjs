@@ -86,7 +86,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.215",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.216",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -3941,7 +3941,7 @@ function normalizeAutomaticTabRows(plan,count,boundary) {
   function stripPlacementCurrent(placement=committedStripPlacement){
     if(dead||!placement||placement!==committedStripPlacement||
        placement.order!==stripOrderSnapshot)return false;
-    const {order,projection}=placement;
+    const {order,projection,compact}=placement;
     const matches=(lane,slots)=>{
       let k=0;
       for(const i of slots){
@@ -3950,8 +3950,10 @@ function normalizeAutomaticTabRows(plan,count,boundary) {
       }
       return k===lane.children.length;
     };
+    if(row.hasAttribute("data-op-adaptive-compact")!==compact)return false;
     if(!projection){
-      return !row.hasAttribute("data-op-show-island")&&
+      return !row.hasAttribute("data-op-show-island")&&bottomLane.hidden&&
+        !row.hasAttribute("data-op-overflow-row")&&!row.hasAttribute("data-op-bottom-plus")&&
         [leftLane,rightLane,bottomLane].every(lane=>lane.parentElement!==list)&&
         list.children.length===order.length&&order.every((node,i)=>list.children[i]===node&&node.parentElement===list);
     }
@@ -3959,13 +3961,14 @@ function normalizeAutomaticTabRows(plan,count,boundary) {
     if(!row.hasAttribute("data-op-show-island")||list.children.length!==3||
        lanes.some((lane,i)=>lane.parentElement!==list||list.children[i]!==lane)||
        bottomLane.hidden===projection.hasSecondRow||
-       row.hasAttribute("data-op-overflow-row")!==projection.hasSecondRow)return false;
+       row.hasAttribute("data-op-overflow-row")!==projection.hasSecondRow||
+       row.hasAttribute("data-op-bottom-plus")!==(projection.regions.find(r=>r.id==="bottom")?.slots.includes("plus-right")??false))return false;
     return ["top-left","top-right","bottom"].every((id,i)=>
       matches(lanes[i],projection.regions.find(region=>region.id===id)?.slots??[]));
   }
-  function publishStripPlacement(order,projection,current){
+  function publishStripPlacement(order,projection,current,compact=false){
     if(!current())return false;
-    const placement={order,projection};
+    const placement={order,projection,compact};
     committedStripPlacement=placement;
     if(stripPlacementCurrent(placement))return true;
     if(committedStripPlacement===placement)committedStripPlacement=null;
@@ -4021,7 +4024,24 @@ function normalizeAutomaticTabRows(plan,count,boundary) {
     if(active&&list.contains(active)&&document.activeElement!==active)active.focus?.({preventScroll:true});
     if(!current())return false;
     if(selected&&previousLane!==selected.closest(".oneplane-island-lane")&&!row.hasAttribute("data-op-home-open"))window.requestAnimationFrame(revealSelectedInStrip);
-    return publishStripPlacement(order,projection,current);
+    return publishStripPlacement(order,projection,current,plan.mode!=="wide");
+  }
+  function applyFlatStripPlacement(order,current){
+    if(!current())return false;
+    committedStripPlacement=null;
+    if(!mountLaneNodes(list,order,current))return false;
+    for(const lane of [leftLane,rightLane,bottomLane]){
+      if(!current())return false;
+      lane.remove();
+    }
+    if(!current())return false;
+    if(!bottomLane.hidden)bottomLane.hidden=true;
+    if(row.hasAttribute("data-op-overflow-row")){adaptiveHeightDirty=true;contourKey=null;scheduleGeometry();}
+    for(const attr of ["data-op-overflow-row","data-op-adaptive-compact","data-op-bottom-plus"]){
+      if(!current())return false;
+      row.removeAttribute(attr);
+    }
+    return publishStripPlacement(order,null,current);
   }
   function placeStripOrder(order) {
     if(row.hasAttribute("data-op-dragging"))return;
@@ -4039,11 +4059,8 @@ function normalizeAutomaticTabRows(plan,count,boundary) {
           topRight:order.slice(boundary).map((_,i)=>i+boundary),lower:[],hasSecondRow:false,mode:"wide",topPlus:true},snapshot,undefined,boundary))scheduleGeometry();
       }
     }else{
-      if(!mountLaneNodes(list,order,()=>!dead&&stripOrderSnapshot===snapshot))return;
-      leftLane.remove();rightLane.remove();bottomLane.remove();if(!bottomLane.hidden)bottomLane.hidden=true;
-      if(row.hasAttribute("data-op-overflow-row")){adaptiveHeightDirty=true;contourKey=null;scheduleGeometry();}
-      for(const attr of ["data-op-overflow-row","data-op-adaptive-compact","data-op-bottom-plus"])row.removeAttribute(attr);
-      publishStripPlacement(snapshot,null,()=>!dead&&stripOrderSnapshot===snapshot);
+      applyFlatStripPlacement(snapshot,()=>!dead&&stripOrderSnapshot===snapshot&&
+        !row.hasAttribute("data-op-show-island")&&!restingGeometryBlocked());
     }
   }
 
@@ -8046,7 +8063,15 @@ function normalizeAutomaticTabRows(plan,count,boundary) {
         setLength(row,"--op-right-plus-offset",metrics.plusOffset);
         setLength(row,"--op-overflow-width",metrics.overflowWidth);
         setLength(row,"--op-bottom-open",metrics.bottomOpen);
-      }else if(!centered)row.style.removeProperty("--op-right-plus-offset");
+      }else{
+        if(!stripPlacementCurrent()){
+          // Recovery consumes the existing complete mirror order, not visible DOM.
+          // Outside TabSync, a stale native signature must be reconciled first.
+          if(!syncing&&!sameStripStructure(syncedTopology,readStripTopology())){schedule();return false;}
+          if(!applyFlatStripPlacement(order,stillCurrent))return stillCurrent()?false:rejectStale();
+        }
+        row.style.removeProperty("--op-right-plus-offset");
+      }
       const bias=toolbarCenterBias(left,right,trailingReserve,centered);
       setLength(leftSpacer,"--op-center-bias",bias.left);
       setLength(rightSpacer,"--op-center-bias",bias.right);
@@ -8059,8 +8084,9 @@ function normalizeAutomaticTabRows(plan,count,boundary) {
       setLength(row, "--op-left-room", leftSpacer.getBoundingClientRect().width - 4);
       syncLaneScroll();
       refreshOverflowSlider();
-      accepted=stillCurrent();
-      return accepted||rejectStale();
+      if(!stillCurrent())return rejectStale();
+      accepted=stripPlacementCurrent();
+      return accepted;
     } finally {
       if(!accepted&&committedStripPlacement?.order===order)committedStripPlacement=null;
       centering=false;
@@ -10927,7 +10953,9 @@ function vanishingHomeEase(progress) {
     row.setAttribute("data-op-hover-mode",mode);
     row.toggleAttribute("data-op-show-island",show);
     if(!show) row.removeAttribute("data-op-island-tight");
-    placeStripOrder(stripNodes());
+    // A partial mount may have detached units. Never reconstruct native order
+    // from the filtered painted list; a stale native signature needs TabSync.
+    if(sameStripStructure(syncedTopology,readStripTopology()))placeStripOrder(stripOrderSnapshot);
     refreshIslandTitle();
     scheduleGeometry();
     schedule();

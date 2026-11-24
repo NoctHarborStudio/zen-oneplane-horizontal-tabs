@@ -1,3 +1,7 @@
+## 0.3.0-preview.216 — Recover verified flat strip placement (ML1b-R)
+
+Recover detached mirror units from the complete existing order, not the filtered DOM. Verify flat and centered control flags and reuse one flat placement path for mode changes and geometry recovery. Retain existing Automatic allocation, native data and Elastic Chain. Native acceptance pending.
+
 ## 0.3.0-preview.215 — Elastic Chain 2.0
 
 Replace Vanishing Home's rigid grip-anchored row translation with measured gesture-local gap distribution. Preserve outer edges and the grabbed point. Freeze distributed geometry after the 350ms collapse; horizontal pointer motion crosses adjacent slots only, with bounded neighbor easing. Retain Bunny's shape, local adjacent-slot closure, native drop authority, OS image ownership, existing 400ms Home restoration and presentation lease. Retain Library/History Glass and the committed strip placement guard. Native visual acceptance pending.

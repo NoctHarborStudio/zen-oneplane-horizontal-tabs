@@ -78,7 +78,9 @@
     row.setAttribute("data-op-hover-mode",mode);
     row.toggleAttribute("data-op-show-island",show);
     if(!show) row.removeAttribute("data-op-island-tight");
-    placeStripOrder(stripNodes());
+    // A partial mount may have detached units. Never reconstruct native order
+    // from the filtered painted list; a stale native signature needs TabSync.
+    if(sameStripStructure(syncedTopology,readStripTopology()))placeStripOrder(stripOrderSnapshot);
     refreshIslandTitle();
     scheduleGeometry();
     schedule();
