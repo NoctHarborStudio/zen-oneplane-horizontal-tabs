@@ -686,7 +686,7 @@ test("MB-014 native background guard matches Boot color and fails open without J
 
 test("fresh Sine profile leaves optional defaults absent but startup CSS honors JavaScript true fallbacks",()=>{
   const sourceCSS=readFileSync(new URL("../src/styles/base.css.part",import.meta.url),"utf8");
-  const gate='@media (prefers-reduced-motion: no-preference) and (not (-moz-pref("zen.refined.startup.animation", false))) and (not (-moz-pref("zen.nocturne.boot.enabled", false)))';
+  const gate='@media ((prefers-reduced-motion: no-preference) or (-moz-pref("zen.nocturne.startup.force-motion"))) and (not (-moz-pref("zen.refined.startup.animation", false))) and (not (-moz-pref("zen.nocturne.boot.enabled", false)))';
   for(const data of [sourceCSS,css]){
     assert.equal(data.split(gate).length-1,2);
     assert.equal(data.includes('and (-moz-pref("zen.refined.startup.animation")) and (-moz-pref("zen.nocturne.boot.enabled"))'),false);
@@ -697,4 +697,15 @@ test("fresh Sine profile leaves optional defaults absent but startup CSS honors 
   const prelude=readFileSync(new URL("../src/core/boot-prelude.js.part",import.meta.url),"utf8");
   assert.ok(prelude.includes('prefs.getBoolPref("zen.refined.startup.animation",true)'));
   assert.ok(prelude.includes('prefs.getBoolPref("zen.nocturne.boot.enabled",true)'));
+});
+
+test("intro override is explicit and startup-only, with native reduced-motion default retained",()=>{
+ const prefs=JSON.parse(readFileSync(new URL("../preferences.json",import.meta.url),"utf8"));
+ assert.equal(prefs.find(x=>x.property==="zen.nocturne.startup.force-motion").defaultValue,false);
+ const pre=readFileSync(new URL("../src/core/boot-prelude.js.part",import.meta.url),"utf8");
+ assert.ok(pre.includes('!prefs.getBoolPref("zen.nocturne.startup.force-motion",false)'));
+ assert.ok(source.includes('const forceMotion=prefs.getBoolPref("zen.nocturne.startup.force-motion",false)'));
+ assert.ok(source.includes('(reduced.matches&&!forceMotion)?"reduced-motion"'));
+ const eligibility=(reduced,forceMotion)=>!(reduced&&!forceMotion);
+ assert.equal(eligibility(true,false),false);assert.equal(eligibility(true,true),true);assert.equal(eligibility(false,false),true);
 });

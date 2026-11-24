@@ -2,7 +2,7 @@
 
 A unified UI modification for [Zen Browser](https://zen-browser.app/), combining OnePlane and Zen Refined. Nocturne is not a browser fork.
 
-**Development preview: 0.3.0-preview.187** · Target: Zen 1.24.2b / Sine 2.3.3. Native verification of this combined package is pending.
+**Development preview: 0.3.0-preview.188** · Target: Zen 1.24.2b / Sine 2.3.3. Native verification of this combined package is pending.
 
 ## Features
 
@@ -29,7 +29,7 @@ NoctHarborStudio/zen-oneplane-horizontal-tabs/tree/preview
 
 On a **fresh install**, Sine 2.3.3 does not immediately write all preference defaults. Nocturne uses runtime fallbacks: regular features, experimental Library, and Ctrl+H/Ctrl+J Library shortcuts are **on** by default, while explicit user opt-outs remain authoritative. The experimental local-media preference defaults on, but native local folder scanning remains **suspended** until its safety gates pass. Free/Trash role IDs from older profiles are not prerequisites. See [installation and clean-profile diagnostics](docs/installation.md).
 
-Sine 2.3.3 requires permission for unofficial mod scripts. Only enable scripts you trust; then restart Zen for a cold startup intro. The intro deliberately does not replay on Sine hot reload. Home uses a transparent CSS surface, but OS-level background translucency depends on native Zen/system settings; Nocturne does not overwrite them. If updating does not work, see [Sine diagnostics](docs/sine-updates.md).
+Sine 2.3.3 requires permission for unofficial mod scripts. Only enable scripts you trust; then restart Zen for a cold startup intro. The intro deliberately does not replay on Sine hot reload. Home uses a transparent CSS surface. The Nocturne settings now expose Home transparency, native window transparency and platform-specific backdrop options. Native settings remain user-controlled; an optional startup-only reduced-motion override is off by default. System compositor support and the native workspace theme opacity still determine the actual desktop translucency. If updating does not work, see [Sine diagnostics](docs/sine-updates.md).
 
 ## Development
 

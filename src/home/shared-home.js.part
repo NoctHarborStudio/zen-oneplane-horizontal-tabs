@@ -63,6 +63,7 @@ function acquireZenHome(win, services) {
 #zen-shared-home{position:absolute;inset:0;z-index:4;display:flex;align-items:safe center;justify-content:center;overflow:auto;box-sizing:border-box;padding:72px 24px 32px;background:transparent;color:var(--toolbox-textcolor,currentColor);font:menu;scrollbar-width:thin}
 #zen-shared-home *{box-sizing:border-box}
 #zen-shared-home button,#zen-shared-home input{font:inherit;color:inherit}
+@media (-moz-pref("zen.nocturne.home.transparent", false)){#zen-shared-home{background:Canvas}}
 #zen-shared-home button{appearance:none;cursor:pointer;border:0;background:none;padding:0}
 #zen-shared-home button:focus-visible,#zen-shared-home input:focus-visible{outline:2px solid AccentColor;outline-offset:3px}
 /* Gecko subtracts every explicit no-drag rectangle from all drag rectangles.
@@ -403,7 +404,7 @@ function acquireZenHome(win, services) {
     if(bloom&&win.__nocturneStartupTimeline!==timeline)return null;
     if(timeline.closed||bloom&&(timeline.bloomPrepared||!timeline.paused||typeof timeline.observeEffect!=="function")||
        !timeline.paused&&elapsed>=timeline.home*timeline.scale){finishStartupHome();return null;}
-    if(win.matchMedia("(prefers-reduced-motion: reduce)").matches||timeline.homeLease){finishStartupHome();return null;}
+    if((win.matchMedia("(prefers-reduced-motion: reduce)").matches&&!prefs.getBoolPref("zen.nocturne.startup.force-motion",false))||timeline.homeLease){finishStartupHome();return null;}
     const run={timeline,effects:[],lease:null,dirty:false,epochStarted:false};
     const exact=()=>startupRun===run&&!dead&&open&&(!bloom||win.__nocturneStartupTimeline===timeline);
     const lease={
@@ -1177,7 +1178,7 @@ function acquireZenHome(win, services) {
       if(startup&&bar?.hasAttribute("zen-newtab"))bar._zenHandleUrlbarClose?.();
       bar?.view?.close();bar?.blur();
       oldInert=panels.hasAttribute("inert");covered=true;host.setAttribute("data-zr-home-host","");panels.setAttribute("data-zr-home-covered","");panels.setAttribute("inert","");
-      const staged=(startup||win.__nocturneLayoutStartup?.initial===true)&&!!root.getAttribute("data-zr-startup-phase")&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const staged=(startup||win.__nocturneLayoutStartup?.initial===true)&&!!root.getAttribute("data-zr-startup-phase")&&(!win.matchMedia("(prefers-reduced-motion: reduce)").matches||prefs.getBoolPref("zen.nocturne.startup.force-motion",false));
       if(staged)panel.setAttribute("data-zh-startup","");
       panel.hidden=false;open=true;render();notify();
       if(staged){

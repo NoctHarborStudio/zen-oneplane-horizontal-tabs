@@ -10,7 +10,7 @@
      typeof win.addUnloadListener!=="function"||win.closed||root.hasAttribute("popup-window")||
      root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"||
      win.performance.now()>=3500||!prefs.getBoolPref("zen.refined.startup.animation",true)||
-     !prefs.getBoolPref("zen.nocturne.boot.enabled",true)||win.matchMedia("(prefers-reduced-motion: reduce)").matches){
+     !prefs.getBoolPref("zen.nocturne.boot.enabled",true)||(win.matchMedia("(prefers-reduced-motion: reduce)").matches&&!prefs.getBoolPref("zen.nocturne.startup.force-motion",false))){
     // A terminal skip must not re-arm the CSS guard on a later empty tab.
     root.setAttribute("data-nocturne-startup-background-done","true");
     return;
@@ -93,7 +93,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.187",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.188",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -575,7 +575,7 @@
       if(type==="unload")requestDispose(true);
     });
     bindNative();observeTargets();
-    record("diagnostics.ready",()=>({version:VERSION,writer:writerMode,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished,size:[win.innerWidth,win.innerHeight],private:privateWindow()}),{sample:6000,flush:true});
+    record("diagnostics.ready",()=>({version:VERSION,writer:writerMode,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished,size:[win.innerWidth,win.innerHeight],private:privateWindow(),reducedMotion:!!win.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches,reducedTransparency:!!win.matchMedia?.("(prefers-reduced-transparency: reduce)")?.matches,forceMotion:Services.prefs.getBoolPref("zen.nocturne.startup.force-motion",false),homeTransparent:Services.prefs.getBoolPref("zen.nocturne.home.transparent",true),nativeMica:!!win.matchMedia?.("(-moz-windows-mica)")?.matches,windowTransparency:Services.prefs.getBoolPref("widget.transparent-windows",false),windowsMica:Services.prefs.getBoolPref("widget.windows.mica",false),linuxTransparency:Services.prefs.getBoolPref("zen.widget.linux.transparency",false),macVibrancy:Services.prefs.getBoolPref("zen.widget.macos.window-vibrancy",false)}),{sample:6000,flush:true});
     const early=win.__nocturneEarlyTrace||[];delete win.__nocturneEarlyTrace;
     for(const item of early)record(item.event,()=>({earlyAt:item.t,...item.data}),{sample:2000});
   }catch(error){record("diagnostics.setup-error",{name:error?.name});dispose();}
@@ -1455,7 +1455,7 @@ function startupBloomAssemblyPlan(start,scale){
   // The layout entrypoint runs before its own projection. Gate only a
   // genuinely new window, never a Sine reload. Fail open on missing Assembly.
   try{
-    if(!win.__nocturneLayoutStartup&&(!win.__zenRefinedStartupAnimationSeen||win.__zenRefinedStartupAnimation)&&win.performance.now()<3500&&Services.prefs.getBoolPref("zen.refined.startup.animation",true)&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches){
+    if(!win.__nocturneLayoutStartup&&(!win.__zenRefinedStartupAnimationSeen||win.__zenRefinedStartupAnimation)&&win.performance.now()<3500&&Services.prefs.getBoolPref("zen.refined.startup.animation",true)&&(!win.matchMedia("(prefers-reduced-motion: reduce)").matches||Services.prefs.getBoolPref("zen.nocturne.startup.force-motion",false))){
       win.__nocturneTrace?.("assembly.gate",{age:win.performance.now(),pending:true},{flush:true});
       root.setAttribute(PENDING,"true");
       const deadline=win.__nocturneEarlyBoot?.deadline??win.__zenRefinedStartupAnimation?.deadline??(win.performance.now()+8000);
@@ -2079,6 +2079,7 @@ function acquireZenHome(win, services) {
 #zen-shared-home{position:absolute;inset:0;z-index:4;display:flex;align-items:safe center;justify-content:center;overflow:auto;box-sizing:border-box;padding:72px 24px 32px;background:transparent;color:var(--toolbox-textcolor,currentColor);font:menu;scrollbar-width:thin}
 #zen-shared-home *{box-sizing:border-box}
 #zen-shared-home button,#zen-shared-home input{font:inherit;color:inherit}
+@media (-moz-pref("zen.nocturne.home.transparent", false)){#zen-shared-home{background:Canvas}}
 #zen-shared-home button{appearance:none;cursor:pointer;border:0;background:none;padding:0}
 #zen-shared-home button:focus-visible,#zen-shared-home input:focus-visible{outline:2px solid AccentColor;outline-offset:3px}
 /* Gecko subtracts every explicit no-drag rectangle from all drag rectangles.
@@ -2419,7 +2420,7 @@ function acquireZenHome(win, services) {
     if(bloom&&win.__nocturneStartupTimeline!==timeline)return null;
     if(timeline.closed||bloom&&(timeline.bloomPrepared||!timeline.paused||typeof timeline.observeEffect!=="function")||
        !timeline.paused&&elapsed>=timeline.home*timeline.scale){finishStartupHome();return null;}
-    if(win.matchMedia("(prefers-reduced-motion: reduce)").matches||timeline.homeLease){finishStartupHome();return null;}
+    if((win.matchMedia("(prefers-reduced-motion: reduce)").matches&&!prefs.getBoolPref("zen.nocturne.startup.force-motion",false))||timeline.homeLease){finishStartupHome();return null;}
     const run={timeline,effects:[],lease:null,dirty:false,epochStarted:false};
     const exact=()=>startupRun===run&&!dead&&open&&(!bloom||win.__nocturneStartupTimeline===timeline);
     const lease={
@@ -3193,7 +3194,7 @@ function acquireZenHome(win, services) {
       if(startup&&bar?.hasAttribute("zen-newtab"))bar._zenHandleUrlbarClose?.();
       bar?.view?.close();bar?.blur();
       oldInert=panels.hasAttribute("inert");covered=true;host.setAttribute("data-zr-home-host","");panels.setAttribute("data-zr-home-covered","");panels.setAttribute("inert","");
-      const staged=(startup||win.__nocturneLayoutStartup?.initial===true)&&!!root.getAttribute("data-zr-startup-phase")&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const staged=(startup||win.__nocturneLayoutStartup?.initial===true)&&!!root.getAttribute("data-zr-startup-phase")&&(!win.matchMedia("(prefers-reduced-motion: reduce)").matches||prefs.getBoolPref("zen.nocturne.startup.force-motion",false));
       if(staged)panel.setAttribute("data-zh-startup","");
       panel.hidden=false;open=true;render();notify();
       if(staged){

@@ -148,6 +148,75 @@
     "defaultValue": true
   },
   {
+    "type": "checkbox",
+    "property": "zen.nocturne.home.transparent",
+    "label": "Home — transparent surface",
+    "defaultValue": true
+  },
+  {
+    "type": "checkbox",
+    "property": "widget.transparent-windows",
+    "label": "Native window transparency (restart required)",
+    "restart": true
+  },
+  {
+    "type": "checkbox",
+    "property": "widget.windows.mica",
+    "label": "Windows Mica / Acrylic backdrop (restart required)",
+    "disabledOn": [
+      "linux",
+      "macos"
+    ],
+    "restart": true
+  },
+  {
+    "type": "dropdown",
+    "property": "widget.windows.mica.toplevel-backdrop",
+    "label": "Windows backdrop type (restart required)",
+    "value": "number",
+    "defaultValue": 2,
+    "placeholder": false,
+    "options": [
+      {
+        "label": "Mica",
+        "value": 1
+      },
+      {
+        "label": "Acrylic (transient)",
+        "value": 2
+      },
+      {
+        "label": "Tabbed Mica",
+        "value": 3
+      }
+    ],
+    "disabledOn": [
+      "linux",
+      "macos"
+    ],
+    "restart": true
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.widget.macos.window-vibrancy",
+    "label": "macOS window vibrancy (restart required)",
+    "disabledOn": [
+      "windows",
+      "linux"
+    ],
+    "restart": true
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.widget.linux.transparency",
+    "label": "Linux window transparency (restart required)",
+    "disabledOn": [
+      "windows",
+      "macos"
+    ],
+    "restart": true
+  },
+  {
     "type": "dropdown",
     "property": "zen.oneplane.fade-transparency",
     "label": "Toolbar surface transparency",
@@ -550,14 +619,23 @@
   {
     "type": "checkbox",
     "property": "zen.refined.startup.animation",
-    "label": "Center Assembly startup animation (next window)",
-    "defaultValue": true
+    "label": "Startup intro — Center Assembly (restart Zen)",
+    "defaultValue": true,
+    "restart": true
   },
   {
     "type": "checkbox",
     "property": "zen.nocturne.boot.enabled",
-    "label": "Nocturne boot splash (next window)",
-    "defaultValue": true
+    "label": "Startup intro — Nocturne logo / Boot (restart Zen)",
+    "defaultValue": true,
+    "restart": true
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.nocturne.startup.force-motion",
+    "label": "Startup intro — play even with system reduced motion (optional; restart Zen)",
+    "defaultValue": false,
+    "restart": true
   },
   {
     "type": "dropdown",
@@ -655,6 +733,12 @@
     "type": "checkbox",
     "property": "zen.nocturne.library.local-media",
     "label": "Library — local folder scan (temporarily paused; choice preserved)",
+    "defaultValue": true
+  },
+  {
+    "type": "checkbox",
+    "property": "zen.nocturne.diagnostics.enabled",
+    "label": "Nocturne local diagnostic log",
     "defaultValue": true
   }
 ]

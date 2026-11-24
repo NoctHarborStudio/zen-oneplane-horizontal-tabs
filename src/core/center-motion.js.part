@@ -709,7 +709,7 @@
   // The layout entrypoint runs before its own projection. Gate only a
   // genuinely new window, never a Sine reload. Fail open on missing Assembly.
   try{
-    if(!win.__nocturneLayoutStartup&&(!win.__zenRefinedStartupAnimationSeen||win.__zenRefinedStartupAnimation)&&win.performance.now()<3500&&Services.prefs.getBoolPref("zen.refined.startup.animation",true)&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches){
+    if(!win.__nocturneLayoutStartup&&(!win.__zenRefinedStartupAnimationSeen||win.__zenRefinedStartupAnimation)&&win.performance.now()<3500&&Services.prefs.getBoolPref("zen.refined.startup.animation",true)&&(!win.matchMedia("(prefers-reduced-motion: reduce)").matches||Services.prefs.getBoolPref("zen.nocturne.startup.force-motion",false))){
       win.__nocturneTrace?.("assembly.gate",{age:win.performance.now(),pending:true},{flush:true});
       root.setAttribute(PENDING,"true");
       const deadline=win.__nocturneEarlyBoot?.deadline??win.__zenRefinedStartupAnimation?.deadline??(win.performance.now()+8000);
