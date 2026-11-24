@@ -45,8 +45,14 @@ test("History launcher uses existing Library toggle and never opens stock Zen Hi
   assert.match(src,/cleanupStep\("history button",\(\)=>historyButton\.remove\(\)\)/);
   assert.match(src,/\[historyButton,"click",openHistory\]/);
   assert.match(css,/#oneplane-history-button \{/);
-  assert.match(css,/margin:0 0 0 -30px !important/);
-  assert.match(css,/transform:translateY\(var\(--op-top-row-height\)\) !important/);
+  const rule=id=>css.slice(css.indexOf("#nav-bar-customization-target > #"+id)).split("}")[0];
+  const order=id=>Number(rule(id).match(/order:(-?\d+) !important/)[1]);
+  const history=rule("oneplane-history-button");
+  assert.match(history,/margin:0 !important/);
+  assert.match(history,/flex:0 0 30px !important/);
+  assert.doesNotMatch(history,/translateY|margin:[^;]*-30px/);
+  assert.ok(order("oneplane-hub-button")<order("oneplane-history-button"));
+  assert.ok(order("oneplane-history-button")<order("oneplane-download-indicator-slot"));
 });
 test("hub follows navigation right edge and clamps to viewport",()=>{
   assert.equal(hubPanelWidth(5,255,1920),250);

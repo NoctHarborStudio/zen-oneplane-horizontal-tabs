@@ -98,7 +98,7 @@
     // Do not reopen the start-page search after an interrupted OS gesture.
     dragSearch=null;pointerSearch=null;
     cancelStartupSearchRestore("drag-cancel");
-    try{endDragVisual();}finally{clearSourceIncoming(cancelledToken);}
+    try{endDragVisual(false,reason==="keyboard-interruption");}finally{clearSourceIncoming(cancelledToken);}
   }
   function startNativeDragLifecycle(event,tab){
     if(dragLifecycle.current())dragLifecycle.cancel("superseded");
@@ -119,6 +119,7 @@
     return dragLifecycle.finish(token);
   }
   function cancelActiveDrag(reason){
+    if(dragInsertPending&&row.hasAttribute("data-op-vanishing-home"))dragSearch=null;
     if(dragInsertPending)endDragVisual();
     return dragLifecycle.cancel(reason);
   }

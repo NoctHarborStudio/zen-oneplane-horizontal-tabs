@@ -13,7 +13,11 @@
     lastHoverPointer={...point};
     return hoverTab===hit;
   }
-  function endDragVisual(restoreReturn=false) {
+  function endDragVisual(restoreReturn=false,reopenVanishing=false) {
+    const reopening=reopenVanishing?captureVanishingReturn():null;
+    const temporaryCommit=!!reopening&&!row.hasAttribute("data-op-drag-commit");
+    if(temporaryCommit)row.setAttribute("data-op-drag-commit","true");
+    try{
     const returnedSource=restoreReturn?dragNode:null,returnedPoint=restoreReturn?dragReturnPoint:null;
     dragReturnPoint=null;
     dragInsertPending=false;dragViewport=null;dragChromeFrame=null;nativeDragTopology=null;
@@ -23,6 +27,7 @@
     const search = dragSearch;
     dragSearch = null; pointerSearch = null;
     clearGroupPull();
+    clearVanishingHome();
     if(dragBunnyLayout)clearBunnyPull();
     dragNode?.removeAttribute("data-op-lane-ghost");
     dragNode?.removeAttribute("data-op-detached");
@@ -50,8 +55,10 @@
     }
     refreshIndicator();
     refreshIslandTitle();
-    restoreStartupSearch(search);
+    if(!reopening)restoreStartupSearch(search);
     reconcileTabCascade();
+    if(reopening)startVanishingReturn(reopening,false);
+    }finally{if(temporaryCommit)row.removeAttribute("data-op-drag-commit");}
   }
   function sourceHandled(tab,finishReturn=false,expectedToken=null) {
     const source=tabOwner(tab)?.[DRAG_CONTROLLER];
@@ -110,6 +117,7 @@
       if (!group && (browser.selectedTab !== tab || isSplit(tab))) {
         splitZone.setAttribute("data-op-dragging", "true");
       }
+      beginVanishingHome(event,tab);
       previewStripDrag(event,tab);
       dragChromeFrame=readDragChromeFrame();
       if(!dragChromeFrame){cancelActiveDrag("chrome-frame-unready");return;}
@@ -185,9 +193,21 @@
     if(owner!==window&&!incomingDropAllowed(tab,owner,incoming,true)){
       rejectIncomingDrop(event,tab,owner,incoming);return;
     }
+    const vanishingDrop=owner===window&&!!row.hasAttribute?.("data-op-vanishing-home");
+    const reopening=vanishingDrop?captureVanishingReturn():null;
+    const settleVanishing=()=>{
+      if(!vanishingDrop||!vanishingHome)return;
+      cancelActiveDrag("vanish-drop-unsettled");
+      if(vanishingHome)endDragVisual();
+    };
+    if(reopening){dragSearch=null;row.setAttribute("data-op-drag-commit","true");}
     if(!validStripDropTarget(dest,event,tab)){
-      markSourceHandled();
-      if(!clearIncomingDrag("target-rejected",incoming)){clearLiveDrag();clearDropMarker();}
+      try{markSourceHandled();}
+      finally{
+        settleVanishing();
+        if(!clearIncomingDrag("target-rejected",incoming)){clearLiveDrag();clearDropMarker();}
+        if(reopening){finishStripCommit();startVanishingReturn(reopening,false);}
+      }
       return;
     }
     row.setAttribute("data-op-drag-commit", "true");
@@ -251,8 +271,10 @@
     }finally{
       window.__nocturneTrace?.("drag.native.outcome",{operation,outcome},{sample:1600});
       try{markSourceHandled();}catch(error){console.error("[OnePlane] Drag source settle:",nocturneErrorClass(error));}
+      settleVanishing();
       if(incoming&&incomingDrag===incoming){incomingDrag=null;releaseDragReveal();}
       clearDropMarker();
       finishStripCommit();
+      if(reopening)startVanishingReturn(reopening,outcome==="confirmed"||outcome==="no-op");
     }
   }

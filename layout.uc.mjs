@@ -86,7 +86,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.201",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.203",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -415,7 +415,7 @@
     }catch{}
   }
   const rootAttrs=["data-zr-center-handoff","data-zr-center-motion","data-zr-center-pending","oneplane-active","data-op-startup-ready","data-zr-startup-phase","data-nocturne-boot","data-zr-closing","data-zr-workspace-phase","data-op-bookmark-wave","zen-compact-mode","customizing","inDOMFullscreen","inFullscreen"];
-  const attrs=[...rootAttrs,"data-op-panel-open","oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold","oneplane-home-hold","oneplane-workspace-hold","oneplane-download-hold","zen-has-hover","has-popup-menu","zen-compact-mode-active","data-ready","data-op-overflow-row","data-op-adaptive-compact","data-op-dragging","data-op-inline-drag","data-op-lane-drag","data-op-group-pull","data-op-live-drag","data-op-drag-commit","data-op-url-phase","data-op-home-open","data-op-lane-ghost","data-op-magnetic-pull","data-op-magnetic-source","data-op-detached","data-op-pulling","data-op-drag-follow","data-op-reinsert","data-zr-workspace-geometry","data-zr-workspace-motion","data-zr-center-card","data-zr-workspace-height-motion","data-zr-workspace-surface","data-zr-workspace-page","data-zr-home-covered","data-zr-startup-effect","data-zr-close-effect","hidden","collapsed","open","focused"];
+  const attrs=[...rootAttrs,"data-op-panel-open","oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold","oneplane-home-hold","oneplane-workspace-hold","oneplane-download-hold","zen-has-hover","has-popup-menu","zen-compact-mode-active","data-ready","data-op-overflow-row","data-op-adaptive-compact","data-op-dragging","data-op-inline-drag","data-op-lane-drag","data-op-group-pull","data-op-live-drag","data-op-vanishing-home","data-op-vanishing-ghost","data-op-vanishing-tail-source","data-op-drag-commit","data-op-url-phase","data-op-home-open","data-op-lane-ghost","data-op-magnetic-pull","data-op-magnetic-source","data-op-detached","data-op-pulling","data-op-drag-follow","data-op-reinsert","data-zr-workspace-geometry","data-zr-workspace-motion","data-zr-center-card","data-zr-workspace-height-motion","data-zr-workspace-surface","data-zr-workspace-page","data-zr-home-covered","data-zr-startup-effect","data-zr-close-effect","hidden","collapsed","open","focused"];
   const targets=["titlebar-buttonbox","titlebar-max","titlebar-restore","titlebar-close","zr-page-progress","oneplane-tab-indicator","oneplane-overflow-slider","zen-appcontent-navbar-wrapper","zen-appcontent-navbar-container","oneplane-toolbar-surface","nav-bar","nav-bar-customization-target","oneplane-hub-button","oneplane-history-button","oneplane-download-indicator-slot","back-button","forward-button","stop-reload-button","oneplane-page-actions","oneplane-tabs","oneplane-overflow-tabs","PersonalToolbar","PlacesToolbarItems","urlbar-container","urlbar","tabbrowser-tabpanels","zen-shared-home","zr-download-indicator"];
   function attrState(n,keys=attrs){const out={};for(const k of keys)if(n.hasAttribute(k))out[k]=n.getAttribute(k)||true;return out;}
   function observeTargets(){
@@ -5104,7 +5104,7 @@ function installTabStrip() {
     // Do not reopen the start-page search after an interrupted OS gesture.
     dragSearch=null;pointerSearch=null;
     cancelStartupSearchRestore("drag-cancel");
-    try{endDragVisual();}finally{clearSourceIncoming(cancelledToken);}
+    try{endDragVisual(false,reason==="keyboard-interruption");}finally{clearSourceIncoming(cancelledToken);}
   }
   function startNativeDragLifecycle(event,tab){
     if(dragLifecycle.current())dragLifecycle.cancel("superseded");
@@ -5125,6 +5125,7 @@ function installTabStrip() {
     return dragLifecycle.finish(token);
   }
   function cancelActiveDrag(reason){
+    if(dragInsertPending&&row.hasAttribute("data-op-vanishing-home"))dragSearch=null;
     if(dragInsertPending)endDragVisual();
     return dragLifecycle.cancel(reason);
   }
@@ -8275,7 +8276,8 @@ function installTabStrip() {
       !bar?.hasAttribute("focused")&&!bar?.hasAttribute("open");
   }
   function retireBlockedNativeTabDrag(reason="phase-conflict"){
-    if(dragLifecycle.current()?.kind!=="tab"||dragPhaseInputAllowed())return false;
+    const visualTail=row.hasAttribute?.("data-op-vanishing-home")&&dragInsertPending;
+    if((dragLifecycle.current()?.kind!=="tab"&&!visualTail)||dragPhaseInputAllowed())return false;
     cancelActiveDrag(reason);
     return true;
   }
@@ -8760,7 +8762,7 @@ function installTabStrip() {
   const bunnyMix=(a,b,t)=>a+(b-a)*t;
   function bunnySlot(progress,anchor,side,gap){
     const ratio=1-.96*bunnySmooth(progress),loss=(anchor.width+gap)*(1-ratio);
-    return {ratio,loss,width:anchor.width*ratio,x:anchor.x+(side==="L"?1:-1)*anchor.width*(1-ratio)/2};
+    return {ratio,loss,width:anchor.width*ratio,x:anchor.x+(side==="L"?1:side==="R"?-1:0)*anchor.width*(1-ratio)/2};
   }
   function bunnyNeighborShift(progress,anchor,side,gap,outer){
     return outer?(side==="L"?1:-1)*bunnySlot(progress,anchor,side,gap).loss:0;
@@ -8918,6 +8920,14 @@ function installTabStrip() {
     // Clearing/replacing it without a verified native contract risks duplicate art.
     if(dragImageMode==="outside")return;
     const previous = dragImageMode;
+    if(vanishingHome&&mode!=="outside"){
+      dragImageMode=mode;
+      dragNode.toggleAttribute("data-op-detached",mode==="content");
+      dragNode.toggleAttribute("data-op-magnetic-source",mode==="content");
+      row.toggleAttribute("data-op-inline-drag",mode==="inline");
+      if(mode==="content")dragDetachedOnce=true;
+      return;
+    }
     if(dragBunnyLayout&&mode!=="outside"){
       dragImageMode=mode;
       dragNode.toggleAttribute("data-op-detached",mode==="content");
@@ -8939,7 +8949,15 @@ function installTabStrip() {
       const ok = updateNativeDragImage(dragGhostBody,Math.round(box.width/2),Math.round(box.height/2),event);
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.native-image",()=>({ok,width:box.width,height:box.height}),{sample:1800});
       hideGhost();
-      if (!ok) { if (dragBunnyLayout)paintBunnyAt(dragBunnyLayout.progress,dragBunnyLayout.point);else if (previous === "content") showGhost(event); return; }
+      if (!ok) { if(vanishingHome){armVanishingHome(vanishingHome);return;} if (dragBunnyLayout)paintBunnyAt(dragBunnyLayout.progress,dragBunnyLayout.point);else if (previous === "content") showGhost(event); return; }
+    }
+    if(vanishingHome&&mode==="outside"){
+      dragImageMode=mode;dragDetachedOnce=true;vanishingHome.p=1;
+      dragNode.setAttribute("data-op-detached","true");
+      dragNode.setAttribute("data-op-magnetic-source","true");
+      dragNode.setAttribute("data-op-lane-ghost","true");
+      row.removeAttribute("data-op-inline-drag");
+      armVanishingHome(vanishingHome);return;
     }
     cancelInsertion();
     const detached = mode === "content" || mode === "outside";
@@ -8979,6 +8997,311 @@ function installTabStrip() {
       if(draggedTab&&dragNode)setDragImageMode("outside",event);
     }
   }
+// Vanishing Home: gesture-local virtual geometry. Native tab order and
+// physical lane ownership remain unchanged until the existing native drop.
+function vanishingHomeSlots(widths, center, plusWidth, gap=3) {
+  const total=widths.reduce((sum,w)=>sum+w+gap,0)+plusWidth;
+  let x=center-total/2;
+  const positions=widths.map(w=>{const left=x;x+=w+gap;return left;});
+  return {positions,plus:x,total};
+}
+
+function vanishingHomeIndex(midpoints, x, previous, buffer=8) {
+  let i=Math.max(0,Math.min(midpoints.length,previous));
+  while(i<midpoints.length&&x>midpoints[i]+buffer)i++;
+  while(i>0&&x<midpoints[i-1]-buffer)i--;
+  return i;
+}
+
+// Both chains close around the disappearing source, retaining their
+// original widths and gaps. The source anchor is the full destination slot.
+function vanishingHomePull(widths, index, center, plusWidth, progress, gap=3) {
+  const full=vanishingHomeSlots(widths,center,plusWidth,gap);
+  const p=Math.max(0,Math.min(1,progress)),smooth=p*p*(3-2*p);
+  const ratio=1-.96*smooth,loss=(widths[index]+gap)*(1-ratio);
+  const positions=full.positions.map((x,i)=>x+(i<index?loss/2:i>index?-loss/2:0));
+  return {positions,plus:full.plus-loss/2,ratio,loss,anchor:full.positions[index]+widths[index]/2};
+}
+
+// Pointer pressure is symmetric, constrained to the frozen chrome budget,
+// and only moves the chain actually touched by the source.
+function vanishingHomePressure(width,delta,room) {
+  const max=Math.min(15,Math.max(8,width*.33));
+  return Math.sign(delta)*Math.min(Math.abs(delta),Math.max(0,room),max*(1-Math.exp(-Math.abs(delta)/18)));
+}
+  // Vanishing Home owns only temporary painted positions for a local,
+  // non-scrolling top-row gesture. The native source stays in its DOM lane.
+  let vanishingHome=null;
+  const VANISH_CLOSE_MS=205,VANISH_OPEN_MS=310;
+  function vanishMotionEnabled(){
+    return !reducedMotion.matches&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0;
+  }
+  function vanishBox(node){
+    const r=node.getBoundingClientRect();
+    return {x:r.left+r.width/2,y:r.top+r.height/2,width:r.width,height:r.height,left:r.left,right:r.right};
+  }
+  function vanishMixBox(a,b,k){
+    return {x:bunnyMix(a.x,b.x,k),y:bunnyMix(a.y,b.y,k),width:bunnyMix(a.width,b.width,k),height:bunnyMix(a.height,b.height,k)};
+  }
+  function vanishValidBox(b){return [b.x,b.y,b.width,b.height,b.left,b.right].every(Number.isFinite)&&b.width>0&&b.height>0;}
+  function vanishRect(b){return {left:b.x-b.width/2,right:b.x+b.width/2,top:b.y-b.height/2,bottom:b.y+b.height/2};}
+  function beginVanishingHome(event,tab){
+    if(!hasCenteredIsland()||useLaneDrop()||!isStripNode(dragNode)||!dragGhostBody||!dragGhost)return false;
+    const nodes=stripNodes(),source=dragNode,index=nodes.indexOf(source);
+    if(index<0||nodes.some(n=>n.parentElement!==leftLane&&n.parentElement!==rightLane))return false;
+    const boxes=new Map(nodes.map(n=>[n,vanishBox(n)])),sourceBox=boxes.get(source);
+    const home=vanishBox(island),plusBox=vanishBox(plus),bounds=row.getBoundingClientRect();
+    if(!vanishValidBox(home)||!vanishValidBox(plusBox)||!vanishValidBox(sourceBox)||
+      [...boxes.values()].some(b=>!vanishValidBox(b)||Math.abs(b.y-sourceBox.y)>2))return false;
+    if(!Number.isFinite(bounds.left)||!Number.isFinite(bounds.right)||bounds.width<=0)return false;
+    for(let i=1;i<nodes.length;i++)if(boxes.get(nodes[i-1]).right>boxes.get(nodes[i]).left+.5)return false;
+    const gap=3,widths=nodes.map(n=>boxes.get(n).width);
+    const centered=vanishingHomeSlots(widths,home.x,plusBox.width,gap);
+    if(centered.total>bounds.width)return false;
+    // Preserve the grabbed slot while the island disappears. Centering
+    // the compact chain unconditionally would slide the card out from
+    // under a stationary pointer by roughly half the island width.
+    const desiredCenter=home.x+sourceBox.x-(centered.positions[index]+widths[index]/2);
+    const center=Math.max(bounds.left+centered.total/2,Math.min(bounds.right-centered.total/2,desiredCenter));
+    const ref=vanishingHomeSlots(widths,center,plusBox.width,gap);
+    if(ref.positions[0]<bounds.left-.1||ref.plus+plusBox.width>bounds.right+.1)return false;
+    const boundary=nodes.filter(n=>n.parentElement===leftLane).length;
+    const seam=(ref.positions[boundary]??ref.plus)-gap/2;
+    const origin=bunnyClamp((seam-home.left)/home.width);
+    const toolbar=toolbarWrapper.getBoundingClientRect();
+    if(!Number.isFinite(toolbar.left)||!Number.isFinite(toolbar.right)||toolbar.right<=toolbar.left)return false;
+    const rest=nodes.filter(n=>n!==source),midpoints=rest.map(n=>{
+      const i=nodes.indexOf(n);return ref.positions[i]+widths[i]/2;
+    });
+    dragGhost.hidden=false;
+    dragGhostBody.style.removeProperty("transform");
+    const ghost=vanishBox(dragGhostBody);hideGhost();
+    if(!vanishValidBox(ghost))return false;
+    boxes.set(plus,plusBox);
+    const s={source,tab,token:nativeDragToken,nodes,rest,boxes,home,plusBox,center,gap,index,midpoints,
+      point:{x:event.clientX,y:event.clientY},lastX:event.clientX,
+      full:{width:ghost.width,height:ghost.height},bounds:{left:bounds.left,right:bounds.right},
+      edge:dragEdge,origin,toolbar:{left:toolbar.left,right:toolbar.right},
+      p:0,paintedP:0,paint:new Map(boxes),scale:1,k:0,frame:0,lastFrame:0,
+      duration:vanishMotionEnabled()?VANISH_CLOSE_MS:0,start:window.performance.now(),gaps:[]};
+    vanishingHome=s;
+    row.setAttribute("data-op-vanishing-home","true");
+    row.setAttribute("data-op-live-drag","true");
+    row.style.setProperty("--op-vanishing-scale","1");
+    row.style.setProperty("--op-vanishing-origin",origin*100+"%");
+    window.__nocturneTrace?.("drag.vanish.begin",{token:nativeDragToken,count:nodes.length,index,homeWidth:home.width,continuousWidth:ref.total,gripOffset:center-home.x,origin},{sample:1000});
+    armVanishingHome(s);
+    return true;
+  }
+  function vanishOrder(s){
+    const order=s.rest.slice();order.splice(s.index,0,s.source);
+    return order;
+  }
+  function vanishFullMap(s,order=vanishOrder(s)){
+    const v=vanishingHomeSlots(order.map(n=>s.boxes.get(n).width),s.center,s.plusBox.width,s.gap);
+    const map=new Map(order.map((n,i)=>[n,{...s.boxes.get(n),x:v.positions[i]+s.boxes.get(n).width/2}]));
+    map.set(plus,{...s.plusBox,x:v.plus+s.plusBox.width/2});
+    return map;
+  }
+  function previewVanishingHome(event){
+    const s=vanishingHome;if(!s)return null;
+    if(!Number.isFinite(event.clientX)||!Number.isFinite(event.clientY))return liveDragTarget;
+    s.point={x:event.clientX,y:event.clientY};dragLastPoint={...s.point};
+    const lateral=event.clientX<s.toolbar.left||event.clientX>s.toolbar.right;
+    const raw=bunnyPullProgress(event.clientY,s.edge);
+    s.p=lateral?1:bunnyProgress(raw);
+    if(dragImageMode!=="outside")setDragImageMode(raw>=BUNNY_DETACH_THRESHOLD||lateral?"content":"inline",event);
+    const x=event.clientX;
+    if(Math.abs(x-s.lastX)>.01){
+      const old=s.index;
+      // During the 205ms join, thresholds share the painted coordinate
+      // interpolation. They never chase shifted neighboring cards.
+      const mids=s.rest.map((n,i)=>bunnyMix(s.boxes.get(n).x,s.midpoints[i],s.k));
+      s.index=vanishingHomeIndex(mids,x,s.index,REORDER_BUFFER);
+      s.lastX=x;
+      if(old!==s.index)window.__nocturneTrace?.("drag.vanish.target",{token:nativeDragToken,from:old,to:s.index,p:s.p},{throttle:70,sample:1000});
+    }
+    const picked=s.rest[Math.min(s.index,s.rest.length-1)]||s.source;
+    liveDragTarget={...nativeSlot(picked),before:s.index<s.rest.length};
+    armVanishingHome(s);
+    return liveDragTarget;
+  }
+  function armVanishingHome(s){
+    if(vanishingHome!==s||s.frame)return;
+    s.frame=window.requestAnimationFrame(now=>{
+      s.frame=0;
+      if(vanishingHome!==s||dead)return;
+      if(retireChangedDragViewport()||retireBlockedNativeTabDrag("vanish-phase"))return;
+      if(paintVanishingHome(s,now))armVanishingHome(s);
+    });
+  }
+  function paintVanishingHome(s,now){
+    if(vanishingHome!==s)return false;
+    const dt=s.lastFrame?Math.max(0,now-s.lastFrame):16;
+    if(s.lastFrame&&s.gaps.length<160)s.gaps.push(dt);
+    s.lastFrame=now;
+    const k=s.duration?bunnySmooth((now-s.start)/s.duration):1;
+    s.k=k;s.scale=1-k;
+    row.style.setProperty("--op-vanishing-scale",String(s.scale));
+    const order=vanishOrder(s),widths=order.map(n=>s.boxes.get(n).width);
+    const q=vanishingHomePull(widths,s.index,s.center,s.plusBox.width,s.p,s.gap);
+    const original=s.boxes.get(s.source),sourceIndex=s.index;
+    const anchor={...original,x:bunnyMix(original.x,q.anchor,k)};
+    const raw=s.point.x-original.width*dragGrabRatio+original.width/2-anchor.x;
+    const available=raw>=0?s.bounds.right-(q.plus+s.plusBox.width):q.positions[0]-s.bounds.left;
+    const pressure=s.p===0?vanishingHomePressure(original.width,raw,available)*k:0;
+    const outside=dragImageMode==="outside",ghost=!outside&&s.p>0;
+    let settling=k<1;
+    const boxes=[];
+    const slide=(n,targetX)=>{
+      const base=s.boxes.get(n),prev=s.paint.get(n)||base;
+      const x=Math.abs(targetX-prev.x)<.1||!s.duration?targetX:bunnyMix(prev.x,targetX,1-Math.exp(-Math.min(dt,45)/30));
+      if(Math.abs(x-targetX)>.1)settling=true;
+      const b={...base,x};s.paint.set(n,b);
+      shiftDragNode(n,x-base.x);
+      boxes.push(vanishRect(b));
+    };
+    for(let i=0;i<order.length;i++){
+      const n=order[i];if(n===s.source)continue;
+      const b=s.boxes.get(n),onSide=pressure>0?i>sourceIndex:i<sourceIndex;
+      const x=bunnyMix(b.x,q.positions[i]+b.width/2,k)+(onSide?pressure:0);
+      slide(n,x);
+    }
+    slide(plus,bunnyMix(s.plusBox.x,q.plus+s.plusBox.width/2,k)+Math.max(0,pressure));
+    if(s.scale>.001)boxes.push(vanishRect({...s.home,x:s.home.x+(s.origin-.5)*s.home.width*(1-s.scale),width:s.home.width*s.scale}));
+    const pose=s.p>0?bunnyPose(s.p,anchor,s.point,s.full,"C",s.gap,s.edge):
+      {x:anchor.x+pressure,y:original.y,width:original.width,height:original.height};
+    if(s.p===1&&(s.point.x<s.toolbar.left||s.point.x>s.toolbar.right)){
+      pose.x=s.point.x;pose.y=s.point.y;pose.width=s.full.width;pose.height=s.full.height;
+    }
+    if(outside){
+      // Gecko remains the sole visible drag image even after re-entry.
+      s.paint.set(s.source,{...original,x:anchor.x});
+    }else s.paint.set(s.source,pose);
+    const hidden=ghost||outside;
+    s.source.toggleAttribute("data-op-magnetic-source",hidden);
+    s.source.toggleAttribute("data-op-lane-ghost",hidden);
+    row.toggleAttribute("data-op-vanishing-ghost",hidden);
+    shiftDragNode(s.source,pose.x-original.x,!hidden);
+    dragPull=s.p;s.paintedP=outside?0:s.p;
+    if(ghost){
+      dragGhost.hidden=false;positionGhost(pose.x,pose.y);
+      dragGhostBody.style.transform="scale("+pose.width/s.full.width+","+pose.height/s.full.height+")";
+      const clip=bunnyClip(pose,s.full,boxes);
+      if(clip)dragGhost.style.setProperty("clip-path",clip);else dragGhost.style.removeProperty("clip-path");
+    }else if(!dragGhost.hidden){hideGhost();dragGhost.style.removeProperty("clip-path");}
+    if(s.ghost!==hidden){s.ghost=hidden;refreshIndicator();}
+    // A pause between pointer events is not a slow presented frame.
+    if(!settling)s.lastFrame=0;
+    return settling;
+  }
+  function captureVanishingReturn(){
+    const s=vanishingHome;
+    if(!s||dragImageMode==="outside")return null;
+    return {source:s.source,tab:s.tab,token:s.token,order:vanishOrder(s),fullMap:vanishFullMap(s),
+      paint:new Map(s.paint),point:{...s.point},p:s.paintedP,k:s.k,scale:s.scale,
+      full:s.full,gap:s.gap,edge:s.edge,origin:s.origin,search:dragSearch};
+  }
+  function clearVanishingHome(){
+    const s=vanishingHome;if(!s)return;
+    vanishingHome=null;
+    if(s.frame)window.cancelAnimationFrame(s.frame);
+    s.source.removeAttribute("data-op-magnetic-source");
+    s.source.removeAttribute("data-op-lane-ghost");
+    row.removeAttribute("data-op-vanishing-home");
+    row.removeAttribute("data-op-vanishing-ghost");
+    row.style.removeProperty("--op-vanishing-scale");
+    row.style.removeProperty("--op-vanishing-origin");
+    dragGhost?.style.removeProperty("clip-path");hideGhost();
+    const gaps=s.gaps.slice().sort((a,b)=>a-b);
+    window.__nocturneTrace?.("drag.vanish.end",{token:s.token,index:s.index,p:s.p,frames:gaps.length,
+      p95:gaps.length?gaps[Math.floor((gaps.length-1)*.95)]:0,max:gaps.at(-1)||0},{sample:1000});
+  }
+  // Only after native settlement and ordinary structural sync. Animate
+  // actual mirrors from the last painted geometry to authoritative slots.
+  // The existing insertion-tail lease owns this bounded timeline.
+  function startVanishingReturn(snapshot,confirmed=false){
+    if(!snapshot)return false;
+    const fallback=()=>{restoreStartupSearch(snapshot.search);return false;};
+    if(dead||dragLifecycle.current()||dragInsertPending||!dragPhaseInputAllowed()||
+      !hasCenteredIsland()||useLaneDrop()||!vanishMotionEnabled()||!validNativeTab(snapshot.tab))return fallback();
+    const nodes=stripNodes(),source=snapshot.source;
+    if(!nodes.includes(source)||nodes.length+1!==snapshot.paint.size||
+      nodes.some(n=>!snapshot.paint.has(n)))return fallback();
+    const final=new Map([...nodes,plus].map(n=>[n,vanishBox(n)]));
+    if([...final.values()].some(b=>!vanishValidBox(b)))return fallback();
+    const chrome=readDragChromeFrame(),topology=readNativeDragTopology(snapshot.tab);
+    if(!chrome||!topology)return fallback();
+    const virtual=confirmed&&snapshot.k>.95&&snapshot.p>0&&nodes.every((n,i)=>n===snapshot.order[i]);
+    const insertion=virtual?240+180*snapshot.p:0;
+    const duration=insertion+VANISH_OPEN_MS,from=virtual?snapshot.fullMap:snapshot.paint;
+    const sourceFinal=final.get(source),sourceFrom=snapshot.paint.get(source);
+    const a=virtual?{...snapshot.fullMap.get(source),width:sourceFinal.width,height:sourceFinal.height}:null;
+    const curve=virtual?bunnyPose(snapshot.p,a,snapshot.point,snapshot.full,"C",snapshot.gap,snapshot.edge):null;
+    let frame=0,start=window.performance.now();
+    const gaps=[];let last=0;
+    const set=(n,b)=>{
+      const dest=final.get(n);
+      shiftDragNode(n,b.x-dest.x,n===source);
+      if(n===source){
+        n.style.setProperty("--op-vanishing-y",(b.y-dest.y)+"px");
+        n.style.setProperty("--op-vanishing-sx",String(b.width/dest.width));
+        n.style.setProperty("--op-vanishing-sy",String(b.height/dest.height));
+      }
+    };
+    const paint=elapsed=>{
+      if(virtual&&elapsed<insertion){
+        const u=bunnySmooth(elapsed/insertion),p=snapshot.p*(1-u);
+        for(const [n,b] of snapshot.fullMap)if(n!==source)set(n,vanishMixBox(snapshot.paint.get(n),b,u));
+        const point={x:bunnyMix(snapshot.point.x,a.x,u),y:bunnyMix(snapshot.point.y,snapshot.edge+PULL_DISTANCE*BUNNY_DETACH_THRESHOLD*p,u)};
+        const pose=bunnyPose(p,a,point,snapshot.full,"C",snapshot.gap,snapshot.edge);
+        for(const key of ["x","y","width","height"])pose[key]+=(sourceFrom[key]-curve[key])*(1-u);
+        set(source,pose);
+        row.style.setProperty("--op-vanishing-scale",String(snapshot.scale));
+      }else{
+        const u=bunnySmooth((elapsed-insertion)/VANISH_OPEN_MS);
+        for(const [n,b] of final)set(n,vanishMixBox(from.get(n),b,u));
+        row.style.setProperty("--op-vanishing-scale",String(bunnyMix(snapshot.scale,1,u)));
+      }
+    };
+    const animation={cancel(){
+      if(frame)window.cancelAnimationFrame(frame);frame=0;
+      source.removeAttribute("data-op-vanishing-tail-source");
+      for(const key of ["--op-vanishing-y","--op-vanishing-sx","--op-vanishing-sy"])source.style.removeProperty(key);
+      row.removeAttribute("data-op-vanishing-home");row.removeAttribute("data-op-vanishing-ghost");
+      row.style.removeProperty("--op-vanishing-scale");
+      row.style.removeProperty("--op-vanishing-origin");
+    }};
+    const tick=now=>{
+      frame=0;if(dragInsertAnimation!==animation)return;
+      if(dead||!dragPhaseInputAllowed()){endDragVisual();return;}
+      if(retireChangedDragViewport())return;
+      if(last&&gaps.length<160)gaps.push(now-last);last=now;
+      const elapsed=Math.min(duration,now-start);paint(elapsed);
+      if(elapsed<duration){frame=window.requestAnimationFrame(tick);return;}
+      const sorted=gaps.slice().sort((a,b)=>a-b);
+      window.__nocturneTrace?.("drag.vanish.restore",{token:snapshot.token,confirmed,virtual,duration,frames:sorted.length,p95:sorted[Math.floor((sorted.length-1)*.95)]||0,max:sorted.at(-1)||0},{sample:1000});
+      endDragVisual(true);
+    };
+    dragInsertAnimation=animation;dragInsertNode=source;dragInsertPending=true;
+    dragNode=source;dragImageMode="inline";dragReturnPoint=snapshot.point;dragSearch=snapshot.search;
+    dragViewport=dragViewportState();dragChromeFrame=chrome;nativeDragTopology=topology;
+    row.setAttribute("data-op-dragging","true");row.setAttribute("data-op-live-drag","true");
+    row.setAttribute("data-op-vanishing-home","true");row.setAttribute("data-op-vanishing-ghost","true");
+    source.setAttribute("data-op-vanishing-tail-source","true");
+    row.style.setProperty("--op-vanishing-origin",snapshot.origin*100+"%");
+    try{
+      paint(0);refreshIndicator();holdToolbarForReturn();
+      if(dragRevealTimer){window.clearTimeout(dragRevealTimer);dragRevealTimer=0;}
+      if(dragInsertAnimation===animation)frame=window.requestAnimationFrame(tick);
+      return dragInsertAnimation===animation;
+    }catch(error){
+      window.__nocturneTrace?.("drag.vanish.restore-error",{error:nocturneErrorClass(error)},{sample:1000});
+      if(dragInsertAnimation===animation)endDragVisual();
+      return false;
+    }
+  }
+
   // Destination-local preview lease. Source token is not proof of a
   // native DataTransfer session; A5 owns that identity contract.
   let incomingDrag=null,incomingReleasing=false;
@@ -9144,6 +9467,7 @@ function installTabStrip() {
   }
   function previewStripDrag(event, tab) {
     const owner = tabOwner(tab);
+    if(owner===window&&vanishingHome)return previewVanishingHome(event);
     if(owner!==window&&!incomingDropAllowed(tab,owner))return null;
     const group = owner?.[DRAG_CONTROLLER]?.group();
     const entry = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
@@ -9261,6 +9585,7 @@ function installTabStrip() {
     if (toolbarContainsPoint(event.clientX,event.clientY)) return;
     if(clearIncomingDrag("leave-strip"))return;
     stopLaneAutoscroll();
+    if(vanishingHome){clearDropMarker();return;}
     // The window capture listener owns pull and image transitions.
     // Do not erase a group's visual position mid-extraction.
     if (!(dragImageMode === "inline" && (groupPullLayout || dragBunnyLayout || dragPull > 0 || dragInsertAnimation))) clearLiveDrag();
@@ -9319,6 +9644,12 @@ function installTabStrip() {
     }
     if(within)holdToolbarForReturn();
     if(local)clearPlacementPreview();
+    if(local&&vanishingHome){
+      previewVanishingHome(event);
+      if(within){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";}
+      else releaseDragReveal();
+      return;
+    }
     // A return still runs the visual state machine. Native cancellation
     // remains owned by onToolbarDrop; do not reorder after detachment.
     if (local && dragNode) {
@@ -9383,6 +9714,7 @@ function installTabStrip() {
     if(tabOwner(tab)===window&&!dragPhaseInputAllowed()){
       event.preventDefault();event.stopPropagation();cancelActiveDrag("toolbar-phase");return;
     }
+    if(tabOwner(tab)===window&&vanishingHome){onStripDrop(event);return;}
     if(tabOwner(tab)===window&&(dragDetachedOnce||dragBunnyLayout)){
       event.preventDefault();event.stopImmediatePropagation();
       prepareBunnyDrop(event);
@@ -9472,7 +9804,11 @@ function installTabStrip() {
     lastHoverPointer={...point};
     return hoverTab===hit;
   }
-  function endDragVisual(restoreReturn=false) {
+  function endDragVisual(restoreReturn=false,reopenVanishing=false) {
+    const reopening=reopenVanishing?captureVanishingReturn():null;
+    const temporaryCommit=!!reopening&&!row.hasAttribute("data-op-drag-commit");
+    if(temporaryCommit)row.setAttribute("data-op-drag-commit","true");
+    try{
     const returnedSource=restoreReturn?dragNode:null,returnedPoint=restoreReturn?dragReturnPoint:null;
     dragReturnPoint=null;
     dragInsertPending=false;dragViewport=null;dragChromeFrame=null;nativeDragTopology=null;
@@ -9482,6 +9818,7 @@ function installTabStrip() {
     const search = dragSearch;
     dragSearch = null; pointerSearch = null;
     clearGroupPull();
+    clearVanishingHome();
     if(dragBunnyLayout)clearBunnyPull();
     dragNode?.removeAttribute("data-op-lane-ghost");
     dragNode?.removeAttribute("data-op-detached");
@@ -9509,8 +9846,10 @@ function installTabStrip() {
     }
     refreshIndicator();
     refreshIslandTitle();
-    restoreStartupSearch(search);
+    if(!reopening)restoreStartupSearch(search);
     reconcileTabCascade();
+    if(reopening)startVanishingReturn(reopening,false);
+    }finally{if(temporaryCommit)row.removeAttribute("data-op-drag-commit");}
   }
   function sourceHandled(tab,finishReturn=false,expectedToken=null) {
     const source=tabOwner(tab)?.[DRAG_CONTROLLER];
@@ -9569,6 +9908,7 @@ function installTabStrip() {
       if (!group && (browser.selectedTab !== tab || isSplit(tab))) {
         splitZone.setAttribute("data-op-dragging", "true");
       }
+      beginVanishingHome(event,tab);
       previewStripDrag(event,tab);
       dragChromeFrame=readDragChromeFrame();
       if(!dragChromeFrame){cancelActiveDrag("chrome-frame-unready");return;}
@@ -9644,9 +9984,21 @@ function installTabStrip() {
     if(owner!==window&&!incomingDropAllowed(tab,owner,incoming,true)){
       rejectIncomingDrop(event,tab,owner,incoming);return;
     }
+    const vanishingDrop=owner===window&&!!row.hasAttribute?.("data-op-vanishing-home");
+    const reopening=vanishingDrop?captureVanishingReturn():null;
+    const settleVanishing=()=>{
+      if(!vanishingDrop||!vanishingHome)return;
+      cancelActiveDrag("vanish-drop-unsettled");
+      if(vanishingHome)endDragVisual();
+    };
+    if(reopening){dragSearch=null;row.setAttribute("data-op-drag-commit","true");}
     if(!validStripDropTarget(dest,event,tab)){
-      markSourceHandled();
-      if(!clearIncomingDrag("target-rejected",incoming)){clearLiveDrag();clearDropMarker();}
+      try{markSourceHandled();}
+      finally{
+        settleVanishing();
+        if(!clearIncomingDrag("target-rejected",incoming)){clearLiveDrag();clearDropMarker();}
+        if(reopening){finishStripCommit();startVanishingReturn(reopening,false);}
+      }
       return;
     }
     row.setAttribute("data-op-drag-commit", "true");
@@ -9710,9 +10062,11 @@ function installTabStrip() {
     }finally{
       window.__nocturneTrace?.("drag.native.outcome",{operation,outcome},{sample:1600});
       try{markSourceHandled();}catch(error){console.error("[OnePlane] Drag source settle:",nocturneErrorClass(error));}
+      settleVanishing();
       if(incoming&&incomingDrag===incoming){incomingDrag=null;releaseDragReveal();}
       clearDropMarker();
       finishStripCommit();
+      if(reopening)startVanishingReturn(reopening,outcome==="confirmed"||outcome==="no-op");
     }
   }
   function splitDropPoint(event){
@@ -9935,10 +10289,10 @@ function installTabStrip() {
     const handled = dragHandled;
     const wasGroup = Boolean(draggedGroup);
     const start = dragStartPoint;
-    if(returned&&!dt?.mozUserCancelled)prepareBunnyDrop(event);
+    if(returned&&!dt?.mozUserCancelled&&!vanishingHome)prepareBunnyDrop(event);
     const keep=returned&&!dt?.mozUserCancelled&&dragImageMode==="inline"&&!!dragInsertAnimation;
     draggedTab = null; draggedGroup = null; dragHandled = false; dragStartPoint = null;
-    try{if(keep)finishInsertionAfterDrop();else endDragVisual(returned&&!dt?.mozUserCancelled);}
+    try{if(keep)finishInsertionAfterDrop();else if(vanishingHome)endDragVisual(false,!placement&&pointInSourceWindow(event));else endDragVisual(returned&&!dt?.mozUserCancelled);}
     finally{clearSourceIncoming(finishedToken);}
     if (returned || wasGroup || !start || handled || dt?.mozUserCancelled || dt?.dropEffect !== "none" ||
         !validNativeTab(tab) || tabOwner(tab) !== window) return;
@@ -10020,7 +10374,7 @@ function installTabStrip() {
   }
   function indicatorTarget() {
     const s=row.getBoundingClientRect();
-    if(s.width<=0||s.height<=0||row.hasAttribute("data-op-lane-drag")||row.hasAttribute("data-op-overflow-row"))return null;
+    if(s.width<=0||s.height<=0||row.hasAttribute("data-op-lane-drag")||row.hasAttribute("data-op-overflow-row")||row.hasAttribute("data-op-vanishing-ghost"))return null;
     const dragging=Boolean(dragNode && row.hasAttribute("data-op-dragging"));
     const homeOpen=row.hasAttribute("data-op-home-open");
     const item=dragging?dragNode:indicatorHover && list.contains(indicatorHover)?

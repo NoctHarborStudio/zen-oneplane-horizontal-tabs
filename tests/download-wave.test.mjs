@@ -103,7 +103,9 @@ test("permanent horizontal host is constructed, measured and removed",()=>{
  const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
  const layout=read("layout.uc.mjs"),css=read("chrome.css");
  assert.ok(layout.includes('downloadHost.id="oneplane-download-indicator-slot"'));
- assert.ok(layout.includes('new Set(["oneplane-hub-button", "oneplane-download-indicator-slot"'));
+ const geometry=read("src/layout/geometry.js.part");
+ const ids=new Function(geometry.slice(0,geometry.indexOf("  const centerIds"))+"return leftIds;")();
+ assert.ok(ids.has("oneplane-hub-button")&&ids.has("oneplane-history-button")&&ids.has("oneplane-download-indicator-slot"));
  assert.ok(layout.includes('cleanupStep("download host",releaseDownloadHost)'));
  assert.ok(layout.includes('"oneplane-download-hold"'));
  assert.ok(css.includes('#oneplane-download-indicator-slot:has(> #zr-download-indicator)'));

@@ -43,7 +43,8 @@
       !bar?.hasAttribute("focused")&&!bar?.hasAttribute("open");
   }
   function retireBlockedNativeTabDrag(reason="phase-conflict"){
-    if(dragLifecycle.current()?.kind!=="tab"||dragPhaseInputAllowed())return false;
+    const visualTail=row.hasAttribute?.("data-op-vanishing-home")&&dragInsertPending;
+    if((dragLifecycle.current()?.kind!=="tab"&&!visualTail)||dragPhaseInputAllowed())return false;
     cancelActiveDrag(reason);
     return true;
   }

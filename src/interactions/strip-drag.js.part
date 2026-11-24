@@ -163,6 +163,7 @@
   }
   function previewStripDrag(event, tab) {
     const owner = tabOwner(tab);
+    if(owner===window&&vanishingHome)return previewVanishingHome(event);
     if(owner!==window&&!incomingDropAllowed(tab,owner))return null;
     const group = owner?.[DRAG_CONTROLLER]?.group();
     const entry = group ? splitEntries.get(group)?.box : entries.get(tab)?.item;
@@ -280,6 +281,7 @@
     if (toolbarContainsPoint(event.clientX,event.clientY)) return;
     if(clearIncomingDrag("leave-strip"))return;
     stopLaneAutoscroll();
+    if(vanishingHome){clearDropMarker();return;}
     // The window capture listener owns pull and image transitions.
     // Do not erase a group's visual position mid-extraction.
     if (!(dragImageMode === "inline" && (groupPullLayout || dragBunnyLayout || dragPull > 0 || dragInsertAnimation))) clearLiveDrag();
@@ -338,6 +340,12 @@
     }
     if(within)holdToolbarForReturn();
     if(local)clearPlacementPreview();
+    if(local&&vanishingHome){
+      previewVanishingHome(event);
+      if(within){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect="move";}
+      else releaseDragReveal();
+      return;
+    }
     // A return still runs the visual state machine. Native cancellation
     // remains owned by onToolbarDrop; do not reorder after detachment.
     if (local && dragNode) {
@@ -402,6 +410,7 @@
     if(tabOwner(tab)===window&&!dragPhaseInputAllowed()){
       event.preventDefault();event.stopPropagation();cancelActiveDrag("toolbar-phase");return;
     }
+    if(tabOwner(tab)===window&&vanishingHome){onStripDrop(event);return;}
     if(tabOwner(tab)===window&&(dragDetachedOnce||dragBunnyLayout)){
       event.preventDefault();event.stopImmediatePropagation();
       prepareBunnyDrop(event);

@@ -120,10 +120,74 @@ function createNocturneBrandMark(document){
   bootMark.append(svg,label);
   return bootMark;
 }
-// Experimental chrome-root fade. CSS opacity is not proof of OS-window alpha.
+// Experimental whole-window alpha; CSS fade remains the unsupported/error path.
 const CLOSE_COVER_MS=320,CLOSE_LOGO_MS=460,CLOSE_FADE_MS=500;
-// Windows-only, exact chrome HWND and system DLL. Never log handles or paths.
-function createWindowsBackdrop({win,services,interfaces,loadCtypes}){
+const LAYERED=0x80000,NO_REDIRECTION=0x200000,CLASS_DC=0x60;
+function closeWindowAlpha(t){
+  t=Math.max(0,Math.min(1,t));
+  if(t===0)return 255;if(t===1)return 0;
+  const b=(u,a,c)=>3*(1-u)*(1-u)*u*a+3*(1-u)*u*u*c+u*u*u;
+  let l=0,r=1;
+  for(let i=0;i<18;i++){const m=(l+r)/2;if(b(m,.42,.58)<t)l=m;else r=m;}
+  return Math.round(255*(1-b((l+r)/2,0,1)));
+}
+// An exact-window, single-use lease. No changes to the backdrop, class style,
+// focus, geometry, hit-testing style or global prefs. Never log HWND/paths.
+function createLayeredWindowLease(api){
+  let owns=false,closed=false,busy=0,retire=null,lastAlpha=null,failed=0;
+  const releaseNow=commit=>{
+    if(closed)return failed;closed=true;
+    if(!commit&&owns){
+      try{
+        if(api.valid()){
+          const style=api.style();
+          if(style&LAYERED){
+            // Keep unrelated extended style bits; this lease never adopts
+            // a window that was layered before acquisition.
+            try{api.alpha(255);}catch{}
+            api.setStyle(style&~LAYERED);
+            if(api.style()&LAYERED)failed++;
+          }
+        }
+      }catch{failed++;}
+    }
+    try{api.close();}catch{failed++;}
+    return failed;
+  };
+  const retireLease=commit=>{
+    if(busy){retire=retire===false?false:commit;return 0;}
+    return releaseNow(commit);
+  };
+  const use=fn=>{
+    if(closed||retire!==null)return false;
+    busy++;
+    try{return fn();}catch{return false;}
+    finally{if(--busy===0&&retire!==null)releaseNow(retire);}
+  };
+  return {
+    acquire:()=>use(()=>{
+      if(!api.valid())return false;
+      const style=api.style(),classStyle=api.classStyle();
+      if(!Number.isInteger(style)||!Number.isInteger(classStyle)||
+         (style&(LAYERED|NO_REDIRECTION))||(classStyle&CLASS_DC))return false;
+      // Claim before calling User32, which may dispatch messages synchronously.
+      owns=true;api.setStyle(style|LAYERED);
+      if(retire!==null||!api.valid()||!(api.style()&LAYERED))return false;
+      if(!api.alpha(255))return false;
+      lastAlpha=255;return api.readAlpha()===255;
+    }),
+    set:alpha=>use(()=>{
+      if(!owns||!Number.isInteger(alpha)||alpha<0||alpha>255||
+         !api.valid()||!(api.style()&LAYERED))return false;
+      if(alpha===lastAlpha)return true;
+      if(!api.alpha(alpha))return false;
+      lastAlpha=alpha;return true;
+    }),
+    read:()=>{try{return !closed&&api.valid()?api.readAlpha():null;}catch{return null;}},
+    release:()=>retireLease(false),commit:()=>retireLease(true)
+  };
+}
+function createWindowsWindowAlpha({win,services,interfaces,loadCtypes}){
   const nativeHandle=()=>{
     if(win.closed)return null;
     const owner=win.docShell.treeOwner;
@@ -133,63 +197,63 @@ function createWindowsBackdrop({win,services,interfaces,loadCtypes}){
     const value=base.nativeHandle;
     return typeof value==="string"&&/^0x[0-9a-f]+$/i.test(value)&&!/^0x0+$/i.test(value)?value:null;
   };
-  const handle=nativeHandle();
-  if(!handle)return null;
+  const handle=nativeHandle();if(!handle)return null;
   const c=loadCtypes(),hwnd=c.voidptr_t(c.UInt64(handle));
   if(hwnd.isNull())return null;
-  const dll=services.dirsvc.get("SysD",interfaces.nsIFile).clone();
-  dll.append("dwmapi.dll");
-  const call=value=>{
-    if(nativeHandle()!==handle)return {hr:null,value:null};
-    let lib;
-    try{
-      lib=c.open(dll.path);
-      const reading=value===undefined;
-      const fn=lib.declare(reading?"DwmGetWindowAttribute":"DwmSetWindowAttribute",
-        c.winapi_abi,c.int32_t,c.voidptr_t,c.uint32_t,c.int32_t.ptr,c.uint32_t);
-      const data=c.int32_t(reading?-1:value);
-      const hr=fn(hwnd,38,data.address(),c.int32_t.size);
-      return {hr,value:hr===0&&data.value>=0&&data.value<=4?data.value:null};
-    }finally{lib?.close();}
-  };
-  return {read:()=>call(),write:value=>{
-    if(!Number.isInteger(value)||value<0||value>4)throw new RangeError("backdrop enum");
-    return call(value);
-  }};
+  const file=services.dirsvc.get("SysD",interfaces.nsIFile).clone();file.append("user32.dll");
+  const lib=c.open(file.path);
+  try{
+    const declare=(name,ret,...args)=>lib.declare(name,c.winapi_abi,ret,c.voidptr_t,...args);
+    const get=declare("GetWindowLongW",c.int32_t,c.int32_t);
+    const set=declare("SetWindowLongW",c.int32_t,c.int32_t,c.int32_t);
+    const cls=declare("GetClassLongW",c.uint32_t,c.int32_t);
+    const alpha=declare("SetLayeredWindowAttributes",c.int32_t,c.uint32_t,c.uint8_t,c.uint32_t);
+    const read=declare("GetLayeredWindowAttributes",c.int32_t,c.uint32_t.ptr,c.uint8_t.ptr,c.uint32_t.ptr);
+    return createLayeredWindowLease({
+      valid:()=>nativeHandle()===handle,
+      style:()=>{const v=get(hwnd,-20);return v===0?null:v;},
+      classStyle:()=>{const v=cls(hwnd,-26);return v===0?null:v;},
+      setStyle:value=>set(hwnd,-20,value),
+      alpha:value=>!!alpha(hwnd,0,value,2),
+      readAlpha:()=>{
+        const a=c.uint8_t(),flags=c.uint32_t(),key=c.uint32_t();
+        return read(hwnd,key.address(),a.address(),flags.address())&&flags.value===2?a.value:null;
+      },
+      close:()=>lib.close()
+    });
+  }catch(e){lib.close();throw e;}
 }
 function createCloseFinale({win,doc,root,start,onModal,windows=false,nativeFactory=null}){
-  let cover=null,mark=null,active=true,listening=false,sealed=false,backdropFrame=null,backdropBaseline=null;
+  let cover=null,mark=null,active=true,listening=false,sealed=false,frame=null,native=null;
+  let rootFade=null,epoch=null,fadeAt=0,end=0,frames=0,lastAlpha=255;
   const trace=(event,data)=>{try{win.__nocturneTrace?.(event,data,{flush:true});}catch{}};
   const effects=[];
-  let native=null,nativeBaseline=null,nativeAttempted=false;
-  const probe=()=>{try{return native?.read()??{hr:null,value:null};}catch{return {hr:null,value:null};}};
-  const write=value=>{try{return native?.write(value)??{hr:null,value:null};}catch{return {hr:null,value:null};}};
+  const animate=(node,keyframes,delay,duration,easing)=>{
+    const effect=node.animate(keyframes,{delay,duration,easing,fill:"both"});
+    effects.push(effect);effect.finished.catch(()=>{});
+    if(Number.isFinite(epoch))effect.startTime=epoch;
+    return effect;
+  };
+  const cssFade=()=>animate(root,[{opacity:1},{opacity:0}],fadeAt,CLOSE_FADE_MS,"ease-in-out");
+  const stopFrame=()=>{const id=frame;frame=null;if(id!==null)try{win.cancelAnimationFrame(id);}catch{}};
+  const dropNative=commit=>{
+    const lease=native;native=null;if(!lease)return 0;
+    let failed=0;try{failed=(commit?lease.commit():lease.release())||0;}catch{failed=1;}
+    trace("disassembly.alpha.release",{committed:commit,failed});return failed;
+  };
+  const fallback=()=>{
+    dropNative(false);
+    if(active&&!rootFade){try{rootFade=cssFade();}catch{}}
+    trace("disassembly.alpha.fallback",{frames,lastAlpha});
+  };
   const release=()=>{
     if(!active)return 0;active=false;let failed=0;
     const step=fn=>{try{fn();}catch{failed++;}};
+    stopFrame();
     if(listening)step(()=>win.removeEventListener("DOMWillOpenModalDialog",onModal,true));
     listening=false;
-    const frame=backdropFrame;backdropFrame=null;
-    if(frame!==null)step(()=>win.cancelAnimationFrame(frame));
-    // Restore only the attribute removed by this lease, never overwrite a
-    // replacement value installed by another owner.
-    const baseline=backdropBaseline;backdropBaseline=null;
-    const ownsAttribute=baseline!==null&&!root.hasAttribute("windowsmica");
-    const before=nativeAttempted&&ownsAttribute&&!win.closed?probe():null;
-    if(baseline!==null)step(()=>{
-      if(!win.closed&&!root.hasAttribute("windowsmica"))root.setAttribute("windowsmica",baseline);
-    });
-    if(nativeAttempted&&ownsAttribute&&!win.closed){
-      const after=probe();
-      const canRestore=before?.hr===0&&(before.value===1||before.value===0);
-      const result=canRestore&&after.value!==nativeBaseline?write(nativeBaseline):null;
-      const final=probe();
-      if(canRestore&&final.value!==nativeBaseline)failed++;
-      trace("disassembly.dwm.restore",{before:before?.value??null,baseline:nativeBaseline,hr:result?.hr??null,after:final.value,owned:canRestore});
-    }
-    native=null;nativeBaseline=null;nativeAttempted=false;
-    if(baseline!==null)trace("disassembly.backdrop.restore",{present:root.hasAttribute("windowsmica"),failed});
-    // Remove the opaque cover before releasing the root's fade in one task.
+    // Restore native alpha before removing the opaque cover in the same task.
+    failed+=dropNative(!!win.closed);
     step(()=>cover?.remove());
     for(const effect of effects)step(()=>effect.cancel());
     effects.length=0;cover=null;mark=null;return failed;
@@ -202,70 +266,59 @@ function createCloseFinale({win,doc,root,start,onModal,windows=false,nativeFacto
     Object.assign(cover.style,{position:"fixed",inset:"0",zIndex:"2147483647",display:"grid",placeItems:"center",background:"#111219",color:"#e4e5ef",pointerEvents:"none",overflow:"hidden",opacity:"0"});
     cover.style.setProperty("-moz-window-dragging","default","important");
     mark=createNocturneBrandMark(doc);mark.style.opacity="0";cover.append(mark);root.append(cover);
-    const epoch=doc.timeline.currentTime;
-    const animate=(node,frames,delay,duration,easing)=>{
-      const effect=node.animate(frames,{delay,duration,easing,fill:"both"});
-      effects.push(effect);effect.finished.catch(()=>{});
-      if(Number.isFinite(epoch))effect.startTime=epoch;
-      return effect;
-    };
+    epoch=doc.timeline.currentTime;
     const coverEffect=animate(cover,[{opacity:0},{opacity:1}],start,CLOSE_COVER_MS,"ease-in-out");
-    const logoAt=start+CLOSE_COVER_MS,fadeAt=logoAt+CLOSE_LOGO_MS,end=fadeAt+CLOSE_FADE_MS;
-    animate(mark,[{opacity:0,transform:"translateY(7px) scale(.96)"},{opacity:1,transform:"translateY(0) scale(1)"}],logoAt,CLOSE_LOGO_MS,"cubic-bezier(.2,.75,.25,1)");
-    animate(root,[{opacity:1},{opacity:0}],fadeAt,CLOSE_FADE_MS,"ease-in-out");
-    // Firefox 160 ChromeObserver reacts to removal/addition of windowsmica
-    // on the chrome root and updates this widget, not other browser windows.
-    // Wait for the cover effect, then two rendering opportunities. The logo
-    // interval is the budget for switching the native backdrop offscreen.
-    // If late, interrupted or unsupported, keep the previous visual path.
-    if(windows&&root.hasAttribute("windowsmica")&&Number.isFinite(epoch)){
-      const maySwitch=()=>active&&!sealed&&root.hasAttribute("windowsmica")&&
-        Number.isFinite(doc.timeline.currentTime)&&doc.timeline.currentTime-epoch<=fadeAt-100&&
-        Number(win.getComputedStyle(root).opacity)===1&&Number(win.getComputedStyle(cover).opacity)===1;
-      const queue=fn=>{backdropFrame=win.requestAnimationFrame(()=>{backdropFrame=null;fn();});};
+    const logoAt=start+CLOSE_COVER_MS;fadeAt=logoAt+CLOSE_LOGO_MS;end=fadeAt+CLOSE_FADE_MS;
+    const logoEffect=animate(mark,[{opacity:0,transform:"translateY(7px) scale(.96)"},{opacity:1,transform:"translateY(0) scale(1)"}],logoAt,CLOSE_LOGO_MS,"cubic-bezier(.2,.75,.25,1)");
+    rootFade=cssFade();
+    const elapsed=()=>doc.timeline.currentTime-epoch;
+    const queue=fn=>{frame=win.requestAnimationFrame(()=>{frame=null;if(active&&!sealed)fn();});};
+    const allowed=()=>active&&!sealed&&!win.closed&&Number.isFinite(doc.timeline.currentTime);
+    const tick=()=>{
+      if(!allowed()||!native)return;
+      const value=closeWindowAlpha((elapsed()-fadeAt)/CLOSE_FADE_MS);
+      const lease=native;
+      if(!lease.set(value)){if(active&&native===lease)fallback();return;}
+      if(!active||sealed||native!==lease)return;
+      frames++;lastAlpha=value;
+      if(value!==0&&elapsed()<end){try{queue(tick);}catch{fallback();}}
+      else trace("disassembly.alpha.end",{frames,alpha:value,read:lease.read()});
+    };
+    if(windows&&nativeFactory&&Number.isFinite(epoch)){
+      const prepare=()=>{
+        if(!allowed()||elapsed()>fadeAt-100||Number(win.getComputedStyle(root).opacity)!==1||
+           Number(win.getComputedStyle(cover).opacity)!==1)return;
+        let lease;
+        try{lease=nativeFactory();}catch{}
+        if(!allowed()){try{lease?.release();}catch{}return;}
+        native=lease||null;
+        let acquired=false;try{acquired=!!lease?.acquire();}catch{}
+        if(!active||sealed||native!==lease){try{lease?.release();}catch{}return;}
+        trace("disassembly.alpha.acquire",{acquired,available:!!lease,read:lease?.read()??null});
+        if(!acquired){dropNative(false);return;}
+        try{rootFade.cancel();effects.splice(effects.indexOf(rootFade),1);rootFade=null;}catch{fallback();return;}
+        // No animation frame loop until the logo interval ends.
+        logoEffect.finished.then(()=>{if(allowed()&&native===lease){try{queue(tick);}catch{fallback();}}},()=>{});
+      };
       coverEffect.finished.then(()=>{
-        try{
-          if(!maySwitch())return;
-          queue(()=>{
-            try{
-              if(!maySwitch())return;
-              queue(()=>{
-                try{
-                  if(!maySwitch())return;
-                  backdropBaseline=root.getAttribute("windowsmica");
-                  if(backdropBaseline===null)return;
-                  if(nativeFactory){
-                    try{native=nativeFactory();}catch{}
-                    const initial=probe();
-                    if(initial.hr===0&&Number.isInteger(initial.value)&&initial.value>=0&&initial.value<=4)nativeBaseline=initial.value;
-                    trace("disassembly.dwm.baseline",{hr:initial.hr,value:initial.value,available:!!native});
-                  }
-                  root.removeAttribute("windowsmica");
-                  if(nativeBaseline!==null){
-                    const auto=probe();
-                    nativeAttempted=true;
-                    const result=write(1),actual=probe();
-                    trace("disassembly.dwm.switch",{baseline:nativeBaseline,afterGecko:auto.value,hr:result.hr,readHr:actual.hr,value:actual.value,confirmed:result.hr===0&&actual.hr===0&&actual.value===1});
-                  }
-                  trace("disassembly.backdrop.switch",{removed:!root.hasAttribute("windowsmica"),elapsed:doc.timeline.currentTime-epoch,rootOpacity:Number(win.getComputedStyle(root).opacity),coverOpacity:Number(win.getComputedStyle(cover).opacity)});
-                }catch{trace("disassembly.backdrop.error",{failed:1});}
-              });
-            }catch{trace("disassembly.backdrop.error",{failed:1});}
-          });
-        }catch{trace("disassembly.backdrop.error",{failed:1});}
+        if(!allowed())return;
+        try{queue(()=>{try{queue(prepare);}catch{}});}catch{}
       },()=>{});
     }
     return {end,logoAt,fadeAt,release,
+      commit(){stopFrame();dropNative(true);},
       seal(){
         if(!active)return null;
-        sealed=true;
-        const frame=backdropFrame;backdropFrame=null;
-        if(frame!==null)try{win.cancelAnimationFrame(frame);}catch{}
-        if(nativeAttempted){
-          const actual=probe();
-          trace("disassembly.dwm.seal",{hr:actual.hr,value:actual.value,attributePresent:root.hasAttribute("windowsmica")});
+        sealed=true;stopFrame();
+        if(native){
+          const lease=native;
+          let ok=false;try{ok=lease.set(0)&&lease.read()===0;}catch{}
+          if(!active)return null;
+          trace("disassembly.alpha.seal",{confirmed:ok,frames,alpha:ok?0:lastAlpha});
+          if(!ok&&native===lease)fallback();
         }
         for(const effect of effects)try{effect.finish();}catch{}
+        // A cancelled root fade must not be finished again on native path.
         const read=node=>{try{const a=Number(win.getComputedStyle(node).opacity);return Number.isFinite(a)?a:null;}catch{return null;}};
         return {rootOpacity:read(root),coverOpacity:read(cover),logoOpacity:read(mark)};
       }};
@@ -273,7 +326,7 @@ function createCloseFinale({win,doc,root,start,onModal,windows=false,nativeFacto
 }
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="disassembly.script",data={version:"0.3.0-preview.201"};
+  const event="disassembly.script",data={version:"0.3.0-preview.203"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -529,7 +582,7 @@ try{if(typeof window!=="undefined"){
     }
     // Keep the previous close path if the experimental finale cannot be acquired.
     finale=createCloseFinale({win:window,doc:document,root,start:sealAt,onModal:modalOpened,windows:Services.appinfo?.OS==="WINNT",
-      nativeFactory:()=>createWindowsBackdrop({win:window,services:Services,interfaces:Ci,
+      nativeFactory:()=>createWindowsWindowAlpha({win:window,services:Services,interfaces:Ci,
         loadCtypes:()=>ChromeUtils.importESModule("resource://gre/modules/ctypes.sys.mjs").ctypes})});
     if(finale){
       window.__nocturneTrace?.("disassembly.finale.begin",{coverAt:sealAt,logoAt:finale.logoAt,fadeAt:finale.fadeAt,end:finale.end},{flush:true});
@@ -578,7 +631,7 @@ try{if(typeof window!=="undefined"){
         const result=Reflect.apply(original,receiver,args);
         typeof window!=="undefined"&&window.__nocturneTrace?.("disassembly.native.after",()=>({resultType:typeof result,closed:window.closed}),{flush:true});
         return result;
-      }finally{if(recovery!==null)try{window.clearTimeout(recovery);}catch{}}
+      }finally{if(recovery!==null)try{window.clearTimeout(recovery);}catch{}if(window.closed)ending?.commit();}
     }
   });
   function preferenceChanged(){if(!dead&&(reduced.matches||!prefs.getBoolPref(PREF,true)))controller.flush();}
@@ -594,6 +647,7 @@ try{if(typeof window!=="undefined"){
   function dispose(){
     if(dead)return;dead=true;
     let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
+    if(window.closed)step(()=>finale?.commit());
     if(!controller.committing&&!window.closed){
       step(()=>controller.dispose());
       if(!controller.busy)step(()=>{if(animations.size||owned.size||root.hasAttribute("data-zr-closing"))restore();});

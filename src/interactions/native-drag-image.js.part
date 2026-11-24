@@ -21,7 +21,7 @@
   const bunnyMix=(a,b,t)=>a+(b-a)*t;
   function bunnySlot(progress,anchor,side,gap){
     const ratio=1-.96*bunnySmooth(progress),loss=(anchor.width+gap)*(1-ratio);
-    return {ratio,loss,width:anchor.width*ratio,x:anchor.x+(side==="L"?1:-1)*anchor.width*(1-ratio)/2};
+    return {ratio,loss,width:anchor.width*ratio,x:anchor.x+(side==="L"?1:side==="R"?-1:0)*anchor.width*(1-ratio)/2};
   }
   function bunnyNeighborShift(progress,anchor,side,gap,outer){
     return outer?(side==="L"?1:-1)*bunnySlot(progress,anchor,side,gap).loss:0;
@@ -179,6 +179,14 @@
     // Clearing/replacing it without a verified native contract risks duplicate art.
     if(dragImageMode==="outside")return;
     const previous = dragImageMode;
+    if(vanishingHome&&mode!=="outside"){
+      dragImageMode=mode;
+      dragNode.toggleAttribute("data-op-detached",mode==="content");
+      dragNode.toggleAttribute("data-op-magnetic-source",mode==="content");
+      row.toggleAttribute("data-op-inline-drag",mode==="inline");
+      if(mode==="content")dragDetachedOnce=true;
+      return;
+    }
     if(dragBunnyLayout&&mode!=="outside"){
       dragImageMode=mode;
       dragNode.toggleAttribute("data-op-detached",mode==="content");
@@ -200,7 +208,15 @@
       const ok = updateNativeDragImage(dragGhostBody,Math.round(box.width/2),Math.round(box.height/2),event);
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.native-image",()=>({ok,width:box.width,height:box.height}),{sample:1800});
       hideGhost();
-      if (!ok) { if (dragBunnyLayout)paintBunnyAt(dragBunnyLayout.progress,dragBunnyLayout.point);else if (previous === "content") showGhost(event); return; }
+      if (!ok) { if(vanishingHome){armVanishingHome(vanishingHome);return;} if (dragBunnyLayout)paintBunnyAt(dragBunnyLayout.progress,dragBunnyLayout.point);else if (previous === "content") showGhost(event); return; }
+    }
+    if(vanishingHome&&mode==="outside"){
+      dragImageMode=mode;dragDetachedOnce=true;vanishingHome.p=1;
+      dragNode.setAttribute("data-op-detached","true");
+      dragNode.setAttribute("data-op-magnetic-source","true");
+      dragNode.setAttribute("data-op-lane-ghost","true");
+      row.removeAttribute("data-op-inline-drag");
+      armVanishingHome(vanishingHome);return;
     }
     cancelInsertion();
     const detached = mode === "content" || mode === "outside";

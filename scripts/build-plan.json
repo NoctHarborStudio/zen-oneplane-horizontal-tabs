@@ -210,6 +210,14 @@
       "kind": "section"
     },
     {
+      "path": "src/algorithms/vanishing-home.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/interactions/vanishing-home.js.part",
+      "kind": "section"
+    },
+    {
       "path": "src/interactions/strip-drag.js.part",
       "kind": "section"
     },

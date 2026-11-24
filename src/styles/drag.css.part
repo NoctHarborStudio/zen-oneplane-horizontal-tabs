@@ -269,3 +269,20 @@
 #oneplane-tabs[data-op-empty-incoming] .oneplane-new-tab {
   box-shadow:inset 0 0 0 1px var(--zen-primary-color, currentColor)!important;
 }
+
+/* Vanishing Home changes only painted geometry; the physical lanes and
+   native source stay in their original DOM slots until native settlement. */
+#oneplane-tabs[data-op-vanishing-home] .oneplane-title-island {
+  scale:var(--op-vanishing-scale,1) 1!important;
+  opacity:var(--op-vanishing-scale,1)!important;
+  transform-origin:var(--op-vanishing-origin,50%) center!important;
+  transition:none!important;pointer-events:none!important;
+}
+#oneplane-tabs[data-op-vanishing-ghost] #oneplane-tab-indicator {
+  opacity:0!important;visibility:hidden!important;transition:none!important;
+}
+#oneplane-tabs[data-op-vanishing-home] [data-op-vanishing-tail-source] {
+  transform:translate(var(--op-drag-x,0px),var(--op-vanishing-y,0px))
+    scale(var(--op-vanishing-sx,1),var(--op-vanishing-sy,1))!important;
+  transform-origin:center!important;transition:none!important;
+}
