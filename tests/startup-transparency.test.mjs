@@ -642,7 +642,7 @@ test("MB-014 uses a bounded clip only for the native empty-tab sidebar",()=>{
  const retired=readFileSync(new URL("../early-startup.css",import.meta.url),"utf8");
  const css=readFileSync(new URL("../src/styles/base.css.part",import.meta.url),"utf8");
  const pre=readFileSync(new URL("../src/core/boot-prelude.js.part",import.meta.url),"utf8");
- const guard=css.slice(0,css.indexOf("/* Registered once"));
+ const guard=css.slice(0,css.indexOf("/* MB-014: stabilize the existing native background"));
  assert.equal(manifest.style.content,undefined);assert.ok(!retired.includes("@keyframes"));
  assert.match(guard,/@-moz-document url\("chrome:\/\/browser\/content\/browser\.xhtml"\)/);
  assert.ok(guard.includes('[zen-compact-mode="true"][zen-has-empty-tab="true"]'));
@@ -658,4 +658,27 @@ test("MB-014 uses a bounded clip only for the native empty-tab sidebar",()=>{
   assert.doesNotMatch(block,/getBoundingClientRect|getComputedStyle|sheetRegistered/);
   assert.ok(s.indexOf("nativeSidebarClipped")>s.indexOf(cover));assert.ok(!s.includes("data-nocturne-early-css-done"));
  }
+});
+
+test("MB-014 native background guard matches Boot color and fails open without JavaScript",()=>{
+ const css=readFileSync(new URL("../src/styles/base.css.part",import.meta.url),"utf8");
+ const pre=readFileSync(new URL("../src/core/boot-prelude.js.part",import.meta.url),"utf8");
+ const guard=css.slice(css.indexOf("/* MB-014: stabilize the existing native background"),css.indexOf("/* Registered once"));
+ assert.ok(guard.includes(':root:is([zen-before-loaded="true"], [zen-has-empty-tab="true"])'));
+ assert.ok(guard.includes(":not([data-nocturne-startup-background-done],"));
+ for(const flag of ["data-op-startup-ready","customizing","inDOMFullscreen","inFullscreen","popup-window","zen-welcome-stage","zen-private-window","zen-unsynced-window","chromehidden","privatebrowsingmode"])assert.ok(guard.includes("["+flag),flag);
+ assert.ok(guard.includes("prefers-reduced-motion: no-preference"));
+ assert.ok(guard.includes('-moz-pref("zen.nocturne.boot.enabled")'));
+ assert.ok(guard.includes('-moz-pref("zen.refined.startup.animation")'));
+ assert.match(guard,/from, to \{ background-color: #111219; background-image: none; opacity: 1; \}/);
+ assert.match(guard,/#zen-browser-background::after\s*\{\s*animation: nocturne-startup-background-guard 2000ms linear 1 normal none !important;/);
+ assert.match(guard,/#zen-browser-background > \.zen-browser-grain\s*\{\s*animation: nocturne-startup-grain-guard 2000ms linear 1 normal none !important;/);
+ assert.doesNotMatch(guard,/pointer-events\s*:|display\s*:|visibility\s*:/);
+ for(const [s,v,cover] of [[pre,"probe","root.append(node)"],[source,"guardProbe","bootMark.append(svg,label)"]]){
+  const mount=s.indexOf(cover),sample=s.indexOf(v+".nativeBackgroundGuard",mount),latch=s.indexOf('root.setAttribute("data-nocturne-startup-background-done","true")',sample);
+  assert.ok(mount>=0&&sample>mount&&latch>sample);assert.ok(s.includes('background:"#111219"'));
+  assert.ok(!s.includes('removeAttribute("data-nocturne-startup-background-done")'));
+ }
+ assert.match(source,/if\(reason\)\{root.setAttribute\("data-nocturne-startup-background-done","true"\)/);
+ assert.match(source,/const fade=overlay.animate\(\[\{opacity:1\},\{opacity:0\}\]/);
 });

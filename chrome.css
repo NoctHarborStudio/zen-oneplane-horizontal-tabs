@@ -14,6 +14,28 @@
     }
   }
 }
+/* MB-014: stabilize the existing native background, not the whole window.
+   Zen's current/old gradient pseudo-elements and grain are independent of
+   its watermark. An opaque current layer covers the old one. The existing
+   Boot node takes over atomically; no fill gives a CSS-only fail-open. */
+@-moz-document url("chrome://browser/content/browser.xhtml") {
+  @keyframes nocturne-startup-background-guard {
+    from, to { background-color: #111219; background-image: none; opacity: 1; }
+  }
+  @keyframes nocturne-startup-grain-guard {
+    from, to { opacity: 0; }
+  }
+  @media (prefers-reduced-motion: no-preference) and (-moz-pref("zen.refined.startup.animation")) and (-moz-pref("zen.nocturne.boot.enabled")) {
+    :root:is([zen-before-loaded="true"], [zen-has-empty-tab="true"]):not([data-nocturne-startup-background-done], [data-op-startup-ready="true"], [customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window], [zen-welcome-stage], [zen-private-window="true"], [zen-unsynced-window="true"], [chromehidden]:not([chromehidden=""]), [privatebrowsingmode]:not([privatebrowsingmode="false"])) {
+      #zen-browser-background::after {
+        animation: nocturne-startup-background-guard 2000ms linear 1 normal none !important;
+      }
+      #zen-browser-background > .zen-browser-grain {
+        animation: nocturne-startup-grain-guard 2000ms linear 1 normal none !important;
+      }
+    }
+  }
+}
 /* Registered once by the stylesheet. Native WAAPI can interpolate
    selection opacity without a script callback on every display frame. */
 @property --op-url-selection-alpha {

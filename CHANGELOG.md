@@ -1,3 +1,7 @@
+## 0.3.0-preview.178 — MB-014 native startup background stabilization
+
+User confirmed the empty-tab sidebar guard in preview.176; preserve it unchanged. Address remaining background brightness jumps independently. Stabilize Zen's existing browser-background current pseudo-layer to the same opaque #111219 as Boot and suppress its separate grain layer through two bounded no-fill CSS effects. Admit only during native before-loaded/empty-tab state, before Layout readiness and one-shot per-window completion latch; exclude special windows, disabled Boot/Assembly and reduced motion. Release behind the existing opaque Boot, preserving the existing logo and 320ms theme reveal. No Mica or placeholder preference changes, extra overlay, timers, or native theme data writes. Sample computed pseudo-layer after cover mount, before releasing the guard. Pre-CSS/OS compositor frames and native visual outcome remain unverified.
+
 ## 0.3.0-preview.177 — Library continuous section retarget
 
 Use 1000ms symmetric ease-in-out for direct horizontal section motion. Freeze and retain every currently visible visual tile before retargeting; new destinations start outside the viewport, and a still-visible destination can reverse into place. Keep one live data session, fixed scrollbar, layout-left positioning and generation cleanup. Native handoff and performance verification pending.
