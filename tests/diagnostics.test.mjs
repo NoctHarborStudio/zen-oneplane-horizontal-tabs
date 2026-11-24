@@ -520,6 +520,7 @@ test("terminal snapshot enters independent writer before pending write completes
  resolve();await writer.submit(JSON.stringify({schema:2,version,window:"barrier",started:Date.now()+1,events:[],startup:[]}));
  const events=JSON.parse(f.writes.at(-1).data).sessions.find(s=>s.window!=="barrier").events;
  assert.equal(events.find(e=>e.event==="diagnostics.ready").data.writer,"independent");
+  assert.equal(events.find(e=>e.event==="diagnostics.ready").data.homeTintOpacity,65);
  assert.ok(events.some(e=>e.event==="layout.cleanup.end"));assert.equal(events.at(-1).event,"diagnostics.dispose");
 });
 test("writer retains latest queued snapshot per session and bounds queued sessions",async()=>{

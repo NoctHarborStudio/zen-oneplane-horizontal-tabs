@@ -1,24 +1,28 @@
-## 0.3.0-preview.189 — Experimental Home direct alpha without Acrylic
+## 0.3.0-preview.190 — Direct-alpha diagnostics compatibility
+
+Keep the experimental Home direct-alpha CSS from preview.189. Preserve diagnostics.ready when a preference adapter lacks the numeric getter, with the same 65% tint fallback. This fixes the CI diagnostics regressions; native Home alpha verification is still required.
+
+## 0.3.0-preview.190 — Experimental Home direct alpha without Acrylic
 
 Add an opt-in Windows Home-only direct-alpha mode and tint opacity control. Clear native opaque chrome backing and composite the existing Zen gradient/grain as one tint layer, conditional on Gecko window transparency and disabled Mica. Ordinary browsing, private/fullscreen/forced-colors modes, startup ownership and explicit user choices remain unchanged. No registry modification, desktop capture or claim of Acrylic-equivalent blur. Native alpha with Windows Transparency effects disabled remains an experimental verification gate.
 
-## 0.3.0-preview.189 — Startup and Home appearance controls
+## 0.3.0-preview.190 — Startup and Home appearance controls
 
 Expose existing intro and Boot toggles with restart hints, a default-on Home transparent surface preference, optional startup-only reduced-motion override (off by default), native window transparency and platform-specific native backdrop controls, and the existing local diagnostics toggle. Preserve the ordinary reduced-motion policy and explicit native/user choices; no automatic native accessibility writes. Record structural reduced-motion/transparency and native backdrop state for clean-profile diagnosis. The OS compositor and workspace theme opacity remain native-owned; native verification pending.
 
-## 0.3.0-preview.189 — Default-on experimental Library on clean profiles
+## 0.3.0-preview.190 — Default-on experimental Library on clean profiles
 
 Enable the existing experimental Library surface and Ctrl+H/Ctrl+J routing by default in Sine settings **and** the runtime fallback path for profiles without materialized defaults. The existing reversible native Library lease and explicit user `false` preferences remain authoritative. Default the optional local-media preference on for consistency, while the safety-suspended scanner remains blocked (no local folder scan occurs). Keep Boot, startup animation and Home CSS transparency already on; do not override native OS/Zen translucency settings or replay the intro on Sine hot reload. Update clean-profile and opt-out regressions, documentation and version metadata. Native Zen/Sine cold-start and Home translucency validation pending.
 
-## 0.3.0-preview.189 — CI closure for fresh-install CSS parity
+## 0.3.0-preview.190 — CI closure for fresh-install CSS parity
 
 Retain the first-run startup CSS fallback alignment from preview.185. Update the existing MB-014 regression assertions to recognize the explicit-false media queries and synchronize the pinned Magnetic Bookmarks diagnostic-version provenance without changing its functional behavior. Native first-paint and affected clean-profile feature behavior still need real Zen/Sine verification.
 
-## 0.3.0-preview.189 — Fresh-install startup CSS default parity
+## 0.3.0-preview.190 — Fresh-install startup CSS default parity
 
 Sine 2.3.3 does not materialize all preference defaults during installation. Align the two early chrome CSS safeguards with the same true-by-default startup options used by the Boot prelude, including on clean profiles with absent user preferences. Explicit false, reduced-motion and fail-open conditions remain effective; no global preference writes. Add a regression for source/generated CSS and document fresh-install feature gates (Library and shortcuts intentionally opt-in). CI/source checks cannot certify native first paint or explain other unreported feature failures.
 
-## 0.3.0-preview.189 — Experimental branded close finale
+## 0.3.0-preview.190 — Experimental branded close finale
 
 Keep the approved Home exit and existing native close gate. After the folds, crossfade into the existing Nocturne brand background (320ms), reveal the shared Boot logo (460ms), then animate chrome-root opacity to zero (500ms) before the existing 110ms sealed dwell. This is an experiment with Gecko document compositing, not proof of OS-window transparency. No native API, system preference or session changes. Restore all visual leases if a modal prompt opens or native close returns without closing; bounded recovery during native delegation. Native visual validation pending.
 
