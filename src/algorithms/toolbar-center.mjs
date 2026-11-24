@@ -14,7 +14,7 @@ import {planAdaptiveTabRows} from "./tab-overflow.mjs";
       const title=iconHome?32:Math.max(100,Math.min(180,available-2*(tabWidth+9)));
       return planAdaptiveTabRows(widths,groups,boundary,available,title,tabWidth,3,returnReserve);
     };
-    return {naturalTabsWidth,availableAt,planAt};
+    return {naturalTabsWidth,availableAt,planAt,boundary};
   }
   // The plus follows the occupied right lane, not the symmetric row's
   // far edge. Keep the existing expansion reserve in Expand mode.

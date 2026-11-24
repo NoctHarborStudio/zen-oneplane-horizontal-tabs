@@ -120,7 +120,7 @@
       const widths=order.map(n=>compactSlotWidth(n,tabWidth));
       const groups=order.map(n=>n.classList.contains("oneplane-split-group"));
       const returnReserve=row.hasAttribute("data-op-adaptive-compact")?12:0;
-      const {naturalTabsWidth,availableAt,planAt}=restingToolbarBudget({widths,groups,windowWidth,right,tabWidth,dragRoom,iconHome,returnReserve});
+      const {naturalTabsWidth,availableAt,planAt,boundary}=restingToolbarBudget({widths,groups,windowWidth,right,tabWidth,dragRoom,iconHome,returnReserve});
       const stillCurrent=()=>!dead&&stripOrderSnapshot===order&&window.innerWidth===windowWidth&&
         geometryWriteAllowed()&&
         row.hasAttribute("data-op-show-island")===wantsIsland&&row.hasAttribute("data-op-home-icon")===iconHome&&
@@ -166,7 +166,7 @@
         const metrics=toolbarPartitionMetrics({layout,widths,available,windowWidth,tabWidth,openWidth,iconHome});
         row.removeAttribute("data-op-island-tight");
         // Lane reparent/focus may synchronously publish a new topology.
-        if(!applyStripPartition(layout,order,stillCurrent)||!stillCurrent())return rejectStale();
+        if(!applyStripPartition(layout,order,stillCurrent,boundary)||!stillCurrent())return rejectStale();
         row.toggleAttribute("data-op-island-compact",!iconHome&&layout.title===32);
         setLength(row,"--op-island-width",metrics.islandWidth);
         setLength(row,"--op-island-row-width",metrics.rowWidth);

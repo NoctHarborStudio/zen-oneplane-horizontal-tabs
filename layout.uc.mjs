@@ -86,7 +86,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.210",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.211",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -3909,6 +3909,30 @@ function installTabStrip() {
     }
     return l;
   }
+
+// Lossless structural adapter: leave Auto allocation, metrics and CSS alone.
+// The boundary must come from the exact same pass as the legacy plan.
+function normalizeAutomaticTabRows(plan,count,boundary) {
+  if(!Number.isSafeInteger(count)||count<0||!Number.isInteger(boundary)||boundary<0||boundary>count||
+     !plan||typeof plan.topPlus!=="boolean"||typeof plan.hasSecondRow!=="boolean"||
+     ![plan.topLeft,plan.topRight,plan.lower].every(Array.isArray))
+    throw new TypeError("Invalid automatic slot plan");
+  const seen=new Set();
+  for(const [region,indices] of [["left",plan.topLeft],["right",plan.topRight],[null,plan.lower]]){
+    for(const i of indices){
+      if(!Number.isInteger(i)||i<0||i>=count||seen.has(i)||
+         (region==="left"&&i>=boundary)||(region==="right"&&i<boundary))
+        throw new TypeError("Inconsistent automatic slot provenance");
+      seen.add(i);
+    }
+  }
+  if(seen.size!==count||plan.hasSecondRow!==(plan.lower.length>0||!plan.topPlus))
+    throw new TypeError("Incomplete automatic slot plan");
+  const regions=[{id:"top-left",side:"left",slots:plan.topLeft.slice()},
+    {id:"top-right",side:"right",slots:[...plan.topRight,...(plan.topPlus?["plus-right"]:[])]}];
+  if(plan.hasSecondRow)regions.push({id:"bottom",side:null,slots:[...plan.lower,...(plan.topPlus?[]:["plus-right"])]});
+  return {mode:"automatic",sides:Array.from({length:count},(_,i)=>i<boundary?"left":"right"),regions,hasSecondRow:plan.hasSecondRow};
+}
   let adaptiveHeightDirty=false,overflowRevealAnimation=null;
   function mountLaneNodes(lane,nodes,current=()=>!dead){
     for(let i=0;i<nodes.length;i++){
@@ -3922,9 +3946,14 @@ function installTabStrip() {
     }
     return current();
   }
-  function applyStripPartition(plan,order=stripOrderSnapshot,current=()=>!dead&&stripOrderSnapshot===order){
+  function applyStripPartition(plan,order=stripOrderSnapshot,current=()=>!dead&&stripOrderSnapshot===order,boundary){
     // Materialize all three lanes before any native focus/reparent callback.
-    const lanes=[plan.topLeft,plan.topRight,plan.lower].map(indices=>indices.map(i=>order[i]));
+    if(!current())return false;
+    const projection=normalizeAutomaticTabRows(plan,order.length,boundary);
+    // Auto's existing plus is positioned by CSS outside the lane DOM.
+    // Keep controls in the plan but mount only native-derived unit nodes.
+    const lanes=["top-left","top-right","bottom"].map(id=>
+      (projection.regions.find(region=>region.id===id)?.slots??[]).filter(Number.isInteger).map(i=>order[i]));
     if(!current())return false;
     if(leftLane.parentElement!==list)list.append(leftLane,rightLane,bottomLane);
     const active=document.activeElement;
@@ -3967,7 +3996,7 @@ function installTabStrip() {
         const tabWidth=parseFloat(window.getComputedStyle(row).getPropertyValue("--op-tab"))||36;
         const boundary=islandBoundary(order.map(n=>compactSlotWidth(n,tabWidth)),tabWidth+3);
         if(!applyStripPartition({topLeft:order.slice(0,boundary).map((_,i)=>i),
-          topRight:order.slice(boundary).map((_,i)=>i+boundary),lower:[],hasSecondRow:false,mode:"wide",topPlus:true},snapshot))scheduleGeometry();
+          topRight:order.slice(boundary).map((_,i)=>i+boundary),lower:[],hasSecondRow:false,mode:"wide",topPlus:true},snapshot,undefined,boundary))scheduleGeometry();
       }
     }else{
       if(!mountLaneNodes(list,order,()=>!dead&&stripOrderSnapshot===snapshot))return;
@@ -7780,7 +7809,7 @@ function installTabStrip() {
       const title=iconHome?32:Math.max(100,Math.min(180,available-2*(tabWidth+9)));
       return planAdaptiveTabRows(widths,groups,boundary,available,title,tabWidth,3,returnReserve);
     };
-    return {naturalTabsWidth,availableAt,planAt};
+    return {naturalTabsWidth,availableAt,planAt,boundary};
   }
   // The plus follows the occupied right lane, not the symmetric row's
   // far edge. Keep the existing expansion reserve in Expand mode.
@@ -7924,7 +7953,7 @@ function installTabStrip() {
       const widths=order.map(n=>compactSlotWidth(n,tabWidth));
       const groups=order.map(n=>n.classList.contains("oneplane-split-group"));
       const returnReserve=row.hasAttribute("data-op-adaptive-compact")?12:0;
-      const {naturalTabsWidth,availableAt,planAt}=restingToolbarBudget({widths,groups,windowWidth,right,tabWidth,dragRoom,iconHome,returnReserve});
+      const {naturalTabsWidth,availableAt,planAt,boundary}=restingToolbarBudget({widths,groups,windowWidth,right,tabWidth,dragRoom,iconHome,returnReserve});
       const stillCurrent=()=>!dead&&stripOrderSnapshot===order&&window.innerWidth===windowWidth&&
         geometryWriteAllowed()&&
         row.hasAttribute("data-op-show-island")===wantsIsland&&row.hasAttribute("data-op-home-icon")===iconHome&&
@@ -7970,7 +7999,7 @@ function installTabStrip() {
         const metrics=toolbarPartitionMetrics({layout,widths,available,windowWidth,tabWidth,openWidth,iconHome});
         row.removeAttribute("data-op-island-tight");
         // Lane reparent/focus may synchronously publish a new topology.
-        if(!applyStripPartition(layout,order,stillCurrent)||!stillCurrent())return rejectStale();
+        if(!applyStripPartition(layout,order,stillCurrent,boundary)||!stillCurrent())return rejectStale();
         row.toggleAttribute("data-op-island-compact",!iconHome&&layout.title===32);
         setLength(row,"--op-island-width",metrics.islandWidth);
         setLength(row,"--op-island-row-width",metrics.rowWidth);

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {planManualTabRows,normalizeAutomaticTabRows} from "../src/algorithms/manual-tab-rows.mjs";
-import {planAdaptiveTabRows} from "../src/algorithms/tab-overflow.mjs";
+import {planManualTabRows} from "../src/algorithms/manual-tab-rows.mjs";
+import {planAdaptiveTabRows,normalizeAutomaticTabRows} from "../src/algorithms/tab-overflow.mjs";
 
 const plan=(widths,sides,leftCapacity,rightCapacity,plusWidth=36,gap=3)=>
   planManualTabRows({widths,sides,leftCapacity,rightCapacity,plusWidth,gap});

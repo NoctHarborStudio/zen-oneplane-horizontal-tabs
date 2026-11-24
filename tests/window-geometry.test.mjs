@@ -110,6 +110,7 @@ test("resting toolbar budget and partition dimensions preserve prior policy acro
   const budget=restingToolbarBudget({widths,groups,windowWidth,right,tabWidth,dragRoom,iconHome,returnReserve});
   const available=Math.max(0,2*Math.min(windowWidth/2-left,windowWidth/2-right)-4-2*dragRoom);
   assert.equal(budget.availableAt(left),available);
+  assert.equal(budget.boundary,islandBoundary(widths,tabWidth+3));
   assert.equal(budget.naturalTabsWidth,widths.reduce((n,w)=>n+w+3,0));
   const title=iconHome?32:Math.max(100,Math.min(180,available-2*(tabWidth+9)));
   const layout=planAdaptiveTabRows(widths,groups,islandBoundary(widths,tabWidth+3),available,title,tabWidth,3,returnReserve);
@@ -125,7 +126,7 @@ test("resting toolbar budget and partition dimensions preserve prior policy acro
    islandWidth:layout.title,rowWidth:Math.max(layout.title+6,topWidth),plusOffset,overflowWidth:bottomWidth,
    bottomOpen:Math.max(tabWidth,Math.min(openWidth,bottomWidth-2*(tabWidth+3)-6))});
  }
- assert.ok(source.indexOf("const metrics=toolbarPartitionMetrics(")<source.indexOf("applyStripPartition(layout,order,stillCurrent)"));
+ assert.ok(source.indexOf("const metrics=toolbarPartitionMetrics(")<source.indexOf("applyStripPartition(layout,order,stillCurrent,boundary)"));
 });
 
 test("collapsed compact toolbar contributes no hidden spacer/lane native drag region",()=>{

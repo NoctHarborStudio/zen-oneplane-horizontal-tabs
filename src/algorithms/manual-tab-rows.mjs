@@ -31,27 +31,3 @@ export function planManualTabRows({widths,sides,leftCapacity,rightCapacity,plusW
   }
   return {mode:"manual",sides:sides.slice(),regions,hasSecondRow:regions.length>2};
 }
-
-// Lossless structural adapter: leave Auto allocation, metrics and CSS alone.
-// The boundary must come from the exact same pass as the legacy plan.
-export function normalizeAutomaticTabRows(plan,count,boundary) {
-  if(!Number.isSafeInteger(count)||count<0||!Number.isInteger(boundary)||boundary<0||boundary>count||
-     !plan||typeof plan.topPlus!=="boolean"||typeof plan.hasSecondRow!=="boolean"||
-     ![plan.topLeft,plan.topRight,plan.lower].every(Array.isArray))
-    throw new TypeError("Invalid automatic slot plan");
-  const seen=new Set();
-  for(const [region,indices] of [["left",plan.topLeft],["right",plan.topRight],[null,plan.lower]]){
-    for(const i of indices){
-      if(!Number.isInteger(i)||i<0||i>=count||seen.has(i)||
-         (region==="left"&&i>=boundary)||(region==="right"&&i<boundary))
-        throw new TypeError("Inconsistent automatic slot provenance");
-      seen.add(i);
-    }
-  }
-  if(seen.size!==count||plan.hasSecondRow!==(plan.lower.length>0||!plan.topPlus))
-    throw new TypeError("Incomplete automatic slot plan");
-  const regions=[{id:"top-left",side:"left",slots:plan.topLeft.slice()},
-    {id:"top-right",side:"right",slots:[...plan.topRight,...(plan.topPlus?["plus-right"]:[])]}];
-  if(plan.hasSecondRow)regions.push({id:"bottom",side:null,slots:[...plan.lower,...(plan.topPlus?[]:["plus-right"])]});
-  return {mode:"automatic",sides:Array.from({length:count},(_,i)=>i<boundary?"left":"right"),regions,hasSecondRow:plan.hasSecondRow};
-}

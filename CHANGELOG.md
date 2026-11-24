@@ -1,3 +1,7 @@
+## 0.3.0-preview.211 — Automatic strip structural plan (ML1b.1)
+
+Route existing centered tab-lane mounting through the common structural plan with the exact allocator boundary, retaining the original Auto width calculation, CSS, single plus and startup fallback. Manual allocation remains source/test-only. No tab/session changes. Native visual acceptance pending.
+
 ## 0.3.0-preview.210 — Bookmark scale and live startup playback experiment
 
 Scale the whole central bookmark toward the actual portal, preserving its icon and text instead of cropping. Keep side conveyor poses and close playback, and try direct WAAPI translate/scale/opacity/clip-path for startup rather than registered property interpolation. Both directions use the same geometry. Existing bounded admission and native-list fallback remain. Add live bookmark timing, geometry and ancestor opacity checks to the existing diagnostic sampler. Preview.208 had three successful startups and closes with valid paused poses but a reported visual startup jump; the cause is not yet established. Native visual validation remains open.
