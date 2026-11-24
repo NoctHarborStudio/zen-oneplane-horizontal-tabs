@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {startupTimeline,startupFits,startupLateEffect,createStartupOutcome,startupBoundaryOutcome} from "../src/algorithms/startup-timeline.mjs";
+import {centerFlowDuration,CENTER_FLOW_MS} from "../src/algorithms/home-island-motion.mjs";
 const source=readFileSync(new URL("../startup-animation.uc.mjs",import.meta.url),"utf8");
 const assemblyErrorContext=source.slice(source.indexOf("const ASSEMBLY_ERROR_CLASSES="),source.indexOf("function canStartBeforePaint("));
 const css=readFileSync(new URL("../chrome.css",import.meta.url),"utf8");
@@ -138,10 +139,10 @@ test("early boot is installed before layout and adopted without duplicate cover"
  assert.ok(source.indexOf('decision("boot.ready"')<source.indexOf('decision("assembly.icons.ready"'));
 });
 
-test("startup animation preserves explicit 760 ms and does not migrate saved choices",()=>{
- const block=source.slice(source.indexOf("  window[SEEN]=true;"),source.indexOf("  const scale=duration/1050;"));
+test("startup preserves the legacy speed choice without writing the stored preference",()=>{
+ const block=source.slice(source.indexOf("  window[SEEN]=true;"),source.indexOf("  const scale=duration/CENTER_FLOW_MS;"));
  const prefs={getIntPref:()=>760,setIntPref(){throw Error("unexpected write");},getBoolPref:()=>false,setBoolPref(){throw Error("unexpected write");}};
- assert.equal(new Function("window","SEEN","prefs","DURATION",block+"return duration;")({},"seen",prefs,"duration"),760);
+ assert.equal(new Function("window","SEEN","prefs","DURATION","centerFlowDuration","CENTER_FLOW_MS",block+"return duration;")({},"seen",prefs,"duration",centerFlowDuration,CENTER_FLOW_MS),Math.round(2400*760/1050));
  assert.ok(!block.includes("setIntPref"));assert.ok(!block.includes("setBoolPref"));
 });
 test("Assembly cleanup continues after Center Motion and Home failures",()=>{

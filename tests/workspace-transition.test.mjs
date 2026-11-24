@@ -180,7 +180,7 @@ test("workspace uses packaged style motion and locks geometry before outgoing ef
 test("compact geometry and card displacement share the incoming timeline",()=>{
  assert.ok(css.includes("--zr-workspace-painted-height"));
  assert.ok(css.includes("data-zr-magnetic-layer"));
- assert.ok(source.includes('const length=outgoing?460:560'));
+ assert.ok(source.includes('const length=tx.flow?(outgoing?240:300):(outgoing?460:560)'));
  assert.ok(source.includes('old.bookmarkTop-n.getBoundingClientRect().top'));
 });
 test("workspace delegates card trajectories to the shared engine and fixes the unscaled surface height",()=>{

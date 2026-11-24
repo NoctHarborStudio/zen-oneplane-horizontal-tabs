@@ -86,7 +86,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.203",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.204",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -642,6 +642,190 @@ function createMagneticFoldMath(){
   }
   return {smooth,magnetState,keyframes,portalGap,portalClip};
 }
+
+// Dual-row conveyor candidate shared by all Center Motion owners and the Lab.
+function createCenterFlowPlan(cards) {
+  // One resting geometry snapshot; no DOM reads or time-dependent state.
+  // Each side is a conveyor: all members share the same horizontal shift.
+  const clamp = p => Math.max(0, Math.min(1, p));
+  const ease = p => { p = clamp(p); return p*p*p*(p*(6*p-15)+10); };
+  const soft = p => { p = clamp(p); return p*p*(3-2*p); };
+  const pad = 8, epsilon = .5;
+  const slots = cards.map(c => {
+    const {x,y,cx,cy,opacity,r,lower,hub} = c;
+    const w = r?.width, h = r?.height;
+    if (![x,y,cx,cy,opacity,w,h].every(Number.isFinite) || w <= 0 || h <= 0 || opacity < 0 || opacity > 1)
+      throw Error("center-flow-geometry");
+    return {x,y,cx,cy,opacity,w,h,lower:!!lower,hub,left:x-w/2,right:x+w/2,top:y-h/2,bottom:y+h/2};
+  });
+  const rows = [slots.filter(c=>!c.lower), slots.filter(c=>c.lower)];
+  const two = rows.every(row=>row.length);
+  const lowerTop = rows[1].length ? Math.min(...rows[1].map(c=>c.top)) : 0;
+  const upperBottom = rows[0].length ? Math.max(...rows[0].map(c=>c.bottom)) : lowerTop;
+  if (two && upperBottom > lowerTop + epsilon) throw Error("center-flow-row-overlap");
+  const lowerClip = two ? Math.min(lowerTop,(upperBottom+lowerTop)/2) : lowerTop;
+  const assigned = new Map();
+  for (const row of rows) {
+    if (!row.length) continue;
+    const sorted = row.slice().sort((a,b)=>a.left-b.left);
+    for (let i=1;i<sorted.length;i++)
+      if (sorted[i-1].right > sorted[i].left + epsilon) throw Error("center-flow-slot-overlap");
+    const cx = row[0].cx;
+    if (row.some(c=>Math.abs(c.cx-cx)>epsilon)) throw Error("center-flow-anchor");
+    const central = sorted.filter(c=>c.left<cx && c.right>cx);
+    if (central.length>1) throw Error("center-flow-center");
+    const middle = central[0];
+    if (middle) assigned.set(middle,{side:0,boundary:cx,travel:0});
+    for (const side of [-1,1]) {
+      const group=sorted.filter(c=>c!==middle && (side<0?c.x<cx:c.x>=cx));
+      if(!group.length)continue;
+      const near=side<0?Math.max(...group.map(c=>c.right)):Math.min(...group.map(c=>c.left));
+      const hub=row[0].hub;
+      const edge=middle?(side<0?middle.left:middle.right):
+        !row[0].lower&&hub&&Number.isFinite(side<0?hub.left:hub.right)?(side<0?hub.left:hub.right):cx;
+      // A portal must never clip a real resting slot. Native partial
+      // slots are rejected by the existing owner before this plan.
+      const boundary=side<0?Math.max(edge,near):Math.min(edge,near);
+      const travel=Math.max(...group.map(c=>side*(c.x-boundary)+c.w/2))+pad;
+      for (const c of group) assigned.set(c,{side,boundary,travel});
+    }
+  }
+  function sample(index,p) {
+    const c=slots[index], g=assigned.get(c);
+    if(!c||!g)throw Error("center-flow-slot");
+    p=clamp(p);
+    // Lower row begins later and overlaps the top row's outward flow.
+    const q=two?(c.lower?clamp((p-.18)/.82):clamp(p/.82)):p;
+    if(q===1)return {x:0,y:0,a:c.opacity,clip:[-pad,-pad,-pad,-pad]};
+    const progress=ease(q);
+    const dx=-g.side*g.travel*(1-progress);
+    const lead=g.side?g.side*(c.x+dx-g.boundary)+c.w/2:0;
+    const descend=g.side?soft(lead/c.w):progress;
+    const dy=c.lower?(c.cy-c.y)*(1-descend):0;
+    const clip=[-pad,-pad,-pad,-pad]; // top/right/bottom/left
+    const bound=(v,size)=>Math.max(-pad,Math.min(size+pad,v));
+    if(g.side<0)clip[1]=bound(c.right+dx-g.boundary,c.w);
+    if(g.side>0)clip[3]=bound(g.boundary-c.left-dx,c.w);
+    if(c.lower)clip[0]=bound(lowerClip-(c.top+dy),c.h);
+    const horizontal=g.side?soft(lead/Math.min(c.w,18)):soft(q/.4);
+    const vertical=c.lower?soft((c.bottom+dy-lowerClip)/Math.min(c.h,12)):1;
+    return {x:dx,y:dy,a:q===0?0:c.opacity*horizontal*vertical,clip};
+  }
+  function keyframes(index,reverse=false) {
+    return Array.from({length:81},(_,i)=>{
+      const f=sample(index,(reverse?80-i:i)/80);
+      return {offset:i/80,transform:`translate(${f.x}px,${f.y}px) scale(1)`,opacity:f.a,
+        clipPath:`inset(${f.clip.map(v=>`${v}px`).join(" ")})`};
+    });
+  }
+  return {sample,keyframes};
+}
+// Home Island variant B, approved in the comparison prototype.
+const HOME_ISLAND_DURATION=540;
+const HOME_ISLAND_TRAVEL="--zr-island-travel",HOME_ISLAND_SCALE="--zr-island-scale";
+function registerHomeIslandMotion(css){
+  for(const name of [HOME_ISLAND_TRAVEL,HOME_ISLAND_SCALE]){
+    try{css.registerProperty({name,syntax:"<number>",inherits:false,initialValue:"1"});}
+    catch(e){if(e.name!=="InvalidModificationError")return false;}
+  }
+  return true;
+}
+function homeIslandDistance(bottom){return -Math.max(66,bottom+2);}
+function homeIslandPose(t){
+  const clamp=x=>Math.min(1,Math.max(0,x));
+  const bezier=(t,x1,y1,x2,y2)=>{
+    t=clamp(t);if(t===0||t===1)return t;
+    let l=0,r=1;
+    const b=(u,a,c)=>3*(1-u)*(1-u)*u*a+3*(1-u)*u*u*c+u*u*u;
+    for(let i=0;i<24;i++){const m=(l+r)/2;if(b(m,x1,x2)<t)l=m;else r=m;}
+    return b((l+r)/2,y1,y2);
+  };
+  t=clamp(t);
+  const a=clamp(t/.3);
+  return {travel:bezier(t,.25,.8,.22,1),scale:.02+.98*bezier((t-.2)/.8,.3,0,.12,1),opacity:a*a*(3-2*a)};
+}
+function homeIslandFrames(reverse=false){
+  return Array.from({length:81},(_,i)=>({offset:i/80,...homeIslandPose((reverse?80-i:i)/80)}));
+}
+
+// Shared horizontal edge choreography. Each side travels as one group;
+// the widest measured extent determines the offscreen starting position.
+const EDGE_CONTROL_EASE="cubic-bezier(.45,0,.55,1)";
+const EDGE_CONTROL_SELECTOR="toolbarbutton,button,.titlebar-button,[role=button],#titlebar-min,#titlebar-max,#titlebar-restore,#titlebar-close";
+function edgeControlOffsets(rects,center,width){
+  if(!Number.isFinite(center)||!Number.isFinite(width)||width<=0)throw RangeError("edge-control-viewport");
+  const sides=rects.map(r=>{
+    if(![r.left,r.right].every(Number.isFinite)||r.right<=r.left)throw RangeError("edge-control-rect");
+    return (r.left+r.right)/2<center?-1:1;
+  });
+  const left=Math.max(0,...rects.filter((_,i)=>sides[i]<0).map(r=>r.right))+8;
+  const right=Math.max(0,...rects.filter((_,i)=>sides[i]>0).map(r=>width-r.left))+8;
+  return sides.map(side=>side<0?-left:right);
+}
+
+// Center Flow: visible choreography only; Boot and the branded close
+// finale have independent native-readiness/confirmation ownership.
+const CENTER_FLOW_MS=2400;
+const CENTER_FLOW_CLOSE_MS=1600;
+const CENTER_FLOW_STAGES=Object.freeze({
+  panel:[48,552],island:[216,996],tabs:[824,1968],edges:[840,1680],
+  bookmarks:[1152,2016],search:[936,1656],pinLabel:[1176,1728],
+  workspaceLabel:[1560,2064],footer:[1944,2400],body:[936,1968]
+});
+function centerFlowDuration(value){
+  if([450,600,760,1000,1050,1250,1500].includes(value))
+    return Math.round(CENTER_FLOW_MS*value/1050);
+  return Number.isFinite(value)?Math.max(900,Math.min(3600,value)):CENTER_FLOW_MS;
+}
+function centerFlowStage(name,duration=CENTER_FLOW_MS,reverse=false,rank=0){
+  if(!Number.isFinite(duration)||duration<=0)throw RangeError("center-flow-duration");
+  rank=Math.max(0,Math.min(1,Number.isFinite(rank)?rank:0));
+  const a=name==="pin"?[1224+312*rank,1872+312*rank]:
+    name==="workspace"?[1584+132*rank,2160+132*rank]:CENTER_FLOW_STAGES[name];
+  if(!a)throw RangeError("center-flow-stage");
+  return {delay:(reverse?CENTER_FLOW_MS-a[1]:a[0])*duration/CENTER_FLOW_MS,
+    duration:(a[1]-a[0])*duration/CENTER_FLOW_MS};
+}
+function centerFlowTimeline(start,scale){
+  if(!Number.isFinite(start)||!Number.isFinite(scale)||scale<=0)throw RangeError("center-flow-plan");
+  const [panel,island,tabs,edges,bookmarks,search]=["panel","island","tabs","edges","bookmarks","search"].map(n=>centerFlowStage(n));
+  return {start,scale,mode:"fold",flow:true,panel:panel.delay,panelLength:panel.duration,
+    islandStart:island.delay,islandLength:island.duration,islandShift:0,
+    cards:tabs.delay,cardsLength:tabs.duration,edges:edges.delay,edgesLength:edges.duration,
+    bookmarks:bookmarks.delay,bookmarksLength:bookmarks.duration,home:search.delay,homeLength:search.duration,
+    end:CENTER_FLOW_MS,finishLength:CENTER_FLOW_MS*scale,lateLimit:(CENTER_FLOW_MS+420)*scale};
+}
+function homeFlowFrames(kind,opacity=1,reverse=false){
+  const a={opacity:0},b={opacity};
+  if(kind==="search"){a.transform="scale(.89,.96)";b.transform="scale(1,1)";}
+  else if(kind==="pin"){a.transform="translateY(14px) scale(.93)";b.transform="translateY(0px) scale(1)";}
+  else if(kind==="workspace"||kind==="body"){a.transform="translateY(9px)";b.transform="translateY(0px)";}
+  return reverse?[b,a]:[a,b];
+}
+function homeFlowTargets(content,duration,reverse=false){
+  if(!content)return [];
+  const nodes=[...content.children],search=nodes.shift(),footer=nodes.pop(),pins=nodes.shift(),spaces=nodes.shift();
+  const fallback=()=>[{node:content,kind:"body",...centerFlowStage("body",duration,reverse)}];
+  if(nodes.length||!search?.matches(".zh-search")||!footer?.matches(".zh-footer")||
+    !pins?.matches(".zh-section")||spaces&&!spaces.matches(".zh-section"))return fallback();
+  const [pinLabel,pinGrid,...pinExtra]=pins.children;
+  const [spaceLabel,spaceGrid,...spaceExtra]=spaces?[...spaces.children]:[];
+  if(!pinLabel?.matches("h3")||!pinGrid?.matches(".zh-pins")||pinExtra.length||
+     spaces&&(!spaceLabel?.matches("h3")||!spaceGrid?.matches(".zh-spaces")||
+       spaceExtra.some(n=>!n.hidden)))return fallback();
+  const targets=[];
+  const add=(node,kind,stage=kind,rank=0)=>targets.push({node,kind,...centerFlowStage(stage,duration,reverse,rank)});
+  const wave=(grid,kind)=>{
+    const list=[...grid.children],rect=grid.getBoundingClientRect(),center=rect.left+rect.width/2;
+    const scores=list.map(n=>{const r=n.getBoundingClientRect();return Math.abs(r.left+r.width/2-center)+Math.max(0,r.top-rect.top);});
+    const max=Math.max(1,...scores);
+    list.forEach((node,i)=>add(node,node.matches(".zh-empty")?"fade":kind,kind,scores[i]/max));
+  };
+  add(search,"search");add(pinLabel,"fade","pinLabel");wave(pinGrid,"pin");
+  if(spaces){add(spaceLabel,"fade","workspaceLabel");wave(spaceGrid,"workspace");}
+  add(footer,"fade","footer");
+  return targets.length<=256?targets:fallback();
+}
 // Reconstructed Magnetic Bloom candidate, not the lost approved HTML.
 // All windows are relative to the first panel stage (reference 940ms).
 // Boot is deliberately outside this visible choreography; no production
@@ -744,7 +928,12 @@ function startupBloomAssemblyPlan(start,scale){
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   if(win[KEY]?.dispose?.({replacement:true})===false)return;
   const MARK="data-zr-center-card",OWNER="data-zr-center-motion",PENDING="data-zr-center-pending";
-  const B="--zr-fold-bookmark-progress";
+  const B="--zr-fold-bookmark-progress",BOOK_FLOW="data-zr-flow-bookmark";
+  const BOOK_PROPS=["--zr-flow-bookmark-x","--zr-flow-bookmark-alpha","--zr-flow-bookmark-left","--zr-flow-bookmark-right"];
+  let bookFlowRegistered=true;
+  for(const [name,syntax,initialValue] of [[BOOK_PROPS[0],"<length>","0px"],[BOOK_PROPS[1],"<number>","1"],[BOOK_PROPS[2],"<length>","-8px"],[BOOK_PROPS[3],"<length>","-8px"]]){
+    try{win.CSS.registerProperty({name,syntax,inherits:false,initialValue});}catch(e){if(e.name!=="InvalidModificationError")bookFlowRegistered=false;}
+  }
   const MODE="data-zr-center-mode",BLOOM_MARK="data-zr-center-bloom-card";
   try{win.CSS.registerProperty({name:B,syntax:"<number>",inherits:false,initialValue:"1"});}catch{}
   // Gecko user sheets may not register @property. The JS registration
@@ -755,7 +944,7 @@ function startupBloomAssemblyPlan(start,scale){
   function trace(event,data,options){try{win.__nocturneTrace?.(event,data,options);}catch{}}
   function retire(){if(disposed&&!disposing&&!active&&!activeBookmark&&current())delete win[KEY];}
   function drainDispose(){if(!motionBusy&&!disposing&&pendingDispose){const options=pendingDispose;pendingDispose=null;dispose(options);}}
-  const {smooth,keyframes,portalClip}=createMagneticFoldMath();
+  const {smooth,portalClip}=createMagneticFoldMath();
   const GEOMETRY_EPS=.5;
   const rectError=(a,b)=>Math.max(...["left","top","width","height"].map(k=>
     Number.isFinite(a?.[k])&&Number.isFinite(b?.[k])?Math.abs(a[k]-b[k]):Infinity));
@@ -1257,7 +1446,8 @@ function startupBloomAssemblyPlan(start,scale){
       // Own every resource before acquisition; never hide cards until all
       // detached proxies have been prepared.
       const geometryPairs=[];
-      for(const c of cards){const n=proxy(c,layer,rr,cleanups,stats,geometryPairs),frames=keyframes(c,direction==="out");effects.push({n,frames,c});}
+      const flow=createCenterFlowPlan(cards);
+      for(const [index,c] of cards.entries()){const n=proxy(c,layer,rr,cleanups,stats,geometryPairs),frames=flow.keyframes(index,direction==="out");effects.push({n,frames,c});}
       if(measuring){restoreMark(root,"data-zr-fold-measuring",measuringMark);measuring=false;}
       if(!preparing()||!projectionCurrent()){handle.release("disposed");return null;}
       ownerMark=root.getAttribute(OWNER);ownerWritten=true;root.setAttribute(OWNER,owner);
@@ -1312,7 +1502,7 @@ function startupBloomAssemblyPlan(start,scale){
     },{sample:800});
       for(const {n,frames} of effects){
         if(!preparing()){handle.release("disposed");return null;}
-        n.style.transform=frames[0].transform;n.style.opacity=String(frames[0].opacity);
+        n.style.transform=frames[0].transform;n.style.opacity=String(frames[0].opacity);n.style.clipPath=frames[0].clipPath;
         const a=n.animate(frames,{duration,delay,easing:"linear",fill:"both"});
         // Install cancellation handling immediately, even when pause or
         // currentTime subsequently throws. Fail open as one surface.
@@ -1323,7 +1513,7 @@ function startupBloomAssemblyPlan(start,scale){
       handle.finished=Promise.all(running.map(a=>a.finished.catch(()=>{})));
       if(!preparing()||!projectionCurrent()){handle.release("disposed");return null;}
       committed=true;
-      trace("center.motion",()=>({id,owner,direction,count:cards.length,duration,mode:"magnetic-fold",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length,groups:stats.groups,handles:stats.handles,handleOffset:stats.handleOffset,icons:iconStats(row),bitmapIcons:stats.bitmapIcons,bitmapFailures:stats.bitmapFailures,animated:running.length}),{sample:duration+250});
+      trace("center.motion",()=>({id,owner,direction,count:cards.length,duration,mode:"magnetic-fold",flow:"conveyor-v1",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length,groups:stats.groups,handles:stats.handles,handleOffset:stats.handleOffset,icons:iconStats(row),bitmapIcons:stats.bitmapIcons,bitmapFailures:stats.bitmapFailures,animated:running.length}),{sample:duration+250});
       if(!preparing()||!projectionCurrent()){handle.release("disposed");return null;}
       return handle;
     }catch(error){
@@ -1337,30 +1527,33 @@ function startupBloomAssemblyPlan(start,scale){
     motionBusy=true;
     try{return acquireBookmark(options);}catch(error){trace("center.bookmarks.error",{stage:"prepare",name:nocturneErrorClass(error)},{flush:true});return null;}finally{motionBusy=false;drainDispose();}
   }
-  function acquireBookmark({owner="unknown",direction="in",duration=520,delay=0,paused=false,retainOnDispose=null,observeEffect=null}={}){
+  function acquireBookmark({owner="unknown",direction="in",duration=520,delay=0,paused=false,retainOnDispose=null,observeEffect=null,flow=false}={}){
     activeBookmark?.release("superseded");
     if(dead||!current())return null;
     const n=document.getElementById("PlacesToolbarItems"),markKey="data-zr-fold-bookmarks";
     if(!n||!n.getBoundingClientRect().width)return null;
     const id=++bookmarkSequence,frames=Array.from({length:21},(_,i)=>{const p=smooth(direction==="out"?1-i/20:i/20);return {offset:i/20,[B]:String(p)};});
     const old=n.style.getPropertyValue(B),priority=n.style.getPropertyPriority(B),mark=n.getAttribute(markKey);
-    let a=null,released=false;
+    const running=[],saved=[];
+    let released=false;
+    const exact=()=>!released&&!dead&&current()&&activeBookmark===handle;
     const handle={owner,retainOnDispose,startupOutcomeVersion:1,finished:Promise.resolve(),
-      resume(){if(!released)try{a?.play();}catch{}},
+      resume(){if(!released)for(const a of running)try{a.play();}catch{}},
       resumeAt(start){
-        if(released||dead||!current()||activeBookmark!==handle||!a)throw Error("bookmark-epoch-stale");
-        start(a);
+        if(!exact()||!running.length)throw Error("bookmark-epoch-stale");
+        for(const a of running){if(!exact())throw Error("bookmark-epoch-stale");start(a);}
       },
-      seal(){if(!released)try{a?.finish();}catch{}},
+      seal(){if(!released)for(const a of running)try{a.finish();}catch{}},
       release(reason="release"){
         if(released)return;released=true;
         const wasBusy=motionBusy;motionBusy=true;
         let failed=0;const step=fn=>{try{fn();}catch{failed++;}};
         try{
-          step(()=>a?.cancel());
+          for(const a of running)step(()=>a.cancel());
           if(activeBookmark===handle){
             activeBookmark=null;
             if(current()){
+              for(const {node,value} of saved)step(()=>{if(value===null)node.removeAttribute(BOOK_FLOW);else node.setAttribute(BOOK_FLOW,value);});
               step(()=>{if(old)n.style.setProperty(B,old,priority);else n.style.removeProperty(B);});
               step(()=>{if(mark===null)n.removeAttribute(markKey);else n.setAttribute(markKey,mark);});
               step(()=>win.__zenMagneticBookmarksShared?.syncAddressState?.());
@@ -1371,14 +1564,42 @@ function startupBloomAssemblyPlan(start,scale){
       }};
     activeBookmark=handle;
     try{
-      n.style.setProperty(B,frames[0][B]);n.setAttribute(markKey,"true");
+      n.style.setProperty(B,flow?"1":frames[0][B]);n.setAttribute(markKey,"true");
       win.__zenMagneticBookmarksShared?.syncAddressState?.();
-      if(dead||!current()){handle.release("disposed");return null;}
-      a=n.animate(frames,{duration,delay,easing:"linear",fill:"both"});
-      handle.finished=a.finished.catch(()=>{});
-      if(owner==="startup")observeEffect?.(a,"bookmarks",()=>!released&&!dead&&current()&&activeBookmark===handle);
-      if(paused){a.pause();a.currentTime=0;}
-      trace("center.bookmarks.acquire",{id,owner,direction,duration},{sample:duration+250});
+      if(!exact()){handle.release("disposed");return null;}
+      const animate=(node,keys)=>{
+        if(!exact())throw Error("bookmark-flow-stale");
+        const a=node.animate(keys,{duration,delay,easing:"linear",fill:"both"});
+        running.push(a);a.finished.catch(()=>{});
+        if(owner==="startup")observeEffect?.(a,"bookmarks",exact);
+        if(paused){a.pause();a.currentTime=0;}
+      };
+      if(flow){
+        if(!bookFlowRegistered)throw Error("bookmark-flow-registration");
+        const rect=n.getBoundingClientRect();
+        const cards=[...n.children].flatMap(node=>{
+          if(node.hidden||node.collapsed)return [];
+          const r=node.getBoundingClientRect(),s=win.getComputedStyle(node),opacity=Number(s.opacity);
+          if(r.width<=1||r.height<=1||s.display==="none"||s.visibility==="hidden"||!(opacity>0)||
+             r.right<=rect.left||r.left>=rect.right)return [];
+          return [{node,r,x:r.left+r.width/2,y:r.top+r.height/2,opacity}];
+        });
+        if(!cards.length||cards.length>256)throw Error("bookmark-flow-geometry");
+        const cx=(Math.min(...cards.map(c=>c.r.left))+Math.max(...cards.map(c=>c.r.right)))/2;
+        const plan=createCenterFlowPlan(cards.map(c=>({...c,cx,cy:c.y,lower:false,hub:null})));
+        for(const [i,c] of cards.entries()){
+          if(!exact())throw Error("bookmark-flow-stale");
+          saved.push({node:c.node,value:c.node.getAttribute(BOOK_FLOW)});c.node.setAttribute(BOOK_FLOW,"true");
+          const keys=Array.from({length:81},(_,k)=>{
+            const f=plan.sample(i,(direction==="out"?80-k:k)/80);
+            return {offset:k/80,[BOOK_PROPS[0]]:f.x+"px",[BOOK_PROPS[1]]:String(f.a),
+              [BOOK_PROPS[2]]:f.clip[3]+"px",[BOOK_PROPS[3]]:f.clip[1]+"px"};
+          });
+          animate(c.node,keys);
+        }
+      }else animate(n,frames);
+      handle.finished=Promise.all(running.map(a=>a.finished.catch(()=>{})));
+      trace("center.bookmarks.acquire",{id,owner,direction,duration,flow,count:running.length},{sample:duration+250});
       if(dead||released||!current()){handle.release("disposed");return null;}
       return handle;
     }catch(error){handle.release("setup-failed");trace("center.bookmarks.error",{id,owner,name:nocturneErrorClass(error)},{flush:true});return null;}
@@ -1437,7 +1658,7 @@ function startupBloomAssemblyPlan(start,scale){
     selectionContainer?.removeEventListener("TabSelect",onSelect);
     selectionContainer=tc;lastTab=win.gBrowser.selectedTab;tc.addEventListener("TabSelect",onSelect);
   }
-  const api={startupBloomVersion:1,start,bookmarks,iconStats,warmIcons,releasePending,invalidateTopology,invalidateGeometry,dispose};win[KEY]=api;
+  const api={startupBloomVersion:1,centerFlowVersion:1,start,bookmarks,iconStats,warmIcons,releasePending,invalidateTopology,invalidateGeometry,dispose};win[KEY]=api;
   const earlyBoot=win.__nocturneEarlyBoot,diagnostics=win.__nocturneDiagnostics;
   // This is the last Sine slot if subsequent Layout fragments fail.
   win.addUnloadListener(()=>{
@@ -2091,7 +2312,8 @@ function acquireZenHome(win, services) {
 #zen-shared-home,#zen-shared-home *{-moz-window-dragging:default!important}
 #zen-shared-home :is(button,input,textarea,select,summary,a,[draggable=true],.zh-recommendations){-moz-window-dragging:no-drag!important}
 #zen-shared-home .zh-content{width:min(100%,720px);margin:auto;transition:opacity 180ms ease,translate 220ms cubic-bezier(.2,.75,.25,1)}
-:root[data-zr-startup-phase="waiting"] #zen-shared-home[data-zh-startup] .zh-content{opacity:0!important;pointer-events:none}
+:root[data-zr-startup-phase="waiting"] #zen-shared-home[data-zh-startup] .zh-content,
+:root[data-zr-center-pending]:not([data-zr-startup-phase="playing"]) #zen-shared-home[data-zh-startup] .zh-content{opacity:0!important;pointer-events:none}
 #zen-shared-home[data-zh-startup] .zh-search:focus-visible{outline:none}
 /* The collapsed button, native editor and cancellation fallback share
    these exact tokens. No separate hover/focus frame at the handoff. */
@@ -2498,12 +2720,14 @@ function acquireZenHome(win, services) {
         try{win.__nocturneTrace?.("home.bloom.acquire",{effects:run.effects.length,stageEnd:timeline.bloom.footer.end},{sample:Math.ceil(timeline.finishLength)+250});}catch{}
         check();return lease;
       }
-      const nodes=[...content.children];
-      for(const [i,node] of nodes.entries()){
-        // Current owners use the original absolute delay against the
-        // shared epoch. Legacy timelines retain their relative delay.
-        const delay=Math.max(0,(timeline.home+Math.min(i*65,195))*timeline.scale-(timeline.startEffect?0:elapsed));
-        const a=node.animate([{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}],{delay,duration:timeline.homeLength*timeline.scale,easing:"cubic-bezier(.2,.75,.25,1)",fill:"both"});
+      const targets=timeline.flow?homeFlowTargets(content,timeline.finishLength):
+        [...content.children].map((node,i)=>({node,delay:(timeline.home+Math.min(i*65,195))*timeline.scale,duration:timeline.homeLength*timeline.scale}));
+      for(const {node,kind,delay:baseDelay,duration} of targets){
+        const delay=Math.max(0,baseDelay-(timeline.startEffect?0:elapsed));
+        const opacity=timeline.flow&&node!==content?Number(win.getComputedStyle(node).opacity):1;
+        if(!Number.isFinite(opacity)||opacity<=0)continue;
+        const frames=timeline.flow?homeFlowFrames(kind,opacity):[{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}];
+        const a=node.animate(frames,{delay,duration,easing:timeline.flow?EDGE_CONTROL_EASE:"cubic-bezier(.2,.75,.25,1)",fill:"both"});
         run.effects.push(a);a.finished.catch(()=>{});
         timeline.observeEffect?.(a,"home",()=>startupRun===run&&!dead&&open);
         if(startupRun!==run){try{a.cancel();}catch{}return null;}
@@ -3205,7 +3429,7 @@ function acquireZenHome(win, services) {
       if(startup&&bar?.hasAttribute("zen-newtab"))bar._zenHandleUrlbarClose?.();
       bar?.view?.close();bar?.blur();
       oldInert=panels.hasAttribute("inert");covered=true;host.setAttribute("data-zr-home-host","");panels.setAttribute("data-zr-home-covered","");panels.setAttribute("inert","");
-      const staged=(startup||win.__nocturneLayoutStartup?.initial===true)&&!!root.getAttribute("data-zr-startup-phase")&&prefs.getBoolPref("zen.nocturne.motion.enabled",true);
+      const staged=(startup||win.__nocturneLayoutStartup?.initial===true)&&(!!root.getAttribute("data-zr-startup-phase")||root.hasAttribute("data-zr-center-pending"))&&prefs.getBoolPref("zen.nocturne.motion.enabled",true);
       if(staged)panel.setAttribute("data-zh-startup","");
       panel.hidden=false;open=true;render();notify();
       if(staged){
@@ -3293,10 +3517,10 @@ function acquireZenHome(win, services) {
       if(open&&e.key==="Escape"&&!searchActive()){e.preventDefault();e.stopPropagation();if(adding&&pinCustom){pinCustom=false;render();content.querySelector(".zh-suggestion, .zh-custom-link")?.focus({preventScroll:true});}else if(adding){leavePinPicker();}else if(editing){editing=false;render();}else content.querySelector(".zh-search")?.focus({preventScroll:true});}},true);
     listen(win,"pointerdown",onSearchPointerDown,true);
     const stateObserver=new win.MutationObserver(()=>{
-      if(panel.hasAttribute("data-zh-startup")&&!root.hasAttribute("data-zr-startup-phase"))finishStartupHome();
+      if(panel.hasAttribute("data-zh-startup")&&!root.hasAttribute("data-zr-startup-phase")&&!root.hasAttribute("data-zr-center-pending"))finishStartupHome();
       if(open&&!allowed())close();else if(!open)ensurePrimaryHome();
     });
-    stateObserver.observe(root,{attributes:true,attributeFilter:["customizing","inDOMFullscreen","inFullscreen","popup-window","data-op-startup-ready","data-zr-startup-phase"]});cleanups.push(()=>stateObserver.disconnect());
+    stateObserver.observe(root,{attributes:true,attributeFilter:["customizing","inDOMFullscreen","inFullscreen","popup-window","data-op-startup-ready","data-zr-startup-phase","data-zr-center-pending"]});cleanups.push(()=>stateObserver.disconnect());
     listen(win,"unload",destroy,{once:true});
     const progress={onLocationChange(b,wp,uri){
       if(switching||b!==browser.selectedBrowser||!wp?.isTopLevel)return;

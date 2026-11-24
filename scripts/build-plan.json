@@ -18,6 +18,10 @@
       "kind": "esm-inline"
     },
     {
+      "path": "src/algorithms/home-island-motion.mjs",
+      "kind": "esm-inline"
+    },
+    {
       "path": "src/algorithms/startup-bloom.mjs",
       "kind": "esm-inline"
     },

@@ -13,10 +13,10 @@
 <h1>Nocturne · Startup Motion Lab</h1>
 <p>Сравнительный стенд: текущая математика Fold и реконструированный кандидат Magnetic Bloom. Не оригинальный утверждённый Lab и не нативный Zen.</p>
 <div class="controls">
-<label>Движок <select id="mode"><option value="bloom">Bloom candidate</option><option value="fold">Fold baseline</option></select></label>
+<label>Движок <select id="mode"><option value="fold" selected>Center Flow</option><option value="bloom">Bloom candidate</option></select></label>
 <label>Вкладки <select id="count"><option>0</option><option>1</option><option selected>12</option><option>30</option><option>100</option></select></label>
 <label>Ширина <select id="width"><option>640</option><option selected>1000</option><option>1440</option></select></label>
-<label>Длительность <select id="duration"><option>400</option><option>760</option><option selected>1050</option><option>1500</option></select> мс (pref)</label>
+<label>Длительность <select id="duration"><option>1200</option><option>1600</option><option selected>2400</option><option>3200</option></select> мс (pref)</label>
 <label><input id="split" type="checkbox" checked> Split View</label>
 <label><input id="reduced" type="checkbox"> Reduced motion</label>
 <button id="replay" type="button">Повторить</button>
@@ -52,6 +52,85 @@ function homeIslandPose(t){
 }
 function homeIslandFrames(reverse=false){
   return Array.from({length:81},(_,i)=>({offset:i/80,...homeIslandPose((reverse?80-i:i)/80)}));
+}
+
+// Shared horizontal edge choreography. Each side travels as one group;
+// the widest measured extent determines the offscreen starting position.
+const EDGE_CONTROL_EASE="cubic-bezier(.45,0,.55,1)";
+const EDGE_CONTROL_SELECTOR="toolbarbutton,button,.titlebar-button,[role=button],#titlebar-min,#titlebar-max,#titlebar-restore,#titlebar-close";
+function edgeControlOffsets(rects,center,width){
+  if(!Number.isFinite(center)||!Number.isFinite(width)||width<=0)throw RangeError("edge-control-viewport");
+  const sides=rects.map(r=>{
+    if(![r.left,r.right].every(Number.isFinite)||r.right<=r.left)throw RangeError("edge-control-rect");
+    return (r.left+r.right)/2<center?-1:1;
+  });
+  const left=Math.max(0,...rects.filter((_,i)=>sides[i]<0).map(r=>r.right))+8;
+  const right=Math.max(0,...rects.filter((_,i)=>sides[i]>0).map(r=>width-r.left))+8;
+  return sides.map(side=>side<0?-left:right);
+}
+
+// Center Flow: visible choreography only; Boot and the branded close
+// finale have independent native-readiness/confirmation ownership.
+const CENTER_FLOW_MS=2400;
+const CENTER_FLOW_CLOSE_MS=1600;
+const CENTER_FLOW_STAGES=Object.freeze({
+  panel:[48,552],island:[216,996],tabs:[824,1968],edges:[840,1680],
+  bookmarks:[1152,2016],search:[936,1656],pinLabel:[1176,1728],
+  workspaceLabel:[1560,2064],footer:[1944,2400],body:[936,1968]
+});
+function centerFlowDuration(value){
+  if([450,600,760,1000,1050,1250,1500].includes(value))
+    return Math.round(CENTER_FLOW_MS*value/1050);
+  return Number.isFinite(value)?Math.max(900,Math.min(3600,value)):CENTER_FLOW_MS;
+}
+function centerFlowStage(name,duration=CENTER_FLOW_MS,reverse=false,rank=0){
+  if(!Number.isFinite(duration)||duration<=0)throw RangeError("center-flow-duration");
+  rank=Math.max(0,Math.min(1,Number.isFinite(rank)?rank:0));
+  const a=name==="pin"?[1224+312*rank,1872+312*rank]:
+    name==="workspace"?[1584+132*rank,2160+132*rank]:CENTER_FLOW_STAGES[name];
+  if(!a)throw RangeError("center-flow-stage");
+  return {delay:(reverse?CENTER_FLOW_MS-a[1]:a[0])*duration/CENTER_FLOW_MS,
+    duration:(a[1]-a[0])*duration/CENTER_FLOW_MS};
+}
+function centerFlowTimeline(start,scale){
+  if(!Number.isFinite(start)||!Number.isFinite(scale)||scale<=0)throw RangeError("center-flow-plan");
+  const [panel,island,tabs,edges,bookmarks,search]=["panel","island","tabs","edges","bookmarks","search"].map(n=>centerFlowStage(n));
+  return {start,scale,mode:"fold",flow:true,panel:panel.delay,panelLength:panel.duration,
+    islandStart:island.delay,islandLength:island.duration,islandShift:0,
+    cards:tabs.delay,cardsLength:tabs.duration,edges:edges.delay,edgesLength:edges.duration,
+    bookmarks:bookmarks.delay,bookmarksLength:bookmarks.duration,home:search.delay,homeLength:search.duration,
+    end:CENTER_FLOW_MS,finishLength:CENTER_FLOW_MS*scale,lateLimit:(CENTER_FLOW_MS+420)*scale};
+}
+function homeFlowFrames(kind,opacity=1,reverse=false){
+  const a={opacity:0},b={opacity};
+  if(kind==="search"){a.transform="scale(.89,.96)";b.transform="scale(1,1)";}
+  else if(kind==="pin"){a.transform="translateY(14px) scale(.93)";b.transform="translateY(0px) scale(1)";}
+  else if(kind==="workspace"||kind==="body"){a.transform="translateY(9px)";b.transform="translateY(0px)";}
+  return reverse?[b,a]:[a,b];
+}
+function homeFlowTargets(content,duration,reverse=false){
+  if(!content)return [];
+  const nodes=[...content.children],search=nodes.shift(),footer=nodes.pop(),pins=nodes.shift(),spaces=nodes.shift();
+  const fallback=()=>[{node:content,kind:"body",...centerFlowStage("body",duration,reverse)}];
+  if(nodes.length||!search?.matches(".zh-search")||!footer?.matches(".zh-footer")||
+    !pins?.matches(".zh-section")||spaces&&!spaces.matches(".zh-section"))return fallback();
+  const [pinLabel,pinGrid,...pinExtra]=pins.children;
+  const [spaceLabel,spaceGrid,...spaceExtra]=spaces?[...spaces.children]:[];
+  if(!pinLabel?.matches("h3")||!pinGrid?.matches(".zh-pins")||pinExtra.length||
+     spaces&&(!spaceLabel?.matches("h3")||!spaceGrid?.matches(".zh-spaces")||
+       spaceExtra.some(n=>!n.hidden)))return fallback();
+  const targets=[];
+  const add=(node,kind,stage=kind,rank=0)=>targets.push({node,kind,...centerFlowStage(stage,duration,reverse,rank)});
+  const wave=(grid,kind)=>{
+    const list=[...grid.children],rect=grid.getBoundingClientRect(),center=rect.left+rect.width/2;
+    const scores=list.map(n=>{const r=n.getBoundingClientRect();return Math.abs(r.left+r.width/2-center)+Math.max(0,r.top-rect.top);});
+    const max=Math.max(1,...scores);
+    list.forEach((node,i)=>add(node,node.matches(".zh-empty")?"fade":kind,kind,scores[i]/max));
+  };
+  add(search,"search");add(pinLabel,"fade","pinLabel");wave(pinGrid,"pin");
+  if(spaces){add(spaceLabel,"fade","workspaceLabel");wave(spaceGrid,"workspace");}
+  add(footer,"fade","footer");
+  return targets.length<=256?targets:fallback();
 }
 // Pure timing plan for Center Assembly; base offsets are unscaled milliseconds.
 // The runtime owns the epoch and lifecycle; this module owns no DOM or timers.
@@ -229,6 +308,84 @@ function createMagneticFoldMath(){
   }
   return {smooth,magnetState,keyframes,portalGap,portalClip};
 }
+
+// Dual-row conveyor candidate shared by all Center Motion owners and the Lab.
+function createCenterFlowPlan(cards) {
+  // One resting geometry snapshot; no DOM reads or time-dependent state.
+  // Each side is a conveyor: all members share the same horizontal shift.
+  const clamp = p => Math.max(0, Math.min(1, p));
+  const ease = p => { p = clamp(p); return p*p*p*(p*(6*p-15)+10); };
+  const soft = p => { p = clamp(p); return p*p*(3-2*p); };
+  const pad = 8, epsilon = .5;
+  const slots = cards.map(c => {
+    const {x,y,cx,cy,opacity,r,lower,hub} = c;
+    const w = r?.width, h = r?.height;
+    if (![x,y,cx,cy,opacity,w,h].every(Number.isFinite) || w <= 0 || h <= 0 || opacity < 0 || opacity > 1)
+      throw Error("center-flow-geometry");
+    return {x,y,cx,cy,opacity,w,h,lower:!!lower,hub,left:x-w/2,right:x+w/2,top:y-h/2,bottom:y+h/2};
+  });
+  const rows = [slots.filter(c=>!c.lower), slots.filter(c=>c.lower)];
+  const two = rows.every(row=>row.length);
+  const lowerTop = rows[1].length ? Math.min(...rows[1].map(c=>c.top)) : 0;
+  const upperBottom = rows[0].length ? Math.max(...rows[0].map(c=>c.bottom)) : lowerTop;
+  if (two && upperBottom > lowerTop + epsilon) throw Error("center-flow-row-overlap");
+  const lowerClip = two ? Math.min(lowerTop,(upperBottom+lowerTop)/2) : lowerTop;
+  const assigned = new Map();
+  for (const row of rows) {
+    if (!row.length) continue;
+    const sorted = row.slice().sort((a,b)=>a.left-b.left);
+    for (let i=1;i<sorted.length;i++)
+      if (sorted[i-1].right > sorted[i].left + epsilon) throw Error("center-flow-slot-overlap");
+    const cx = row[0].cx;
+    if (row.some(c=>Math.abs(c.cx-cx)>epsilon)) throw Error("center-flow-anchor");
+    const central = sorted.filter(c=>c.left<cx && c.right>cx);
+    if (central.length>1) throw Error("center-flow-center");
+    const middle = central[0];
+    if (middle) assigned.set(middle,{side:0,boundary:cx,travel:0});
+    for (const side of [-1,1]) {
+      const group=sorted.filter(c=>c!==middle && (side<0?c.x<cx:c.x>=cx));
+      if(!group.length)continue;
+      const near=side<0?Math.max(...group.map(c=>c.right)):Math.min(...group.map(c=>c.left));
+      const hub=row[0].hub;
+      const edge=middle?(side<0?middle.left:middle.right):
+        !row[0].lower&&hub&&Number.isFinite(side<0?hub.left:hub.right)?(side<0?hub.left:hub.right):cx;
+      // A portal must never clip a real resting slot. Native partial
+      // slots are rejected by the existing owner before this plan.
+      const boundary=side<0?Math.max(edge,near):Math.min(edge,near);
+      const travel=Math.max(...group.map(c=>side*(c.x-boundary)+c.w/2))+pad;
+      for (const c of group) assigned.set(c,{side,boundary,travel});
+    }
+  }
+  function sample(index,p) {
+    const c=slots[index], g=assigned.get(c);
+    if(!c||!g)throw Error("center-flow-slot");
+    p=clamp(p);
+    // Lower row begins later and overlaps the top row's outward flow.
+    const q=two?(c.lower?clamp((p-.18)/.82):clamp(p/.82)):p;
+    if(q===1)return {x:0,y:0,a:c.opacity,clip:[-pad,-pad,-pad,-pad]};
+    const progress=ease(q);
+    const dx=-g.side*g.travel*(1-progress);
+    const lead=g.side?g.side*(c.x+dx-g.boundary)+c.w/2:0;
+    const descend=g.side?soft(lead/c.w):progress;
+    const dy=c.lower?(c.cy-c.y)*(1-descend):0;
+    const clip=[-pad,-pad,-pad,-pad]; // top/right/bottom/left
+    const bound=(v,size)=>Math.max(-pad,Math.min(size+pad,v));
+    if(g.side<0)clip[1]=bound(c.right+dx-g.boundary,c.w);
+    if(g.side>0)clip[3]=bound(g.boundary-c.left-dx,c.w);
+    if(c.lower)clip[0]=bound(lowerClip-(c.top+dy),c.h);
+    const horizontal=g.side?soft(lead/Math.min(c.w,18)):soft(q/.4);
+    const vertical=c.lower?soft((c.bottom+dy-lowerClip)/Math.min(c.h,12)):1;
+    return {x:dx,y:dy,a:q===0?0:c.opacity*horizontal*vertical,clip};
+  }
+  function keyframes(index,reverse=false) {
+    return Array.from({length:81},(_,i)=>{
+      const f=sample(index,(reverse?80-i:i)/80);
+      return {offset:i/80,transform:`translate(${f.x}px,${f.y}px) scale(1)`,opacity:f.a,
+        clipPath:`inset(${f.clip.map(v=>`${v}px`).join(" ")})`};
+    });
+  }
+  return {sample,keyframes};
+}
 // Reconstructed Magnetic Bloom candidate, not the lost approved HTML.
 // All windows are relative to the first panel stage (reference 940ms).
 // Boot is deliberately outside this visible choreography; no production
@@ -369,7 +526,7 @@ function startupBloomAssemblyPlan(start,scale){
     return {panel,row,island,shape,label,cards,bookmarks,search,pins,pinTiles,work,wsTiles,footer};
   }
   function play(){
-    retire();const id=++generation,ui=render(),mode=byId("mode").value,scale=Number(byId("duration").value)/1050;
+    retire();const id=++generation,ui=render(),mode=byId("mode").value,scale=Number(byId("duration").value)/CENTER_FLOW_MS;
     if(byId("reduced").checked||matchMedia("(prefers-reduced-motion: reduce)").matches){stats.textContent="Reduced motion · resting pose";return;}
     const run={effects:[],hidden:[],layer:null};active=run;
     const started=performance.now(),rr=scene.getBoundingClientRect(),hr=ui.island.getBoundingClientRect();
@@ -404,21 +561,30 @@ function startupBloomAssemblyPlan(start,scale){
         [...ui.wsTiles.children].forEach((n,i)=>effect(n,startupBloomFrames("card"),home.workspaces[i]));
         effect(ui.footer,startupBloomFrames("fade"),home.footer);
       }else{
-        const plan=startupTimeline(0,scale,"fold",true);
-        stage(ui.panel,startupBloomFrames("fade"),{start:0,end:plan.panelLength*scale});
+        const plan=centerFlowTimeline(0,scale);
+        effect(ui.panel,startupBloomFrames("fade"),centerFlowStage("panel",plan.finishLength));
         const y=homeIslandDistance(hr.bottom-rr.top);
         effect(ui.island,homeIslandFrames().map(f=>({offset:f.offset,opacity:f.opacity,transform:"translateY("+y*(1-f.travel)+"px) scale("+f.scale+")"})),
           {delay:plan.islandStart*scale,duration:plan.islandLength*scale});
         run.layer=element("div","proxyLayer","",scene);run.layer.style.clipPath=fold.portalClip(hub,rr,rr.width,rr.height);
-        for(const s of slots){
+        const flow=createCenterFlowPlan(slots.map(s=>({...s,cx:center.x,cy:center.y,unit:1.5,opacity:1,hub,lower:s.y>center.y+18})));
+        for(const [index,s] of slots.entries()){
           const proxy=s.n.cloneNode(true);run.layer.append(proxy);
           Object.assign(proxy.style,{left:(s.r.left-rr.left)+"px",top:(s.r.top-rr.top)+"px",width:s.r.width+"px",height:s.r.height+"px"});
           run.hidden.push(s.n);s.n.style.visibility="hidden";
-          const card={...s,cx:center.x,cy:center.y,unit:1.5,opacity:1,hub,lower:s.y>center.y+18};
-          effect(proxy,fold.keyframes(card),{delay:plan.cards*scale,duration:plan.cardsLength*scale});
+          effect(proxy,flow.keyframes(index),{delay:plan.cards*scale,duration:plan.cardsLength*scale});
         }
-        effect(ui.bookmarks,[{scale:"0.08 1",opacity:0},{scale:"1 1",opacity:1}],{delay:plan.bookmarks*scale,duration:420*scale});
-        [ui.search,ui.pins,ui.work,ui.footer].forEach((n,i)=>effect(n,[{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}],{delay:(plan.home+Math.min(i*65,195))*scale,duration:plan.homeLength*scale}));
+        const books=[...ui.bookmarks.children].map(n=>{const r=n.getBoundingClientRect();return {n,r,x:r.left+r.width/2,y:r.top+r.height/2,opacity:1};});
+        if(books.length){
+          const cx=(Math.min(...books.map(c=>c.r.left))+Math.max(...books.map(c=>c.r.right)))/2;
+          const bookFlow=createCenterFlowPlan(books.map(c=>({...c,cx,cy:c.y,lower:false,hub:null})));
+          books.forEach((c,i)=>effect(c.n,bookFlow.keyframes(i),centerFlowStage("bookmarks",plan.finishLength)));
+        }
+        const home=(n,kind,stage=kind,rank=0)=>effect(n,homeFlowFrames(kind).map((f,i)=>i===0?{...f,easing:EDGE_CONTROL_EASE}:f),centerFlowStage(stage,plan.finishLength,false,rank));
+        const waveHome=(grid,kind)=>{const children=[...grid.children],mid=(children.length-1)/2;
+          children.forEach((n,i)=>home(n,kind,kind,Math.abs(i-mid)/Math.max(1,mid)));};
+        home(ui.search,"search");home(ui.pins.firstElementChild,"fade","pinLabel");waveHome(ui.pinTiles,"pin");
+        home(ui.work.firstElementChild,"fade","workspaceLabel");waveHome(ui.wsTiles,"workspace");home(ui.footer,"fade","footer");
       }
       const epoch=document.timeline.currentTime;
       if(!Number.isFinite(epoch))throw Error("inactive timeline");

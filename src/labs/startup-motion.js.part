@@ -43,7 +43,7 @@
     return {panel,row,island,shape,label,cards,bookmarks,search,pins,pinTiles,work,wsTiles,footer};
   }
   function play(){
-    retire();const id=++generation,ui=render(),mode=byId("mode").value,scale=Number(byId("duration").value)/1050;
+    retire();const id=++generation,ui=render(),mode=byId("mode").value,scale=Number(byId("duration").value)/CENTER_FLOW_MS;
     if(byId("reduced").checked||matchMedia("(prefers-reduced-motion: reduce)").matches){stats.textContent="Reduced motion · resting pose";return;}
     const run={effects:[],hidden:[],layer:null};active=run;
     const started=performance.now(),rr=scene.getBoundingClientRect(),hr=ui.island.getBoundingClientRect();
@@ -78,21 +78,30 @@
         [...ui.wsTiles.children].forEach((n,i)=>effect(n,startupBloomFrames("card"),home.workspaces[i]));
         effect(ui.footer,startupBloomFrames("fade"),home.footer);
       }else{
-        const plan=startupTimeline(0,scale,"fold",true);
-        stage(ui.panel,startupBloomFrames("fade"),{start:0,end:plan.panelLength*scale});
+        const plan=centerFlowTimeline(0,scale);
+        effect(ui.panel,startupBloomFrames("fade"),centerFlowStage("panel",plan.finishLength));
         const y=homeIslandDistance(hr.bottom-rr.top);
         effect(ui.island,homeIslandFrames().map(f=>({offset:f.offset,opacity:f.opacity,transform:"translateY("+y*(1-f.travel)+"px) scale("+f.scale+")"})),
           {delay:plan.islandStart*scale,duration:plan.islandLength*scale});
         run.layer=element("div","proxyLayer","",scene);run.layer.style.clipPath=fold.portalClip(hub,rr,rr.width,rr.height);
-        for(const s of slots){
+        const flow=createCenterFlowPlan(slots.map(s=>({...s,cx:center.x,cy:center.y,unit:1.5,opacity:1,hub,lower:s.y>center.y+18})));
+        for(const [index,s] of slots.entries()){
           const proxy=s.n.cloneNode(true);run.layer.append(proxy);
           Object.assign(proxy.style,{left:(s.r.left-rr.left)+"px",top:(s.r.top-rr.top)+"px",width:s.r.width+"px",height:s.r.height+"px"});
           run.hidden.push(s.n);s.n.style.visibility="hidden";
-          const card={...s,cx:center.x,cy:center.y,unit:1.5,opacity:1,hub,lower:s.y>center.y+18};
-          effect(proxy,fold.keyframes(card),{delay:plan.cards*scale,duration:plan.cardsLength*scale});
+          effect(proxy,flow.keyframes(index),{delay:plan.cards*scale,duration:plan.cardsLength*scale});
         }
-        effect(ui.bookmarks,[{scale:"0.08 1",opacity:0},{scale:"1 1",opacity:1}],{delay:plan.bookmarks*scale,duration:420*scale});
-        [ui.search,ui.pins,ui.work,ui.footer].forEach((n,i)=>effect(n,[{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}],{delay:(plan.home+Math.min(i*65,195))*scale,duration:plan.homeLength*scale}));
+        const books=[...ui.bookmarks.children].map(n=>{const r=n.getBoundingClientRect();return {n,r,x:r.left+r.width/2,y:r.top+r.height/2,opacity:1};});
+        if(books.length){
+          const cx=(Math.min(...books.map(c=>c.r.left))+Math.max(...books.map(c=>c.r.right)))/2;
+          const bookFlow=createCenterFlowPlan(books.map(c=>({...c,cx,cy:c.y,lower:false,hub:null})));
+          books.forEach((c,i)=>effect(c.n,bookFlow.keyframes(i),centerFlowStage("bookmarks",plan.finishLength)));
+        }
+        const home=(n,kind,stage=kind,rank=0)=>effect(n,homeFlowFrames(kind).map((f,i)=>i===0?{...f,easing:EDGE_CONTROL_EASE}:f),centerFlowStage(stage,plan.finishLength,false,rank));
+        const waveHome=(grid,kind)=>{const children=[...grid.children],mid=(children.length-1)/2;
+          children.forEach((n,i)=>home(n,kind,kind,Math.abs(i-mid)/Math.max(1,mid)));};
+        home(ui.search,"search");home(ui.pins.firstElementChild,"fade","pinLabel");waveHome(ui.pinTiles,"pin");
+        home(ui.work.firstElementChild,"fade","workspaceLabel");waveHome(ui.wsTiles,"workspace");home(ui.footer,"fade","footer");
       }
       const epoch=document.timeline.currentTime;
       if(!Number.isFinite(epoch))throw Error("inactive timeline");

@@ -2,6 +2,13 @@
 
 During local wide-row tab or whole Split-group dragging, close the visual Home island, join the existing lane mirrors without reparenting the native drag source, and allow symmetric reorder plus Bunny pull/return to any virtual slot. Keep native drop and postconditions authoritative. Restore the real centered partition after native settlement; reuse the existing insertion-tail lease, support cancellation and leave OS-image handoff, scrolling or two-row and nested Split-member paths on the existing guarded behavior. Preserve pointer grip during collapse and the original Bunny squash. Add geometry and runtime fixtures, bounded trace events, and reconcile four stale assertions from the earlier approved toolbar alignment (no change to those controls). Native visual acceptance pending.
 
+## 0.3.0-preview.204 — Unified Center Flow
+
+- Shared reversible geometry for both tab rows, native bookmark children, edge controls, Home Island and staged Home content.
+- Cold visible assembly defaults to 2400 ms; native window close uses a reversed 1600 ms flow before the existing close finale. Boot and native readiness are separate.
+- Workspace tab flow uses short 240/300 ms phases; persistent edge controls and bookmarks stay visible. Legacy startup speed preferences are mapped without rewriting them.
+- Retains preview.203 Vanishing Home, History alignment and Windows close-alpha behavior. Candidate CI passed 931 JavaScript and 16 Python tests; native Zen visual acceptance remains pending.
+
 ## 0.3.0-preview.202 — Experimental whole-window closing fade
 
 Replace ineffective DWM backdrop mutation with a Windows layered-window alpha lease. Preserve Acrylic and close timings, reject incompatible styles, verify alpha and restore on cancellation. Fall back to the existing CSS fade if unsupported. Native compositor and visual acceptance pending.

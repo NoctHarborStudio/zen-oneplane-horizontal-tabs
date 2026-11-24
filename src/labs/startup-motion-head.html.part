@@ -13,10 +13,10 @@
 <h1>Nocturne · Startup Motion Lab</h1>
 <p>Сравнительный стенд: текущая математика Fold и реконструированный кандидат Magnetic Bloom. Не оригинальный утверждённый Lab и не нативный Zen.</p>
 <div class="controls">
-<label>Движок <select id="mode"><option value="bloom">Bloom candidate</option><option value="fold">Fold baseline</option></select></label>
+<label>Движок <select id="mode"><option value="fold" selected>Center Flow</option><option value="bloom">Bloom candidate</option></select></label>
 <label>Вкладки <select id="count"><option>0</option><option>1</option><option selected>12</option><option>30</option><option>100</option></select></label>
 <label>Ширина <select id="width"><option>640</option><option selected>1000</option><option>1440</option></select></label>
-<label>Длительность <select id="duration"><option>400</option><option>760</option><option selected>1050</option><option>1500</option></select> мс (pref)</label>
+<label>Длительность <select id="duration"><option>1200</option><option>1600</option><option selected>2400</option><option>3200</option></select> мс (pref)</label>
 <label><input id="split" type="checkbox" checked> Split View</label>
 <label><input id="reduced" type="checkbox"> Reduced motion</label>
 <button id="replay" type="button">Повторить</button>

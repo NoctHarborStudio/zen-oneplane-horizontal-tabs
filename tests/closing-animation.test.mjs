@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
-import {HOME_ISLAND_DURATION,HOME_ISLAND_TRAVEL,HOME_ISLAND_SCALE,homeIslandDistance,homeIslandFrames,registerHomeIslandMotion} from "../src/algorithms/home-island-motion.mjs";
+import {HOME_ISLAND_DURATION,HOME_ISLAND_TRAVEL,HOME_ISLAND_SCALE,homeIslandDistance,homeIslandFrames,registerHomeIslandMotion,centerFlowStage,CENTER_FLOW_CLOSE_MS,EDGE_CONTROL_SELECTOR,edgeControlOffsets,EDGE_CONTROL_EASE,homeFlowTargets,homeFlowFrames} from "../src/algorithms/home-island-motion.mjs";
 const source=readFileSync(new URL("../closing-animation.uc.mjs",import.meta.url),"utf8");
 const start=source.indexOf("function makeCloseController("),end=source.indexOf("function visible(",start);
 const factory=new Function("DURATION",source.slice(start,end)+"return makeCloseController;")(760);
@@ -65,8 +65,8 @@ test("close reentry during seal does not seal twice or schedule another dwell",(
  gate.request({},[]);timer();assert.equal(calls,1);assert.equal(seals,1);assert.equal(scheduled,1);
 });
 
-function closeAcquisitionFixture({tabs=true,bookmarks=true,missingEngine=false,missingBookmarks=false,failTab=false,failBookmark=false,failControl=false,replaceEngine=false,preflight=false,failPreflight=false,registered=false,cancelNative=false,brand=false,modalDuringNative=false}={}){
- const effects=[],events=[],timers=[],reasons=[],measurements=[];
+function closeAcquisitionFixture({tabs=true,bookmarks=true,missingEngine=false,missingBookmarks=false,failTab=false,failBookmark=false,failControl=false,replaceEngine=false,preflight=false,failPreflight=false,registered=false,cancelNative=false,brand=false,modalDuringNative=false,flow=false}={}){
+ const effects=[],events=[],timers=[],reasons=[],measurements=[],clock={currentTime:70};
  const finaleState={released:0,sealed:0,modal:null,visibleDuringNative:null};
  let suspended=false;
  function node(name,children=[]){
@@ -76,7 +76,7 @@ function closeAcquisitionFixture({tabs=true,bookmarks=true,missingEngine=false,m
    hasAttribute:k=>attrs.has(k),getAttribute:k=>attrs.get(k)??null,setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k),
    getBoundingClientRect:()=>{if(preflight)measurements.push({name,suspended});return {left:20,top:10,right:220,bottom:50,width:200,height:40};},
    contains(n){return this===n||children.some(c=>c.contains(n));},querySelector(){return null;},querySelectorAll(){return [];},
-   animate(frames,timing){if(failControl&&name==="island")throw Error("control");const a={name,frames,timing,cancelled:0,finished:Promise.resolve(),cancel(){this.cancelled++;},finish(){}};effects.push(a);return a;}
+   animate(frames,timing){if(failControl&&name==="island")throw Error("control");const a={name,frames,timing,cancelled:0,finished:Promise.resolve(),timeline:clock,playState:"running",pause(){this.playState="paused";},cancel(){this.cancelled++;},finish(){}};effects.push(a);return a;}
   };
  }
  const card=node("card"),plus=node("plus"),island=node("island"),row=node("row",[card,plus,island]);
@@ -90,17 +90,17 @@ function closeAcquisitionFixture({tabs=true,bookmarks=true,missingEngine=false,m
   __nocturneTrace(event,data){if(event==="disassembly.bypass")reasons.push(data.reason);}
  };
  if(preflight||failPreflight)win.__zenMagneticBookmarksShared={syncAddressState(){suspended=root.hasAttribute("data-zr-closing");if(failPreflight&&suspended)throw Error("preflight");}};
- const handle=name=>({count:1,release(){events.push("release-"+name);},seal(){events.push("seal-"+name);}});
+ const handle=name=>({count:1,resumeAt(start){const a={timeline:clock,playState:"paused"};start(a);events.push("epoch-"+name+"-"+a.startTime);},release(){events.push("release-"+name);},seal(){events.push("seal-"+name);}});
  if(!missingEngine){
-  const engine={start(){events.push("tabs");return failTab?null:handle("tabs");}};
+  const engine={centerFlowVersion:flow?1:undefined,start(){events.push("tabs");return failTab?null:handle("tabs");}};
   if(!missingBookmarks)engine.bookmarks=()=>{events.push("bookmarks");if(replaceEngine)win.__nocturneCenterMotion={};return failBookmark?null:handle("bookmarks");};
   win.__nocturneCenterMotion=engine;
  }
  const code=source.slice(source.indexOf("  function visible("),source.indexOf("  function eligible("));
- const setup=new Function("window","root","get","factory","events","timers","closedState","Services","homeIslandDistance","homeIslandFrames","registerHomeIslandMotion","HOME_ISLAND_DURATION","HOME_ISLAND_TRAVEL","HOME_ISLAND_SCALE","cancelNative","brand","modalDuringNative","finaleState",`
+ const setup=new Function("window","root","get","factory","events","timers","closedState","Services","homeIslandDistance","homeIslandFrames","registerHomeIslandMotion","HOME_ISLAND_DURATION","HOME_ISLAND_TRAVEL","HOME_ISLAND_SCALE","cancelNative","brand","modalDuringNative","finaleState","clock","centerFlowStage","CENTER_FLOW_CLOSE_MS","EDGE_CONTROL_SELECTOR","edgeControlOffsets","EDGE_CONTROL_EASE","homeFlowTargets","homeFlowFrames",`
   const MARK="data-zr-close-effect",MOVE="data-zr-close-move",CLIP="data-zr-close-clip",PROGRESS="--zr-close-progress",DURATION=760;
   let centerHandle=null,bookmarkHandle=null,sheet=null,style=null,finale=null;
-  const document={};function createCloseFinale({start,onModal}){
+  const document={timeline:clock};function createCloseFinale({start,onModal}){
     if(!brand)return null;finaleState.modal=onModal;
     return {end:start+1280,logoAt:start+320,fadeAt:start+780,release(){finaleState.released++;},seal(){finaleState.sealed++;}};
   }
@@ -109,7 +109,7 @@ function closeAcquisitionFixture({tabs=true,bookmarks=true,missingEngine=false,m
   const controller=factory({eligible:()=>true,begin,clear:restore,seal(){centerHandle?.seal();bookmarkHandle?.seal();for(const a of animations)a.finish();finale?.seal();},isClosed:()=>closedState.value,later(fn,ms){fn.ms=ms;timers.push(fn);return timers.length;},cancelLater(){},invoke(){events.push("native");if(modalDuringNative){finaleState.modal();finaleState.visibleDuringNative=!root.hasAttribute("data-zr-closing");}closedState.value=!cancelNative;return "closed";}});
   return controller;
  `);
- const state={value:closed},gate=setup(win,root,get,factory,events,timers,state,{io:{newURI:s=>s}},homeIslandDistance,homeIslandFrames,registerHomeIslandMotion,HOME_ISLAND_DURATION,HOME_ISLAND_TRAVEL,HOME_ISLAND_SCALE,cancelNative,brand,modalDuringNative,finaleState);
+ const state={value:closed},gate=setup(win,root,get,factory,events,timers,state,{io:{newURI:s=>s}},homeIslandDistance,homeIslandFrames,registerHomeIslandMotion,HOME_ISLAND_DURATION,HOME_ISLAND_TRAVEL,HOME_ISLAND_SCALE,cancelNative,brand,modalDuringNative,finaleState,clock,centerFlowStage,CENTER_FLOW_CLOSE_MS,EDGE_CONTROL_SELECTOR,edgeControlOffsets,EDGE_CONTROL_EASE,homeFlowTargets,homeFlowFrames);
  return {gate,root,effects,events,timers,reasons,measurements,island,finaleState};
 }
 test("visible horizontal tabs with missing or failed proxy acquisition bypass close motion",()=>{
@@ -184,4 +184,15 @@ test("modal during native delegation restores the window before native returns",
  h.gate.request({},[]);h.timers[0]();h.timers[1]();
  assert.equal(h.finaleState.visibleDuringNative,true);
  assert.equal(h.finaleState.released,1);assert.equal(h.events.filter(x=>x==="native").length,1);
+});
+
+test("Center Flow close starts every surface at one epoch and reverses the shared Island stage",()=>{
+ const h=closeAcquisitionFixture({registered:true,cancelNative:true,flow:true});h.gate.request({},[]);
+ const island=h.effects.find(a=>a.name==="island"),t=centerFlowStage("island",CENTER_FLOW_CLOSE_MS,true);
+ assert.ok(island);assert.deepEqual(island.timing,{...t,easing:"linear",fill:"both"});
+ assert.ok(h.effects.every(a=>a.startTime===70));
+ assert.ok(h.events.includes("epoch-tabs-70")&&h.events.includes("epoch-bookmarks-70"));
+ assert.equal(h.timers[0].ms,CENTER_FLOW_CLOSE_MS);
+ h.timers[0]();h.timers[1]();assert.ok(h.effects.every(a=>a.cancelled===1));
+ assert.equal(h.root.hasAttribute("data-zr-closing"),false);
 });

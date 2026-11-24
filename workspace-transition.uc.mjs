@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="workspace.script",data={version:"0.3.0-preview.203"};
+  const event="workspace.script",data={version:"0.3.0-preview.204"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -83,7 +83,9 @@ function workspaceErrorClass(error){try{const name=error?.name;return typeof nam
   function phase(value){return visualStep(()=>setPhase(value));}
   function setPhase(value){
     if(value&&dead)return;
-    if(!value)releaseGeometry();
+    if(!value){releaseGeometry();root.removeAttribute("data-zr-workspace-flow");}
+    else if(active?.flow)root.setAttribute("data-zr-workspace-flow","true");
+    else root.removeAttribute("data-zr-workspace-flow");
     if((root.getAttribute(PHASE)||null)===(value||null))return;
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.phase",()=>({from:root.getAttribute(PHASE),to:value,locked:!!geometryLock}),{sample:1800});
     if(value)root.setAttribute(PHASE,value);else root.removeAttribute(PHASE);
@@ -158,7 +160,7 @@ function workspaceErrorClass(error){try{const name=error?.name;return typeof nam
     return !t||t==="none"||/^0(?:px|%)?(?: 0(?:px|%)?){0,2}$/.test(t);
   }
   function animate(tx,items,outgoing,old=null){
-    const length=outgoing?460:560,effects=[],ease="cubic-bezier(.25,.55,.25,1)";
+    const length=tx.flow?(outgoing?240:300):(outgoing?460:560),effects=[],ease=tx.flow?"cubic-bezier(.45,0,.55,1)":"cubic-bezier(.25,.55,.25,1)";
     const row=get("oneplane-tabs");
     // Read all final geometry before any effect changes its painted rect.
     const surface=get("oneplane-toolbar-surface"),sr=rect(surface),wrapper=get("zen-appcontent-navbar-wrapper"),wr=rect(wrapper);
@@ -171,6 +173,8 @@ function workspaceErrorClass(error){try{const name=error?.name;return typeof nam
     }
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.animate",()=>({outgoing,length,targets:items.length,locked:!!old}),{sample:1800});
     for(const n of items){
+      if(tx.flow&&n===get("PlacesToolbarItems")&&outgoing)continue;
+      if(tx.flow&&n===row&&!tx.center&&!row.querySelector?.(".oneplane-tab,.oneplane-split-group"))continue;
       const dy=!outgoing&&n===get("PlacesToolbarItems")&&old?.bookmarkTop!=null?old.bookmarkTop-n.getBoundingClientRect().top:0;
       const move=n!==row&&neutralTranslate(n),offset=Math.max(-180,Math.min(180,dy));
       if(!saveEffect(tx,n,MARK,{[PROGRESS]:outgoing?1:0,"--zr-workspace-row-y":offset+"px"}))continue;
@@ -255,7 +259,8 @@ function workspaceErrorClass(error){try{const name=error?.name;return typeof nam
     typeof window!=="undefined"&&window.__nocturneTrace?.("workspace.bypass",()=>({registered,interacting,reduced:reduced.matches,startup:root.getAttribute('data-zr-startup-phase'),ready:root.getAttribute('data-op-startup-ready')}),{sample:1800});
       phase(null);return invoke();
     }
-    const tx={animations:new Set(),styles:new Map(),timers:new Set(),waiters:new Set(),cancelled:false,superseded:false,skipMotion:false,sequence:++transitionCount};active=tx;
+    const tx={animations:new Set(),styles:new Map(),timers:new Set(),waiters:new Set(),cancelled:false,superseded:false,skipMotion:false,
+      flow:win.__nocturneCenterMotion?.centerFlowVersion===1,sequence:++transitionCount};active=tx;
     // Native switching owns its own promise; visual gating must never
     // remain stuck if that promise is slow or fails to settle.
     let called=false,nativeResolved=false,result;

@@ -72,7 +72,8 @@ function acquireZenHome(win, services) {
 #zen-shared-home,#zen-shared-home *{-moz-window-dragging:default!important}
 #zen-shared-home :is(button,input,textarea,select,summary,a,[draggable=true],.zh-recommendations){-moz-window-dragging:no-drag!important}
 #zen-shared-home .zh-content{width:min(100%,720px);margin:auto;transition:opacity 180ms ease,translate 220ms cubic-bezier(.2,.75,.25,1)}
-:root[data-zr-startup-phase="waiting"] #zen-shared-home[data-zh-startup] .zh-content{opacity:0!important;pointer-events:none}
+:root[data-zr-startup-phase="waiting"] #zen-shared-home[data-zh-startup] .zh-content,
+:root[data-zr-center-pending]:not([data-zr-startup-phase="playing"]) #zen-shared-home[data-zh-startup] .zh-content{opacity:0!important;pointer-events:none}
 #zen-shared-home[data-zh-startup] .zh-search:focus-visible{outline:none}
 /* The collapsed button, native editor and cancellation fallback share
    these exact tokens. No separate hover/focus frame at the handoff. */
@@ -479,12 +480,14 @@ function acquireZenHome(win, services) {
         try{win.__nocturneTrace?.("home.bloom.acquire",{effects:run.effects.length,stageEnd:timeline.bloom.footer.end},{sample:Math.ceil(timeline.finishLength)+250});}catch{}
         check();return lease;
       }
-      const nodes=[...content.children];
-      for(const [i,node] of nodes.entries()){
-        // Current owners use the original absolute delay against the
-        // shared epoch. Legacy timelines retain their relative delay.
-        const delay=Math.max(0,(timeline.home+Math.min(i*65,195))*timeline.scale-(timeline.startEffect?0:elapsed));
-        const a=node.animate([{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}],{delay,duration:timeline.homeLength*timeline.scale,easing:"cubic-bezier(.2,.75,.25,1)",fill:"both"});
+      const targets=timeline.flow?homeFlowTargets(content,timeline.finishLength):
+        [...content.children].map((node,i)=>({node,delay:(timeline.home+Math.min(i*65,195))*timeline.scale,duration:timeline.homeLength*timeline.scale}));
+      for(const {node,kind,delay:baseDelay,duration} of targets){
+        const delay=Math.max(0,baseDelay-(timeline.startEffect?0:elapsed));
+        const opacity=timeline.flow&&node!==content?Number(win.getComputedStyle(node).opacity):1;
+        if(!Number.isFinite(opacity)||opacity<=0)continue;
+        const frames=timeline.flow?homeFlowFrames(kind,opacity):[{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}];
+        const a=node.animate(frames,{delay,duration,easing:timeline.flow?EDGE_CONTROL_EASE:"cubic-bezier(.2,.75,.25,1)",fill:"both"});
         run.effects.push(a);a.finished.catch(()=>{});
         timeline.observeEffect?.(a,"home",()=>startupRun===run&&!dead&&open);
         if(startupRun!==run){try{a.cancel();}catch{}return null;}
@@ -1186,7 +1189,7 @@ function acquireZenHome(win, services) {
       if(startup&&bar?.hasAttribute("zen-newtab"))bar._zenHandleUrlbarClose?.();
       bar?.view?.close();bar?.blur();
       oldInert=panels.hasAttribute("inert");covered=true;host.setAttribute("data-zr-home-host","");panels.setAttribute("data-zr-home-covered","");panels.setAttribute("inert","");
-      const staged=(startup||win.__nocturneLayoutStartup?.initial===true)&&!!root.getAttribute("data-zr-startup-phase")&&prefs.getBoolPref("zen.nocturne.motion.enabled",true);
+      const staged=(startup||win.__nocturneLayoutStartup?.initial===true)&&(!!root.getAttribute("data-zr-startup-phase")||root.hasAttribute("data-zr-center-pending"))&&prefs.getBoolPref("zen.nocturne.motion.enabled",true);
       if(staged)panel.setAttribute("data-zh-startup","");
       panel.hidden=false;open=true;render();notify();
       if(staged){
@@ -1274,10 +1277,10 @@ function acquireZenHome(win, services) {
       if(open&&e.key==="Escape"&&!searchActive()){e.preventDefault();e.stopPropagation();if(adding&&pinCustom){pinCustom=false;render();content.querySelector(".zh-suggestion, .zh-custom-link")?.focus({preventScroll:true});}else if(adding){leavePinPicker();}else if(editing){editing=false;render();}else content.querySelector(".zh-search")?.focus({preventScroll:true});}},true);
     listen(win,"pointerdown",onSearchPointerDown,true);
     const stateObserver=new win.MutationObserver(()=>{
-      if(panel.hasAttribute("data-zh-startup")&&!root.hasAttribute("data-zr-startup-phase"))finishStartupHome();
+      if(panel.hasAttribute("data-zh-startup")&&!root.hasAttribute("data-zr-startup-phase")&&!root.hasAttribute("data-zr-center-pending"))finishStartupHome();
       if(open&&!allowed())close();else if(!open)ensurePrimaryHome();
     });
-    stateObserver.observe(root,{attributes:true,attributeFilter:["customizing","inDOMFullscreen","inFullscreen","popup-window","data-op-startup-ready","data-zr-startup-phase"]});cleanups.push(()=>stateObserver.disconnect());
+    stateObserver.observe(root,{attributes:true,attributeFilter:["customizing","inDOMFullscreen","inFullscreen","popup-window","data-op-startup-ready","data-zr-startup-phase","data-zr-center-pending"]});cleanups.push(()=>stateObserver.disconnect());
     listen(win,"unload",destroy,{once:true});
     const progress={onLocationChange(b,wp,uri){
       if(switching||b!==browser.selectedBrowser||!wp?.isTopLevel)return;

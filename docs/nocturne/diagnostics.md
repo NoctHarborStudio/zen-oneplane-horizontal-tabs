@@ -582,3 +582,7 @@ Preview.202 replaces DWM probe with disassembly.alpha.acquire/end/seal/release/f
 ### Preview.203 — Vanishing Home
 
 The drag-scoped events `drag.vanish.begin`, `drag.vanish.target`, `drag.vanish.end`, `drag.vanish.restore` and `drag.vanish.restore-error` track virtual row activation, insertion target, pull/restore and failures. Use the gesture token to correlate with native settlement. Bounded frame callback gaps describe callback pacing, not presented FPS. No URLs or titles. The snapshot includes the Vanishing Home, ghost and insertion-tail source markers; verify their cleanup after cancellation or settlement.
+
+### Preview.204 — Center Flow
+
+Use the existing startup, disassembly, workspace and window lifecycle traces to correlate visible motion, native readiness, fallback and cleanup. Compare recorded frame gaps with a screen recording; callbacks are not presented FPS. Native acceptance remains open.
