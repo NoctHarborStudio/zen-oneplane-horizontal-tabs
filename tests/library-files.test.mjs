@@ -342,23 +342,27 @@ test("NC4-022/082/083 local rows cannot create file URI thumbnails",()=>{
 
 test("NC4-022/082/083 paused media UI hides folder controls and keeps download projections",async()=>{
  const controller=readFileSync(new URL("../src/library/controller.js.part",import.meta.url),"utf8");
- const start=controller.indexOf("  function syncTools(){"),end=controller.indexOf("  async function clearDownloads(){",start);
+ const start=controller.indexOf("  function syncHistoryFilter(){"),end=controller.indexOf("  async function clearDownloads(){",start);
  assert.ok(start>=0&&end>start);
- const state={phase:"open",section:"pictures",sort:"new",query:""},win={
+ const state={phase:"open",section:"pictures",sort:"new",filter:"all",query:""},win={
    __nocturneLibraryServices:{mediaScanAvailable:false,downloads:{getSnapshot:()=>[]}}
  };
  const prefs={getBoolPref:()=>true},MEDIA_PREF="zen.nocturne.library.local-media";
- const shell=Object.fromEntries(["tools","sort","filter","clear","yes","no","native","refresh","addFolder",
-   "resetFolders","nativeHistory","historyRange","clearHistory"].map(x=>[x,{}]));
- const syncTools=new Function("shell","fileSection","state","prefs","MEDIA_PREF","win","confirmation","clearing",
-   controller.slice(start,end)+"return syncTools;")(
-   shell,()=>["downloads","documents","pictures"].includes(state.section),state,prefs,MEDIA_PREF,win,false,false);
+ const shell=Object.fromEntries(["tools","sort","filter","clear","yes","no","refresh","addFolder",
+    "resetFolders","historyFilter","historyDrawer","historyRange","clearHistory","body"].map(x=>[x,{}]));
+ shell.historyFilter.setAttribute=()=>{};shell.historyDrawer.toggleAttribute=()=>{};
+ shell.periodButtons=new Map();shell.orderButtons=new Map();
+ const syncTools=new Function("shell","fileSection","state","prefs","MEDIA_PREF","win","confirmation","clearing","active",
+    controller.slice(start,end)+"return syncTools;")(
+    shell,()=>["downloads","documents","pictures"].includes(state.section),state,prefs,MEDIA_PREF,win,false,false,()=>true);
  for(const section of ["pictures","documents"]){
    state.section=section;syncTools();
    assert.equal(shell.refresh.hidden,true);assert.equal(shell.addFolder.hidden,true);
    assert.equal(shell.resetFolders.hidden,true);assert.equal(shell.sort.hidden,false);
  }
- state.section="downloads";syncTools();assert.equal(shell.native.hidden,false);
+ state.section="downloads";syncTools();assert.equal(shell.historyFilter.hidden,true);assert.equal(shell.clear.hidden,false);
+ assert.equal(shell.historyDrawer.hidden,true);assert.equal(shell.body.inert,false);
+ assert.doesNotMatch(controller,/button\("Native downloads"/);
  state.section="pictures";delete win.__nocturneLibraryServices.mediaScanAvailable;syncTools();
  assert.equal(shell.refresh.hidden,true,"unknown older service capability must fail closed");
  const rbStart=controller.indexOf("  function renderBody(){"),rbEnd=controller.indexOf("  function sample(",rbStart);
@@ -371,7 +375,7 @@ test("NC4-022/082/083 paused media UI hides folder controls and keeps download p
    state,x=>notices.push(x),()=>{},()=>{}, {start:(...args)=>starts.push(args)},
    prefs,MEDIA_PREF,win);
  renderBody();
- assert.deepEqual(starts,[["pictures",""]]);
+ assert.deepEqual(starts,[["pictures","",{sort:"new",filter:"all"}]]);
  assert.match(notices.at(-1),/temporarily paused for safety/);
  const projected=[row("picture","photo.png"),row("document","notes.pdf"),row("missing","photo2.png",{exists:false})];
  const services={downloads:{start:async()=>{},subscribe:()=>()=>{},getSnapshot:()=>projected},
