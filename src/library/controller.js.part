@@ -5,7 +5,7 @@
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,{flush:true});
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.160",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.161",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
@@ -354,7 +354,19 @@
     try{const a=n.animate(frames,{duration:ms,easing:"cubic-bezier(.2,.75,.2,1)",fill:"both"});animations.push(a);return a.finished.catch(()=>{});}catch{return Promise.resolve();}
   }
   const current=epoch=>!dead&&state.motionEpoch===epoch;
-  function settle(epoch){if(current(epoch)){state=reduceLibrary(state,{type:"MOTION_DONE",epoch});cancelMotion();}}
+  function settle(epoch){
+    if(!current(epoch))return;
+    // Compare the computed terminal pose across the WAAPI-to-CSS handoff.
+    // Do not sample frames or collect text, and skip reads when opted out.
+    const probe=prefs.getBoolPref("zen.nocturne.diagnostics.enabled",true)&&state.phase==="opening";
+    let before=null;
+    if(probe)try{before=sample(shell.panel);}catch{}
+    state=reduceLibrary(state,{type:"MOTION_DONE",epoch});cancelMotion();
+    if(before)try{
+      const after=sample(shell.panel);
+      trace("motion.settled",{section:state.section,opacityStable:before.opacity===after.opacity,transformStable:before.transform===after.transform,beforeOpacity:Number(before.opacity),afterOpacity:Number(after.opacity)});
+    }catch{}
+  }
   function hide(restore=true){
     stopFallbackDragWatch();
     data.stop();rows.clear();renderedSection=null;dragSource=null;dragOwner=null;indicatorReady=false;pendingResult=null;pendingClose=false;confirmation=false;clearing=false;++actionSerial;cancelMotion();if(frame)win.cancelAnimationFrame(frame);frame=0;
@@ -371,7 +383,7 @@
     const next=reduceLibrary(state,{type:"CLOSE"});if(next===state)return false;
     state=next;data.stop();const epoch=state.motionEpoch,panel=sample(shell.panel),shade=sample(shell.shade);
     cancelMotion();shell.panel.inert=true;
-    void Promise.all([play(shell.panel,[panel,{opacity:0,transform:"translateY(8px) scale(.97)"}],duration(210)),play(shell.shade,[shade,{opacity:0}],duration(180))]).then(()=>{
+    void Promise.all([play(shell.panel,[panel,{opacity:0,transform:"translateY(8px)"}],duration(210)),play(shell.shade,[shade,{opacity:0}],duration(180))]).then(()=>{
       if(!current(epoch))return;state=reduceLibrary(state,{type:"MOTION_DONE",epoch});hide();
     });return true;
   }
@@ -400,13 +412,13 @@
     if(!overlay.request(OWNER))return fail("overlay-busy");
     const before=state,next=reduceLibrary(state,{type:"OPEN",section});if(next===state)return true;
     const first=before.phase==="closed",reopening=before.phase==="closing";
-    const panel=first?{opacity:0,transform:"translateY(8px) scale(.97)"}:sample(shell.panel),shade=first?{opacity:0}:sample(shell.shade),body=sample(shell.body);
+    const panel=first?{opacity:0,transform:"translateY(8px)"}:sample(shell.panel),shade=first?{opacity:0}:sample(shell.shade),body=sample(shell.body);
     data.stop();renderedSection=null;confirmation=false;pendingResult=null;++actionSerial;cancelMotion();state=next;const epoch=state.motionEpoch;shell.panel.inert=false;
     if(first){returnFocus=doc.activeElement;if(!showLayer()){closeNow();return fail("surface-hidden");}}
     renderHeader();
     if(state.phase==="opening"){
       renderBody();(shell.search.disabled?shell.tabs.get(state.section):shell.search).focus({preventScroll:true});
-      void Promise.all([play(shell.panel,[panel,{opacity:1,transform:"none"}],duration(reopening?220:300)),play(shell.shade,[shade,{opacity:1}],duration(200))]).then(()=>settle(epoch));
+      void Promise.all([play(shell.panel,[panel,{opacity:1,transform:"translateY(0px)"}],duration(reopening?220:300)),play(shell.shade,[shade,{opacity:1}],duration(200))]).then(()=>settle(epoch));
     }else{
       void play(shell.body,[body,{opacity:0,transform:"translateX(-6px)"}],duration(90)).then(()=>{
         if(!current(epoch))return;cancelMotion();renderBody();

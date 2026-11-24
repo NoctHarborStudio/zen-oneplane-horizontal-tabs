@@ -2037,6 +2037,8 @@
 #nocturne-library-preview .nl-shade{position:absolute;inset:0;background:#0005;}
 #nocturne-library-preview .nl-panel{
   position:relative;display:flex;flex-direction:column;gap:14px;
+  /* Match the terminal WAAPI pose; never scale text as a raster surface. */
+  transform:translateY(0px);opacity:1;
   box-sizing:border-box;width:min(960px,calc(100% - 40px));height:min(740px,calc(100% - 40px));
   min-width:0;min-height:0;padding:20px;border-radius:16px;overflow:hidden;font:menu;
   color:CanvasText;background:color-mix(in srgb,Canvas 86%,transparent);backdrop-filter:blur(30px);

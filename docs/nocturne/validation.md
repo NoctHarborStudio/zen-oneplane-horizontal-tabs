@@ -829,3 +829,9 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [x] Add source-backed CSS geometry invariant fixture and regenerate stylesheet against current preview.159 History control.
 - [ ] Full CI, reproducible generated files, runtime parsers.
 - [ ] Native Windows Zen/Sine: normal/two-row, maximize/restore, minimize/restore/close hit testing, 125/150% DPI, Compact hover, resize, History button click, disable/reload and the native outside-`#nav-bar` fallback.
+
+### Preview.161 — Library appearance text handoff
+
+- [x] User confirms the History button works; reports brief text sharpness/brightness change at animation completion.
+- [x] Remove panel scaling, preserve fade/travel and durations, match terminal CSS/WAAPI pose, add bounded opt-out-aware settlement diagnostic and two source regressions.
+- [ ] In installed Zen, compare opening and closing on Home and ordinary page; check fast reopen, reduced motion, and no sharpness/brightness jump at the last frame. If still present, collect diagnostics and isolate backdrop-filter/group opacity. Source/CI is not proof of native text rendering.
