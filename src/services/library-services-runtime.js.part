@@ -2,7 +2,7 @@
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   const trace=(event,data)=>{try{if(win.__nocturneTrace)win.__nocturneTrace(event,data,{flush:true});else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,data,t:win.performance?.now?.()??0});}}catch{}};
-  trace("library.services.script",{version:"0.3.0-preview.186"});
+  trace("library.services.script",{version:"0.3.0-preview.187"});
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
   const BARRIER="__nocturneDownloadsDisposal",MEDIA_BARRIER="__nocturneMediaDisposal";
   const previous=win[KEY],previousClosing=previous?.dispose?.(),existing=win[BARRIER];
@@ -23,7 +23,7 @@
   // NC4-022/082/083: Zen 1.24.2b cannot bound decoded images, scan accumulation, or cancel native work.
   // Preserve the saved opt-in/folder prefs, but fail closed until a verified native-safe contract exists.
   const LOCAL_MEDIA_SCAN_SUSPENDED=true;
-  const mediaAllowed=()=>!LOCAL_MEDIA_SCAN_SUSPENDED&&allowed()&&Services.prefs.getBoolPref(mediaPref,false);
+  const mediaAllowed=()=>!LOCAL_MEDIA_SCAN_SUSPENDED&&allowed()&&Services.prefs.getBoolPref(mediaPref,true);
   const windows=Services.appinfo.OS==="WINNT";
   const fileFor=path=>new (load("resource://gre/modules/FileUtils.sys.mjs","FileUtils").File)(path);
   const scanner=()=>Cc["@mozilla.org/zen/library-files;1"].getService(Ci.nsIZenLibraryFiles);

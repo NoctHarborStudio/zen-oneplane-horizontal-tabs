@@ -20,7 +20,7 @@ function fixture(){
   const h=run(Services,window,document,{warn(){},error(){},info(){}},()=>release,createDisposableScope,nocturneErrorClass);
   return {...h,window,document,events,timers,sine:()=>sine?.(),listeners:unload,fireUnload:event=>unload.get("unload")?.(event),onRelease(fn){release=fn;},tick(){const q=[...timers.values()];timers.clear();q.forEach(fn=>fn());}};
  }
- return {mount,values,writes,prefs,Services,observers};
+ return {mount,values,writes,prefs,Services,observers,defaults};
 }
 test("joining window shares native preferences without overwriting user edits",async()=>{
  const f=fixture(),a=f.mount();await a.activate();assert.equal(f.prefs.getBoolPref(A),false);
@@ -167,4 +167,17 @@ test("Library lease preserves an explicit native disabled value",async()=>{
  const f=fixture(),key="zen.library.enabled";f.values.set(key,false);f.values.set("zen.nocturne.library.preview",true);
  const a=f.mount();await a.activate();assert.equal(f.writes.some(([k])=>k===key),false);a.cleanup();
  assert.equal(f.values.get(key),false);
+});
+
+test("clean-profile Library default enables reversible native cutover, explicit opt-out remains native",async()=>{
+  const f=fixture();f.defaults.set("zen.nocturne.library.preview",true);
+  const a=f.mount();await a.activate();
+  assert.equal(f.prefs.getBoolPref("zen.library.enabled"),false);
+  assert.equal(f.writes.filter(([k])=>k==="zen.library.enabled").length,1);
+  a.cleanup();assert.equal(f.prefs.getBoolPref("zen.library.enabled"),true);
+  assert.equal(f.values.has("zen.library.enabled"),false);
+  f.values.set("zen.nocturne.library.preview",false);
+  const b=f.mount();await b.activate();
+  assert.equal(f.prefs.getBoolPref("zen.library.enabled"),true);
+  b.cleanup();
 });

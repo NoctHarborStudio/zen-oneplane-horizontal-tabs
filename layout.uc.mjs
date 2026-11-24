@@ -93,7 +93,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.186",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.187",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -11143,7 +11143,7 @@ async function activate() {
       if(!shared)for (const [name, value] of Object.entries(TARGET)) {
         if(!current())return;
         // Native Library cutover is selected only for a profile that opted into Nocturne Library.
-        if(name===NATIVE_LIBRARY&&!prefs.getBoolPref("zen.nocturne.library.preview",false))continue;
+        if(name===NATIVE_LIBRARY&&!prefs.getBoolPref("zen.nocturne.library.preview",true))continue;
         const actual=prefs.getBoolPref(name);
         if(actual===value)continue;
         if(saved[name].owned!==undefined){

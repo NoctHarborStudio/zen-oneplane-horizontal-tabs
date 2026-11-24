@@ -637,24 +637,24 @@
     "type": "checkbox",
     "property": "zen.nocturne.library.preview",
     "label": "Experimental Library shell (preview)",
-    "defaultValue": false
+    "defaultValue": true
   },
   {
     "type": "checkbox",
     "property": "zen.nocturne.library.history-shortcut",
     "label": "Experimental Library — Ctrl+H and History command",
-    "defaultValue": false
+    "defaultValue": true
   },
   {
     "type": "checkbox",
     "property": "zen.nocturne.library.downloads-shortcut",
     "label": "Experimental Library — Ctrl+J and Downloads command",
-    "defaultValue": false
+    "defaultValue": true
   },
   {
     "type": "checkbox",
     "property": "zen.nocturne.library.local-media",
     "label": "Library — local folder scan (temporarily paused; choice preserved)",
-    "defaultValue": false
+    "defaultValue": true
   }
 ]

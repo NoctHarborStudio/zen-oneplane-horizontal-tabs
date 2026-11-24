@@ -251,7 +251,7 @@ function libraryShortcutSection(event,os="WINNT"){
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,options);
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.186",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.187",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
@@ -262,12 +262,12 @@ function libraryShortcutSection(event,os="WINNT"){
   let state=createLibraryState(),dead=false,lease=()=>{},shell=null,animations=[],motionProbe=null,frame=0,returnFocus=null,rows=new Map(),backgroundAction=false,renderedSection=null,dragSource=null,pendingResult=null,clearing=false,confirmation=false,actionSerial=0,pendingClose=false,dragOwner=null,indicatorReady=false,lastFailure=null,fallbackDragTimer=0,fallbackDragMissing=0,fallbackDragUnknown=0;
   const data=createLibraryData({getServices:()=>win.__nocturneLibraryServices,onResult:result=>{const measure=state.phase==="opening"||state.phase==="switching",start=measure?win.performance.now():0;renderResults(result);if(measure)trace("render",{section:state.section,phase:state.phase,rows:result.rows.length,duration:win.performance.now()-start},{flush:false});},onError:renderError,onNotice:notice,onScanWait:status=>trace("media.scan.wait",{status,section:state.section}),schedule:(fn,ms)=>win.setTimeout(fn,ms),cancel:id=>win.clearTimeout(id)});
   const fileSection=()=>["downloads","documents","pictures"].includes(state.section);
-  const enabled=()=>prefs.getBoolPref(PREF,false),active=()=>state.phase!=="closed";
+  const enabled=()=>prefs.getBoolPref(PREF,true),active=()=>state.phase!=="closed";
   const duration=n=>libraryDuration(win.matchMedia("(prefers-reduced-motion: reduce)").matches,prefs.getIntPref("zen.oneplane.animation-duration",160)!==0,n);
   const make=(tag,cls,text)=>{const n=doc.createElementNS(NS,tag);if(cls)n.className=cls;if(text)n.textContent=text;return n;};
   function privateWindow(){try{return ChromeUtils.importESModule("resource://gre/modules/PrivateBrowsingUtils.sys.mjs").PrivateBrowsingUtils.isWindowPrivate(win);}catch{return true;}}
   function fail(reason){lastFailure=reason;trace("open.rejected",{reason,section:state.section});return false;}
-  function diagnostics(probe=true){return {enabled:enabled(),historyShortcut:prefs.getBoolPref(SHORTCUT,false),downloadsShortcut:prefs.getBoolPref(DOWNLOADS_SHORTCUT,false),delayed:!!win.gBrowserInit?.delayedStartupFinished,private:privateWindow(),overlay:!!win.__nocturneOverlay,services:!!win.__nocturneLibraryServices,historyReady:probe?!!win.__nocturneLibraryServices?.historyReady?.():null,phase:state.phase,section:state.section,lastFailure};}
+  function diagnostics(probe=true){return {enabled:enabled(),historyShortcut:prefs.getBoolPref(SHORTCUT,true),downloadsShortcut:prefs.getBoolPref(DOWNLOADS_SHORTCUT,true),delayed:!!win.gBrowserInit?.delayedStartupFinished,private:privateWindow(),overlay:!!win.__nocturneOverlay,services:!!win.__nocturneLibraryServices,historyReady:probe?!!win.__nocturneLibraryServices?.historyReady?.():null,phase:state.phase,section:state.section,lastFailure};}
   function geometry(){
     if(!shell)return false;
     for(const id of ["tabbrowser-tabpanels","browser"]){
@@ -452,7 +452,7 @@ function libraryShortcutSection(event,os="WINNT"){
     syncHistoryFilter();syncScrollbar(state.phase==="switching");
   }
   function syncTools(){
-    if(!shell)return;const f=fileSection(),d=state.section==="downloads",local=f&&!d&&prefs.getBoolPref(MEDIA_PREF,false)&&win.__nocturneLibraryServices?.mediaScanAvailable===true;
+    if(!shell)return;const f=fileSection(),d=state.section==="downloads",local=f&&!d&&prefs.getBoolPref(MEDIA_PREF,true)&&win.__nocturneLibraryServices?.mediaScanAvailable===true;
     shell.tools.hidden=!f&&state.section!=="history";shell.sort.hidden=!f;shell.sort.value=state.sort;
     shell.filter.hidden=!d;shell.filter.value=state.filter;
     shell.clear.hidden=!d||confirmation;shell.clear.disabled=clearing||!win.__nocturneLibraryServices?.downloads?.getSnapshot().some(r=>r.clearable);
@@ -478,7 +478,7 @@ function libraryShortcutSection(event,os="WINNT"){
     finally{if(token===actionSerial){clearing=false;confirmation=false;syncTools();data.retry();}}
   }
   async function changeFolders(reset){
-    if(!active()||dragSource||clearing||!["documents","pictures"].includes(state.section)||!prefs.getBoolPref(MEDIA_PREF,false)||win.__nocturneLibraryServices?.mediaScanAvailable!==true)return;
+    if(!active()||dragSource||clearing||!["documents","pictures"].includes(state.section)||!prefs.getBoolPref(MEDIA_PREF,true)||win.__nocturneLibraryServices?.mediaScanAvailable!==true)return;
     const service=win.__nocturneLibraryServices;
     if(reset&&!win.confirm("Remove all extra Library folders? No files will be deleted."))return;
     try{if(reset)service.clearFolders();else await service.chooseFolder();}catch{}
@@ -679,7 +679,7 @@ function libraryShortcutSection(event,os="WINNT"){
     if(shell.view)shell.view.limit=50;
     scrollPending=state.phase==="switching";rows.clear();shell.body.scrollTop=0;renderedSection=state.section;
     shell.search.disabled=false;notice("");syncTools();
-    if(["documents","pictures"].includes(state.section)&&prefs.getBoolPref(MEDIA_PREF,false)&&win.__nocturneLibraryServices?.mediaScanAvailable!==true)
+    if(["documents","pictures"].includes(state.section)&&prefs.getBoolPref(MEDIA_PREF,true)&&win.__nocturneLibraryServices?.mediaScanAvailable!==true)
       notice("Local folder scanning is temporarily paused for safety. Downloaded files remain available.");
     placeholder("Loading…","Reading native browser records.");data.start(state.section,state.query,{sort:state.sort,filter:state.filter});
   }
@@ -923,7 +923,7 @@ function libraryShortcutSection(event,os="WINNT"){
     if(!section)return false;
     const pref=section==="history"?SHORTCUT:DOWNLOADS_SHORTCUT,service=win.__nocturneLibraryServices;
     let reason=null;
-    if(!enabled()||!prefs.getBoolPref(pref,false))reason="disabled";
+    if(!enabled()||!prefs.getBoolPref(pref,true))reason="disabled";
     else if(privateWindow())reason="private";
     else if(!service)reason="services-missing";
     else if(section==="history"&&!service.historyReady?.())reason="history-unready";

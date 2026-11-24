@@ -28,3 +28,15 @@ test("Nocturne builds one bookmark stylesheet and one Refined feature stylesheet
  assert.equal(plan.stylesheet.filter(x=>x.path==="src/styles/magnetic-bookmarks.css.part").length,1);
  assert.equal(plan.stylesheet.filter(x=>x.path==="src/styles/refined-features.css.part").length,1);
 });
+
+test("clean-profile feature defaults enable experimental Library but leave diagnostics and paused scanner safe",()=>{
+  const prefs=JSON.parse(read("preferences.json"));
+  const get=name=>prefs.find(p=>p.property===name)?.defaultValue;
+  for(const name of ["zen.nocturne.library.preview","zen.nocturne.library.history-shortcut","zen.nocturne.library.downloads-shortcut","zen.nocturne.library.local-media","zen.nocturne.boot.enabled","zen.refined.startup.animation","zen.refined.closing.animation","zen.refined.bookmarks.enabled","zen.refined.smart-search.enabled","zen.refined.downloads.indicator","zen.refined.page-progress.enabled","zen.oneplane.experimental-display-snap"])assert.equal(get(name),true,name);
+  assert.equal(get("zen.oneplane.address-diagnostics"),false);
+  const runtime=read("src/services/library-services-runtime.js.part");
+  assert.ok(runtime.includes("const LOCAL_MEDIA_SCAN_SUSPENDED=true"));
+  assert.ok(runtime.includes("!LOCAL_MEDIA_SCAN_SUSPENDED&&allowed()"));
+  const home=read("src/home/shared-home.js.part");
+  assert.ok(home.includes("background:transparent"));
+});
