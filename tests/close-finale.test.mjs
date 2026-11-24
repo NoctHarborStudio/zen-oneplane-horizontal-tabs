@@ -2,28 +2,33 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {createCloseFinale} from "../src/core/close-finale.mjs";
 
-function fixture({failAt=null,opacity=1}={}){
- const effects=[],listeners=new Map(),nodes=[];
+function fixture({failAt=null,opacity=1,windows=false,mica=null}={}){
+ const effects=[],listeners=new Map(),nodes=[],frames=new Map(),events=[];
+ let frameId=0;
  function node(tag,ns){
    const n={tag,namespaceURI:ns,children:[],parent:null,style:{setProperty(k,v){this[k]=v;}},attrs:new Map(),
-    setAttribute(k,v){this.attrs.set(k,v);},append(...items){for(const c of items){c.parent=this;this.children.push(c);}},
+    setAttribute(k,v){this.attrs.set(k,v);},hasAttribute(k){return this.attrs.has(k);},getAttribute(k){return this.attrs.get(k)??null;},removeAttribute(k){this.attrs.delete(k);},append(...items){for(const c of items){c.parent=this;this.children.push(c);}},
     remove(){if(this.parent){this.parent.children=this.parent.children.filter(c=>c!==this);this.parent=null;}},
     animate(frames,timing){
       if(effects.length===failAt)throw Error("acquisition");
-      const a={node:this,frames,timing,cancelled:false,sealed:false,finished:Promise.resolve(),
-        cancel(){this.cancelled=true;},finish(){this.sealed=true;}};
+      let resolve;const finished=new Promise(r=>{resolve=r;});
+      const a={node:this,frames,timing,cancelled:false,sealed:false,finished,
+        cancel(){this.cancelled=true;},finish(){this.sealed=true;resolve();}};
       effects.push(a);return a;
     }};
    nodes.push(n);return n;
  }
  const root=node("root"),doc={timeline:{currentTime:42},createElementNS:(ns,tag)=>node(tag,ns)};
- const win={getComputedStyle(n){
+ if(mica!==null)root.setAttribute("windowsmica",mica);
+ const win={requestAnimationFrame(fn){const id=++frameId;frames.set(id,fn);return id;},cancelAnimationFrame(id){frames.delete(id);},__nocturneTrace(event,data){events.push({event,data});},getComputedStyle(n){
    const a=effects.findLast(a=>a.node===n&&!a.cancelled);
    return {opacity:String(a?.sealed?a.frames.at(-1).opacity:n===root?opacity:n.style.opacity??1)};
  },addEventListener(k,fn,capture){listeners.set(k,{fn,capture});},
  removeEventListener(k,fn,capture){assert.equal(listeners.get(k)?.fn,fn);assert.equal(listeners.get(k)?.capture,capture);listeners.delete(k);}};
  const onModal=()=>{};
- return {win,doc,root,effects,listeners,nodes,onModal,make:()=>createCloseFinale({win,doc,root,start:1190,onModal})};
+ return {win,doc,root,effects,listeners,nodes,onModal,frames,events,make:()=>createCloseFinale({win,doc,root,start:1190,onModal,windows}),
+   async coverDone(){doc.timeline.currentTime=42+1510;effects[0].finish();await Promise.resolve();},
+   frame(ms=16){doc.timeline.currentTime+=ms;const pending=[...frames];frames.clear();for(const [,fn] of pending)fn();}};
 }
 
 test("finale uses the same brand and fades the root only after the logo finishes",()=>{
@@ -47,4 +52,34 @@ test("each failed effect acquisition unwinds the brand and restores root visibil
    assert.ok(f.effects.every(a=>a.cancelled));assert.equal(f.win.getComputedStyle(f.root).opacity,"1");
  }
  const f=fixture({opacity:.5});assert.equal(f.make(),null);assert.equal(f.effects.length,0);assert.equal(f.listeners.size,0);
+});
+
+test("Windows backdrop is removed only behind an opaque cover after two frames and restored exactly",async()=>{
+ const f=fixture({windows:true,mica:"true"}),h=f.make();assert.ok(h);
+ assert.equal(f.root.getAttribute("windowsmica"),"true");
+ await f.coverDone();assert.equal(f.frames.size,1);f.frame();
+ assert.equal(f.root.getAttribute("windowsmica"),"true");
+ f.frame();assert.equal(f.root.hasAttribute("windowsmica"),false);
+ const event=f.events.find(e=>e.event==="disassembly.backdrop.switch");
+ assert.deepEqual(event.data,{removed:true,elapsed:1542,rootOpacity:1,coverOpacity:1});
+ h.seal();assert.equal(f.root.hasAttribute("windowsmica"),false);
+ assert.equal(h.release(),0);assert.equal(f.root.getAttribute("windowsmica"),"true");
+ assert.equal(f.frames.size,0);assert.equal(h.release(),0);
+});
+test("non-Windows, missing attribute, stale or late callbacks do not change the native backdrop",async()=>{
+ for(const opts of [{windows:false,mica:"true"},{windows:true}]){
+   const f=fixture(opts),h=f.make();await f.coverDone();assert.equal(f.frames.size,0);h.release();
+ }
+ for(const kind of ["release","seal","late"]){
+   const f=fixture({windows:true,mica:"true"}),h=f.make();await f.coverDone();
+   const stale=[...f.frames.values()][0];
+   if(kind==="release")h.release();else if(kind==="seal")h.seal();else f.doc.timeline.currentTime=42+1970;
+   stale();f.frame();
+   assert.equal(f.root.getAttribute("windowsmica"),"true");assert.equal(f.frames.size,0);h.release();
+ }
+});
+test("release does not overwrite a native backdrop attribute reinstalled by another owner",async()=>{
+ const f=fixture({windows:true,mica:""}),h=f.make();await f.coverDone();f.frame();f.frame();
+ assert.equal(f.root.hasAttribute("windowsmica"),false);
+ f.root.setAttribute("windowsmica","replacement");h.release();assert.equal(f.root.getAttribute("windowsmica"),"replacement");
 });

@@ -1,3 +1,7 @@
+## 0.3.0-preview.199 — Per-window Acrylic release during close
+
+On Windows, wait for the opaque branded cover and two rendering opportunities before removing the current chrome root's `windowsmica` attribute. Use the existing logo interval for the compositor handoff; skip if fewer than 100ms remain before fade. Restore the owned attribute on cancellation or modal recovery. No global preference changes or native DLL calls. Gecko requests DWMSBT_AUTO, not guaranteed desktop alpha; native visual validation remains open.
+
 ## 0.3.0-preview.198 — Home search final audit (HS6)
 
 Replace the refresh-dependent 120-frame readiness cap with a 2000ms monotonic deadline. End readiness and opening animation if the captured Zen callback is no longer owned; release the readiness gate when motion is disabled or the deadline expires. Preserve the existing single live DOM, animation durations, easing and geometry. Add regression coverage for refresh rates, suspended RAF, owner loss and motion bypass. Native final acceptance remains pending.
