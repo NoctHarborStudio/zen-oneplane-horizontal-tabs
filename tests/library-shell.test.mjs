@@ -264,7 +264,7 @@ test("Library terminal motion probe respects epoch and opt-out and samples both 
  assert.ok(start>=0&&end>start);
  const run=(enabled,phase,epoch)=>{
    const events=[],calls=[],shell={panel:{}};
-   const f=new Function("prefs","shell","sample","cancelMotion","reduceLibrary","trace","calls",`let state={phase:${JSON.stringify(phase)},section:"history",motionEpoch:2}; const current=e=>e===state.motionEpoch;${source.slice(start,end)}return settle;`)(
+   const f=new Function("prefs","shell","sample","cancelMotion","reduceLibrary","trace","calls",`let state={phase:${JSON.stringify(phase)},section:"history",motionEpoch:2}; const current=e=>e===state.motionEpoch;const clearSectionFlight=()=>{},drainSectionRequest=()=>{};${source.slice(start,end)}return settle;`)(
      {getBoolPref:()=>enabled},shell,()=>{calls.push("sample");return {opacity:"1",transform:"matrix(1, 0, 0, 1, 0, 0)"};},
      ()=>calls.push("cancel"),s=>({...s,phase:"open"}),(name,data)=>events.push({name,data}),calls);
    f(epoch);return {calls,events};
@@ -352,4 +352,33 @@ test("Library dependencies reject foreign originalTarget on native unload",()=>{
    assert.match(source,/addEventListener\("unload",onUnload\)/);
    assert.match(source,/removeEventListener\("unload",onUnload\)/);
  }
+});
+
+test("Library direct swipe moves exactly two full-width pages, regardless of distance",()=>{
+ const source=read("src/library/controller.js.part"),css=read("src/styles/library.css.part");
+ const start=source.indexOf("  function sectionFrames("),end=source.indexOf("  function startMotionProbe(",start);
+ assert.ok(start>=0&&end>start);
+ const sections=["downloads","documents","history","pictures","closed"];
+ const frames=new Function("LIBRARY_SECTIONS",source.slice(start,end)+"return sectionFrames;")(sections);
+ for(const from of sections)for(const to of sections){
+   if(from===to)continue;
+   const d=sections.indexOf(to)>sections.indexOf(from)?1:-1;
+   assert.deepEqual(frames(from,to),{direction:d,out:[{transform:"translateX(0%)"},{transform:"translateX("+(-d*100)+"%)"}],incoming:[{transform:"translateX("+(d*100)+"%)"},{transform:"translateX(0%)"}]});
+ }
+ assert.match(source,/next.phase==="switching"\?duration\(1000\):0/);
+ assert.match(source,/Promise.all\(\[play\(outgoing,motion.out,ms,easing\),play\(shell.page,motion.incoming,ms,easing\)\]\)/);
+ assert.match(source,/copy.inert=true;copy.setAttribute\("aria-hidden","true"\)/);
+ assert.match(source,/copy.querySelectorAll\("\[id\]"\)/);
+ assert.match(source,/queuedSection=null;cancelMotion\(\);clearSectionFlight\(\)/);
+ assert.match(css,/\.nl-page-viewport\{[^}]*overflow:hidden/);
+ assert.match(css,/\.nl-page-outgoing\{[^}]*pointer-events:none/);
+});
+test("Library latest queued section is consumed once only when open",()=>{
+ const source=read("src/library/controller.js.part");
+ const start=source.indexOf("  function drainSectionRequest("),end=source.indexOf("  function sectionFrames(",start);
+ const calls=[],state={phase:"open",section:"history"};
+ const f=new Function("state","open","active",`let queuedSection=null;${source.slice(start,end)}return {set:s=>queuedSection=s,drain:drainSectionRequest};`)(state,s=>calls.push(s),()=>state.phase!=="closed");
+ f.set("documents");f.set("closed");f.drain();f.drain();assert.deepEqual(calls,["closed"]);
+ f.set("history");f.drain();assert.deepEqual(calls,["closed"]);
+ state.phase="closing";f.set("downloads");f.drain();state.phase="open";f.drain();assert.deepEqual(calls,["closed"]);
 });

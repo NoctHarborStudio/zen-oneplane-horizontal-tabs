@@ -1,3 +1,7 @@
+## 0.3.0-preview.170 — Library direct horizontal page transition
+
+Replace the sequential 6px body fade with a simultaneous full-width horizontal slide of source and destination, 1000ms, direction based on section order, no intermediate sections or opacity/scale. Keep shell and glass stationary; include search, filters, status and content in the clipped page viewport. One live data owner and one inert transient visual copy with scroll/form state preserved; no duplicate IDs. Coalesce rapid navigation to the latest intent, clean up on close/reload, honor reduced motion. Record section direction, epoch, duration and bounded RAF gap summaries. Native visual/performance acceptance pending.
+
 ## 0.3.0-preview.169 — MB-014 native Compact Mode sidebar experiment
 
 Preview.167 cold-start logs report globalCSS=false and cssHidden=false. Retire the global stylesheet experiment (leave an inert file for cached manifests). Set the existing Layout target zen.view.compact.hide-tabbar=true, allowing Zen's native Compact Mode to hide its own sidebar. On confirmed last native window exit, preserve only an owned matching sidebar setting and its original backup, while releasing the other Layout preferences as before. Restore the original value on live disable/unload; keep user-owned Compact Mode selection unchanged. Add bounded diagnostics for native hide-tabbar, compact startup/state, sidebar geometry/visibility/reveal/animation and titlebar visibility. No forced Compact Mode, profile CSS modifications or earlier injection claims. Native restart validation pending.

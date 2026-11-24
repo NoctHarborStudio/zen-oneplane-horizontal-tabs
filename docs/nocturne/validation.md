@@ -873,3 +873,7 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [x] Identify Address shield layer and dispatch; integrate Home lease before ordinary inline/native fallback; keep complete pointer sequence.
 - [x] Source-backed tests for shield delegation, inactive/released/returning and popup guards; shield pointerdown does not trigger duplicate capture.
 - [ ] Installed Zen: click Home background during and after reveal; check shield-dismiss handled=true, close-start home-background, no flash. Check Escape, ordinary page address dismissal and result selection. Icons and reveal performance remain open.
+
+### Preview.170 — direct Library section swipe
+- Source fixtures cover every ordered pair of distinct sections, exact full-width two-surface frames and 1000ms duration, reduced-motion branch, inert copy, no duplicate IDs, coalesced pending intent and cleanup wiring.
+- Native gate: History → Downloads → Recently Closed → History, no intermediate pages; compare adjacent switches; rapid alternate clicks, Escape/background close mid-motion, reopen, scroll preservation, resizing, reduced motion, disable/reload. Check search/filter controls and file drag after settlement; no native fallback. Compare section RAF aggregates (not presented FPS). CI and native visual acceptance pending.
