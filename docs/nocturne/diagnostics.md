@@ -576,3 +576,5 @@ Preview.199: `disassembly.backdrop.switch` reports whether the current root attr
 Preview.200 adds existing-sampler rectangle targets for the customization target, Hub, History, Downloads slot, Back/Forward/Reload and page actions. Compare resting first-row centers on ordinary pages and Home in one- and two-row layouts; no new observer or sampling cadence.
 
 Preview.201 close experiment: disassembly.dwm.baseline, disassembly.dwm.switch, disassembly.dwm.seal and disassembly.dwm.restore record enum/HRESULT/ownership, never HWND or paths. No continuous sampling; readback is not proof of displayed alpha.
+
+Preview.202 replaces DWM probe with disassembly.alpha.acquire/end/seal/release/fallback: acquisition and readback, frame count, alpha, committed and failed. No handle/path or per-frame trace. API readback does not certify actual DWM presentation.

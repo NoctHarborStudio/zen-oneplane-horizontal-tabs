@@ -1,3 +1,7 @@
+## 0.3.0-preview.202 — Experimental whole-window closing fade
+
+Replace ineffective DWM backdrop mutation with a Windows layered-window alpha lease. Preserve Acrylic and close timings, reject incompatible styles, verify alpha and restore on cancellation. Fall back to the existing CSS fade if unsupported. Native compositor and visual acceptance pending.
+
 ## 0.3.0-preview.201 — Experimental DWM close backdrop
 
 Read the per-window native backdrop before Gecko removal; request and verify DWMSBT_NONE only under the opaque cover, check at seal, restore owned state on cancellation. Unsupported APIs retain the existing path. Timings and native confirmation unchanged; Windows visual verification pending.
