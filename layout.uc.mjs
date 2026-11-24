@@ -1443,12 +1443,14 @@ function startupBloomAssemblyPlan(start,scale){
 
 const KEY = "zen.oneplane.original-layout";
 const CONTROLLER = "__oneplaneLayoutController";
+const NATIVE_LIBRARY = "zen.library.enabled";
 const TARGET = {
   "zen.view.use-single-toolbar": false,
   "zen.tabs.vertical.right-side": false,
   "zen.view.sidebar-expanded": true,
   "zen.view.compact.hide-tabbar": false,
   "zen.view.compact.hide-toolbar": true,
+  [NATIVE_LIBRARY]: false,
 };
 const STARTUP = "zen.view.compact.enable-at-startup";
 const root = document.documentElement;
@@ -1470,11 +1472,16 @@ function snapshot() {
   const raw = prefs.getStringPref(KEY, "");
   if (raw) {
     const saved = JSON.parse(raw);
-    if (Object.keys({...TARGET, [STARTUP]: true}).every(name =>
-      typeof saved[name]?.value === "boolean" && typeof saved[name]?.user === "boolean")) {
+    const valid=name=>typeof saved?.[name]?.value==="boolean"&&typeof saved?.[name]?.user==="boolean";
+    const keys=[...Object.keys(TARGET),STARTUP];
+    // Extend the pre-cutover backup only after validating all legacy keys.
+    // An absent key has never been owned; do not invent its original value.
+    const missingLibrary=saved&&typeof saved==="object"&&!Object.hasOwn(saved,NATIVE_LIBRARY);
+    if (keys.every(name=>name===NATIVE_LIBRARY&&missingLibrary||valid(name))) {
       // A partial release may leave a complete backup. Reacquire only
       // previously released keys from their current user/default state.
       let changed=false;
+      if(missingLibrary){saved[NATIVE_LIBRARY]=capture(NATIVE_LIBRARY);changed=true;}
       for (const name of Object.keys(TARGET)) {
         if (saved[name].released===true) { saved[name]=capture(name); changed=true; }
       }
@@ -1511,6 +1518,7 @@ function restorePrefs() {
   for (const name of Object.keys(TARGET)) {
     try {
       const original = saved[name];
+      if(name===NATIVE_LIBRARY&&!Object.hasOwn(saved,name)){skipped++;continue;}
       if (!original || typeof original.value !== "boolean" || typeof original.user !== "boolean")
         throw new Error("Invalid saved preference");
       if (original.released===true) { alreadyReleased++; continue; }
@@ -6837,15 +6845,9 @@ function installTabStrip() {
     function openHistory(event){
       event.preventDefault();event.stopPropagation();
       if(destroyed||!supported())return;
-      let accepted=false,nativeFallback=false;
+      let accepted=false;
       try{accepted=window.__nocturneLibrary?.toggle?.("history")===true;}catch{}
-      if(!accepted){
-        try{
-          const native=document.getElementById("Browser:ShowAllHistory");
-          if(typeof native?.doCommand==="function"){native.doCommand();nativeFallback=true;}
-        }catch{}
-      }
-      try{window.__nocturneTrace?.("library.button",{accepted,nativeFallback},{flush:true});}catch{}
+      try{window.__nocturneTrace?.("library.button",{accepted,nativeFallback:false},{flush:true});}catch{}
     }
     function toggle(event){
       event.preventDefault();event.stopPropagation();
@@ -11108,6 +11110,8 @@ async function activate() {
       // Only the first live window applies global native preferences.
       if(!shared)for (const [name, value] of Object.entries(TARGET)) {
         if(!current())return;
+        // Native Library cutover is selected only for a profile that opted into Nocturne Library.
+        if(name===NATIVE_LIBRARY&&!prefs.getBoolPref("zen.nocturne.library.preview",false))continue;
         const actual=prefs.getBoolPref(name);
         if(actual===value)continue;
         if(saved[name].owned!==undefined){
@@ -11120,6 +11124,15 @@ async function activate() {
     }finally{
       preferenceMutation=false;
       finishCleanup();
+    }
+    if(!current())return;
+    // Zen's supported preference blocks toggle and edge-swipe admission.
+    // Close an already visible native Library via its own API, not DOM hiding.
+    if(!prefs.getBoolPref(NATIVE_LIBRARY,true)){
+      try{
+        const nativeLibrary=window.customElements?.get("zen-library");
+        if(nativeLibrary?.isLibraryOpen||nativeLibrary?.isLibrarySlightlyOpen)nativeLibrary.close();
+      }catch(error){console.warn("[Nocturne] Native Library close:",nocturneErrorClass(error));}
     }
     if(!current())return;
     // Zen 1.24.2b hideToolbar() unconditionally writes both hide prefs,

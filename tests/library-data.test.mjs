@@ -76,3 +76,18 @@ test("physical library shortcut recognizes exact platform accelerator and reject
  for(const patch of [{repeat:true},{isComposing:true},{altKey:true},{shiftKey:true},{metaKey:true},{defaultPrevented:true},{key:"x"},{ctrlKey:false}])assert.equal(libraryShortcutSection({...e,...patch}),null);
  assert.equal(libraryShortcutSection(e,"Darwin"),null);assert.equal(libraryShortcutSection({key:"h",metaKey:true},"Darwin"),"history");
 });
+
+
+test("History filter sends native period and sort, resets pagination and rejects stale requests",async()=>{
+ const f=fixture();f.data.start("history");f.data.more();
+ assert.equal(f.requests[1].args.limit,100);
+ f.data.options("mostvisited","week");
+ assert.deepEqual(f.requests[2].args,{text:"",limit:50,sort:"mostvisited",period:"week"});
+ f.requests[1].resolve({rows:["old"]});f.requests[2].resolve({rows:["new"]});await tick();
+ assert.deepEqual(f.results,[{rows:["new"]}]);
+ f.data.search("site",true);assert.deepEqual(f.requests[3].args,{text:"site",limit:50,sort:"mostvisited",period:"week"});
+ f.data.start("history","",{sort:"site",filter:"month"});
+ assert.deepEqual(f.requests[4].args,{text:"",limit:50,sort:"site",period:"month"});
+ f.data.start("closed");assert.deepEqual(f.requests[5].args,{text:"",limit:50});
+ f.data.dispose();
+});
