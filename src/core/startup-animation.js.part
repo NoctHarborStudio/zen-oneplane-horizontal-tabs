@@ -65,8 +65,8 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
   // 760 ms is still a supported user choice. Legacy saved defaults and
   // explicit selections cannot be distinguished: never rewrite either.
   // New installs retain the manifest default (1050 ms).
-  const duration=Math.max(400,Math.min(1500,prefs.getIntPref(DURATION,1050)));
-  const scale=duration/1050;
+  const duration=centerFlowDuration(prefs.getIntPref(DURATION,CENTER_FLOW_MS));
+  const scale=duration/CENTER_FLOW_MS;
   // Source-only candidate switch. Do not expose a new preference or
   // enable Bloom before native comparison and the topology gate.
   const BLOOM_CANDIDATE=false;
@@ -608,7 +608,8 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       for(const child of candidates)if(child!==n&&n.contains(child)){seen.add(child);child.setAttribute(MANAGED,"true");}
       const index=admit.findIndex(t=>t.n===n);
       if(index<0){seen.add(n);n.setAttribute(MANAGED,"true");continue;}
-      reveal(n,{x:offsets[index],delay:260+(ownedTimeline?.islandShift||0),length:390,easing:EDGE_CONTROL_EASE,edgeEntry:true});
+      reveal(n,{x:offsets[index],delay:ownedTimeline?.flow?ownedTimeline.edges:260+(ownedTimeline?.islandShift||0),
+        length:ownedTimeline?.flow?ownedTimeline.edgesLength:390,easing:EDGE_CONTROL_EASE,edgeEntry:true});
     }
     decision("assembly.controls.edge",{left:offsets.filter(x=>x<0).length,right:offsets.filter(x=>x>0).length,late});
   }
@@ -631,7 +632,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     }
   }
   function acquireStartupBookmarks(engine,items,timeline){
-    if(dead||!centerHandle||!items||!engine||window.__nocturneCenterMotion!==engine)return null;
+    if(dead||!centerHandle&&!timeline.flow||!items||!engine||window.__nocturneCenterMotion!==engine)return null;
     const prepared=[];
     let handle=null;
     try{
@@ -640,7 +641,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
         prepared.push({n,mark:n.getAttribute(MANAGED)});
         seen.add(n);n.setAttribute(MANAGED,"true");
       }
-      handle=engine.bookmarks?.({owner:"startup",direction:"in",duration:Math.round(420*scale),delay:Math.round(timeline.bookmarks*scale),paused:timeline.paused,observeEffect:timeline.observeEffect})||null;
+      handle=engine.bookmarks?.({owner:"startup",direction:"in",duration:Math.round((timeline.bookmarksLength||420)*scale),delay:Math.round(timeline.bookmarks*scale),paused:timeline.paused,observeEffect:timeline.observeEffect})||null;
       if(dead||window.__nocturneCenterMotion!==engine){handle?.release();handle=null;}
       return handle;
     }catch(error){
@@ -666,7 +667,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       const bar=floatingBar();
       if(bar&&!seen.has(bar)){
         if(ownedTimeline?.mode==="bloom"){seen.add(bar);bar.setAttribute(MANAGED,"true");}
-        else openFromCenter(bar,590+(timeline?.islandShift||0),440,true);
+        else openFromCenter(bar,timeline?.flow?timeline.home:590+(timeline?.islandShift||0),timeline?.flow?timeline.homeLength:440,true);
       }
       if(!bookmarkHandle)revealBookmarks(window.innerWidth/2,true);
       else for(const n of get("PlacesToolbarItems")?.children||[]){n.setAttribute(MANAGED,"true");seen.add(n);}
@@ -744,8 +745,9 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       // Capture all resting rectangles before adding an Island transform.
       // A covered Boot or a newly inserted Island may enter from zero;
       // do not re-hide an already-painted, uncovered Island.
-      if(plan.mode!=="bloom"&&ir&&islandRegistered&&Number.isFinite(ir.bottom)&&
-         (bootPreparing||!baseline.has(island)))plan=startupTimeline(0,scale,"fold",true);
+      const islandEligible=ir&&islandRegistered&&Number.isFinite(ir.bottom)&&(bootPreparing||!baseline.has(island));
+      if(plan.flow){if(!islandEligible)plan={...plan,islandLength:0};}
+      else if(plan.mode!=="bloom"&&islandEligible)plan=startupTimeline(0,scale,"fold",true);
       playStart=now();
       const overhead=bootPreparing?BOOT_EXIT+150:0;
       if(!startupFits(plan,playStart,deadline,overhead)){
@@ -771,11 +773,11 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
         throw Error("assembly-bloom-owner");
       // Fold preserves its original order. Bloom measures the resting
       // strip/Island before any direct shape effects are prepared.
-      if(!bloom&&surface)reveal(surface,{y:-18,delay:timeline.panel,length:timeline.panelLength});
+      if(!bloom&&surface)reveal(surface,{y:timeline.flow?0:-18,delay:timeline.panel,length:timeline.panelLength,easing:timeline.flow?EDGE_CONTROL_EASE:EASE});
       decision("assembly.timeline",{mode:bloom?"bloom":"fold",panel:!!surface,cardsAt:timeline.cards*scale,homeAt:timeline.home*scale});
       // The native floating field may be a top-layer popover; never clip
       // its parent during its independent entrance.
-      if(!bloom&&ur&&!floating)openFromCenter(url,45+(timeline.islandShift||0),410);
+      if(!bloom&&ur&&!floating)openFromCenter(url,timeline.flow?timeline.home:45+(timeline.islandShift||0),timeline.flow?timeline.homeLength:410);
       if(dead)return;
       if(one&&rr){
         const cards=[...row.querySelectorAll(".oneplane-tab,.oneplane-split-group")];
@@ -813,7 +815,11 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
             const acquired=reveal(island,{delay:timeline.islandStart,length:timeline.islandLength,islandY:y});
             decision("assembly.island.entry",{acquired,y,width:ir.width,height:ir.height,
               duration:timeline.islandLength*scale,cardsAt:timeline.cards*scale,curve:"delayed-reveal"});
-          }else if(ir)reveal(island,{delay:150,length:190});
+          }else if(ir){
+            if(timeline.flow){seen.add(island);island.setAttribute(MANAGED,"true");
+              decision("assembly.island.rest",{reason:islandRegistered?"already-painted":"registration-unavailable"});}
+            else reveal(island,{delay:150,length:190});
+          }
         }
       }else{
         // Move actual native tabs instead of fading the acrylic sidebar.
@@ -831,7 +837,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       if(dead)return;
       if(one&&window.__nocturneCenterMotion!==engine){finish();return;}
       if(!bookmarkHandle)revealBookmarks(center);
-      if(floating){if(bloom)bloomStage(floating,timeline.bloom.search);else openFromCenter(floating,590+(timeline.islandShift||0),440);}
+      if(floating){if(bloom)bloomStage(floating,timeline.bloom.search);else openFromCenter(floating,timeline.flow?timeline.home:590+(timeline.islandShift||0),timeline.flow?timeline.homeLength:440);}
       if(dead)return;
       if(bloom)verifyBloomDirect(timeline);
       if(dead)return;
@@ -983,6 +989,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     // Do not start a full sequence which cannot fit the remaining budget.
     const overhead=boot?BOOT_EXIT+150:0;
     plan=selectStartupPlan(one,overhead);
+    if(one&&window.__nocturneCenterMotion?.centerFlowVersion===1)plan=centerFlowTimeline(0,scale);
     const needed=plan.finishLength+overhead;
     if(!startupFits(plan,now(),deadline,overhead)){decision("assembly.skip",{reason:"insufficient-budget",remaining:deadline-now(),needed});finish("insufficient-budget");return;}
     console.info("[Zen Refined] Center Assembly launch: "+(one?"OnePlane":"native"));

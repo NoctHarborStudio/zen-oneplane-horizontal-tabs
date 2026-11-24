@@ -90,7 +90,7 @@ try{if(typeof window!=="undefined"){
       r.right<=0||r.bottom<=0||r.left>=window.innerWidth||r.top>=window.innerHeight)return null;
     return {n,r,s};
   }
-  function collect(engine){
+  function collect(engine,flow=false){
     const row=get("oneplane-tabs"),island=row?.querySelector(".oneplane-title-island");
     const ir=visible(island),rr=visible(row),url=get("urlbar-container"),ur=visible(url);
     const center=ir?ir.r.left+ir.r.width/2:rr?rr.r.left+rr.r.width/2:ur?ur.r.left+ur.r.width/2:window.innerWidth/2;
@@ -103,18 +103,29 @@ try{if(typeof window!=="undefined"){
     }
     const floating=get("urlbar");
     const floatVisible=floating&&(floating.getAttribute("zen-floating-urlbar")==="true"||floating.hasAttribute("zen-newtab"));
-    if(floatVisible)add(floating,0,0,true,0,280);
+    const timing=name=>centerFlowStage(name,CENTER_FLOW_CLOSE_MS,true);
+    const searchTiming=timing("search");
+    if(floatVisible)add(floating,0,0,true,flow?searchTiming.delay:0,flow?searchTiming.duration:280,null,flow);
     if(typeof engine?.bookmarks!=="function")for(const n of Array.from(get("PlacesToolbarItems")?.children||[])){
       const t=visible(n);if(t)add(n,0,-14,false,Math.max(0,55-Math.abs(t.r.left+t.r.width/2-center)*.09),280);
     }
     if(rr){
       // The plus button exits with the measured edge group.
-      if(ir)add(island,0,0,true,570,80,homeIslandDistance(ir.r.bottom));
+      if(ir){const t=timing("island");add(island,0,0,true,flow?t.delay:570,flow?t.duration:80,homeIslandDistance(ir.r.bottom));}
     }else{
       const sidebar=get("zen-tabs-wrapper")||get("TabsToolbar");
       const t=visible(sidebar);if(t)add(sidebar,t.r.left<window.innerWidth/2?-18:18,0,false,95,330);
     }
-    if(!floatVisible)add(url,0,0,true,165,330);
+    if(!floatVisible)add(url,0,0,true,flow?searchTiming.delay:165,flow?searchTiming.duration:330,null,flow);
+    if(flow){
+      const t=timing("panel");add(get("oneplane-toolbar-surface"),0,0,false,t.delay,t.duration,null,true);
+      const home=get("zen-shared-home");
+      if(visible(home)&&!home.hasAttribute("data-zh-search")){
+        for(const target of homeFlowTargets(home.querySelector(".zh-content"),CENTER_FLOW_CLOSE_MS,true)){
+          const v=visible(target.node);if(v)result.push({n:target.node,homeKind:target.kind,opacity:Number(v.s.opacity),delay:target.delay,length:target.duration});
+        }
+      }
+    }
     const candidates=new Set();
     let captions=null;try{captions=window.gZenVerticalTabsManager?.actualWindowButtons;}catch{}
     const plus=row?.querySelector(".oneplane-new-tab");
@@ -128,7 +139,8 @@ try{if(typeof window!=="undefined"){
     if(visible(plus))candidates.add(plus);
     const group=[...candidates].filter(n=>![...candidates].some(c=>c!==n&&c.contains(n))).map(n=>visible(n)).filter(Boolean);
     const offsets=edgeControlOffsets(group.map(t=>t.r),center,window.innerWidth);
-    group.forEach(({n},i)=>add(n,offsets[i],0,false,120,390,null,true));
+    const t=timing("edges");
+    group.forEach(({n},i)=>add(n,offsets[i],0,false,flow?t.delay:120,flow?t.duration:390,null,true));
     window.__nocturneTrace?.("disassembly.controls.edge",{left:offsets.filter(x=>x<0).length,right:offsets.filter(x=>x>0).length});
     return result;
   }
@@ -171,7 +183,8 @@ try{if(typeof window!=="undefined"){
     const row=get("oneplane-tabs"),items=get("PlacesToolbarItems");
     const needsTabs=!!visible(row)&&Array.from(row.querySelectorAll(".oneplane-tab-list :is(.oneplane-tab,.oneplane-split-group)")).some(n=>!!visible(n));
     const needsBookmarks=!!visible(items)&&Array.from(items.children).some(n=>!!visible(n));
-    const targets=collect(engine);if(!targets.length)return false;
+    const flow=engine?.centerFlowVersion===1&&!!visible(row);
+    const targets=collect(engine,flow);if(!targets.length)return false;
     // Missing horizontal proxy support must not leave the visible strip
     // behind while other controls disappear. Native-only sidebar and the
     // existing no-bookmark-API fallback remain supported.
@@ -191,16 +204,22 @@ try{if(typeof window!=="undefined"){
       try{sheet=Services.io.newURI("data:text/css;charset=utf-8,"+encodeURIComponent(css));window.windowUtils.loadSheet(sheet,window.windowUtils.USER_SHEET);}
       catch{sheet=null;style=document.createElementNS("http://www.w3.org/1999/xhtml","style");style.textContent=css;root.append(style);}
     }
-    centerHandle=engine?.start?.(row,{owner:"close",direction:"out",duration:620,retainOnDispose:()=>controller.committing});
+    const tabTiming=centerFlowStage("tabs",CENTER_FLOW_CLOSE_MS,true),bookmarkTiming=centerFlowStage("bookmarks",CENTER_FLOW_CLOSE_MS,true);
+    centerHandle=engine?.start?.(row,{owner:"close",direction:"out",duration:flow?tabTiming.duration:620,delay:flow?tabTiming.delay:0,paused:flow,retainOnDispose:()=>controller.committing});
     if(needsTabs&&!centerHandle?.count)return bypass("tab-acquisition-failed");
-    bookmarkHandle=engine?.bookmarks?.({owner:"close",direction:"out",duration:650,retainOnDispose:()=>controller.committing});
+    bookmarkHandle=engine?.bookmarks?.({owner:"close",direction:"out",duration:flow?bookmarkTiming.duration:650,delay:flow?bookmarkTiming.delay:0,paused:flow,retainOnDispose:()=>controller.committing});
     if(needsBookmarks&&typeof engine?.bookmarks==="function"&&!bookmarkHandle)return bypass("bookmark-acquisition-failed");
     if((centerHandle||bookmarkHandle)&&window.__nocturneCenterMotion!==engine)return bypass("engine-replaced");
-    let sealAt=DURATION-110;
-    for(const {n,x,y,clip,delay:baseDelay,length:baseLength,opacity,islandY,edge} of targets){
+    let sealAt=flow?CENTER_FLOW_CLOSE_MS:DURATION-110;
+    for(const {n,x,y,clip,delay:baseDelay,length:baseLength,opacity,islandY,edge,homeKind} of targets){
       const foldIsland=islandRegistered&&Number.isFinite(islandY)&&islandY<0;
-      const delay=foldIsland?DURATION-110:baseDelay,length=foldIsland?HOME_ISLAND_DURATION:baseLength;
+      const delay=foldIsland&&!flow?DURATION-110:baseDelay,length=foldIsland&&!flow?HOME_ISLAND_DURATION:baseLength;
       try{
+        if(homeKind){
+          const effect=n.animate(homeFlowFrames(homeKind,opacity,true),{delay,duration:length,easing:EDGE_CONTROL_EASE,fill:"both"});
+          animations.add(effect);effect.finished.catch(()=>{});effect.pause();effect.currentTime=0;
+          continue;
+        }
         let frames;
         if(registered){
           owned.set(n,{styles:new Map(),attrs:new Map()});
@@ -221,8 +240,19 @@ try{if(typeof window!=="undefined"){
         }
         const effect=n.animate(frames,{delay,duration:length,easing:foldIsland?"linear":edge?EDGE_CONTROL_EASE:"cubic-bezier(.4,0,.35,1)",fill:"both"});
         animations.add(effect);effect.finished.catch(()=>{});
+        if(flow){effect.pause();effect.currentTime=0;}
         if(foldIsland){sealAt=Math.max(sealAt,delay+length);window.__nocturneTrace?.("disassembly.island.exit",{curve:"delayed-reveal",y:islandY,delay,duration:length},{flush:true});}
       }catch{return bypass("control-acquisition-failed");}
+    }
+    if(flow){
+      try{
+        const epoch=document.timeline.currentTime;
+        if(!Number.isFinite(epoch))throw Error("close-flow-clock");
+        const start=a=>{if(a.timeline!==document.timeline||a.playState==="idle")throw Error("close-flow-effect");a.startTime=epoch;};
+        centerHandle?.resumeAt(start);bookmarkHandle?.resumeAt(start);
+        for(const a of animations)start(a);
+        window.__nocturneTrace?.("disassembly.flow.epoch",{duration:CENTER_FLOW_CLOSE_MS,effects:animations.size},{flush:true});
+      }catch{return bypass("flow-epoch-failed");}
     }
     // Keep the previous close path if the experimental finale cannot be acquired.
     finale=createCloseFinale({win:window,doc:document,root,start:sealAt,onModal:modalOpened,windows:Services.appinfo?.OS==="WINNT",

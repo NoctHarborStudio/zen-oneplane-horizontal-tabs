@@ -135,6 +135,70 @@ function edgeControlOffsets(rects,center,width){
   const right=Math.max(0,...rects.filter((_,i)=>sides[i]>0).map(r=>width-r.left))+8;
   return sides.map(side=>side<0?-left:right);
 }
+
+// Center Flow: visible choreography only; Boot and the branded close
+// finale have independent native-readiness/confirmation ownership.
+const CENTER_FLOW_MS=2400;
+const CENTER_FLOW_CLOSE_MS=1600;
+const CENTER_FLOW_STAGES=Object.freeze({
+  panel:[48,552],island:[216,996],tabs:[824,1968],edges:[840,1680],
+  bookmarks:[1152,2016],search:[936,1656],pinLabel:[1176,1728],
+  workspaceLabel:[1560,2064],footer:[1944,2400],body:[936,1968]
+});
+function centerFlowDuration(value){
+  if([450,600,760,1000,1050,1250,1500].includes(value))
+    return Math.round(CENTER_FLOW_MS*value/1050);
+  return Number.isFinite(value)?Math.max(900,Math.min(3600,value)):CENTER_FLOW_MS;
+}
+function centerFlowStage(name,duration=CENTER_FLOW_MS,reverse=false,rank=0){
+  if(!Number.isFinite(duration)||duration<=0)throw RangeError("center-flow-duration");
+  rank=Math.max(0,Math.min(1,Number.isFinite(rank)?rank:0));
+  const a=name==="pin"?[1224+312*rank,1872+312*rank]:
+    name==="workspace"?[1584+132*rank,2160+132*rank]:CENTER_FLOW_STAGES[name];
+  if(!a)throw RangeError("center-flow-stage");
+  return {delay:(reverse?CENTER_FLOW_MS-a[1]:a[0])*duration/CENTER_FLOW_MS,
+    duration:(a[1]-a[0])*duration/CENTER_FLOW_MS};
+}
+function centerFlowTimeline(start,scale){
+  if(!Number.isFinite(start)||!Number.isFinite(scale)||scale<=0)throw RangeError("center-flow-plan");
+  const [panel,island,tabs,edges,bookmarks,search]=["panel","island","tabs","edges","bookmarks","search"].map(n=>centerFlowStage(n));
+  return {start,scale,mode:"fold",flow:true,panel:panel.delay,panelLength:panel.duration,
+    islandStart:island.delay,islandLength:island.duration,islandShift:0,
+    cards:tabs.delay,cardsLength:tabs.duration,edges:edges.delay,edgesLength:edges.duration,
+    bookmarks:bookmarks.delay,bookmarksLength:bookmarks.duration,home:search.delay,homeLength:search.duration,
+    end:CENTER_FLOW_MS,finishLength:CENTER_FLOW_MS*scale,lateLimit:(CENTER_FLOW_MS+420)*scale};
+}
+function homeFlowFrames(kind,opacity=1,reverse=false){
+  const a={opacity:0},b={opacity};
+  if(kind==="search"){a.transform="scale(.89,.96)";b.transform="scale(1,1)";}
+  else if(kind==="pin"){a.transform="translateY(14px) scale(.93)";b.transform="translateY(0px) scale(1)";}
+  else if(kind==="workspace"||kind==="body"){a.transform="translateY(9px)";b.transform="translateY(0px)";}
+  return reverse?[b,a]:[a,b];
+}
+function homeFlowTargets(content,duration,reverse=false){
+  if(!content)return [];
+  const nodes=[...content.children],search=nodes.shift(),footer=nodes.pop(),pins=nodes.shift(),spaces=nodes.shift();
+  const fallback=()=>[{node:content,kind:"body",...centerFlowStage("body",duration,reverse)}];
+  if(nodes.length||!search?.matches(".zh-search")||!footer?.matches(".zh-footer")||
+    !pins?.matches(".zh-section")||spaces&&!spaces.matches(".zh-section"))return fallback();
+  const [pinLabel,pinGrid,...pinExtra]=pins.children;
+  const [spaceLabel,spaceGrid,...spaceExtra]=spaces?[...spaces.children]:[];
+  if(!pinLabel?.matches("h3")||!pinGrid?.matches(".zh-pins")||pinExtra.length||
+     spaces&&(!spaceLabel?.matches("h3")||!spaceGrid?.matches(".zh-spaces")||
+       spaceExtra.some(n=>!n.hidden)))return fallback();
+  const targets=[];
+  const add=(node,kind,stage=kind,rank=0)=>targets.push({node,kind,...centerFlowStage(stage,duration,reverse,rank)});
+  const wave=(grid,kind)=>{
+    const list=[...grid.children],rect=grid.getBoundingClientRect(),center=rect.left+rect.width/2;
+    const scores=list.map(n=>{const r=n.getBoundingClientRect();return Math.abs(r.left+r.width/2-center)+Math.max(0,r.top-rect.top);});
+    const max=Math.max(1,...scores);
+    list.forEach((node,i)=>add(node,node.matches(".zh-empty")?"fade":kind,kind,scores[i]/max));
+  };
+  add(search,"search");add(pinLabel,"fade","pinLabel");wave(pinGrid,"pin");
+  if(spaces){add(spaceLabel,"fade","workspaceLabel");wave(spaceGrid,"workspace");}
+  add(footer,"fade","footer");
+  return targets.length<=256?targets:fallback();
+}
 // Pure timing plan for Center Assembly; base offsets are unscaled milliseconds.
 // The runtime owns the epoch and lifecycle; this module owns no DOM or timers.
 function startupTimeline(start,scale,mode="fold",islandEntry=false){
@@ -340,8 +404,8 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
   // 760 ms is still a supported user choice. Legacy saved defaults and
   // explicit selections cannot be distinguished: never rewrite either.
   // New installs retain the manifest default (1050 ms).
-  const duration=Math.max(400,Math.min(1500,prefs.getIntPref(DURATION,1050)));
-  const scale=duration/1050;
+  const duration=centerFlowDuration(prefs.getIntPref(DURATION,CENTER_FLOW_MS));
+  const scale=duration/CENTER_FLOW_MS;
   // Source-only candidate switch. Do not expose a new preference or
   // enable Bloom before native comparison and the topology gate.
   const BLOOM_CANDIDATE=false;
@@ -883,7 +947,8 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       for(const child of candidates)if(child!==n&&n.contains(child)){seen.add(child);child.setAttribute(MANAGED,"true");}
       const index=admit.findIndex(t=>t.n===n);
       if(index<0){seen.add(n);n.setAttribute(MANAGED,"true");continue;}
-      reveal(n,{x:offsets[index],delay:260+(ownedTimeline?.islandShift||0),length:390,easing:EDGE_CONTROL_EASE,edgeEntry:true});
+      reveal(n,{x:offsets[index],delay:ownedTimeline?.flow?ownedTimeline.edges:260+(ownedTimeline?.islandShift||0),
+        length:ownedTimeline?.flow?ownedTimeline.edgesLength:390,easing:EDGE_CONTROL_EASE,edgeEntry:true});
     }
     decision("assembly.controls.edge",{left:offsets.filter(x=>x<0).length,right:offsets.filter(x=>x>0).length,late});
   }
@@ -906,7 +971,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     }
   }
   function acquireStartupBookmarks(engine,items,timeline){
-    if(dead||!centerHandle||!items||!engine||window.__nocturneCenterMotion!==engine)return null;
+    if(dead||!centerHandle&&!timeline.flow||!items||!engine||window.__nocturneCenterMotion!==engine)return null;
     const prepared=[];
     let handle=null;
     try{
@@ -915,7 +980,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
         prepared.push({n,mark:n.getAttribute(MANAGED)});
         seen.add(n);n.setAttribute(MANAGED,"true");
       }
-      handle=engine.bookmarks?.({owner:"startup",direction:"in",duration:Math.round(420*scale),delay:Math.round(timeline.bookmarks*scale),paused:timeline.paused,observeEffect:timeline.observeEffect})||null;
+      handle=engine.bookmarks?.({owner:"startup",direction:"in",duration:Math.round((timeline.bookmarksLength||420)*scale),delay:Math.round(timeline.bookmarks*scale),paused:timeline.paused,observeEffect:timeline.observeEffect})||null;
       if(dead||window.__nocturneCenterMotion!==engine){handle?.release();handle=null;}
       return handle;
     }catch(error){
@@ -941,7 +1006,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       const bar=floatingBar();
       if(bar&&!seen.has(bar)){
         if(ownedTimeline?.mode==="bloom"){seen.add(bar);bar.setAttribute(MANAGED,"true");}
-        else openFromCenter(bar,590+(timeline?.islandShift||0),440,true);
+        else openFromCenter(bar,timeline?.flow?timeline.home:590+(timeline?.islandShift||0),timeline?.flow?timeline.homeLength:440,true);
       }
       if(!bookmarkHandle)revealBookmarks(window.innerWidth/2,true);
       else for(const n of get("PlacesToolbarItems")?.children||[]){n.setAttribute(MANAGED,"true");seen.add(n);}
@@ -1019,8 +1084,9 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       // Capture all resting rectangles before adding an Island transform.
       // A covered Boot or a newly inserted Island may enter from zero;
       // do not re-hide an already-painted, uncovered Island.
-      if(plan.mode!=="bloom"&&ir&&islandRegistered&&Number.isFinite(ir.bottom)&&
-         (bootPreparing||!baseline.has(island)))plan=startupTimeline(0,scale,"fold",true);
+      const islandEligible=ir&&islandRegistered&&Number.isFinite(ir.bottom)&&(bootPreparing||!baseline.has(island));
+      if(plan.flow){if(!islandEligible)plan={...plan,islandLength:0};}
+      else if(plan.mode!=="bloom"&&islandEligible)plan=startupTimeline(0,scale,"fold",true);
       playStart=now();
       const overhead=bootPreparing?BOOT_EXIT+150:0;
       if(!startupFits(plan,playStart,deadline,overhead)){
@@ -1046,11 +1112,11 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
         throw Error("assembly-bloom-owner");
       // Fold preserves its original order. Bloom measures the resting
       // strip/Island before any direct shape effects are prepared.
-      if(!bloom&&surface)reveal(surface,{y:-18,delay:timeline.panel,length:timeline.panelLength});
+      if(!bloom&&surface)reveal(surface,{y:timeline.flow?0:-18,delay:timeline.panel,length:timeline.panelLength,easing:timeline.flow?EDGE_CONTROL_EASE:EASE});
       decision("assembly.timeline",{mode:bloom?"bloom":"fold",panel:!!surface,cardsAt:timeline.cards*scale,homeAt:timeline.home*scale});
       // The native floating field may be a top-layer popover; never clip
       // its parent during its independent entrance.
-      if(!bloom&&ur&&!floating)openFromCenter(url,45+(timeline.islandShift||0),410);
+      if(!bloom&&ur&&!floating)openFromCenter(url,timeline.flow?timeline.home:45+(timeline.islandShift||0),timeline.flow?timeline.homeLength:410);
       if(dead)return;
       if(one&&rr){
         const cards=[...row.querySelectorAll(".oneplane-tab,.oneplane-split-group")];
@@ -1088,7 +1154,11 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
             const acquired=reveal(island,{delay:timeline.islandStart,length:timeline.islandLength,islandY:y});
             decision("assembly.island.entry",{acquired,y,width:ir.width,height:ir.height,
               duration:timeline.islandLength*scale,cardsAt:timeline.cards*scale,curve:"delayed-reveal"});
-          }else if(ir)reveal(island,{delay:150,length:190});
+          }else if(ir){
+            if(timeline.flow){seen.add(island);island.setAttribute(MANAGED,"true");
+              decision("assembly.island.rest",{reason:islandRegistered?"already-painted":"registration-unavailable"});}
+            else reveal(island,{delay:150,length:190});
+          }
         }
       }else{
         // Move actual native tabs instead of fading the acrylic sidebar.
@@ -1106,7 +1176,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       if(dead)return;
       if(one&&window.__nocturneCenterMotion!==engine){finish();return;}
       if(!bookmarkHandle)revealBookmarks(center);
-      if(floating){if(bloom)bloomStage(floating,timeline.bloom.search);else openFromCenter(floating,590+(timeline.islandShift||0),440);}
+      if(floating){if(bloom)bloomStage(floating,timeline.bloom.search);else openFromCenter(floating,timeline.flow?timeline.home:590+(timeline.islandShift||0),timeline.flow?timeline.homeLength:440);}
       if(dead)return;
       if(bloom)verifyBloomDirect(timeline);
       if(dead)return;
@@ -1258,6 +1328,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     // Do not start a full sequence which cannot fit the remaining budget.
     const overhead=boot?BOOT_EXIT+150:0;
     plan=selectStartupPlan(one,overhead);
+    if(one&&window.__nocturneCenterMotion?.centerFlowVersion===1)plan=centerFlowTimeline(0,scale);
     const needed=plan.finishLength+overhead;
     if(!startupFits(plan,now(),deadline,overhead)){decision("assembly.skip",{reason:"insufficient-budget",remaining:deadline-now(),needed});finish("insufficient-budget");return;}
     console.info("[Zen Refined] Center Assembly launch: "+(one?"OnePlane":"native"));

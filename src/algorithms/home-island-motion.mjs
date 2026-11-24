@@ -40,3 +40,67 @@ export function edgeControlOffsets(rects,center,width){
   const right=Math.max(0,...rects.filter((_,i)=>sides[i]>0).map(r=>width-r.left))+8;
   return sides.map(side=>side<0?-left:right);
 }
+
+// Center Flow: visible choreography only; Boot and the branded close
+// finale have independent native-readiness/confirmation ownership.
+export const CENTER_FLOW_MS=2400;
+export const CENTER_FLOW_CLOSE_MS=1600;
+export const CENTER_FLOW_STAGES=Object.freeze({
+  panel:[48,552],island:[216,996],tabs:[824,1968],edges:[840,1680],
+  bookmarks:[1152,2016],search:[936,1656],pinLabel:[1176,1728],
+  workspaceLabel:[1560,2064],footer:[1944,2400],body:[936,1968]
+});
+export function centerFlowDuration(value){
+  if([450,600,760,1000,1050,1250,1500].includes(value))
+    return Math.round(CENTER_FLOW_MS*value/1050);
+  return Number.isFinite(value)?Math.max(900,Math.min(3600,value)):CENTER_FLOW_MS;
+}
+export function centerFlowStage(name,duration=CENTER_FLOW_MS,reverse=false,rank=0){
+  if(!Number.isFinite(duration)||duration<=0)throw RangeError("center-flow-duration");
+  rank=Math.max(0,Math.min(1,Number.isFinite(rank)?rank:0));
+  const a=name==="pin"?[1224+312*rank,1872+312*rank]:
+    name==="workspace"?[1584+132*rank,2160+132*rank]:CENTER_FLOW_STAGES[name];
+  if(!a)throw RangeError("center-flow-stage");
+  return {delay:(reverse?CENTER_FLOW_MS-a[1]:a[0])*duration/CENTER_FLOW_MS,
+    duration:(a[1]-a[0])*duration/CENTER_FLOW_MS};
+}
+export function centerFlowTimeline(start,scale){
+  if(!Number.isFinite(start)||!Number.isFinite(scale)||scale<=0)throw RangeError("center-flow-plan");
+  const [panel,island,tabs,edges,bookmarks,search]=["panel","island","tabs","edges","bookmarks","search"].map(n=>centerFlowStage(n));
+  return {start,scale,mode:"fold",flow:true,panel:panel.delay,panelLength:panel.duration,
+    islandStart:island.delay,islandLength:island.duration,islandShift:0,
+    cards:tabs.delay,cardsLength:tabs.duration,edges:edges.delay,edgesLength:edges.duration,
+    bookmarks:bookmarks.delay,bookmarksLength:bookmarks.duration,home:search.delay,homeLength:search.duration,
+    end:CENTER_FLOW_MS,finishLength:CENTER_FLOW_MS*scale,lateLimit:(CENTER_FLOW_MS+420)*scale};
+}
+export function homeFlowFrames(kind,opacity=1,reverse=false){
+  const a={opacity:0},b={opacity};
+  if(kind==="search"){a.transform="scale(.89,.96)";b.transform="scale(1,1)";}
+  else if(kind==="pin"){a.transform="translateY(14px) scale(.93)";b.transform="translateY(0px) scale(1)";}
+  else if(kind==="workspace"||kind==="body"){a.transform="translateY(9px)";b.transform="translateY(0px)";}
+  return reverse?[b,a]:[a,b];
+}
+export function homeFlowTargets(content,duration,reverse=false){
+  if(!content)return [];
+  const nodes=[...content.children],search=nodes.shift(),footer=nodes.pop(),pins=nodes.shift(),spaces=nodes.shift();
+  const fallback=()=>[{node:content,kind:"body",...centerFlowStage("body",duration,reverse)}];
+  if(nodes.length||!search?.matches(".zh-search")||!footer?.matches(".zh-footer")||
+    !pins?.matches(".zh-section")||spaces&&!spaces.matches(".zh-section"))return fallback();
+  const [pinLabel,pinGrid,...pinExtra]=pins.children;
+  const [spaceLabel,spaceGrid,...spaceExtra]=spaces?[...spaces.children]:[];
+  if(!pinLabel?.matches("h3")||!pinGrid?.matches(".zh-pins")||pinExtra.length||
+     spaces&&(!spaceLabel?.matches("h3")||!spaceGrid?.matches(".zh-spaces")||
+       spaceExtra.some(n=>!n.hidden)))return fallback();
+  const targets=[];
+  const add=(node,kind,stage=kind,rank=0)=>targets.push({node,kind,...centerFlowStage(stage,duration,reverse,rank)});
+  const wave=(grid,kind)=>{
+    const list=[...grid.children],rect=grid.getBoundingClientRect(),center=rect.left+rect.width/2;
+    const scores=list.map(n=>{const r=n.getBoundingClientRect();return Math.abs(r.left+r.width/2-center)+Math.max(0,r.top-rect.top);});
+    const max=Math.max(1,...scores);
+    list.forEach((node,i)=>add(node,node.matches(".zh-empty")?"fade":kind,kind,scores[i]/max));
+  };
+  add(search,"search");add(pinLabel,"fade","pinLabel");wave(pinGrid,"pin");
+  if(spaces){add(spaceLabel,"fade","workspaceLabel");wave(spaceGrid,"workspace");}
+  add(footer,"fade","footer");
+  return targets.length<=256?targets:fallback();
+}

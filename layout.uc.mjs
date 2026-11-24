@@ -720,6 +720,112 @@ function createCenterFlowPlan(cards) {
   }
   return {sample,keyframes};
 }
+// Home Island variant B, approved in the comparison prototype.
+const HOME_ISLAND_DURATION=540;
+const HOME_ISLAND_TRAVEL="--zr-island-travel",HOME_ISLAND_SCALE="--zr-island-scale";
+function registerHomeIslandMotion(css){
+  for(const name of [HOME_ISLAND_TRAVEL,HOME_ISLAND_SCALE]){
+    try{css.registerProperty({name,syntax:"<number>",inherits:false,initialValue:"1"});}
+    catch(e){if(e.name!=="InvalidModificationError")return false;}
+  }
+  return true;
+}
+function homeIslandDistance(bottom){return -Math.max(66,bottom+2);}
+function homeIslandPose(t){
+  const clamp=x=>Math.min(1,Math.max(0,x));
+  const bezier=(t,x1,y1,x2,y2)=>{
+    t=clamp(t);if(t===0||t===1)return t;
+    let l=0,r=1;
+    const b=(u,a,c)=>3*(1-u)*(1-u)*u*a+3*(1-u)*u*u*c+u*u*u;
+    for(let i=0;i<24;i++){const m=(l+r)/2;if(b(m,x1,x2)<t)l=m;else r=m;}
+    return b((l+r)/2,y1,y2);
+  };
+  t=clamp(t);
+  const a=clamp(t/.3);
+  return {travel:bezier(t,.25,.8,.22,1),scale:.02+.98*bezier((t-.2)/.8,.3,0,.12,1),opacity:a*a*(3-2*a)};
+}
+function homeIslandFrames(reverse=false){
+  return Array.from({length:81},(_,i)=>({offset:i/80,...homeIslandPose((reverse?80-i:i)/80)}));
+}
+
+// Shared horizontal edge choreography. Each side travels as one group;
+// the widest measured extent determines the offscreen starting position.
+const EDGE_CONTROL_EASE="cubic-bezier(.45,0,.55,1)";
+const EDGE_CONTROL_SELECTOR="toolbarbutton,button,.titlebar-button,[role=button],#titlebar-min,#titlebar-max,#titlebar-restore,#titlebar-close";
+function edgeControlOffsets(rects,center,width){
+  if(!Number.isFinite(center)||!Number.isFinite(width)||width<=0)throw RangeError("edge-control-viewport");
+  const sides=rects.map(r=>{
+    if(![r.left,r.right].every(Number.isFinite)||r.right<=r.left)throw RangeError("edge-control-rect");
+    return (r.left+r.right)/2<center?-1:1;
+  });
+  const left=Math.max(0,...rects.filter((_,i)=>sides[i]<0).map(r=>r.right))+8;
+  const right=Math.max(0,...rects.filter((_,i)=>sides[i]>0).map(r=>width-r.left))+8;
+  return sides.map(side=>side<0?-left:right);
+}
+
+// Center Flow: visible choreography only; Boot and the branded close
+// finale have independent native-readiness/confirmation ownership.
+const CENTER_FLOW_MS=2400;
+const CENTER_FLOW_CLOSE_MS=1600;
+const CENTER_FLOW_STAGES=Object.freeze({
+  panel:[48,552],island:[216,996],tabs:[824,1968],edges:[840,1680],
+  bookmarks:[1152,2016],search:[936,1656],pinLabel:[1176,1728],
+  workspaceLabel:[1560,2064],footer:[1944,2400],body:[936,1968]
+});
+function centerFlowDuration(value){
+  if([450,600,760,1000,1050,1250,1500].includes(value))
+    return Math.round(CENTER_FLOW_MS*value/1050);
+  return Number.isFinite(value)?Math.max(900,Math.min(3600,value)):CENTER_FLOW_MS;
+}
+function centerFlowStage(name,duration=CENTER_FLOW_MS,reverse=false,rank=0){
+  if(!Number.isFinite(duration)||duration<=0)throw RangeError("center-flow-duration");
+  rank=Math.max(0,Math.min(1,Number.isFinite(rank)?rank:0));
+  const a=name==="pin"?[1224+312*rank,1872+312*rank]:
+    name==="workspace"?[1584+132*rank,2160+132*rank]:CENTER_FLOW_STAGES[name];
+  if(!a)throw RangeError("center-flow-stage");
+  return {delay:(reverse?CENTER_FLOW_MS-a[1]:a[0])*duration/CENTER_FLOW_MS,
+    duration:(a[1]-a[0])*duration/CENTER_FLOW_MS};
+}
+function centerFlowTimeline(start,scale){
+  if(!Number.isFinite(start)||!Number.isFinite(scale)||scale<=0)throw RangeError("center-flow-plan");
+  const [panel,island,tabs,edges,bookmarks,search]=["panel","island","tabs","edges","bookmarks","search"].map(n=>centerFlowStage(n));
+  return {start,scale,mode:"fold",flow:true,panel:panel.delay,panelLength:panel.duration,
+    islandStart:island.delay,islandLength:island.duration,islandShift:0,
+    cards:tabs.delay,cardsLength:tabs.duration,edges:edges.delay,edgesLength:edges.duration,
+    bookmarks:bookmarks.delay,bookmarksLength:bookmarks.duration,home:search.delay,homeLength:search.duration,
+    end:CENTER_FLOW_MS,finishLength:CENTER_FLOW_MS*scale,lateLimit:(CENTER_FLOW_MS+420)*scale};
+}
+function homeFlowFrames(kind,opacity=1,reverse=false){
+  const a={opacity:0},b={opacity};
+  if(kind==="search"){a.transform="scale(.89,.96)";b.transform="scale(1,1)";}
+  else if(kind==="pin"){a.transform="translateY(14px) scale(.93)";b.transform="translateY(0px) scale(1)";}
+  else if(kind==="workspace"||kind==="body"){a.transform="translateY(9px)";b.transform="translateY(0px)";}
+  return reverse?[b,a]:[a,b];
+}
+function homeFlowTargets(content,duration,reverse=false){
+  if(!content)return [];
+  const nodes=[...content.children],search=nodes.shift(),footer=nodes.pop(),pins=nodes.shift(),spaces=nodes.shift();
+  const fallback=()=>[{node:content,kind:"body",...centerFlowStage("body",duration,reverse)}];
+  if(nodes.length||!search?.matches(".zh-search")||!footer?.matches(".zh-footer")||
+    !pins?.matches(".zh-section")||spaces&&!spaces.matches(".zh-section"))return fallback();
+  const [pinLabel,pinGrid,...pinExtra]=pins.children;
+  const [spaceLabel,spaceGrid,...spaceExtra]=spaces?[...spaces.children]:[];
+  if(!pinLabel?.matches("h3")||!pinGrid?.matches(".zh-pins")||pinExtra.length||
+     spaces&&(!spaceLabel?.matches("h3")||!spaceGrid?.matches(".zh-spaces")||
+       spaceExtra.some(n=>!n.hidden)))return fallback();
+  const targets=[];
+  const add=(node,kind,stage=kind,rank=0)=>targets.push({node,kind,...centerFlowStage(stage,duration,reverse,rank)});
+  const wave=(grid,kind)=>{
+    const list=[...grid.children],rect=grid.getBoundingClientRect(),center=rect.left+rect.width/2;
+    const scores=list.map(n=>{const r=n.getBoundingClientRect();return Math.abs(r.left+r.width/2-center)+Math.max(0,r.top-rect.top);});
+    const max=Math.max(1,...scores);
+    list.forEach((node,i)=>add(node,node.matches(".zh-empty")?"fade":kind,kind,scores[i]/max));
+  };
+  add(search,"search");add(pinLabel,"fade","pinLabel");wave(pinGrid,"pin");
+  if(spaces){add(spaceLabel,"fade","workspaceLabel");wave(spaceGrid,"workspace");}
+  add(footer,"fade","footer");
+  return targets.length<=256?targets:fallback();
+}
 // Reconstructed Magnetic Bloom candidate, not the lost approved HTML.
 // All windows are relative to the first panel stage (reference 940ms).
 // Boot is deliberately outside this visible choreography; no production
@@ -1516,7 +1622,7 @@ function startupBloomAssemblyPlan(start,scale){
     selectionContainer?.removeEventListener("TabSelect",onSelect);
     selectionContainer=tc;lastTab=win.gBrowser.selectedTab;tc.addEventListener("TabSelect",onSelect);
   }
-  const api={startupBloomVersion:1,start,bookmarks,iconStats,warmIcons,releasePending,invalidateTopology,invalidateGeometry,dispose};win[KEY]=api;
+  const api={startupBloomVersion:1,centerFlowVersion:1,start,bookmarks,iconStats,warmIcons,releasePending,invalidateTopology,invalidateGeometry,dispose};win[KEY]=api;
   const earlyBoot=win.__nocturneEarlyBoot,diagnostics=win.__nocturneDiagnostics;
   // This is the last Sine slot if subsequent Layout fragments fail.
   win.addUnloadListener(()=>{
@@ -2170,7 +2276,8 @@ function acquireZenHome(win, services) {
 #zen-shared-home,#zen-shared-home *{-moz-window-dragging:default!important}
 #zen-shared-home :is(button,input,textarea,select,summary,a,[draggable=true],.zh-recommendations){-moz-window-dragging:no-drag!important}
 #zen-shared-home .zh-content{width:min(100%,720px);margin:auto;transition:opacity 180ms ease,translate 220ms cubic-bezier(.2,.75,.25,1)}
-:root[data-zr-startup-phase="waiting"] #zen-shared-home[data-zh-startup] .zh-content{opacity:0!important;pointer-events:none}
+:root[data-zr-startup-phase="waiting"] #zen-shared-home[data-zh-startup] .zh-content,
+:root[data-zr-center-pending]:not([data-zr-startup-phase="playing"]) #zen-shared-home[data-zh-startup] .zh-content{opacity:0!important;pointer-events:none}
 #zen-shared-home[data-zh-startup] .zh-search:focus-visible{outline:none}
 /* The collapsed button, native editor and cancellation fallback share
    these exact tokens. No separate hover/focus frame at the handoff. */
@@ -2577,12 +2684,14 @@ function acquireZenHome(win, services) {
         try{win.__nocturneTrace?.("home.bloom.acquire",{effects:run.effects.length,stageEnd:timeline.bloom.footer.end},{sample:Math.ceil(timeline.finishLength)+250});}catch{}
         check();return lease;
       }
-      const nodes=[...content.children];
-      for(const [i,node] of nodes.entries()){
-        // Current owners use the original absolute delay against the
-        // shared epoch. Legacy timelines retain their relative delay.
-        const delay=Math.max(0,(timeline.home+Math.min(i*65,195))*timeline.scale-(timeline.startEffect?0:elapsed));
-        const a=node.animate([{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}],{delay,duration:timeline.homeLength*timeline.scale,easing:"cubic-bezier(.2,.75,.25,1)",fill:"both"});
+      const targets=timeline.flow?homeFlowTargets(content,timeline.finishLength):
+        [...content.children].map((node,i)=>({node,delay:(timeline.home+Math.min(i*65,195))*timeline.scale,duration:timeline.homeLength*timeline.scale}));
+      for(const {node,kind,delay:baseDelay,duration} of targets){
+        const delay=Math.max(0,baseDelay-(timeline.startEffect?0:elapsed));
+        const opacity=timeline.flow?Number(win.getComputedStyle(node).opacity):1;
+        if(!Number.isFinite(opacity)||opacity<=0)continue;
+        const frames=timeline.flow?homeFlowFrames(kind,opacity):[{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}];
+        const a=node.animate(frames,{delay,duration,easing:timeline.flow?EDGE_CONTROL_EASE:"cubic-bezier(.2,.75,.25,1)",fill:"both"});
         run.effects.push(a);a.finished.catch(()=>{});
         timeline.observeEffect?.(a,"home",()=>startupRun===run&&!dead&&open);
         if(startupRun!==run){try{a.cancel();}catch{}return null;}
@@ -3284,7 +3393,7 @@ function acquireZenHome(win, services) {
       if(startup&&bar?.hasAttribute("zen-newtab"))bar._zenHandleUrlbarClose?.();
       bar?.view?.close();bar?.blur();
       oldInert=panels.hasAttribute("inert");covered=true;host.setAttribute("data-zr-home-host","");panels.setAttribute("data-zr-home-covered","");panels.setAttribute("inert","");
-      const staged=(startup||win.__nocturneLayoutStartup?.initial===true)&&!!root.getAttribute("data-zr-startup-phase")&&prefs.getBoolPref("zen.nocturne.motion.enabled",true);
+      const staged=(startup||win.__nocturneLayoutStartup?.initial===true)&&(!!root.getAttribute("data-zr-startup-phase")||root.hasAttribute("data-zr-center-pending"))&&prefs.getBoolPref("zen.nocturne.motion.enabled",true);
       if(staged)panel.setAttribute("data-zh-startup","");
       panel.hidden=false;open=true;render();notify();
       if(staged){
@@ -3372,10 +3481,10 @@ function acquireZenHome(win, services) {
       if(open&&e.key==="Escape"&&!searchActive()){e.preventDefault();e.stopPropagation();if(adding&&pinCustom){pinCustom=false;render();content.querySelector(".zh-suggestion, .zh-custom-link")?.focus({preventScroll:true});}else if(adding){leavePinPicker();}else if(editing){editing=false;render();}else content.querySelector(".zh-search")?.focus({preventScroll:true});}},true);
     listen(win,"pointerdown",onSearchPointerDown,true);
     const stateObserver=new win.MutationObserver(()=>{
-      if(panel.hasAttribute("data-zh-startup")&&!root.hasAttribute("data-zr-startup-phase"))finishStartupHome();
+      if(panel.hasAttribute("data-zh-startup")&&!root.hasAttribute("data-zr-startup-phase")&&!root.hasAttribute("data-zr-center-pending"))finishStartupHome();
       if(open&&!allowed())close();else if(!open)ensurePrimaryHome();
     });
-    stateObserver.observe(root,{attributes:true,attributeFilter:["customizing","inDOMFullscreen","inFullscreen","popup-window","data-op-startup-ready","data-zr-startup-phase"]});cleanups.push(()=>stateObserver.disconnect());
+    stateObserver.observe(root,{attributes:true,attributeFilter:["customizing","inDOMFullscreen","inFullscreen","popup-window","data-op-startup-ready","data-zr-startup-phase","data-zr-center-pending"]});cleanups.push(()=>stateObserver.disconnect());
     listen(win,"unload",destroy,{once:true});
     const progress={onLocationChange(b,wp,uri){
       if(switching||b!==browser.selectedBrowser||!wp?.isTopLevel)return;

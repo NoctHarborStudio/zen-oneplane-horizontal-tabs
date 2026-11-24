@@ -40,6 +40,70 @@ function edgeControlOffsets(rects,center,width){
   const right=Math.max(0,...rects.filter((_,i)=>sides[i]>0).map(r=>width-r.left))+8;
   return sides.map(side=>side<0?-left:right);
 }
+
+// Center Flow: visible choreography only; Boot and the branded close
+// finale have independent native-readiness/confirmation ownership.
+const CENTER_FLOW_MS=2400;
+const CENTER_FLOW_CLOSE_MS=1600;
+const CENTER_FLOW_STAGES=Object.freeze({
+  panel:[48,552],island:[216,996],tabs:[824,1968],edges:[840,1680],
+  bookmarks:[1152,2016],search:[936,1656],pinLabel:[1176,1728],
+  workspaceLabel:[1560,2064],footer:[1944,2400],body:[936,1968]
+});
+function centerFlowDuration(value){
+  if([450,600,760,1000,1050,1250,1500].includes(value))
+    return Math.round(CENTER_FLOW_MS*value/1050);
+  return Number.isFinite(value)?Math.max(900,Math.min(3600,value)):CENTER_FLOW_MS;
+}
+function centerFlowStage(name,duration=CENTER_FLOW_MS,reverse=false,rank=0){
+  if(!Number.isFinite(duration)||duration<=0)throw RangeError("center-flow-duration");
+  rank=Math.max(0,Math.min(1,Number.isFinite(rank)?rank:0));
+  const a=name==="pin"?[1224+312*rank,1872+312*rank]:
+    name==="workspace"?[1584+132*rank,2160+132*rank]:CENTER_FLOW_STAGES[name];
+  if(!a)throw RangeError("center-flow-stage");
+  return {delay:(reverse?CENTER_FLOW_MS-a[1]:a[0])*duration/CENTER_FLOW_MS,
+    duration:(a[1]-a[0])*duration/CENTER_FLOW_MS};
+}
+function centerFlowTimeline(start,scale){
+  if(!Number.isFinite(start)||!Number.isFinite(scale)||scale<=0)throw RangeError("center-flow-plan");
+  const [panel,island,tabs,edges,bookmarks,search]=["panel","island","tabs","edges","bookmarks","search"].map(n=>centerFlowStage(n));
+  return {start,scale,mode:"fold",flow:true,panel:panel.delay,panelLength:panel.duration,
+    islandStart:island.delay,islandLength:island.duration,islandShift:0,
+    cards:tabs.delay,cardsLength:tabs.duration,edges:edges.delay,edgesLength:edges.duration,
+    bookmarks:bookmarks.delay,bookmarksLength:bookmarks.duration,home:search.delay,homeLength:search.duration,
+    end:CENTER_FLOW_MS,finishLength:CENTER_FLOW_MS*scale,lateLimit:(CENTER_FLOW_MS+420)*scale};
+}
+function homeFlowFrames(kind,opacity=1,reverse=false){
+  const a={opacity:0},b={opacity};
+  if(kind==="search"){a.transform="scale(.89,.96)";b.transform="scale(1,1)";}
+  else if(kind==="pin"){a.transform="translateY(14px) scale(.93)";b.transform="translateY(0px) scale(1)";}
+  else if(kind==="workspace"||kind==="body"){a.transform="translateY(9px)";b.transform="translateY(0px)";}
+  return reverse?[b,a]:[a,b];
+}
+function homeFlowTargets(content,duration,reverse=false){
+  if(!content)return [];
+  const nodes=[...content.children],search=nodes.shift(),footer=nodes.pop(),pins=nodes.shift(),spaces=nodes.shift();
+  const fallback=()=>[{node:content,kind:"body",...centerFlowStage("body",duration,reverse)}];
+  if(nodes.length||!search?.matches(".zh-search")||!footer?.matches(".zh-footer")||
+    !pins?.matches(".zh-section")||spaces&&!spaces.matches(".zh-section"))return fallback();
+  const [pinLabel,pinGrid,...pinExtra]=pins.children;
+  const [spaceLabel,spaceGrid,...spaceExtra]=spaces?[...spaces.children]:[];
+  if(!pinLabel?.matches("h3")||!pinGrid?.matches(".zh-pins")||pinExtra.length||
+     spaces&&(!spaceLabel?.matches("h3")||!spaceGrid?.matches(".zh-spaces")||
+       spaceExtra.some(n=>!n.hidden)))return fallback();
+  const targets=[];
+  const add=(node,kind,stage=kind,rank=0)=>targets.push({node,kind,...centerFlowStage(stage,duration,reverse,rank)});
+  const wave=(grid,kind)=>{
+    const list=[...grid.children],rect=grid.getBoundingClientRect(),center=rect.left+rect.width/2;
+    const scores=list.map(n=>{const r=n.getBoundingClientRect();return Math.abs(r.left+r.width/2-center)+Math.max(0,r.top-rect.top);});
+    const max=Math.max(1,...scores);
+    list.forEach((node,i)=>add(node,node.matches(".zh-empty")?"fade":kind,kind,scores[i]/max));
+  };
+  add(search,"search");add(pinLabel,"fade","pinLabel");wave(pinGrid,"pin");
+  if(spaces){add(spaceLabel,"fade","workspaceLabel");wave(spaceGrid,"workspace");}
+  add(footer,"fade","footer");
+  return targets.length<=256?targets:fallback();
+}
 // Chrome-only brand mark shared by Boot and Center Disassembly.
 function createNocturneBrandMark(document){
   const html=tag=>document.createElementNS("http://www.w3.org/1999/xhtml",tag);
@@ -299,7 +363,7 @@ try{if(typeof window!=="undefined"){
       r.right<=0||r.bottom<=0||r.left>=window.innerWidth||r.top>=window.innerHeight)return null;
     return {n,r,s};
   }
-  function collect(engine){
+  function collect(engine,flow=false){
     const row=get("oneplane-tabs"),island=row?.querySelector(".oneplane-title-island");
     const ir=visible(island),rr=visible(row),url=get("urlbar-container"),ur=visible(url);
     const center=ir?ir.r.left+ir.r.width/2:rr?rr.r.left+rr.r.width/2:ur?ur.r.left+ur.r.width/2:window.innerWidth/2;
@@ -312,18 +376,29 @@ try{if(typeof window!=="undefined"){
     }
     const floating=get("urlbar");
     const floatVisible=floating&&(floating.getAttribute("zen-floating-urlbar")==="true"||floating.hasAttribute("zen-newtab"));
-    if(floatVisible)add(floating,0,0,true,0,280);
+    const timing=name=>centerFlowStage(name,CENTER_FLOW_CLOSE_MS,true);
+    const searchTiming=timing("search");
+    if(floatVisible)add(floating,0,0,true,flow?searchTiming.delay:0,flow?searchTiming.duration:280,null,flow);
     if(typeof engine?.bookmarks!=="function")for(const n of Array.from(get("PlacesToolbarItems")?.children||[])){
       const t=visible(n);if(t)add(n,0,-14,false,Math.max(0,55-Math.abs(t.r.left+t.r.width/2-center)*.09),280);
     }
     if(rr){
       // The plus button exits with the measured edge group.
-      if(ir)add(island,0,0,true,570,80,homeIslandDistance(ir.r.bottom));
+      if(ir){const t=timing("island");add(island,0,0,true,flow?t.delay:570,flow?t.duration:80,homeIslandDistance(ir.r.bottom));}
     }else{
       const sidebar=get("zen-tabs-wrapper")||get("TabsToolbar");
       const t=visible(sidebar);if(t)add(sidebar,t.r.left<window.innerWidth/2?-18:18,0,false,95,330);
     }
-    if(!floatVisible)add(url,0,0,true,165,330);
+    if(!floatVisible)add(url,0,0,true,flow?searchTiming.delay:165,flow?searchTiming.duration:330,null,flow);
+    if(flow){
+      const t=timing("panel");add(get("oneplane-toolbar-surface"),0,0,false,t.delay,t.duration,null,true);
+      const home=get("zen-shared-home");
+      if(visible(home)&&!home.hasAttribute("data-zh-search")){
+        for(const target of homeFlowTargets(home.querySelector(".zh-content"),CENTER_FLOW_CLOSE_MS,true)){
+          const v=visible(target.node);if(v)result.push({n:target.node,homeKind:target.kind,opacity:Number(v.s.opacity),delay:target.delay,length:target.duration});
+        }
+      }
+    }
     const candidates=new Set();
     let captions=null;try{captions=window.gZenVerticalTabsManager?.actualWindowButtons;}catch{}
     const plus=row?.querySelector(".oneplane-new-tab");
@@ -337,7 +412,8 @@ try{if(typeof window!=="undefined"){
     if(visible(plus))candidates.add(plus);
     const group=[...candidates].filter(n=>![...candidates].some(c=>c!==n&&c.contains(n))).map(n=>visible(n)).filter(Boolean);
     const offsets=edgeControlOffsets(group.map(t=>t.r),center,window.innerWidth);
-    group.forEach(({n},i)=>add(n,offsets[i],0,false,120,390,null,true));
+    const t=timing("edges");
+    group.forEach(({n},i)=>add(n,offsets[i],0,false,flow?t.delay:120,flow?t.duration:390,null,true));
     window.__nocturneTrace?.("disassembly.controls.edge",{left:offsets.filter(x=>x<0).length,right:offsets.filter(x=>x>0).length});
     return result;
   }
@@ -380,7 +456,8 @@ try{if(typeof window!=="undefined"){
     const row=get("oneplane-tabs"),items=get("PlacesToolbarItems");
     const needsTabs=!!visible(row)&&Array.from(row.querySelectorAll(".oneplane-tab-list :is(.oneplane-tab,.oneplane-split-group)")).some(n=>!!visible(n));
     const needsBookmarks=!!visible(items)&&Array.from(items.children).some(n=>!!visible(n));
-    const targets=collect(engine);if(!targets.length)return false;
+    const flow=engine?.centerFlowVersion===1&&!!visible(row);
+    const targets=collect(engine,flow);if(!targets.length)return false;
     // Missing horizontal proxy support must not leave the visible strip
     // behind while other controls disappear. Native-only sidebar and the
     // existing no-bookmark-API fallback remain supported.
@@ -400,16 +477,22 @@ try{if(typeof window!=="undefined"){
       try{sheet=Services.io.newURI("data:text/css;charset=utf-8,"+encodeURIComponent(css));window.windowUtils.loadSheet(sheet,window.windowUtils.USER_SHEET);}
       catch{sheet=null;style=document.createElementNS("http://www.w3.org/1999/xhtml","style");style.textContent=css;root.append(style);}
     }
-    centerHandle=engine?.start?.(row,{owner:"close",direction:"out",duration:620,retainOnDispose:()=>controller.committing});
+    const tabTiming=centerFlowStage("tabs",CENTER_FLOW_CLOSE_MS,true),bookmarkTiming=centerFlowStage("bookmarks",CENTER_FLOW_CLOSE_MS,true);
+    centerHandle=engine?.start?.(row,{owner:"close",direction:"out",duration:flow?tabTiming.duration:620,delay:flow?tabTiming.delay:0,paused:flow,retainOnDispose:()=>controller.committing});
     if(needsTabs&&!centerHandle?.count)return bypass("tab-acquisition-failed");
-    bookmarkHandle=engine?.bookmarks?.({owner:"close",direction:"out",duration:650,retainOnDispose:()=>controller.committing});
+    bookmarkHandle=engine?.bookmarks?.({owner:"close",direction:"out",duration:flow?bookmarkTiming.duration:650,delay:flow?bookmarkTiming.delay:0,paused:flow,retainOnDispose:()=>controller.committing});
     if(needsBookmarks&&typeof engine?.bookmarks==="function"&&!bookmarkHandle)return bypass("bookmark-acquisition-failed");
     if((centerHandle||bookmarkHandle)&&window.__nocturneCenterMotion!==engine)return bypass("engine-replaced");
-    let sealAt=DURATION-110;
-    for(const {n,x,y,clip,delay:baseDelay,length:baseLength,opacity,islandY,edge} of targets){
+    let sealAt=flow?CENTER_FLOW_CLOSE_MS:DURATION-110;
+    for(const {n,x,y,clip,delay:baseDelay,length:baseLength,opacity,islandY,edge,homeKind} of targets){
       const foldIsland=islandRegistered&&Number.isFinite(islandY)&&islandY<0;
-      const delay=foldIsland?DURATION-110:baseDelay,length=foldIsland?HOME_ISLAND_DURATION:baseLength;
+      const delay=foldIsland&&!flow?DURATION-110:baseDelay,length=foldIsland&&!flow?HOME_ISLAND_DURATION:baseLength;
       try{
+        if(homeKind){
+          const effect=n.animate(homeFlowFrames(homeKind,opacity,true),{delay,duration:length,easing:EDGE_CONTROL_EASE,fill:"both"});
+          animations.add(effect);effect.finished.catch(()=>{});effect.pause();effect.currentTime=0;
+          continue;
+        }
         let frames;
         if(registered){
           owned.set(n,{styles:new Map(),attrs:new Map()});
@@ -430,8 +513,19 @@ try{if(typeof window!=="undefined"){
         }
         const effect=n.animate(frames,{delay,duration:length,easing:foldIsland?"linear":edge?EDGE_CONTROL_EASE:"cubic-bezier(.4,0,.35,1)",fill:"both"});
         animations.add(effect);effect.finished.catch(()=>{});
+        if(flow){effect.pause();effect.currentTime=0;}
         if(foldIsland){sealAt=Math.max(sealAt,delay+length);window.__nocturneTrace?.("disassembly.island.exit",{curve:"delayed-reveal",y:islandY,delay,duration:length},{flush:true});}
       }catch{return bypass("control-acquisition-failed");}
+    }
+    if(flow){
+      try{
+        const epoch=document.timeline.currentTime;
+        if(!Number.isFinite(epoch))throw Error("close-flow-clock");
+        const start=a=>{if(a.timeline!==document.timeline||a.playState==="idle")throw Error("close-flow-effect");a.startTime=epoch;};
+        centerHandle?.resumeAt(start);bookmarkHandle?.resumeAt(start);
+        for(const a of animations)start(a);
+        window.__nocturneTrace?.("disassembly.flow.epoch",{duration:CENTER_FLOW_CLOSE_MS,effects:animations.size},{flush:true});
+      }catch{return bypass("flow-epoch-failed");}
     }
     // Keep the previous close path if the experimental finale cannot be acquired.
     finale=createCloseFinale({win:window,doc:document,root,start:sealAt,onModal:modalOpened,windows:Services.appinfo?.OS==="WINNT",
