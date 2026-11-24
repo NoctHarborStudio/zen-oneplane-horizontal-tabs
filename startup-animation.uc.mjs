@@ -213,7 +213,7 @@ function startupBoundaryOutcome(counts,legacy=0){
 }
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.171"};
+  const event="assembly.script",data={version:"0.3.0-preview.172"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -260,17 +260,51 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     !startupEligible(lateStart,check.delayed,check.ready,check.age,window.__nocturneLayoutStartup)?"late-established-window":null;
   check.nativeBeforeLoaded=root.hasAttribute("zen-before-loaded");check.nativeWatermark=prefs.getBoolPref("zen.watermark.enabled",false);
   try{if(prefs.getBoolPref("zen.nocturne.diagnostics.enabled",true)){
+    // MB-014: bounded read-only snapshot, taken before Boot mounts.
+    check.nativeProbeAt=window.performance.now();
     check.nativeHideTabbar=prefs.getBoolPref("zen.view.compact.hide-tabbar",false);
     check.nativeCompactStartup=prefs.getBoolPref("zen.view.compact.enable-at-startup",false);
     check.nativeCompact=root.getAttribute("zen-compact-mode")==="true";
-    const sidebar=document.getElementById("navigator-toolbox"),titlebar=document.getElementById("titlebar");
-    if(sidebar){
-      const rect=sidebar.getBoundingClientRect(),style=window.getComputedStyle(sidebar);
-      check.nativeSidebarOnscreen=rect.width>1&&rect.height>1&&rect.right>0&&rect.left<window.innerWidth&&style.visibility!=="hidden"&&Number(style.opacity)>0;
-      check.nativeSidebarReveal=["zen-has-hover","zen-user-show","zen-has-empty-tab","flash-popup","has-popup-menu","movingtab","zen-compact-mode-active"].some(key=>sidebar.hasAttribute(key));
-      check.nativeSidebarAnimating=sidebar.hasAttribute("animate")||root.hasAttribute("zen-compact-animating");
-    }
-    if(titlebar)check.nativeTitlebarHidden=window.getComputedStyle(titlebar).visibility==="hidden";
+    check.nativeOpenOnStartup=prefs.getBoolPref("zen.urlbar.open-on-startup",true);
+    check.nativeContinueSession=prefs.getBoolPref("zen.workspaces.continue-where-left-off",false);
+    check.nativeHoverEnabled=prefs.getBoolPref("zen.view.compact.show-sidebar-and-toolbar-on-hover",true);
+    check.nativeFlashEnabled=prefs.getBoolPref("zen.view.compact.toolbar-flash-popup",false);
+    check.nativeAnimateSidebar=prefs.getBoolPref("zen.view.compact.animate-sidebar",true);
+    const selected=window.gBrowser?.selectedTab;
+    check.nativeSelectedEmpty=selected?selected.hasAttribute("zen-empty-tab"):null;
+    check.nativeRootEmpty=root.getAttribute("zen-has-empty-tab")==="true";
+    check.nativeRenaming=root.getAttribute("zen-renaming-tab")==="true";
+    check.nativeSuppressAdjust=root.getAttribute("supress-primary-adjustment")==="true";
+    const sidebar=document.getElementById("navigator-toolbox"),titlebar=document.getElementById("titlebar"),toolbar=document.getElementById("zen-appcontent-navbar-wrapper"),bar=document.getElementById("urlbar");
+    const keys=["zen-has-hover","zen-user-show","zen-has-empty-tab","flash-popup","has-popup-menu","movingtab","zen-compact-mode-active"];
+    const flags=node=>node?Object.fromEntries(keys.map(key=>[key,node.hasAttribute(key)])):null;
+    const snapshot=node=>{
+      if(!node)return null;
+      const r=node.getBoundingClientRect(),s=window.getComputedStyle(node);
+      return {rect:[r.x,r.y,r.width,r.height],opacity:s.opacity,visibility:s.visibility,display:s.display,translate:s.translate,transform:s.transform,
+        intersects:r.width>1&&r.height>1&&r.right>0&&r.left<window.innerWidth&&r.bottom>0&&r.top<window.innerHeight};
+    };
+    check.nativeSidebarFlags=flags(sidebar);
+    check.nativeToolbarFlags=flags(toolbar);
+    check.nativeRootFlags=flags(root);
+    check.nativeSidebarHover=sidebar?.matches(":hover")??null;
+    check.nativeSidebarCSS=snapshot(sidebar);
+    check.nativeTitlebarCSS=snapshot(titlebar);
+    check.nativeSidebarOnscreen=!!(check.nativeSidebarCSS?.intersects&&check.nativeSidebarCSS.visibility!=="hidden"&&Number(check.nativeSidebarCSS.opacity)>0);
+    check.nativeSidebarReveal=!!(check.nativeSidebarFlags&&Object.values(check.nativeSidebarFlags).some(Boolean));
+    check.nativeSidebarAnimating=!!(sidebar?.hasAttribute("animate")||root.hasAttribute("zen-compact-animating"));
+    check.nativeTitlebarHidden=check.nativeTitlebarCSS?check.nativeTitlebarCSS.visibility==="hidden":null;
+    check.nativeTitlebarOnscreen=!!(check.nativeTitlebarCSS?.intersects&&check.nativeTitlebarCSS.visibility==="visible"&&Number(check.nativeTitlebarCSS.opacity)>0&&Number(check.nativeSidebarCSS?.opacity)>0);
+    check.nativeAddressFlags=bar?Object.fromEntries(["zen-newtab","breakout","breakout-extend","open","focused","zen-floating-urlbar"].map(key=>[key,bar.hasAttribute(key)])):null;
+    check.chromeCSSPresent=window.getComputedStyle(root).getPropertyValue("--nocturne-startup-diagnostic-css").trim()==="1";
+    // A registered sheet does not establish when it was registered or whether
+    // it matched this document. The obsolete global experiment is not reenabled.
+    try{
+      const file=Services.dirsvc.get("UChrm",Ci.nsIFile);file.append("sine-mods");file.append("content.css");
+      const service=Cc["@mozilla.org/content/style-sheet-service;1"].getService(Ci.nsIStyleSheetService);
+      check.sineContentRegistered=service.sheetRegistered(Services.io.newFileURI(file),service.USER_SHEET);
+    }catch{check.sineContentRegistered=null;}
+    check.nativeProbeElapsed=window.performance.now()-check.nativeProbeAt;
   }}catch{}
   decision("assembly.eligible.check",{...check,reason});
   if(reason){window.__nocturneEarlyBoot?.cleanup?.();return;}

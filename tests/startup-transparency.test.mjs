@@ -649,3 +649,23 @@ test("MB-014 obsolete global hide is retired and native sidebar is diagnosed",()
  assert.ok(!pre.includes("data-nocturne-early-css-done"));
  assert.ok(!source.includes("data-nocturne-early-css-done"));
 });
+
+test("MB-014 snapshots distinguish empty-tab reveal from visible toolbox geometry",()=>{
+ const pre=readFileSync(new URL("../src/core/boot-prelude.js.part",import.meta.url),"utf8");
+ const block=(s,v)=>s.slice(s.indexOf("    // MB-014: bounded read-only snapshot"),s.indexOf("\n  }}catch{}",s.indexOf("    // MB-014: bounded read-only snapshot")));
+ const code=block(pre,"probe");
+ assert.equal(code.replace(/\bprobe\b/g,"check").replace(/\bwin\b/g,"window"),block(source,"check"));
+ const run=new Function("win","root","prefs","document","Services","Ci","Cc","probe",code+"return probe;");
+ const el=(attrs=[],style={})=>({hasAttribute:k=>attrs.includes(k),getAttribute:k=>attrs.includes(k)?"true":null,matches:()=>false,getBoundingClientRect:()=>({x:0,y:0,width:220,height:800,right:220,bottom:800,left:0,top:0}),style:{opacity:"1",visibility:"visible",display:"flex",translate:"none",transform:"none",...style,getPropertyValue:()=>"1"}});
+ for(const empty of [true,false]){
+  const root=el(empty?["zen-has-empty-tab","zen-compact-mode"]:["zen-compact-mode"]),sidebar=el(empty?["zen-has-empty-tab"]:[]),titlebar=el([],empty?{}:{visibility:"hidden"}),toolbar=el(["zen-compact-mode-active"]),bar=el(["zen-newtab"]);
+  const nodes={"navigator-toolbox":sidebar,titlebar,"zen-appcontent-navbar-wrapper":toolbar,urlbar:bar};
+  const win={performance:{now:()=>10},innerWidth:1000,innerHeight:900,gBrowser:{selectedTab:el(empty?["zen-empty-tab"]:[])},getComputedStyle:n=>n.style};
+  const p=run(win,root,{getBoolPref:(k,d)=>d},{getElementById:k=>nodes[k]},null,null,null,{});
+  assert.equal(p.nativeSelectedEmpty,empty);assert.equal(p.nativeSidebarFlags["zen-has-empty-tab"],empty);assert.equal(p.nativeSidebarReveal,empty);
+  assert.equal(p.nativeToolbarFlags["zen-compact-mode-active"],true);assert.equal(p.nativeSidebarFlags["zen-compact-mode-active"],false);
+  assert.equal(p.nativeSidebarOnscreen,true);assert.equal(p.nativeTitlebarOnscreen,empty);assert.equal(p.nativeTitlebarHidden,!empty);
+  assert.equal(p.chromeCSSPresent,true);assert.equal(p.sineContentRegistered,null);
+  assert.deepEqual(p.nativeTitlebarCSS.rect,[0,0,220,800]);
+ }
+});

@@ -1,3 +1,7 @@
+/* MB-014 read-only CSS presence marker; no visibility or animation change. */
+@-moz-document url("chrome://browser/content/browser.xhtml") {
+  :root { --nocturne-startup-diagnostic-css: 1; }
+}
 /* Registered once by the stylesheet. Native WAAPI can interpolate
    selection opacity without a script callback on every display frame. */
 @property --op-url-selection-alpha {
