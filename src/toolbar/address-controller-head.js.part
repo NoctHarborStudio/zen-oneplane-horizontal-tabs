@@ -43,7 +43,7 @@
   function addressMotionEnabled() {
     return hoverSupported() &&
       prefs.getIntPref("zen.oneplane.animation-duration", 160) !== 0 &&
-      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      prefs.getBoolPref("zen.nocturne.motion.enabled",true);
   }
   function addressWidths() {
     const base = parseFloat(window.getComputedStyle(url).getPropertyValue("--op-url")) || 180;

@@ -1,5 +1,12 @@
 [
   {
+    "type": "checkbox",
+    "property": "zen.nocturne.motion.enabled",
+    "label": "Nocturne animations — independent of system motion settings",
+    "defaultValue": true,
+    "restart": true
+  },
+  {
     "type": "dropdown",
     "property": "zen.oneplane.tab-width",
     "label": "Collapsed tab width",
@@ -676,13 +683,6 @@
     "property": "zen.nocturne.boot.enabled",
     "label": "Startup intro — Nocturne logo / Boot (restart Zen)",
     "defaultValue": true,
-    "restart": true
-  },
-  {
-    "type": "checkbox",
-    "property": "zen.nocturne.startup.force-motion",
-    "label": "Startup intro — play even with system reduced motion (optional; restart Zen)",
-    "defaultValue": false,
     "restart": true
   },
   {

@@ -131,7 +131,7 @@
 }
 #oneplane-hub-panel .op-hub-content {container-type:inline-size;}
 #oneplane-hub-panel .op-hub-space {transition:background 180ms,transform 220ms;}
-@media (prefers-reduced-motion:reduce) {
+@media (-moz-pref("zen.nocturne.motion.enabled", false)) {
   #oneplane-hub-panel :is(.op-hub-trash-panel,.op-hub-trash-title,.op-hub-trash-symbol,.op-hub-trash-tools,.op-hub-trash-drawer,.op-hub-trash-item,.op-hub-space) {transition:none!important;}
 }
 

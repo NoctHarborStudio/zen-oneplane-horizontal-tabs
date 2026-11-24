@@ -260,7 +260,7 @@ function createNocturneBrandMark(document){
 }
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.191"};
+  const event="assembly.script",data={version:"0.3.0-preview.192"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -273,8 +273,8 @@ try{if(typeof window!=="undefined"){
   const KEY="__zenRefinedStartupAnimation",SEEN="__zenRefinedStartupAnimationSeen";
   const html=(tag)=>document.createElementNS("http://www.w3.org/1999/xhtml",tag);
   const get=id=>document.getElementById(id);
-  const reduced=window.matchMedia("(prefers-reduced-motion: reduce)");
-  const forceMotion=prefs.getBoolPref("zen.nocturne.startup.force-motion",false);
+  const reduced={get matches(){return !prefs.getBoolPref("zen.nocturne.motion.enabled",true);}};
+
   const now=()=>window.performance.now();
 const ASSEMBLY_ERROR_CLASSES=new Set(["Error","TypeError","RangeError","ReferenceError","SyntaxError","URIError","EvalError","AggregateError","DOMException","AbortError","NotAllowedError","InvalidStateError","NotFoundError","NotSupportedError","SecurityError","DataCloneError","NetworkError","TimeoutError","QuotaExceededError","WorkspaceCommandError","NS_ERROR_FAILURE","NS_ERROR_ABORT","NS_ERROR_NOT_AVAILABLE","NS_ERROR_UNEXPECTED","NS_ERROR_NOT_INITIALIZED","NS_ERROR_FILE_NOT_FOUND","NS_ERROR_XPC_BAD_CONVERT_JS"]);
 function assemblyErrorClass(error){try{const name=error?.name;return typeof name==="string"&&ASSEMBLY_ERROR_CLASSES.has(name)?name:"Error";}catch{return "Error";}}
@@ -303,7 +303,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
   let lateStart=!canStartBeforePaint(window.windowUtils,document.readyState);
   const check={paintCount:window.windowUtils?.paintCount,delayed:!!window.gBrowserInit?.delayedStartupFinished,ready:root.getAttribute(READY),cold:!!window.__nocturneLayoutStartup?.initial,age:now()};
   const reason=typeof window.addUnloadListener!=="function"?"no-unload-hook":window[SEEN]?"already-seen":root.hasAttribute("popup-window")?"popup":
-    !prefs.getBoolPref(ENABLE,true)?"disabled":(reduced.matches&&!forceMotion)?"reduced-motion":window.closed?"closed":
+    !prefs.getBoolPref(ENABLE,true)?"disabled":reduced.matches?"reduced-motion":window.closed?"closed":
     root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"?"native-mode":
     !startupEligible(lateStart,check.delayed,check.ready,check.age,window.__nocturneLayoutStartup)?"late-established-window":null;
   check.nativeBeforeLoaded=root.hasAttribute("zen-before-loaded");check.nativeWatermark=prefs.getBoolPref("zen.watermark.enabled",false);
@@ -316,7 +316,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     check.nativeRootEmpty=root.getAttribute("zen-has-empty-tab")==="true";
     check.nativeSidebarFlags=sidebar?Object.fromEntries(["zen-has-hover","zen-user-show","zen-has-empty-tab","flash-popup","has-popup-menu","movingtab","zen-compact-mode-active"].map(key=>[key,sidebar.hasAttribute(key)])):null;
   }}catch{}
-  decision("assembly.eligible.check",{...check,reason,reducedMotion:reduced.matches,forceMotion});
+  decision("assembly.eligible.check",{...check,reason,reducedMotion:reduced.matches,motionEnabled:!reduced.matches});
   if(reason){root.setAttribute("data-nocturne-startup-background-done","true");window.__nocturneEarlyBoot?.cleanup?.();return;}
   window[SEEN]=true;
   // 760 ms is still a supported user choice. Legacy saved defaults and
@@ -551,7 +551,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     step(()=>window.removeEventListener("resize",onResize));
     step(()=>window.removeEventListener("unload",finish));
     step(()=>window.removeEventListener("OnePlane:StartupState",schedule));
-    step(()=>reduced.removeEventListener("change",preferenceChanged));
+    step(()=>prefs.removeObserver("zen.nocturne.motion.enabled",preferenceChanged));
     step(()=>prefs.removeObserver(ENABLE,preferenceChanged));
     if(window[KEY]===finish)delete window[KEY];
     step(()=>window.__nocturneTrace?.("assembly.cleanup",{failed,owns},{flush:true}));
@@ -559,7 +559,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
   function settle(){
     typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.settle",()=>({playing,settling,effects:animations.size}),{sample:1800});
     if(dead||settling)return;
-    if(ownedTimeline?.mode==="bloom"||!playing||bootPreparing||ownedTimeline?.paused||(reduced.matches&&!forceMotion)||!animations.size){finish("interrupted");return;}
+    if(ownedTimeline?.mode==="bloom"||!playing||bootPreparing||ownedTimeline?.paused||reduced.matches||!animations.size){finish("interrupted");return;}
     settling=true;
     // Stop further stage admission immediately, including a late Home.
     if(ownedTimeline)ownedTimeline.closed=true;
@@ -613,7 +613,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     typeof window!=="undefined"&&window.__nocturneTrace?.("assembly.resize",()=>({changed,playing,size:next}),{throttle:100,sample:1500});
     viewport=next;if(playing&&changed){if(bootPreparing)finish("interrupted");else settle();}
   }
-  function preferenceChanged(){if((reduced.matches&&!forceMotion)||bootPreparing&&!prefs.getBoolPref(ENABLE,true))finish("interrupted");else if(!prefs.getBoolPref(ENABLE,true))settle();}
+  function preferenceChanged(){if(reduced.matches||bootPreparing&&!prefs.getBoolPref(ENABLE,true))finish("interrupted");else if(!prefs.getBoolPref(ENABLE,true))settle();}
   function bounds(n,ignoreOpacity=false){
     if(!n||n.hidden||n.collapsed)return null;
     const s=window.getComputedStyle(n),r=n.getBoundingClientRect();
@@ -1272,7 +1272,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     for(const type of inputs)window.addEventListener(type,interrupt,true);
     window.addEventListener("resize",onResize);
     window.addEventListener("OnePlane:StartupState",schedule);
-    reduced.addEventListener("change",preferenceChanged);
+    prefs.addObserver("zen.nocturne.motion.enabled",preferenceChanged);
     prefs.addObserver(ENABLE,preferenceChanged);
     // Early startup gates only animated controls, never a window-sized layer.
     // Sine applies its chrome CSS at USER_SHEET origin. A user-important

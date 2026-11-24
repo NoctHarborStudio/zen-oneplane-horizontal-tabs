@@ -136,7 +136,7 @@
 }
 #PersonalToolbar[data-zr-magnetic-enabled] > #zr-bookmark-indicator[data-zr-visible] { opacity: 1 !important; }
 #PersonalToolbar[data-zr-magnetic-enabled] > #zr-bookmark-indicator[data-zr-no-glow] { box-shadow: none !important; }
-@media (prefers-reduced-motion: reduce) {
+@media (-moz-pref("zen.nocturne.motion.enabled", false)) {
   #PersonalToolbar[data-zr-magnetic-enabled] #PlacesToolbarItems > toolbarbutton.bookmark-item[data-zr-bm-managed],
   #PersonalToolbar[data-zr-magnetic-enabled] #PlacesToolbarItems > toolbarbutton.bookmark-item[data-zr-bm-managed] :is(.toolbarbutton-icon, .toolbarbutton-text),
   #PersonalToolbar[data-zr-magnetic-enabled] > #zr-bookmark-indicator {

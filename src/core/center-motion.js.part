@@ -245,7 +245,7 @@
       root.getAttribute("data-zr-startup-phase")==="waiting"&&
       !["data-zr-closing","data-zr-workspace-phase","customizing","inDOMFullscreen","inFullscreen"].some(k=>root.hasAttribute(k))&&
       row&&document.getElementById("oneplane-tabs")===row&&!row.hasAttribute("data-op-dragging")&&
-      !win.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      Services.prefs.getBoolPref("zen.nocturne.motion.enabled",true);
   }
   function start(row,options={}){
     if(dead||motionBusy||disposing||!current())return null;
@@ -683,7 +683,7 @@
     stopSelection();
     if(!next||!previous||next===previous||active||root.hasAttribute(PENDING)||
        ["data-zr-startup-phase","data-zr-workspace-phase","data-zr-closing","customizing","inDOMFullscreen","inFullscreen"].some(k=>root.hasAttribute(k))||
-       win.matchMedia("(prefers-reduced-motion: reduce)").matches||Services.prefs.getIntPref("zen.oneplane.animation-duration",160)===0||
+       !Services.prefs.getBoolPref("zen.nocturne.motion.enabled",true)||Services.prefs.getIntPref("zen.oneplane.animation-duration",160)===0||
        next.hasAttribute("zen-empty-tab")||next.hasAttribute("split-view")||previous.hasAttribute("split-view"))return;
     const deck=document.getElementById("tabbrowser-tabpanels");
     if(!deck||deck.hasAttribute("data-zr-home-covered")||deck.querySelector(".browserSidebarContainer[zen-split='true']"))return;
@@ -709,7 +709,7 @@
   // The layout entrypoint runs before its own projection. Gate only a
   // genuinely new window, never a Sine reload. Fail open on missing Assembly.
   try{
-    if(!win.__nocturneLayoutStartup&&(!win.__zenRefinedStartupAnimationSeen||win.__zenRefinedStartupAnimation)&&win.performance.now()<3500&&Services.prefs.getBoolPref("zen.refined.startup.animation",true)&&(!win.matchMedia("(prefers-reduced-motion: reduce)").matches||Services.prefs.getBoolPref("zen.nocturne.startup.force-motion",false))){
+    if(!win.__nocturneLayoutStartup&&(!win.__zenRefinedStartupAnimationSeen||win.__zenRefinedStartupAnimation)&&win.performance.now()<3500&&Services.prefs.getBoolPref("zen.refined.startup.animation",true)&&Services.prefs.getBoolPref("zen.nocturne.motion.enabled",true)){
       win.__nocturneTrace?.("assembly.gate",{age:win.performance.now(),pending:true},{flush:true});
       root.setAttribute(PENDING,"true");
       const deadline=win.__nocturneEarlyBoot?.deadline??win.__zenRefinedStartupAnimation?.deadline??(win.performance.now()+8000);

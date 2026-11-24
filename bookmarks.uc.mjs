@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="bookmarks.script",data={version:"0.3.0-preview.191"};
+  const event="bookmarks.script",data={version:"0.3.0-preview.192"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -30,7 +30,7 @@ function install() {
   indicator.setAttribute("aria-hidden", "true");
   indicator.setAttribute("skipintoolbarset", "true");
   indicator.setAttribute("removable", "false");
-  const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const motion = {get matches(){return !prefs.getBoolPref("zen.nocturne.motion.enabled",true);}};
   const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
   const number = (key, fallback, lo, hi) => clamp(prefs.getIntPref(PREFIX + key, fallback), lo, hi);
   const bool = (key, fallback) => prefs.getBoolPref(PREFIX + key, fallback);
@@ -752,7 +752,7 @@ function install() {
     openPopups.clear();
     for (const [target, type, listener, capture] of listeners) target.removeEventListener(type, listener, capture);
     try { prefs.removeObserver(PREFIX, prefsObserver); } catch {}
-    motion.removeEventListener("change", prefsObserver);
+    prefs.removeObserver("zen.nocturne.motion.enabled",prefsObserver);
     toolbar.removeAttribute("data-zr-magnetic-enabled");
     toolbar.style.removeProperty("--zr-bm-duration");
     toolbar.style.removeProperty("--zr-bm-base-height");
@@ -772,7 +772,7 @@ function install() {
     resize.observe(toolbar);
     if(navbar)resize.observe(navbar);
     prefs.addObserver(PREFIX,prefsObserver);
-    motion.addEventListener("change", prefsObserver);
+    prefs.addObserver("zen.nocturne.motion.enabled",prefsObserver);
   } catch (error) {
     destroy();
     throw error;

@@ -85,7 +85,7 @@ function createCloseFinale({win,doc,root,start,onModal}){
 }
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="disassembly.script",data={version:"0.3.0-preview.191"};
+  const event="disassembly.script",data={version:"0.3.0-preview.192"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -97,7 +97,7 @@ try{if(typeof window!=="undefined"){
   const KEY="__zenRefinedClosingAnimation",PREF="zen.refined.closing.animation",DURATION=760;
   const root=document.documentElement,prefs=Services.prefs;
   const MARK="data-zr-close-effect",MOVE="data-zr-close-move",CLIP="data-zr-close-clip",PROGRESS="--zr-close-progress";
-  const reduced=window.matchMedia("(prefers-reduced-motion: reduce)");
+  const reduced={get matches(){return !prefs.getBoolPref("zen.nocturne.motion.enabled",true);}};
   const get=id=>document.getElementById(id);
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   if(typeof window.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
@@ -377,13 +377,13 @@ try{if(typeof window!=="undefined"){
     step(()=>{if(owner&&wrapped&&owner.tryToCloseWindow===wrapped)owner.tryToCloseWindow=original;});
     step(()=>{if(observer)Services.obs.removeObserver(observer,"browser-delayed-startup-finished");});observer=null;
     step(()=>prefs.removeObserver(PREF,preferenceChanged));
-    step(()=>reduced.removeEventListener("change",preferenceChanged));
+    step(()=>prefs.removeObserver("zen.nocturne.motion.enabled",preferenceChanged));
     step(()=>window.removeEventListener("unload",dispose));
     if(window[KEY]===dispose)delete window[KEY];
     try{window.__nocturneTrace?.("disassembly.dispose",{failed,delegated:controller.committing},{flush:true});}catch{}
   }
   window[KEY]=dispose;window.addUnloadListener(dispose);window.addEventListener("unload",dispose,{once:true});
-  prefs.addObserver(PREF,preferenceChanged);reduced.addEventListener("change",preferenceChanged);
+  prefs.addObserver(PREF,preferenceChanged);prefs.addObserver("zen.nocturne.motion.enabled",preferenceChanged);
   install();
   if(!wrapped&&!window.gBrowserInit?.delayedStartupFinished){
     observer=subject=>{if(subject!==window)return;Services.obs.removeObserver(observer,"browser-delayed-startup-finished");observer=null;install();};

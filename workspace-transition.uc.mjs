@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="workspace.script",data={version:"0.3.0-preview.191"};
+  const event="workspace.script",data={version:"0.3.0-preview.192"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -40,7 +40,7 @@ function workspaceErrorClass(error){try{const name=error?.name;return typeof nam
     pending.then(release,release);
     return pending;
   }
-  const reduced=win.matchMedia("(prefers-reduced-motion: reduce)");
+  const reduced={get matches(){return !prefs.getBoolPref("zen.nocturne.motion.enabled",true);}};
   function eligible(state){return !state.dead&&!state.busy&&!state.reduced&&!state.startup&&state.enabled&&!state.fullscreen&&!state.interacting;}
   function units(){
     // Stable surface targets survive tab mirror repartition and Places rebuild.
@@ -328,7 +328,7 @@ function workspaceErrorClass(error){try{const name=error?.name;return typeof nam
     step(()=>win.removeEventListener("unload",dispose));
     step(()=>win.removeEventListener("keydown",onKey,true));
     step(()=>win.removeEventListener("beforecustomization",abort));
-    step(()=>reduced.removeEventListener("change",abort));
+    step(()=>prefs.removeObserver("zen.nocturne.motion.enabled",abort));
     step(()=>prefs.removeObserver(PREF,abort));
     if(win[KEY]===api)delete win[KEY];
     try{win.__nocturneTrace?.("workspace.dispose",{failed},{flush:true});}catch{}
@@ -340,6 +340,6 @@ function workspaceErrorClass(error){try{const name=error?.name;return typeof nam
     // No separately loaded temporary user sheet.
     win[KEY]=api;win.addUnloadListener(dispose);win.addEventListener("unload",dispose,{once:true});
     win.addEventListener("keydown",onKey,true);win.addEventListener("beforecustomization",abort);
-    reduced.addEventListener("change",abort);prefs.addObserver(PREF,abort);
+    prefs.addObserver("zen.nocturne.motion.enabled",abort);prefs.addObserver(PREF,abort);
   }catch(error){console.warn("[Zen Refined] Workspace transition:",workspaceErrorClass(error));dispose();}
 })();

@@ -108,7 +108,7 @@
         pointer-events: none !important;
       }
     }
-    @media (prefers-reduced-motion: reduce) {
+    @media (-moz-pref("zen.nocturne.motion.enabled", false)) {
       #zen-appcontent-navbar-wrapper { transition: none !important; }
     }
     @media (prefers-reduced-transparency: reduce) {

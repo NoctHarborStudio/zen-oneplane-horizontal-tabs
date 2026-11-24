@@ -10,7 +10,7 @@
      typeof win.addUnloadListener!=="function"||win.closed||root.hasAttribute("popup-window")||
      root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"||
      win.performance.now()>=3500||!prefs.getBoolPref("zen.refined.startup.animation",true)||
-     !prefs.getBoolPref("zen.nocturne.boot.enabled",true)||(win.matchMedia("(prefers-reduced-motion: reduce)").matches&&!prefs.getBoolPref("zen.nocturne.startup.force-motion",false))){
+     !prefs.getBoolPref("zen.nocturne.boot.enabled",true)||!prefs.getBoolPref("zen.nocturne.motion.enabled",true)){
     // A terminal skip must not re-arm the CSS guard on a later empty tab.
     root.setAttribute("data-nocturne-startup-background-done","true");
     return;
@@ -93,7 +93,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.191",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.192",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -575,7 +575,7 @@
       if(type==="unload")requestDispose(true);
     });
     bindNative();observeTargets();
-    record("diagnostics.ready",()=>({version:VERSION,writer:writerMode,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished,size:[win.innerWidth,win.innerHeight],private:privateWindow(),reducedMotion:!!win.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches,reducedTransparency:!!win.matchMedia?.("(prefers-reduced-transparency: reduce)")?.matches,forceMotion:Services.prefs.getBoolPref("zen.nocturne.startup.force-motion",false),homeTransparent:Services.prefs.getBoolPref("zen.nocturne.home.transparent",true),directAlpha:Services.prefs.getBoolPref("zen.nocturne.home.direct-alpha",false),homeTintOpacity:Services.prefs.getIntPref?.("zen.nocturne.home.tint-opacity",65)??65,nativeMica:!!win.matchMedia?.("(-moz-windows-mica)")?.matches,windowTransparency:Services.prefs.getBoolPref("widget.transparent-windows",false),windowsMica:Services.prefs.getBoolPref("widget.windows.mica",false),linuxTransparency:Services.prefs.getBoolPref("zen.widget.linux.transparency",false),macVibrancy:Services.prefs.getBoolPref("zen.widget.macos.window-vibrancy",false)}),{sample:6000,flush:true});
+    record("diagnostics.ready",()=>({version:VERSION,writer:writerMode,paintCount:win.windowUtils?.paintCount,delayed:!!win.gBrowserInit?.delayedStartupFinished,size:[win.innerWidth,win.innerHeight],private:privateWindow(),reducedMotion:!!win.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches,reducedTransparency:!!win.matchMedia?.("(prefers-reduced-transparency: reduce)")?.matches,motionEnabled:Services.prefs.getBoolPref("zen.nocturne.motion.enabled",true),homeTransparent:Services.prefs.getBoolPref("zen.nocturne.home.transparent",true),directAlpha:Services.prefs.getBoolPref("zen.nocturne.home.direct-alpha",false),homeTintOpacity:Services.prefs.getIntPref?.("zen.nocturne.home.tint-opacity",65)??65,nativeMica:!!win.matchMedia?.("(-moz-windows-mica)")?.matches,windowTransparency:Services.prefs.getBoolPref("widget.transparent-windows",false),windowsMica:Services.prefs.getBoolPref("widget.windows.mica",false),linuxTransparency:Services.prefs.getBoolPref("zen.widget.linux.transparency",false),macVibrancy:Services.prefs.getBoolPref("zen.widget.macos.window-vibrancy",false)}),{sample:6000,flush:true});
     const early=win.__nocturneEarlyTrace||[];delete win.__nocturneEarlyTrace;
     for(const item of early)record(item.event,()=>({earlyAt:item.t,...item.data}),{sample:2000});
   }catch(error){record("diagnostics.setup-error",{name:error?.name});dispose();}
@@ -991,7 +991,7 @@ function startupBloomAssemblyPlan(start,scale){
       root.getAttribute("data-zr-startup-phase")==="waiting"&&
       !["data-zr-closing","data-zr-workspace-phase","customizing","inDOMFullscreen","inFullscreen"].some(k=>root.hasAttribute(k))&&
       row&&document.getElementById("oneplane-tabs")===row&&!row.hasAttribute("data-op-dragging")&&
-      !win.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      Services.prefs.getBoolPref("zen.nocturne.motion.enabled",true);
   }
   function start(row,options={}){
     if(dead||motionBusy||disposing||!current())return null;
@@ -1429,7 +1429,7 @@ function startupBloomAssemblyPlan(start,scale){
     stopSelection();
     if(!next||!previous||next===previous||active||root.hasAttribute(PENDING)||
        ["data-zr-startup-phase","data-zr-workspace-phase","data-zr-closing","customizing","inDOMFullscreen","inFullscreen"].some(k=>root.hasAttribute(k))||
-       win.matchMedia("(prefers-reduced-motion: reduce)").matches||Services.prefs.getIntPref("zen.oneplane.animation-duration",160)===0||
+       !Services.prefs.getBoolPref("zen.nocturne.motion.enabled",true)||Services.prefs.getIntPref("zen.oneplane.animation-duration",160)===0||
        next.hasAttribute("zen-empty-tab")||next.hasAttribute("split-view")||previous.hasAttribute("split-view"))return;
     const deck=document.getElementById("tabbrowser-tabpanels");
     if(!deck||deck.hasAttribute("data-zr-home-covered")||deck.querySelector(".browserSidebarContainer[zen-split='true']"))return;
@@ -1455,7 +1455,7 @@ function startupBloomAssemblyPlan(start,scale){
   // The layout entrypoint runs before its own projection. Gate only a
   // genuinely new window, never a Sine reload. Fail open on missing Assembly.
   try{
-    if(!win.__nocturneLayoutStartup&&(!win.__zenRefinedStartupAnimationSeen||win.__zenRefinedStartupAnimation)&&win.performance.now()<3500&&Services.prefs.getBoolPref("zen.refined.startup.animation",true)&&(!win.matchMedia("(prefers-reduced-motion: reduce)").matches||Services.prefs.getBoolPref("zen.nocturne.startup.force-motion",false))){
+    if(!win.__nocturneLayoutStartup&&(!win.__zenRefinedStartupAnimationSeen||win.__zenRefinedStartupAnimation)&&win.performance.now()<3500&&Services.prefs.getBoolPref("zen.refined.startup.animation",true)&&Services.prefs.getBoolPref("zen.nocturne.motion.enabled",true)){
       win.__nocturneTrace?.("assembly.gate",{age:win.performance.now(),pending:true},{flush:true});
       root.setAttribute(PENDING,"true");
       const deadline=win.__nocturneEarlyBoot?.deadline??win.__zenRefinedStartupAnimation?.deadline??(win.performance.now()+8000);
@@ -2293,7 +2293,7 @@ function acquireZenHome(win, services) {
   transition:none!important;animation:none!important;pointer-events:none
 }
 @media(max-width:600px){#zen-shared-home{padding:62px 16px 20px}#zen-shared-home .zh-pin{flex-basis:calc((100% - 24px)/3)}#zen-shared-home .zh-tile{height:84px}#zen-shared-home .zh-space{flex-basis:120px}}
-@media(prefers-reduced-motion:reduce){#zen-shared-home *{transition:none!important;animation:none!important}#zen-shared-home .zh-suggestion:active,#zen-shared-home .zh-suggestion:hover .zh-suggestion-plus{scale:1}}
+@media(-moz-pref("zen.nocturne.motion.enabled", false)){#zen-shared-home *{transition:none!important;animation:none!important}#zen-shared-home .zh-suggestion:active,#zen-shared-home .zh-suggestion:hover .zh-suggestion-plus{scale:1}}
 `;
   const panel=html("div");panel.id="zen-shared-home";panel.hidden=true;
   panel.setAttribute("role","region");panel.setAttribute("aria-label","Home");
@@ -2430,7 +2430,7 @@ function acquireZenHome(win, services) {
     if(bloom&&win.__nocturneStartupTimeline!==timeline)return null;
     if(timeline.closed||bloom&&(timeline.bloomPrepared||!timeline.paused||typeof timeline.observeEffect!=="function")||
        !timeline.paused&&elapsed>=timeline.home*timeline.scale){finishStartupHome();return null;}
-    if((win.matchMedia("(prefers-reduced-motion: reduce)").matches&&!prefs.getBoolPref("zen.nocturne.startup.force-motion",false))||timeline.homeLease){finishStartupHome();return null;}
+    if(!prefs.getBoolPref("zen.nocturne.motion.enabled",true)||timeline.homeLease){finishStartupHome();return null;}
     const run={timeline,effects:[],lease:null,dirty:false,epochStarted:false};
     const exact=()=>startupRun===run&&!dead&&open&&(!bloom||win.__nocturneStartupTimeline===timeline);
     const lease={
@@ -2680,7 +2680,7 @@ function acquireZenHome(win, services) {
     searchFrame=win.requestAnimationFrame(tick);
   }
   function startSearchMorph(token,geometry){
-    if(!searchBar||!geometry||win.matchMedia("(prefers-reduced-motion: reduce)").matches){
+    if(!searchBar||!geometry||!prefs.getBoolPref("zen.nocturne.motion.enabled",true)){
       finishSearchProbe(token,"open","bypass");
       panel.setAttribute("data-zh-search-ready","");finishSearchMotion();return;
     }
@@ -2733,7 +2733,7 @@ function acquireZenHome(win, services) {
     searchLastHeight=searchCurrentHeight=geometry?.header||56;
     applySearchGeometry(bar,geometry);
     bar.setAttribute("data-zr-home-search","");
-    if(geometry&&!win.matchMedia("(prefers-reduced-motion: reduce)").matches){
+    if(geometry&&prefs.getBoolPref("zen.nocturne.motion.enabled",true)){
       paintSearchHeight(bar,geometry.header,0);
       bar.setAttribute("data-zr-home-search-motion","prepare");
     }
@@ -2934,7 +2934,7 @@ function acquireZenHome(win, services) {
   function cancelHomeSearch(reason="escape"){
     const token=searchToken,bar=searchBar;
     if(!token||!bar||!searchGeometry||searchClosing||!ownsLiveSearch(token,bar))return false;
-    if(win.matchMedia("(prefers-reduced-motion: reduce)").matches)return false;
+    if(!prefs.getBoolPref("zen.nocturne.motion.enabled",true))return false;
     try{
       let state=token.liveReturn;
       if(!state){
@@ -3204,12 +3204,12 @@ function acquireZenHome(win, services) {
       if(startup&&bar?.hasAttribute("zen-newtab"))bar._zenHandleUrlbarClose?.();
       bar?.view?.close();bar?.blur();
       oldInert=panels.hasAttribute("inert");covered=true;host.setAttribute("data-zr-home-host","");panels.setAttribute("data-zr-home-covered","");panels.setAttribute("inert","");
-      const staged=(startup||win.__nocturneLayoutStartup?.initial===true)&&!!root.getAttribute("data-zr-startup-phase")&&(!win.matchMedia("(prefers-reduced-motion: reduce)").matches||prefs.getBoolPref("zen.nocturne.startup.force-motion",false));
+      const staged=(startup||win.__nocturneLayoutStartup?.initial===true)&&!!root.getAttribute("data-zr-startup-phase")&&prefs.getBoolPref("zen.nocturne.motion.enabled",true);
       if(staged)panel.setAttribute("data-zh-startup","");
       panel.hidden=false;open=true;render();notify();
       if(staged){
         if(win.__nocturneStartupTimeline)playStartupHome(win.__nocturneStartupTimeline);
-      }else if(!win.matchMedia("(prefers-reduced-motion: reduce)").matches&&typeof content.animate==="function"){
+      }else if(prefs.getBoolPref("zen.nocturne.motion.enabled",true)&&typeof content.animate==="function"){
         motion=content.animate([{opacity:0,transform:"translateY(9px)"},{opacity:1,transform:"translateY(0)"}],{duration:300,easing:"cubic-bezier(.2,.75,.25,1)"});
         const a=motion;a.finished.then(()=>{if(motion===a)motion=null;},()=>{});
       }
@@ -3830,7 +3830,7 @@ function installTabStrip() {
   function addressMotionEnabled() {
     return hoverSupported() &&
       prefs.getIntPref("zen.oneplane.animation-duration", 160) !== 0 &&
-      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      prefs.getBoolPref("zen.nocturne.motion.enabled",true);
   }
   function addressWidths() {
     const base = parseFloat(window.getComputedStyle(url).getPropertyValue("--op-url")) || 180;
@@ -5583,7 +5583,7 @@ function installTabStrip() {
       panel.hidden=true;panel.inert=false;setHold(false);
     }
     function fluid(show,done){
-      const reduced=window.matchMedia("(prefers-reduced-motion: reduce)").matches||prefs.getIntPref("zen.oneplane.animation-duration",160)===0;
+      const reduced=!prefs.getBoolPref("zen.nocturne.motion.enabled",true)||prefs.getIntPref("zen.oneplane.animation-duration",160)===0;
       if(reduced||typeof panel.animate!=="function"){stopMotion();done();return;}
       const computed=window.getComputedStyle(panel);
       const from=motion?{clipPath:computed.clipPath,opacity:computed.opacity,translate:computed.translate}:show?
@@ -5967,7 +5967,7 @@ function installTabStrip() {
       });
     }
     function trashMotionEnabled(){
-      return !window.matchMedia("(prefers-reduced-motion: reduce)").matches&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0;
+      return prefs.getBoolPref("zen.nocturne.motion.enabled",true)&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0;
     }
     function clearTrashTarget(){
       trashTarget?.removeAttribute("data-op-trash-target");trashTarget=null;
@@ -9770,7 +9770,7 @@ function installTabStrip() {
   };
 
   // Single hover target; preserve momentum across tabs and short gaps.
-  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const reducedMotion = {get matches(){return !prefs.getBoolPref("zen.nocturne.motion.enabled",true);}};
   const clamp = (x, min, max) => Math.max(min, Math.min(max, x));
   let hoverTab = null, hoverX = null, hoverTimer = 0, indicatorFrame = 0;
   let lastHoverPointer = null, indicatorHover = null, indicatorReturnTimer = 0;

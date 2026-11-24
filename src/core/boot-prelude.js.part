@@ -10,7 +10,7 @@
      typeof win.addUnloadListener!=="function"||win.closed||root.hasAttribute("popup-window")||
      root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"||
      win.performance.now()>=3500||!prefs.getBoolPref("zen.refined.startup.animation",true)||
-     !prefs.getBoolPref("zen.nocturne.boot.enabled",true)||(win.matchMedia("(prefers-reduced-motion: reduce)").matches&&!prefs.getBoolPref("zen.nocturne.startup.force-motion",false))){
+     !prefs.getBoolPref("zen.nocturne.boot.enabled",true)||!prefs.getBoolPref("zen.nocturne.motion.enabled",true)){
     // A terminal skip must not re-arm the CSS guard on a later empty tab.
     root.setAttribute("data-nocturne-startup-background-done","true");
     return;

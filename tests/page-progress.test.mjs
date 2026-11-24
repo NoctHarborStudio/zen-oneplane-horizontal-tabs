@@ -68,7 +68,7 @@ test("native location and symmetrical CSS are scoped to the active owner",()=>{
  assert.ok(css.includes('transform-origin:center center'));
  assert.ok(css.includes('[data-phase="closing"] .zr-page-progress-track'));
  assert.ok(css.includes('transform:scaleX(var(--zr-page-progress,0))'));
- assert.ok(css.includes('prefers-reduced-motion:reduce'));
+ assert.ok(css.includes('(-moz-pref("zen.nocturne.motion.enabled", false))'));
  assert.ok(source.includes('browser?.selectedTab?.linkedPanel'));
 });
 

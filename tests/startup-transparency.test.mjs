@@ -245,7 +245,7 @@ test("Home owns an exact timeline lease and rolls back all partial pause effects
  let open=true,dead=false,searchToken=null,mark=true,fail=true;
  const panel={hasAttribute:()=>mark,removeAttribute(){mark=false;}},effects=[];
  const nodes=[0,1].map(i=>({animate(){const a={cancelled:0,played:0,finished:Promise.resolve(),pause(){if(i===1&&fail)throw Error("pause");},cancel(){this.cancelled++;},play(){this.played++;}};effects.push(a);return a;}}));
- const content={children:nodes},win={matchMedia:()=>({matches:false}),performance:{now:()=>0}};
+ const content={children:nodes},win={matchMedia:()=>({matches:true}),performance:{now:()=>0}},prefs={getBoolPref:(k,f)=>f};
  ${code}
  const timeline={start:0,scale:1,home:650,homeLength:330,paused:true};
  const first=playStartupHome(timeline);const afterFail={lease:!!timeline.homeLease,mark,cancelled:effects.map(a=>a.cancelled)};
@@ -442,7 +442,7 @@ test("late Home uses its absolute delay against document epoch and never replays
  let open=true,dead=false,searchToken=null,mark=true,elapsed=300,delays=[],starts=0;
  const panel={hasAttribute:()=>mark,removeAttribute(){mark=false;}};
  const content={children:[0,1].map(()=>({animate(f,o){delays.push(o.delay);return {finished:new Promise(()=>{}),cancel(){}};}}))};
- const win={performance:{now:()=>9999},matchMedia:()=>({matches:false})};function render(){}
+ const win={performance:{now:()=>9999},matchMedia:()=>({matches:true})},prefs={getBoolPref:(k,f)=>f};function render(){}
  ${code}
  const timeline={start:0,scale:1,home:650,homeLength:330,paused:false,elapsed:()=>elapsed,startEffect(){starts++;}};
  const lease=playStartupHome(timeline);lease.release();mark=true;elapsed=650;
@@ -507,7 +507,7 @@ test("current Home keeps the exact lease through normal effect completion until 
  let open=true,dead=false,searchToken=null,mark=true,dirty=0,cancelled=0,resolve;
  const panel={hasAttribute:()=>mark,removeAttribute(){mark=false;}};
  const a={finished:new Promise(r=>resolve=r),pause(){},cancel(){cancelled++;}};
- const content={children:[{animate(){return a;}}]},win={matchMedia:()=>({matches:false})};
+ const content={children:[{animate(){return a;}}]},win={matchMedia:()=>({matches:true})},prefs={getBoolPref:(k,f)=>f};
  function render(){dirty++;}
  ${code}
  const ledger=createStartupOutcome(()=>{throw Error("unexpected");});
@@ -668,7 +668,7 @@ test("MB-014 native background guard matches Boot color and fails open without J
  assert.ok(guard.includes(':root:is([zen-before-loaded="true"], [zen-has-empty-tab="true"])'));
  assert.ok(guard.includes(":not([data-nocturne-startup-background-done],"));
  for(const flag of ["data-op-startup-ready","customizing","inDOMFullscreen","inFullscreen","popup-window","zen-welcome-stage","zen-private-window","zen-unsynced-window","chromehidden","privatebrowsingmode"])assert.ok(guard.includes("["+flag),flag);
- assert.ok(guard.includes("prefers-reduced-motion: no-preference"));
+ assert.ok(guard.includes('not (-moz-pref("zen.nocturne.motion.enabled", false))'));
  assert.ok(guard.includes('not (-moz-pref("zen.nocturne.boot.enabled", false))'));
  assert.ok(guard.includes('not (-moz-pref("zen.refined.startup.animation", false))'));
  assert.match(guard,/from, to \{ background-color: #111219; background-image: none; opacity: 1; \}/);
@@ -686,26 +686,29 @@ test("MB-014 native background guard matches Boot color and fails open without J
 
 test("fresh Sine profile leaves optional defaults absent but startup CSS honors JavaScript true fallbacks",()=>{
   const sourceCSS=readFileSync(new URL("../src/styles/base.css.part",import.meta.url),"utf8");
-  const gate='@media ((prefers-reduced-motion: no-preference) or (-moz-pref("zen.nocturne.startup.force-motion"))) and (not (-moz-pref("zen.refined.startup.animation", false))) and (not (-moz-pref("zen.nocturne.boot.enabled", false)))';
+  const gate='@media (not (-moz-pref("zen.nocturne.motion.enabled", false))) and (not (-moz-pref("zen.refined.startup.animation", false))) and (not (-moz-pref("zen.nocturne.boot.enabled", false)))';
   for(const data of [sourceCSS,css]){
     assert.equal(data.split(gate).length-1,2);
     assert.equal(data.includes('and (-moz-pref("zen.refined.startup.animation")) and (-moz-pref("zen.nocturne.boot.enabled"))'),false);
   }
   const configured=JSON.parse(readFileSync(new URL("../preferences.json",import.meta.url),"utf8"));
-  for(const key of ["zen.refined.startup.animation","zen.nocturne.boot.enabled"])
+  for(const key of ["zen.nocturne.motion.enabled","zen.refined.startup.animation","zen.nocturne.boot.enabled"])
     assert.equal(configured.find(x=>x.property===key)?.defaultValue,true);
   const prelude=readFileSync(new URL("../src/core/boot-prelude.js.part",import.meta.url),"utf8");
   assert.ok(prelude.includes('prefs.getBoolPref("zen.refined.startup.animation",true)'));
   assert.ok(prelude.includes('prefs.getBoolPref("zen.nocturne.boot.enabled",true)'));
 });
 
-test("intro override is explicit and startup-only, with native reduced-motion default retained",()=>{
+test("Nocturne motion is default-on independently of system motion and explicit opt-outs",()=>{
  const prefs=JSON.parse(readFileSync(new URL("../preferences.json",import.meta.url),"utf8"));
- assert.equal(prefs.find(x=>x.property==="zen.nocturne.startup.force-motion").defaultValue,false);
+ assert.equal(prefs.find(x=>x.property==="zen.nocturne.motion.enabled").defaultValue,true);
  const pre=readFileSync(new URL("../src/core/boot-prelude.js.part",import.meta.url),"utf8");
- assert.ok(pre.includes('!prefs.getBoolPref("zen.nocturne.startup.force-motion",false)'));
- assert.ok(source.includes('const forceMotion=prefs.getBoolPref("zen.nocturne.startup.force-motion",false)'));
- assert.ok(source.includes('(reduced.matches&&!forceMotion)?"reduced-motion"'));
- const eligibility=(reduced,forceMotion)=>!(reduced&&!forceMotion);
- assert.equal(eligibility(true,false),false);assert.equal(eligibility(true,true),true);assert.equal(eligibility(false,false),true);
+ assert.ok(pre.includes('!prefs.getBoolPref("zen.nocturne.motion.enabled",true)'));
+ const getter=source.match(/const reduced=\{get matches\(\)\{return !prefs\.getBoolPref\("zen\.nocturne\.motion\.enabled",true\);\}\};/)[0];
+ const evaluate=new Function("prefs","window",getter+"return reduced.matches;");
+ for(const systemReduced of [false,true])for(const choice of [undefined,true,false]){
+   const window={matchMedia(){throw Error("OS query must not be read");},systemReduced};
+   assert.equal(evaluate({getBoolPref:(k,f)=>choice??f},window),choice===false);
+ }
+ assert.ok(source.includes('reduced.matches?"reduced-motion"'));
 });

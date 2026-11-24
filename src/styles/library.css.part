@@ -58,7 +58,7 @@
 #nocturne-library-preview .nl-filter-group h3{margin:0 0 7px;font-size:12px;font-weight:600;}
 #nocturne-library-preview .nl-filter-options{display:flex;gap:6px;flex-wrap:wrap;}
 #nocturne-library-preview :is(.nl-filter-options .nl-action[aria-pressed="true"],.nl-action[aria-expanded="true"]){background:color-mix(in srgb,currentColor 15%,transparent);}
-@media(prefers-reduced-motion:reduce),(-moz-pref("zen.oneplane.animation-duration",0)){#nocturne-library-preview .nl-history-filter{transition:none;}}
+@media(-moz-pref("zen.nocturne.motion.enabled", false)),(-moz-pref("zen.oneplane.animation-duration",0)){#nocturne-library-preview .nl-history-filter{transition:none;}}
 #nocturne-library-preview .nl-placeholder{min-height:100%;display:grid;align-content:center;justify-items:center;gap:8px;text-align:center;padding:16px;box-sizing:border-box;}
 #nocturne-library-preview .nl-placeholder p{max-width:38ch;margin:0;opacity:.65;font-size:12px;}
 @container (max-width:620px){

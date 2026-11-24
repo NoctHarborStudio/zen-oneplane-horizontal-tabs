@@ -1,5 +1,5 @@
   // Single hover target; preserve momentum across tabs and short gaps.
-  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const reducedMotion = {get matches(){return !prefs.getBoolPref("zen.nocturne.motion.enabled",true);}};
   const clamp = (x, min, max) => Math.max(min, Math.min(max, x));
   let hoverTab = null, hoverX = null, hoverTimer = 0, indicatorFrame = 0;
   let lastHoverPointer = null, indicatorHover = null, indicatorReturnTimer = 0;

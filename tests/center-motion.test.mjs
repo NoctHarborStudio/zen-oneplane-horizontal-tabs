@@ -162,7 +162,7 @@ function bookmarkFixture({width=200}={}){
    animate(){const a={finished:Promise.resolve(),cancelled:0,played:0,sealed:0,cancel(){this.cancelled++;},play(){this.played++;},finish(){this.sealed++;},pause(){}};effects.push(a);return a;}};
  const document={documentElement:root,getElementById:()=>node};
  const window={__nocturneLayoutStartup:{},CSS:{registerProperty(){}},addUnloadListener(){},addEventListener(){},removeEventListener(){}};
- const mount=()=>{new Function("window","document","Services",runtimeSource)(window,document,{});return window.__nocturneCenterMotion;};
+ const mount=()=>{new Function("window","document","Services",runtimeSource)(window,document,{prefs:{getBoolPref:(k,f)=>f,getIntPref:(k,f)=>f}});return window.__nocturneCenterMotion;};
  return {root,node,window,document,mount,effects};
 }
 const foldProp="--zr-fold-bookmark-progress",foldMark="data-zr-fold-bookmarks";
@@ -265,7 +265,7 @@ function proxyFixture(){
   CustomEvent:class{constructor(type){this.type=type;}},dispatchEvent(event){events.push(event.type);fault.onEnd?.();},
   MutationObserver:class{constructor(fn){this.fn=fn;this.active=false;observers.push(this);}observe(){this.active=true;if(fault.observe)throw Error("observe");}disconnect(){this.active=false;}}
  };
- const mount=()=>{new Function("window","document","Services",runtimeSource)(window,document,{});return window.__nocturneCenterMotion;};
+ const mount=()=>{new Function("window","document","Services",runtimeSource)(window,document,{prefs:{getBoolPref:(k,f)=>k==="zen.nocturne.motion.enabled"?!fault.reduced:f,getIntPref:(k,f)=>f}});return window.__nocturneCenterMotion;};
  const addIcon=()=>{const wrap=node("icon"),img=node("img");wrap.append(img);cards[0].append(wrap);return img;};
  return {root,row,list,cards,nodes,effects,observers,events,frames,fault,window,mount,addIcon};
 }

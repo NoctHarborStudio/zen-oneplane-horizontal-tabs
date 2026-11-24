@@ -70,7 +70,7 @@ test("Workspace command notices preserve Home geometry without hiding native pen
 test("Home native search preserves surface on cancel and ignores stale close",()=>{
  const code=extract("  function searchActive(","  function move(");
  const run=new Function("win","panel","content",code+`
- let open=true,searchToken=null,searchBar=null,searchFrame=0,searchMotion=null,searchTimer=0,closed=0;
+ let open=true,searchToken=null,searchBar=null,searchFrame=0,searchMotion=null,searchTimer=0,closed=0;const prefs={getBoolPref:()=>false};
  let searchGeometry=null,searchLastHeight=0,searchCurrentHeight=0,searchClosing=false,searchReturn=null,searchReturnFrame=0;
  let searchInput=null,searchOriginalPlaceholder=null,searchSessionLabel=null;
  let searchSnapshot=null,searchSnapshotTimer=0,searchSnapshotObserver=null,searchSnapshotDirty=true,searchSnapshotView=null;
@@ -212,7 +212,7 @@ test("Home is primary: repeated clicks, Escape, background opens and real naviga
  page.linkedBrowser={currentURI:{spec:"https://example.org/"}};
  pending.setAttribute("pending","");pending.linkedBrowser={currentURI:{spec:"about:blank"}};
  let progress;win.gBrowser={tabContainer:tabs,selectedTab:blank,get selectedBrowser(){return this.selectedTab.linkedBrowser;},addTabsProgressListener(p){progress=p},removeTabsProgressListener(){}};
- const services={prefs:{getStringPref:(k,v)=>v,addObserver(){},removeObserver(){}}};
+ const services={prefs:{getStringPref:(k,v)=>v,getBoolPref:(k,v)=>k==="zen.nocturne.motion.enabled"?false:v,addObserver(){},removeObserver(){}}};
  const acquire=new Function("ChromeUtils","watchWorkspaceCommand","workspaceCommandState","workspaceCommandMessage","workspaceCommandPresentationBlocked",core+"return acquireZenHome;")({importESModule:()=>({PrivateBrowsingUtils:{isWindowPrivate:()=>false}})},watchWorkspaceCommand,workspaceCommandState,workspaceCommandMessage,workspaceCommandPresentationBlocked);
  const lease=acquire(win,services),states=[];lease.subscribe(v=>states.push(v));
  assert.equal(lease.open,true);assert.equal(panels.hasAttribute("data-zr-home-covered"),true);
@@ -294,7 +294,7 @@ test("Home search waits for a real result height and animates both directions",(
  bar.setAttribute("open","");bar.setAttribute("zen-floating-urlbar","true");bar.setAttribute("data-zr-home-search-motion","prepare");
  const win={requestAnimationFrame(fn){queue.set(++seq,fn);return seq;},cancelAnimationFrame(id){queue.delete(id);},matchMedia:()=>({matches:false})};
  const run=new Function("win","bar",code+`
- let open=true,searchToken={},searchBar=bar,searchFrame=0,searchClosing=false,searchLastHeight=56,searchCurrentHeight=56,searchGeometry={header:56,room:600};
+ let open=true,searchToken={},searchBar=bar,searchFrame=0,searchClosing=false,searchLastHeight=56,searchCurrentHeight=56,searchGeometry={header:56,room:600};const prefs={getBoolPref:(k,f)=>f};
  const panel={hasAttribute:k=>attrsMock.has(k),setAttribute:(k,v)=>attrsMock.set(k,v)};const attrsMock=new Map();
  function nativeSearchOpen(){return true}
  function finishSearchMotion(){bar.removeAttribute("data-zr-home-search-motion")}
@@ -514,7 +514,7 @@ test("Home controlled close keeps native session until last frame and reverses f
  let height=400,alpha=1;
  const bar={_zenHandleUrlbarClose:native,getBoundingClientRect:()=>({height}),querySelector:()=>({querySelectorAll:()=>[1,2]}),setAttribute:(k,v)=>attrs.set(k,v)};
  const api=new Function("win","token","bar","jobs","writes","attrs","setHeight","setAlpha",code+`
- let searchToken=token,searchBar=bar,searchGeometry={header:56,room:600,top:40},searchLastHeight=400,searchClosing=false,searchReturnParts=[];
+ let searchToken=token,searchBar=bar,searchGeometry={header:56,room:600,top:40},searchLastHeight=400,searchClosing=false,searchReturnParts=[];const prefs={getBoolPref:(k,f)=>f};
  const panel={setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k)};
  const content={querySelectorAll:()=>[],querySelector:()=>({focus:()=>writes.push("focus")})};
  function liveSearchReady(){return true} function finishSearchProbe(){} function beginSearchCloseProbe(){}

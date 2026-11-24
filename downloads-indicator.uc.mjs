@@ -1,6 +1,6 @@
 // Nocturne preview.45: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="downloads.script",data={version:"0.3.0-preview.191"};
+  const event="downloads.script",data={version:"0.3.0-preview.192"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -14,7 +14,7 @@ try{if(typeof window!=="undefined"){
   const make=(tag,cls)=>{const n=document.createElementNS(NS,tag);if(cls)n.className=cls;return n;};
   const get=id=>document.getElementById(id);
   const RATE=200,HOLD=2000,SIDE="zen.tabs.vertical.right-side";
-  const reduced=window.matchMedia("(prefers-reduced-motion: reduce)");
+  const reduced={get matches(){return !prefs.getBoolPref("zen.nocturne.motion.enabled",true);}};
   const enabled=()=>prefs.getBoolPref(PREF,true);
   if(root.hasAttribute("popup-window")||typeof window.addUnloadListener!=="function")return;
   window[KEY]?.dispose?.();

@@ -129,12 +129,12 @@
   animation:zr-page-unknown 1.8s ease-in-out infinite;
 }
 @keyframes zr-page-unknown {0%,100%{opacity:.45}50%{opacity:1}}
-@media(prefers-reduced-motion:reduce) {
+@media(-moz-pref("zen.nocturne.motion.enabled", false)) {
   #zr-page-progress[data-zr-center-progress] .zr-page-progress-track,
   #zr-page-progress[data-zr-center-progress] .zr-page-progress-fill {transition:none!important;animation:none!important}
 }
 /* Startup never forcibly hides live download/page indicators. */
-@media (prefers-reduced-motion:reduce) {
+@media (-moz-pref("zen.nocturne.motion.enabled", false)) {
   #zr-download-indicator,#zr-download-dock,.zr-download-fill,#zr-page-progress,#zr-page-progress .zr-page-progress-fill { transition:none !important;animation:none !important; }
   #zr-download-indicator[data-indeterminate] .zr-download-fill { transform:scaleX(1);opacity:.55; }
   #zr-page-progress[data-indeterminate] .zr-page-progress-fill { opacity:.65; }
@@ -244,7 +244,7 @@
 .zr-file-bunny-name,.zr-file-bunny-meta {white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font:menu}
 .zr-file-bunny-name {font-size:12px;font-weight:600}
 .zr-file-bunny-meta {font-size:10px;opacity:.72}
-@media(prefers-reduced-motion:reduce) {
+@media(-moz-pref("zen.nocturne.motion.enabled", false)) {
   #zr-download-dock .zr-dock-row[draggable="true"],#zr-download-dock .zr-dock-row > * {transition:none!important}
   #zr-download-dock .zr-dock-row[draggable="true"]:active {transform:none!important}
 }
@@ -261,7 +261,7 @@
 #zr-download-dock .zr-dock-empty { --zr-dock-rest-opacity:.65;text-align:center;opacity:var(--zr-dock-rest-opacity);padding:28px 8px; }
 #zr-download-dock .zr-dock-notice { --zr-dock-rest-opacity:.8;font-size:10px;opacity:var(--zr-dock-rest-opacity); }
 #zr-download-dock .zr-dock-notice:empty,#zr-download-dock [hidden] { display:none !important; }
-@media(prefers-reduced-motion:reduce) {
+@media(-moz-pref("zen.nocturne.motion.enabled", false)) {
   #zr-download-dock,#zr-download-dock .zr-download-fill { transition:none !important;animation:none !important; }
 }
 
@@ -277,7 +277,7 @@
 #zr-download-dock .zr-dock-sort button { flex:1;text-align:center; }
 #zr-download-dock .zr-dock-sort button[aria-pressed="true"] { background:color-mix(in srgb,currentColor 14%,transparent);font-weight:600; }
 @keyframes zr-dock-confirm-in { from {opacity:0;translate:0 -3px;} to {opacity:1;translate:none;} }
-@media(prefers-reduced-motion:reduce) {
+@media(-moz-pref("zen.nocturne.motion.enabled", false)) {
   #zr-download-dock .zr-dock-header-confirm { transition:none !important;animation:none !important; }
 }
 
@@ -288,7 +288,7 @@
   inset:-1px;border-radius:0;
 }
 #zr-download-dock:is([data-open],[data-closing]) { backdrop-filter:blur(12px); }
-@media(prefers-reduced-motion:reduce) { #zr-download-dock > * { transition:none !important; } }
+@media(-moz-pref("zen.nocturne.motion.enabled", false)) { #zr-download-dock > * { transition:none !important; } }
 
 /* One panel, only its internal list scrolls. */
 #zr-download-dock .zr-dock-list { overflow-y:auto;overflow-x:hidden;flex:0 1 auto; }
@@ -296,7 +296,7 @@
 #zr-download-dock > :not(.zr-dock-list) { flex-shrink:0; }
 #zr-download-dock .zr-dock-all { font-weight:600; }
 
-@media(prefers-reduced-motion:reduce) { #zr-download-dock:is([data-entering],[data-closing]) > * { animation:none !important; } }
+@media(-moz-pref("zen.nocturne.motion.enabled", false)) { #zr-download-dock:is([data-entering],[data-closing]) > * { animation:none !important; } }
 
 
 
@@ -391,7 +391,7 @@
 }
 #urlbar-results[data-zr-smart-grid][data-zr-narrow] > .urlbarView-row[data-zr-top]:not([data-zr-first]) {margin-block-start:0 !important;}
 #urlbar-results[data-zr-smart-grid][data-zr-narrow] > .urlbarView-row[data-zr-rail]::after {content:none !important;}
-@media(prefers-reduced-motion:reduce) {
+@media(-moz-pref("zen.nocturne.motion.enabled", false)) {
   #urlbar-results[data-zr-timeline] > .urlbarView-row[data-zr-rail]::after {animation:none !important;}
 }
 #urlbar-results[data-zr-smart-grid] > .urlbarView-row[data-zr-cell="1-1"] {grid-row:1;grid-column:1;}

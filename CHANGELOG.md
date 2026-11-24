@@ -1,3 +1,7 @@
+## 0.3.0-preview.192 — Independent Nocturne motion policy
+
+Replace the OS reduced-motion gates in packaged CSS and runtime admission with one default-on Nocturne preference, `zen.nocturne.motion.enabled`. Preserve existing per-feature choices and their duration controls; supersede the startup-only override without changing its saved value or native accessibility settings. Record the system signal for diagnostics only, separately from the effective mod preference. Restart after changing the global policy; native Zen and operating-system animations remain outside Nocturne ownership. Native acceptance pending.
+
 ## 0.3.0-preview.191 — Automatic native content frame removal
 
 Apply `zen.theme.content-element-separation=0` via the existing Layout preference lease, extending its validated backup/restore contract to the native integer key. Zen owns its `zen-no-padding` state and associated layout. Preserve existing zero, custom values, external edits, legacy backups and multi-window ownership; report actual separation at activation. No OS border or window-compositor changes. Native verification pending.
