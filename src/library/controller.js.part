@@ -12,7 +12,7 @@
   const labels={downloads:"All Downloads",documents:"Documents",history:"History",pictures:"Pictures",closed:"Recently Closed"};
   const summaries={downloads:"Download records and file actions",documents:"Downloaded documents and opted-in folders",history:"Browsing history and search",pictures:"Downloaded pictures and opted-in folders",closed:"Recently closed tabs in this window"};
   let state=createLibraryState(),dead=false,lease=()=>{},shell=null,animations=[],frame=0,returnFocus=null,rows=new Map(),backgroundAction=false,renderedSection=null,dragSource=null,pendingResult=null,clearing=false,confirmation=false,actionSerial=0,pendingClose=false,dragOwner=null,indicatorReady=false,lastFailure=null,fallbackDragTimer=0,fallbackDragMissing=0,fallbackDragUnknown=0;
-  const data=createLibraryData({getServices:()=>win.__nocturneLibraryServices,onResult:result=>{const start=win.performance.now();renderResults(result);trace("render",{section:state.section,phase:state.phase,rows:result.rows.length,duration:win.performance.now()-start},{flush:false});},onError:renderError,onNotice:notice,onScanWait:status=>trace("media.scan.wait",{status,section:state.section}),schedule:(fn,ms)=>win.setTimeout(fn,ms),cancel:id=>win.clearTimeout(id)});
+  const data=createLibraryData({getServices:()=>win.__nocturneLibraryServices,onResult:result=>{const measure=state.phase==="opening"||state.phase==="switching",start=measure?win.performance.now():0;renderResults(result);if(measure)trace("render",{section:state.section,phase:state.phase,rows:result.rows.length,duration:win.performance.now()-start},{flush:false});},onError:renderError,onNotice:notice,onScanWait:status=>trace("media.scan.wait",{status,section:state.section}),schedule:(fn,ms)=>win.setTimeout(fn,ms),cancel:id=>win.clearTimeout(id)});
   const fileSection=()=>["downloads","documents","pictures"].includes(state.section);
   const enabled=()=>prefs.getBoolPref(PREF,false),active=()=>state.phase!=="closed";
   const duration=n=>libraryDuration(win.matchMedia("(prefers-reduced-motion: reduce)").matches,prefs.getIntPref("zen.oneplane.animation-duration",160)!==0,n);
@@ -90,7 +90,7 @@
           state=reduceLibrary(state,{type,value});
           syncHistoryFilter();shell.body.scrollTop=0;
           if(renderedSection==="history")data.options(state.sort,state.filter);
-          trace("filter.changed",{section:"history",sort:state.sort==="new"?"date":state.sort,filter:state.filter},{flush:false});
+          trace("filter.changed",{section:"history",mode:state.sort==="new"?"date":state.sort,scope:state.filter},{flush:false});
         });
         choice.setAttribute("aria-pressed","false");buttons.set(value,choice);items.append(choice);
       }
@@ -501,8 +501,8 @@
     if(!reason&&!toggle(section))reason=lastFailure||"toggle-rejected";
     trace("shortcut",{section,origin,accepted:!reason,reason});
     // While our Library is enabled, never dispatch a rejected request to Zen.
-    // Disabled Nocturne retains the existing native command behavior.
-    if(reason&&!enabled())return false;
+    // The native preference is leased by Layout during opt-in cutover.
+    if(reason&&!enabled()&&prefs.getBoolPref("zen.library.enabled",true))return false;
     e.preventDefault();e.stopImmediatePropagation();return true;
   }
   function onCommand(e){

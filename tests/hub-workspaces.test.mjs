@@ -14,7 +14,7 @@ test("no invented Free; unavailable manager fails closed",()=>{
   assert.equal(hubWorkspaceSnapshot({getWorkspaces(){throw Error("unavailable")},changeWorkspaceWithID(){}}),null);
 });
 
-test("History launcher uses existing Library toggle and native fallback without a second owner",()=>{
+test("History launcher uses existing Library toggle and never opens stock Zen History",()=>{
   const src=readFileSync(new URL("../src/hub/controller.js.part",import.meta.url),"utf8");
   const css=readFileSync(new URL("../src/styles/base.css.part",import.meta.url),"utf8");
   const begin=src.indexOf("    function openHistory(event){"),end=src.indexOf("    function toggle(event){",begin);
@@ -32,9 +32,10 @@ test("History launcher uses existing Library toggle and native fallback without 
   const accepted=run({toggle:section=>{assert.equal(section,"history");called++;return true;}});
   assert.equal(called,1);assert.deepEqual(accepted.native,[]);assert.deepEqual(accepted.events,["prevent","stop"]);
   assert.deepEqual(accepted.trace[0].data,{accepted:true,nativeFallback:false});
-  assert.deepEqual(run({toggle:()=>false}).native,["history"]);
-  assert.deepEqual(run(null).native,["history"]);
-  assert.deepEqual(run({toggle:()=>{throw Error("unavailable");}}).native,["history"]);
+  assert.deepEqual(run({toggle:()=>false}).native,[]);
+  assert.deepEqual(run(null).native,[]);
+  assert.deepEqual(run({toggle:()=>{throw Error("unavailable");}}).native,[]);
+  assert.equal(run({toggle:()=>false}).trace[0].data.accepted,false);
   assert.deepEqual(run({toggle:()=>true},false).native,[]);
   assert.deepEqual(run({toggle:()=>true},true,true).native,[]);
   assert.match(src,/button\.after\(historyButton\)/);

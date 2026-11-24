@@ -7,8 +7,8 @@ const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 const source=read("src/core/preferences.js.part"),boot=read("src/core/bootstrap.js.part");
 const KEY="zen.oneplane.original-layout",CTRL="__oneplaneLayoutController",A="zen.view.use-single-toolbar",B="zen.tabs.vertical.right-side";
 function fixture(){
- const values=new Map(),defaults=new Map([[A,true],[B,false],["zen.view.sidebar-expanded",true],["zen.view.compact.hide-tabbar",false],["zen.view.compact.hide-toolbar",true],["zen.view.compact.enable-at-startup",false]]);
- const windows=[],writes=[],observers=new Set(),prefs={PREF_BOOL:128,getPrefType:()=>128,getStringPref:(k,d)=>values.get(k)??d,setStringPref:(k,v)=>values.set(k,v),getBoolPref:k=>values.get(k)??defaults.get(k),prefHasUserValue:k=>values.has(k),setBoolPref(k,v){writes.push([k,v]);values.set(k,v);},clearUserPref:k=>values.delete(k)};
+ const values=new Map(),defaults=new Map([[A,true],[B,false],["zen.view.sidebar-expanded",true],["zen.view.compact.hide-tabbar",false],["zen.view.compact.hide-toolbar",true],["zen.view.compact.enable-at-startup",false],["zen.library.enabled",true],["zen.nocturne.library.preview",false]]);
+ const windows=[],writes=[],observers=new Set(),prefs={PREF_BOOL:128,getPrefType:()=>128,getStringPref:(k,d)=>values.get(k)??d,setStringPref:(k,v)=>values.set(k,v),getBoolPref:(k,fallback)=>values.get(k)??defaults.get(k)??fallback,prefHasUserValue:k=>values.has(k),setBoolPref(k,v){writes.push([k,v]);values.set(k,v);},clearUserPref:k=>values.delete(k)};
  const Services={prefs,startup:{shuttingDown:false},obs:{addObserver(fn){observers.add(fn);},removeObserver(fn){observers.delete(fn);}},wm:{getEnumerator(){const items=[...windows];return {hasMoreElements:()=>items.length>0,getNext:()=>items.shift()};}}};
  function mount(resources={},register=false,onEvent=()=>{}){
   const root={hasAttribute:()=>false,setAttribute(){},removeAttribute(){}},document={documentElement:root},timers=new Map(),events=[],unload=new Map();
@@ -140,4 +140,27 @@ test("bootstrap registration rolls back claim and listeners when StartupState di
  });
  assert.equal(a.window[CTRL],undefined);assert.equal(a.listeners.size,0);
  assert.equal(f.observers.size,0);assert.equal(completed,1);a.sine();assert.equal(completed,1);
+});
+
+
+test("opted-in Library acquires reversible native-disable lease shared by windows",async()=>{
+ const f=fixture(),key="zen.library.enabled";f.values.set("zen.nocturne.library.preview",true);
+ const a=f.mount(),b=f.mount();await a.activate();await b.activate();
+ assert.equal(f.prefs.getBoolPref(key),false);assert.equal(f.writes.filter(([k])=>k===key).length,1);
+ a.cleanup();assert.equal(f.prefs.getBoolPref(key),false);
+ b.cleanup();assert.equal(f.prefs.getBoolPref(key),true);assert.equal(f.values.has(key),false);
+});
+test("Library opt-out does not claim native preference; legacy backup migrates without losing ownership",async()=>{
+ const f=fixture(),key="zen.library.enabled";const a=f.mount();await a.activate();
+ assert.equal(f.prefs.getBoolPref(key),true);const old=JSON.parse(f.values.get(KEY));delete old[key];
+ // Simulate a previous-version persisted backup across a process restart.
+ a.window.closed=true;f.values.set(KEY,JSON.stringify(old));f.values.set("zen.nocturne.library.preview",true);
+ const b=f.mount();await b.activate();
+ assert.equal(f.prefs.getBoolPref(key),false);assert.equal(JSON.parse(f.values.get(KEY))[key].value,true);
+ b.cleanup();assert.equal(f.prefs.getBoolPref(key),true);assert.equal(f.values.has(KEY),false);
+});
+test("Library lease preserves an explicit native disabled value",async()=>{
+ const f=fixture(),key="zen.library.enabled";f.values.set(key,false);f.values.set("zen.nocturne.library.preview",true);
+ const a=f.mount();await a.activate();assert.equal(f.writes.some(([k])=>k===key),false);a.cleanup();
+ assert.equal(f.values.get(key),false);
 });

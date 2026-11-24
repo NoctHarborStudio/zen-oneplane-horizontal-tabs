@@ -162,6 +162,8 @@ async function activate() {
       // Only the first live window applies global native preferences.
       if(!shared)for (const [name, value] of Object.entries(TARGET)) {
         if(!current())return;
+        // Native Library cutover is selected only for a profile that opted into Nocturne Library.
+        if(name===NATIVE_LIBRARY&&!prefs.getBoolPref("zen.nocturne.library.preview",false))continue;
         const actual=prefs.getBoolPref(name);
         if(actual===value)continue;
         if(saved[name].owned!==undefined){
@@ -174,6 +176,15 @@ async function activate() {
     }finally{
       preferenceMutation=false;
       finishCleanup();
+    }
+    if(!current())return;
+    // Zen's supported preference blocks toggle and edge-swipe admission.
+    // Close an already visible native Library via its own API, not DOM hiding.
+    if(!prefs.getBoolPref(NATIVE_LIBRARY,true)){
+      try{
+        const nativeLibrary=window.customElements?.get("zen-library");
+        if(nativeLibrary?.isLibraryOpen||nativeLibrary?.isLibrarySlightlyOpen)nativeLibrary.close();
+      }catch(error){console.warn("[Nocturne] Native Library close:",nocturneErrorClass(error));}
     }
     if(!current())return;
     // Zen 1.24.2b hideToolbar() unconditionally writes both hide prefs,
