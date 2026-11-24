@@ -545,3 +545,6 @@ The preview.172 log confirms the selected native empty tab and toolbox zen-has-e
 
 
 - Preview.176: `assembly.island.entry` records the owned Fold Home entrance acquisition, vertical offset, resting dimensions, scaled duration and card-wave start; compare with `assembly.timeline` and `center.geometry.invalidate` during native startup.
+
+### Preview.177 Library retarget continuity
+Section motion diagnostics now report numeric start viewport fraction, actual direction, surface count and reused visible destination boolean; duration is 1000ms for animated flights. Continue comparing completed/interrupted RAF summaries; native paint cadence is not inferred from RAF. No record content is recorded.

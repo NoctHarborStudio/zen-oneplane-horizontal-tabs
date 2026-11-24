@@ -5,14 +5,14 @@
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,options);
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.176",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.177",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
   const labels={downloads:"All Downloads",documents:"Documents",history:"History",pictures:"Pictures",closed:"Recently Closed"};
   const summaries={downloads:"Download records and file actions",documents:"Downloaded documents and opted-in folders",history:"Browsing history and search",pictures:"Downloaded pictures and opted-in folders",closed:"Recently closed tabs in this window"};
-  let outgoingPage=null,scrollPending=false,scrollDrag=null,scrollObserver=null;
-  const SECTION_MS=800,SECTION_EASING="cubic-bezier(.25,.65,.25,1)";
+  let outgoingPages=[],sectionCover=null,scrollPending=false,scrollDrag=null,scrollObserver=null;
+  const SECTION_MS=1000,SECTION_EASING="cubic-bezier(.45,0,.55,1)";
   let state=createLibraryState(),dead=false,lease=()=>{},shell=null,animations=[],motionProbe=null,frame=0,returnFocus=null,rows=new Map(),backgroundAction=false,renderedSection=null,dragSource=null,pendingResult=null,clearing=false,confirmation=false,actionSerial=0,pendingClose=false,dragOwner=null,indicatorReady=false,lastFailure=null,fallbackDragTimer=0,fallbackDragMissing=0,fallbackDragUnknown=0;
   const data=createLibraryData({getServices:()=>win.__nocturneLibraryServices,onResult:result=>{const measure=state.phase==="opening"||state.phase==="switching",start=measure?win.performance.now():0;renderResults(result);if(measure)trace("render",{section:state.section,phase:state.phase,rows:result.rows.length,duration:win.performance.now()-start},{flush:false});},onError:renderError,onNotice:notice,onScanWait:status=>trace("media.scan.wait",{status,section:state.section}),schedule:(fn,ms)=>win.setTimeout(fn,ms),cancel:id=>win.clearTimeout(id)});
   const fileSection=()=>["downloads","documents","pictures"].includes(state.section);
@@ -443,8 +443,9 @@
     else if(Object.hasOwn(delta,e.key))b.scrollTop+=delta[e.key];else return;
     e.preventDefault();e.stopPropagation();syncScrollbar(false);
   }
-  // Two full-width surfaces. On interruption retain the page on the outgoing
-  // side and retarget from its sampled position, rather than queue or snap.
+  // Freeze every currently visible tile before cancelling the old flight.
+  // A new destination starts outside the viewport; visible content is never
+  // replaced by another section at the same screen position.
   function snapshotPage(){
     const page=shell.page,copy=page.cloneNode(true);
     copy.classList.add("nl-page-outgoing");copy.inert=true;copy.setAttribute("aria-hidden","true");
@@ -458,30 +459,49 @@
     return copy;
   }
   function clearSectionFlight(){
-    outgoingPage?.remove();outgoingPage=null;
-    if(shell?.page)shell.page.style.left="0%";
+    for(const tile of outgoingPages)tile.node.remove();
+    outgoingPages=[];sectionCover=null;
+    if(shell?.page){shell.page.style.left="0%";shell.page.style.visibility="";}
   }
-  function sectionPlan(from,to,live,old){
+  function sectionPlan(from,to,tiles){
     const direction=LIBRARY_SECTIONS.indexOf(to)>LIBRARY_SECTIONS.indexOf(from)?1:-1;
-    // Positions are viewport fractions. Retain the outgoing-side tile unless
-    // it has fully exited; then use the still-visible live tile.
-    const visible=x=>Number.isFinite(x)&&Math.abs(x)<1;
-    const keepOld=visible(old)&&(!visible(live)||direction*old<direction*live);
-    const start=keepOld?old:Math.max(-1,Math.min(1,live));
+    const visible=tiles.filter(tile=>Number.isFinite(tile.x)&&Math.abs(tile.x)<1);
+    const reused=visible.find(tile=>tile.section===to)||null;
+    const edge=visible.length?(direction>0?Math.max(...visible.map(tile=>tile.x))+1:Math.min(...visible.map(tile=>tile.x))-1):direction;
+    const target=reused?reused.x:edge;
     const x=value=>({left:(value*100)+"%"});
-    return {direction,keepOld,out:[x(start),x(-direction)],incoming:[x(start+direction),x(0)]};
+    const frames=(start,end)=>[x(start),x(end)];
+    return {direction:target<0?-1:target>0?1:direction,reused,target,
+      tiles:visible.map(tile=>({tile,frames:frames(tile.x,tile.x-target)})),
+      incoming:frames(target,0)};
   }
   function prepareSection(from,to){
     const width=shell.viewport.getBoundingClientRect().width;
-    const position=n=>n&&width>0?parseFloat(win.getComputedStyle(n).left)/width:null;
-    const motion=sectionPlan(from,to,position(shell.page)||0,outgoingPage?position(outgoingPage):NaN);
-    const previous=outgoingPage;
-    const outgoing=motion.keepOld?previous:snapshotPage();
-    // Freeze the sampled pose before cancelling old WAAPI effects.
-    outgoing.style.left=motion.out[0].left;shell.page.style.left=motion.incoming[0].left;
+    const position=node=>{
+      const value=win.getComputedStyle(node).left,number=parseFloat(value);
+      return value.endsWith("%")?number/100:width>0?number/width:NaN;
+    };
+    const previous=outgoingPages;
+    const tiles=previous.map(tile=>({...tile,x:position(tile.node)}));
+    // If the live page is covered by its retained visual tile, it is not
+    // visible and must not be captured again on a second interruption.
+    if(!sectionCover){
+      const x=position(shell.page);
+      if(Number.isFinite(x)&&Math.abs(x)<1)tiles.push({node:snapshotPage(),section:from,x});
+    }
+    const motion=sectionPlan(from,to,tiles);
+    // In a hidden/zero-width viewport fall back to the existing live content.
+    if(!motion.tiles.length){
+      cancelMotion();clearSectionFlight();return null;
+    }
+    for(const {tile,frames} of motion.tiles)tile.node.style.left=frames[0].left;
+    shell.page.style.left=motion.incoming[0].left;
     cancelMotion();
-    if(previous&&previous!==outgoing)previous.remove();
-    outgoingPage=outgoing;
+    const retained=new Set(motion.tiles.map(({tile})=>tile.node));
+    for(const tile of previous)if(!retained.has(tile.node))tile.node.remove();
+    outgoingPages=motion.tiles.map(({tile})=>({node:tile.node,section:tile.section}));
+    sectionCover=motion.reused?.node||null;
+    shell.page.style.visibility=sectionCover?"hidden":"";
     return motion;
   }
   function startMotionProbe(ms){
@@ -586,11 +606,11 @@
       renderBody();(shell.search.disabled?shell.tabs.get(state.section):shell.search).focus({preventScroll:true});
     }else{
       renderBody();
-      trace("section.motion",{source:from,section:state.section,direction:LIBRARY_SECTIONS.indexOf(state.section)>LIBRARY_SECTIONS.indexOf(from)?"left":"right",duration:ms,epoch,interrupted:before.phase==="switching",start:motion?.incoming[0].left??"0%",mode:"layout-left"},{flush:false});
+      trace("section.motion",{source:from,section:state.section,direction:(motion?.direction??(LIBRARY_SECTIONS.indexOf(state.section)>LIBRARY_SECTIONS.indexOf(from)?1:-1))>0?"left":"right",duration:motion?ms:0,epoch,interrupted:before.phase==="switching",start:motion?.target??0,surfaces:(motion?.tiles.length??0)+1,reused:!!motion?.reused,mode:"layout-left"},{flush:false});
       if(!motion){settle(epoch);}
       else{
         startMotionProbe(ms);
-        void Promise.all([play(outgoingPage,motion.out,ms,SECTION_EASING),play(shell.page,motion.incoming,ms,SECTION_EASING)]).then(()=>settle(epoch));
+        void Promise.all([...motion.tiles.map(({tile,frames})=>play(tile.node,frames,ms,SECTION_EASING)),play(shell.page,motion.incoming,ms,SECTION_EASING)]).then(()=>settle(epoch));
       }
     }
     trace("open.accepted",{section,phase:state.phase,topLayer:shell.topLayer},{flush:false});return true;

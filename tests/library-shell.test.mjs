@@ -354,27 +354,42 @@ test("Library dependencies reject foreign originalTarget on native unload",()=>{
  }
 });
 
-test("Library direct swipe and immediate retarget use two layout-positioned pages",()=>{
+test("Library direct swipe preserves visible tiles and introduces new content outside the viewport",()=>{
  const source=read("src/library/controller.js.part"),css=read("src/styles/library.css.part");
  const start=source.indexOf("  function sectionPlan("),end=source.indexOf("  function prepareSection(",start);
  const sections=["downloads","documents","history","pictures","closed"];
  const plan=new Function("LIBRARY_SECTIONS",source.slice(start,end)+"return sectionPlan;")(sections);
  for(const from of sections)for(const to of sections){
    if(from===to)continue;
-   const d=sections.indexOf(to)>sections.indexOf(from)?1:-1;
-   assert.deepEqual(plan(from,to,0,NaN),{direction:d,keepOld:false,out:[{left:"0%"},{left:(-d*100)+"%"}],incoming:[{left:(d*100)+"%"},{left:"0%"}]});
+   const d=sections.indexOf(to)>sections.indexOf(from)?1:-1,tile={section:from,x:0};
+   const p=plan(from,to,[tile]);
+   assert.equal(p.direction,d);assert.equal(p.reused,null);
+   assert.deepEqual(p.tiles,[{tile,frames:[{left:"0%"},{left:(-d*100)+"%"}]}]);
+   assert.deepEqual(p.incoming,[{left:(d*100)+"%"},{left:"0%"}]);
  }
- const same=plan("history","closed",.4,-.6);assert.equal(same.keepOld,true);assert.deepEqual(same.out,[{left:"-60%"},{left:"-100%"}]);assert.deepEqual(same.incoming,[{left:"40%"},{left:"0%"}]);
- const reverse=plan("history","downloads",.4,-.6);assert.equal(reverse.keepOld,false);assert.deepEqual(reverse.out,[{left:"40%"},{left:"100%"}]);assert.deepEqual(reverse.incoming,[{left:"-60%"},{left:"0%"}]);
- assert.equal(plan("history","closed",0,-1).keepOld,false);
- assert.match(source,/SECTION_MS=800/);
+ const a={section:"history",x:-.6},b={section:"pictures",x:.4};
+ const p=plan("pictures","closed",[a,b]);
+ assert.equal(p.tiles.length,2);assert.equal(p.target,1.4);
+ assert.equal(p.tiles[0].tile,a);assert.equal(p.tiles[1].tile,b);
+ assert.equal(p.tiles[0].frames[0].left,"-60%");assert.equal(p.tiles[1].frames[0].left,"40%");
+ assert.ok(parseFloat(p.incoming[0].left)>=100);
+ const reverse=plan("pictures","history",[a,b]);
+ assert.equal(reverse.reused,a);assert.equal(reverse.direction,-1);
+ assert.deepEqual(reverse.tiles[0].frames,[{left:"-60%"},{left:"0%"}]);
+ assert.deepEqual(reverse.tiles[1].frames,[{left:"40%"},{left:"100%"}]);
+ const left=plan("pictures","downloads",[a,b]);
+ assert.equal(left.target,-1.6);assert.equal(left.tiles.length,2);
+ assert.equal(plan("pictures","closed",[{section:"history",x:-1},b,{section:"documents",x:1.4}]).tiles.length,1);
+ assert.match(source,/SECTION_MS=1000,SECTION_EASING="cubic-bezier\(\.45,0,\.55,1\)"/);
  assert.match(source,/copy.inert=true;copy.setAttribute\("aria-hidden","true"\)/);
  assert.match(source,/copy.querySelectorAll\("\[id\]"\)/);
  assert.doesNotMatch(source,/queuedSection|section\.queued|drainSectionRequest/);
+ assert.match(source,/if\(!sectionCover\)/);
+ assert.match(source,/shell.page.style.visibility=sectionCover\?"hidden":""/);
  assert.match(css,/\.nl-page-viewport\{[^}]*overflow:hidden/);
  assert.match(css,/\.nl-page-outgoing\{[^}]*pointer-events:none/);
  assert.doesNotMatch(css,/\.nl-page\{[^}]*transform:/);
- assert.match(source,/if\(previous&&previous!==outgoing\)previous.remove\(\)/);
+ assert.match(source,/for\(const tile of previous\)if\(!retained.has\(tile.node\)\)tile.node.remove\(\)/);
 });
 test("Library stationary scrollbar derives size and position from native extent",()=>{
  const source=read("src/library/controller.js.part"),css=read("src/styles/library.css.part");

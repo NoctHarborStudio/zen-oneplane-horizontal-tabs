@@ -1,3 +1,7 @@
+## 0.3.0-preview.177 — Library continuous section retarget
+
+Use 1000ms symmetric ease-in-out for direct horizontal section motion. Freeze and retain every currently visible visual tile before retargeting; new destinations start outside the viewport, and a still-visible destination can reverse into place. Keep one live data session, fixed scrollbar, layout-left positioning and generation cleanup. Native handoff and performance verification pending.
+
 ## 0.3.0-preview.176 — Home Island entrance before startup tab wave
 
 After the branded Boot, bring the actual Home Island down from above the window while growing from .02 to full scale using 41 samples of the centered Magnetic Fold curve. At the default motion duration the Island occupies 0–420ms, then the existing 650ms magnetic card wave begins; subsequent Fold stages shift by 175ms without changing their individual durations or relative cadence. Preserve native centering, the resting portal geometry lease, reduced motion, deadline and fail-open behavior; no second clock or timer. Experimental Bloom remains off and unchanged. Record Island acquisition and timing. Regression fixtures cover the timeline and exact transformed geometry. Native visual acceptance pending.

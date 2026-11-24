@@ -895,3 +895,6 @@ Check direct 800ms transitions, rapid same-direction and reverse retargets, no d
 
 
 - Preview.176 native gate: after the Boot, the small Home Island travels down from above the window, reaches its final size/position before the magnetic tabs begin, and the existing tab wave retains its appearance and duration. Repeat with the Boot off, reduced motion, narrow/compact layouts and interrupted startup. Inspect `assembly.island.entry`, `assembly.timeline` and unexpected `center.geometry.invalidate` events. Pending native acceptance.
+
+### Preview.177 — section retarget continuity
+Test normal direct 1000ms transitions, rapid History → Pictures → Recently Closed and reverse to History while still visible. Existing visible rows must move without being overwritten at click; new content enters from outside the viewport. Test repeated reversals, all five sections, close mid-flight, reduced motion, scrollbar and text consistency. Pure planner fixtures cover all ordered pairs, same-direction and reverse retargets and offscreen pruning. Runtime syntax and planner smoke checked; native handoff and CI pending.
