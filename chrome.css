@@ -12,7 +12,7 @@
   initial-value: 0;
 }
 /* OnePlane — native toolbar tab view. No fixed-position overlay. */
- #oneplane-compact-search, #oneplane-hub-button, #oneplane-download-indicator-slot, #oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss, #oneplane-center-start, #oneplane-center-end, #oneplane-toolbar-surface, #oneplane-split-drop { display: none !important; }
+ #oneplane-compact-search, #oneplane-hub-button, #oneplane-history-button, #oneplane-download-indicator-slot, #oneplane-tabs, #oneplane-page-actions, #oneplane-url-dismiss, #oneplane-center-start, #oneplane-center-end, #oneplane-toolbar-surface, #oneplane-split-drop { display: none !important; }
 @media (min-width: 0px) {
   :root[oneplane-active="true"]:not([customizing], [inDOMFullscreen="true"], [inFullscreen="true"], [popup-window]):has(#nav-bar-customization-target > #oneplane-tabs[data-ready="true"]) {
     --op-height: 34px;
@@ -125,6 +125,37 @@
       background-color:var(--toolbarbutton-active-background,color-mix(in srgb,currentColor 20%,transparent)) !important;
     }
     #oneplane-hub-button:focus-visible {outline:2px solid AccentColor;outline-offset:-2px;}
+    /* A second-row shortcut under Hub. Its negative inline margin cancels its
+       flex width, so the native navigation and tab strip keep their x positions. */
+    #nav-bar-customization-target > #oneplane-history-button {
+      display:flex !important; align-items:center !important; justify-content:center !important;
+      order:-1 !important; flex:0 0 30px !important;
+      width:30px !important; min-width:30px !important; height:30px !important;
+      box-sizing:border-box !important; margin:0 0 0 -30px !important;
+      padding:0 !important; border:0 !important;
+      border-radius:var(--toolbarbutton-border-radius,var(--op-url-radius)) !important;
+      color:var(--toolbarbutton-icon-fill,currentColor) !important;
+      background-color:transparent !important;
+      appearance:none !important; cursor:pointer;
+      position:relative !important; z-index:3 !important;
+      transform:translateY(var(--op-top-row-height)) !important;
+      -moz-window-dragging:no-drag !important;
+      pointer-events:auto !important;
+    }
+    #nav-bar-customization-target > #oneplane-history-button > svg {
+      display:block !important; flex:none !important;
+      width:var(--zen-toolbar-button-size,16px) !important; height:var(--zen-toolbar-button-size,16px) !important;
+      fill:none !important; stroke:currentColor !important; stroke-width:1.5;
+      stroke-linecap:round; stroke-linejoin:round; pointer-events:none !important;
+      opacity:.66 !important;
+    }
+    #nav-bar-customization-target > #oneplane-history-button:hover {
+      background-color:var(--toolbarbutton-hover-background,color-mix(in srgb,currentColor 12%,transparent)) !important;
+    }
+    #nav-bar-customization-target > #oneplane-history-button:active {
+      background-color:var(--toolbarbutton-active-background,color-mix(in srgb,currentColor 20%,transparent)) !important;
+    }
+    #oneplane-history-button:focus-visible {outline:2px solid AccentColor;outline-offset:-2px;}
     #nav-bar-customization-target > :is(#sidebar-button, #sidebar-toggle-button) { order: 0 !important; }
     #nav-bar-customization-target > #oneplane-download-indicator-slot:has(> #zr-download-indicator) {
       display:flex !important; order:1 !important;
