@@ -1,7 +1,7 @@
 name: Verify integration candidate
 on:
   push:
-    branches: [integration/unified-core]
+    branches: [integration/unified-core, motion/center-flow]
   workflow_dispatch:
 permissions:
   contents: read

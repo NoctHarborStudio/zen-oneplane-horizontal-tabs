@@ -82,10 +82,10 @@ test("generated comparison Lab uses shared Fold, startup timeline and candidate 
   return kind==="esm-inline"?s.replace(/^import [^\n]+\n/gm,"").replace(/^([ \t]*)export (function|const) /gm,"$1$2 "):s;
  }).join("");
  assert.equal(html,assemble(plan.startupMotionLab));
- assert.ok(html.includes('const plan=startupTimeline(0,scale,"fold",true);'));
+ assert.ok(html.includes('const plan=centerFlowTimeline(0,scale);'));
  assert.ok(html.includes('const plan=startupTimeline(0,scale,"bloom").bloom;'));
  assert.ok(html.includes("startupBloomHomeSchedule(plan,"));
- assert.ok(html.includes("fold.keyframes(card)"));
+ assert.ok(html.includes("flow.keyframes(index)"));
  assert.ok(html.includes("a.startTime=epoch;"));
  const layout=read("layout.uc.mjs");
  assert.ok(layout.includes(assemble([{path:"src/algorithms/magnetic-fold.mjs",kind:"esm-inline"}])));

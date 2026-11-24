@@ -583,3 +583,12 @@
 :root[data-zr-center-motion="startup"][data-zr-center-mode="bloom"] #oneplane-tabs#oneplane-tabs#oneplane-tabs [data-zr-center-bloom-card] {
   transform-origin:center center!important;
 }
+
+/* Shared-flow Workspace changes only the tabs and row geometry. Persistent
+ * controls and native bookmarks do not disappear during the native swap. */
+:root[data-zr-workspace-flow][data-zr-workspace-phase] #PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems#PlacesToolbarItems {
+  opacity:1!important;scale:1!important;
+}
+:root[data-zr-workspace-flow][data-zr-workspace-phase] #oneplane-tabs#oneplane-tabs#oneplane-tabs#oneplane-tabs .oneplane-new-tab {
+  opacity:1!important;transition:none!important;
+}
