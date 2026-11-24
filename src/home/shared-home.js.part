@@ -868,6 +868,45 @@ function acquireZenHome(win, services) {
     searchSnapshotView?.removeEventListener("scroll",scheduleSearchSnapshot,true);searchSnapshotView=null;
     searchSnapshot=null;searchSnapshotDirty=true;
   }
+  // The floating Zen popover is in the top layer, so a background press
+  // need not reach the panel itself. Only claim an actual Home background
+  // or the popover's own retargeted outside press; never a result/control.
+  function isHomeSearchBackgroundPress(event,home,body,bar,host,panels){
+    if(event.defaultPrevented||event.button!==0||event.isPrimary===false||
+       !body.hasAttribute("inert")||bar.hasAttribute("has-popup-open"))return false;
+    const target=event.target;
+    if(!target)return false;
+    const direct=target===home||target===body||body.contains?.(target);
+    const passive=target===host||target===panels;
+    const backdrop=target===bar&&bar.matches?.(":popover-open");
+    if(!direct&&!passive&&!backdrop)return false;
+    // Coordinates are CSS viewport pixels, like getBoundingClientRect().
+    // Reject anonymous retargets in the live editor and outside Home.
+    const x=event.clientX,y=event.clientY;
+    if(!Number.isFinite(x)||!Number.isFinite(y))return false;
+    const contains=rect=>rect&&x>=rect.left&&x<rect.right&&y>=rect.top&&y<rect.bottom;
+    return contains(home.getBoundingClientRect())&&!contains(bar.getBoundingClientRect());
+  }
+  function onSearchPointerDown(event){
+    if(!open||!searchToken||searchClosing||searchReturn||!searchBar)return;
+    const bar=searchBar,target=event.target,id=searchToken.homeProbe?.id??null;
+    const background=isHomeSearchBackgroundPress(event,panel,content,bar,host,panels);
+    const consumed=background&&cancelHomeSearch("home-background");
+    // One bounded, structural record per press, without coordinates, node
+    // identifiers, input or result data. Explains missed native handoffs.
+    win.__nocturneTrace?.("home.search.pointer-boundary",()=>({
+      id,background,consumed,home:target===panel||target===content||content.contains?.(target),
+      host:target===host,panels:target===panels,bar:target===bar,
+      barChild:target!==bar&&bar.contains?.(target),primary:event.button===0&&event.isPrimary!==false
+    }));
+    if(consumed){
+      // Cancel the default focus change before native blur can dismantle
+      // the popover; cancelHomeSearch has already run Zen's own close.
+      event.preventDefault();event.stopImmediatePropagation();
+      return;
+    }
+    if(!bar.contains?.(event.target))captureSearchSnapshot();
+  }
   function finishNativeCancel(){
     const bar=searchBar;
     // Use Zen's own session closure; do not replace its provider or patch
@@ -1284,13 +1323,10 @@ function acquireZenHome(win, services) {
            (searchClosing||cancelHomeSearch("escape"))){e.preventDefault();e.stopImmediatePropagation();return;}
       }
       if(open&&e.key==="Escape"&&!searchActive()){e.preventDefault();e.stopPropagation();if(adding&&pinCustom){pinCustom=false;render();content.querySelector(".zh-suggestion, .zh-custom-link")?.focus({preventScroll:true});}else if(adding){leavePinPicker();}else if(editing){editing=false;render();}else content.querySelector(".zh-search")?.focus({preventScroll:true});}},true);
-    listen(win,"pointerdown",e=>{
-      if(searchToken&&!searchClosing&&!searchReturn&&searchBar&&!searchBar.contains?.(e.target))captureSearchSnapshot();
-    },true);
+    listen(win,"pointerdown",onSearchPointerDown,true);
     listen(win,"focusout",e=>{
       if(searchToken&&!searchClosing&&!searchReturn&&searchBar?.contains?.(e.target))captureSearchSnapshot();
     },true);
-    listen(panel,"pointerdown",e=>{if(e.target===panel&&searchToken&&!searchClosing&&cancelHomeSearch("home-background")){e.preventDefault();e.stopPropagation();}},true);
     const stateObserver=new win.MutationObserver(()=>{
       if(panel.hasAttribute("data-zh-startup")&&!root.hasAttribute("data-zr-startup-phase"))finishStartupHome();
       if(open&&!allowed())close();else if(!open)ensurePrimaryHome();

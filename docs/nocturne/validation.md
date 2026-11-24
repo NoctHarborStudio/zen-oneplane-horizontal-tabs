@@ -853,3 +853,10 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [ ] Installed Zen/Sine: full restart with experimental Library enabled; confirm stock Zen Library does not open via Ctrl+H/J, toolbar icon, menu, edge swipe, and refused/unready commands. Check opt-out/disable and multiwindow restoration on disposable profile.
 - [ ] On Home and ordinary page, scroll History and verify no Copy/Remove overlap; Filter slide, all period/sort choices, search/pagination, keyboard focus, Escape and quick reopen. Test narrow viewport/overflow and reduced motion.
 - [ ] Compare native opening/closing visual cadence, diagnostics-on/off, callback gap aggregates and Gecko Profiler presented frames/render pipeline where needed. Callback intervals are not presented FPS.
+
+### HS3.2 / preview.165 — Home Search background handoff
+
+- [x] Source and baseline analysis: Escape live handoff versus native-observer background close.
+- [x] Single window-capture handler with Home and passive-host/top-layer outside-hit classification; retain native routes for result, toolbar, sub-popup, reduced-motion and non-primary actions.
+- [x] Source fixture tests classification, dispatch, rejection and closing guard.
+- [ ] Native Zen/Sine: same display and profile, open then click Home background after settle and during reveal. Expect smooth return and home-background close-start (not native-observer) for accepted background presses. Escape remains unchanged. Verify result navigation and toolbar commands; inspect pointer-boundary if missed. Icon parity and snapshot cost are separate open work.

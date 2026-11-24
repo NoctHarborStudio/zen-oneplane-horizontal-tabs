@@ -464,3 +464,31 @@ test("Home baseline records bounded frame gaps, snapshot work and one summary pe
  enabled=false;const off={};api.startSearchProbe(off);assert.equal(off.homeProbe,undefined);
  enabled=true;api.startSearchProbe(off);enabled=false;api.finishSearchProbe(off,"open","interrupted");assert.equal(traces.length,2);
 });
+
+test("Home background cancellation classifies pointer presses at the window boundary",()=>{
+ const code=extract("  function isHomeSearchBackgroundPress(","  function finishNativeCancel(");
+ const rect=(left,top,right,bottom)=>({left,top,right,bottom});
+ const panel={getBoundingClientRect:()=>rect(0,0,1000,800)},child={},content={hasAttribute:k=>k==="inert",contains:n=>n===child},host={},panels={},row={},toolbar={};
+ let popup=false,popover=true;
+ const bar={hasAttribute:k=>k==="has-popup-open"&&popup,matches:s=>s===":popover-open"&&popover,contains:n=>n===bar||n===row,getBoundingClientRect:()=>rect(200,150,800,450)};
+ const calls=[];
+ const api=new Function("win","panel","content","host","panels","bar","calls",code+`
+ let open=true,searchToken={},searchClosing=false,searchReturn=null,searchBar=bar;
+ function cancelHomeSearch(reason){calls.push(reason);return true;}
+ function captureSearchSnapshot(){calls.push("capture");}
+ return {classify:event=>isHomeSearchBackgroundPress(event,panel,content,bar,host,panels),dispatch:onSearchPointerDown,setClosing:value=>searchClosing=value};
+ `)({},panel,content,host,panels,bar,calls);
+ const press=(target,x=100,y=500,extra={})=>({target,clientX:x,clientY:y,button:0,isPrimary:true,defaultPrevented:false,preventDefault(){calls.push("prevent");},stopImmediatePropagation(){calls.push("stop");},...extra});
+ for(const target of [panel,content,child,host,panels,bar])assert.equal(api.classify(press(target)),true);
+ for(const event of [press(row),press(toolbar),press(bar,400,300),press(panel,400,300),press(panel,-1,500),press(panel,100,900),press(panel,100,500,{button:2}),press(panel,100,500,{isPrimary:false}),press(panel,100,500,{defaultPrevented:true})])assert.equal(api.classify(event),false);
+ popup=true;assert.equal(api.classify(press(panel)),false);popup=false;
+ popover=false;assert.equal(api.classify(press(bar)),false);popover=true;
+ content.hasAttribute=()=>false;assert.equal(api.classify(press(panel)),false);content.hasAttribute=k=>k==="inert";
+ api.dispatch(press(panel));assert.deepEqual(calls.splice(0),["home-background","prevent","stop"]);
+ api.dispatch(press(bar));assert.deepEqual(calls.splice(0),["home-background","prevent","stop"]);
+ api.dispatch(press(row,400,300));assert.deepEqual(calls.splice(0),[]);
+ api.dispatch(press(toolbar));assert.deepEqual(calls.splice(0),["capture"]);
+ api.setClosing(true);api.dispatch(press(panel));assert.deepEqual(calls,[]);
+ assert.ok(core.includes('listen(win,"pointerdown",onSearchPointerDown,true)'));
+ assert.ok(!core.includes('listen(panel,"pointerdown"'));
+});

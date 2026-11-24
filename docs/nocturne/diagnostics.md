@@ -500,3 +500,7 @@ The native Zen 1.24.2b browser.xhtml begins with zen-before-loaded=true. ZenStar
 ### Preview.164 — Library motion diagnostics
 
 Existing recorder gains Library-produced events (no new logger): `library.motion.begin` (phase/section/duration), `library.motion.frames` (epoch, completed, frames, elapsed, p50/p95/p99/max, over25 callback intervals, maximum 300 samples; RAF cancelled on completion/interruption/teardown and absent if disabled/reduced motion), `library.render` (section/phase/row count/render duration during opening/switching), and finite `library.filter.changed` mode/scope. No per-frame DOM/style reads or individual frame events. Preserve prior `library.motion.settled` computed endpoint comparison. Aggregate callback cadence is not presented FPS; compare real Zen diagnostics on/off and Gecko Profiler if compositor remains suspect.
+
+### Preview.165 — HS3.2 pointer boundary
+
+`home.search.pointer-boundary` reports one structural record per pointerdown observed during an active Home search before return: local probe id, classified background/consumed booleans, exact Home/host/panels/bar/barChild booleans and primary-press status. No coordinates, DOM IDs, input strings or URLs. No new sampling arm. A consumed press runs the same live handoff as Escape and should produce `home.search.close-start.reason=home-background`. A native-observer close after an unconsumed press is useful evidence for a missed target or inactive native state, not proof of a presented flash. Existing baseline/close events retained.
