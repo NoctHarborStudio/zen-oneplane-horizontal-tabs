@@ -1,37 +1,47 @@
-// Vanishing Home: gesture-local virtual geometry. Native tab order and
-// physical lane ownership remain unchanged until the existing native drop.
-export function vanishingHomeSlots(widths, center, plusWidth, gap=3) {
-  const total=widths.reduce((sum,w)=>sum+w+gap,0)+plusWidth;
-  let x=center-total/2;
-  const positions=widths.map(w=>{const left=x;x+=w+gap;return left;});
-  return {positions,plus:x,total};
+// Elastic Chain 2.0: one gesture-local, measured gap vector. No native
+// order or DOM ownership changes until the existing native drop.
+export function elasticChainGaps(gaps,source,seam,minimum=3) {
+  if(!gaps.length||source<0||source>=gaps.length||seam<0||seam>=gaps.length||
+    gaps.some(g=>!Number.isFinite(g)||g<-.5))return null;
+  const result=gaps.slice(),extra=Math.max(0,gaps[seam]-minimum);
+  result[seam]-=extra;
+  // Only gaps between the grabbed slot and the outer edge across Home
+  // receive the excess. Both outside edges and the grab stay fixed.
+  const first=source<=seam?source:0,last=source<=seam?gaps.length:source;
+  for(let j=first;j<last;j++)result[j]+=extra/(last-first);
+  return result;
 }
-
-export function vanishingHomeIndex(midpoints, x, previous, buffer=8) {
-  let i=Math.max(0,Math.min(midpoints.length,previous));
-  while(i<midpoints.length&&x>midpoints[i]+buffer)i++;
-  while(i>0&&x<midpoints[i-1]-buffer)i--;
-  return i;
+export function elasticChainSlots(widths,left,gaps) {
+  let x=left;
+  return widths.map((w,i)=>{const center=x+w/2;x+=w+(gaps[i]||0);return center;});
 }
-
-// Both chains close around the disappearing source, retaining their
-// original widths and gaps. The source anchor is the full destination slot.
-export function vanishingHomePull(widths, index, center, plusWidth, progress, gap=3) {
-  const full=vanishingHomeSlots(widths,center,plusWidth,gap);
-  const p=Math.max(0,Math.min(1,progress)),smooth=p*p*(3-2*p);
-  const ratio=1-.96*smooth,loss=(widths[index]+gap)*(1-ratio);
-  const positions=full.positions.map((x,i)=>x+(i<index?loss/2:i>index?-loss/2:0));
-  return {positions,plus:full.plus-loss/2,ratio,loss,anchor:full.positions[index]+widths[index]/2};
+// Only actual pointer motion may cross a boundary. Re-evaluate the
+// adjacent pair in the stable gap vector, not the animated DOM.
+export function elasticChainIndex(widths,left,gaps,source,previous,x,direction,buffer=4) {
+  const order=widths.map((_,i)=>i).filter(i=>i!==source);
+  order.splice(previous,0,source);
+  let index=previous;
+  if(!direction)return index;
+  const dir=Math.sign(direction);
+  for(let count=0;count<widths.length;count++){
+    const next=index+dir;
+    if(next<0||next>=order.length-1)break; // final item is the plus button
+    const slots=elasticChainSlots(order.map(i=>widths[i]),left,gaps);
+    const threshold=(slots[index]+slots[next])/2+dir*buffer;
+    if(dir*(x-threshold)<=0)break;
+    [order[index],order[next]]=[order[next],order[index]];
+    index=next;
+  }
+  return index;
 }
-
-// Pointer pressure is symmetric, constrained to the frozen chrome budget,
-// and only moves the chain actually touched by the source.
-export function vanishingHomePressure(width,delta,room) {
-  const max=Math.min(15,Math.max(8,width*.33));
-  return Math.sign(delta)*Math.min(Math.abs(delta),Math.max(0,room),max*(1-Math.exp(-Math.abs(delta)/18)));
+// Only the immediate neighboring tabs close around the Bunny source.
+export function elasticChainPull(slots,widths,index,progress,gap=3) {
+  const p=Math.max(0,Math.min(1,progress)),loss=(widths[index]+gap)*.96*p*p*(3-2*p);
+  const result=slots.slice();
+  if(index>0)result[index-1]+=loss/2;
+  if(index+1<slots.length-1)result[index+1]-=loss/2;
+  return result;
 }
-
-// Common join clock with zero-velocity/zero-acceleration endpoints.
 export function vanishingHomeEase(progress) {
   const t=Math.max(0,Math.min(1,progress));
   return t*t*t*(t*(t*6-15)+10);

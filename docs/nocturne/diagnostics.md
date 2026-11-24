@@ -602,3 +602,7 @@ Live bookmark evidence: `sample.data.bookmarkFlow` is present near the active bo
 Preview.212: existing geometry snapshots include `oneplane-hub-panel` and `zr-download-dock` with numeric `materialOpacity` and `materialBlur` resolved from shared role tokens. No download names or workspace names are added.
 
 Preview.213: existing geometry snapshots include `nocturne-library-preview` with numeric `materialOpacity` and `materialBlur` resolved from the common Library/History role. These are material token values, not the animated layer opacity or proof of compositor output. No new sampling cadence or record content.
+
+### Preview.215 — Elastic Chain 2.0
+
+`drag.vanish.begin` identifies geometry elastic-chain-v2 and records measured seam gap, distributed seam gap, outer-edge deltas and frozen row width; gripOffset is zero by contract. `drag.vanish.end` includes maxChanged, maximum number of non-source cards with a local reorder/pull delta (not base collapse displacement). Existing target, presentation, restoration and native outcome events remain authoritative for their respective phases. No content data. Validate stationary grab, fixed edges, one-neighbor sort, reversal, pull/return and cancellation in Zen.

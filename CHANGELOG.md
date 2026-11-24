@@ -1,3 +1,7 @@
+## 0.3.0-preview.215 — Elastic Chain 2.0
+
+Replace Vanishing Home's rigid grip-anchored row translation with measured gesture-local gap distribution. Preserve outer edges and the grabbed point. Freeze distributed geometry after the 350ms collapse; horizontal pointer motion crosses adjacent slots only, with bounded neighbor easing. Retain Bunny's shape, local adjacent-slot closure, native drop authority, OS image ownership, existing 400ms Home restoration and presentation lease. Retain Library/History Glass and the committed strip placement guard. Native visual acceptance pending.
+
 ## 0.3.0-preview.214 — Verified strip placement (ML1b.2)
 
 Verify exact lane membership, native unit order and lower-row visibility before accepting a resting projection. Center Motion and new local tab drags reject stale/partial placements; existing native drag and geometry owners remain. Preserve frozen icon refresh and existing Automatic allocation/CSS. Native acceptance pending.

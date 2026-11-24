@@ -1,45 +1,37 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {vanishingHomeSlots,vanishingHomeIndex,vanishingHomePull,vanishingHomePressure} from "../src/algorithms/vanishing-home.mjs";
-
-test("continuous row is centered including plus; unequal group widths retain exact gaps",()=>{
-  const w=[36,100,36,36],s=vanishingHomeSlots(w,600,36);
-  assert.equal(s.positions[0]+s.total/2,600);
-  assert.equal(s.plus+36-s.positions[0],s.total);
-  for(let i=1;i<w.length;i++)assert.equal(s.positions[i]-s.positions[i-1]-w[i-1],3);
+import {elasticChainGaps,elasticChainSlots,elasticChainIndex,elasticChainPull,vanishingHomeEase} from "../src/algorithms/vanishing-home.mjs";
+const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-8);
+test("distributed gaps preserve the grabbed slot and both edges for every source, including unequal Split widths",()=>{
+ const widths=[36,100,36,36,36,36,36],left=100,gaps=[3,3,183,3,3,3];
+ const before=elasticChainSlots(widths,left,gaps);
+ for(let i=0;i<widths.length-1;i++){
+  const g=elasticChainGaps(gaps,i,2),after=elasticChainSlots(widths,left,g);
+  close(after[0],before[0]);close(after.at(-1),before.at(-1));close(after[i],before[i]);
+  close(g.reduce((a,b)=>a+b,0),gaps.reduce((a,b)=>a+b,0));
+  assert.ok(g.every(x=>x>=3));assert.ok(g[2]<183);
+  if(i<=2)assert.ok(after[3]<before[3]);else assert.ok(after[2]>before[2]);
+ }
 });
-
-test("both reorder directions use stable symmetric hysteresis",()=>{
-  const mid=[100,139,178];
-  assert.equal(vanishingHomeIndex(mid,146,1),1);
-  assert.equal(vanishingHomeIndex(mid,148,1),2);
-  assert.equal(vanishingHomeIndex(mid,132,2),2);
-  assert.equal(vanishingHomeIndex(mid,130,2),1);
-  assert.equal(vanishingHomeIndex(mid,500,0),3);
-  assert.equal(vanishingHomeIndex(mid,0,3),0);
+test("adjacent reorder changes only crossed interval with unequal widths",()=>{
+ const w=[36,100,36,36,36],g=[10,20,30,40],left=100;
+ const before=elasticChainSlots(w,left,g),after=elasticChainSlots([36,36,100,36,36],left,g);
+ close(before[0],after[0]);close(before[3],after[3]);close(before[4],after[4]);
+ assert.equal(elasticChainIndex(w,left,g,1,1,1000,1),3);
+ assert.equal(elasticChainIndex(w,left,g,1,3,0,-1),0);
+ assert.equal(elasticChainIndex(w,left,g,1,1,1000,0),1);
 });
-
-test("pull closes the gap symmetrically; zero pull returns the same full geometry",()=>{
-  const w=[36,100,36,36],full=vanishingHomeSlots(w,600,36);
-  for(let i=0;i<w.length;i++){
-    const zero=vanishingHomePull(w,i,600,36,0);
-    assert.deepEqual(zero.positions,full.positions);
-    assert.equal(zero.plus,full.plus);
-    for(const p of [.2,.62,1]){
-      const q=vanishingHomePull(w,i,600,36,p);
-      assert.ok(Math.abs(q.ratio-(1-.96*p*p*(3-2*p)))<1e-10);
-      assert.equal(q.anchor,full.positions[i]+w[i]/2);
-      for(let j=0;j<w.length;j++)assert.ok(Math.abs(q.positions[j]-full.positions[j]-(j<i?q.loss/2:j>i?-q.loss/2:0))<1e-10);
-      assert.ok(Math.abs(q.plus-(full.plus-q.loss/2))<1e-10);
-    }
+test("Bunny only shifts immediate neighbors and retains plus",()=>{
+ const w=[36,100,36,36,36],g=[3,20,30,3],s=elasticChainSlots(w,100,g);
+ for(let i=0;i<w.length-1;i++){
+  assert.deepEqual(elasticChainPull(s,w,i,0),s);
+  for(const p of [.2,.62,1]){
+   const r=elasticChainPull(s,w,i,p),loss=(w[i]+3)*.96*p*p*(3-2*p);
+   r.forEach((x,j)=>close(x,s[j]+(j===i-1?loss/2:j===i+1&&j<w.length-1?-loss/2:0)));
   }
+ }
 });
-
-test("pressure mirrors direction and cannot exceed edge room",()=>{
-  for(const delta of [1,8,30,100]){
-    assert.equal(vanishingHomePressure(36,-delta,20),-vanishingHomePressure(36,delta,20));
-    assert.ok(Math.abs(vanishingHomePressure(36,delta,2))<=2);
-    assert.ok(Math.abs(vanishingHomePressure(36,delta,20))<=delta);
-  }
-  assert.equal(vanishingHomePressure(36,100,0),0);
+test("invalid measured gaps reject and common clock retains endpoints",()=>{
+ assert.equal(elasticChainGaps([3,-4,3],0,1),null);
+ assert.equal(vanishingHomeEase(0),0);assert.equal(vanishingHomeEase(.5),.5);assert.equal(vanishingHomeEase(1),1);
 });

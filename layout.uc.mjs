@@ -86,7 +86,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.214",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.215",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -9196,40 +9196,50 @@ function normalizeAutomaticTabRows(plan,count,boundary) {
       if(draggedTab&&dragNode)setDragImageMode("outside",event);
     }
   }
-// Vanishing Home: gesture-local virtual geometry. Native tab order and
-// physical lane ownership remain unchanged until the existing native drop.
-function vanishingHomeSlots(widths, center, plusWidth, gap=3) {
-  const total=widths.reduce((sum,w)=>sum+w+gap,0)+plusWidth;
-  let x=center-total/2;
-  const positions=widths.map(w=>{const left=x;x+=w+gap;return left;});
-  return {positions,plus:x,total};
+// Elastic Chain 2.0: one gesture-local, measured gap vector. No native
+// order or DOM ownership changes until the existing native drop.
+function elasticChainGaps(gaps,source,seam,minimum=3) {
+  if(!gaps.length||source<0||source>=gaps.length||seam<0||seam>=gaps.length||
+    gaps.some(g=>!Number.isFinite(g)||g<-.5))return null;
+  const result=gaps.slice(),extra=Math.max(0,gaps[seam]-minimum);
+  result[seam]-=extra;
+  // Only gaps between the grabbed slot and the outer edge across Home
+  // receive the excess. Both outside edges and the grab stay fixed.
+  const first=source<=seam?source:0,last=source<=seam?gaps.length:source;
+  for(let j=first;j<last;j++)result[j]+=extra/(last-first);
+  return result;
 }
-
-function vanishingHomeIndex(midpoints, x, previous, buffer=8) {
-  let i=Math.max(0,Math.min(midpoints.length,previous));
-  while(i<midpoints.length&&x>midpoints[i]+buffer)i++;
-  while(i>0&&x<midpoints[i-1]-buffer)i--;
-  return i;
+function elasticChainSlots(widths,left,gaps) {
+  let x=left;
+  return widths.map((w,i)=>{const center=x+w/2;x+=w+(gaps[i]||0);return center;});
 }
-
-// Both chains close around the disappearing source, retaining their
-// original widths and gaps. The source anchor is the full destination slot.
-function vanishingHomePull(widths, index, center, plusWidth, progress, gap=3) {
-  const full=vanishingHomeSlots(widths,center,plusWidth,gap);
-  const p=Math.max(0,Math.min(1,progress)),smooth=p*p*(3-2*p);
-  const ratio=1-.96*smooth,loss=(widths[index]+gap)*(1-ratio);
-  const positions=full.positions.map((x,i)=>x+(i<index?loss/2:i>index?-loss/2:0));
-  return {positions,plus:full.plus-loss/2,ratio,loss,anchor:full.positions[index]+widths[index]/2};
+// Only actual pointer motion may cross a boundary. Re-evaluate the
+// adjacent pair in the stable gap vector, not the animated DOM.
+function elasticChainIndex(widths,left,gaps,source,previous,x,direction,buffer=4) {
+  const order=widths.map((_,i)=>i).filter(i=>i!==source);
+  order.splice(previous,0,source);
+  let index=previous;
+  if(!direction)return index;
+  const dir=Math.sign(direction);
+  for(let count=0;count<widths.length;count++){
+    const next=index+dir;
+    if(next<0||next>=order.length-1)break; // final item is the plus button
+    const slots=elasticChainSlots(order.map(i=>widths[i]),left,gaps);
+    const threshold=(slots[index]+slots[next])/2+dir*buffer;
+    if(dir*(x-threshold)<=0)break;
+    [order[index],order[next]]=[order[next],order[index]];
+    index=next;
+  }
+  return index;
 }
-
-// Pointer pressure is symmetric, constrained to the frozen chrome budget,
-// and only moves the chain actually touched by the source.
-function vanishingHomePressure(width,delta,room) {
-  const max=Math.min(15,Math.max(8,width*.33));
-  return Math.sign(delta)*Math.min(Math.abs(delta),Math.max(0,room),max*(1-Math.exp(-Math.abs(delta)/18)));
+// Only the immediate neighboring tabs close around the Bunny source.
+function elasticChainPull(slots,widths,index,progress,gap=3) {
+  const p=Math.max(0,Math.min(1,progress)),loss=(widths[index]+gap)*.96*p*p*(3-2*p);
+  const result=slots.slice();
+  if(index>0)result[index-1]+=loss/2;
+  if(index+1<slots.length-1)result[index+1]-=loss/2;
+  return result;
 }
-
-// Common join clock with zero-velocity/zero-acceleration endpoints.
 function vanishingHomeEase(progress) {
   const t=Math.max(0,Math.min(1,progress));
   return t*t*t*(t*(t*6-15)+10);
@@ -9318,31 +9328,27 @@ function vanishingHomeEase(progress) {
       [...boxes.values()].some(b=>!vanishValidBox(b)||Math.abs(b.y-sourceBox.y)>2))return false;
     if(!Number.isFinite(bounds.left)||!Number.isFinite(bounds.right)||bounds.width<=0)return false;
     for(let i=1;i<nodes.length;i++)if(boxes.get(nodes[i-1]).right>boxes.get(nodes[i]).left+.5)return false;
-    const gap=3,widths=nodes.map(n=>boxes.get(n).width);
-    const centered=vanishingHomeSlots(widths,home.x,plusBox.width,gap);
-    if(centered.total>bounds.width)return false;
-    // Preserve the grabbed slot while the island disappears. Centering
-    // the compact chain unconditionally would slide the card out from
-    // under a stationary pointer by roughly half the island width.
-    const desiredCenter=home.x+sourceBox.x-(centered.positions[index]+widths[index]/2);
-    const center=Math.max(bounds.left+centered.total/2,Math.min(bounds.right-centered.total/2,desiredCenter));
-    const ref=vanishingHomeSlots(widths,center,plusBox.width,gap);
-    if(ref.positions[0]<bounds.left-.1||ref.plus+plusBox.width>bounds.right+.1)return false;
-    // Home pivot is independent of pointer-grip geometry.
-    const origin=.5;
-    const refX=new Map(nodes.map((n,i)=>[n,ref.positions[i]+widths[i]/2]));
-    refX.set(plus,ref.plus+plusBox.width/2);
+    const gap=3,origin=.5,all=[...nodes,plus],widths=all.map(n=>n===plus?plusBox.width:boxes.get(n).width);
+    const left=boxes.get(nodes[0]).left;
+    const seam=nodes.filter(n=>n.parentElement===leftLane).length-1;
+    if(seam<0||seam>=nodes.length-1)return false;
+    const baseGaps=nodes.map((n,i)=>(all[i+1]===plus?plusBox:boxes.get(all[i+1])).left-boxes.get(n).right);
+    const endGaps=elasticChainGaps(baseGaps,index,seam,gap);
+    if(!endGaps||left<bounds.left-.5||plusBox.right>bounds.right+.5)return false;
+    const ref=elasticChainSlots(widths,left,endGaps);
+    const refX=new Map(all.map((n,i)=>[n,ref[i]]));
+    const grip=event.clientX-sourceBox.x;
+    const minX=left+sourceBox.width/2,maxX=boxes.get(nodes.at(-1)).right-sourceBox.width/2;
+    if(maxX<minX)return false;
     const toolbar=toolbarWrapper.getBoundingClientRect();
     if(!Number.isFinite(toolbar.left)||!Number.isFinite(toolbar.right)||toolbar.right<=toolbar.left)return false;
-    const rest=nodes.filter(n=>n!==source),midpoints=rest.map(n=>{
-      const i=nodes.indexOf(n);return ref.positions[i]+widths[i]/2;
-    });
+    const rest=nodes.filter(n=>n!==source);
     dragGhost.hidden=false;
     dragGhostBody.style.removeProperty("transform");
     const ghost=vanishBox(dragGhostBody);hideGhost();
     if(!vanishValidBox(ghost))return false;
     boxes.set(plus,plusBox);
-    const s={source,tab,token:nativeDragToken,nodes,rest,boxes,home,plusBox,center,gap,index,midpoints,
+    const s={source,tab,token:nativeDragToken,nodes,rest,boxes,home,plusBox,gap,index,original:index,widths,left,baseGaps,endGaps,grip,minX,maxX,
       point:{x:event.clientX,y:event.clientY},lastX:event.clientX,
       full:{width:ghost.width,height:ghost.height},bounds:{left:bounds.left,right:bounds.right},
       edge:dragEdge,origin,toolbar:{left:toolbar.left,right:toolbar.right},
@@ -9352,7 +9358,9 @@ function vanishingHomeEase(progress) {
     row.setAttribute("data-op-vanishing-home","true");
     row.setAttribute("data-op-live-drag","true");
     row.style.setProperty("--op-vanishing-scale","1");
-    window.__nocturneTrace?.("drag.vanish.begin",{token:nativeDragToken,count:nodes.length,index,homeWidth:home.width,continuousWidth:ref.total,gripOffset:center-home.x,origin,duration:s.duration},{sample:1000});
+    window.__nocturneTrace?.("drag.vanish.begin",{token:nativeDragToken,count:nodes.length,index,homeWidth:home.width,continuousWidth:plusBox.right-left,gripOffset:0,origin,duration:s.duration,
+      geometry:"elastic-chain-v2",seamGap:baseGaps[seam],distributedGap:endGaps[seam],
+      leftShift:ref[0]-boxes.get(nodes[0]).x,rightShift:ref.at(-1)-plusBox.x},{sample:1000});
     armVanishingHome(s);
     return true;
   }
@@ -9360,11 +9368,15 @@ function vanishingHomeEase(progress) {
     const order=s.rest.slice();order.splice(s.index,0,s.source);
     return order;
   }
+  function vanishGaps(s){
+    return s.baseGaps.map((g,i)=>bunnyMix(g,s.endGaps[i],s.k));
+  }
+  function vanishPointerX(s){
+    return Math.max(s.minX,Math.min(s.maxX,s.point.x-s.grip));
+  }
   function vanishFullMap(s,order=vanishOrder(s)){
-    const v=vanishingHomeSlots(order.map(n=>s.boxes.get(n).width),s.center,s.plusBox.width,s.gap);
-    const map=new Map(order.map((n,i)=>[n,{...s.boxes.get(n),x:v.positions[i]+s.boxes.get(n).width/2}]));
-    map.set(plus,{...s.plusBox,x:v.plus+s.plusBox.width/2});
-    return map;
+    const all=[...order,plus],slots=elasticChainSlots(all.map(n=>s.boxes.get(n).width),s.left,vanishGaps(s));
+    return new Map(all.map((n,i)=>[n,{...s.boxes.get(n),x:slots[i]}]));
   }
   function previewVanishingHome(event){
     const s=vanishingHome;if(!s)return null;
@@ -9377,10 +9389,7 @@ function vanishingHomeEase(progress) {
     const x=event.clientX;
     if(Math.abs(x-s.lastX)>.01){
       const old=s.index;
-      // During the join, thresholds share the painted coordinate
-      // interpolation. They never chase shifted neighboring cards.
-      const mids=s.rest.map((n,i)=>bunnyMix(s.boxes.get(n).x,s.midpoints[i],s.k));
-      s.index=vanishingHomeIndex(mids,x,s.index,REORDER_BUFFER);
+      s.index=elasticChainIndex(s.widths,s.left,vanishGaps(s),s.original,s.index,vanishPointerX(s),x-s.lastX);
       s.lastX=x;
       if(old!==s.index)window.__nocturneTrace?.("drag.vanish.target",{token:nativeDragToken,from:old,to:s.index,p:s.p},{throttle:70,sample:1000});
     }
@@ -9407,40 +9416,33 @@ function vanishingHomeEase(progress) {
     const k=s.duration?vanishingHomeEase((now-s.start)/s.duration):1;
     s.k=k;s.scale=1-k;
     row.style.setProperty("--op-vanishing-scale",String(s.scale));
-    const order=vanishOrder(s),widths=order.map(n=>s.boxes.get(n).width);
-    const q=vanishingHomePull(widths,s.index,s.center,s.plusBox.width,s.p,s.gap);
-    const original=s.boxes.get(s.source),sourceIndex=s.index;
-    const raw=s.point.x-original.width*dragGrabRatio+original.width/2-bunnyMix(original.x,q.anchor,k);
-    const available=raw>=0?s.bounds.right-(q.plus+s.plusBox.width):q.positions[0]-s.bounds.left;
-    const pressure=s.p===0?vanishingHomePressure(original.width,raw,available):0;
+    const order=[...vanishOrder(s),plus],widths=order.map(n=>s.boxes.get(n).width);
+    const gaps=vanishGaps(s),slots=elasticChainSlots(widths,s.left,gaps);
+    const targets=elasticChainPull(slots,widths,s.index,s.p,s.gap);
+    const original=s.boxes.get(s.source),px=vanishPointerX(s);
     const outside=dragImageMode==="outside",ghost=!outside&&s.p>0;
-    let settling=k<1;
+    let settling=k<1,changed=0;
     const boxes=[];
-    // Base join uses exactly the Home clock. Only target/pressure
-    // changes receive a bounded response filter.
-    const position=(n,targetX)=>{
-      const base=s.boxes.get(n),ref=s.refX.get(n),delta=targetX-ref,prev=s.offsets.get(n)||0;
-      const next=Math.abs(delta-prev)<.1||!s.duration?delta:bunnyMix(prev,delta,1-Math.exp(-Math.min(dt,45)/38));
-      if(Math.abs(delta-next)>.1)settling=true;
-      s.offsets.set(n,next);
-      return bunnyMix(base.x,ref,k)+next*k;
-    };
-    const anchor={...original,x:position(s.source,q.anchor+pressure)};
-    const slide=(n,targetX)=>{
-      const base=s.boxes.get(n),x=position(n,targetX);
-      const b={...base,x};s.paint.set(n,b);
-      shiftDragNode(n,x-base.x);
-      boxes.push(vanishRect(b));
-    };
+    // Base distribution shares the Home clock. Only the crossed
+    // interval and the two Bunny neighbors receive animated deltas.
     for(let i=0;i<order.length;i++){
       const n=order[i];if(n===s.source)continue;
-      const b=s.boxes.get(n),onSide=pressure>0?i>sourceIndex:i<sourceIndex;
-      slide(n,q.positions[i]+b.width/2+(onSide?pressure:0));
+      const base=s.boxes.get(n),ref=bunnyMix(base.x,s.refX.get(n),k);
+      const delta=targets[i]-ref,prev=s.offsets.get(n)||0;
+      const next=Math.abs(delta-prev)<.03||!s.duration?delta:bunnyMix(prev,delta,1-Math.exp(-Math.min(dt,45)/42));
+      if(Math.abs(delta-next)>.03)settling=true;
+      if(Math.abs(delta)>.1||Math.abs(next)>.1)changed++;
+      s.offsets.set(n,next);
+      const b={...base,x:ref+next};s.paint.set(n,b);
+      shiftDragNode(n,b.x-base.x);
+      boxes.push(vanishRect(b));
     }
-    slide(plus,q.plus+s.plusBox.width/2+Math.max(0,pressure));
+    s.changed=changed;s.maxChanged=Math.max(s.maxChanged||0,changed);
     if(s.scale>.001)boxes.push(vanishRect({...s.home,width:s.home.width*s.scale}));
-    const pose=s.p>0?bunnyPose(s.p,anchor,s.point,s.full,"C",s.gap,s.edge):
-      {x:anchor.x,y:original.y,width:original.width,height:original.height};
+    const anchor={...original,x:bunnyMix(px,slots[s.index],bunnySmooth(s.p/.28))};
+    const point={x:s.point.x-s.grip,y:s.point.y};
+    const pose=s.p>0?bunnyPose(s.p,anchor,point,s.full,"C",s.gap,s.edge):
+      {x:px,y:original.y,width:original.width,height:original.height};
     if(s.p===1&&(s.point.x<s.toolbar.left||s.point.x>s.toolbar.right)){
       pose.x=s.point.x;pose.y=s.point.y;pose.width=s.full.width;pose.height=s.full.height;
     }
@@ -9471,7 +9473,7 @@ function vanishingHomeEase(progress) {
     if(!s||dragImageMode==="outside")return null;
     if(vanishingPresentation)vanishingPresentation.hold=true;
     return {source:s.source,tab:s.tab,token:s.token,order:vanishOrder(s),fullMap:vanishFullMap(s),
-      paint:new Map(s.paint),point:{...s.point},p:s.paintedP,k:s.k,scale:s.scale,
+      paint:new Map(s.paint),point:{...s.point},bunnyPoint:{x:s.point.x-s.grip,y:s.point.y},p:s.paintedP,k:s.k,scale:s.scale,
       full:s.full,gap:s.gap,edge:s.edge,origin:s.origin,search:dragSearch};
   }
   function clearVanishingHome(){
@@ -9485,7 +9487,7 @@ function vanishingHomeEase(progress) {
     row.style.removeProperty("--op-vanishing-scale");
     dragGhost?.style.removeProperty("clip-path");hideGhost();
     const gaps=s.gaps.slice().sort((a,b)=>a-b);
-    window.__nocturneTrace?.("drag.vanish.end",{token:s.token,index:s.index,p:s.p,frames:gaps.length,
+    window.__nocturneTrace?.("drag.vanish.end",{token:s.token,index:s.index,p:s.p,geometry:"elastic-chain-v2",maxChanged:s.maxChanged||0,frames:gaps.length,
       p95:gaps.length?gaps[Math.floor((gaps.length-1)*.95)]:0,max:gaps.at(-1)||0},{sample:1000});
   }
   // Only after native settlement and ordinary structural sync. Animate
@@ -9508,7 +9510,7 @@ function vanishingHomeEase(progress) {
     const duration=insertion+VANISH_OPEN_MS,from=virtual?snapshot.fullMap:snapshot.paint;
     const sourceFinal=final.get(source),sourceFrom=snapshot.paint.get(source);
     const a=virtual?{...snapshot.fullMap.get(source),width:sourceFinal.width,height:sourceFinal.height}:null;
-    const curve=virtual?bunnyPose(snapshot.p,a,snapshot.point,snapshot.full,"C",snapshot.gap,snapshot.edge):null;
+    const curve=virtual?bunnyPose(snapshot.p,a,snapshot.bunnyPoint,snapshot.full,"C",snapshot.gap,snapshot.edge):null;
     let frame=0,start=window.performance.now();
     const gaps=[];let last=0,presentationChecked=false;
     const set=(n,b)=>{
@@ -9524,7 +9526,7 @@ function vanishingHomeEase(progress) {
       if(virtual&&elapsed<insertion){
         const u=bunnySmooth(elapsed/insertion),p=snapshot.p*(1-u);
         for(const [n,b] of snapshot.fullMap)if(n!==source)set(n,vanishMixBox(snapshot.paint.get(n),b,u));
-        const point={x:bunnyMix(snapshot.point.x,a.x,u),y:bunnyMix(snapshot.point.y,snapshot.edge+PULL_DISTANCE*BUNNY_DETACH_THRESHOLD*p,u)};
+        const point={x:bunnyMix(snapshot.bunnyPoint.x,a.x,u),y:bunnyMix(snapshot.bunnyPoint.y,snapshot.edge+PULL_DISTANCE*BUNNY_DETACH_THRESHOLD*p,u)};
         const pose=bunnyPose(p,a,point,snapshot.full,"C",snapshot.gap,snapshot.edge);
         for(const key of ["x","y","width","height"])pose[key]+=(sourceFrom[key]-curve[key])*(1-u);
         set(source,pose);
