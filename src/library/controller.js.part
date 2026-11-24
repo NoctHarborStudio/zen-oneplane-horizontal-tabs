@@ -5,14 +5,14 @@
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,options);
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.181",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.182",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
   const labels={downloads:"All Downloads",documents:"Documents",history:"History",pictures:"Pictures",closed:"Recently Closed"};
   const summaries={downloads:"Download records and file actions",documents:"Downloaded documents and opted-in folders",history:"Browsing history and search",pictures:"Downloaded pictures and opted-in folders",closed:"Recently closed tabs in this window"};
   let outgoingPages=[],pageSerial=0,scrollPending=false,scrollDrag=null,scrollObserver=null;
-  const SECTION_MS=1000,SECTION_EASING="cubic-bezier(.45,0,.55,1)";
+  const SECTION_MS=800,SECTION_EASING="cubic-bezier(.45,0,.55,1)";
   let state=createLibraryState(),dead=false,lease=()=>{},shell=null,animations=[],motionProbe=null,frame=0,returnFocus=null,rows=new Map(),backgroundAction=false,renderedSection=null,dragSource=null,pendingResult=null,clearing=false,confirmation=false,actionSerial=0,pendingClose=false,dragOwner=null,indicatorReady=false,lastFailure=null,fallbackDragTimer=0,fallbackDragMissing=0,fallbackDragUnknown=0;
   const data=createLibraryData({getServices:()=>win.__nocturneLibraryServices,onResult:result=>{const measure=state.phase==="opening"||state.phase==="switching",start=measure?win.performance.now():0;renderResults(result);if(measure)trace("render",{section:state.section,phase:state.phase,rows:result.rows.length,duration:win.performance.now()-start},{flush:false});},onError:renderError,onNotice:notice,onScanWait:status=>trace("media.scan.wait",{status,section:state.section}),schedule:(fn,ms)=>win.setTimeout(fn,ms),cancel:id=>win.clearTimeout(id)});
   const fileSection=()=>["downloads","documents","pictures"].includes(state.section);
@@ -484,19 +484,18 @@
   function clearSectionFlight(){
     for(const tile of outgoingPages)removePage(tile.view);
     outgoingPages=[];
-    if(shell?.page)shell.page.style.left="0%";
+    if(shell?.page)shell.page.style.transform="translateX(0%)";
   }
-  function pagePosition(node,width){
-    const value=win.getComputedStyle(node).left,n=parseFloat(value);
-    return value.endsWith("%")?n/100:width>0?n/width:NaN;
+  function pagePosition(node,viewport){
+    return viewport.width>0?(node.getBoundingClientRect().left-viewport.left)/viewport.width:NaN;
   }
   function freezeSectionFlight(){
     if(!shell?.view)return;
-    const width=shell.viewport.getBoundingClientRect().width;
-    for(const view of [shell.view,...outgoingPages.map(tile=>tile.view)]){
-      const node=view.controls.page,x=pagePosition(node,width);
-      if(Number.isFinite(x))node.style.left=(x*100)+"%";
-    }
+    const viewport=shell.viewport.getBoundingClientRect();
+    const poses=[shell.view,...outgoingPages.map(tile=>tile.view)].map(view=>{
+      const node=view.controls.page;return {node,x:pagePosition(node,viewport)};
+    });
+    for(const {node,x} of poses)if(Number.isFinite(x))node.style.transform="translateX("+(x*100)+"%)";
   }
   function sectionPlan(from,to,tiles){
     const direction=LIBRARY_SECTIONS.indexOf(to)>LIBRARY_SECTIONS.indexOf(from)?1:-1;
@@ -504,27 +503,27 @@
     const reused=visible.find(tile=>tile.section===to)||null;
     const edge=visible.length?(direction>0?Math.max(...visible.map(tile=>tile.x))+1:Math.min(...visible.map(tile=>tile.x))-1):direction;
     const target=reused?reused.x:edge;
-    const x=value=>({left:(value*100)+"%"});
+    const x=value=>({transform:"translateX("+(value*100)+"%)"});
     const frames=(start,end)=>[x(start),x(end)];
     return {direction:target<0?-1:target>0?1:direction,reused,target,
       tiles:visible.map(tile=>({tile,frames:frames(tile.x,tile.x-target)})),
       incoming:frames(target,0)};
   }
   function prepareSection(from,to){
-    const width=shell.viewport.getBoundingClientRect().width,old=shell.view;
+    const viewport=shell.viewport.getBoundingClientRect(),old=shell.view;
     if(!old)return null;
     const previous=[...outgoingPages,{view:old,section:from}];
-    const tiles=previous.map(tile=>({...tile,x:pagePosition(tile.view.controls.page,width)}));
+    const tiles=previous.map(tile=>({...tile,x:pagePosition(tile.view.controls.page,viewport)}));
     const motion=sectionPlan(from,to,tiles);
     if(!motion.tiles.length)return null;
     old.saved={query:state.query,filter:state.filter,sort:state.sort};
     scrollObserver?.disconnect();
-    for(const {tile,frames} of motion.tiles)tile.view.controls.page.style.left=frames[0].left;
+    for(const {tile,frames} of motion.tiles)tile.view.controls.page.style.transform=frames[0].transform;
     cancelMotion();
     const retained=new Set(motion.tiles.map(({tile})=>tile.view));
     for(const tile of previous)if(!retained.has(tile.view))removePage(tile.view);
     const target=motion.reused?.view||createPage(to);
-    target.controls.page.style.left=motion.incoming[0].left;
+    target.controls.page.style.transform=motion.incoming[0].transform;
     outgoingPages=motion.tiles.filter(({tile})=>tile.view!==target).map(({tile})=>({view:tile.view,section:tile.section}));
     for(const tile of outgoingPages){
       const node=tile.view.controls.page;node.classList.add("nl-page-outgoing");node.inert=true;node.setAttribute("aria-hidden","true");
@@ -638,7 +637,7 @@
       renderBody();(shell.search.disabled?shell.tabs.get(state.section):shell.search).focus({preventScroll:true});
     }else{
       if(motion?.reused){shell.tabs.get(state.section).focus({preventScroll:true});}else renderBody();
-      trace("section.motion",{source:from,section:state.section,direction:(motion?.direction??(LIBRARY_SECTIONS.indexOf(state.section)>LIBRARY_SECTIONS.indexOf(from)?1:-1))>0?"left":"right",duration:motion?ms:0,epoch,interrupted:before.phase==="switching",start:motion?.target??0,surfaces:outgoingPages.length+1,reused:!!motion?.reused,mode:"layout-left",original:true},{flush:false});
+      trace("section.motion",{source:from,section:state.section,direction:(motion?.direction??(LIBRARY_SECTIONS.indexOf(state.section)>LIBRARY_SECTIONS.indexOf(from)?1:-1))>0?"left":"right",duration:motion?ms:0,epoch,interrupted:before.phase==="switching",start:motion?.target??0,surfaces:outgoingPages.length+1,reused:!!motion?.reused,mode:"transform",original:true},{flush:false});
       if(!motion){settle(epoch);}
       else{
         startMotionProbe(ms);

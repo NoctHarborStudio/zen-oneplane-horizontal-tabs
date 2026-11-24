@@ -364,23 +364,23 @@ test("Library direct swipe preserves visible tiles and introduces new content ou
    const d=sections.indexOf(to)>sections.indexOf(from)?1:-1,tile={section:from,x:0};
    const p=plan(from,to,[tile]);
    assert.equal(p.direction,d);assert.equal(p.reused,null);
-   assert.deepEqual(p.tiles,[{tile,frames:[{left:"0%"},{left:(-d*100)+"%"}]}]);
-   assert.deepEqual(p.incoming,[{left:(d*100)+"%"},{left:"0%"}]);
+   assert.deepEqual(p.tiles,[{tile,frames:[{transform:"translateX(0%)"},{transform:"translateX("+(-d*100)+"%)"}]}]);
+   assert.deepEqual(p.incoming,[{transform:"translateX("+(d*100)+"%)"},{transform:"translateX(0%)"}]);
  }
  const a={section:"history",x:-.6},b={section:"pictures",x:.4};
  const p=plan("pictures","closed",[a,b]);
  assert.equal(p.tiles.length,2);assert.equal(p.target,1.4);
  assert.equal(p.tiles[0].tile,a);assert.equal(p.tiles[1].tile,b);
- assert.equal(p.tiles[0].frames[0].left,"-60%");assert.equal(p.tiles[1].frames[0].left,"40%");
- assert.ok(parseFloat(p.incoming[0].left)>=100);
+ assert.equal(p.tiles[0].frames[0].transform,"translateX(-60%)");assert.equal(p.tiles[1].frames[0].transform,"translateX(40%)");
+ assert.ok(parseFloat(p.incoming[0].transform.slice(11))>=100);
  const reverse=plan("pictures","history",[a,b]);
  assert.equal(reverse.reused,a);assert.equal(reverse.direction,-1);
- assert.deepEqual(reverse.tiles[0].frames,[{left:"-60%"},{left:"0%"}]);
- assert.deepEqual(reverse.tiles[1].frames,[{left:"40%"},{left:"100%"}]);
+ assert.deepEqual(reverse.tiles[0].frames,[{transform:"translateX(-60%)"},{transform:"translateX(0%)"}]);
+ assert.deepEqual(reverse.tiles[1].frames,[{transform:"translateX(40%)"},{transform:"translateX(100%)"}]);
  const left=plan("pictures","downloads",[a,b]);
  assert.equal(left.target,-1.6);assert.equal(left.tiles.length,2);
  assert.equal(plan("pictures","closed",[{section:"history",x:-1},b,{section:"documents",x:1.4}]).tiles.length,1);
- assert.match(source,/SECTION_MS=1000,SECTION_EASING="cubic-bezier\(\.45,0,\.55,1\)"/);
+ assert.match(source,/SECTION_MS=800,SECTION_EASING="cubic-bezier\(\.45,0,\.55,1\)"/);
  assert.doesNotMatch(source,/cloneNode\(|snapshotPage|sectionCover/);
  assert.match(source,/node.inert=true;node.setAttribute\("aria-hidden","true"\)/);
  assert.doesNotMatch(source,/queuedSection|section\.queued|drainSectionRequest/);
@@ -388,7 +388,8 @@ test("Library direct swipe preserves visible tiles and introduces new content ou
  assert.match(source,/view.controller.abort\(\);view.rows.clear\(\);view.controls.page.remove\(\)/);
  assert.match(css,/\.nl-page-viewport\{[^}]*overflow:hidden/);
  assert.match(css,/\.nl-page-outgoing\{[^}]*pointer-events:none/);
- assert.doesNotMatch(css,/\.nl-page\{[^}]*transform:/);
+ assert.match(css,/\.nl-page\{[^}]*left:0;[^}]*transform:translateX\(0%\)/);
+ assert.doesNotMatch(source,/\.page\.style\.left|node\.style\.left|mode:"layout-left"/);
  assert.match(source,/for\(const tile of previous\)if\(!retained.has\(tile.view\)\)removePage\(tile.view\)/);
 });
 test("Library stationary scrollbar derives size and position from native extent",()=>{
@@ -411,30 +412,31 @@ test("Library page factory, native ownership and cleanup use originals",()=>{
  const x=source.indexOf("  function clearSectionFlight("),y=source.indexOf("  function startMotionProbe(",x);
  const nodes=[],removed=[],aborted=[],observed=[],calls=[],sections=["downloads","documents","history","pictures","closed"];
  const view=section=>{
-   const node={style:{left:"0%"},isConnected:false,inert:false,classList:{add(){},remove(){}},setAttribute(){},removeAttribute(){},remove(){this.isConnected=false;removed.push(this);}};
+   const node={style:{transform:"translateX(0%)"},getBoundingClientRect(){return {left:50+parseFloat(this.style.transform.slice(11))};},isConnected:false,inert:false,classList:{add(){},remove(){}},setAttribute(){},removeAttribute(){},remove(){this.isConnected=false;removed.push(this);}};
    const v={section,controller:{abort(){aborted.push(node);}},rows:new Map([["r",{}]]),saved:null,limit:100,paused:false,controls:{page:node,body:{}}};
    nodes.push(v);return v;
  };
- const shell={view:null,viewport:{getBoundingClientRect:()=>({width:100}),insertBefore(node){node.isConnected=true;}},scrollbar:{}};
+ const shell={view:null,viewport:{getBoundingClientRect:()=>({left:50,width:100}),insertBefore(node){node.isConnected=true;}},scrollbar:{}};
  const state={section:"history",query:"q",sort:"site",filter:"week"};
  const fixture=new Function("shell","state","createPage","win","scrollObserver","data","LIBRARY_SECTIONS","calls",`
  let rows=new Map(),outgoingPages=[],scrollPending=false,renderedSection=null;
  const syncTools=()=>{},syncScrollbar=()=>{},cancelMotion=()=>{};
  ${source.slice(a,b)}
  ${source.slice(x,y)}
- return {bindPage,prepareSection,clearSectionFlight,releaseActivePage,resumePage,retained:()=>outgoingPages.slice(),rows:()=>rows};
- `)(shell,state,view,{getComputedStyle:n=>({left:n.style.left})},{disconnect(){observed.push(null);},observe(n){observed.push(n);}}, {start(...args){calls.push(args);}},sections,calls);
+ return {bindPage,prepareSection,clearSectionFlight,releaseActivePage,resumePage,freezeSectionFlight,retained:()=>outgoingPages.slice(),rows:()=>rows};
+ `)(shell,state,view,{},{disconnect(){observed.push(null);},observe(n){observed.push(n);}}, {start(...args){calls.push(args);}},sections,calls);
  const first=view("history");fixture.bindPage(first);const original=first.controls.page;
  let motion=fixture.prepareSection("history","pictures");const pictures=shell.view;
  assert.equal(fixture.retained()[0].view,first);assert.equal(first.controls.page,original);assert.equal(original.inert,true);
  assert.equal(first.rows.size,1);assert.deepEqual(first.saved,{query:"q",filter:"week",sort:"site"});
- original.style.left="-60%";pictures.controls.page.style.left="40%";
+ original.style.transform="translateX(-60%)";pictures.controls.page.style.transform="translateX(40%)";
+ fixture.freezeSectionFlight();assert.equal(original.style.transform,"translateX(-60%)");assert.equal(pictures.controls.page.style.transform,"translateX(40%)");
  state.section="pictures";state.query="";state.sort="new";state.filter="all";
  motion=fixture.prepareSection("pictures","history");
  assert.equal(motion.reused.view,first);assert.equal(shell.view,first);assert.equal(shell.page,original);assert.equal(first.paused,true);
  assert.equal(fixture.rows(),first.rows);assert.equal(calls.length,0);
  Object.assign(state,{section:"history",...first.saved});fixture.clearSectionFlight();fixture.resumePage();
- assert.equal(shell.page,original);assert.equal(original.inert,false);assert.equal(original.style.left,"0%");
+ assert.equal(shell.page,original);assert.equal(original.inert,false);assert.equal(original.style.transform,"translateX(0%)");
  assert.equal(pictures.rows.size,0);assert.equal(pictures.controls.page.isConnected,false);
  assert.deepEqual(calls,[["history","q",{sort:"site",filter:"week",limit:100}]]);
  fixture.releaseActivePage();assert.equal(shell.view,null);assert.equal(first.rows.size,0);assert.equal(aborted.length,2);assert.equal(removed.length,2);

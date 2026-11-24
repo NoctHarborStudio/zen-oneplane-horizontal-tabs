@@ -261,3 +261,8 @@ Preview.176 native traces contain 17 section flights, six interrupted, p50 RAF 5
 
 ## Preview.180 — original page ownership (supersedes cloned motion)
 The singleton shell owns navigation, viewport and scrollbar. Each real page owns its controls, record map, saved query/filter/sort and pagination, and abort-scoped control listeners. Retire the native query before retargeting, retain visible original pages inert, prune offscreen views, create a new target only if no visible original exists. On reversal bind the same view, preserve DOM until settled and then resume its bounded query. The scrollbar observer follows only the active view. Settlement removes outgoing originals; close freezes the in-flight pose and removes every view on hide, while reduced motion, replacement and unload clean up without copies. No cloneNode, hidden cover, second data owner or persistent cache. Native acceptance OPEN.
+
+
+## Preview.182 — original-page transform experiment
+
+Library animates original pages with percentage translateX on stable layout coordinates, 800ms symmetric easing, preserving live reversal, shared scrollbar and original-page cleanup. Capture visible rects relative to viewport before cancellation; preserve terminal identity transform. No permanent will-change or additional frame loop. Preview.181 trace: 15 flights, median RAF 5.56ms, max 15.10ms, no intervals >25ms; perceived presentation remains poor. Compositor improvement and text raster stability require native validation.

@@ -1,3 +1,7 @@
+## 0.3.0-preview.182 — Library compositor motion experiment
+
+Library animates original pages with percentage translateX on stable layout coordinates, 800ms symmetric easing, preserving live reversal, shared scrollbar and original-page cleanup. Capture visible rects relative to viewport before cancellation; preserve terminal identity transform. No permanent will-change or additional frame loop. Preview.181 trace: 15 flights, median RAF 5.56ms, max 15.10ms, no intervals >25ms; perceived presentation remains poor. Compositor improvement and text raster stability require native validation.
+
 ## 0.3.0-preview.181 — Home Island delayed reveal
 
 Use approved prototype B: independent vertical travel, delayed scale and opacity samples, shared by startup, close and the Lab. The 540ms scaled entrance lands before the existing tab wave; explicit native window close reverses the same curve after tab/bookmark folds, then retains the existing 110ms sealed dwell. The actual Island remains the only visual owner. Preserve geometry leases, fail-open fallback, cancellation, preference/reduced-motion behavior and native confirmation. Native visual validation pending.
