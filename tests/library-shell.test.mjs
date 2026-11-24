@@ -311,3 +311,45 @@ test("Library motion probe is bounded, opt-out-aware and releases scheduled fram
  enabled=true;run.startMotionProbe(0);assert.equal(frames.size,0);
  run.startMotionProbe(480);run.cancelMotion();assert.equal(frames.size,0);assert.equal(events[1].detail.completed,false);
 });
+
+test("Library captured descendant unload cannot dispose its live window owner",()=>{
+ const source=read("src/library/controller.js.part");
+ const doc={documentElement:{hasAttribute:()=>false}},events=new Map(),unloads=[],traces=[],observers=new Map();
+ let releases=0,disposals=0;
+ const prefs={getBoolPref:()=>true,addObserver:(k,fn)=>observers.set(k,fn),removeObserver:(k,fn)=>{assert.equal(observers.get(k),fn);observers.delete(k);}};
+ const win={document:doc,gBrowserInit:{delayedStartupFinished:true},
+   __nocturneTrace:(event,data)=>traces.push({event,data}),
+   __nocturneOverlay:{register:()=>()=>{releases++;}},__nocturneLibraryServices:{},
+   addEventListener:(name,fn,capture)=>events.set(name,{fn,capture}),
+   removeEventListener:(name,fn,capture)=>{if(events.get(name)?.fn===fn&&events.get(name)?.capture===capture)events.delete(name);},
+   addUnloadListener:fn=>unloads.push(fn)};
+ const run=new Function("window","Services","createLibraryState","createLibraryData","ChromeUtils",source);
+ const mount=()=>run(win,{prefs},()=>({phase:"closed",section:"history",motionEpoch:0}),()=>({dispose(){disposals++;}}),{importESModule:()=>({PrivateBrowsingUtils:{isWindowPrivate:()=>false}})});
+ mount();const first=win.__nocturneLibrary,unload=events.get("unload").fn;
+ assert.equal(events.get("unload").capture,true);
+ const child={};unload({target:child});unload({target:doc,originalTarget:child});
+ assert.equal(win.__nocturneLibrary,first);assert.equal(disposals,0);assert.equal(events.get("unload").fn,unload);
+ assert.equal(traces.filter(x=>x.event==="library.unload.ignored").length,1);
+ mount();const second=win.__nocturneLibrary;assert.notEqual(second,first);
+ assert.equal(disposals,1);assert.equal(releases,1);unloads[0]();unload({target:doc});
+ assert.equal(win.__nocturneLibrary,second);assert.equal(disposals,1);
+ events.get("unload").fn({target:doc,originalTarget:doc});
+ assert.equal(win.__nocturneLibrary,undefined);assert.equal(disposals,2);assert.equal(releases,2);
+ assert.equal(events.size,0);assert.equal(observers.size,0);
+ unloads[1]();assert.equal(disposals,2);
+ assert.deepEqual(traces.filter(x=>x.event==="library.dispose.end").map(x=>x.data),[{reason:"replacement",failed:0},{reason:"window-unload",failed:0}]);
+ mount();unloads[2]();assert.equal(disposals,3);assert.equal(win.__nocturneLibrary,undefined);
+ assert.equal(traces.at(-1).data.reason,"sine-unload");
+});
+test("Library dependencies reject foreign originalTarget on native unload",()=>{
+ for(const path of ["src/services/library-services-runtime.js.part","src/core/overlay-runtime.js.part"]){
+   const source=read(path),start=source.indexOf("  function onUnload(event){"),end=source.indexOf("\n  const api=",start);
+   assert.ok(start>=0&&end>start);
+   const doc={},win={document:doc};let calls=0;
+   const unload=new Function("win","doc","dispose",source.slice(start,end)+"return onUnload;")(win,doc,()=>calls++);
+   unload({target:{}});unload({target:win,originalTarget:{}});assert.equal(calls,0);
+   unload({target:doc,originalTarget:doc});unload({target:win});assert.equal(calls,2);
+   assert.match(source,/addEventListener\("unload",onUnload\)/);
+   assert.match(source,/removeEventListener\("unload",onUnload\)/);
+ }
+});

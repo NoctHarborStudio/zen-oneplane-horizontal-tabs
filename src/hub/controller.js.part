@@ -1429,9 +1429,15 @@
     function openHistory(event){
       event.preventDefault();event.stopPropagation();
       if(destroyed||!supported())return;
-      let accepted=false;
-      try{accepted=window.__nocturneLibrary?.toggle?.("history")===true;}catch{}
-      try{window.__nocturneTrace?.("library.button",{accepted,nativeFallback:false},{flush:true});}catch{}
+      let accepted=false,reason="api-missing";
+      const library=window.__nocturneLibrary;
+      try{
+        if(typeof library?.toggle==="function"){
+          accepted=library.toggle("history")===true;
+          reason=accepted?"accepted":"rejected";
+        }
+      }catch{reason="exception";}
+      try{window.__nocturneTrace?.("library.button",{accepted,nativeFallback:false,reason,overlay:!!window.__nocturneOverlay,services:!!window.__nocturneLibraryServices},{flush:true});}catch{}
     }
     function toggle(event){
       event.preventDefault();event.stopPropagation();

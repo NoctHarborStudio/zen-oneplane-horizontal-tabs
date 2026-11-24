@@ -390,7 +390,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
 (()=>{
   const win=window,KEY="__nocturneLibraryServices";
   const trace=(event,data)=>{try{if(win.__nocturneTrace)win.__nocturneTrace(event,data,{flush:true});else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,data,t:win.performance?.now?.()??0});}}catch{}};
-  trace("library.services.script",{version:"0.3.0-preview.166"});
+  trace("library.services.script",{version:"0.3.0-preview.167"});
   if(typeof win.addUnloadListener!=="function"||win.document.documentElement.hasAttribute("popup-window"))return;
   const BARRIER="__nocturneDownloadsDisposal",MEDIA_BARRIER="__nocturneMediaDisposal";
   const previous=win[KEY],previousClosing=previous?.dispose?.(),existing=win[BARRIER];
@@ -531,7 +531,7 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
   function dispose(){
     if(closing)return closing;
     dead=true;
-    win.removeEventListener("unload",dispose);
+    win.removeEventListener("unload",onUnload);
     for(const pref of [mediaPref,folderPref])try{Services.prefs.removeObserver(pref,onMediaScopeChange);}catch{}
     for(const s of [...historySessions])try{s.close();}catch{}
     try{trace("library.scope.dispose",{owner:"closed-tabs",...closedTabs.dispose()});}catch{}
@@ -541,9 +541,13 @@ function createMediaService({scan,barrier=Promise.resolve(),allowed=()=>true,win
     if(win[KEY]===api){delete win[KEY];win.dispatchEvent(new win.CustomEvent("Nocturne:ServicesGone"));}
     return closing;
   }
+  function onUnload(event){
+    const own=target=>target===win||target===win.document;
+    if(own(event?.target)&&(!event.originalTarget||own(event.originalTarget)))dispose();
+  }
   const api={downloads,openHistory,historyReady,openHistoryURL,closedTabs,copyHistoryURL,removeHistoryURL,clearHistoryRange,media,chooseFolder,clearFolders,mediaScanAvailable:!LOCAL_MEDIA_SCAN_SUSPENDED,openMedia:section=>mediaAllowed()?media.open(section,()=>downloads.pathKeys(windows)):null,dispose};
   Services.prefs.addObserver(mediaPref,onMediaScopeChange);
   Services.prefs.addObserver(folderPref,onMediaScopeChange);
-  win[KEY]=api;win.addUnloadListener(dispose);win.addEventListener("unload",dispose,{once:true});
+  win[KEY]=api;win.addUnloadListener(dispose);win.addEventListener("unload",onUnload);
   trace("library.services.ready",{registered:true,mediaScanAvailable:!LOCAL_MEDIA_SCAN_SUSPENDED});win.dispatchEvent(new win.CustomEvent("Nocturne:ServicesReady"));
 })();

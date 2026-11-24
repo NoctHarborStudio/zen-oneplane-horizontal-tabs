@@ -69,7 +69,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.166",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.167",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -144,6 +144,10 @@
   // Event-specific codes come only from fixed Nocturne producers, never user/native text.
   // Unlisted events keep their previous bounded grammar until separately audited.
   const EVENT_STRING_ENUMS=new Map([
+    ["library.button",{reason:new Set(["accepted","rejected","api-missing","exception"])}],
+    ["library.unload.ignored",{reason:new Set(["foreign-document"])}],
+    ["library.dispose.begin",{reason:new Set(["replacement","window-unload","sine-unload"])}],
+    ["library.dispose.end",{reason:new Set(["replacement","window-unload","sine-unload"])}],
     ["library.open.rejected",{reason:new Set(["busy","disabled","section","startup","window","overlay-missing","services-missing","exception","mount","geometry","overlay-busy","surface-hidden"])}],
     ["library.shortcut",{reason:new Set(["busy","disabled","section","startup","window","overlay-missing","services-missing","exception","mount","geometry","overlay-busy","surface-hidden","private","history-unready","downloads-unready","toggle-rejected"])}],
     ["library.media.scan.wait",{status:new Set(["deadline","late-complete","late-error"])}],
@@ -6881,9 +6885,15 @@ function installTabStrip() {
     function openHistory(event){
       event.preventDefault();event.stopPropagation();
       if(destroyed||!supported())return;
-      let accepted=false;
-      try{accepted=window.__nocturneLibrary?.toggle?.("history")===true;}catch{}
-      try{window.__nocturneTrace?.("library.button",{accepted,nativeFallback:false},{flush:true});}catch{}
+      let accepted=false,reason="api-missing";
+      const library=window.__nocturneLibrary;
+      try{
+        if(typeof library?.toggle==="function"){
+          accepted=library.toggle("history")===true;
+          reason=accepted?"accepted":"rejected";
+        }
+      }catch{reason="exception";}
+      try{window.__nocturneTrace?.("library.button",{accepted,nativeFallback:false,reason,overlay:!!window.__nocturneOverlay,services:!!window.__nocturneLibraryServices},{flush:true});}catch{}
     }
     function toggle(event){
       event.preventDefault();event.stopPropagation();

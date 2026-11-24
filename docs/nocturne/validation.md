@@ -860,3 +860,9 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [x] Single window-capture handler with Home and passive-host/top-layer outside-hit classification; retain native routes for result, toolbar, sub-popup, reduced-motion and non-primary actions.
 - [x] Source fixture tests classification, dispatch, rejection and closing guard.
 - [ ] Native Zen/Sine: same display and profile, open then click Home background after settle and during reveal. Expect smooth return and home-background close-start (not native-observer) for accepted background presses. Escape remains unchanged. Verify result navigation and toolbar commands; inspect pointer-boundary if missed. Icon parity and snapshot cost are separate open work.
+
+### Preview.167 — Library lifetime regression
+
+- Source-backed full Library controller fixture: capture-mode foreign and retargeted unload, live API and listener retention, generation replacement, stale old callback, exact window unload, Sine disable, observer and overlay lease cleanup. Dependency unload guards and launcher outcome fixtures also included.
+- Native gate: installed Zen/Sine full restart, open History on Home and a loaded page, navigate/reload/close a tab, open History again from the icon and Ctrl+H, repeat Ctrl+J, switch windows/workspaces and verify disable/reload. No native stock History fallback while opted in. Check new bounded lifecycle diagnostics if failure persists.
+- CI and native acceptance pending; do not interpret source tests as proof of native Gecko event delivery.

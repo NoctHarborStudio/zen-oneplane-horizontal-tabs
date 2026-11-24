@@ -16,11 +16,15 @@
   const key=e=>core.dispatchEscape(e);
   function dispose(){
     if(dead)return;dead=true;
-    win.removeEventListener("keydown",key,true);win.removeEventListener("unload",dispose);
+    win.removeEventListener("keydown",key,true);win.removeEventListener("unload",onUnload);
     core.dispose();if(win[KEY]===api)delete win[KEY];
   }
+  function onUnload(event){
+    const own=target=>target===win||target===doc;
+    if(own(event?.target)&&(!event.originalTarget||own(event.originalTarget)))dispose();
+  }
   const api={...core,dispose};
-  win[KEY]=api;win.addEventListener("keydown",key,true);win.addEventListener("unload",dispose,{once:true});win.addUnloadListener(dispose);
+  win[KEY]=api;win.addEventListener("keydown",key,true);win.addEventListener("unload",onUnload);win.addUnloadListener(dispose);
   // Late mounting and hot reload both rebind existing controllers.
   try{win.__nocturneTrace?.("library.overlay.ready",{ready:true},{flush:true});}catch{}
   win.dispatchEvent(new win.CustomEvent("Nocturne:OverlayReady"));

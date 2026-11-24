@@ -31,9 +31,12 @@ test("History launcher uses existing Library toggle and never opens stock Zen Hi
   let called=0;
   const accepted=run({toggle:section=>{assert.equal(section,"history");called++;return true;}});
   assert.equal(called,1);assert.deepEqual(accepted.native,[]);assert.deepEqual(accepted.events,["prevent","stop"]);
-  assert.deepEqual(accepted.trace[0].data,{accepted:true,nativeFallback:false});
+  assert.deepEqual(accepted.trace[0].data,{accepted:true,nativeFallback:false,reason:"accepted",overlay:false,services:false});
   assert.deepEqual(run({toggle:()=>false}).native,[]);
   assert.deepEqual(run(null).native,[]);
+  assert.equal(run(null).trace[0].data.reason,"api-missing");
+  assert.equal(run({toggle:()=>false}).trace[0].data.reason,"rejected");
+  assert.equal(run({toggle:()=>{throw Error("unavailable");}}).trace[0].data.reason,"exception");
   assert.deepEqual(run({toggle:()=>{throw Error("unavailable");}}).native,[]);
   assert.equal(run({toggle:()=>false}).trace[0].data.accepted,false);
   assert.deepEqual(run({toggle:()=>true},false).native,[]);

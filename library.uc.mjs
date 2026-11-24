@@ -251,7 +251,7 @@ function libraryShortcutSection(event,os="WINNT"){
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,options);
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.166",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.167",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
@@ -784,13 +784,31 @@ function libraryShortcutSection(event,os="WINNT"){
     route(e,section,"keydown");
   }
   function onServicesGone(){if(dragSource){pendingClose=true;return;}if(active())closeNow();}
-  function dispose(){
-    if(dead)return;closeNow(false);dead=true;stopFallbackDragWatch();data.dispose();lease();cancelMotion();if(frame)win.cancelAnimationFrame(frame);
-    for(const [name,fn] of listeners)win.removeEventListener(name,fn,true);
-    try{prefs.removeObserver(PREF,onPref);prefs.removeObserver(MEDIA_PREF,onMediaPref);prefs.removeObserver("zen.nocturne.library.custom-folders",onMediaPref);}catch{}shell?.layer.remove();shell=null;if(win[KEY]===api)delete win[KEY];
+  // A captured descendant unload is not a chrome-window exit.
+  let ignoredUnload=false;
+  function onUnload(event){
+    const own=target=>target===win||target===doc;
+    if(!own(event?.target)||(event.originalTarget&&!own(event.originalTarget))){
+      if(!ignoredUnload){ignoredUnload=true;trace("unload.ignored",{reason:"foreign-document"});}
+      return;
+    }
+    dispose("window-unload");
   }
-  const listeners=[["keydown",onKey],["command",onCommand],["Nocturne:ServicesGone",onServicesGone],["Nocturne:OverlayReady",bindOverlay],["resize",resize],["TabSelect",onTab],["ZenRefined:WorkspaceTransition",onWorkspace],["dragstart",onDragStart],["unload",dispose]];
-  const api={open,toggle,close,getState:()=>({...state}),getDiagnostics:diagnostics,dispose};
+  function dispose(reason="replacement"){
+    if(dead)return;
+    dead=true;let failed=0;
+    const step=fn=>{try{fn();}catch{failed++;}};
+    trace("dispose.begin",{reason,phase:state.phase,owns:win[KEY]===api});
+    step(()=>closeNow(false));step(stopFallbackDragWatch);step(()=>data.dispose());step(()=>lease());step(()=>cancelMotion());
+    if(frame)step(()=>win.cancelAnimationFrame(frame));frame=0;
+    for(const [name,fn] of listeners)step(()=>win.removeEventListener(name,fn,true));
+    for(const [pref,fn] of [[PREF,onPref],[MEDIA_PREF,onMediaPref],["zen.nocturne.library.custom-folders",onMediaPref]])step(()=>prefs.removeObserver(pref,fn));
+    step(()=>shell?.layer.remove());shell=null;
+    if(win[KEY]===api)delete win[KEY];
+    trace("dispose.end",{reason,failed});
+  }
+  const listeners=[["keydown",onKey],["command",onCommand],["Nocturne:ServicesGone",onServicesGone],["Nocturne:OverlayReady",bindOverlay],["resize",resize],["TabSelect",onTab],["ZenRefined:WorkspaceTransition",onWorkspace],["dragstart",onDragStart],["unload",onUnload]];
+  const api={open,toggle,close,getState:()=>({...state}),getDiagnostics:diagnostics,dispose:()=>dispose("replacement")};
   win[KEY]=api;for(const [name,fn] of listeners)win.addEventListener(name,fn,true);
-  win.addUnloadListener(dispose);prefs.addObserver(PREF,onPref);prefs.addObserver(MEDIA_PREF,onMediaPref);prefs.addObserver("zen.nocturne.library.custom-folders",onMediaPref);bindOverlay();trace("ready",diagnostics(false));
+  win.addUnloadListener(()=>dispose("sine-unload"));prefs.addObserver(PREF,onPref);prefs.addObserver(MEDIA_PREF,onMediaPref);prefs.addObserver("zen.nocturne.library.custom-folders",onMediaPref);bindOverlay();trace("ready",diagnostics(false));
 })();
