@@ -7,8 +7,8 @@ const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 const source=read("src/core/preferences.js.part"),boot=read("src/core/bootstrap.js.part");
 const KEY="zen.oneplane.original-layout",CTRL="__oneplaneLayoutController",A="zen.view.use-single-toolbar",B="zen.tabs.vertical.right-side";
 function fixture(){
- const values=new Map(),defaults=new Map([[A,true],[B,false],["zen.view.sidebar-expanded",true],["zen.view.compact.hide-tabbar",false],["zen.view.compact.hide-toolbar",true],["zen.view.compact.enable-at-startup",false],["zen.library.enabled",true],["zen.nocturne.library.preview",false]]);
- const windows=[],writes=[],observers=new Set(),prefs={PREF_BOOL:128,getPrefType:()=>128,getStringPref:(k,d)=>values.get(k)??d,setStringPref:(k,v)=>values.set(k,v),getBoolPref:(k,fallback)=>values.get(k)??defaults.get(k)??fallback,prefHasUserValue:k=>values.has(k),setBoolPref(k,v){writes.push([k,v]);values.set(k,v);},clearUserPref:k=>values.delete(k)};
+ const values=new Map(),defaults=new Map([[A,true],[B,false],["zen.view.sidebar-expanded",true],["zen.view.compact.hide-tabbar",false],["zen.view.compact.hide-toolbar",true],["zen.view.compact.enable-at-startup",false],["zen.library.enabled",true],["zen.nocturne.library.preview",false],["zen.theme.content-element-separation",8]]);
+ const windows=[],writes=[],observers=new Set(),prefs={PREF_BOOL:128,PREF_INT:64,getPrefType:k=>k==="zen.theme.content-element-separation"?64:128,getIntPref:(k,d)=>values.get(k)??defaults.get(k)??d,setIntPref(k,v){writes.push([k,v]);values.set(k,v);},getStringPref:(k,d)=>values.get(k)??d,setStringPref:(k,v)=>values.set(k,v),getBoolPref:(k,fallback)=>values.get(k)??defaults.get(k)??fallback,prefHasUserValue:k=>values.has(k),setBoolPref(k,v){writes.push([k,v]);values.set(k,v);},clearUserPref:k=>values.delete(k)};
  const Services={prefs,startup:{shuttingDown:false},obs:{addObserver(fn){observers.add(fn);},removeObserver(fn){observers.delete(fn);}},wm:{getEnumerator(){const items=[...windows];return {hasMoreElements:()=>items.length>0,getNext:()=>items.shift()};}}};
  function mount(resources={},register=false,onEvent=()=>{}){
   const root={hasAttribute:()=>false,setAttribute(){},removeAttribute(){}},document={documentElement:root},timers=new Map(),events=[],unload=new Map();
@@ -180,4 +180,31 @@ test("clean-profile Library default enables reversible native cutover, explicit 
   const b=f.mount();await b.activate();
   assert.equal(f.prefs.getBoolPref("zen.library.enabled"),true);
   b.cleanup();
+});
+
+test("native content frame is disabled automatically and restored by final Layout owner",async()=>{
+ const f=fixture(),key="zen.theme.content-element-separation",a=f.mount(),b=f.mount();
+ await a.activate();await b.activate();
+ assert.equal(f.prefs.getIntPref(key),0);
+ assert.deepEqual(f.writes.filter(([k])=>k===key),[[key,0]]);
+ a.cleanup();assert.equal(f.prefs.getIntPref(key),0);
+ b.cleanup();assert.equal(f.prefs.getIntPref(key),8);assert.equal(f.values.has(key),false);
+});
+test("already borderless profile is not claimed; custom integer frame restored and external edits preserved",async()=>{
+ const key="zen.theme.content-element-separation";
+ for(const [initial,external,expected] of [[0,null,0],[12,null,12],[8,4,4]]){
+  const f=fixture();f.values.set(key,initial);const a=f.mount();await a.activate();
+  assert.equal(f.prefs.getIntPref(key),0);
+  if(initial===0)assert.equal(f.writes.some(([k])=>k===key),false);
+  if(external!==null)f.values.set(key,external);
+  a.cleanup();assert.equal(f.values.get(key),expected);assert.equal(f.values.has(KEY),false);
+ }
+});
+test("legacy native layout backup migrates absent integer frame without losing previous ownership",async()=>{
+ const key="zen.theme.content-element-separation",f=fixture(),a=f.mount();await a.activate();
+ const saved=JSON.parse(f.values.get(KEY));delete saved[key];f.values.set(KEY,JSON.stringify(saved));
+ f.values.delete(key);a.window.closed=true;
+ const b=f.mount();await b.activate();assert.equal(f.prefs.getIntPref(key),0);
+ assert.deepEqual(JSON.parse(f.values.get(KEY))[key],{value:8,user:false,owned:true});
+ b.cleanup();assert.equal(f.values.has(key),false);assert.equal(f.prefs.getIntPref(key),8);assert.equal(f.values.has(KEY),false);
 });

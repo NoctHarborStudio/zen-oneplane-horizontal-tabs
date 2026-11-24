@@ -93,7 +93,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.190",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.191",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -1472,6 +1472,9 @@ function startupBloomAssemblyPlan(start,scale){
 const KEY = "zen.oneplane.original-layout";
 const CONTROLLER = "__oneplaneLayoutController";
 const NATIVE_LIBRARY = "zen.library.enabled";
+const NATIVE_FRAME = "zen.theme.content-element-separation";
+// Zen uses zero separation to set zen-no-padding and suppress the content frame.
+// Keep the integer in the same reversible native layout lease.
 const TARGET = {
   "zen.view.use-single-toolbar": false,
   "zen.tabs.vertical.right-side": false,
@@ -1479,6 +1482,7 @@ const TARGET = {
   "zen.view.compact.hide-tabbar": true,
   "zen.view.compact.hide-toolbar": true,
   [NATIVE_LIBRARY]: false,
+  [NATIVE_FRAME]: 0,
 };
 const STARTUP = "zen.view.compact.enable-at-startup";
 const root = document.documentElement;
@@ -1491,25 +1495,31 @@ let closing = false,closeTimer=0;
 let startupObserver = null;
 let removeTabStrip = null;
 
+function validNativeValue(name,value){
+  return name===NATIVE_FRAME?Number.isInteger(value)&&value>=-2147483648&&value<=2147483647:typeof value==="boolean";
+}
+function readNativeValue(name){return name===NATIVE_FRAME?prefs.getIntPref(name):prefs.getBoolPref(name);}
+function writeNativeValue(name,value){if(name===NATIVE_FRAME)prefs.setIntPref(name,value);else prefs.setBoolPref(name,value);}
 function snapshot() {
   const capture=name=>{
-    if (prefs.getPrefType(name) !== prefs.PREF_BOOL)
+    if (prefs.getPrefType(name) !== (name===NATIVE_FRAME?prefs.PREF_INT:prefs.PREF_BOOL))
       throw new Error("Unsupported Zen preference: " + name);
-    return { value: prefs.getBoolPref(name), user: prefs.prefHasUserValue(name), owned:false };
+    return { value: readNativeValue(name), user: prefs.prefHasUserValue(name), owned:false };
   };
   const raw = prefs.getStringPref(KEY, "");
   if (raw) {
     const saved = JSON.parse(raw);
-    const valid=name=>typeof saved?.[name]?.value==="boolean"&&typeof saved?.[name]?.user==="boolean";
+    const valid=name=>validNativeValue(name,saved?.[name]?.value)&&typeof saved?.[name]?.user==="boolean";
     const keys=[...Object.keys(TARGET),STARTUP];
     // Extend the pre-cutover backup only after validating all legacy keys.
     // An absent key has never been owned; do not invent its original value.
-    const missingLibrary=saved&&typeof saved==="object"&&!Object.hasOwn(saved,NATIVE_LIBRARY);
-    if (keys.every(name=>name===NATIVE_LIBRARY&&missingLibrary||valid(name))) {
+    const addedKeys=[NATIVE_LIBRARY,NATIVE_FRAME];
+    const missing=name=>addedKeys.includes(name)&&saved&&typeof saved==="object"&&!Object.hasOwn(saved,name);
+    if (keys.every(name=>missing(name)||valid(name))) {
       // A partial release may leave a complete backup. Reacquire only
       // previously released keys from their current user/default state.
       let changed=false;
-      if(missingLibrary){saved[NATIVE_LIBRARY]=capture(NATIVE_LIBRARY);changed=true;}
+      for(const name of addedKeys)if(missing(name)){saved[name]=capture(name);changed=true;}
       for (const name of Object.keys(TARGET)) {
         if (saved[name].released===true) { saved[name]=capture(name); changed=true; }
       }
@@ -1546,21 +1556,21 @@ function restorePrefs(preserveSidebar=false) {
   for (const name of Object.keys(TARGET)) {
     try {
       const original = saved[name];
-      if(name===NATIVE_LIBRARY&&!Object.hasOwn(saved,name)){skipped++;continue;}
-      if (!original || typeof original.value !== "boolean" || typeof original.user !== "boolean")
+      if([NATIVE_LIBRARY,NATIVE_FRAME].includes(name)&&!Object.hasOwn(saved,name)){skipped++;continue;}
+      if (!original || !validNativeValue(name,original.value) || typeof original.user !== "boolean")
         throw new Error("Invalid saved preference");
       if (original.released===true) { alreadyReleased++; continue; }
       // New snapshots distinguish a no-op acquisition from a native write.
       // Legacy backups retain their old value-based restoration contract.
       if (original.owned===false ||
-          prefs.getBoolPref(name) !== TARGET[name] ||
+          readNativeValue(name) !== TARGET[name] ||
           (original.owned===true&&!prefs.prefHasUserValue(name))) {
         skipped++; original.released=true; continue;
       }
       // Keep only an owned native sidebar setting across confirmed native exit.
       // Zen reads it before Sine on the next launch. A live unload restores it.
       if(preserveSidebar&&name==="zen.view.compact.hide-tabbar"){retained++;continue;}
-      if (original.user) prefs.setBoolPref(name, original.value);
+      if (original.user) writeNativeValue(name, original.value);
       else prefs.clearUserPref(name);
       restored++;
       original.released=true;
@@ -11145,20 +11155,21 @@ async function activate() {
         if(!current())return;
         // Native Library cutover is selected only for a profile that opted into Nocturne Library.
         if(name===NATIVE_LIBRARY&&!prefs.getBoolPref("zen.nocturne.library.preview",true))continue;
-        const actual=prefs.getBoolPref(name);
+        const actual=readNativeValue(name);
         if(actual===value)continue;
         if(saved[name].owned!==undefined){
           saved[name]={value:actual,user:prefs.prefHasUserValue(name),owned:true};
           prefs.setStringPref(KEY,JSON.stringify(saved));
           if(!current())return;
         }
-        prefs.setBoolPref(name,value);
+        writeNativeValue(name,value);
       }
     }finally{
       preferenceMutation=false;
       finishCleanup();
     }
     if(!current())return;
+    try{window.__nocturneTrace?.("layout.frame",()=>({separation:readNativeValue(NATIVE_FRAME),borderless:readNativeValue(NATIVE_FRAME)===0}),{flush:true});}catch{}
     // Zen's supported preference blocks toggle and edge-swipe admission.
     // Close an already visible native Library via its own API, not DOM hiding.
     if(!prefs.getBoolPref(NATIVE_LIBRARY,true)){

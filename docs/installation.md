@@ -7,7 +7,7 @@ Use a disposable profile, not your daily browser.
 3. Nocturne uses a local browser-chrome script to prepare the layout automatically. Sine 2.3.3 requires the user to explicitly permit scripts from unofficial mods for this feature. Review [layout.uc.mjs](../layout.uc.mjs) first. The Sine setting applies to other unpublished mods too; it is not changed by Nocturne.
 4. Enable Nocturne in Sine. Restart Zen after updating if the new script is not loaded immediately.
 
-No manual sidebar position, toolbar mode or Compact Mode setup is intended. The script records the original native values, configures Multiple Toolbars, the expanded left sidebar and Hide Toolbar, and requests native Compact Mode. The CSS is gated by the script's per-window active marker.
+No manual sidebar position, toolbar mode or Compact Mode setup is intended. The script records the original native values, configures Multiple Toolbars, the expanded left sidebar and Hide Toolbar, and requests native Compact Mode. The layout also sets `zen.theme.content-element-separation` to `0` using the same reversible global preference lease. Zen itself enables `zen-no-padding`; existing zero values are not claimed, previous user/default values are restored when the final Layout owner releases, and external edits are preserved. This removes the inner content frame, not the OS window outline. The CSS is gated by the script's per-window active marker.
 
 ## Fresh installation versus an upgraded profile
 

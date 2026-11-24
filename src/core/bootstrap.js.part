@@ -164,20 +164,21 @@ async function activate() {
         if(!current())return;
         // Native Library cutover is selected only for a profile that opted into Nocturne Library.
         if(name===NATIVE_LIBRARY&&!prefs.getBoolPref("zen.nocturne.library.preview",true))continue;
-        const actual=prefs.getBoolPref(name);
+        const actual=readNativeValue(name);
         if(actual===value)continue;
         if(saved[name].owned!==undefined){
           saved[name]={value:actual,user:prefs.prefHasUserValue(name),owned:true};
           prefs.setStringPref(KEY,JSON.stringify(saved));
           if(!current())return;
         }
-        prefs.setBoolPref(name,value);
+        writeNativeValue(name,value);
       }
     }finally{
       preferenceMutation=false;
       finishCleanup();
     }
     if(!current())return;
+    try{window.__nocturneTrace?.("layout.frame",()=>({separation:readNativeValue(NATIVE_FRAME),borderless:readNativeValue(NATIVE_FRAME)===0}),{flush:true});}catch{}
     // Zen's supported preference blocks toggle and edge-swipe admission.
     // Close an already visible native Library via its own API, not DOM hiding.
     if(!prefs.getBoolPref(NATIVE_LIBRARY,true)){
