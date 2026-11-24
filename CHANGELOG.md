@@ -1,3 +1,11 @@
+## 0.3.0-preview.160 — native caption controls stay in the upper row
+
+Zen 1.24.2b can move `.titlebar-buttonbox-container` directly into `#nav-bar` before Nocturne runs, leaving the caption node without Nocturne's `data-zr-native-captions` marker. Existing CSS capped only the marked branch. When `data-op-overflow-row` extended the toolbar to two rows, the native close/minimize/maximize hit area could stretch vertically.
+
+The active-layout CSS now constrains either direct native caption container or tagged adopted container to `--op-top-row-height`, including nested buttonbox/buttons and zero minimum heights; it also cancels the generic overflow bottom margin on that container. The tab strip's two-row size and native widget reparenting are unchanged. A source-backed regression covers the two selectors and generated CSS. Zen Windows visual/hit-test verification remains pending.
+
+This change is rebased on preview.159's separately implemented History button below Hub; its source, generated CSS, and native fallback are preserved.
+
 ## 0.3.0-preview.159 — History button below One Plane Hub
 
 Add a small History launcher directly below the existing One Plane Hub toolbar icon. The new control is owned by the existing Layout/Hub lifecycle and reuses the existing Nocturne Library `toggle("history")` route. When the experimental shell is disabled, unready, private or otherwise cannot accept, it invokes the stock `Browser:ShowAllHistory` command instead of creating another panel or modifying native history.

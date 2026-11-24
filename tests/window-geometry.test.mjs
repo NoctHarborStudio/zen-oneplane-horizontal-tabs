@@ -179,3 +179,18 @@ test("retargeted split drop retires the local gesture before any native command"
  ${code}onSplitDrop({preventDefault(){calls.push("prevent")},stopPropagation(){calls.push("stop")}});return calls;`);
  for(const [allowed,point] of [[false,{x:.5,y:.5}],[true,null]])assert.deepEqual(run(allowed,point),["prevent","stop","split-hit-rejected"]);
 });
+
+test("native window buttons use the first-row size even when Zen placed them in #nav-bar",()=>{
+ const refined=readFileSync(new URL("../src/styles/refined-features.css.part",import.meta.url),"utf8");
+ const chrome=readFileSync(new URL("../chrome.css",import.meta.url),"utf8");
+ const captions=refined.split("/* Zen may move native captions")[1].split("/* The hub stays anchored")[0];
+ const direct="> :is([data-zr-native-captions],.titlebar-buttonbox-container)";
+ assert.equal(captions.split(direct).length-1,3);
+ assert.ok(captions.includes("align-self:flex-start!important;align-items:center!important"));
+ assert.ok(captions.includes("height:var(--op-top-row-height,52px)!important;min-height:0!important;max-height:var(--op-top-row-height,52px)!important"));
+ assert.ok(captions.includes("margin-block:0!important;flex-shrink:0!important"));
+ assert.ok(captions.includes("min-height:0!important;height:var(--op-top-row-height,52px)!important;max-height:var(--op-top-row-height,52px)!important"));
+ assert.ok(captions.includes(direct+" .titlebar-button"));
+ assert.ok(chrome.endsWith(refined));
+ assert.ok(base.includes("#nav-bar:has(#oneplane-tabs[data-op-overflow-row])"));
+});

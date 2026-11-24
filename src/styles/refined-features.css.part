@@ -533,17 +533,19 @@
 :root[oneplane-active="true"][zen-compact-mode="true"] #zen-appcontent-navbar-wrapper#zen-appcontent-navbar-wrapper #nav-bar#nav-bar#nav-bar {
   background:transparent!important;background-image:none!important;backdrop-filter:none!important;
 }
-/* Native Windows captions occupy the first row, independent of the strip. */
-:root[oneplane-active="true"]:not([customizing],[inDOMFullscreen="true"],[inFullscreen="true"]) #nav-bar#nav-bar > [data-zr-native-captions] {
+/* Zen may move native captions into #nav-bar before OnePlane starts.
+   Match that unmarked native container as well as our adopted one, so a
+   second tab row never stretches the window buttons or their hit regions. */
+:root[oneplane-active="true"]:not([customizing],[inDOMFullscreen="true"],[inFullscreen="true"]) #nav-bar#nav-bar > :is([data-zr-native-captions],.titlebar-buttonbox-container) {
   align-self:flex-start!important;align-items:center!important;
   height:var(--op-top-row-height,52px)!important;min-height:0!important;max-height:var(--op-top-row-height,52px)!important;
   margin-block:0!important;flex-shrink:0!important;
 }
-:root[oneplane-active="true"]:not([customizing],[inDOMFullscreen="true"],[inFullscreen="true"]) #nav-bar#nav-bar > [data-zr-native-captions] :is(.titlebar-buttonbox,.titlebar-buttonbox-container) {
-  align-self:center!important;align-items:center!important;height:var(--op-top-row-height,52px)!important;max-height:var(--op-top-row-height,52px)!important;
+:root[oneplane-active="true"]:not([customizing],[inDOMFullscreen="true"],[inFullscreen="true"]) #nav-bar#nav-bar > :is([data-zr-native-captions],.titlebar-buttonbox-container) :is(.titlebar-buttonbox,.titlebar-buttonbox-container) {
+  align-self:center!important;align-items:center!important;min-height:0!important;height:var(--op-top-row-height,52px)!important;max-height:var(--op-top-row-height,52px)!important;
 }
-:root[oneplane-active="true"]:not([customizing],[inDOMFullscreen="true"],[inFullscreen="true"]) #nav-bar#nav-bar > [data-zr-native-captions] .titlebar-button {
-  align-self:center!important;max-height:var(--op-top-row-height,52px)!important;height:var(--op-top-row-height,52px)!important;
+:root[oneplane-active="true"]:not([customizing],[inDOMFullscreen="true"],[inFullscreen="true"]) #nav-bar#nav-bar > :is([data-zr-native-captions],.titlebar-buttonbox-container) .titlebar-button {
+  align-self:center!important;min-height:0!important;max-height:var(--op-top-row-height,52px)!important;height:var(--op-top-row-height,52px)!important;
 }
 
 /* The hub stays anchored during a workspace swap, including the native

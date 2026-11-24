@@ -821,3 +821,11 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [ ] Toggle `zen.nocturne.library.preview=false` in a disposable session: button should fall back to native Zen History. Check disabled/unloaded Sine, normal/private windows, narrow window, overflow, bookmarks row, DPI and keyboard focus/Enter/Space. Validate placement, no horizontal tab strip shift, and no zombie button after hot reload.
 - [x] [PR #46](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/pull/46) published preview.159 at `55e5203e9b8f6ea2acc416d62c54b58513a37655`; [CI 45299914792](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45299914792) **SUCCESS**: 844/844 Node, 15/15 Python, 12/12 runtime parsers, verified generated CSS/Layout and public Sine package.
 - [ ] Native hit testing and visual acceptance are not established by source/CI fixtures.
+
+### preview.160 — native window captions with overflowed tab rows
+
+- [x] Check Zen 1.24.2b source: native `actualWindowButtons` is `.titlebar-buttonbox-container`, which Zen may append directly into `#nav-bar` without Nocturne's marker.
+- [x] Restrict direct native and tagged caption paths to first-row height, including children and margins. Do not alter the new History button from preview.159 or two-row tab projection.
+- [x] Add source-backed CSS geometry invariant fixture and regenerate stylesheet against current preview.159 History control.
+- [ ] Full CI, reproducible generated files, runtime parsers.
+- [ ] Native Windows Zen/Sine: normal/two-row, maximize/restore, minimize/restore/close hit testing, 125/150% DPI, Compact hover, resize, History button click, disable/reload and the native outside-`#nav-bar` fallback.
