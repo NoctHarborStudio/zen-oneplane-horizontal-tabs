@@ -229,10 +229,16 @@ function acquireZenHome(win, services) {
 #urlbar[data-zr-home-search][zen-floating-urlbar="true"] #urlbar-results .urlbarView-row{
   --urlbarview-row-min-height:40px;
 }
+/* Resolve the intended thin rule to a whole number of physical pixels.
+   The frozen renderer copies the same resolved background geometry. */
+#urlbar[data-zr-home-search][zen-floating-urlbar="true"] #urlbar-results[data-zr-smart-grid]{
+  background-size:var(--zh-search-rule,1px) calc(100% - 16px);
+}
 /* Home already animates the whole result view. Keep both chronological
    rails stable; ordinary non-Home search retains its own timeline motion. */
 #urlbar[data-zr-home-search][zen-floating-urlbar="true"] #urlbar-results[data-zr-smart-grid][data-zr-timeline] > .urlbarView-row[data-zr-rail]::after{
   animation:none!important;background-position:center bottom,center!important;opacity:.43!important;
+  background-size:6px 6px,var(--zh-search-rule,1px) calc(100% - 4px)!important;
 }
 #urlbar[data-zr-home-search-motion="prepare"][zen-floating-urlbar="true"],
 #urlbar[data-zr-home-search-motion="run"][zen-floating-urlbar="true"]{
@@ -539,7 +545,7 @@ function acquireZenHome(win, services) {
     searchReturnParts=[];searchLastRect=null;
     if(searchBar){
       searchBar.removeAttribute("data-zr-home-search");searchBar.removeAttribute("data-zh-closing");
-      for(const key of ["left","top","width","header","room"])searchBar.style?.removeProperty("--zh-search-"+key);
+      for(const key of ["left","top","width","header","room","rule"])searchBar.style?.removeProperty("--zh-search-"+key);
     }
     if(searchInput&&searchInput.getAttribute("placeholder")===searchSessionLabel){
       if(searchOriginalPlaceholder===null)searchInput.removeAttribute("placeholder");
@@ -559,9 +565,14 @@ function acquireZenHome(win, services) {
     const top=Math.min(Math.max(12,from.top),Math.max(12,h-header-16));
     return {left,top,width,header,room:Math.max(header,h-top-16)};
   }
+  function searchRuleWidth(dpr){
+    const scale=Number.isFinite(dpr)&&dpr>0?dpr:1;
+    return Math.max(1,Math.floor(scale))/scale;
+  }
   function applySearchGeometry(bar,geometry){
     if(!geometry)return;
     for(const [key,value] of Object.entries(geometry))bar.style?.setProperty("--zh-search-"+key,value+"px");
+    bar.style?.setProperty("--zh-search-rule",searchRuleWidth(win.devicePixelRatio)+"px");
   }
   // Use an explicit bounded frame driver instead of depending on Gecko
   // interpolating a registered custom property. The only per-frame work
@@ -731,7 +742,7 @@ function acquireZenHome(win, services) {
   // event handlers, selectable IDs or interactive links.
   // Resolved longhands preserve one-sided separators and multi-layer
   // pseudo-elements. Mixed border shorthands were empty in the old copy.
-  const snapshotProperties=("display position box-sizing width height min-width min-height max-width max-height top right bottom left margin-top margin-right margin-bottom margin-left padding-top padding-right padding-bottom padding-left border-top-width border-right-width border-bottom-width border-left-width border-top-style border-right-style border-bottom-style border-left-style border-top-color border-right-color border-bottom-color border-left-color border-top-left-radius border-top-right-radius border-bottom-right-radius border-bottom-left-radius outline-width outline-style outline-color outline-offset box-shadow background-color background-image background-size background-position background-position-x background-position-y background-repeat background-origin background-clip color opacity font-family font-size font-weight font-style font-stretch font-variant-numeric font-feature-settings line-height letter-spacing text-align text-overflow white-space overflow-x overflow-y overflow-wrap direction writing-mode align-items align-self align-content justify-items justify-self justify-content flex-direction flex-wrap flex-grow flex-shrink flex-basis order row-gap column-gap grid-template-columns grid-template-rows grid-auto-rows grid-auto-columns grid-auto-flow grid-row-start grid-row-end grid-column-start grid-column-end vertical-align object-fit object-position list-style-image fill stroke -moz-context-properties mask-image mask-size mask-position mask-repeat transform transform-origin scale translate visibility z-index scrollbar-width scrollbar-color").split(" ");
+  const snapshotProperties=("display position box-sizing width height min-width min-height max-width max-height top right bottom left margin-top margin-right margin-bottom margin-left padding-top padding-right padding-bottom padding-left border-top-width border-right-width border-bottom-width border-left-width border-top-style border-right-style border-bottom-style border-left-style border-top-color border-right-color border-bottom-color border-left-color border-top-left-radius border-top-right-radius border-bottom-right-radius border-bottom-left-radius outline-width outline-style outline-color outline-offset box-shadow background-color background-image background-size background-position background-position-x background-position-y background-repeat background-origin background-clip color opacity font-family font-size font-weight font-style font-stretch font-variant-numeric font-feature-settings line-height letter-spacing text-align text-overflow white-space overflow-x overflow-y overflow-wrap direction writing-mode align-items align-self align-content justify-items justify-self justify-content flex-direction flex-wrap flex-grow flex-shrink flex-basis order row-gap column-gap grid-template-columns grid-template-rows grid-auto-rows grid-auto-columns grid-auto-flow grid-row-start grid-row-end grid-column-start grid-column-end vertical-align object-fit object-position list-style-image fill fill-opacity stroke stroke-opacity -moz-context-properties color-scheme mask-image mask-size mask-position mask-repeat transform transform-origin scale translate visibility z-index scrollbar-width scrollbar-color").split(" ");
   function snapshotNow(){return win.performance?.now?.()??Date.now();}
   function snapshotReady(bar){
     // Zen removes zen-newtab before notifying Home of cancellation.
@@ -783,10 +794,36 @@ function acquireZenHome(win, services) {
       part.node.style.setProperty("--zh-return-shift",shift);
     }
   }
+  // Page-icon may resolve to Gecko's context-painted default SVG. Preserve
+  // that actual resource when the chrome-only final URI exposes it. Do not
+  // infer missing favicons from about: or HTTP URLs, or tint real bitmaps.
+  const snapshotDefaultIcon="chrome://global/skin/icons/defaultFavicon.svg";
+  function snapshotImageSource(source){
+    const src=source.currentSrc||source.getAttribute("src");
+    if(src?.startsWith("page-icon:")){
+      try{
+        const resolved=source.currentRequestFinalURI?.spec;
+        if(resolved===snapshotDefaultIcon)return resolved;
+      }catch{}
+    }
+    return src;
+  }
+  function snapshotImagePaint(target,style){
+    const color=style.getPropertyValue("color");
+    for(const key of ["color","fill","fill-opacity","stroke","stroke-opacity","-moz-context-properties","color-scheme"]){
+      const value=style.getPropertyValue(key);
+      if(value)target.style.setProperty(key,/^currentcolor$/i.test(value)?color:value,"important");
+    }
+  }
+  function snapshotBorderInset(style){
+    const width=key=>Math.max(0,Number.parseFloat(style.getPropertyValue(key))||0);
+    return {left:width("border-left-width"),top:width("border-top-width")};
+  }
   function freezeSearchResults(view,barRect){
     const rect=view.getBoundingClientRect();
     if(!(rect.width>0&&rect.height>0))return null;
-    const scroll=[];let budget=900,pseudos=0,rails=0;
+    const scroll=[];let budget=900,pseudos=0,rails=0,contextIcons=0,defaultIcons=0;
+    const inset=snapshotBorderInset(win.getComputedStyle(searchBar));
     function styleCopy(target,style){
       for(const key of snapshotProperties){
         const value=style.getPropertyValue(key);
@@ -806,13 +843,20 @@ function acquireZenHome(win, services) {
       const style=win.getComputedStyle(source);
       if(style.display==="none"||style.visibility==="collapse"||source.hidden)return null;
       const image=source.localName==="img"||source.localName==="image";
-      const src=image&&(source.currentSrc||source.getAttribute("src"));
+      const src=image&&snapshotImageSource(source);
       const tag=src?"img":(!image&&["span","b","strong","em","small"].includes(source.localName)?source.localName:"div");
       const target=html(tag);styleCopy(target,style);
-      if(src){target.src=src;target.alt="";target.draggable=false;target.style.setProperty("-moz-context-properties",style.getPropertyValue("-moz-context-properties")||"fill, stroke");}
+      if(image){
+        // Apply the full resolved paint contract before loading the image.
+        // A copied favicon has no native .urlbarView-row ancestor anymore.
+        snapshotImagePaint(target,style);
+        const context=style.getPropertyValue("-moz-context-properties");
+        if(context&&context!=="none")contextIcons++;
+        if(src===snapshotDefaultIcon)defaultIcons++;
+      }
+      if(src){target.src=src;target.alt="";target.draggable=false;}
       else if(image&&style.listStyleImage&&style.listStyleImage!=="none"){
         Object.assign(target.style,{backgroundImage:style.listStyleImage,backgroundSize:"contain",backgroundRepeat:"no-repeat",backgroundPosition:"center"});
-        target.style.setProperty("-moz-context-properties",style.getPropertyValue("-moz-context-properties")||"fill, stroke");
       }
       if(!image){
         for(const child of source.childNodes){
@@ -826,10 +870,10 @@ function acquireZenHome(win, services) {
     }
     const frozen=copy(view);if(!frozen||budget<0)return null;
     const holder=html("div","zh-return-results");
-    Object.assign(holder.style,{left:(rect.left-barRect.left-1)+"px",top:(rect.top-barRect.top-1)+"px",width:rect.width+"px",height:rect.height+"px"});
+    Object.assign(holder.style,{left:(rect.left-barRect.left-inset.left)+"px",top:(rect.top-barRect.top-inset.top)+"px",width:rect.width+"px",height:rect.height+"px"});
     Object.assign(frozen.style,{position:"relative",inset:"auto",margin:"0",boxSizing:"border-box",width:rect.width+"px",height:rect.height+"px",opacity:"1"});
     holder.append(frozen);
-    return {node:holder,scroll,rows:view.querySelectorAll(".urlbarView-row:not([hidden])").length,pseudos,rails,rect:{left:barRect.left,top:barRect.top,width:barRect.width,height:barRect.height}};
+    return {node:holder,scroll,rows:view.querySelectorAll(".urlbarView-row:not([hidden])").length,pseudos,rails,contextIcons,defaultIcons,inset,rect:{left:barRect.left,top:barRect.top,width:barRect.width,height:barRect.height}};
   }
   function captureSearchSnapshot(){
     if(!searchToken||!searchBar||searchClosing||searchReturn||!searchGeometry||
@@ -979,7 +1023,7 @@ function acquireZenHome(win, services) {
     paintReturnParts(parts,startBox.top+height,0,finalBottom);
     panel.setAttribute("data-zh-search-ready","");panel.setAttribute("data-zh-return","");
     const duration=height>dest.height+8?460:180;
-    searchLog("close-start",{reason,rows:frozen?.rows||0,rails:frozen?.rails||0,pseudos:frozen?.pseudos||0,height:Math.round(height),header:Math.round(dest.height),duration,parts:parts.length,snapshotDirty:searchSnapshotDirty,snapshotAge:frozen?Math.round(snapshotNow()-frozen.capturedAt):null,captureMs:frozen?Math.round(frozen.captureMs):null,handoffMs:Math.round(snapshotNow()-handoffStarted)});
+    searchLog("close-start",{reason,rows:frozen?.rows||0,rails:frozen?.rails||0,pseudos:frozen?.pseudos||0,contextIcons:frozen?.contextIcons||0,defaultIcons:frozen?.defaultIcons||0,originInsetX:frozen?.inset.left??null,originInsetY:frozen?.inset.top??null,ruleWidth:searchRuleWidth(win.devicePixelRatio),height:Math.round(height),header:Math.round(dest.height),duration,parts:parts.length,snapshotDirty:searchSnapshotDirty,snapshotAge:frozen?Math.round(snapshotNow()-frozen.capturedAt):null,captureMs:frozen?Math.round(frozen.captureMs):null,handoffMs:Math.round(snapshotNow()-handoffStarted)});
     const token=searchToken;let start=null,previous=null,maxFrameGap=0,firstFrameDelay=0;
     const moveTop=Math.abs(startBox.top-dest.top)>.1,moveLeft=Math.abs(startBox.left-dest.left)>.1,moveWidth=Math.abs(startBox.width-dest.width)>.1;
     const tick=now=>{

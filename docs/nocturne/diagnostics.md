@@ -523,3 +523,7 @@ Preview.167 cold starts did not observe the experimental global CSS marker. Reti
 
 ### Preview.170 Library direct section transition
 `library.section.motion` records source/target section, direction, duration, epoch; `library.section.queued` records latest requested section during a flight. Existing `library.motion.frames` now also samples switching phase, bounded to 300 gaps and diagnostic opt-out. No query, URL, titles or visual snapshot contents in diagnostics. Compare p50/p95/p99/max and over25 with previous opening/closing summaries; these measure RAF cadence, not display presentation.
+
+### Preview.171 — Home return paint
+
+Existing `home.search.close-start` adds numeric `contextIcons` (copied images with active context properties), `defaultIcons` (exact known chrome default source, including native resolved page-icon final URI), `originInsetX/Y` (resolved source border CSS px) and `ruleWidth` (whole-device-pixel Home rule expressed in CSS px). No image URLs, colors, page titles or image data are logged. These counters are source/geometry evidence, not a pixel comparison.

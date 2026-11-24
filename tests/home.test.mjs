@@ -398,7 +398,7 @@ test("Home snapshot keeps both timeline rails stable and copies resolved borders
  assert.ok(core.includes('#urlbar[data-zr-home-search][zen-floating-urlbar="true"] #urlbar-results[data-zr-smart-grid][data-zr-timeline] > .urlbarView-row[data-zr-rail]::after'));
  assert.ok(core.includes("animation:none!important;background-position:center bottom,center!important;opacity:.43!important"));
  const props=new Function(extract("  const snapshotProperties=","  function snapshotNow(")+"return snapshotProperties")();
- for(const key of ["border-top-width","border-top-style","border-top-color","border-bottom-color","background-position-x","background-position-y","-moz-context-properties","fill","stroke","grid-row-start"])assert.ok(props.includes(key),key);
+ for(const key of ["border-top-width","border-top-style","border-top-color","border-bottom-color","background-position-x","background-position-y","-moz-context-properties","fill","fill-opacity","stroke","stroke-opacity","color-scheme","grid-row-start"])assert.ok(props.includes(key),key);
  const text=new Function(extract("  function snapshotPseudoText(","  function searchLog(")+"return snapshotPseudoText")();
  const node={getAttribute:()=> "Recent tabs"};
  assert.equal(text("none",node),null);
@@ -519,4 +519,32 @@ test("Address dismiss shield delegates Home search before ordinary address close
  api.set(true,null,null,false,false);assert.equal(api.dismissHomeSearch(),false);
  assert.deepEqual(calls,[]);
  assert.ok(core.includes("dismissSearch:()=>!released&&dismissHomeSearch()"));
+});
+
+test("Home snapshot preserves native context paint and fractional border geometry",()=>{
+ const code=extract("  const snapshotDefaultIcon=","  function freezeSearchResults(");
+ const api=new Function(code+"return {snapshotImageSource,snapshotImagePaint,snapshotBorderInset};")();
+ const fallback="chrome://global/skin/icons/defaultFavicon.svg";
+ const page={currentSrc:"page-icon:about:preferences",currentRequestFinalURI:{spec:fallback}};
+ assert.equal(api.snapshotImageSource(page),fallback);
+ assert.equal(api.snapshotImageSource({...page,currentRequestFinalURI:{spec:"page-icon:about:preferences"}}),page.currentSrc);
+ assert.equal(api.snapshotImageSource({currentSrc:"page-icon:https://example.invalid",currentRequestFinalURI:{spec:"https://example.invalid/icon.png"}}),"page-icon:https://example.invalid");
+ assert.equal(api.snapshotImageSource({currentSrc:"",getAttribute:()=>fallback}),fallback);
+ const values={color:"rgb(210, 210, 210)",fill:"currentcolor","fill-opacity":"0.72",stroke:"none","stroke-opacity":"0.9","-moz-context-properties":"fill, fill-opacity","color-scheme":"dark","border-left-width":"0.666667px","border-top-width":"0.666667px"};
+ const style={getPropertyValue:k=>values[k]||""},paint=new Map();
+ api.snapshotImagePaint({style:{setProperty:(k,v,p)=>paint.set(k,[v,p])}},style);
+ assert.deepEqual(paint.get("fill"),[values.color,"important"]);
+ assert.deepEqual(paint.get("fill-opacity"),["0.72","important"]);
+ assert.deepEqual(paint.get("-moz-context-properties"),["fill, fill-opacity","important"]);
+ assert.deepEqual(paint.get("stroke"),["none","important"]);
+ assert.deepEqual(paint.get("color-scheme"),["dark","important"]);
+ assert.deepEqual(api.snapshotBorderInset(style),{left:.666667,top:.666667});
+ assert.deepEqual(api.snapshotBorderInset({getPropertyValue:()=>""}),{left:0,top:0});
+ const width=new Function(extract("  function searchRuleWidth(","  function applySearchGeometry(")+"return searchRuleWidth")();
+ for(const dpr of [1,1.25,1.5,1.75,2,2.5,3])assert.ok(Math.abs(width(dpr)*dpr-Math.floor(dpr))<1e-9);
+ assert.equal(width(0),1);assert.equal(width(undefined),1);
+ assert.ok(core.includes('rect.left-barRect.left-inset.left'));
+ assert.ok(core.includes('rect.top-barRect.top-inset.top'));
+ assert.ok(core.includes('background-size:6px 6px,var(--zh-search-rule,1px)'));
+ assert.ok(core.includes('background-size:var(--zh-search-rule,1px) calc(100% - 16px)'));
 });

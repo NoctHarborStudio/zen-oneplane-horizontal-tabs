@@ -877,3 +877,9 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 ### Preview.170 — direct Library section swipe
 - Source fixtures cover every ordered pair of distinct sections, exact full-width two-surface frames and 1000ms duration, reduced-motion branch, inert copy, no duplicate IDs, coalesced pending intent and cleanup wiring.
 - Native gate: History → Downloads → Recently Closed → History, no intermediate pages; compare adjacent switches; rapid alternate clicks, Escape/background close mid-motion, reopen, scroll preservation, resizing, reduced motion, disable/reload. Check search/filter controls and file drag after settlement; no native fallback. Compare section RAF aggregates (not presented FPS). CI and native visual acceptance pending.
+
+### HS3.3 / preview.171 — Home result paint parity
+
+- [x] Preserve resolved SVG context paint including opacity and exact known default final URI; preserve ordinary image sources. Use whole-device-pixel rule widths and resolved border origin; no additional observers or animation callbacks.
+- [x] Source-backed tests for context paint and fallback handling, fractional DPR, border inset and Home-scoped rail/divider rule.
+- [ ] Installed Zen: compare full opening and first return frame, including Settings/Troubleshooting globes and both recent timeline rails plus middle divider. Check Escape/outside click and partial return, real colored favicons, light/dark and mixed DPI. Native visual parity and presented cadence remain unverified.
