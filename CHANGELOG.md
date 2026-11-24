@@ -1,3 +1,7 @@
+## 0.3.0-preview.194 — Home tab hover titles
+
+Give explicit hovered/dragged tab titles precedence over the resting Home island label, retaining existing indicator cooldown and workspace transition ownership. After the hover returns to rest, an open Home displays Home again. Add regression coverage for selected, hovered, detached, untitled and split-group targets.
+
 ## 0.3.0-preview.193 — Native fullscreen video transition control
 
 Disable Gecko DOM fullscreen enter/leave fades by default using the two existing string preferences (`0 0`). Expose an independent Nocturne toggle and reuse the process-wide native preference owner with a separate typed backup, restoring original user/default values on opt-out or live mod unload. Keep fullscreen warnings and F11 behavior untouched. Native validation pending.

@@ -93,7 +93,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.193",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.194",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -10029,14 +10029,17 @@ function installTabStrip() {
   }
   function refreshIslandTitle(){
     if(dead || !row.hasAttribute("data-op-show-island")) return;
-    const item=dragNode && row.hasAttribute("data-op-dragging")?dragNode:
-      indicatorHover && list.contains(indicatorHover)?indicatorHover:entries.get(browser.selectedTab)?.item;
+    const dragging=dragNode && row.hasAttribute("data-op-dragging")?dragNode:null;
+    const hovered=indicatorHover && list.contains(indicatorHover)?indicatorHover:null;
+    const item=dragging||hovered||entries.get(browser.selectedTab)?.item;
     const nativeTitle=item?.classList.contains("oneplane-split-group")?
       Array.from(item.querySelectorAll(".oneplane-tab-title")).map(n=>n.textContent).filter(Boolean).join(" · "):
       item?.querySelector(".oneplane-tab-title")?.textContent || "";
     const key=item||null;
     if(homeLease && (homeTitleKey!==key || homeNativeTitle!==nativeTitle)){homeTitleKey=key;homeNativeTitle=nativeTitle;markHomeTitleActivity();}
-    const title=homeLease&&(homeLease.open||homeIdle||!nativeTitle)?"Home":nativeTitle;
+    // Home is the resting label, not an override of an explicit tab target.
+    // The existing indicator return timer owns the hover cooldown.
+    const title=homeLease&&(!nativeTitle||(!dragging&&!hovered&&(homeLease.open||homeIdle)))?"Home":nativeTitle;
     const phase=root.getAttribute("data-zr-workspace-phase");
     // Native selection may change several times during a workspace swap.
     // Only the settled incoming selection may replace the visible label.

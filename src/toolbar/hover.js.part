@@ -45,14 +45,17 @@
   }
   function refreshIslandTitle(){
     if(dead || !row.hasAttribute("data-op-show-island")) return;
-    const item=dragNode && row.hasAttribute("data-op-dragging")?dragNode:
-      indicatorHover && list.contains(indicatorHover)?indicatorHover:entries.get(browser.selectedTab)?.item;
+    const dragging=dragNode && row.hasAttribute("data-op-dragging")?dragNode:null;
+    const hovered=indicatorHover && list.contains(indicatorHover)?indicatorHover:null;
+    const item=dragging||hovered||entries.get(browser.selectedTab)?.item;
     const nativeTitle=item?.classList.contains("oneplane-split-group")?
       Array.from(item.querySelectorAll(".oneplane-tab-title")).map(n=>n.textContent).filter(Boolean).join(" · "):
       item?.querySelector(".oneplane-tab-title")?.textContent || "";
     const key=item||null;
     if(homeLease && (homeTitleKey!==key || homeNativeTitle!==nativeTitle)){homeTitleKey=key;homeNativeTitle=nativeTitle;markHomeTitleActivity();}
-    const title=homeLease&&(homeLease.open||homeIdle||!nativeTitle)?"Home":nativeTitle;
+    // Home is the resting label, not an override of an explicit tab target.
+    // The existing indicator return timer owns the hover cooldown.
+    const title=homeLease&&(!nativeTitle||(!dragging&&!hovered&&(homeLease.open||homeIdle)))?"Home":nativeTitle;
     const phase=root.getAttribute("data-zr-workspace-phase");
     // Native selection may change several times during a workspace swap.
     // Only the settled incoming selection may replace the visible label.
