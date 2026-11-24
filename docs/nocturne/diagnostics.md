@@ -600,3 +600,5 @@ Bookmark paint admission: `center.bookmarks.paint` reports transaction id, owner
 Live bookmark evidence: `sample.data.bookmarkFlow` is present near the active bookmark stage. It records the shared transaction id, direct-property mode, fraction, actual/expected clock, clock spread/error, actual/expected visible count, geometry/alpha/clip errors, topology and ancestor visibility/opacity. No labels or URLs, no new sampler or forced animation seek. Paused admission events remain separate.
 
 Preview.212: existing geometry snapshots include `oneplane-hub-panel` and `zr-download-dock` with numeric `materialOpacity` and `materialBlur` resolved from shared role tokens. No download names or workspace names are added.
+
+Preview.213: existing geometry snapshots include `nocturne-library-preview` with numeric `materialOpacity` and `materialBlur` resolved from the common Library/History role. These are material token values, not the animated layer opacity or proof of compositor output. No new sampling cadence or record content.

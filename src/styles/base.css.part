@@ -141,7 +141,30 @@
     @media (-moz-pref("zen.nocturne.material.downloads.blur", 32)) { --nocturne-downloads-blur: 32px; }
     @media (-moz-pref("zen.nocturne.material.downloads.blur", 40)) { --nocturne-downloads-blur: 40px; }
     --nocturne-downloads-paint: color-mix(in srgb, var(--nocturne-glass-tint) var(--nocturne-downloads-opacity), transparent);
+    --nocturne-library-opacity: var(--nocturne-glass-opacity);
+    @media (-moz-pref("zen.nocturne.material.library.opacity", 0)) { --nocturne-library-opacity: 0%; }
+    @media (-moz-pref("zen.nocturne.material.library.opacity", 10)) { --nocturne-library-opacity: 10%; }
+    @media (-moz-pref("zen.nocturne.material.library.opacity", 20)) { --nocturne-library-opacity: 20%; }
+    @media (-moz-pref("zen.nocturne.material.library.opacity", 30)) { --nocturne-library-opacity: 30%; }
+    @media (-moz-pref("zen.nocturne.material.library.opacity", 40)) { --nocturne-library-opacity: 40%; }
+    @media (-moz-pref("zen.nocturne.material.library.opacity", 50)) { --nocturne-library-opacity: 50%; }
+    @media (-moz-pref("zen.nocturne.material.library.opacity", 60)) { --nocturne-library-opacity: 60%; }
+    @media (-moz-pref("zen.nocturne.material.library.opacity", 70)) { --nocturne-library-opacity: 70%; }
+    @media (-moz-pref("zen.nocturne.material.library.opacity", 80)) { --nocturne-library-opacity: 80%; }
+    @media (-moz-pref("zen.nocturne.material.library.opacity", 90)) { --nocturne-library-opacity: 90%; }
+    @media (-moz-pref("zen.nocturne.material.library.opacity", 100)) { --nocturne-library-opacity: 100%; }
+    --nocturne-library-blur: var(--nocturne-glass-blur);
+    @media (-moz-pref("zen.nocturne.material.library.blur", 0)) { --nocturne-library-blur: 0px; }
+    @media (-moz-pref("zen.nocturne.material.library.blur", 8)) { --nocturne-library-blur: 8px; }
+    @media (-moz-pref("zen.nocturne.material.library.blur", 12)) { --nocturne-library-blur: 12px; }
+    @media (-moz-pref("zen.nocturne.material.library.blur", 16)) { --nocturne-library-blur: 16px; }
+    @media (-moz-pref("zen.nocturne.material.library.blur", 24)) { --nocturne-library-blur: 24px; }
+    @media (-moz-pref("zen.nocturne.material.library.blur", 32)) { --nocturne-library-blur: 32px; }
+    @media (-moz-pref("zen.nocturne.material.library.blur", 40)) { --nocturne-library-blur: 40px; }
+    --nocturne-library-paint: color-mix(in srgb, var(--nocturne-glass-tint) var(--nocturne-library-opacity), transparent);
     @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+      --nocturne-library-opacity: 100%;
+      --nocturne-library-blur: 0px;
       --nocturne-hub-opacity: 100%;
       --nocturne-downloads-opacity: 100%;
       --nocturne-hub-blur: 0px;
@@ -152,6 +175,7 @@
       --nocturne-home-search-blur: 0px;
     }
     @media (forced-colors: active) {
+      --nocturne-library-paint: Canvas;
       --nocturne-hub-paint: Canvas;
       --nocturne-downloads-paint: Canvas;
       --nocturne-address-paint: Canvas;

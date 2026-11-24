@@ -290,7 +290,7 @@ test("Library uses stationary glass and an independent filter drawer with reserv
  assert.match(source,/orderButtons,"SORT"/);
  assert.doesNotMatch(source,/button\("Native (?:history|downloads)"/);
  assert.match(css,/scrollbar-width:none;padding-inline-end:14px/);
- assert.match(css,/\.nl-glass\{[^}]*backdrop-filter:blur\(30px\)/s);
+ assert.match(css,/\.nl-glass\{[^}]*backdrop-filter:blur\(var\(--nocturne-library-blur,0px\)\)/s);
  assert.doesNotMatch(css,/\.nl-panel\{[^}]*backdrop-filter:/s);
  assert.match(css,/\.nl-history-filter\[data-open\]/);
 });
