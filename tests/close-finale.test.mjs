@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {createCloseFinale} from "../src/core/close-finale.mjs";
 
-function fixture({failAt=null,opacity=1,windows=false,mica=null}={}){
+function fixture({failAt=null,opacity=1,windows=false,mica=null,nativeFactory=null}={}){
  const effects=[],listeners=new Map(),nodes=[],frames=new Map(),events=[];
  let frameId=0;
  function node(tag,ns){
@@ -26,7 +26,7 @@ function fixture({failAt=null,opacity=1,windows=false,mica=null}={}){
  },addEventListener(k,fn,capture){listeners.set(k,{fn,capture});},
  removeEventListener(k,fn,capture){assert.equal(listeners.get(k)?.fn,fn);assert.equal(listeners.get(k)?.capture,capture);listeners.delete(k);}};
  const onModal=()=>{};
- return {win,doc,root,effects,listeners,nodes,onModal,frames,events,make:()=>createCloseFinale({win,doc,root,start:1190,onModal,windows}),
+ return {win,doc,root,effects,listeners,nodes,onModal,frames,events,make:()=>createCloseFinale({win,doc,root,start:1190,onModal,windows,nativeFactory}),
    async coverDone(){doc.timeline.currentTime=42+1510;effects[0].finish();await Promise.resolve();},
    frame(ms=16){doc.timeline.currentTime+=ms;const pending=[...frames];frames.clear();for(const [,fn] of pending)fn();}};
 }
@@ -82,4 +82,36 @@ test("release does not overwrite a native backdrop attribute reinstalled by anot
  const f=fixture({windows:true,mica:""}),h=f.make();await f.coverDone();f.frame();f.frame();
  assert.equal(f.root.hasAttribute("windowsmica"),false);
  f.root.setAttribute("windowsmica","replacement");h.release();assert.equal(f.root.getAttribute("windowsmica"),"replacement");
+});
+
+test("DWM NONE is requested behind the opaque cover, verified at seal and restored on cancel",async()=>{
+ let material=3;const writes=[];
+ const native={read:()=>({hr:0,value:material}),write:value=>{writes.push(value);material=value;return {hr:0,value};}};
+ const f=fixture({windows:true,mica:"true",nativeFactory:()=>native}),h=f.make();
+ assert.deepEqual(writes,[]);await f.coverDone();f.frame();assert.deepEqual(writes,[]);
+ f.frame();assert.deepEqual(writes,[1]);assert.equal(material,1);
+ assert.equal(f.events.find(e=>e.event==="disassembly.dwm.switch").data.confirmed,true);
+ h.seal();assert.equal(f.events.find(e=>e.event==="disassembly.dwm.seal").data.value,1);
+ assert.equal(h.release(),0);assert.deepEqual(writes,[1,3]);assert.equal(material,3);
+ assert.equal(h.release(),0);
+});
+test("unreadable DWM baseline never writes, retains Gecko fallback",async()=>{
+ for(const nativeFactory of [()=>{throw Error("unavailable");},()=>({read:()=>({hr:-1,value:null}),write:()=>assert.fail("unsafe write")})]){
+   const f=fixture({windows:true,mica:"true",nativeFactory}),h=f.make();
+   await f.coverDone();f.frame();f.frame();assert.equal(f.root.hasAttribute("windowsmica"),false);
+   assert.equal(f.events.some(e=>e.event==="disassembly.dwm.switch"),false);
+   h.release();assert.equal(f.root.getAttribute("windowsmica"),"true");
+ }
+});
+test("DWM failure and foreign re-add are distinguished",async()=>{
+ for(const fail of [true,false]){
+   let material=3;const writes=[];
+   const native={read:()=>({hr:0,value:material}),write:value=>{writes.push(value);if(fail)return {hr:-1,value:null};material=value;return {hr:0,value};}};
+   const f=fixture({windows:true,mica:"true",nativeFactory:()=>native}),h=f.make();
+   await f.coverDone();f.frame();f.frame();
+   assert.equal(f.events.find(e=>e.event==="disassembly.dwm.switch").data.confirmed,!fail);
+   material=4;f.root.setAttribute("windowsmica","foreign");
+   h.seal();assert.equal(f.events.find(e=>e.event==="disassembly.dwm.seal").data.value,4);
+   h.release();assert.deepEqual(writes,[1]);assert.equal(material,4);assert.equal(f.root.getAttribute("windowsmica"),"foreign");
+ }
 });

@@ -43,10 +43,48 @@ function createNocturneBrandMark(document){
 }
 // Experimental chrome-root fade. CSS opacity is not proof of OS-window alpha.
 const CLOSE_COVER_MS=320,CLOSE_LOGO_MS=460,CLOSE_FADE_MS=500;
-function createCloseFinale({win,doc,root,start,onModal,windows=false}){
+// Windows-only, exact chrome HWND and system DLL. Never log handles or paths.
+function createWindowsBackdrop({win,services,interfaces,loadCtypes}){
+  const nativeHandle=()=>{
+    if(win.closed)return null;
+    const owner=win.docShell.treeOwner;
+    let base;
+    try{base=owner.QueryInterface(interfaces.nsIBaseWindow);}
+    catch{base=owner.QueryInterface(interfaces.nsIInterfaceRequestor).getInterface(interfaces.nsIBaseWindow);}
+    const value=base.nativeHandle;
+    return typeof value==="string"&&/^0x[0-9a-f]+$/i.test(value)&&!/^0x0+$/i.test(value)?value:null;
+  };
+  const handle=nativeHandle();
+  if(!handle)return null;
+  const c=loadCtypes(),hwnd=c.voidptr_t(c.UInt64(handle));
+  if(hwnd.isNull())return null;
+  const dll=services.dirsvc.get("SysD",interfaces.nsIFile).clone();
+  dll.append("dwmapi.dll");
+  const call=value=>{
+    if(nativeHandle()!==handle)return {hr:null,value:null};
+    let lib;
+    try{
+      lib=c.open(dll.path);
+      const reading=value===undefined;
+      const fn=lib.declare(reading?"DwmGetWindowAttribute":"DwmSetWindowAttribute",
+        c.winapi_abi,c.int32_t,c.voidptr_t,c.uint32_t,c.int32_t.ptr,c.uint32_t);
+      const data=c.int32_t(reading?-1:value);
+      const hr=fn(hwnd,38,data.address(),c.int32_t.size);
+      return {hr,value:hr===0&&data.value>=0&&data.value<=4?data.value:null};
+    }finally{lib?.close();}
+  };
+  return {read:()=>call(),write:value=>{
+    if(!Number.isInteger(value)||value<0||value>4)throw new RangeError("backdrop enum");
+    return call(value);
+  }};
+}
+function createCloseFinale({win,doc,root,start,onModal,windows=false,nativeFactory=null}){
   let cover=null,mark=null,active=true,listening=false,sealed=false,backdropFrame=null,backdropBaseline=null;
   const trace=(event,data)=>{try{win.__nocturneTrace?.(event,data,{flush:true});}catch{}};
   const effects=[];
+  let native=null,nativeBaseline=null,nativeAttempted=false;
+  const probe=()=>{try{return native?.read()??{hr:null,value:null};}catch{return {hr:null,value:null};}};
+  const write=value=>{try{return native?.write(value)??{hr:null,value:null};}catch{return {hr:null,value:null};}};
   const release=()=>{
     if(!active)return 0;active=false;let failed=0;
     const step=fn=>{try{fn();}catch{failed++;}};
@@ -57,9 +95,20 @@ function createCloseFinale({win,doc,root,start,onModal,windows=false}){
     // Restore only the attribute removed by this lease, never overwrite a
     // replacement value installed by another owner.
     const baseline=backdropBaseline;backdropBaseline=null;
+    const ownsAttribute=baseline!==null&&!root.hasAttribute("windowsmica");
+    const before=nativeAttempted&&ownsAttribute&&!win.closed?probe():null;
     if(baseline!==null)step(()=>{
-      if(!root.hasAttribute("windowsmica"))root.setAttribute("windowsmica",baseline);
+      if(!win.closed&&!root.hasAttribute("windowsmica"))root.setAttribute("windowsmica",baseline);
     });
+    if(nativeAttempted&&ownsAttribute&&!win.closed){
+      const after=probe();
+      const canRestore=before?.hr===0&&(before.value===1||before.value===0);
+      const result=canRestore&&after.value!==nativeBaseline?write(nativeBaseline):null;
+      const final=probe();
+      if(canRestore&&final.value!==nativeBaseline)failed++;
+      trace("disassembly.dwm.restore",{before:before?.value??null,baseline:nativeBaseline,hr:result?.hr??null,after:final.value,owned:canRestore});
+    }
+    native=null;nativeBaseline=null;nativeAttempted=false;
     if(baseline!==null)trace("disassembly.backdrop.restore",{present:root.hasAttribute("windowsmica"),failed});
     // Remove the opaque cover before releasing the root's fade in one task.
     step(()=>cover?.remove());
@@ -106,7 +155,19 @@ function createCloseFinale({win,doc,root,start,onModal,windows=false}){
                   if(!maySwitch())return;
                   backdropBaseline=root.getAttribute("windowsmica");
                   if(backdropBaseline===null)return;
+                  if(nativeFactory){
+                    try{native=nativeFactory();}catch{}
+                    const initial=probe();
+                    if(initial.hr===0&&Number.isInteger(initial.value)&&initial.value>=0&&initial.value<=4)nativeBaseline=initial.value;
+                    trace("disassembly.dwm.baseline",{hr:initial.hr,value:initial.value,available:!!native});
+                  }
                   root.removeAttribute("windowsmica");
+                  if(nativeBaseline!==null){
+                    const auto=probe();
+                    nativeAttempted=true;
+                    const result=write(1),actual=probe();
+                    trace("disassembly.dwm.switch",{baseline:nativeBaseline,afterGecko:auto.value,hr:result.hr,readHr:actual.hr,value:actual.value,confirmed:result.hr===0&&actual.hr===0&&actual.value===1});
+                  }
                   trace("disassembly.backdrop.switch",{removed:!root.hasAttribute("windowsmica"),elapsed:doc.timeline.currentTime-epoch,rootOpacity:Number(win.getComputedStyle(root).opacity),coverOpacity:Number(win.getComputedStyle(cover).opacity)});
                 }catch{trace("disassembly.backdrop.error",{failed:1});}
               });
@@ -121,6 +182,10 @@ function createCloseFinale({win,doc,root,start,onModal,windows=false}){
         sealed=true;
         const frame=backdropFrame;backdropFrame=null;
         if(frame!==null)try{win.cancelAnimationFrame(frame);}catch{}
+        if(nativeAttempted){
+          const actual=probe();
+          trace("disassembly.dwm.seal",{hr:actual.hr,value:actual.value,attributePresent:root.hasAttribute("windowsmica")});
+        }
         for(const effect of effects)try{effect.finish();}catch{}
         const read=node=>{try{const a=Number(win.getComputedStyle(node).opacity);return Number.isFinite(a)?a:null;}catch{return null;}};
         return {rootOpacity:read(root),coverOpacity:read(cover),logoOpacity:read(mark)};
@@ -129,7 +194,7 @@ function createCloseFinale({win,doc,root,start,onModal,windows=false}){
 }
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="disassembly.script",data={version:"0.3.0-preview.200"};
+  const event="disassembly.script",data={version:"0.3.0-preview.201"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -350,7 +415,9 @@ try{if(typeof window!=="undefined"){
       }catch{return bypass("control-acquisition-failed");}
     }
     // Keep the previous close path if the experimental finale cannot be acquired.
-    finale=createCloseFinale({win:window,doc:document,root,start:sealAt,onModal:modalOpened,windows:Services.appinfo?.OS==="WINNT"});
+    finale=createCloseFinale({win:window,doc:document,root,start:sealAt,onModal:modalOpened,windows:Services.appinfo?.OS==="WINNT",
+      nativeFactory:()=>createWindowsBackdrop({win:window,services:Services,interfaces:Ci,
+        loadCtypes:()=>ChromeUtils.importESModule("resource://gre/modules/ctypes.sys.mjs").ctypes})});
     if(finale){
       window.__nocturneTrace?.("disassembly.finale.begin",{coverAt:sealAt,logoAt:finale.logoAt,fadeAt:finale.fadeAt,end:finale.end},{flush:true});
       sealAt=finale.end;

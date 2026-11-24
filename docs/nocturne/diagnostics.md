@@ -574,3 +574,5 @@ Preview.184: `disassembly.finale.begin` records cover/logo/fade/end timings; `di
 Preview.199: `disassembly.backdrop.switch` reports whether the current root attribute was removed, elapsed timeline time and computed root/cover opacity (expected 1/1). `disassembly.backdrop.restore` reports presence and failure count after release, `disassembly.backdrop.error` reports a bounded failure count. These are attribute/DOM observations, not DWM alpha readback. No native handle, profile values or per-frame logging.
 
 Preview.200 adds existing-sampler rectangle targets for the customization target, Hub, History, Downloads slot, Back/Forward/Reload and page actions. Compare resting first-row centers on ordinary pages and Home in one- and two-row layouts; no new observer or sampling cadence.
+
+Preview.201 close experiment: disassembly.dwm.baseline, disassembly.dwm.switch, disassembly.dwm.seal and disassembly.dwm.restore record enum/HRESULT/ownership, never HWND or paths. No continuous sampling; readback is not proof of displayed alpha.
