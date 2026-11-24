@@ -1,3 +1,7 @@
+## 0.3.0-preview.181 — Home Island delayed reveal
+
+Use approved prototype B: independent vertical travel, delayed scale and opacity samples, shared by startup, close and the Lab. The 540ms scaled entrance lands before the existing tab wave; explicit native window close reverses the same curve after tab/bookmark folds, then retains the existing 110ms sealed dwell. The actual Island remains the only visual owner. Preserve geometry leases, fail-open fallback, cancellation, preference/reduced-motion behavior and native confirmation. Native visual validation pending.
+
 ## 0.3.0-preview.180 — Library original page lifecycle
 
 Replace the cloned outgoing page and hidden-cover handoff with original page views. Keep the existing 1000ms ease-in-out layout-left motion and stationary scrollbar. One active native query session, abort-scoped page controls, unique accessibility IDs, original node reuse on reversal, bounded pagination restoration and deterministic disposal on settlement, close, interruption and unload. No persistent offscreen cache. Native verification pending.

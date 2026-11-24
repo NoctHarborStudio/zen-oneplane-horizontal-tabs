@@ -93,6 +93,33 @@ function startupBloomAssemblyPlan(start,scale){
     finishLength:bloom.end,lateLimit:bloom.end+420
   };
 }
+// Home Island variant B, approved in the comparison prototype.
+const HOME_ISLAND_DURATION=540;
+const HOME_ISLAND_TRAVEL="--zr-island-travel",HOME_ISLAND_SCALE="--zr-island-scale";
+function registerHomeIslandMotion(css){
+  for(const name of [HOME_ISLAND_TRAVEL,HOME_ISLAND_SCALE]){
+    try{css.registerProperty({name,syntax:"<number>",inherits:false,initialValue:"1"});}
+    catch(e){if(e.name!=="InvalidModificationError")return false;}
+  }
+  return true;
+}
+function homeIslandDistance(bottom){return -Math.max(66,bottom+2);}
+function homeIslandPose(t){
+  const clamp=x=>Math.min(1,Math.max(0,x));
+  const bezier=(t,x1,y1,x2,y2)=>{
+    t=clamp(t);if(t===0||t===1)return t;
+    let l=0,r=1;
+    const b=(u,a,c)=>3*(1-u)*(1-u)*u*a+3*(1-u)*u*u*c+u*u*u;
+    for(let i=0;i<24;i++){const m=(l+r)/2;if(b(m,x1,x2)<t)l=m;else r=m;}
+    return b((l+r)/2,y1,y2);
+  };
+  t=clamp(t);
+  const a=clamp(t/.3);
+  return {travel:bezier(t,.25,.8,.22,1),scale:.02+.98*bezier((t-.2)/.8,.3,0,.12,1),opacity:a*a*(3-2*a)};
+}
+function homeIslandFrames(reverse=false){
+  return Array.from({length:81},(_,i)=>({offset:i/80,...homeIslandPose((reverse?80-i:i)/80)}));
+}
 // Pure timing plan for Center Assembly; base offsets are unscaled milliseconds.
 // The runtime owns the epoch and lifecycle; this module owns no DOM or timers.
 function startupTimeline(start,scale,mode="fold",islandEntry=false){
@@ -101,7 +128,7 @@ function startupTimeline(start,scale,mode="fold",islandEntry=false){
   const duration=Math.round(scale*1050);
   // Keep the existing Fold cadence after the Island reaches its real slot.
   // Native/hidden Island startup and the experimental Bloom path are unchanged.
-  const islandLength=420,shift=islandEntry?islandLength-245:0;
+  const islandLength=HOME_ISLAND_DURATION,shift=islandEntry?islandLength-245:0;
   return {
     start,scale,panel:0,panelLength:220,cards:245+shift,cardsLength:650,
     bookmarks:470+shift,home:650+shift,homeLength:330,end:1190+shift,
@@ -109,11 +136,6 @@ function startupTimeline(start,scale,mode="fold",islandEntry=false){
     lateLimit:duration+420+shift*scale,
     ...(islandEntry?{islandStart:0,islandLength,islandShift:shift}:{})
   };
-}
-
-// The centered Magnetic Fold card uses the same 41 smoothstep samples.
-function startupIslandProgress(){
-  return Array.from({length:41},(_,i)=>{const p=i/40;return p*p*(3-2*p);});
 }
 
 function startupFits(plan,now,deadline,overhead=0){
@@ -222,7 +244,7 @@ function startupBoundaryOutcome(counts,legacy=0){
 }
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.180"};
+  const event="assembly.script",data={version:"0.3.0-preview.181"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -301,6 +323,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
   let registered=false;
   try{window.CSS.registerProperty({name:PROGRESS,syntax:"<number>",inherits:false,initialValue:"1"});registered=true;}
   catch(e){registered=e.name==="InvalidModificationError";}
+  const islandRegistered=registered&&registerHomeIslandMotion(window.CSS);
   const BOOT_PREF="zen.nocturne.boot.enabled",BOOT_MIN=1010,BOOT_EXIT=320,BOOT_LEAD=150,BOOT_ENTER=460;
   let boot=null,bootMark=null,bootEffects=[],bootAt=0,bootTimer=0,bootFrame=0,bootPreparing=false;
   const inputs=["pointerdown","keydown","wheel","dragstart","beforecustomization"];
@@ -692,12 +715,16 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       if(bloomShape)n.setAttribute("data-zr-startup-bloom-shape","true");
       if(islandY!==null){
         save(n,"--zr-startup-island-y",islandY+"px");
+        for(const k of [HOME_ISLAND_TRAVEL,HOME_ISLAND_SCALE]){
+          record.set(k,{value:n.style.getPropertyValue(k),priority:n.style.getPropertyPriority(k)});
+          n.style.setProperty(k,"1");
+        }
         n.setAttribute("data-zr-startup-island-entry","true");
       }
       const resting=bloomTiming&&bloomShape?n.getBoundingClientRect():null;
       const verify=bloomTiming?(a,promise)=>prepareBloomDirect(n,a,promise,timeline,start,time,opacity,resting):null;
       const frames=islandY===null?[{[PROGRESS]:String(initial)},{[PROGRESS]:"1"}]:
-        startupIslandProgress().map(p=>({[PROGRESS]:String(p)}));
+        homeIslandFrames().map(f=>({offset:f.offset,[PROGRESS]:String(f.opacity),[HOME_ISLAND_TRAVEL]:String(f.travel),[HOME_ISLAND_SCALE]:String(f.scale)}));
       acquired=play(n,frames,start,time,false,islandY===null?easing:"linear",()=>restore(n),!late,startLate,verify);
       if(!acquired)restore(n);
     }else{
@@ -963,7 +990,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       // Capture all resting rectangles before adding an Island transform.
       // A covered Boot or a newly inserted Island may enter from zero;
       // do not re-hide an already-painted, uncovered Island.
-      if(plan.mode!=="bloom"&&ir&&registered&&Number.isFinite(ir.bottom)&&
+      if(plan.mode!=="bloom"&&ir&&islandRegistered&&Number.isFinite(ir.bottom)&&
          (bootPreparing||!baseline.has(island)))plan=startupTimeline(0,scale,"fold",true);
       playStart=now();
       const overhead=bootPreparing?BOOT_EXIT+150:0;
@@ -1004,7 +1031,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
         // Remove per-card startup gates together, including split members.
         for(const n of cards){n.setAttribute(MANAGED,"true");seen.add(n);}
         if(!painted){
-          const options={owner:"startup",direction:"in",duration:Math.round(timeline.cardsLength*scale),delay:Math.round(timeline.cards*scale),paused:timeline.paused,observeEffect:timeline.observeEffect,
+          const options={owner:"startup",direction:"in",duration:Math.round(timeline.cardsLength*scale),delay:Math.ceil(timeline.cards*scale),paused:timeline.paused,observeEffect:timeline.observeEffect,
             onTopologyInvalidated:()=>{if(!dead&&ownedTimeline===timeline)finish("interrupted");}};
           if(bloom){
             const fold=startupTimeline(0,scale);
@@ -1028,10 +1055,10 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
           if(ir&&timeline.islandLength){
             // Center Motion already captured the final, untransformed portal.
             // Keep the native -50% translate intact; only transform the Island.
-            const y=-Math.max(1,ir.bottom+2);
+            const y=homeIslandDistance(ir.bottom);
             const acquired=reveal(island,{delay:timeline.islandStart,length:timeline.islandLength,islandY:y});
             decision("assembly.island.entry",{acquired,y,width:ir.width,height:ir.height,
-              duration:timeline.islandLength*scale,cardsAt:timeline.cards*scale});
+              duration:timeline.islandLength*scale,cardsAt:timeline.cards*scale,curve:"delayed-reveal"});
           }else if(ir)reveal(island,{delay:150,length:190});
         }
       }else{
@@ -1285,7 +1312,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
         translate: calc(var(--zr-startup-dx) * (1 - var(${PROGRESS}))) calc(var(--zr-startup-dy) * (1 - var(${PROGRESS}))) !important;
       }
       ${base}[data-zr-startup-island-entry] {
-        transform: translateY(calc(var(--zr-startup-island-y) * (1 - var(${PROGRESS})))) scale(max(.02, var(${PROGRESS}))) !important;
+        transform: translateY(calc(var(--zr-startup-island-y) * (1 - var(--zr-island-travel)))) scale(var(--zr-island-scale)) !important;
         transform-origin: center center !important;
       }
       ${base}[data-zr-startup-bloom-shape] {

@@ -559,3 +559,5 @@ Controlled close-start/close-finish include mode=native-live; close-reverse reco
 
 ### Preview.180 Library original page cleanup
 `library.section.motion` includes `original:true` and actual surface count; `library.section.cleanup` counts attached pages and retained views at settlement/hide (expected 1/0 and 0/0). No content, query or file identifiers in these events. Existing frame summaries remain bounded.
+
+Preview.181: `assembly.island.entry` and `disassembly.island.exit` report acquired geometry/distance and stage timing, with the existing Assembly/Disassembly completion and cleanup events. No per-frame logging. Compare the close seal to the 1190ms visual boundary only when an Island exit is acquired; otherwise the original 650ms boundary applies.

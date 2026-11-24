@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
+import {HOME_ISLAND_DURATION,HOME_ISLAND_TRAVEL,HOME_ISLAND_SCALE,homeIslandDistance,homeIslandFrames,registerHomeIslandMotion} from "../src/algorithms/home-island-motion.mjs";
 const source=readFileSync(new URL("../closing-animation.uc.mjs",import.meta.url),"utf8");
 const start=source.indexOf("function makeCloseController("),end=source.indexOf("function visible(",start);
 const factory=new Function("DURATION",source.slice(start,end)+"return makeCloseController;")(760);
@@ -64,7 +65,7 @@ test("close reentry during seal does not seal twice or schedule another dwell",(
  gate.request({},[]);timer();assert.equal(calls,1);assert.equal(seals,1);assert.equal(scheduled,1);
 });
 
-function closeAcquisitionFixture({tabs=true,bookmarks=true,missingEngine=false,missingBookmarks=false,failTab=false,failBookmark=false,failControl=false,replaceEngine=false,preflight=false,failPreflight=false}={}){
+function closeAcquisitionFixture({tabs=true,bookmarks=true,missingEngine=false,missingBookmarks=false,failTab=false,failBookmark=false,failControl=false,replaceEngine=false,preflight=false,failPreflight=false,registered=false,cancelNative=false}={}){
  const effects=[],events=[],timers=[],reasons=[],measurements=[];
  let suspended=false;
  function node(name,children=[]){
@@ -74,7 +75,7 @@ function closeAcquisitionFixture({tabs=true,bookmarks=true,missingEngine=false,m
    hasAttribute:k=>attrs.has(k),getAttribute:k=>attrs.get(k)??null,setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k),
    getBoundingClientRect:()=>{if(preflight)measurements.push({name,suspended});return {left:20,top:10,right:220,bottom:50,width:200,height:40};},
    contains(n){return this===n||children.some(c=>c.contains(n));},querySelector(){return null;},querySelectorAll(){return [];},
-   animate(){if(failControl&&name==="island")throw Error("control");const a={name,cancelled:0,finished:Promise.resolve(),cancel(){this.cancelled++;},finish(){}};effects.push(a);return a;}
+   animate(frames,timing){if(failControl&&name==="island")throw Error("control");const a={name,frames,timing,cancelled:0,finished:Promise.resolve(),cancel(){this.cancelled++;},finish(){}};effects.push(a);return a;}
   };
  }
  const card=node("card"),plus=node("plus"),island=node("island"),row=node("row",[card,plus,island]);
@@ -83,7 +84,7 @@ function closeAcquisitionFixture({tabs=true,bookmarks=true,missingEngine=false,m
  const bm=node("bookmark"),items=node("items",bookmarks?[bm]:[]),root=node("root"),url=node("url"),sidebar=node("sidebar");
  const get=id=>({"oneplane-tabs":tabs?row:null,"PlacesToolbarItems":items,"urlbar-container":url,"zen-tabs-wrapper":sidebar}[id]||null);
  let closed=false;
- const win={innerWidth:1000,innerHeight:700,CSS:{registerProperty(){throw Error("unsupported");}},
+ const win={innerWidth:1000,innerHeight:700,CSS:{registerProperty(){if(!registered)throw Error("unsupported");}},windowUtils:{USER_SHEET:1,loadSheet(){},removeSheet(){}},
   getComputedStyle:()=>({display:"block",visibility:"visible",opacity:"1",translate:"none"}),
   __nocturneTrace(event,data){if(event==="disassembly.bypass")reasons.push(data.reason);}
  };
@@ -95,16 +96,16 @@ function closeAcquisitionFixture({tabs=true,bookmarks=true,missingEngine=false,m
   win.__nocturneCenterMotion=engine;
  }
  const code=source.slice(source.indexOf("  function visible("),source.indexOf("  function eligible("));
- const setup=new Function("window","root","get","factory","events","timers","closedState",`
+ const setup=new Function("window","root","get","factory","events","timers","closedState","Services","homeIslandDistance","homeIslandFrames","registerHomeIslandMotion","HOME_ISLAND_DURATION","HOME_ISLAND_TRAVEL","HOME_ISLAND_SCALE","cancelNative",`
   const MARK="data-zr-close-effect",MOVE="data-zr-close-move",CLIP="data-zr-close-clip",PROGRESS="--zr-close-progress",DURATION=760;
   let centerHandle=null,bookmarkHandle=null,sheet=null,style=null;
   const animations=new Set(),owned=new Map();
   ${code}
-  const controller=factory({eligible:()=>true,begin,clear:restore,seal(){centerHandle?.seal();bookmarkHandle?.seal();for(const a of animations)a.finish();},isClosed:()=>closedState.value,later(fn){timers.push(fn);return timers.length;},cancelLater(){},invoke(){events.push("native");closedState.value=true;return "closed";}});
+  const controller=factory({eligible:()=>true,begin,clear:restore,seal(){centerHandle?.seal();bookmarkHandle?.seal();for(const a of animations)a.finish();},isClosed:()=>closedState.value,later(fn,ms){fn.ms=ms;timers.push(fn);return timers.length;},cancelLater(){},invoke(){events.push("native");closedState.value=!cancelNative;return "closed";}});
   return controller;
  `);
- const state={value:closed},gate=setup(win,root,get,factory,events,timers,state);
- return {gate,root,effects,events,timers,reasons,measurements};
+ const state={value:closed},gate=setup(win,root,get,factory,events,timers,state,{io:{newURI:s=>s}},homeIslandDistance,homeIslandFrames,registerHomeIslandMotion,HOME_ISLAND_DURATION,HOME_ISLAND_TRAVEL,HOME_ISLAND_SCALE,cancelNative);
+ return {gate,root,effects,events,timers,reasons,measurements,island};
 }
 test("visible horizontal tabs with missing or failed proxy acquisition bypass close motion",()=>{
  for(const options of [{missingEngine:true},{failTab:true}]){
@@ -146,4 +147,17 @@ test("failed bookmark preflight restores phase and bypasses native close exactly
  const h=closeAcquisitionFixture({failPreflight:true});assert.equal(h.gate.request({},[]),"closed");
  assert.deepEqual(h.events,["native"]);assert.deepEqual(h.reasons,["bookmark-preflight-failed"]);
  assert.equal(h.root.hasAttribute("data-zr-closing"),false);assert.equal(h.effects.length,0);assert.equal(h.timers.length,0);
+});
+
+test("Home exit is exact reversed B after both folds; cancelled native close restores the real Island",()=>{
+ const h=closeAcquisitionFixture({registered:true,cancelNative:true});h.gate.request({},[]);
+ const a=h.effects.find(a=>a.name==="island");
+ assert.deepEqual(a.timing,{delay:650,duration:540,easing:"linear",fill:"both"});
+ assert.equal(h.timers[0].ms,1190);
+ assert.deepEqual(a.frames,homeIslandFrames(true).map(f=>({offset:f.offset,"--zr-close-progress":String(f.opacity),[HOME_ISLAND_TRAVEL]:String(f.travel),[HOME_ISLAND_SCALE]:String(f.scale)})));
+ assert.ok(h.island.hasAttribute("data-zr-close-island-exit"));assert.ok(!h.island.hasAttribute("data-zr-close-clip"));
+ h.timers[0]();assert.equal(h.timers[1].ms,110);h.timers[1]();
+ assert.equal(h.events.filter(x=>x==="native").length,1);assert.ok(!h.island.hasAttribute("data-zr-close-island-exit"));
+ assert.equal(h.island.style.getPropertyValue(HOME_ISLAND_TRAVEL),"");assert.equal(h.island.style.getPropertyValue(HOME_ISLAND_SCALE),"");
+ assert.ok(h.effects.every(a=>a.cancelled===1));
 });

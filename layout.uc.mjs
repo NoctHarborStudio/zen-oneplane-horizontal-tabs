@@ -93,7 +93,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.180",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.181",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -7704,11 +7704,12 @@ function installTabStrip() {
         // Compare its painted rectangle against the projected resting slot;
         // integer offset metrics and every other geometry check remain live.
         let islandMotion=null;
-        if(r&&n===island&&n.hasAttribute?.("data-zr-startup-island-entry")){
+        if(r&&n===island&&(n.hasAttribute?.("data-zr-startup-island-entry")||n.hasAttribute?.("data-zr-close-island-exit"))){
           const cs=window.getComputedStyle(n);
-          const p=Number.parseFloat(cs.getPropertyValue("--zr-startup-progress"));
-          const y=Number.parseFloat(cs.getPropertyValue("--zr-startup-island-y"));
-          islandMotion=[p,y];
+          const p=Number.parseFloat(cs.getPropertyValue("--zr-island-travel"));
+          const s=Number.parseFloat(cs.getPropertyValue("--zr-island-scale"));
+          const y=Number.parseFloat(cs.getPropertyValue(n.hasAttribute("data-zr-close-island-exit")?"--zr-close-island-y":"--zr-startup-island-y"));
+          islandMotion=[p,y,s];
         }
         return {connected,parent:n.parentElement,offsetParent:n.offsetParent,metrics,scroll,local,islandMotion};
       });
@@ -7722,9 +7723,8 @@ function installTabStrip() {
     const same=(a,b,epsilon=0)=>a.length===b.length&&a.every((v,i)=>Math.abs(v-b[i])<=epsilon);
     const sameLocal=(a,b)=>{
       if(!b.islandMotion)return same(a.local,b.local,.5);
-      const [p,y]=b.islandMotion,[left,top,width,height]=a.local;
-      if(a.islandMotion||!Number.isFinite(p)||p<0||p>1||!Number.isFinite(y)||y>=0)return false;
-      const s=Math.max(.02,p);
+      const [p,y,s]=b.islandMotion,[left,top,width,height]=a.local;
+      if(a.islandMotion||!Number.isFinite(p)||p<0||p>1||!Number.isFinite(y)||y>=0||!Number.isFinite(s)||s<.02||s>1)return false;
       return same([left+width*(1-s)/2,top+height*(1-s)/2+y*(1-p),width*s,height*s],b.local,.5);
     };
     const before=measure();

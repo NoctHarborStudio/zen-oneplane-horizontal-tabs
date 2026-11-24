@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.180"};
+  const event="assembly.script",data={version:"0.3.0-preview.181"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -79,6 +79,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
   let registered=false;
   try{window.CSS.registerProperty({name:PROGRESS,syntax:"<number>",inherits:false,initialValue:"1"});registered=true;}
   catch(e){registered=e.name==="InvalidModificationError";}
+  const islandRegistered=registered&&registerHomeIslandMotion(window.CSS);
   const BOOT_PREF="zen.nocturne.boot.enabled",BOOT_MIN=1010,BOOT_EXIT=320,BOOT_LEAD=150,BOOT_ENTER=460;
   let boot=null,bootMark=null,bootEffects=[],bootAt=0,bootTimer=0,bootFrame=0,bootPreparing=false;
   const inputs=["pointerdown","keydown","wheel","dragstart","beforecustomization"];
@@ -470,12 +471,16 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       if(bloomShape)n.setAttribute("data-zr-startup-bloom-shape","true");
       if(islandY!==null){
         save(n,"--zr-startup-island-y",islandY+"px");
+        for(const k of [HOME_ISLAND_TRAVEL,HOME_ISLAND_SCALE]){
+          record.set(k,{value:n.style.getPropertyValue(k),priority:n.style.getPropertyPriority(k)});
+          n.style.setProperty(k,"1");
+        }
         n.setAttribute("data-zr-startup-island-entry","true");
       }
       const resting=bloomTiming&&bloomShape?n.getBoundingClientRect():null;
       const verify=bloomTiming?(a,promise)=>prepareBloomDirect(n,a,promise,timeline,start,time,opacity,resting):null;
       const frames=islandY===null?[{[PROGRESS]:String(initial)},{[PROGRESS]:"1"}]:
-        startupIslandProgress().map(p=>({[PROGRESS]:String(p)}));
+        homeIslandFrames().map(f=>({offset:f.offset,[PROGRESS]:String(f.opacity),[HOME_ISLAND_TRAVEL]:String(f.travel),[HOME_ISLAND_SCALE]:String(f.scale)}));
       acquired=play(n,frames,start,time,false,islandY===null?easing:"linear",()=>restore(n),!late,startLate,verify);
       if(!acquired)restore(n);
     }else{
@@ -741,7 +746,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       // Capture all resting rectangles before adding an Island transform.
       // A covered Boot or a newly inserted Island may enter from zero;
       // do not re-hide an already-painted, uncovered Island.
-      if(plan.mode!=="bloom"&&ir&&registered&&Number.isFinite(ir.bottom)&&
+      if(plan.mode!=="bloom"&&ir&&islandRegistered&&Number.isFinite(ir.bottom)&&
          (bootPreparing||!baseline.has(island)))plan=startupTimeline(0,scale,"fold",true);
       playStart=now();
       const overhead=bootPreparing?BOOT_EXIT+150:0;
@@ -782,7 +787,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
         // Remove per-card startup gates together, including split members.
         for(const n of cards){n.setAttribute(MANAGED,"true");seen.add(n);}
         if(!painted){
-          const options={owner:"startup",direction:"in",duration:Math.round(timeline.cardsLength*scale),delay:Math.round(timeline.cards*scale),paused:timeline.paused,observeEffect:timeline.observeEffect,
+          const options={owner:"startup",direction:"in",duration:Math.round(timeline.cardsLength*scale),delay:Math.ceil(timeline.cards*scale),paused:timeline.paused,observeEffect:timeline.observeEffect,
             onTopologyInvalidated:()=>{if(!dead&&ownedTimeline===timeline)finish("interrupted");}};
           if(bloom){
             const fold=startupTimeline(0,scale);
@@ -806,10 +811,10 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
           if(ir&&timeline.islandLength){
             // Center Motion already captured the final, untransformed portal.
             // Keep the native -50% translate intact; only transform the Island.
-            const y=-Math.max(1,ir.bottom+2);
+            const y=homeIslandDistance(ir.bottom);
             const acquired=reveal(island,{delay:timeline.islandStart,length:timeline.islandLength,islandY:y});
             decision("assembly.island.entry",{acquired,y,width:ir.width,height:ir.height,
-              duration:timeline.islandLength*scale,cardsAt:timeline.cards*scale});
+              duration:timeline.islandLength*scale,cardsAt:timeline.cards*scale,curve:"delayed-reveal"});
           }else if(ir)reveal(island,{delay:150,length:190});
         }
       }else{
@@ -1063,7 +1068,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
         translate: calc(var(--zr-startup-dx) * (1 - var(${PROGRESS}))) calc(var(--zr-startup-dy) * (1 - var(${PROGRESS}))) !important;
       }
       ${base}[data-zr-startup-island-entry] {
-        transform: translateY(calc(var(--zr-startup-island-y) * (1 - var(${PROGRESS})))) scale(max(.02, var(${PROGRESS}))) !important;
+        transform: translateY(calc(var(--zr-startup-island-y) * (1 - var(--zr-island-travel)))) scale(var(--zr-island-scale)) !important;
         transform-origin: center center !important;
       }
       ${base}[data-zr-startup-bloom-shape] {

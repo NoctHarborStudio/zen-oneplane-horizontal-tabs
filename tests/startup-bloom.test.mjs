@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {startupBloomTimeline,startupBloomStagger,startupBloomOrder,startupBloomFrames,startupBloomAssemblyPlan,startupBloomHomeSchedule} from "../src/algorithms/startup-bloom.mjs";
-import {startupTimeline,startupIslandProgress,startupFits,startupLateEffect,createStartupOutcome} from "../src/algorithms/startup-timeline.mjs";
+import {startupTimeline,startupFits,startupLateEffect,createStartupOutcome} from "../src/algorithms/startup-timeline.mjs";
+import {HOME_ISLAND_DURATION,homeIslandFrames,homeIslandDistance} from "../src/algorithms/home-island-motion.mjs";
 const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 const near=(a,b)=>Math.abs(a-b)<1e-7;
 
@@ -224,8 +225,8 @@ function assemblyFixture({boot=false,remaining=8000,mode="bloom",failDirect=fals
  const engine={startupBloomVersion:oldEngine?undefined:1,start(row,opts){calls.push(["center",opts.bloomTimeline?.mode??"fold",opts.delay,opts.duration]);const a=effect("tabs");opts.observeEffect(a,"tabs",()=>true);return {count:1,mode:"magnetic-bloom",startupOutcomeVersion:1,resumeAt(fn){fn(a);},release(){}};},releasePending(){}};
  const home={startupBloomVersion:1,startupOutcomeVersion:1,startupLeaseVersion:1,playStartup(t){calls.push(["home",t.mode??"fold"]);if(failHome)return;const a=effect("home");t.observeEffect(a,"home",()=>true);t.homeLease={startupOutcomeVersion:1,resumeAt(fn){fn(a);},release(){}};}};
  window={innerWidth:1000,__nocturneCenterMotion:engine,__zenSharedHomeV1:home,__nocturneLayoutStartup:{initial:true},__oneplaneLayoutController:{prepareWorkspaceGeometry(){}},__zenMagneticBookmarksShared:{syncAddressState(){}}};
- const run=new Function("window","document","root","nodes","state","calls","effect","startupTimeline","startupFits","createStartupOutcome","codeBoot","mode","failDirect",`
- let dead=false,playing=false,settling=false,bootPreparing=false,boot=codeBoot?{}:null,registered=true,scale=1,duration=1050;
+ const run=new Function("window","document","root","nodes","state","calls","effect","startupTimeline","startupFits","createStartupOutcome","homeIslandDistance","codeBoot","mode","failDirect",`
+ let dead=false,playing=false,settling=false,bootPreparing=false,boot=codeBoot?{}:null,registered=true,islandRegistered=true,scale=1,duration=1050;
  let pendingEngine=null,playStart=0,finishAt=0,ownedTimeline=null,homeRegistry=null,centerHandle=null,bookmarkHandle=null,lateObserver=null,lateResize=null;
  let plan=startupTimeline(0,1,mode);const started=0,deadline=state.remaining,BOOT_EXIT=320,PHASE="phase",READY="ready",MANAGED="managed";
  const seen=new Set(),baseline=new Set(),animations=new Map();
@@ -241,7 +242,7 @@ function assemblyFixture({boot=false,remaining=8000,mode="bloom",failDirect=fals
  const MutationObserver=class{observe(){}};const ResizeObserver=undefined;const console={warn(){}};
  ${code}
  launch(true);return ()=>({timeline:ownedTimeline,finishAt,dead});
- `)(window,document,root,{"oneplane-tabs":row,"oneplane-toolbar-surface":surface,"urlbar-container":url,"PlacesToolbarItems":items,"zen-shared-home":homeNode},state,calls,effect,startupTimeline,startupFits,createStartupOutcome,boot,mode,failDirect);
+ `)(window,document,root,{"oneplane-tabs":row,"oneplane-toolbar-surface":surface,"urlbar-container":url,"PlacesToolbarItems":items,"zen-shared-home":homeNode},state,calls,effect,startupTimeline,startupFits,createStartupOutcome,homeIslandDistance,boot,mode,failDirect);
  return {state,calls,effects,clock,window,run};
 }
 test("explicit Assembly Bloom passes exact timeline to Center and Home, resumes once after Boot",()=>{
@@ -394,13 +395,15 @@ test("Fold Home Island entrance finishes before the unchanged magnetic card wave
   assert.equal(p.home-p.cards,prior.home-prior.cards);assert.ok(near(p.finishLength,prior.finishLength+p.islandShift*scale));
   assert.ok(near(p.lateLimit,prior.lateLimit+p.islandShift*scale));
  }
- const p=startupIslandProgress();assert.equal(p.length,41);assert.equal(p[0],0);assert.equal(p[20],.5);assert.equal(p.at(-1),1);
- assert.ok(p.every((v,i)=>i===0||v>p[i-1]));
+ const p=homeIslandFrames();assert.equal(p.length,81);assert.equal(p[0].scale,.02);assert.equal(p.at(-1).scale,1);
+ assert.equal(p[16].scale,.02);assert.ok(p[16].travel>.5);assert.equal(p[24].opacity,1);
+ for(const k of ["travel","scale","opacity"])assert.ok(p.every((v,i)=>i===0||v[k]>=p[i-1][k]));
+ assert.deepEqual(homeIslandFrames(true).map(({offset,...f})=>f),p.map(({offset,...f})=>f).reverse());
  for(const boot of [false,true]){
   const f=assemblyFixture({boot,mode:"fold"}),t=f.run().timeline;
-  assert.equal(t.cards,420);assert.equal(t.islandLength,420);
-  assert.ok(f.calls.some(x=>x[0]==="center"&&x[1]==="fold"&&x[2]===420&&x[3]===650));
-  assert.ok(f.calls.some(x=>x[0]==="reveal"&&x[1]==="island"&&x[2].delay===0&&x[2].length===420&&x[2].islandY===-42));
-  assert.ok(f.calls.some(x=>x[0]==="assembly.island.entry"&&x[1].acquired===true&&x[1].cardsAt===420));
+  assert.equal(t.cards,540);assert.equal(t.islandLength,540);
+  assert.ok(f.calls.some(x=>x[0]==="center"&&x[1]==="fold"&&x[2]===540&&x[3]===650));
+  assert.ok(f.calls.some(x=>x[0]==="reveal"&&x[1]==="island"&&x[2].delay===0&&x[2].length===540&&x[2].islandY===-66));
+  assert.ok(f.calls.some(x=>x[0]==="assembly.island.entry"&&x[1].acquired===true&&x[1].cardsAt===540));
  }
 });

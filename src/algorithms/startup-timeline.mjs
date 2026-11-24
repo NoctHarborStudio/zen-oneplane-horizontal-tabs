@@ -1,13 +1,14 @@
 // Pure timing plan for Center Assembly; base offsets are unscaled milliseconds.
 // The runtime owns the epoch and lifecycle; this module owns no DOM or timers.
 import {startupBloomAssemblyPlan} from "./startup-bloom.mjs";
+import {HOME_ISLAND_DURATION} from "./home-island-motion.mjs";
 export function startupTimeline(start,scale,mode="fold",islandEntry=false){
   if(mode==="bloom")return startupBloomAssemblyPlan(start,scale);
   if(mode!=="fold")throw RangeError("unknown startup motion mode");
   const duration=Math.round(scale*1050);
   // Keep the existing Fold cadence after the Island reaches its real slot.
   // Native/hidden Island startup and the experimental Bloom path are unchanged.
-  const islandLength=420,shift=islandEntry?islandLength-245:0;
+  const islandLength=HOME_ISLAND_DURATION,shift=islandEntry?islandLength-245:0;
   return {
     start,scale,panel:0,panelLength:220,cards:245+shift,cardsLength:650,
     bookmarks:470+shift,home:650+shift,homeLength:330,end:1190+shift,
@@ -15,11 +16,6 @@ export function startupTimeline(start,scale,mode="fold",islandEntry=false){
     lateLimit:duration+420+shift*scale,
     ...(islandEntry?{islandStart:0,islandLength,islandShift:shift}:{})
   };
-}
-
-// The centered Magnetic Fold card uses the same 41 smoothstep samples.
-export function startupIslandProgress(){
-  return Array.from({length:41},(_,i)=>{const p=i/40;return p*p*(3-2*p);});
 }
 
 export function startupFits(plan,now,deadline,overhead=0){

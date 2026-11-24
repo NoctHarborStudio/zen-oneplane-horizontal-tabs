@@ -26,6 +26,33 @@
 <p class="note">Без Boot, реальных страниц, пользовательских данных и сетевых ресурсов. Фиксированные слоты; только видимые карточки участвуют. Fold использует ту же кривую, что runtime, но упрощённые копии DOM. Время подготовки и число effects/keyframes — показатели этого стенда, не FPS Gecko.</p>
 </main>
 <script>
+// Home Island variant B, approved in the comparison prototype.
+const HOME_ISLAND_DURATION=540;
+const HOME_ISLAND_TRAVEL="--zr-island-travel",HOME_ISLAND_SCALE="--zr-island-scale";
+function registerHomeIslandMotion(css){
+  for(const name of [HOME_ISLAND_TRAVEL,HOME_ISLAND_SCALE]){
+    try{css.registerProperty({name,syntax:"<number>",inherits:false,initialValue:"1"});}
+    catch(e){if(e.name!=="InvalidModificationError")return false;}
+  }
+  return true;
+}
+function homeIslandDistance(bottom){return -Math.max(66,bottom+2);}
+function homeIslandPose(t){
+  const clamp=x=>Math.min(1,Math.max(0,x));
+  const bezier=(t,x1,y1,x2,y2)=>{
+    t=clamp(t);if(t===0||t===1)return t;
+    let l=0,r=1;
+    const b=(u,a,c)=>3*(1-u)*(1-u)*u*a+3*(1-u)*u*u*c+u*u*u;
+    for(let i=0;i<24;i++){const m=(l+r)/2;if(b(m,x1,x2)<t)l=m;else r=m;}
+    return b((l+r)/2,y1,y2);
+  };
+  t=clamp(t);
+  const a=clamp(t/.3);
+  return {travel:bezier(t,.25,.8,.22,1),scale:.02+.98*bezier((t-.2)/.8,.3,0,.12,1),opacity:a*a*(3-2*a)};
+}
+function homeIslandFrames(reverse=false){
+  return Array.from({length:81},(_,i)=>({offset:i/80,...homeIslandPose((reverse?80-i:i)/80)}));
+}
 // Pure timing plan for Center Assembly; base offsets are unscaled milliseconds.
 // The runtime owns the epoch and lifecycle; this module owns no DOM or timers.
 function startupTimeline(start,scale,mode="fold",islandEntry=false){
@@ -34,7 +61,7 @@ function startupTimeline(start,scale,mode="fold",islandEntry=false){
   const duration=Math.round(scale*1050);
   // Keep the existing Fold cadence after the Island reaches its real slot.
   // Native/hidden Island startup and the experimental Bloom path are unchanged.
-  const islandLength=420,shift=islandEntry?islandLength-245:0;
+  const islandLength=HOME_ISLAND_DURATION,shift=islandEntry?islandLength-245:0;
   return {
     start,scale,panel:0,panelLength:220,cards:245+shift,cardsLength:650,
     bookmarks:470+shift,home:650+shift,homeLength:330,end:1190+shift,
@@ -42,11 +69,6 @@ function startupTimeline(start,scale,mode="fold",islandEntry=false){
     lateLimit:duration+420+shift*scale,
     ...(islandEntry?{islandStart:0,islandLength,islandShift:shift}:{})
   };
-}
-
-// The centered Magnetic Fold card uses the same 41 smoothstep samples.
-function startupIslandProgress(){
-  return Array.from({length:41},(_,i)=>{const p=i/40;return p*p*(3-2*p);});
 }
 
 function startupFits(plan,now,deadline,overhead=0){
@@ -384,8 +406,8 @@ function startupBloomAssemblyPlan(start,scale){
       }else{
         const plan=startupTimeline(0,scale,"fold",true);
         stage(ui.panel,startupBloomFrames("fade"),{start:0,end:plan.panelLength*scale});
-        const y=-Math.max(1,hr.bottom-rr.top+2);
-        effect(ui.island,startupIslandProgress().map(p=>({opacity:p,transform:"translateY("+y*(1-p)+"px) scale("+Math.max(.02,p)+")"})),
+        const y=homeIslandDistance(hr.bottom-rr.top);
+        effect(ui.island,homeIslandFrames().map(f=>({offset:f.offset,opacity:f.opacity,transform:"translateY("+y*(1-f.travel)+"px) scale("+f.scale+")"})),
           {delay:plan.islandStart*scale,duration:plan.islandLength*scale});
         run.layer=element("div","proxyLayer","",scene);run.layer.style.clipPath=fold.portalClip(hub,rr,rr.width,rr.height);
         for(const s of slots){

@@ -28,7 +28,7 @@ async function assemble(entries) {
   return parts.join("");
 }
 
-for (const [output, entries] of [["layout.uc.mjs", plan.javascript], ["chrome.css", plan.stylesheet], ["overlay.uc.mjs", plan.overlay], ["library-services.uc.mjs", plan.libraryServices], ["library.uc.mjs", plan.library], ["startup-animation.uc.mjs", plan.startupAnimation], ["docs/nocturne/labs/startup-motion.html", plan.startupMotionLab]]) {
+for (const [output, entries] of [["layout.uc.mjs", plan.javascript], ["chrome.css", plan.stylesheet], ["overlay.uc.mjs", plan.overlay], ["library-services.uc.mjs", plan.libraryServices], ["library.uc.mjs", plan.library], ["startup-animation.uc.mjs", plan.startupAnimation], ["closing-animation.uc.mjs", plan.closingAnimation], ["docs/nocturne/labs/startup-motion.html", plan.startupMotionLab]]) {
   const data = await assemble(entries);
   const path = resolve(root, output);
   if (check) {

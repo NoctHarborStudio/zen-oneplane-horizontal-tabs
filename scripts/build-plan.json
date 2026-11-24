@@ -404,6 +404,10 @@
       "kind": "esm-inline"
     },
     {
+      "path": "src/algorithms/home-island-motion.mjs",
+      "kind": "esm-inline"
+    },
+    {
       "path": "src/algorithms/startup-timeline.mjs",
       "kind": "esm-inline"
     },
@@ -416,6 +420,10 @@
     {
       "path": "src/labs/startup-motion-head.html.part",
       "kind": "section"
+    },
+    {
+      "path": "src/algorithms/home-island-motion.mjs",
+      "kind": "esm-inline"
     },
     {
       "path": "src/algorithms/startup-timeline.mjs",
@@ -431,6 +439,16 @@
     },
     {
       "path": "src/labs/startup-motion.js.part",
+      "kind": "section"
+    }
+  ],
+  "closingAnimation": [
+    {
+      "path": "src/algorithms/home-island-motion.mjs",
+      "kind": "esm-inline"
+    },
+    {
+      "path": "src/core/closing-animation.js.part",
       "kind": "section"
     }
   ]

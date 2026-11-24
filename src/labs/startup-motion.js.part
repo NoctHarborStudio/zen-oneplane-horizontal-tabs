@@ -80,8 +80,8 @@
       }else{
         const plan=startupTimeline(0,scale,"fold",true);
         stage(ui.panel,startupBloomFrames("fade"),{start:0,end:plan.panelLength*scale});
-        const y=-Math.max(1,hr.bottom-rr.top+2);
-        effect(ui.island,startupIslandProgress().map(p=>({opacity:p,transform:"translateY("+y*(1-p)+"px) scale("+Math.max(.02,p)+")"})),
+        const y=homeIslandDistance(hr.bottom-rr.top);
+        effect(ui.island,homeIslandFrames().map(f=>({offset:f.offset,opacity:f.opacity,transform:"translateY("+y*(1-f.travel)+"px) scale("+f.scale+")"})),
           {delay:plan.islandStart*scale,duration:plan.islandLength*scale});
         run.layer=element("div","proxyLayer","",scene);run.layer.style.clipPath=fold.portalClip(hub,rr,rr.width,rr.height);
         for(const s of slots){
