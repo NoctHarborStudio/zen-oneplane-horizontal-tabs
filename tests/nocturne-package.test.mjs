@@ -62,3 +62,13 @@ test("experimental direct alpha keeps native backing changes scoped to visible n
  assert.doesNotMatch(block,/backdrop-filter|pointer-events:|position:|z-index:|transform:|transition:|display:|visibility:/);
  assert.ok(read("chrome.css").includes(block));
 });
+
+test("packaged Nocturne runtime has no system motion admission gates",()=>{
+ const pref=JSON.parse(read("preferences.json")).find(x=>x.property==="zen.nocturne.motion.enabled");
+ assert.equal(pref.defaultValue,true);assert.equal(pref.restart,true);
+ const css=read("chrome.css");assert.doesNotMatch(css,/prefers-reduced-motion|zen\.nocturne\.startup\.force-motion/);
+ for(const path of Object.keys(manifest.scripts)){
+  const runtime=read(path).split("\n").filter(line=>!line.includes('record("diagnostics.ready"')).join("\n");
+  assert.doesNotMatch(runtime,/prefers-reduced-motion|zen\.nocturne\.startup\.force-motion|ui\.prefersReducedMotion/,path);
+ }
+});

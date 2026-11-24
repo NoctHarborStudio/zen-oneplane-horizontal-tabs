@@ -87,13 +87,13 @@ test("layout preference restore isolates failed keys and retains complete backup
 test("new activation captures released preference keys without losing unresolved originals",()=>{
  const src=read("src/core/preferences.js.part");
  const code=src.slice(src.indexOf("function validNativeValue("),src.indexOf("function otherActiveWindow"));
- const nativeKey="zen.library.enabled",saved={a:{value:false,user:true},b:{value:true,user:false,released:true},startup:{value:false,user:false},[nativeKey]:{value:true,user:false,owned:true}};
+ const nativeKey="zen.library.enabled",frameKey="zen.theme.content-element-separation",saved={a:{value:false,user:true},b:{value:true,user:false,released:true},startup:{value:false,user:false},[nativeKey]:{value:true,user:false,owned:true}};
  let raw=JSON.stringify(saved);
- const prefs={PREF_BOOL:128,getPrefType:()=>128,getStringPref:()=>raw,setStringPref(k,v){raw=v;},
+ const prefs={PREF_BOOL:128,PREF_INT:64,getPrefType:k=>k===frameKey?64:128,getIntPref:()=>9,getStringPref:()=>raw,setStringPref(k,v){raw=v;},
   getBoolPref:k=>false,prefHasUserValue:k=>true};
- const snapshot=new Function("prefs","TARGET","STARTUP","KEY","NATIVE_LIBRARY","NATIVE_FRAME",code+"return snapshot;")(prefs,{a:true,b:false,[nativeKey]:false},"startup","backup",nativeKey,"zen.theme.content-element-separation");
- assert.deepEqual(snapshot(),{a:saved.a,b:{value:false,user:true,owned:false},startup:saved.startup,[nativeKey]:saved[nativeKey]});
- assert.deepEqual(JSON.parse(raw),{a:saved.a,b:{value:false,user:true,owned:false},startup:saved.startup,[nativeKey]:saved[nativeKey]});
+ const snapshot=new Function("prefs","TARGET","STARTUP","KEY","NATIVE_LIBRARY","NATIVE_FRAME",code+"return snapshot;")(prefs,{a:true,b:false,[nativeKey]:false,[frameKey]:0},"startup","backup",nativeKey,frameKey);
+ assert.deepEqual(snapshot(),{a:saved.a,b:{value:false,user:true,owned:false},startup:saved.startup,[nativeKey]:saved[nativeKey],[frameKey]:{value:9,user:true,owned:false}});
+ assert.deepEqual(JSON.parse(raw),{a:saved.a,b:{value:false,user:true,owned:false},startup:saved.startup,[nativeKey]:saved[nativeKey],[frameKey]:{value:9,user:true,owned:false}});
 });
 test("failed backup removal checkpoints release progress before retry",()=>{
  const src=read("src/core/preferences.js.part");

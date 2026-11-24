@@ -162,13 +162,13 @@ function homeFixture({empty=false,workspaces=true}={}){
  const content=node(".zh-content",[search,pinSection,...(workspaces?[spaceSection]:[]),footer]);
  let mark=true;
  const panel={hasAttribute:()=>mark,removeAttribute(){mark=false;}};
- const win={getComputedStyle:n=>{const s=style(n);return {...s,opacity:String(s.opacity),scale:String(s.scale)};},matchMedia:()=>({matches:false})};
+ const win={getComputedStyle:n=>{const s=style(n);return {...s,opacity:String(s.opacity),scale:String(s.scale)};},matchMedia:()=>({matches:true})};
  const timeline={...startupTimeline(0,1,"bloom"),paused:true,closed:false,observeEffect:(a,surface,current)=>observed.push({a,surface,current})};
  win.__nocturneStartupTimeline=timeline;
  const home=read("src/home/shared-home.js.part");
  const code=home.slice(home.indexOf("  let startupRun="),home.indexOf("  function stopMotion()"));
  const run=new Function("win","doc","panel","content","calls","startupBloomHomeSchedule","startupBloomFrames",`
- let open=true,dead=false,searchToken=null,editing=false,adding=false;function render(){calls.render++;}
+ let open=true,dead=false,searchToken=null,editing=false,adding=false;const prefs={getBoolPref:(k,f)=>k==="zen.nocturne.motion.enabled"?fault.motionEnabled??f:f};function render(){calls.render++;}
  ${code}
  return {play:playStartupHome,refresh:refreshHomeStructure,finish:finishStartupHome,edit:()=>{editing=true;}};
  `)(win,doc,panel,content,calls,startupBloomHomeSchedule,startupBloomFrames);
@@ -186,6 +186,10 @@ test("real Home candidate owns individual leaves, opacity and exact shared epoch
  f.run.refresh();f.run.refresh();assert.equal(f.calls.render,0);
  lease.release();assert.equal(f.calls.render,1);assert.equal(f.marked(),false);
  assert.ok(f.effects.every(a=>a.cancelled===1));assert.ok(f.observed.every(o=>!o.current()));assert.equal(f.timeline.homeLease,undefined);
+});
+test("Home ignores system reduced motion and honors explicit Nocturne opt-out",()=>{
+ const f=homeFixture();f.fault.motionEnabled=false;
+ assert.equal(f.run.play(f.timeline),null);assert.equal(f.effects.length,0);assert.equal(f.marked(),false);assert.equal(f.timeline.homeLease,undefined);
 });
 test("empty Pins is an independent fade and no Workspaces means no phantom effect",()=>{
  const f=homeFixture({empty:true,workspaces:false}),lease=f.run.play(f.timeline);
