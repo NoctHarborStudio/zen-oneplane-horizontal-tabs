@@ -11,7 +11,7 @@
      root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"||
      win.performance.now()>=3500||!prefs.getBoolPref("zen.refined.startup.animation",true)||
      !prefs.getBoolPref("zen.nocturne.boot.enabled",true)||win.matchMedia("(prefers-reduced-motion: reduce)").matches){
-    root.setAttribute("data-nocturne-early-css-done","true");return;
+    return;
   }
   let node=null,timer=0,claimed=false,cleaned=false,phaseOwned=false,bootOwned=false;
   const oldPhase=root.getAttribute(PHASE),oldBoot=root.getAttribute(BOOT);
@@ -42,9 +42,17 @@
   }
   const probe={nativeBeforeLoaded:root.hasAttribute("zen-before-loaded"),nativeWatermark:prefs.getBoolPref("zen.watermark.enabled",false)};
   try{if(prefs.getBoolPref("zen.nocturne.diagnostics.enabled",true)){
-    probe.globalCSS=win.getComputedStyle(root).getPropertyValue("--nocturne-early-global-css").trim()==="1";
-    const body=document.body&&win.getComputedStyle(document.body);
-    probe.cssHidden=!!body&&body.animationName==="nocturne-early-native-hide"&&Number(body.opacity)===0;
+    probe.nativeHideTabbar=prefs.getBoolPref("zen.view.compact.hide-tabbar",false);
+    probe.nativeCompactStartup=prefs.getBoolPref("zen.view.compact.enable-at-startup",false);
+    probe.nativeCompact=root.getAttribute("zen-compact-mode")==="true";
+    const sidebar=document.getElementById("navigator-toolbox"),titlebar=document.getElementById("titlebar");
+    if(sidebar){
+      const rect=sidebar.getBoundingClientRect(),style=win.getComputedStyle(sidebar);
+      probe.nativeSidebarOnscreen=rect.width>1&&rect.height>1&&rect.right>0&&rect.left<win.innerWidth&&style.visibility!=="hidden"&&Number(style.opacity)>0;
+      probe.nativeSidebarReveal=["zen-has-hover","zen-user-show","zen-has-empty-tab","flash-popup","has-popup-menu","movingtab","zen-compact-mode-active"].some(key=>sidebar.hasAttribute(key));
+      probe.nativeSidebarAnimating=sidebar.hasAttribute("animate")||root.hasAttribute("zen-compact-animating");
+    }
+    if(titlebar)probe.nativeTitlebarHidden=win.getComputedStyle(titlebar).visibility==="hidden";
   }}catch{}
   try{
     node=document.createElementNS("http://www.w3.org/1999/xhtml","div");
@@ -53,7 +61,6 @@
     node.style.setProperty("-moz-window-dragging","default","important");
     record.node=node;record.at=win.performance.now();record.deadline=record.at+8000;win[KEY]=record;
     root.append(node);
-    root.setAttribute("data-nocturne-early-css-done","true");
     if(cleaned||claimed||win[KEY]!==record)return;
     bootOwned=true;root.setAttribute(BOOT,"waiting");
     if(cleaned||claimed||win[KEY]!==record)return;
@@ -64,12 +71,12 @@
     else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"boot.prelude",t:record.at,data});}
     if(cleaned||claimed||win[KEY]!==record)return;
     timer=win.setTimeout(expire,Math.max(0,record.deadline-win.performance.now()));win.addUnloadListener(cleanup);
-  }catch{try{root.setAttribute("data-nocturne-early-css-done","true");}catch{}cleanup();}
+  }catch{cleanup();}
 })();
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.168",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.169",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -1452,7 +1459,7 @@ const TARGET = {
   "zen.view.use-single-toolbar": false,
   "zen.tabs.vertical.right-side": false,
   "zen.view.sidebar-expanded": true,
-  "zen.view.compact.hide-tabbar": false,
+  "zen.view.compact.hide-tabbar": true,
   "zen.view.compact.hide-toolbar": true,
   [NATIVE_LIBRARY]: false,
 };
@@ -1513,12 +1520,12 @@ function otherActiveWindow() {
   return false;
 }
 
-function restorePrefs() {
+function restorePrefs(preserveSidebar=false) {
   const raw = prefs.getStringPref(KEY, "");
   if (!raw) return;
   const saved = JSON.parse(raw);
   // Compact Mode is a user-owned setting.
-  let restored=0,skipped=0,failed=0,alreadyReleased=0,checkpointFailed=false;
+  let restored=0,skipped=0,failed=0,alreadyReleased=0,checkpointFailed=false,retained=0;
   for (const name of Object.keys(TARGET)) {
     try {
       const original = saved[name];
@@ -1533,6 +1540,9 @@ function restorePrefs() {
           (original.owned===true&&!prefs.prefHasUserValue(name))) {
         skipped++; original.released=true; continue;
       }
+      // Keep only an owned native sidebar setting across confirmed native exit.
+      // Zen reads it before Sine on the next launch. A live unload restores it.
+      if(preserveSidebar&&name==="zen.view.compact.hide-tabbar"){retained++;continue;}
       if (original.user) prefs.setBoolPref(name, original.value);
       else prefs.clearUserPref(name);
       restored++;
@@ -1544,15 +1554,15 @@ function restorePrefs() {
   }
   // Keep original values and release progress when a native key or backup
   // removal fails. Retrying must not touch keys we already relinquished.
-  if (!failed) {
+  if (!failed&&!retained) {
     try { prefs.clearUserPref(KEY); }
     catch (error) { failed++; console.warn("[Nocturne] Layout backup release:", nocturneErrorClass(error)); }
   }
-  if (failed) {
+  if (failed||retained) {
     try { prefs.setStringPref(KEY,JSON.stringify(saved)); }
     catch (error) { checkpointFailed=true; console.warn("[Nocturne] Layout backup checkpoint:",nocturneErrorClass(error)); }
   }
-  try { window.__nocturneTrace?.("layout.prefs.restore",{restored,skipped,failed,alreadyReleased,checkpointFailed,backupRetained:failed>0},{flush:true}); } catch {}
+  try { window.__nocturneTrace?.("layout.prefs.restore",{restored,skipped,failed,alreadyReleased,checkpointFailed,backupRetained:failed>0||retained>0,...(preserveSidebar?{retained}: {})},{flush:true}); } catch {}
   return failed===0;
 }
 
@@ -11061,7 +11071,7 @@ function finishCleanup(){
   if(registered)delete window[CONTROLLER];
   if(wasOwner)cleanupStep("layout preferences",()=>{
     const shared=otherActiveWindow()||!!window[CONTROLLER]?.ownsPreferences;
-    if(!shared)restorePrefs();
+    if(!shared)restorePrefs(wasApplied&&(nativeExit||window.closed===true));
     try{window.__nocturneTrace?.("layout.prefs.lease",{action:"release",last:!shared},{flush:true});}catch{}
   });
   if(wasApplied&&registered)cleanupStep("native layout update",()=>updateNativeAfterCleanup(pendingClose,nativeExit===true));

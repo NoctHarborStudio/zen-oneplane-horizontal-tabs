@@ -11,7 +11,7 @@
      root.hasAttribute("customizing")||root.getAttribute("inDOMFullscreen")==="true"||
      win.performance.now()>=3500||!prefs.getBoolPref("zen.refined.startup.animation",true)||
      !prefs.getBoolPref("zen.nocturne.boot.enabled",true)||win.matchMedia("(prefers-reduced-motion: reduce)").matches){
-    root.setAttribute("data-nocturne-early-css-done","true");return;
+    return;
   }
   let node=null,timer=0,claimed=false,cleaned=false,phaseOwned=false,bootOwned=false;
   const oldPhase=root.getAttribute(PHASE),oldBoot=root.getAttribute(BOOT);
@@ -42,9 +42,17 @@
   }
   const probe={nativeBeforeLoaded:root.hasAttribute("zen-before-loaded"),nativeWatermark:prefs.getBoolPref("zen.watermark.enabled",false)};
   try{if(prefs.getBoolPref("zen.nocturne.diagnostics.enabled",true)){
-    probe.globalCSS=win.getComputedStyle(root).getPropertyValue("--nocturne-early-global-css").trim()==="1";
-    const body=document.body&&win.getComputedStyle(document.body);
-    probe.cssHidden=!!body&&body.animationName==="nocturne-early-native-hide"&&Number(body.opacity)===0;
+    probe.nativeHideTabbar=prefs.getBoolPref("zen.view.compact.hide-tabbar",false);
+    probe.nativeCompactStartup=prefs.getBoolPref("zen.view.compact.enable-at-startup",false);
+    probe.nativeCompact=root.getAttribute("zen-compact-mode")==="true";
+    const sidebar=document.getElementById("navigator-toolbox"),titlebar=document.getElementById("titlebar");
+    if(sidebar){
+      const rect=sidebar.getBoundingClientRect(),style=win.getComputedStyle(sidebar);
+      probe.nativeSidebarOnscreen=rect.width>1&&rect.height>1&&rect.right>0&&rect.left<win.innerWidth&&style.visibility!=="hidden"&&Number(style.opacity)>0;
+      probe.nativeSidebarReveal=["zen-has-hover","zen-user-show","zen-has-empty-tab","flash-popup","has-popup-menu","movingtab","zen-compact-mode-active"].some(key=>sidebar.hasAttribute(key));
+      probe.nativeSidebarAnimating=sidebar.hasAttribute("animate")||root.hasAttribute("zen-compact-animating");
+    }
+    if(titlebar)probe.nativeTitlebarHidden=win.getComputedStyle(titlebar).visibility==="hidden";
   }}catch{}
   try{
     node=document.createElementNS("http://www.w3.org/1999/xhtml","div");
@@ -53,7 +61,6 @@
     node.style.setProperty("-moz-window-dragging","default","important");
     record.node=node;record.at=win.performance.now();record.deadline=record.at+8000;win[KEY]=record;
     root.append(node);
-    root.setAttribute("data-nocturne-early-css-done","true");
     if(cleaned||claimed||win[KEY]!==record)return;
     bootOwned=true;root.setAttribute(BOOT,"waiting");
     if(cleaned||claimed||win[KEY]!==record)return;
@@ -64,5 +71,5 @@
     else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"boot.prelude",t:record.at,data});}
     if(cleaned||claimed||win[KEY]!==record)return;
     timer=win.setTimeout(expire,Math.max(0,record.deadline-win.performance.now()));win.addUnloadListener(cleanup);
-  }catch{try{root.setAttribute("data-nocturne-early-css-done","true");}catch{}cleanup();}
+  }catch{cleanup();}
 })();

@@ -46,7 +46,7 @@ function finishCleanup(){
   if(registered)delete window[CONTROLLER];
   if(wasOwner)cleanupStep("layout preferences",()=>{
     const shared=otherActiveWindow()||!!window[CONTROLLER]?.ownsPreferences;
-    if(!shared)restorePrefs();
+    if(!shared)restorePrefs(wasApplied&&(nativeExit||window.closed===true));
     try{window.__nocturneTrace?.("layout.prefs.lease",{action:"release",last:!shared},{flush:true});}catch{}
   });
   if(wasApplied&&registered)cleanupStep("native layout update",()=>updateNativeAfterCleanup(pendingClose,nativeExit===true));

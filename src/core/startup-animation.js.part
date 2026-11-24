@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.168"};
+  const event="assembly.script",data={version:"0.3.0-preview.169"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -47,12 +47,20 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     !startupEligible(lateStart,check.delayed,check.ready,check.age,window.__nocturneLayoutStartup)?"late-established-window":null;
   check.nativeBeforeLoaded=root.hasAttribute("zen-before-loaded");check.nativeWatermark=prefs.getBoolPref("zen.watermark.enabled",false);
   try{if(prefs.getBoolPref("zen.nocturne.diagnostics.enabled",true)){
-    check.globalCSS=window.getComputedStyle(root).getPropertyValue("--nocturne-early-global-css").trim()==="1";
-    const body=document.body&&window.getComputedStyle(document.body);
-    check.cssHidden=!!body&&body.animationName==="nocturne-early-native-hide"&&Number(body.opacity)===0;
+    check.nativeHideTabbar=prefs.getBoolPref("zen.view.compact.hide-tabbar",false);
+    check.nativeCompactStartup=prefs.getBoolPref("zen.view.compact.enable-at-startup",false);
+    check.nativeCompact=root.getAttribute("zen-compact-mode")==="true";
+    const sidebar=document.getElementById("navigator-toolbox"),titlebar=document.getElementById("titlebar");
+    if(sidebar){
+      const rect=sidebar.getBoundingClientRect(),style=window.getComputedStyle(sidebar);
+      check.nativeSidebarOnscreen=rect.width>1&&rect.height>1&&rect.right>0&&rect.left<window.innerWidth&&style.visibility!=="hidden"&&Number(style.opacity)>0;
+      check.nativeSidebarReveal=["zen-has-hover","zen-user-show","zen-has-empty-tab","flash-popup","has-popup-menu","movingtab","zen-compact-mode-active"].some(key=>sidebar.hasAttribute(key));
+      check.nativeSidebarAnimating=sidebar.hasAttribute("animate")||root.hasAttribute("zen-compact-animating");
+    }
+    if(titlebar)check.nativeTitlebarHidden=window.getComputedStyle(titlebar).visibility==="hidden";
   }}catch{}
   decision("assembly.eligible.check",{...check,reason});
-  if(reason){root.setAttribute("data-nocturne-early-css-done","true");window.__nocturneEarlyBoot?.cleanup?.();return;}
+  if(reason){window.__nocturneEarlyBoot?.cleanup?.();return;}
   window[SEEN]=true;
   // 760 ms is still a supported user choice. Legacy saved defaults and
   // explicit selections cannot be distinguished: never rewrite either.
@@ -125,7 +133,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     }catch(error){decision("assembly.timer.error",{name:assemblyErrorClass(error)});finish("setup-failed");}
   }
   function mountBoot(){
-    if(!prefs.getBoolPref(BOOT_PREF,true)){root.setAttribute("data-nocturne-early-css-done","true");removeBoot();return;}
+    if(!prefs.getBoolPref(BOOT_PREF,true)){removeBoot();return;}
     try{
       // Chrome-only, no network assets, no blur, no page mutation.
       const early=earlyBoot;
@@ -143,7 +151,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       const label=html("div");label.textContent="NOCTURNE";
       Object.assign(label.style,{font:"300 24px system-ui, sans-serif",letterSpacing:"7px",paddingInlineStart:"7px"});
       bootMark.append(svg,label);boot.append(bootMark);if(!early)root.append(boot);
-      root.setAttribute("data-nocturne-early-css-done","true");
+      
       if(dead)return;
       bootOwned=true;root.setAttribute("data-nocturne-boot","waiting");bootAt=now();
       if(dead)return;
@@ -155,7 +163,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
       if(dead){try{logo.finished.catch(()=>{});}catch{}try{logo.cancel();}catch{}return;}
       bootEffects.push(logo);logo.finished.catch(()=>{});
       decision("boot.show",{age:bootAt-started,adopted:!!early,backgroundAt:early?.at??bootAt,lead,minimum:BOOT_MIN,exit:BOOT_EXIT});
-    }catch(error){try{root.setAttribute("data-nocturne-early-css-done","true");}catch{}removeBoot();decision("boot.error",{name:assemblyErrorClass(error)});}
+    }catch(error){removeBoot();decision("boot.error",{name:assemblyErrorClass(error)});}
   }
   function removeBoot(){
     let failed=0;

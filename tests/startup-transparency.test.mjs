@@ -637,28 +637,15 @@ test("startup geometry rejection releases startup rather than acquiring effects"
 });
 
 
-test("MB-014 global CSS hides only the chrome body and restores the underlying cascade",()=>{
- const rule=readFileSync(new URL("../early-startup.css",import.meta.url),"utf8");
+test("MB-014 obsolete global hide is retired and native sidebar is diagnosed",()=>{
  const manifest=JSON.parse(readFileSync(new URL("../theme.json",import.meta.url),"utf8"));
- assert.equal(manifest.style.content,"early-startup.css");
- for(const token of ['url("chrome://browser/content/browser.xhtml")','[windowtype="navigator:browser"]','[data-nocturne-early-css-done]','[data-nocturne-boot]','[data-op-startup-ready]','[popup-window]','prefers-reduced-motion: no-preference','zen.refined.startup.animation','zen.nocturne.boot.enabled','> *|body','2000ms steps(1, end) none','from, to { opacity: 0; }'])assert.ok(rule.includes(token),token);
- assert.ok(!rule.includes('[zen-before-loaded'));
- assert.ok(!rule.includes('::after'));
- assert.ok(!rule.includes('display: none'));
- assert.ok(!css.includes('nocturne-early-css-expire'));
- assert.ok(!css.includes('nocturne-early-native-hide'));
-});
-test("MB-014 prelude hands off global hiding after the root-level Boot node mounts",()=>{
+ const retired=readFileSync(new URL("../early-startup.css",import.meta.url),"utf8");
  const pre=readFileSync(new URL("../src/core/boot-prelude.js.part",import.meta.url),"utf8");
- for(const hidden of [true,false]){
-  const attrs=new Map(),log=[],body={};
-  const node={isConnected:false,style:{setProperty(){}},setAttribute(){},remove(){this.isConnected=false;}};
-  const root={hasAttribute:k=>attrs.has(k),getAttribute:k=>attrs.get(k)??null,setAttribute(k,v){attrs.set(k,v);log.push(k);},removeAttribute:k=>attrs.delete(k),append(n){n.isConnected=true;log.push("append");}};
-  let timer;const win={performance:{now:()=>10},matchMedia:()=>({matches:false}),setTimeout(fn){timer=fn;return 1;},clearTimeout(){},addUnloadListener(){},getComputedStyle(n){return n===body?{animationName:hidden?"nocturne-early-native-hide":"none",opacity:hidden?"0":"1"}:{getPropertyValue:()=>"1"};}};
-  const run=new Function("window","document","Services",pre);const doc={documentElement:root,body,createElementNS:()=>node};const services={prefs:{getBoolPref:()=>true}};
-  run(win,doc,services);assert.ok(log.indexOf("append")<log.indexOf("data-nocturne-early-css-done"));assert.equal(win.__nocturneEarlyTrace[0].data.globalCSS,true);assert.equal(win.__nocturneEarlyTrace[0].data.cssHidden,hidden);
-  timer();assert.equal(node.isConnected,false);assert.equal(attrs.get("data-nocturne-early-css-done"),"true");run(win,doc,services);assert.equal(node.isConnected,false);
+ assert.equal(manifest.style.content,undefined);
+ assert.ok(!retired.includes("@keyframes"));
+ for(const field of ["nativeHideTabbar","nativeCompactStartup","nativeCompact","nativeSidebarOnscreen","nativeSidebarReveal","nativeSidebarAnimating","nativeTitlebarHidden"]){
+  assert.ok(pre.includes("probe."+field),field);assert.ok(source.includes("check."+field),field);
  }
- assert.ok(source.includes('bootMark.append(svg,label);boot.append(bootMark);if(!early)root.append(boot);\n      root.setAttribute("data-nocturne-early-css-done","true");'));
- assert.ok(source.includes('if(reason){root.setAttribute("data-nocturne-early-css-done","true");'));
+ assert.ok(!pre.includes("data-nocturne-early-css-done"));
+ assert.ok(!source.includes("data-nocturne-early-css-done"));
 });

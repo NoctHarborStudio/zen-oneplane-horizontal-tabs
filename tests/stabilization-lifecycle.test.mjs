@@ -67,7 +67,7 @@ test("layout cleanup continues after feature disposal throws",()=>{
 
 test("layout preference restore isolates failed keys and retains complete backup",()=>{
  const src=read("src/core/preferences.js.part");
- const code=src.slice(src.indexOf("function restorePrefs()"),src.indexOf("function markClosing"));
+ const code=src.slice(src.indexOf("function restorePrefs("),src.indexOf("function markClosing"));
  const backup={a:{value:false,user:true},b:{value:true,user:false},c:{value:false,user:true}};
  const values=new Map([["a",true],["b",false],["c",false]]);
  const cleared=[],traces=[];let fail=true,raw=JSON.stringify(backup);
@@ -97,7 +97,7 @@ test("new activation captures released preference keys without losing unresolved
 });
 test("failed backup removal checkpoints release progress before retry",()=>{
  const src=read("src/core/preferences.js.part");
- const code=src.slice(src.indexOf("function restorePrefs()"),src.indexOf("function markClosing"));
+ const code=src.slice(src.indexOf("function restorePrefs("),src.indexOf("function markClosing"));
  let raw=JSON.stringify({a:{value:false,user:true}}),value=true,fail=true,sets=0;
  const prefs={getStringPref:()=>raw,setStringPref(k,v){raw=v;},getBoolPref:()=>value,
   setBoolPref(k,v){sets++;value=v;},clearUserPref(){if(fail)throw Error("locked backup");raw="";}};
@@ -136,4 +136,24 @@ test("Hub overlay stale generation cannot handle Escape after rebinding",()=>{
  ${code}bindOverlay();bindOverlay();const old=specs[0],live=specs[1];
  return {old:old.isActive(),oldEscape:old.onEscape({}),live:live.isActive(),liveEscape:live.onEscape({}),escapes};`);
  assert.deepEqual(run(),{old:false,oldEscape:false,live:true,liveEscape:true,escapes:1});
+});
+
+test("MB-014 native exit retains only owned sidebar preference; live disable restores baseline",()=>{
+ const src=read("src/core/preferences.js.part");
+ const code=src.slice(src.indexOf("function restorePrefs("),src.indexOf("function markClosing"));
+ const side="zen.view.compact.hide-tabbar",other="zen.view.compact.hide-toolbar";
+ for(const scenario of ["owned","no-op","external-change"]){
+  const original={value:scenario==="no-op",user:true,owned:scenario!=="no-op"};
+  const values=new Map([[side,scenario!=="external-change"],[other,true]]);
+  let raw=JSON.stringify({[side]:original,[other]:{value:false,user:true,owned:true}});
+  const prefs={getStringPref:()=>raw,setStringPref(k,v){raw=v;},getBoolPref:k=>values.get(k),prefHasUserValue:()=>true,setBoolPref(k,v){values.set(k,v)},clearUserPref(k){if(k==="backup")raw="";else throw Error("unexpected clear")}};
+  const restore=new Function("prefs","window","console","TARGET","KEY","nocturneErrorClass","NATIVE_LIBRARY",code+"return restorePrefs;")(prefs,{}, {warn(){}},{[side]:true,[other]:true},"backup",nocturneErrorClass,"zen.library.enabled");
+  assert.equal(restore(true),true);
+  assert.equal(values.get(other),false);
+  if(scenario==="owned"){
+   assert.equal(values.get(side),true);assert.deepEqual(JSON.parse(raw)[side],original);assert.equal(JSON.parse(raw)[other].released,true);
+   assert.equal(restore(false),true);assert.equal(values.get(side),false);
+  }else assert.equal(values.get(side),scenario==="no-op");
+  assert.equal(raw,"");
+ }
 });

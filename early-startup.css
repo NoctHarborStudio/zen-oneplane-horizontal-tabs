@@ -1,16 +1,1 @@
-/* MB-014: Sine style.content is a globally registered USER_SHEET.
- * Exact browser chrome URL only; no web-page selectors or native pref writes.
- * The existing Boot node is a child of the root, not of the hidden body.
- * No fill: expiration restores the underlying opacity without inline writes.
- * A late global registration may still miss the first paint. */
-@-moz-document url("chrome://browser/content/browser.xhtml") {
-  :root { --nocturne-early-global-css: 1; }
-  @media (prefers-reduced-motion: no-preference) and (-moz-pref("zen.refined.startup.animation")) and (-moz-pref("zen.nocturne.boot.enabled")) {
-    :root[windowtype="navigator:browser"]:not([data-nocturne-early-css-done], [data-nocturne-boot], [data-op-startup-ready], [oneplane-active], [popup-window], [customizing], [inDOMFullscreen="true"], [inFullscreen="true"]) > *|body {
-      animation: nocturne-early-native-hide 2000ms steps(1, end) none !important;
-    }
-  }
-  @keyframes nocturne-early-native-hide {
-    from, to { opacity: 0; }
-  }
-}
+/* MB-014: retired global CSS experiment. Inert for older cached Sine manifests. */

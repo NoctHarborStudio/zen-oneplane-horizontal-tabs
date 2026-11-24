@@ -10,7 +10,7 @@ const TARGET = {
   "zen.view.use-single-toolbar": false,
   "zen.tabs.vertical.right-side": false,
   "zen.view.sidebar-expanded": true,
-  "zen.view.compact.hide-tabbar": false,
+  "zen.view.compact.hide-tabbar": true,
   "zen.view.compact.hide-toolbar": true,
   [NATIVE_LIBRARY]: false,
 };
@@ -71,12 +71,12 @@ function otherActiveWindow() {
   return false;
 }
 
-function restorePrefs() {
+function restorePrefs(preserveSidebar=false) {
   const raw = prefs.getStringPref(KEY, "");
   if (!raw) return;
   const saved = JSON.parse(raw);
   // Compact Mode is a user-owned setting.
-  let restored=0,skipped=0,failed=0,alreadyReleased=0,checkpointFailed=false;
+  let restored=0,skipped=0,failed=0,alreadyReleased=0,checkpointFailed=false,retained=0;
   for (const name of Object.keys(TARGET)) {
     try {
       const original = saved[name];
@@ -91,6 +91,9 @@ function restorePrefs() {
           (original.owned===true&&!prefs.prefHasUserValue(name))) {
         skipped++; original.released=true; continue;
       }
+      // Keep only an owned native sidebar setting across confirmed native exit.
+      // Zen reads it before Sine on the next launch. A live unload restores it.
+      if(preserveSidebar&&name==="zen.view.compact.hide-tabbar"){retained++;continue;}
       if (original.user) prefs.setBoolPref(name, original.value);
       else prefs.clearUserPref(name);
       restored++;
@@ -102,15 +105,15 @@ function restorePrefs() {
   }
   // Keep original values and release progress when a native key or backup
   // removal fails. Retrying must not touch keys we already relinquished.
-  if (!failed) {
+  if (!failed&&!retained) {
     try { prefs.clearUserPref(KEY); }
     catch (error) { failed++; console.warn("[Nocturne] Layout backup release:", nocturneErrorClass(error)); }
   }
-  if (failed) {
+  if (failed||retained) {
     try { prefs.setStringPref(KEY,JSON.stringify(saved)); }
     catch (error) { checkpointFailed=true; console.warn("[Nocturne] Layout backup checkpoint:",nocturneErrorClass(error)); }
   }
-  try { window.__nocturneTrace?.("layout.prefs.restore",{restored,skipped,failed,alreadyReleased,checkpointFailed,backupRetained:failed>0},{flush:true}); } catch {}
+  try { window.__nocturneTrace?.("layout.prefs.restore",{restored,skipped,failed,alreadyReleased,checkpointFailed,backupRetained:failed>0||retained>0,...(preserveSidebar?{retained}: {})},{flush:true}); } catch {}
   return failed===0;
 }
 
