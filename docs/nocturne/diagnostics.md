@@ -535,3 +535,6 @@ Nocturne Home can open over an ordinary native tab after Layout readiness, so Ho
 ### Preview.173 — explicit Home generic glyph
 
 Existing close-start includes `stableDefaultIcons`, the count of provider-marked generic recent-tab masks in the frozen tree. No icon URIs or colors. For the same full recent set, compare count, actual appearance, and new duration 368 ms; opening baseline includes readiness and the 448 ms reveal. Zero previous context/default counts did not establish the actual paint color.
+
+### Preview.174 Library retarget
+`library.section.motion` now includes `interrupted`, normalized starting left pose and `mode:layout-left`, duration 800ms. The previous `library.section.queued` event is retired. Superseded epochs report `library.motion.frames` with completed=false; latest settlement reports completed=true. No record content or query is collected. Compare p95/p99/max and over25 against preview.172; use Gecko Profiler if text or paint cadence remains unstable.

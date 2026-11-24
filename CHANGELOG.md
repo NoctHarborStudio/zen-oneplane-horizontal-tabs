@@ -1,3 +1,7 @@
+## 0.3.0-preview.174 — Library stationary scrollbar and interruptible 800ms swipe
+
+Keep a single stationary scrollbar driven by the active native scroll container, animate its thumb position/height and remove native scrollbars from sliding pages. Retarget immediately from sampled layout positions rather than queue clicks. Use 800ms left-position motion instead of transform to isolate Gecko text raster handoff. Retain one live session and one outgoing inert visual page at paint boundaries; on retarget superseded incoming content may change in place. Native text/performance acceptance pending.
+
 ## 0.3.0-preview.173 — HS3.3b Home search timing and explicit default glyph
 
 Reduce Home search reveal/correction/return/header-only durations by 20% (448/224/368/144 ms) without changing easing. Preview.172 native logs: nine controlled returns, eight background and one Escape, all with zero recognized context/default icons; the user confirmed the rail fix but reported dark globes on return. For recent Home results with an explicit native default or an internal tab lacking a native favicon, use a transparent SVG source and one theme-colored CSS globe mask in the live and frozen views. Preserve ordinary website cache sources and non-Home results. Copy the complete computed mask geometry/paint, and report stableDefaultIcons in close-start. Native visual verification remains required; no changes to rail geometry or native search ownership.

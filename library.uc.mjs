@@ -251,13 +251,14 @@ function libraryShortcutSection(event,os="WINNT"){
     try{if(win.__nocturneTrace)win.__nocturneTrace("library."+event,detail,options);
       else{const q=win.__nocturneEarlyTrace??(win.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event:"library."+event,data:detail,t:win.performance?.now?.()??0});}}catch{}
   }
-  trace("script",{version:"0.3.0-preview.173",unload:typeof win.addUnloadListener==="function"});
+  trace("script",{version:"0.3.0-preview.174",unload:typeof win.addUnloadListener==="function"});
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   win[KEY]?.dispose?.();
   const prefs=Services.prefs,NS="http://www.w3.org/1999/xhtml";
   const labels={downloads:"All Downloads",documents:"Documents",history:"History",pictures:"Pictures",closed:"Recently Closed"};
   const summaries={downloads:"Download records and file actions",documents:"Downloaded documents and opted-in folders",history:"Browsing history and search",pictures:"Downloaded pictures and opted-in folders",closed:"Recently closed tabs in this window"};
-  let outgoingPage=null,queuedSection=null;
+  let outgoingPage=null,scrollPending=false,scrollDrag=null,scrollObserver=null;
+  const SECTION_MS=800,SECTION_EASING="cubic-bezier(.25,.65,.25,1)";
   let state=createLibraryState(),dead=false,lease=()=>{},shell=null,animations=[],motionProbe=null,frame=0,returnFocus=null,rows=new Map(),backgroundAction=false,renderedSection=null,dragSource=null,pendingResult=null,clearing=false,confirmation=false,actionSerial=0,pendingClose=false,dragOwner=null,indicatorReady=false,lastFailure=null,fallbackDragTimer=0,fallbackDragMissing=0,fallbackDragUnknown=0;
   const data=createLibraryData({getServices:()=>win.__nocturneLibraryServices,onResult:result=>{const measure=state.phase==="opening"||state.phase==="switching",start=measure?win.performance.now():0;renderResults(result);if(measure)trace("render",{section:state.section,phase:state.phase,rows:result.rows.length,duration:win.performance.now()-start},{flush:false});},onError:renderError,onNotice:notice,onScanWait:status=>trace("media.scan.wait",{status,section:state.section}),schedule:(fn,ms)=>win.setTimeout(fn,ms),cancel:id=>win.clearTimeout(id)});
   const fileSection=()=>["downloads","documents","pictures"].includes(state.section);
@@ -277,7 +278,7 @@ function libraryShortcutSection(event,os="WINNT"){
     return false;
   }
   function resize(){
-    if(!active()||frame)return;frame=win.requestAnimationFrame(()=>{frame=0;if(active()){if(!geometry())closeNow();else syncIndicator(false);}});
+    if(!active()||frame)return;frame=win.requestAnimationFrame(()=>{frame=0;if(active()){if(!geometry())closeNow();else{syncIndicator(false);syncScrollbar(false);}}});
   }
   function mount(){
     if(shell)return true;
@@ -357,15 +358,27 @@ function libraryShortcutSection(event,os="WINNT"){
     const contentArea=make("div","nl-content-area");contentArea.append(body,historyDrawer);
     const viewport=make("div","nl-page-viewport"),page=make("div","nl-page");
     page.append(search,tools,status,contentArea);viewport.append(page);
+    const scrollbar=make("div","nl-scrollbar"),thumb=make("span","nl-scroll-thumb");
+    scrollbar.setAttribute("role","scrollbar");scrollbar.setAttribute("aria-label","Library scroll");
+    scrollbar.setAttribute("aria-controls","nl-body");scrollbar.setAttribute("aria-orientation","vertical");
+    scrollbar.setAttribute("aria-valuemin","0");scrollbar.setAttribute("aria-valuemax","100");scrollbar.setAttribute("aria-disabled","true");scrollbar.tabIndex=-1;
+    scrollbar.append(thumb);viewport.append(scrollbar);
+    body.addEventListener("scroll",()=>syncScrollbar(state.phase==="switching"&&!scrollDrag),{passive:true});
+    scrollbar.addEventListener("pointerdown",startScrollDrag);
+    scrollbar.addEventListener("pointermove",moveScrollDrag);
+    for(const event of ["pointerup","pointercancel","lostpointercapture"])scrollbar.addEventListener(event,endScrollDrag);
+    scrollbar.addEventListener("keydown",scrollbarKey);
     panel.append(header,nav,viewport);layer.append(shade,glass,panel);root.append(layer);
     shade.addEventListener("pointerdown",e=>{if(e.button===0){e.preventDefault();close();}});
     panel.addEventListener("keydown",e=>{
       if(e.key!=="Tab")return;
-      const nodes=[dismiss,tabs.get(state.section),...(search.disabled?[]:[search]),...tools.querySelectorAll("button:not([disabled]):not([hidden]),select:not([disabled]):not([hidden])"),...(!historyDrawer.inert&&!historyDrawer.hidden?[...historyDrawer.querySelectorAll("button:not([disabled])")]:[body,...body.querySelectorAll("button:not([disabled])")])],i=nodes.indexOf(doc.activeElement);
+      const nodes=[dismiss,tabs.get(state.section),...(search.disabled?[]:[search]),...(scrollbar.tabIndex===0?[scrollbar]:[]),...tools.querySelectorAll("button:not([disabled]):not([hidden]),select:not([disabled]):not([hidden])"),...(!historyDrawer.inert&&!historyDrawer.hidden?[...historyDrawer.querySelectorAll("button:not([disabled])")]:[body,...body.querySelectorAll("button:not([disabled])")])],i=nodes.indexOf(doc.activeElement);
       const next=e.shiftKey?(i<=0?nodes.length-1:i-1):(i<0||i===nodes.length-1?0:i+1);
       e.preventDefault();nodes[next].focus();
     });
-    shell={layer,shade,glass,panel,viewport,page,title,tabs,search,body,tools,status,sort,filter,clear,yes,no,refresh,more,nav,indicator,historyFilter,historyDrawer,periodButtons,orderButtons,historyRange,clearHistory,addFolder,resetFolders,topLayer};return true;
+    shell={layer,shade,glass,panel,viewport,page,scrollbar,thumb,title,tabs,search,body,tools,status,sort,filter,clear,yes,no,refresh,more,nav,indicator,historyFilter,historyDrawer,periodButtons,orderButtons,historyRange,clearHistory,addFolder,resetFolders,topLayer};
+    if(typeof win.ResizeObserver==="function"){scrollObserver=new win.ResizeObserver(()=>syncScrollbar(state.phase==="switching"));scrollObserver.observe(body);}
+    return true;
   }
   function syncIndicator(animate=true){
     if(!shell||!active())return;
@@ -374,8 +387,8 @@ function libraryShortcutSection(event,os="WINNT"){
     const width=Math.max(12,tab.offsetWidth*.5),x=tab.offsetLeft+(tab.offsetWidth-width)/2,y=tab.offsetTop+tab.offsetHeight-3;
     if(!tab.offsetWidth)return;
     if(!animate||!indicatorReady){indicator.style.transition="none";}else{
-      const ms=duration(state.phase==="switching"?1000:220);
-      indicator.style.transition=ms?"transform "+ms+"ms cubic-bezier(.25,.8,.25,1), width "+ms+"ms cubic-bezier(.25,.8,.25,1)":"none";
+      const ms=duration(state.phase==="switching"?SECTION_MS:220);
+      indicator.style.transition=ms?"transform "+ms+"ms "+SECTION_EASING+", width "+ms+"ms "+SECTION_EASING:"none";
     }
     indicator.style.transform="translate("+x+"px,"+y+"px)";indicator.style.width=width+"px";indicatorReady=true;indicator.hidden=false;
   }
@@ -401,7 +414,7 @@ function libraryShortcutSection(event,os="WINNT"){
     historyDrawer.inert=!open;shell.body.inert=open;historyDrawer.toggleAttribute("data-open",open);
     historyFilter.setAttribute("aria-expanded",String(open));
     if(!open&&focus)historyFilter.focus({preventScroll:true});
-    syncHistoryFilter();
+    syncHistoryFilter();syncScrollbar(state.phase==="switching");
   }
   function syncTools(){
     if(!shell)return;const f=fileSection(),d=state.section==="downloads",local=f&&!d&&prefs.getBoolPref(MEDIA_PREF,false)&&win.__nocturneLibraryServices?.mediaScanAvailable===true;
@@ -552,7 +565,7 @@ function libraryShortcutSection(event,os="WINNT"){
   function renderError(){
     if(!active()||state.phase==="closing"||renderedSection!==state.section)return;
     if(dragSource){pendingResult={error:true};return;}
-    rows.clear();placeholder("Library data unavailable","Try again or use the native Zen Library.",()=>renderBody());
+    rows.clear();placeholder("Library data unavailable","Try again.",()=>renderBody());scrollPending=false;syncScrollbar(state.phase==="switching");
   }
   function activateRow(row,background){
     if(!row||!active()||state.phase==="closing"||renderedSection!==state.section||rows.get(row.id)?.record!==row)return;
@@ -611,7 +624,7 @@ function libraryShortcutSection(event,os="WINNT"){
       ordered.push(entry.node);
     }
     for(const id of rows.keys())if(!live.has(id))rows.delete(id);
-    if(!ordered.length&&!result.hasMore){placeholder(state.query?"No matching results":"Nothing to show","No records in this section for the selected period.");return;}
+    if(!ordered.length&&!result.hasMore){placeholder(state.query?"No matching results":"Nothing to show","No records in this section for the selected period.");scrollPending=false;syncScrollbar(state.phase==="switching");return;}
     if(!ordered.length&&state.section==="history"){
       ordered.push(make("p","nl-limit","No visits from the last 120 days in these results."));
     }
@@ -624,17 +637,60 @@ function libraryShortcutSection(event,os="WINNT"){
       for(let i=0;i<ordered.length;i++)if(body.children[i]!==ordered[i])body.insertBefore(ordered[i],body.children[i]||null);body.scrollTop=oldScroll;
       if(focusId&&rows.has(focusId)){if(focused?.isConnected)focused.focus({preventScroll:true});else rows.get(focusId).node.querySelector?.("button:not([disabled])")?.focus({preventScroll:true});}}
 
+    scrollPending=false;syncScrollbar(state.phase==="switching");
   }
   function renderBody(){
-    rows.clear();shell.body.scrollTop=0;renderedSection=state.section;
+    scrollPending=state.phase==="switching";rows.clear();shell.body.scrollTop=0;renderedSection=state.section;
     shell.search.disabled=false;notice("");syncTools();
     if(["documents","pictures"].includes(state.section)&&prefs.getBoolPref(MEDIA_PREF,false)&&win.__nocturneLibraryServices?.mediaScanAvailable!==true)
       notice("Local folder scanning is temporarily paused for safety. Downloaded files remain available.");
     placeholder("Loading…","Reading native browser records.");data.start(state.section,state.query,{sort:state.sort,filter:state.filter});
   }
   function sample(n){const c=win.getComputedStyle(n);return {opacity:c.opacity,transform:c.transform};}
-  // One live view and one inert, short-lived visual copy. Never create a
-  // second data session or keep offscreen sections subscribed.
+  // Scroll content stays native. Only the single stationary scrollbar is custom.
+  function scrollbarMetrics(height,extent,offset){
+    const max=Math.max(0,extent-height),size=max?Math.min(height,Math.max(22,height*height/extent)):0;
+    const ratio=max?Math.max(0,Math.min(1,offset/max)):0;
+    return {max,size,top:(height-size)*ratio,ratio};
+  }
+  function syncScrollbar(animate=false){
+    if(!shell||!active()||state.phase==="closing"||scrollPending)return;
+    const {body,viewport,scrollbar,thumb}=shell,rect=body.getBoundingClientRect(),vr=viewport.getBoundingClientRect();
+    const h=body.clientHeight,m=scrollbarMetrics(h,body.scrollHeight,body.scrollTop);
+    const available=m.max>0&&!body.inert&&h>0,ms=animate?duration(SECTION_MS):0;
+    scrollbar.style.transition=ms?"top "+ms+"ms "+SECTION_EASING+", height "+ms+"ms "+SECTION_EASING:"none";
+    thumb.style.transition=ms?"top "+ms+"ms "+SECTION_EASING+", height "+ms+"ms "+SECTION_EASING:"none";
+    scrollbar.style.top=(rect.top-vr.top)+"px";scrollbar.style.height=h+"px";
+    thumb.style.top=m.top+"px";thumb.style.height=(available?m.size:0)+"px";
+    scrollbar.hidden=false;scrollbar.setAttribute("aria-disabled",String(!available));
+    scrollbar.setAttribute("aria-valuenow",String(Math.round(m.ratio*100)));scrollbar.tabIndex=available?0:-1;
+  }
+  function setScrollFromPointer(e){
+    const {body,scrollbar,thumb}=shell,r=scrollbar.getBoundingClientRect(),size=thumb.getBoundingClientRect().height;
+    const max=body.scrollHeight-body.clientHeight,travel=r.height-size;
+    if(max>0&&travel>0){body.scrollTop=max*Math.max(0,Math.min(1,(e.clientY-r.top-scrollDrag.offset)/travel));syncScrollbar(false);}
+  }
+  function startScrollDrag(e){
+    if(e.button!==0||scrollPending||shell.scrollbar.getAttribute("aria-disabled")==="true")return;
+    e.preventDefault();const r=shell.thumb.getBoundingClientRect();
+    scrollDrag={id:e.pointerId,offset:e.clientY>=r.top&&e.clientY<=r.bottom?e.clientY-r.top:r.height/2};
+    shell.scrollbar.setPointerCapture(e.pointerId);setScrollFromPointer(e);
+  }
+  function moveScrollDrag(e){if(scrollDrag?.id===e.pointerId)setScrollFromPointer(e);}
+  function endScrollDrag(e){
+    if(!scrollDrag||(e&&e.pointerId!==scrollDrag.id))return;
+    const id=scrollDrag.id;scrollDrag=null;
+    try{if(shell?.scrollbar.hasPointerCapture(id))shell.scrollbar.releasePointerCapture(id);}catch{}
+  }
+  function scrollbarKey(e){
+    if(scrollPending||shell.scrollbar.getAttribute("aria-disabled")==="true")return;
+    const b=shell.body,delta={ArrowUp:-40,ArrowDown:40,PageUp:-b.clientHeight,PageDown:b.clientHeight};
+    if(e.key==="Home")b.scrollTop=0;else if(e.key==="End")b.scrollTop=b.scrollHeight;
+    else if(Object.hasOwn(delta,e.key))b.scrollTop+=delta[e.key];else return;
+    e.preventDefault();e.stopPropagation();syncScrollbar(false);
+  }
+  // Two full-width surfaces. On interruption retain the page on the outgoing
+  // side and retarget from its sampled position, rather than queue or snap.
   function snapshotPage(){
     const page=shell.page,copy=page.cloneNode(true);
     copy.classList.add("nl-page-outgoing");copy.inert=true;copy.setAttribute("aria-hidden","true");
@@ -642,22 +698,37 @@ function libraryShortcutSection(event,os="WINNT"){
     const sourceControls=page.querySelectorAll("input,select"),copyControls=copy.querySelectorAll("input,select");
     for(let i=0;i<sourceControls.length;i++)copyControls[i].value=sourceControls[i].value;
     const scroll=shell.body.scrollTop,drawerScroll=shell.historyDrawer.scrollTop;
-    shell.viewport.append(copy);outgoingPage=copy;
+    shell.viewport.insertBefore(copy,shell.scrollbar);
     copy.querySelector(".nl-body").scrollTop=scroll;
     copy.querySelector(".nl-history-filter").scrollTop=drawerScroll;
     return copy;
   }
   function clearSectionFlight(){
     outgoingPage?.remove();outgoingPage=null;
+    if(shell?.page)shell.page.style.left="0%";
   }
-  function drainSectionRequest(){
-    const section=queuedSection;queuedSection=null;
-    if(section!==null&&active()&&state.phase==="open"&&section!==state.section)open(section);
-  }
-  function sectionFrames(from,to){
+  function sectionPlan(from,to,live,old){
     const direction=LIBRARY_SECTIONS.indexOf(to)>LIBRARY_SECTIONS.indexOf(from)?1:-1;
-    const x=value=>({transform:"translateX("+value+"%)"});
-    return {direction,out:[x(0),x(-direction*100)],incoming:[x(direction*100),x(0)]};
+    // Positions are viewport fractions. Retain the outgoing-side tile unless
+    // it has fully exited; then use the still-visible live tile.
+    const visible=x=>Number.isFinite(x)&&Math.abs(x)<1;
+    const keepOld=visible(old)&&(!visible(live)||direction*old<direction*live);
+    const start=keepOld?old:Math.max(-1,Math.min(1,live));
+    const x=value=>({left:(value*100)+"%"});
+    return {direction,keepOld,out:[x(start),x(-direction)],incoming:[x(start+direction),x(0)]};
+  }
+  function prepareSection(from,to){
+    const width=shell.viewport.getBoundingClientRect().width;
+    const position=n=>n&&width>0?parseFloat(win.getComputedStyle(n).left)/width:null;
+    const motion=sectionPlan(from,to,position(shell.page)||0,outgoingPage?position(outgoingPage):NaN);
+    const previous=outgoingPage;
+    const outgoing=motion.keepOld?previous:snapshotPage();
+    // Freeze the sampled pose before cancelling old WAAPI effects.
+    outgoing.style.left=motion.out[0].left;shell.page.style.left=motion.incoming[0].left;
+    cancelMotion();
+    if(previous&&previous!==outgoing)previous.remove();
+    outgoingPage=outgoing;
+    return motion;
   }
   function startMotionProbe(ms){
     if(!ms||!prefs.getBoolPref("zen.nocturne.diagnostics.enabled",true))return;
@@ -699,12 +770,12 @@ function libraryShortcutSection(event,os="WINNT"){
       const after=sample(shell.panel);
       trace("motion.settled",{section:state.section,opacityStable:before.opacity===after.opacity,transformStable:before.transform===after.transform,beforeOpacity:Number(before.opacity),afterOpacity:Number(after.opacity)});
     }catch{}
-    drainSectionRequest();
+    if(state.phase==="open"&&scrollPending){scrollPending=false;syncScrollbar(false);}
   }
   function hide(restore=true,completed=false){
     stopFallbackDragWatch();
-    data.stop();rows.clear();renderedSection=null;dragSource=null;dragOwner=null;indicatorReady=false;pendingResult=null;pendingClose=false;confirmation=false;clearing=false;++actionSerial;queuedSection=null;cancelMotion(completed);clearSectionFlight();if(frame)win.cancelAnimationFrame(frame);frame=0;
-    if(shell){setHistoryDrawer(false);try{if(shell.topLayer&&shell.layer.matches(":popover-open"))shell.layer.hidePopover();}catch{}shell.layer.removeAttribute("data-library-open");shell.layer.hidden=true;shell.indicator.hidden=true;shell.panel.inert=false;shell.body.replaceChildren();shell.search.value="";}
+    data.stop();rows.clear();renderedSection=null;dragSource=null;dragOwner=null;indicatorReady=false;pendingResult=null;pendingClose=false;confirmation=false;clearing=false;++actionSerial;scrollPending=false;endScrollDrag();cancelMotion(completed);clearSectionFlight();if(frame)win.cancelAnimationFrame(frame);frame=0;
+    if(shell){setHistoryDrawer(false);try{if(shell.topLayer&&shell.layer.matches(":popover-open"))shell.layer.hidePopover();}catch{}shell.layer.removeAttribute("data-library-open");shell.layer.hidden=true;shell.indicator.hidden=true;shell.scrollbar.hidden=true;shell.scrollbar.style.height="0px";shell.thumb.style.height="0px";shell.panel.inert=false;shell.body.replaceChildren();shell.search.value="";}
     const target=returnFocus;returnFocus=null;if(!restore||win.closed)return;
     try{if(target?.isConnected&&typeof target.focus==="function")target.focus({preventScroll:true});else win.gBrowser?.selectedBrowser?.focus();}catch{}
   }
@@ -716,7 +787,7 @@ function libraryShortcutSection(event,os="WINNT"){
     if(confirmation){confirmation=false;syncTools();return true;}
     const next=reduceLibrary(state,{type:"CLOSE"});if(next===state)return false;
     state=next;setHistoryDrawer(false);data.stop();const epoch=state.motionEpoch,panel=sample(shell.panel),shade=sample(shell.shade),glass=sample(shell.glass);
-    queuedSection=null;cancelMotion();clearSectionFlight();shell.panel.inert=true;
+    scrollPending=false;endScrollDrag();cancelMotion();clearSectionFlight();shell.panel.inert=true;
     trace("motion.begin",{phase:"closing",section:state.section,duration:duration(360)},{flush:false});startMotionProbe(duration(360));
     void Promise.all([play(shell.panel,[panel,{opacity:0,transform:"translateY(8px)"}],duration(360)),play(shell.glass,[glass,{opacity:0}],duration(360)),play(shell.shade,[shade,{opacity:0}],duration(320))]).then(()=>{
       if(!current(epoch))return;state=reduceLibrary(state,{type:"MOTION_DONE",epoch});hide(true,true);
@@ -745,18 +816,14 @@ function libraryShortcutSection(event,os="WINNT"){
     if(!mount())return fail("mount");
     if(!geometry())return fail("geometry");
     if(!overlay.request(OWNER))return fail("overlay-busy");
-    // Coalesce fast clicks to the last requested destination. Keep the two
-    // already-moving pages intact; no jump, third surface or stale completion.
-    if(state.phase==="switching"){
-      queuedSection=section===state.section?null:section;
-      trace("section.queued",{section,epoch:state.motionEpoch},{flush:false});return true;
-    }
     const before=state,next=reduceLibrary(state,{type:"OPEN",section});if(next===state)return true;
     const first=before.phase==="closed",reopening=before.phase==="closing";
     const panel=first?{opacity:0,transform:"translateY(8px)"}:sample(shell.panel),shade=first?{opacity:0}:sample(shell.shade),glass=first?{opacity:0}:sample(shell.glass);
-    const ms=next.phase==="switching"?duration(1000):0,from=before.section;
-    const outgoing=ms?snapshotPage():null;
-    data.stop();renderedSection=null;confirmation=false;pendingResult=null;++actionSerial;cancelMotion();state=next;const epoch=state.motionEpoch;shell.panel.inert=false;
+    const ms=next.phase==="switching"?duration(SECTION_MS):0,from=before.section;
+    endScrollDrag();
+    const motion=ms?prepareSection(from,section):null;
+    if(!motion){cancelMotion();clearSectionFlight();}
+    data.stop();renderedSection=null;confirmation=false;pendingResult=null;++actionSerial;state=next;scrollPending=state.phase==="switching";const epoch=state.motionEpoch;shell.panel.inert=false;
     if(first){returnFocus=doc.activeElement;if(!showLayer()){closeNow();return fail("surface-hidden");}}
     setHistoryDrawer(false);renderHeader();
     if(state.phase==="opening"){
@@ -764,14 +831,12 @@ function libraryShortcutSection(event,os="WINNT"){
       void Promise.all([play(shell.panel,[panel,{opacity:1,transform:"translateY(0px)"}],duration(reopening?360:480)),play(shell.glass,[glass,{opacity:1}],duration(reopening?360:480)),play(shell.shade,[shade,{opacity:1}],duration(340))]).then(()=>settle(epoch));
       renderBody();(shell.search.disabled?shell.tabs.get(state.section):shell.search).focus({preventScroll:true});
     }else{
-      const motion=sectionFrames(from,state.section);
       renderBody();
-      trace("section.motion",{source:from,section:state.section,direction:motion.direction>0?"left":"right",duration:ms,epoch},{flush:false});
-      if(!outgoing){settle(epoch);}
+      trace("section.motion",{source:from,section:state.section,direction:LIBRARY_SECTIONS.indexOf(state.section)>LIBRARY_SECTIONS.indexOf(from)?"left":"right",duration:ms,epoch,interrupted:before.phase==="switching",start:motion?.incoming[0].left??"0%",mode:"layout-left"},{flush:false});
+      if(!motion){settle(epoch);}
       else{
         startMotionProbe(ms);
-        const easing="cubic-bezier(.25,.8,.25,1)";
-        void Promise.all([play(outgoing,motion.out,ms,easing),play(shell.page,motion.incoming,ms,easing)]).then(()=>settle(epoch));
+        void Promise.all([play(outgoingPage,motion.out,ms,SECTION_EASING),play(shell.page,motion.incoming,ms,SECTION_EASING)]).then(()=>settle(epoch));
       }
     }
     trace("open.accepted",{section,phase:state.phase,topLayer:shell.topLayer},{flush:false});return true;
@@ -845,7 +910,7 @@ function libraryShortcutSection(event,os="WINNT"){
     dead=true;let failed=0;
     const step=fn=>{try{fn();}catch{failed++;}};
     trace("dispose.begin",{reason,phase:state.phase,owns:win[KEY]===api});
-    step(()=>closeNow(false));step(stopFallbackDragWatch);step(()=>data.dispose());step(()=>lease());step(()=>cancelMotion());step(clearSectionFlight);
+    step(()=>closeNow(false));step(stopFallbackDragWatch);step(()=>data.dispose());step(()=>lease());step(()=>cancelMotion());step(clearSectionFlight);step(endScrollDrag);step(()=>scrollObserver?.disconnect());scrollObserver=null;
     if(frame)step(()=>win.cancelAnimationFrame(frame));frame=0;
     for(const [name,fn] of listeners)step(()=>win.removeEventListener(name,fn,true));
     for(const [pref,fn] of [[PREF,onPref],[MEDIA_PREF,onMediaPref],["zen.nocturne.library.custom-folders",onMediaPref]])step(()=>prefs.removeObserver(pref,fn));

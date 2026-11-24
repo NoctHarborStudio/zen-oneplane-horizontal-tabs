@@ -146,7 +146,7 @@ test("Library preserves local DOM row/scroll across capability refresh, but chan
  const createFileRow=()=>{created++;const node={dataset:{},remove(){const i=body.children.indexOf(node);if(i>=0)body.children.splice(i,1);}};return {node,record:null};};
  const updateFileRow=(entry,row)=>{entry.record=row;entry.node.dataset.recordId=row.viewKey;};
  const render=new Function("rows","shell","state","doc","createFileRow","updateFileRow",`
-   const active=()=>true,fileSection=()=>true,syncTools=()=>{};
+   const active=()=>true,fileSection=()=>true,syncTools=()=>{},syncScrollbar=()=>{};let scrollPending=false;
    let renderedSection="pictures",dragSource=null,pendingResult=null;
    ${rowKey}
    ${code}
@@ -189,7 +189,7 @@ function historyHeadingFixture(){
    node.querySelector=()=>main;
    return entry;
  };
- const script="const active=()=>true,fileSection=()=>false,syncTools=()=>{},updateFileRow=()=>{throw Error('file render unexpected');};\n"+
+ const script="const active=()=>true,fileSection=()=>false,syncTools=()=>{},syncScrollbar=()=>{};let scrollPending=false;const updateFileRow=()=>{throw Error('file render unexpected');};\n"+
    "let renderedSection='history',dragSource=null,pendingResult=null;\n"+key+"\n"+source.slice(start,end)+"\nreturn renderResults;";
  const render=new Function("rows","shell","state","doc","make","createRow","placeholder","libraryWebURL",script)(
    rows,shell,state,doc,make,createRow,()=>body.replaceChildren(make("p","nl-placeholder")),()=>null);
@@ -264,7 +264,7 @@ test("Library terminal motion probe respects epoch and opt-out and samples both 
  assert.ok(start>=0&&end>start);
  const run=(enabled,phase,epoch)=>{
    const events=[],calls=[],shell={panel:{}};
-   const f=new Function("prefs","shell","sample","cancelMotion","reduceLibrary","trace","calls",`let state={phase:${JSON.stringify(phase)},section:"history",motionEpoch:2}; const current=e=>e===state.motionEpoch;const clearSectionFlight=()=>{},drainSectionRequest=()=>{};${source.slice(start,end)}return settle;`)(
+   const f=new Function("prefs","shell","sample","cancelMotion","reduceLibrary","trace","calls",`let state={phase:${JSON.stringify(phase)},section:"history",motionEpoch:2}; const current=e=>e===state.motionEpoch;const clearSectionFlight=()=>{},scrollPending=false;${source.slice(start,end)}return settle;`)(
      {getBoolPref:()=>enabled},shell,()=>{calls.push("sample");return {opacity:"1",transform:"matrix(1, 0, 0, 1, 0, 0)"};},
      ()=>calls.push("cancel"),s=>({...s,phase:"open"}),(name,data)=>events.push({name,data}),calls);
    f(epoch);return {calls,events};
@@ -289,7 +289,7 @@ test("Library uses stationary glass and an independent filter drawer with reserv
  assert.match(source,/periodButtons,"FILTER"/);
  assert.match(source,/orderButtons,"SORT"/);
  assert.doesNotMatch(source,/button\("Native (?:history|downloads)"/);
- assert.match(css,/scrollbar-gutter:stable;padding-inline-end:14px/);
+ assert.match(css,/scrollbar-width:none;padding-inline-end:14px/);
  assert.match(css,/\.nl-glass\{[^}]*backdrop-filter:blur\(30px\)/s);
  assert.doesNotMatch(css,/\.nl-panel\{[^}]*backdrop-filter:/s);
  assert.match(css,/\.nl-history-filter\[data-open\]/);
@@ -354,31 +354,38 @@ test("Library dependencies reject foreign originalTarget on native unload",()=>{
  }
 });
 
-test("Library direct swipe moves exactly two full-width pages, regardless of distance",()=>{
+test("Library direct swipe and immediate retarget use two layout-positioned pages",()=>{
  const source=read("src/library/controller.js.part"),css=read("src/styles/library.css.part");
- const start=source.indexOf("  function sectionFrames("),end=source.indexOf("  function startMotionProbe(",start);
- assert.ok(start>=0&&end>start);
+ const start=source.indexOf("  function sectionPlan("),end=source.indexOf("  function prepareSection(",start);
  const sections=["downloads","documents","history","pictures","closed"];
- const frames=new Function("LIBRARY_SECTIONS",source.slice(start,end)+"return sectionFrames;")(sections);
+ const plan=new Function("LIBRARY_SECTIONS",source.slice(start,end)+"return sectionPlan;")(sections);
  for(const from of sections)for(const to of sections){
    if(from===to)continue;
    const d=sections.indexOf(to)>sections.indexOf(from)?1:-1;
-   assert.deepEqual(frames(from,to),{direction:d,out:[{transform:"translateX(0%)"},{transform:"translateX("+(-d*100)+"%)"}],incoming:[{transform:"translateX("+(d*100)+"%)"},{transform:"translateX(0%)"}]});
+   assert.deepEqual(plan(from,to,0,NaN),{direction:d,keepOld:false,out:[{left:"0%"},{left:(-d*100)+"%"}],incoming:[{left:(d*100)+"%"},{left:"0%"}]});
  }
- assert.match(source,/next.phase==="switching"\?duration\(1000\):0/);
- assert.match(source,/Promise.all\(\[play\(outgoing,motion.out,ms,easing\),play\(shell.page,motion.incoming,ms,easing\)\]\)/);
+ const same=plan("history","closed",.4,-.6);assert.equal(same.keepOld,true);assert.deepEqual(same.out,[{left:"-60%"},{left:"-100%"}]);assert.deepEqual(same.incoming,[{left:"40%"},{left:"0%"}]);
+ const reverse=plan("history","downloads",.4,-.6);assert.equal(reverse.keepOld,false);assert.deepEqual(reverse.out,[{left:"40%"},{left:"100%"}]);assert.deepEqual(reverse.incoming,[{left:"-60%"},{left:"0%"}]);
+ assert.equal(plan("history","closed",0,-1).keepOld,false);
+ assert.match(source,/SECTION_MS=800/);
  assert.match(source,/copy.inert=true;copy.setAttribute\("aria-hidden","true"\)/);
  assert.match(source,/copy.querySelectorAll\("\[id\]"\)/);
- assert.match(source,/queuedSection=null;cancelMotion\(\);clearSectionFlight\(\)/);
+ assert.doesNotMatch(source,/queuedSection|section\.queued|drainSectionRequest/);
  assert.match(css,/\.nl-page-viewport\{[^}]*overflow:hidden/);
  assert.match(css,/\.nl-page-outgoing\{[^}]*pointer-events:none/);
+ assert.doesNotMatch(css,/\.nl-page\{[^}]*transform:/);
+ assert.match(source,/if\(previous&&previous!==outgoing\)previous.remove\(\)/);
 });
-test("Library latest queued section is consumed once only when open",()=>{
- const source=read("src/library/controller.js.part");
- const start=source.indexOf("  function drainSectionRequest("),end=source.indexOf("  function sectionFrames(",start);
- const calls=[],state={phase:"open",section:"history"};
- const f=new Function("state","open","active",`let queuedSection=null;${source.slice(start,end)}return {set:s=>queuedSection=s,drain:drainSectionRequest};`)(state,s=>calls.push(s),()=>state.phase!=="closed");
- f.set("documents");f.set("closed");f.drain();f.drain();assert.deepEqual(calls,["closed"]);
- f.set("history");f.drain();assert.deepEqual(calls,["closed"]);
- state.phase="closing";f.set("downloads");f.drain();state.phase="open";f.drain();assert.deepEqual(calls,["closed"]);
+test("Library stationary scrollbar derives size and position from native extent",()=>{
+ const source=read("src/library/controller.js.part"),css=read("src/styles/library.css.part");
+ const start=source.indexOf("  function scrollbarMetrics("),end=source.indexOf("  function syncScrollbar(",start);
+ const m=new Function(source.slice(start,end)+"return scrollbarMetrics;")();
+ assert.deepEqual(m(400,1600,600),{max:1200,size:100,top:150,ratio:.5});
+ assert.deepEqual(m(400,400,0),{max:0,size:0,top:0,ratio:0});
+ assert.equal(m(400,100000,100000).size,22);
+ assert.equal(m(400,1600,9999).top,300);
+ assert.match(source,/viewport.append\(scrollbar\)/);
+ assert.match(source,/page.append\(search,tools,status,contentArea\)/);
+ assert.match(source,/scrollObserver\?\.disconnect\(\)/);
+ assert.match(css,/\.nl-body\{[^}]*scrollbar-width:none/);
 });

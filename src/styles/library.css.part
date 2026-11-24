@@ -44,7 +44,7 @@
 #nocturne-library-preview .nl-search{appearance:none;box-sizing:border-box;width:100%;min-width:0;min-height:36px;padding:8px 12px;border-radius:9px;border:1px solid color-mix(in srgb,currentColor 13%,transparent);background:color-mix(in srgb,currentColor 6%,transparent);color:inherit;font:inherit;}
 #nocturne-library-preview :is(button,input,select,[tabindex]):focus-visible{outline:2px solid AccentColor;outline-offset:-2px;}
 #nocturne-library-preview .nl-content-area{position:relative;display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;}
-#nocturne-library-preview .nl-body{flex:1;min-height:0;min-width:0;box-sizing:border-box;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-inline-end:14px;}
+#nocturne-library-preview .nl-body{flex:1;min-height:0;min-width:0;box-sizing:border-box;overflow:auto;overscroll-behavior:contain;scrollbar-width:none;padding-inline-end:14px;}
 #nocturne-library-preview .nl-history-filter{
   position:absolute;inset:0 14px auto 0;z-index:2;max-height:100%;box-sizing:border-box;overflow:auto;
   display:flex;flex-direction:column;gap:12px;padding:14px;border:1px solid color-mix(in srgb,CanvasText 15%,transparent);
@@ -104,9 +104,13 @@
 
 #nocturne-library-preview .nl-panel > :not(.nl-page-viewport){flex-shrink:0;}
 #nocturne-library-preview .nl-page-viewport{position:relative;display:grid;grid-template:minmax(0,1fr)/minmax(0,1fr);flex:1;min-width:0;min-height:0;overflow:hidden;gap:inherit;}
-#nocturne-library-preview .nl-page{grid-area:1/1;display:flex;flex-direction:column;gap:inherit;min-width:0;min-height:0;transform:translateX(0%);}
+#nocturne-library-preview .nl-page{position:absolute;top:0;bottom:0;left:0;width:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:inherit;min-width:0;min-height:0;transition:none;}
 #nocturne-library-preview .nl-page > :not(.nl-content-area){flex-shrink:0;}
-#nocturne-library-preview .nl-page-outgoing{position:absolute;inset:0;pointer-events:none;}
+#nocturne-library-preview .nl-page-outgoing{pointer-events:none;}
+#nocturne-library-preview .nl-scrollbar{position:absolute;z-index:3;right:0;width:12px;top:0;height:0;touch-action:none;cursor:default;}
+#nocturne-library-preview .nl-scrollbar[aria-disabled="true"]{pointer-events:none;}
+#nocturne-library-preview .nl-scroll-thumb{position:absolute;top:0;right:1px;width:3px;height:0;border-radius:3px;background:color-mix(in srgb,currentColor 45%,transparent);pointer-events:none;}
+#nocturne-library-preview .nl-scrollbar:is(:hover,:active,:focus-visible) .nl-scroll-thumb{width:5px;background:color-mix(in srgb,currentColor 65%,transparent);}
 #nocturne-library-preview .nl-file-icon[hidden]{display:block;visibility:hidden;}
 
 #nocturne-library-preview .nl-file-record[data-file-lift]{outline:1px dashed color-mix(in srgb,currentColor 20%,transparent);}

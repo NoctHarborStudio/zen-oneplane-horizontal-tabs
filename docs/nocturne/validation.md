@@ -889,3 +889,6 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [x] User accepts preview.171 rail correction; preview.172 logs confirm 9 controlled returns but zero detected context/default images.
 - [x] Source fixtures cover Home-only default selection, ordinary site source preservation, mask property capture and reduced duration frame driver.
 - [ ] Native Zen: Settings/Troubleshooting in recent tabs should have the same globe in open and return; verify stableDefaultIcons > 0 when present, light/dark, real favicons, Escape/background, interrupted reveal and 368 ms full return. Do not claim universal missing-favicon detection or presented FPS.
+
+### Preview.174 — Library retarget/scrollbar/raster experiment
+Check direct 800ms transitions, rapid same-direction and reverse retargets, no duplicate scrollbar, thumb shrinking to zero on empty sections and expanding to native extent on return, wheel/drag/keyboard scroll, filter drawer, resize, reduced motion and Escape during flight. Compare text during/after motion and RAF aggregates (not presented FPS) with preview.172. Tests exercise all ordered pairs, interruption geometry and scrollbar metrics. Other owners' startup CI failures remain separate. Native visual/performance gate OPEN.
