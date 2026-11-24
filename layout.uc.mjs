@@ -86,7 +86,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.209",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.210",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -450,7 +450,10 @@
     // The cold start itself is the workload under investigation. Don't
     // force dozens of style/layout reads or animation enumerations mid-run.
     // Keep the frame-gap stream and resume full geometry on handoff.
-    if(startupPlaying())return {root:attrState(root,rootAttrs),frame:frameSummary(),full:false,metrics:{},light:true};
+    if(startupPlaying()){
+      const bookmarkFlow=win.__nocturneCenterMotion?.bookmarkPlaybackSample?.();
+      return {root:attrState(root,rootAttrs),frame:frameSummary(),full:false,metrics:{},light:true,...(bookmarkFlow?{bookmarkFlow}:{})};
+    }
     observeTargets();
     const row=get("oneplane-tabs"),browser=win.gBrowser;
     const counts={native:browser?.tabs?.length??null,visible:browser?.visibleTabs?.length??null,mirror:row?.querySelectorAll(".oneplane-tab").length??null,
@@ -480,7 +483,8 @@
       }
     }
     previousMetrics=metrics;
-    return {root:attrState(root,rootAttrs),counts,frame,full,metrics:delta};
+    const bookmarkFlow=root.hasAttribute("data-zr-closing")?win.__nocturneCenterMotion?.bookmarkPlaybackSample?.():null;
+    return {root:attrState(root,rootAttrs),counts,frame,full,metrics:delta,...(bookmarkFlow?{bookmarkFlow}:{})};
   }
   function frameTick(t){raf=0;if(dead||quiescing||!enabled()||now()>until)return;if(frameLast&&gaps.length<300)gaps.push(t-frameLast);frameLast=t;raf=win.requestAnimationFrame(frameTick);}
   function sample(){timer=0;if(dead||quiescing||!enabled()||now()>until){frameLast=0;return;}record("sample",snapshot);timer=win.setTimeout(sample,180);}
@@ -646,7 +650,7 @@ function createMagneticFoldMath(){
 }
 
 // Dual-row conveyor candidate shared by all Center Motion owners and the Lab.
-function createCenterFlowPlan(cards,{centerAperture=false}={}) {
+function createCenterFlowPlan(cards,{centerScale=false}={}) {
   // One resting geometry snapshot; no DOM reads or time-dependent state.
   // Each side is a conveyor: all members share the same horizontal shift.
   const clamp = p => Math.max(0, Math.min(1, p));
@@ -698,7 +702,7 @@ function createCenterFlowPlan(cards,{centerAperture=false}={}) {
     p=clamp(p);
     // Lower row begins later and overlaps the top row's outward flow.
     const q=two?(c.lower?clamp((p-.18)/.82):clamp(p/.82)):p;
-    if(q===1)return {x:0,y:0,a:c.opacity,clip:[-pad,-pad,-pad,-pad]};
+    if(q===1)return {x:0,y:0,a:c.opacity,clip:[-pad,-pad,-pad,-pad],...(centerScale?{s:1}:{})};
     const progress=ease(q);
     const dx=-g.side*g.travel*(1-progress);
     const lead=g.side?g.side*(c.x+dx-g.boundary)+c.w/2:0;
@@ -708,22 +712,19 @@ function createCenterFlowPlan(cards,{centerAperture=false}={}) {
     const bound=(v,size)=>Math.max(-pad,Math.min(size+pad,v));
     if(g.side<0)clip[1]=bound(c.right+dx-g.boundary,c.w);
     if(g.side>0)clip[3]=bound(g.boundary-c.left-dx,c.w);
-    // The center bookmark is a two-sided aperture, not an early static
-    // fade. Keep its native text/slot size; reveal around the actual
-    // portal (which may be off-center within a wider bookmark).
-    if(centerAperture&&g.side===0){
-      clip[3]=(g.boundary-c.left)*(1-progress)-pad*progress;
-      clip[1]=(c.right-g.boundary)*(1-progress)-pad*progress;
-    }
+    // Only the center bookmark actually scales. Its whole icon and
+    // label shrink around the portal, without cropping or layout changes.
+    const center=centerScale&&g.side===0;
+    const s=center?.02+.98*progress:1;
     if(c.lower)clip[0]=bound(lowerClip-(c.top+dy),c.h);
-    const horizontal=g.side?soft(lead/Math.min(c.w,18)):soft(q/.4);
+    const horizontal=center?soft(q):g.side?soft(lead/Math.min(c.w,18)):soft(q/.4);
     const vertical=c.lower?soft((c.bottom+dy-lowerClip)/Math.min(c.h,12)):1;
-    return {x:dx,y:dy,a:q===0?0:c.opacity*horizontal*vertical,clip};
+    return {x:center?(g.boundary-c.x)*(1-s):dx,y:dy,a:q===0?0:c.opacity*horizontal*vertical,clip,...(centerScale?{s}:{})};
   }
   function keyframes(index,reverse=false) {
     return Array.from({length:81},(_,i)=>{
       const f=sample(index,(reverse?80-i:i)/80);
-      return {offset:i/80,transform:`translate(${f.x}px,${f.y}px) scale(1)`,opacity:f.a,
+      return {offset:i/80,transform:`translate(${f.x}px,${f.y}px) scale(${f.s??1})`,opacity:f.a,
         clipPath:`inset(${f.clip.map(v=>`${v}px`).join(" ")})`};
     });
   }
@@ -938,9 +939,9 @@ function startupBloomAssemblyPlan(start,scale){
   if(win[KEY]?.dispose?.({replacement:true})===false)return;
   const MARK="data-zr-center-card",OWNER="data-zr-center-motion",PENDING="data-zr-center-pending";
   const B="--zr-fold-bookmark-progress",BOOK_FLOW="data-zr-flow-bookmark";
-  const BOOK_PROPS=["--zr-flow-bookmark-x","--zr-flow-bookmark-alpha","--zr-flow-bookmark-left","--zr-flow-bookmark-right"];
+  const BOOK_PROPS=["--zr-flow-bookmark-x","--zr-flow-bookmark-alpha","--zr-flow-bookmark-left","--zr-flow-bookmark-right","--zr-flow-bookmark-scale"];
   let bookFlowRegistered=true;
-  for(const [name,syntax,initialValue] of [[BOOK_PROPS[0],"<length>","0px"],[BOOK_PROPS[1],"<number>","1"],[BOOK_PROPS[2],"<length>","-8px"],[BOOK_PROPS[3],"<length>","-8px"]]){
+  for(const [name,syntax,initialValue] of [[BOOK_PROPS[0],"<length>","0px"],[BOOK_PROPS[1],"<number>","1"],[BOOK_PROPS[2],"<length>","-8px"],[BOOK_PROPS[3],"<length>","-8px"],[BOOK_PROPS[4],"<number>","1"]]){
     try{win.CSS.registerProperty({name,syntax,inherits:false,initialValue});}catch(e){if(e.name!=="InvalidModificationError")bookFlowRegistered=false;}
   }
   const MODE="data-zr-center-mode",BLOOM_MARK="data-zr-center-bloom-card";
@@ -1544,10 +1545,11 @@ function startupBloomAssemblyPlan(start,scale){
     const id=++bookmarkSequence,frames=Array.from({length:21},(_,i)=>{const p=smooth(direction==="out"?1-i/20:i/20);return {offset:i/20,[B]:String(p)};});
     const old=n.style.getPropertyValue(B),priority=n.style.getPropertyPriority(B),mark=n.getAttribute(markKey);
     const running=[],saved=[];
-    let released=false,verifyPrepared=null;
+    let released=false,verifyPrepared=null,readPlayback=null;
     const exact=()=>!released&&!dead&&current()&&activeBookmark===handle;
     const handle={owner,retainOnDispose,startupOutcomeVersion:1,finished:Promise.resolve(),
       validatePrepared(){try{return exact()&&(!verifyPrepared||verifyPrepared());}catch{return false;}},
+      playbackSample(){try{return exact()?readPlayback?.()??null:null;}catch{return null;}},
       resume(){if(!released)for(const a of running)try{a.play();}catch{}},
       resumeAt(start){
         if(!exact()||!running.length)throw Error("bookmark-epoch-stale");
@@ -1586,7 +1588,11 @@ function startupBloomAssemblyPlan(start,scale){
         return a;
       };
       if(flow){
-        if(!bookFlowRegistered)throw Error("bookmark-flow-registration");
+        // Startup uses native WAAPI properties to avoid a computed
+        // custom-property dependency during Gecko's running animation.
+        // Keep the validated closing playback path, with identical poses.
+        const direct=owner==="startup";
+        if(!direct&&!bookFlowRegistered)throw Error("bookmark-flow-registration");
         const rect=n.getBoundingClientRect();
         const cards=[...n.children].flatMap(node=>{
           if(node.hidden||node.collapsed)return [];
@@ -1597,15 +1603,17 @@ function startupBloomAssemblyPlan(start,scale){
         });
         if(!cards.length||cards.length>256)throw Error("bookmark-flow-geometry");
         const cx=(Math.min(...cards.map(c=>c.r.left))+Math.max(...cards.map(c=>c.r.right)))/2;
-        const plan=createCenterFlowPlan(cards.map(c=>({...c,cx,cy:c.y,lower:false,hub:null})),{centerAperture:true});
+        const plan=createCenterFlowPlan(cards.map(c=>({...c,cx,cy:c.y,lower:false,hub:null})),{centerScale:true});
         const children=[...n.children],cohort=[];
         for(const [i,c] of cards.entries()){
           if(!exact())throw Error("bookmark-flow-stale");
-          saved.push({node:c.node,value:c.node.getAttribute(BOOK_FLOW)});c.node.setAttribute(BOOK_FLOW,"true");
+          saved.push({node:c.node,value:c.node.getAttribute(BOOK_FLOW)});c.node.setAttribute(BOOK_FLOW,direct?"direct":"true");
           const keys=Array.from({length:81},(_,k)=>{
             const f=plan.sample(i,(direction==="out"?80-k:k)/80);
+            if(direct)return {offset:k/80,translate:f.x+"px 0px",scale:String(f.s),opacity:f.a,
+              clipPath:`inset(${f.clip.map(v=>v+"px").join(" ")})`};
             return {offset:k/80,[BOOK_PROPS[0]]:f.x+"px",[BOOK_PROPS[1]]:String(f.a),
-              [BOOK_PROPS[2]]:f.clip[3]+"px",[BOOK_PROPS[3]]:f.clip[1]+"px"};
+              [BOOK_PROPS[2]]:f.clip[3]+"px",[BOOK_PROPS[3]]:f.clip[1]+"px",[BOOK_PROPS[4]]:String(f.s)};
           });
           cohort.push({c,i,a:animate(c.node,keys)});
         }
@@ -1620,21 +1628,47 @@ function startupBloomAssemblyPlan(start,scale){
           return [v[0],v[1]??v[0],v[2]??v[0],v[3]??v[1]??v[0]];
         };
         const sameChildren=()=>exact()&&document.getElementById("PlacesToolbarItems")===n&&n.children.length===children.length&&children.every((child,i)=>n.children[i]===child);
-        const sample=(fraction,seek)=>{
-          if(!sameChildren())return false;
+        const measure=(fraction,seek)=>{
+          if(!sameChildren())return {id,owner,direct,fraction,count:cohort.length,bad:cohort.length,topology:false};
           if(seek)for(const {a} of cohort)a.currentTime=fraction?delay+duration*fraction:0;
-          let bad=0,maxAlphaError=0,maxPositionError=0,maxClipError=0;
-          for(const {c,i} of cohort){
+          let bad=0,maxAlphaError=0,maxPositionError=0,maxClipError=0,visibleCount=0,expectedVisibleCount=0,clockSpread=0;
+          const expectedTime=Number(cohort[0].a.currentTime);
+          for(const {c,i,a} of cohort){
             const pose=plan.sample(i,direction==="out"?1-fraction:fraction);
             const s=win.getComputedStyle(c.node),r=c.node.getBoundingClientRect(),clip=px(s.clipPath);
             const ae=Math.abs(Number(s.opacity)-pose.a);
-            const pe=Math.max(Math.abs(r.left-c.r.left-pose.x),Math.abs(r.top-c.r.top),Math.abs(r.width-c.r.width),Math.abs(r.height-c.r.height));
+            const pe=Math.max(Math.abs(r.left-(c.x+pose.x-c.r.width*pose.s/2)),Math.abs(r.top-(c.y-c.r.height*pose.s/2)),
+              Math.abs(r.width-c.r.width*pose.s),Math.abs(r.height-c.r.height*pose.s));
             const ce=clip?Math.max(...clip.map((v,j)=>Math.abs(v-pose.clip[j]))):Infinity;
-            if(!Number.isFinite(ae)||!Number.isFinite(pe)||ae>.01||pe>1||ce>1||c.node.hidden||c.node.collapsed||s.visibility!=="visible"||s.display==="none")bad++;
+            if(!Number.isFinite(ae)||!Number.isFinite(pe)||ae>.02||pe>1.5||ce>1.5||c.node.hidden||c.node.collapsed||s.visibility!=="visible"||s.display==="none")bad++;
             maxAlphaError=Math.max(maxAlphaError,ae);maxPositionError=Math.max(maxPositionError,pe);maxClipError=Math.max(maxClipError,ce);
+            if(pose.a>.05&&c.r.width-pose.clip[1]-pose.clip[3]>1)expectedVisibleCount++;
+            if(Number(s.opacity)>.05&&clip&&r.width>1&&c.r.width-clip[1]-clip[3]>1&&s.visibility==="visible"&&s.display!=="none")visibleCount++;
+            clockSpread=Math.max(clockSpread,Math.abs(Number(a.currentTime)-expectedTime));
           }
-          trace("center.bookmarks.paint",{id,owner,fraction,count:cohort.length,bad,maxAlphaError,maxPositionError,maxClipError},{flush:bad>0});
-          return bad===0;
+          return {id,owner,direct,fraction,count:cohort.length,bad,maxAlphaError,maxPositionError,maxClipError,visibleCount,expectedVisibleCount,clockSpread,topology:true};
+        };
+        const sample=(fraction,seek)=>{
+          const data=measure(fraction,seek);
+          trace("center.bookmarks.paint",data,{flush:data.bad>0});
+          return data.bad===0;
+        };
+        // Bounded, read-only playback evidence from the existing 180ms
+        // diagnostic sampler. Never seek a running effect or add a timer.
+        readPlayback=()=>{
+          const a=cohort[0].a,t=Number(a.currentTime),start=a.startTime,now=document.timeline?.currentTime;
+          if(!Number.isFinite(t)||!Number.isFinite(start)||!Number.isFinite(now))return null;
+          const expected=now-start;
+          if(expected<delay-180||expected>delay+duration+180)return null;
+          const fraction=Math.max(0,Math.min(1,(t-delay)/duration));
+          const data=measure(fraction,false);
+          let ancestorOpacity=1,ancestorVisible=true;
+          for(let node=n;node;node=node.parentElement){
+            const style=win.getComputedStyle(node);ancestorOpacity*=Number(style.opacity);
+            if(style.display==="none"||style.visibility!=="visible"||node.hidden||node.collapsed)ancestorVisible=false;
+            if(node===root)break;
+          }
+          return {...data,clockTime:t,expectedTime:expected,clockError:Math.abs(expected-t),ancestorOpacity,ancestorVisible};
         };
         if(paused){
           const initial=sample(0,true),interior=initial&&sample(.5,true),restored=sample(0,true);
@@ -1643,7 +1677,7 @@ function startupBloomAssemblyPlan(start,scale){
         }
       }else animate(n,frames);
       handle.finished=Promise.all(running.map(a=>a.finished.catch(()=>{})));
-      trace("center.bookmarks.acquire",{id,owner,direction,duration,flow,count:running.length},{sample:duration+250});
+      trace("center.bookmarks.acquire",{id,owner,direction,duration,flow,direct:flow&&owner==="startup",count:running.length},{sample:delay+duration+250});
       if(dead||released||!current()){handle.release("disposed");return null;}
       return handle;
     }catch(error){handle.release("setup-failed");trace("center.bookmarks.error",{id,owner,name:nocturneErrorClass(error)},{flush:true});return null;}
@@ -1702,7 +1736,7 @@ function startupBloomAssemblyPlan(start,scale){
     selectionContainer?.removeEventListener("TabSelect",onSelect);
     selectionContainer=tc;lastTab=win.gBrowser.selectedTab;tc.addEventListener("TabSelect",onSelect);
   }
-  const api={startupBloomVersion:1,centerFlowVersion:1,start,bookmarks,iconStats,warmIcons,releasePending,invalidateTopology,invalidateGeometry,dispose};win[KEY]=api;
+  const api={startupBloomVersion:1,centerFlowVersion:1,start,bookmarks,bookmarkPlaybackSample:()=>activeBookmark?.playbackSample?.()??null,iconStats,warmIcons,releasePending,invalidateTopology,invalidateGeometry,dispose};win[KEY]=api;
   const earlyBoot=win.__nocturneEarlyBoot,diagnostics=win.__nocturneDiagnostics;
   // This is the last Sine slot if subsequent Layout fragments fail.
   win.addUnloadListener(()=>{

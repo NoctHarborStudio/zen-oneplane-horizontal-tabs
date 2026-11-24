@@ -54,7 +54,7 @@ export function createMagneticFoldMath(){
 }
 
 // Dual-row conveyor candidate shared by all Center Motion owners and the Lab.
-export function createCenterFlowPlan(cards,{centerAperture=false}={}) {
+export function createCenterFlowPlan(cards,{centerScale=false}={}) {
   // One resting geometry snapshot; no DOM reads or time-dependent state.
   // Each side is a conveyor: all members share the same horizontal shift.
   const clamp = p => Math.max(0, Math.min(1, p));
@@ -106,7 +106,7 @@ export function createCenterFlowPlan(cards,{centerAperture=false}={}) {
     p=clamp(p);
     // Lower row begins later and overlaps the top row's outward flow.
     const q=two?(c.lower?clamp((p-.18)/.82):clamp(p/.82)):p;
-    if(q===1)return {x:0,y:0,a:c.opacity,clip:[-pad,-pad,-pad,-pad]};
+    if(q===1)return {x:0,y:0,a:c.opacity,clip:[-pad,-pad,-pad,-pad],...(centerScale?{s:1}:{})};
     const progress=ease(q);
     const dx=-g.side*g.travel*(1-progress);
     const lead=g.side?g.side*(c.x+dx-g.boundary)+c.w/2:0;
@@ -116,22 +116,19 @@ export function createCenterFlowPlan(cards,{centerAperture=false}={}) {
     const bound=(v,size)=>Math.max(-pad,Math.min(size+pad,v));
     if(g.side<0)clip[1]=bound(c.right+dx-g.boundary,c.w);
     if(g.side>0)clip[3]=bound(g.boundary-c.left-dx,c.w);
-    // The center bookmark is a two-sided aperture, not an early static
-    // fade. Keep its native text/slot size; reveal around the actual
-    // portal (which may be off-center within a wider bookmark).
-    if(centerAperture&&g.side===0){
-      clip[3]=(g.boundary-c.left)*(1-progress)-pad*progress;
-      clip[1]=(c.right-g.boundary)*(1-progress)-pad*progress;
-    }
+    // Only the center bookmark actually scales. Its whole icon and
+    // label shrink around the portal, without cropping or layout changes.
+    const center=centerScale&&g.side===0;
+    const s=center?.02+.98*progress:1;
     if(c.lower)clip[0]=bound(lowerClip-(c.top+dy),c.h);
-    const horizontal=g.side?soft(lead/Math.min(c.w,18)):soft(q/.4);
+    const horizontal=center?soft(q):g.side?soft(lead/Math.min(c.w,18)):soft(q/.4);
     const vertical=c.lower?soft((c.bottom+dy-lowerClip)/Math.min(c.h,12)):1;
-    return {x:dx,y:dy,a:q===0?0:c.opacity*horizontal*vertical,clip};
+    return {x:center?(g.boundary-c.x)*(1-s):dx,y:dy,a:q===0?0:c.opacity*horizontal*vertical,clip,...(centerScale?{s}:{})};
   }
   function keyframes(index,reverse=false) {
     return Array.from({length:81},(_,i)=>{
       const f=sample(index,(reverse?80-i:i)/80);
-      return {offset:i/80,transform:`translate(${f.x}px,${f.y}px) scale(1)`,opacity:f.a,
+      return {offset:i/80,transform:`translate(${f.x}px,${f.y}px) scale(${f.s??1})`,opacity:f.a,
         clipPath:`inset(${f.clip.map(v=>`${v}px`).join(" ")})`};
     });
   }

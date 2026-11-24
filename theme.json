@@ -4,7 +4,7 @@
   "description": "A unified Zen Browser UI with horizontal tabs, Home, Hub, Smart Search, Magnetic Bookmarks, Downloads, Library and motion. Requires JavaScript for unofficial mods in Sine. Development preview: full restoration of native browser behavior after uninstall is not guaranteed.",
   "homepage": "https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/tree/preview",
   "author": "NoctHarborStudio",
-  "version": "0.3.0-preview.209",
+  "version": "0.3.0-preview.210",
   "style": {
     "chrome": "chrome.css"
   },
@@ -19,7 +19,7 @@
     "productivity"
   ],
   "createdAt": "2026-11-15",
-  "updatedAt": "2026-11-24T14:39:00.000Z",
+  "updatedAt": "2026-11-24T14:46:00.000Z",
   "fork": [
     "zen"
   ],

@@ -716,23 +716,32 @@ test("flow bookmark ownership releases every native child and the list on failur
  const f=bookmarkFixture(),children=[];
  for(const [left,width] of [[20,50],[75,40],[120,55]]){
   const attrs=new Map(),node={hidden:false,collapsed:false,getAttribute:k=>attrs.get(k)??null,setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k),
-   getBoundingClientRect(){const x=parseFloat(this.frame()?.["--zr-flow-bookmark-x"]||"0");return {left:left+x,right:left+width+x,top:20,bottom:40,width,height:20};},
+   getBoundingClientRect(){const k=this.frame(),x=parseFloat(k?.translate??k?.["--zr-flow-bookmark-x"]??"0"),s=Number(k?.scale??k?.["--zr-flow-bookmark-scale"]??1);
+    return {left:left+x+width*(1-s)/2,right:left+x+width*(1+s)/2,top:30-10*s,bottom:30+10*s,width:width*s,height:20*s};},
    frame(){if(!this.effect||this.effect.cancelled)return null;const {duration,delay}=this.effect.timing;const k=Math.round(Math.max(0,Math.min(1,((this.effect.currentTime||0)-delay)/duration))*80);return this.effect.keys[k];},
    animate(keys,timing){const a=f.node.animate();a.keys=keys;a.timing=timing;this.effect=a;return a;}};
   children.push(node);
  }
  f.node.children=children;f.node.getBoundingClientRect=()=>({left:0,right:200,width:200});
- f.window.getComputedStyle=n=>{const k=n.frame?.();return {display:"flex",visibility:"visible",opacity:k?.["--zr-flow-bookmark-alpha"]??"1",
-  clipPath:k?`inset(-8px ${k["--zr-flow-bookmark-right"]} -8px ${k["--zr-flow-bookmark-left"]})`:"none"};};
+ f.window.getComputedStyle=n=>{const k=n.frame?.();return {display:"flex",visibility:"visible",opacity:k?.opacity??k?.["--zr-flow-bookmark-alpha"]??"1",
+  clipPath:k?.clipPath??(k?`inset(-8px ${k["--zr-flow-bookmark-right"]} -8px ${k["--zr-flow-bookmark-left"]})`:"none")};};
  const engine=f.mount(),handle=engine.bookmarks({owner:"startup",flow:true,paused:true});
  assert.ok(handle);assert.equal(f.effects.length,3);assert.equal(handle.validatePrepared(),true);
- assert.ok(children.every(n=>n.getAttribute("data-zr-flow-bookmark")==="true"));
+ assert.ok(children.every(n=>n.getAttribute("data-zr-flow-bookmark")==="direct"));
+ assert.ok(f.effects.every(a=>a.keys.every(k=>"translate" in k&&"scale" in k&&"opacity" in k&&"clipPath" in k)));
+ f.document.timeline={currentTime:400};for(const a of f.effects){a.startTime=140;a.currentTime=260;}
+ const playback=engine.bookmarkPlaybackSample();assert.equal(playback.fraction,.5);assert.equal(playback.bad,0);assert.equal(playback.clockError,0);
+ for(const a of f.effects)a.currentTime=0;
  const before=f.window.getComputedStyle;f.window.getComputedStyle=n=>({...before(n),clipPath:"none"});
  assert.equal(handle.validatePrepared(),false);f.window.getComputedStyle=before;
  f.node.children=[...children].reverse();assert.equal(handle.validatePrepared(),false);f.node.children=children;
  handle.release();assert.ok(f.effects.every(a=>a.cancelled===1));
  assert.ok(children.every(n=>n.getAttribute("data-zr-flow-bookmark")===null));
  assert.equal(f.node.getAttribute(foldMark),null);
+ const closing=engine.bookmarks({owner:"close",direction:"out",flow:true,paused:true});
+ assert.ok(closing);assert.ok(children.every(n=>n.getAttribute("data-zr-flow-bookmark")==="true"));
+ assert.ok(f.effects.slice(-3).every(a=>a.keys.every(k=>"--zr-flow-bookmark-scale" in k)));
+ closing.release();
  children[1].animate=()=>{throw Error("bookmark effect");};
  assert.equal(engine.bookmarks({owner:"startup",flow:true}),null);
  assert.equal(f.effects.at(-1).cancelled,1);

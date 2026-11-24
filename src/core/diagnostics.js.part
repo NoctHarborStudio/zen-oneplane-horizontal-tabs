@@ -1,7 +1,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.209",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.210",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -365,7 +365,10 @@
     // The cold start itself is the workload under investigation. Don't
     // force dozens of style/layout reads or animation enumerations mid-run.
     // Keep the frame-gap stream and resume full geometry on handoff.
-    if(startupPlaying())return {root:attrState(root,rootAttrs),frame:frameSummary(),full:false,metrics:{},light:true};
+    if(startupPlaying()){
+      const bookmarkFlow=win.__nocturneCenterMotion?.bookmarkPlaybackSample?.();
+      return {root:attrState(root,rootAttrs),frame:frameSummary(),full:false,metrics:{},light:true,...(bookmarkFlow?{bookmarkFlow}:{})};
+    }
     observeTargets();
     const row=get("oneplane-tabs"),browser=win.gBrowser;
     const counts={native:browser?.tabs?.length??null,visible:browser?.visibleTabs?.length??null,mirror:row?.querySelectorAll(".oneplane-tab").length??null,
@@ -395,7 +398,8 @@
       }
     }
     previousMetrics=metrics;
-    return {root:attrState(root,rootAttrs),counts,frame,full,metrics:delta};
+    const bookmarkFlow=root.hasAttribute("data-zr-closing")?win.__nocturneCenterMotion?.bookmarkPlaybackSample?.():null;
+    return {root:attrState(root,rootAttrs),counts,frame,full,metrics:delta,...(bookmarkFlow?{bookmarkFlow}:{})};
   }
   function frameTick(t){raf=0;if(dead||quiescing||!enabled()||now()>until)return;if(frameLast&&gaps.length<300)gaps.push(t-frameLast);frameLast=t;raf=win.requestAnimationFrame(frameTick);}
   function sample(){timer=0;if(dead||quiescing||!enabled()||now()>until){frameLast=0;return;}record("sample",snapshot);timer=win.setTimeout(sample,180);}

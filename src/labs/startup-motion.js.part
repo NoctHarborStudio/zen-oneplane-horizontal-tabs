@@ -94,7 +94,7 @@
         const books=[...ui.bookmarks.children].map(n=>{const r=n.getBoundingClientRect();return {n,r,x:r.left+r.width/2,y:r.top+r.height/2,opacity:1};});
         if(books.length){
           const cx=(Math.min(...books.map(c=>c.r.left))+Math.max(...books.map(c=>c.r.right)))/2;
-          const bookFlow=createCenterFlowPlan(books.map(c=>({...c,cx,cy:c.y,lower:false,hub:null})),{centerAperture:true});
+          const bookFlow=createCenterFlowPlan(books.map(c=>({...c,cx,cy:c.y,lower:false,hub:null})),{centerScale:true});
           books.forEach((c,i)=>effect(c.n,bookFlow.keyframes(i),centerFlowStage("bookmarks",plan.finishLength)));
         }
         const home=(n,kind,stage=kind,rank=0)=>effect(n,homeFlowFrames(kind).map((f,i)=>i===0?{...f,easing:EDGE_CONTROL_EASE}:f),centerFlowStage(stage,plan.finishLength,false,rank));

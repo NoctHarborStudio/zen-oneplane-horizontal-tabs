@@ -69,23 +69,30 @@ test("linear interpolation of WAAPI keyframes preserves separated card bodies",(
  }
 });
 
-test("center bookmark opens from an aperture at the actual portal and reverses without affecting its neighbors",()=>{
+test("center bookmark scales as a whole around the actual portal; side conveyors remain identical",()=>{
  for(const widths of [[40,100,20],[30,140,60,25],[80],[30,30]]){
   let left=0;const width=widths.reduce((a,b)=>a+b,0)+5*(widths.length-1),cx=width/2;
   const cards=widths.map(w=>{const c={x:left+w/2,y:20,cx,cy:20,opacity:1,r:{width:w,height:20}};left+=w+5;return c;});
-  const plan=createCenterFlowPlan(cards,{centerAperture:true}),legacy=createCenterFlowPlan(cards);
+  const plan=createCenterFlowPlan(cards,{centerScale:true}),legacy=createCenterFlowPlan(cards);
   cards.forEach((c,i)=>{
    const middle=Math.abs(c.x-cx)<c.r.width/2;
    if(middle){
-    const first=plan.sample(i,0);assert.ok(Math.abs(first.x)<1e-8);assert.ok(Math.abs(first.clip[1]+first.clip[3]-c.r.width)<1e-8);
-    assert.equal(c.x-c.r.width/2+first.clip[3],cx);
-    assert.ok(plan.sample(i,.5).clip[1]+plan.sample(i,.5).clip[3]<c.r.width);
-   }else for(let k=0;k<=80;k++)assert.deepEqual(plan.sample(i,k/80),legacy.sample(i,k/80));
+    const first=plan.sample(i,0),mid=plan.sample(i,.5),last=plan.sample(i,1);
+    assert.equal(first.s,.02);assert.equal(mid.s,.51);assert.equal(last.s,1);
+    assert.deepEqual(first.clip,[-8,-8,-8,-8]);assert.deepEqual(mid.clip,first.clip);
+    assert.ok(Math.abs(c.x+first.x-(cx+(c.x-cx)*first.s))<1e-8);
+    assert.ok(first.a===0&&mid.a>0&&last.a===1);
+   }else for(let k=0;k<=80;k++){const {s,...f}=plan.sample(i,k/80);assert.equal(s,1);assert.deepEqual(f,legacy.sample(i,k/80));}
    const rev=plan.keyframes(i,true),forward=plan.keyframes(i);
    for(let j=0;j<81;j++){const {offset:a,...x}=rev[j],{offset:b,...y}=forward[80-j];assert.deepEqual(x,y);}
   });
   for(let k=0;k<=320;k++){
-   const boxes=cards.map((c,i)=>visible(c,interpolate(plan,i,k/320)));
+   const boxes=cards.map((c,i)=>{
+    const f=interpolate(plan,i,k/320),a=plan.sample(i,Math.floor(k/4)/80),b=plan.sample(i,Math.ceil(k/4)/80);
+    const s=a.s+(b.s-a.s)*(k%4)/4;
+    const l=c.x+f.x-c.r.width*s/2,r=c.x+f.x+c.r.width*s/2;
+    return {a:f.a,l:l+Math.max(0,f.clip[3])*s,r:r-Math.max(0,f.clip[1])*s};
+   });
    for(let i=0;i<boxes.length;i++)for(let j=0;j<i;j++)if(boxes[i].a>0&&boxes[j].a>0)
     assert.ok(Math.min(boxes[i].r,boxes[j].r)-Math.max(boxes[i].l,boxes[j].l)<=.51);
   }
