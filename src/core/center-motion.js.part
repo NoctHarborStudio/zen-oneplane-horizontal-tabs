@@ -16,7 +16,7 @@
   function trace(event,data,options){try{win.__nocturneTrace?.(event,data,options);}catch{}}
   function retire(){if(disposed&&!disposing&&!active&&!activeBookmark&&current())delete win[KEY];}
   function drainDispose(){if(!motionBusy&&!disposing&&pendingDispose){const options=pendingDispose;pendingDispose=null;dispose(options);}}
-  const {smooth,keyframes,portalClip}=createMagneticFoldMath();
+  const {smooth,portalClip}=createMagneticFoldMath();
   const GEOMETRY_EPS=.5;
   const rectError=(a,b)=>Math.max(...["left","top","width","height"].map(k=>
     Number.isFinite(a?.[k])&&Number.isFinite(b?.[k])?Math.abs(a[k]-b[k]):Infinity));
@@ -518,7 +518,8 @@
       // Own every resource before acquisition; never hide cards until all
       // detached proxies have been prepared.
       const geometryPairs=[];
-      for(const c of cards){const n=proxy(c,layer,rr,cleanups,stats,geometryPairs),frames=keyframes(c,direction==="out");effects.push({n,frames,c});}
+      const flow=createCenterFlowPlan(cards);
+      for(const [index,c] of cards.entries()){const n=proxy(c,layer,rr,cleanups,stats,geometryPairs),frames=flow.keyframes(index,direction==="out");effects.push({n,frames,c});}
       if(measuring){restoreMark(root,"data-zr-fold-measuring",measuringMark);measuring=false;}
       if(!preparing()||!projectionCurrent()){handle.release("disposed");return null;}
       ownerMark=root.getAttribute(OWNER);ownerWritten=true;root.setAttribute(OWNER,owner);
@@ -573,7 +574,7 @@
     },{sample:800});
       for(const {n,frames} of effects){
         if(!preparing()){handle.release("disposed");return null;}
-        n.style.transform=frames[0].transform;n.style.opacity=String(frames[0].opacity);
+        n.style.transform=frames[0].transform;n.style.opacity=String(frames[0].opacity);n.style.clipPath=frames[0].clipPath;
         const a=n.animate(frames,{duration,delay,easing:"linear",fill:"both"});
         // Install cancellation handling immediately, even when pause or
         // currentTime subsequently throws. Fail open as one surface.
@@ -584,7 +585,7 @@
       handle.finished=Promise.all(running.map(a=>a.finished.catch(()=>{})));
       if(!preparing()||!projectionCurrent()){handle.release("disposed");return null;}
       committed=true;
-      trace("center.motion",()=>({id,owner,direction,count:cards.length,duration,mode:"magnetic-fold",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length,groups:stats.groups,handles:stats.handles,handleOffset:stats.handleOffset,icons:iconStats(row),bitmapIcons:stats.bitmapIcons,bitmapFailures:stats.bitmapFailures,animated:running.length}),{sample:duration+250});
+      trace("center.motion",()=>({id,owner,direction,count:cards.length,duration,mode:"magnetic-fold",flow:"conveyor-v1",portal:hub?[hub.right-hub.left,hub.bottom-hub.top]:null,center:[cards[0].cx,cards[0].cy],lower:cards.filter(c=>c.lower).length,groups:stats.groups,handles:stats.handles,handleOffset:stats.handleOffset,icons:iconStats(row),bitmapIcons:stats.bitmapIcons,bitmapFailures:stats.bitmapFailures,animated:running.length}),{sample:duration+250});
       if(!preparing()||!projectionCurrent()){handle.release("disposed");return null;}
       return handle;
     }catch(error){

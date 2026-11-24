@@ -140,3 +140,5 @@ A7 / NC4-087 preview.141: independent Firefox 145 IDL and `TabProgressListener` 
 Home Island motion: `algorithms/home-island-motion.mjs` provides the approved B curve and registration helpers to generated Startup, generated Closing and the comparison Lab. Edit `core/closing-animation.js.part` rather than the generated `closing-animation.uc.mjs`. Existing Sine registrations stay unchanged.
 
 Boot branding is shared by Startup and Closing via `core/boot-brand.mjs`; the experimental final chrome-root fade is a bounded visual lease in `core/close-finale.mjs`. The close command controller remains the sole native-dispatch owner.
+
+Center Motion conveyor candidate (stage M1): the existing proxy owner now consumes one shared pure geometry plan for startup, Workspace and close. Constant-size, constant-spacing lanes have real portal clipping, lower-row descent and exact reversed keyframes. The comparison Lab uses the same trajectory. This is a candidate, not a validated Sine release; native geometry, interpolated clip rendering, performance and startup/close choreography remain gates. Existing topology, lifecycle and native ownership are unchanged.

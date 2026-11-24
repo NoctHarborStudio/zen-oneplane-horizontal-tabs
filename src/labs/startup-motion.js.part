@@ -84,12 +84,12 @@
         effect(ui.island,homeIslandFrames().map(f=>({offset:f.offset,opacity:f.opacity,transform:"translateY("+y*(1-f.travel)+"px) scale("+f.scale+")"})),
           {delay:plan.islandStart*scale,duration:plan.islandLength*scale});
         run.layer=element("div","proxyLayer","",scene);run.layer.style.clipPath=fold.portalClip(hub,rr,rr.width,rr.height);
-        for(const s of slots){
+        const flow=createCenterFlowPlan(slots.map(s=>({...s,cx:center.x,cy:center.y,unit:1.5,opacity:1,hub,lower:s.y>center.y+18})));
+        for(const [index,s] of slots.entries()){
           const proxy=s.n.cloneNode(true);run.layer.append(proxy);
           Object.assign(proxy.style,{left:(s.r.left-rr.left)+"px",top:(s.r.top-rr.top)+"px",width:s.r.width+"px",height:s.r.height+"px"});
           run.hidden.push(s.n);s.n.style.visibility="hidden";
-          const card={...s,cx:center.x,cy:center.y,unit:1.5,opacity:1,hub,lower:s.y>center.y+18};
-          effect(proxy,fold.keyframes(card),{delay:plan.cards*scale,duration:plan.cardsLength*scale});
+          effect(proxy,flow.keyframes(index),{delay:plan.cards*scale,duration:plan.cardsLength*scale});
         }
         effect(ui.bookmarks,[{scale:"0.08 1",opacity:0},{scale:"1 1",opacity:1}],{delay:plan.bookmarks*scale,duration:420*scale});
         [ui.search,ui.pins,ui.work,ui.footer].forEach((n,i)=>effect(n,[{opacity:0,transform:"translateY(12px)"},{opacity:1,transform:"translateY(0)"}],{delay:(plan.home+Math.min(i*65,195))*scale,duration:plan.homeLength*scale}));
