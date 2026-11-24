@@ -1,3 +1,7 @@
+## 0.3.0-preview.183 — Home live-return performance (HS4)
+
+Remove the frozen result-tree renderer, its speculative cache, mutation and scroll subscriptions, timer, geometry ResizeObserver, and separate return RAF. Controlled Escape/background cancellation and reversal continue to animate the original Zen view using the existing geometry, easing, and durations. If Zen has independently closed or replaced the session, release the Home visual lease immediately without recreating results or stealing focus. Native validation of external cancellation and reversal remains open. Preserve the verified physical-pixel rails and live default-icon styling.
+
 ## 0.3.0-preview.182 — Library compositor motion experiment
 
 Library animates original pages with percentage translateX on stable layout coordinates, 800ms symmetric easing, preserving live reversal, shared scrollbar and original-page cleanup. Capture visible rects relative to viewport before cancellation; preserve terminal identity transform. No permanent will-change or additional frame loop. Preview.181 trace: 15 flights, median RAF 5.56ms, max 15.10ms, no intervals >25ms; perceived presentation remains poor. Compositor improvement and text raster stability require native validation.

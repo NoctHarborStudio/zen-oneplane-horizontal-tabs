@@ -105,7 +105,7 @@ test("NC4-089-R5 enforces source-declared event-specific reasons and statuses",(
    ["library.media.scan.wait","status"],["library.media.refresh","status"],
    ["downloads.native.transfer","reason"],["downloads.drag.payload","reason"],
    ["home.search.close-start","reason"],["home.search.close-finish","reason"],
-   ["home.search.snapshot-unavailable","reason"],["home.search.open-baseline","reason"],["home.search.close-baseline","reason"],["page-progress.network","reason"],
+   ["home.search.native-settle","reason"],["home.search.open-baseline","reason"],["home.search.close-baseline","reason"],["page-progress.network","reason"],
    ["library.file.drag.recovered","reason"],["library.surface.fallback","reason"],
    ["center.bloom.fallback","reason"],["center.motion.skip","reason"],["center.fold.reject","reason"]
  ]){
@@ -122,8 +122,8 @@ test("NC4-089-R5 Home Search console cannot echo unfiltered event fields",()=>{
  assert.ok(start>=0&&end>start);
  const searchLog=new Function("win",home.slice(start,end)+";return searchLog;")(f.win);
  searchLog("close-start",{reason:"private-workspace-token",query:"sensitive search phrase"});
- searchLog("snapshot-unavailable",{name:"PrivateAccount",reason:"personal-workspace-token"});
- searchLog("snapshot-unavailable",{name:"TypeError"});
+ searchLog("native-settle",{name:"PrivateAccount",reason:"personal-workspace-token"});
+ searchLog("native-settle",{name:"TypeError"});
  const events=JSON.parse(f.api.dump()).events;
  assert.equal(events.at(-3).data.reason,null);
  assert.equal(events.at(-2).data.name,null);
@@ -297,11 +297,11 @@ test("NC4-089-R2 extracted Home producer and address phase survive the recorder"
  const address=readFileSync(new URL("../src/toolbar/address-controller.js.part",import.meta.url),"utf8");
  const start=home.indexOf("  function searchLog("),end=home.indexOf("  // A card starts appearing",start);
  assert.ok(start>0&&end>start);
- assert.ok(home.includes('searchLog("snapshot-unavailable",{name:error?.name||"Error"})'));
+ assert.ok(home.includes('searchLog("native-settle",{id:searchToken.homeProbe?.id??null,reason,'));
  assert.ok(address.includes('__nocturneTrace?.("address.begin",()=>({phase:name,'));
  const searchLog=new Function("win",home.slice(start,end)+";return searchLog;")(f.win);
- searchLog("snapshot-unavailable",{name:"Error"});
- const found=JSON.parse(f.api.dump()).events.find(e=>e.event==="home.search.snapshot-unavailable");
+ searchLog("native-settle",{name:"Error"});
+ const found=JSON.parse(f.api.dump()).events.find(e=>e.event==="home.search.native-settle");
  assert.ok(found);assert.equal(found.data.name,"Error");
  f.api.dispose();
 });

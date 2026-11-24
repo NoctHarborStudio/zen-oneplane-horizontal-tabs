@@ -561,3 +561,7 @@ Controlled close-start/close-finish include mode=native-live; close-reverse reco
 `library.section.motion` includes `original:true` and actual surface count; `library.section.cleanup` counts attached pages and retained views at settlement/hide (expected 1/0 and 0/0). No content, query or file identifiers in these events. Existing frame summaries remain bounded.
 
 Preview.181: `assembly.island.entry` and `disassembly.island.exit` report acquired geometry/distance and stage timing, with the existing Assembly/Disassembly completion and cleanup events. No per-frame logging. Compare the close seal to the 1190ms visual boundary only when an Island exit is acquired; otherwise the original 650ms boundary applies.
+
+### Preview.183 — HS4 Home live-only
+
+Retire snapshot-unavailable and snapshot/resizeReads counters with their removed producers. Keep bounded phase frame gaps and natural-height measureCalls/measureMs. close-start/close-finish/close-reverse include local probe id when enabled. native-settle has bounded reason native-event/native-observer/owner-changed/live-invalid plus id and closing/hadLiveReturn booleans. No result content, new observer, timer or per-frame events. Absence of removed counters indicates the removed code path, not a measured performance result.

@@ -313,10 +313,10 @@ test("Home search waits for a real result height and animates both directions",(
 test("Home search closing preserves native ownership and has blur fallback",()=>{
  assert.ok(core.includes("bar._zenHandleUrlbarClose(false,false)"));
  assert.ok(core.includes("driveLiveSearch(token,state,true,reason)"));
- assert.ok(core.includes("function animateSearchReturn(reason="));
+ assert.ok(core.includes("function settleNativeSearch(reason)"));
  assert.ok(core.includes('panel.removeAttribute("data-zh-return")'));
  assert.ok(core.includes("if(detail.onElementPicked||detail.onSwitch)leaveHome();"));
- assert.ok(core.includes('searchReturn?.remove()'));
+ assert.ok(core.includes('else settleNativeSearch("native-event")'));
 });
 test("Home icon error fallback retains original cache URI before generic",()=>{
  const make=new Function("win",extract("  const steamVector=","  const style=")+"return setHomeIcon;")({URL,devicePixelRatio:1});
@@ -349,7 +349,7 @@ test("Home search handoff shares header tokens, exact anchor and no New tab labe
  assert.ok(!core.includes('html("span","","New tab")'));
  assert.ok(!core.includes("shell.style.opacity="));
  assert.ok(core.includes("round?224:448"));
- assert.ok(core.includes("height>dest.height+8?368:144"));
+ assert.ok(core.includes("from>header+8?368:144"));
  assert.ok(core.includes("eased=t*t*(3-2*t)"));
 });
 
@@ -369,55 +369,32 @@ test("Home cards reveal continuously as the search edge clears each row",()=>{
  assert.ok(near.alpha>.99&&near.clip<=1);
  assert.deepEqual(state(260,100,264,1,264),{alpha:1,clip:0,shift:0});
 });
-test("Home retains a temporary fallback only for unexpected native close",()=>{
- assert.ok(core.includes("function freezeSearchResults(view,barRect)"));
- assert.ok(core.includes('const target=html(tag);styleCopy(target,style)'));
- assert.ok(core.includes('shell.append(frozen.node)'));
- assert.ok(core.includes('else animateSearchReturn("native-event")'));
+test("Home has no frozen renderer or prewarm work",()=>{
+ for(const old of ["freezeSearchResults","snapshotProperties","searchSnapshot","zen-home-search-return","searchReturnFrame","ResizeObserver","captureSearchSnapshot","scheduleSearchSnapshot"])assert.ok(!core.includes(old),old);
  assert.ok(core.includes('opacity:calc(var(--zh-return-alpha,0) * var(--zh-return-base,1))'));
- assert.ok(core.includes('paintReturnParts(parts,top+h,p,finalBottom)'));
- assert.ok(core.includes('searchLog("close-start",{reason,rows:'));
- assert.ok(!core.includes('.zh-footer{opacity:1}'));
- assert.ok(core.includes("stopSearchSnapshot();"));
+ assert.ok(core.includes('paintReturnParts(searchReturnParts,g.top+height,state.progress,g.top+header)'));
+ assert.ok(core.includes('if(part.last===key)continue'));
+ assert.ok(core.includes('else settleNativeSearch("native-event")'));
+ assert.ok(!core.includes('listen(win,"focusout"'));
 });
 
-test("Home close reuses an unchanged snapshot and avoids unnecessary geometry writes",()=>{
- assert.ok(core.includes("if(searchSnapshot&&!searchSnapshotDirty)return;"));
- assert.ok(core.includes('searchSnapshotDirty=true;'));
- assert.ok(core.includes('searchSnapshotView?.removeEventListener("scroll",scheduleSearchSnapshot,true)'));
- assert.ok(core.includes("const measured=live?bar?.getBoundingClientRect():(searchLastRect||searchSnapshot?.rect);"));
- assert.ok(core.includes('if(moveTop)shell.style.top=top+"px";'));
- assert.ok(core.includes("maxFrameGap:Math.round(maxFrameGap)"));
- assert.ok(core.includes('if(part.last===key)continue'));
-});
+
 
 test("Home footer return uses resting opacity rather than search-hidden opacity",()=>{
  assert.ok(core.includes('node.classList.contains("zh-footer")?1:'));
 });
 
-test("Home snapshot keeps both timeline rails stable and copies resolved borders and context paint",()=>{
+test("Home retains the verified native timeline rail geometry",()=>{
  assert.ok(core.includes('#urlbar[data-zr-home-search][zen-floating-urlbar="true"] #urlbar-results[data-zr-smart-grid][data-zr-timeline] > .urlbarView-row[data-zr-rail]::after'));
  assert.ok(core.includes("animation:none!important;background-position:center bottom,center!important;opacity:.43!important"));
- const props=new Function(extract("  const snapshotProperties=","  function snapshotNow(")+"return snapshotProperties")();
- for(const key of ["border-top-width","border-top-style","border-top-color","border-bottom-color","background-position-x","background-position-y","-moz-context-properties","fill","fill-opacity","stroke","stroke-opacity","color-scheme","grid-row-start"])assert.ok(props.includes(key),key);
- const text=new Function(extract("  function snapshotPseudoText(","  function searchLog(")+"return snapshotPseudoText")();
- const node={getAttribute:()=> "Recent tabs"};
- assert.equal(text("none",node),null);
- assert.equal(text('""',node),"");
- assert.equal(text("attr(data-zr-first)",node),"Recent tabs");
 });
-test("Home snapshot excludes native teardown and logs pre-animation delay",()=>{
- const ready=new Function(extract("  function snapshotReady(","  function snapshotPseudoText(")+"return snapshotReady")();
+test("Home live readiness excludes native teardown",()=>{
+ const ready=new Function(extract("  function liveSearchReady(","  function searchLog(")+"return liveSearchReady")();
  const attrs=new Map([["zen-newtab",""],["zen-floating-urlbar","true"]]);
  const bar={view:{isOpen:true},hasAttribute:k=>attrs.has(k),getAttribute:k=>attrs.get(k)};
  assert.equal(ready(bar),true);
  attrs.delete("zen-newtab");assert.equal(ready(bar),false);
  attrs.set("zen-newtab","");bar.view.isOpen=false;assert.equal(ready(bar),false);
- assert.ok(core.includes("attributeOldValue:true"));
- assert.ok(core.includes('listen(win,"focusout"'));
- assert.ok(core.includes("snapshotAge:frozen?"));
- assert.ok(core.includes("handoffMs:Math.round(snapshotNow()-handoffStarted)"));
- assert.ok(core.includes("firstFrameDelay:Math.round(firstFrameDelay)"));
 });
 
 test("Home startup groups are gated, decoded, staggered and cleaned up",()=>{
@@ -427,13 +404,11 @@ test("Home startup groups are gated, decoded, staggered and cleaned up",()=>{
  assert.ok(core.includes('if(startupRun===run)finishStartupHome(run)'));
  assert.ok(core.includes('if(!startup&&!staged)content.querySelector'));
 });
-test("Home search close gate survives native floating attribute teardown",()=>{
- const code=extract("  function animateSearchReturn(","  function onSearchClosed(");
- assert.ok(code.indexOf('bar?.setAttribute("data-zh-closing","")')<code.indexOf("finishSearchMotion();"));
+test("Home search commit gate survives native floating attribute teardown",()=>{
+ const code=extract("  function driveLiveSearch(","  function reverseLiveSearch(");
+ assert.ok(code.indexOf('bar.setAttribute("data-zh-closing","")')<code.indexOf("if(!finishNativeCancel())"));
  assert.ok(core.includes('#urlbar[data-zr-home-search][data-zh-closing]{opacity:0!important;visibility:hidden!important'));
- const observer=extract("  function observeSearch(","  function move(");
- assert.ok(observer.includes('if(searchToken&&!nativeSearchOpen(searchBar))animateSearchReturn("native-observer");'));
- assert.ok(!observer.includes("},32)"));
+ assert.ok(core.includes('if(!nativeSearchOpen(searchBar))settleNativeSearch("native-observer");'));
  assert.ok(core.includes('win.__nocturneTrace?.("home.search."+event'));
 });
 
@@ -443,25 +418,24 @@ test("Home startup animation is held until the boot controller resumes it",()=>{
  assert.ok(core.includes('resumeStartup:resumeStartupHome'));
 });
 
-test("Home baseline records bounded frame gaps, snapshot work and one summary per phase",()=>{
+test("Home baseline records bounded frame gaps and one summary per phase",()=>{
  const code=extract("  function searchProbeNow(","  function paintSearchHeight(");
  let clock=10,enabled=true;const traces=[];
  const win={performance:{now:()=>clock},__nocturneTrace:(event,data)=>traces.push({event,data})};
  const prefs={getBoolPref:()=>enabled};
- const api=new Function("win","prefs",code+`let searchProbeSequence=0;return {startSearchProbe,beginSearchCloseProbe,searchProbeFrame,searchProbeSnapshot,finishSearchProbe};`)(win,prefs);
+ const api=new Function("win","prefs",code+`let searchProbeSequence=0;return {startSearchProbe,beginSearchCloseProbe,searchProbeFrame,finishSearchProbe};`)(win,prefs);
  const token={};api.startSearchProbe(token);assert.equal(token.homeProbe.id,1);
  for(const now of [10,15,25,45,85])api.searchProbeFrame(token,"open",now);
- api.searchProbeSnapshot(token,13,true);api.searchProbeSnapshot(token,3,false);
  clock=100;api.finishSearchProbe(token,"open","complete");api.finishSearchProbe(token,"open","interrupted");
  assert.equal(traces.length,1);const d=traces[0].data;
  assert.equal(traces[0].event,"home.search.open-baseline");
  assert.deepEqual([d.frames,d.gapCount,d.p50,d.p95,d.p99,d.max],[5,4,10,40,40,40]);
- assert.deepEqual([d.snapshotCalls,d.snapshotSuccess,d.snapshotMs,d.snapshotDuringOpen],[2,1,16,2]);
+ assert.equal("snapshotCalls" in d,false);assert.equal("resizeReads" in d,false);
  api.beginSearchCloseProbe(token);api.beginSearchCloseProbe(token);
  for(let i=0;i<520;i++)api.searchProbeFrame(token,"close",100+i*4);
- api.searchProbeSnapshot(token,8,true);clock=2300;api.finishSearchProbe(token,"close","complete");
+ clock=2300;api.finishSearchProbe(token,"close","complete");
  assert.equal(traces.length,2);assert.equal(traces[1].data.gapCount,512);assert.equal(traces[1].data.gapDropped,7);
- assert.equal(traces[1].data.snapshotDuringOpen,2);assert.equal(traces[1].data.snapshotCalls,3);
+ assert.equal("snapshotCalls" in traces[1].data,false);
  enabled=false;const off={};api.startSearchProbe(off);assert.equal(off.homeProbe,undefined);
  enabled=true;api.startSearchProbe(off);enabled=false;api.finishSearchProbe(off,"open","interrupted");assert.equal(traces.length,2);
 });
@@ -477,7 +451,6 @@ test("Home background cancellation classifies pointer presses at the window boun
  const api=new Function("win","doc","panel","content","host","panels","bar","calls",code+`
  let open=true,searchToken={},searchClosing=false,searchReturn=null,searchBar=bar;
  function cancelHomeSearch(reason){calls.push(reason);return true;}
- function captureSearchSnapshot(){calls.push("capture");}
  return {classify:event=>isHomeSearchBackgroundPress(event,panel,content,bar,host,panels),dispatch:onSearchPointerDown,setClosing:value=>searchClosing=value};
  `)({},doc,panel,content,host,panels,bar,calls);
  const press=(target,x=100,y=500,extra={})=>({target,clientX:x,clientY:y,button:0,isPrimary:true,defaultPrevented:false,preventDefault(){calls.push("prevent");},stopImmediatePropagation(){calls.push("stop");},...extra});
@@ -489,7 +462,7 @@ test("Home background cancellation classifies pointer presses at the window boun
  api.dispatch(press(panel));assert.deepEqual(calls.splice(0),["home-background","prevent","stop"]);
  api.dispatch(press(bar));assert.deepEqual(calls.splice(0),["home-background","prevent","stop"]);
  api.dispatch(press(row,400,300));assert.deepEqual(calls.splice(0),[]);
- api.dispatch(press(toolbar));assert.deepEqual(calls.splice(0),["capture"]);
+ api.dispatch(press(toolbar));assert.deepEqual(calls.splice(0),[]);
  api.dispatch(press(shield));assert.deepEqual(calls.splice(0),[]);
  api.setClosing(true);api.dispatch(press(panel));assert.deepEqual(calls,[]);
  assert.ok(core.includes('listen(win,"pointerdown",onSearchPointerDown,true)'));
@@ -514,7 +487,6 @@ test("Address dismiss shield delegates Home search before ordinary address close
  `)(calls);
  assert.equal(api.dismissHomeSearch(),true);assert.deepEqual(calls.splice(0),["home-background"]);
  api.set(true,{},null,false,true);assert.equal(api.dismissHomeSearch(),false);
- api.set(true,{}, {},false,false);assert.equal(api.dismissHomeSearch(),true);
  api.set(true,{},null,true,false);assert.equal(api.dismissHomeSearch(),true);
  api.set(false,{},null,false,false);assert.equal(api.dismissHomeSearch(),false);
  api.set(true,null,null,false,false);assert.equal(api.dismissHomeSearch(),false);
@@ -522,45 +494,21 @@ test("Address dismiss shield delegates Home search before ordinary address close
  assert.ok(core.includes("dismissSearch:()=>!released&&dismissHomeSearch()"));
 });
 
-test("Home snapshot preserves native context paint and fractional border geometry",()=>{
- const code=extract("  const snapshotDefaultIcon=","  function freezeSearchResults(");
- const api=new Function(code+"return {snapshotImageSource,snapshotImagePaint,snapshotBorderInset};")();
- const fallback="chrome://global/skin/icons/defaultFavicon.svg";
- const page={currentSrc:"page-icon:about:preferences",currentRequestFinalURI:{spec:fallback}};
- assert.equal(api.snapshotImageSource(page),fallback);
- assert.equal(api.snapshotImageSource({...page,currentRequestFinalURI:{spec:"page-icon:about:preferences"}}),page.currentSrc);
- assert.equal(api.snapshotImageSource({currentSrc:"page-icon:https://example.invalid",currentRequestFinalURI:{spec:"https://example.invalid/icon.png"}}),"page-icon:https://example.invalid");
- assert.equal(api.snapshotImageSource({currentSrc:"",getAttribute:()=>fallback}),fallback);
- const values={color:"rgb(210, 210, 210)",fill:"currentcolor","fill-opacity":"0.72",stroke:"none","stroke-opacity":"0.9","-moz-context-properties":"fill, fill-opacity","color-scheme":"dark","border-left-width":"0.666667px","border-top-width":"0.666667px"};
- const style={getPropertyValue:k=>values[k]||""},paint=new Map();
- api.snapshotImagePaint({style:{setProperty:(k,v,p)=>paint.set(k,[v,p])}},style);
- assert.deepEqual(paint.get("fill"),[values.color,"important"]);
- assert.deepEqual(paint.get("fill-opacity"),["0.72","important"]);
- assert.deepEqual(paint.get("-moz-context-properties"),["fill, fill-opacity","important"]);
- assert.deepEqual(paint.get("stroke"),["none","important"]);
- assert.deepEqual(paint.get("color-scheme"),["dark","important"]);
- assert.deepEqual(api.snapshotBorderInset(style),{left:.666667,top:.666667});
- assert.deepEqual(api.snapshotBorderInset({getPropertyValue:()=>""}),{left:0,top:0});
+test("Home native rail width is quantized to physical pixels",()=>{
  const width=new Function(extract("  function searchRuleWidth(","  function applySearchGeometry(")+"return searchRuleWidth")();
  for(const dpr of [1,1.25,1.5,1.75,2,2.5,3])assert.ok(Math.abs(width(dpr)*dpr-Math.floor(dpr))<1e-9);
  assert.equal(width(0),1);assert.equal(width(undefined),1);
- assert.ok(core.includes('rect.left-barRect.left-inset.left'));
- assert.ok(core.includes('rect.top-barRect.top-inset.top'));
  assert.ok(core.includes('background-size:6px 6px,var(--zh-search-rule,1px)'));
  assert.ok(core.includes('background-size:var(--zh-search-rule,1px) calc(100% - 16px)'));
 });
 
-test("Home frozen default glyph uses the same computed CSS mask as the live recent icon",()=>{
- const props=new Function(extract("  const snapshotProperties=","  function snapshotNow(")+"return snapshotProperties")();
- for(const key of ["background-color","mask-image","mask-size","mask-position","mask-repeat","mask-origin","mask-clip","mask-mode","mask-composite"])assert.ok(props.includes(key),key);
+test("Home preserves its existing live default glyph until visual acceptance",()=>{
  assert.ok(core.includes('.urlbarView-favicon[data-zr-home-default="true"]'));
  assert.ok(core.includes("background-color:currentColor!important"));
- assert.ok(core.includes('if(source.getAttribute("data-zr-home-default")==="true")stableDefaultIcons++'));
- assert.ok(core.includes("stableDefaultIcons:frozen?.stableDefaultIcons||0"));
 });
 
 test("Home controlled close keeps native session until last frame and reverses from current geometry",()=>{
- const code=extract("  function ownsLiveSearch(","  function animateSearchReturn(");
+ const code=extract("  function ownsLiveSearch(","  function settleNativeSearch(");
  const jobs=[],writes=[],native=()=>writes.push("native");
  const token={nativeClose:native,liveReturn:null},attrs=new Map();
  let height=400,alpha=1;
@@ -569,9 +517,8 @@ test("Home controlled close keeps native session until last frame and reverses f
  let searchToken=token,searchBar=bar,searchGeometry={header:56,room:600,top:40},searchLastHeight=400,searchClosing=false,searchReturnParts=[];
  const panel={setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k)};
  const content={querySelectorAll:()=>[],querySelector:()=>({focus:()=>writes.push("focus")})};
- function snapshotReady(){return true} function stopSearchSnapshot(){writes.push("stop-snapshot")}
- function startSearchSnapshot(){writes.push("start-snapshot")} function finishSearchProbe(){} function beginSearchCloseProbe(){}
- function prepareReturnParts(){return []} function paintReturnParts(){} function finishSearchMotion(){} function snapshotNow(){return 0}
+ function liveSearchReady(){return true} function finishSearchProbe(){} function beginSearchCloseProbe(){}
+ function prepareReturnParts(){return []} function paintReturnParts(){} function finishSearchMotion(){} function searchProbeNow(){return 0}
  function searchLog(){} function naturalSearchHeight(){return 400} function revealValue(a,b,p){return a+(b-a)*p}
  function finishNativeCancel(){bar._zenHandleUrlbarClose();return true}
  function finishSearchVisual(){searchToken=null;writes.push("cleanup")}
@@ -580,10 +527,32 @@ test("Home controlled close keeps native session until last frame and reverses f
  }
  const open=true;return {cancelHomeSearch,reverseLiveSearch,ownsLiveSearch}
  ` )({gURLBar:bar,matchMedia:()=>({matches:false}),getComputedStyle:()=>({opacity:String(alpha)}),console:{warn(){}}},token,bar,jobs,writes,attrs,h=>height=h,a=>alpha=a);
- assert.equal(api.cancelHomeSearch(),true);assert.deepEqual(writes,["stop-snapshot"]);
+ assert.equal(api.cancelHomeSearch(),true);assert.deepEqual(writes,[]);
  assert.equal(jobs[0].duration,368);jobs[0].step(.5);assert.equal(height,228);
  assert.equal(api.reverseLiveSearch(),true);assert.equal(jobs[0].from,228);assert.equal(jobs[0].to,400);jobs[0].step(1);
  assert.equal(height,400);assert.equal(token.liveReturn,null);assert.ok(!writes.includes("native"));
  assert.equal(api.cancelHomeSearch(),true);jobs[0].step(1);assert.equal(writes.filter(x=>x==="native").length,1);assert.equal(token.liveReturn.phase,"commit");
  bar._zenHandleUrlbarClose=()=>{};assert.equal(api.ownsLiveSearch(token,bar),false);
+});
+
+test("Home external close restores only the original surface without forcing focus or closing a replacement session",()=>{
+ const code=extract("  function settleNativeSearch(","  function move(");
+ const calls=[],owner=()=>{},bar={_zenHandleUrlbarClose:owner};
+ let nativeOpen=true;
+ const api=new Function("win","bar","owner","calls","isOpen",code+`
+ let open=true,searchClosing=false,searchToken=null,searchBar=bar,nativeCancelTab=null;
+ function searchLog(event,data){calls.push([event,data.reason])}
+ function settleLiveSearch(focus=false){calls.push(["settle",focus]);searchToken=null;searchBar=null;}
+ function leaveHome(){calls.push(["leave"]);searchToken=null;}
+ function nativeSearchOpen(){return isOpen()}
+ function ownsLiveSearch(token,b){return b._zenHandleUrlbarClose===token.nativeClose&&isOpen()}
+ return {reset(state=null){searchBar=bar;searchToken={id:7,nativeClose:owner,liveReturn:state};searchClosing=!!state;},observeSearch,onSearchClosed};
+ `)({gURLBar:bar},bar,owner,calls,()=>nativeOpen);
+ api.reset();api.onSearchClosed({detail:{closeSeq:6}});assert.deepEqual(calls,[]);
+ api.onSearchClosed({detail:{closeSeq:7}});assert.deepEqual(calls.splice(0),[["native-settle","native-event"],["settle",false]]);
+ api.reset();nativeOpen=false;api.observeSearch();assert.deepEqual(calls.splice(0),[["native-settle","native-observer"],["settle",false]]);
+ nativeOpen=true;api.reset();bar._zenHandleUrlbarClose=()=>{};api.observeSearch();assert.deepEqual(calls.splice(0),[["native-settle","owner-changed"],["settle",false]]);
+ bar._zenHandleUrlbarClose=owner;api.reset({phase:"commit"});api.onSearchClosed({detail:{closeSeq:7}});assert.deepEqual(calls.splice(0),[["settle",true]]);
+ api.reset();api.onSearchClosed({detail:{closeSeq:7,onElementPicked:true}});assert.deepEqual(calls.splice(0),[["leave"]]);
+ api.reset({phase:"fold"});bar._zenHandleUrlbarClose=()=>{};api.observeSearch();assert.deepEqual(calls.splice(0),[["native-settle","live-invalid"],["settle",false]]);
 });
