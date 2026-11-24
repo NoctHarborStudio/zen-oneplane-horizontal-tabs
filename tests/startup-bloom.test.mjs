@@ -167,11 +167,11 @@ function homeFixture({empty=false,workspaces=true}={}){
  win.__nocturneStartupTimeline=timeline;
  const home=read("src/home/shared-home.js.part");
  const code=home.slice(home.indexOf("  let startupRun="),home.indexOf("  function stopMotion()"));
- const run=new Function("win","doc","panel","content","calls","startupBloomHomeSchedule","startupBloomFrames",`
+ const run=new Function("win","doc","panel","content","calls","startupBloomHomeSchedule","startupBloomFrames","fault",`
  let open=true,dead=false,searchToken=null,editing=false,adding=false;const prefs={getBoolPref:(k,f)=>k==="zen.nocturne.motion.enabled"?fault.motionEnabled??f:f};function render(){calls.render++;}
  ${code}
  return {play:playStartupHome,refresh:refreshHomeStructure,finish:finishStartupHome,edit:()=>{editing=true;}};
- `)(win,doc,panel,content,calls,startupBloomHomeSchedule,startupBloomFrames);
+ `)(win,doc,panel,content,calls,startupBloomHomeSchedule,startupBloomFrames,fault);
  return {effects,observed,fault,calls,win,timeline,run,content,search,pinLabel,pinSection,pinGrid,pins,spaceLabel,spaceNodes,spaceSection,spaceGrid,footer,pending,marked:()=>mark};
 }
 test("real Home candidate owns individual leaves, opacity and exact shared epoch",()=>{
