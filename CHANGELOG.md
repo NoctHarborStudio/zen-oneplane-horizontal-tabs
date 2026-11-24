@@ -1,3 +1,7 @@
+## 0.3.0-preview.207 — Vanishing Home visual stabilization (VH1–VH4)
+
+Keep the original island centered while collapsing, preserve its existing label/icon mode and material from before hover reset until native drop/cancel and return finish, and share a smoother 350ms join / 400ms restore timeline. Separate pointer pressure/reorder response from the base join clock; do not change native drop authority or Bunny pull shape. Add presentation cleanup/handoff tests and bounded title/mode/material/surface comparison diagnostics (no titles or URLs). Retain preview.206 shared Glass material. Whole-toolbar tint changes are not yet independently reproduced; native visual acceptance pending.
+
 ## 0.3.0-preview.206 — Nocturne Glass first consumer (DS-M2/M4/M3)
 
 Define shared theme-adaptive material tokens, default tint opacity 70% and blur 24px, with independent top-plane inheritance/overrides. Default to one full-width toolbar surface over the tab and bookmark rows, followed by a uniform fade; mask alpha is shape-only, tint alpha applied once. Preserve the previous shaped contour as explicit restart-only opt-in and retain its preferences. Flat mode no longer reads bookmark-card envelopes or follows their transitions; existing row measurement, phase guards, native input and Magnetic Bookmarks motion remain. Preserve Hub's previous tint pending its migration. Existing diagnostics sample effective material properties. Native visual acceptance pending.

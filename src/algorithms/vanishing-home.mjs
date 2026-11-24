@@ -30,3 +30,9 @@ export function vanishingHomePressure(width,delta,room) {
   const max=Math.min(15,Math.max(8,width*.33));
   return Math.sign(delta)*Math.min(Math.abs(delta),Math.max(0,room),max*(1-Math.exp(-Math.abs(delta)/18)));
 }
+
+// Common join clock with zero-velocity/zero-acceleration endpoints.
+export function vanishingHomeEase(progress) {
+  const t=Math.max(0,Math.min(1,progress));
+  return t*t*t*(t*(t*6-15)+10);
+}

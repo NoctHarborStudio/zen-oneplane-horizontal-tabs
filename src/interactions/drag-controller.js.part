@@ -45,6 +45,7 @@
     clearLiveDrag();
     clearDropMarker();
     row.removeAttribute("data-op-dragging");
+    if(dead||!vanishingPresentation?.hold)releaseVanishingPresentation();
     if(!dead){applyHoverMode();scheduleGeometry();schedule();}
     for (const entry of splitEntries.values()) entry.box.removeAttribute("data-op-group-dragging");
     splitZone.removeAttribute("data-op-dragging");
@@ -58,7 +59,10 @@
     if(!reopening)restoreStartupSearch(search);
     reconcileTabCascade();
     if(reopening)startVanishingReturn(reopening,false);
-    }finally{if(temporaryCommit)row.removeAttribute("data-op-drag-commit");}
+    }finally{
+      if(temporaryCommit)row.removeAttribute("data-op-drag-commit");
+      if(reopenVanishing&&vanishingPresentation?.hold){releaseVanishingPresentation();refreshIslandTitle();}
+    }
   }
   function sourceHandled(tab,finishReturn=false,expectedToken=null) {
     const source=tabOwner(tab)?.[DRAG_CONTROLLER];
@@ -87,7 +91,6 @@
     dragEdge = grabbed.bottom + BUNNY_EDGE_PAD;
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.start.geometry",()=>({group:!!group,edge:dragEdge,cardBottom:grabbed.bottom,edgePad:BUNNY_EDGE_PAD,width:dragWidth,grabX:dragGrabRatio,grabY:dragGrabY,pullDistance:PULL_DISTANCE,overflow:row.hasAttribute('data-op-overflow-row'),panelHeight:toolbarWrapper?.getBoundingClientRect().height}),{sample:1800});
     dragLastPoint = {x:event.clientX,y:event.clientY};
-    clearTabHover();
     if (group && (splitGroup(tab) !== group || groupMembers(group).length < 2)) {
       event.preventDefault();
       return;
@@ -103,6 +106,8 @@
     dragStartPoint = { x: event.screenX, y: event.screenY };
     dragViewport=dragViewportState();
     try {
+      acquireVanishingPresentation(image);
+      clearTabHover();
       event.dataTransfer.mozSetDataAt(DRAG_TYPE, tab, 0);
       event.dataTransfer.effectAllowed = "move";
       dragNode = image;
@@ -117,7 +122,7 @@
       if (!group && (browser.selectedTab !== tab || isSplit(tab))) {
         splitZone.setAttribute("data-op-dragging", "true");
       }
-      beginVanishingHome(event,tab);
+      if(!beginVanishingHome(event,tab))releaseVanishingPresentation();
       previewStripDrag(event,tab);
       dragChromeFrame=readDragChromeFrame();
       if(!dragChromeFrame){cancelActiveDrag("chrome-frame-unready");return;}
@@ -206,7 +211,7 @@
       finally{
         settleVanishing();
         if(!clearIncomingDrag("target-rejected",incoming)){clearLiveDrag();clearDropMarker();}
-        if(reopening){finishStripCommit();startVanishingReturn(reopening,false);}
+        if(reopening)finishVanishingHandoff(reopening,false);
       }
       return;
     }
@@ -274,7 +279,7 @@
       settleVanishing();
       if(incoming&&incomingDrag===incoming){incomingDrag=null;releaseDragReveal();}
       clearDropMarker();
-      finishStripCommit();
-      if(reopening)startVanishingReturn(reopening,outcome==="confirmed"||outcome==="no-op");
+      if(reopening)finishVanishingHandoff(reopening,outcome==="confirmed"||outcome==="no-op");
+      else finishStripCommit();
     }
   }

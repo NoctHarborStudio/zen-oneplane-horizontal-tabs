@@ -712,7 +712,7 @@
     #oneplane-tabs[data-op-show-island]:not([data-op-island-tight]):is([data-op-dragging],[data-op-island-incoming]) .oneplane-tab-list {
       clip-path:inset(-80px 0 -80px 0);
     }
-    #oneplane-tabs[data-op-show-island]:not([data-op-island-tight]):is([data-op-dragging],[data-op-island-incoming]) .oneplane-title-island {
+    #oneplane-tabs[data-op-show-island]:not([data-op-island-tight],[data-op-vanishing-presentation]):is([data-op-dragging],[data-op-island-incoming]) .oneplane-title-island {
       background:color-mix(in srgb,currentColor 12%,light-dark(#e9edf5,#222631));
     }
     #oneplane-tabs:not([data-op-show-island]) .oneplane-new-tab,
@@ -1406,7 +1406,7 @@
 #oneplane-tabs[data-op-vanishing-home] .oneplane-title-island {
   scale:var(--op-vanishing-scale,1) 1!important;
   opacity:var(--op-vanishing-scale,1)!important;
-  transform-origin:var(--op-vanishing-origin,50%) center!important;
+  transform-origin:center center!important;
   transition:none!important;pointer-events:none!important;
 }
 #oneplane-tabs[data-op-vanishing-ghost] #oneplane-tab-indicator {

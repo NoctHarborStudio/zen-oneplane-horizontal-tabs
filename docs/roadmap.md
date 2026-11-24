@@ -209,3 +209,5 @@ This is a **new feature workstream**, not part of the already approved A5.7c sou
 ## Nocturne Design System — material first (DS1–DS8)
 
 Approved workstream: one configurable translucent material across top plane, search, Hub, Downloads and Library, local per-property overrides, flat single top backing without bookmark-local halo; motion unification follows. Restore anchored compact All Downloads in DS6 while keeping Library. Owner and staged acceptance: [design-system.md](nocturne/design-system.md). DS-M1 source audit complete; DS-M2/M4 token contract and top-plane slice next. No runtime change in this planning commit.
+
+- **VH1–VH4 visual correction (preview.207):** fixed center pivot, preserved original presentation across the drag/return, shared smooth join/restore clock, and regression coverage for release/handoff. VH5 native visual acceptance remains open, including dock-wide tint, rapid repeat, cancel, Bunny and both reorder directions. Deferred asymmetric A unchanged.

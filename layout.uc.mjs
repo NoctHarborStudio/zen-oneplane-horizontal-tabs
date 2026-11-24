@@ -86,7 +86,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.206",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.207",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -415,7 +415,7 @@
     }catch{}
   }
   const rootAttrs=["data-zr-center-handoff","data-zr-center-motion","data-zr-center-pending","oneplane-active","data-op-startup-ready","data-zr-startup-phase","data-nocturne-boot","data-zr-closing","data-zr-workspace-phase","data-op-bookmark-wave","zen-compact-mode","customizing","inDOMFullscreen","inFullscreen"];
-  const attrs=[...rootAttrs,"data-op-panel-open","oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold","oneplane-home-hold","oneplane-workspace-hold","oneplane-download-hold","zen-has-hover","has-popup-menu","zen-compact-mode-active","data-ready","data-op-overflow-row","data-op-adaptive-compact","data-op-dragging","data-op-inline-drag","data-op-lane-drag","data-op-group-pull","data-op-live-drag","data-op-vanishing-home","data-op-vanishing-ghost","data-op-vanishing-tail-source","data-op-drag-commit","data-op-url-phase","data-op-home-open","data-op-lane-ghost","data-op-magnetic-pull","data-op-magnetic-source","data-op-detached","data-op-pulling","data-op-drag-follow","data-op-reinsert","data-zr-workspace-geometry","data-zr-workspace-motion","data-zr-center-card","data-zr-workspace-height-motion","data-zr-workspace-surface","data-zr-workspace-page","data-zr-home-covered","data-zr-startup-effect","data-zr-close-effect","hidden","collapsed","open","focused"];
+  const attrs=[...rootAttrs,"data-op-panel-open","oneplane-url-hold","oneplane-drag-hold","oneplane-startup-hold","oneplane-hub-hold","oneplane-tab-menu-hold","oneplane-home-hold","oneplane-workspace-hold","oneplane-download-hold","zen-has-hover","has-popup-menu","zen-compact-mode-active","data-ready","data-op-overflow-row","data-op-adaptive-compact","data-op-dragging","data-op-inline-drag","data-op-lane-drag","data-op-group-pull","data-op-live-drag","data-op-vanishing-home","data-op-vanishing-presentation","data-op-vanishing-ghost","data-op-vanishing-tail-source","data-op-drag-commit","data-op-url-phase","data-op-home-open","data-op-lane-ghost","data-op-magnetic-pull","data-op-magnetic-source","data-op-detached","data-op-pulling","data-op-drag-follow","data-op-reinsert","data-zr-workspace-geometry","data-zr-workspace-motion","data-zr-center-card","data-zr-workspace-height-motion","data-zr-workspace-surface","data-zr-workspace-page","data-zr-home-covered","data-zr-startup-effect","data-zr-close-effect","hidden","collapsed","open","focused"];
   const targets=["titlebar-buttonbox","titlebar-max","titlebar-restore","titlebar-close","zr-page-progress","oneplane-tab-indicator","oneplane-overflow-slider","zen-appcontent-navbar-wrapper","zen-appcontent-navbar-container","oneplane-toolbar-surface","nav-bar","nav-bar-customization-target","oneplane-hub-button","oneplane-history-button","oneplane-download-indicator-slot","back-button","forward-button","stop-reload-button","oneplane-page-actions","oneplane-tabs","oneplane-overflow-tabs","PersonalToolbar","PlacesToolbarItems","urlbar-container","urlbar","tabbrowser-tabpanels","zen-shared-home","zr-download-indicator"];
   function attrState(n,keys=attrs){const out={};for(const k of keys)if(n.hasAttribute(k))out[k]=n.getAttribute(k)||true;return out;}
   function observeTargets(){
@@ -9075,10 +9075,74 @@ function vanishingHomePressure(width,delta,room) {
   const max=Math.min(15,Math.max(8,width*.33));
   return Math.sign(delta)*Math.min(Math.abs(delta),Math.max(0,room),max*(1-Math.exp(-Math.abs(delta)/18)));
 }
+
+// Common join clock with zero-velocity/zero-acceleration endpoints.
+function vanishingHomeEase(progress) {
+  const t=Math.max(0,Math.min(1,progress));
+  return t*t*t*(t*(t*6-15)+10);
+}
   // Vanishing Home owns only temporary painted positions for a local,
   // non-scrolling top-row gesture. The native source stays in its DOM lane.
-  let vanishingHome=null;
-  const VANISH_CLOSE_MS=205,VANISH_OPEN_MS=310;
+  let vanishingHome=null,vanishingPresentation=null;
+  const VANISH_CLOSE_MS=350,VANISH_OPEN_MS=400;
+  // Preserve the existing painted island before hover reset. This lease
+  // spans the native gesture and synchronous commit/return handoff.
+  function acquireVanishingPresentation(image){
+    if(vanishingPresentation||!hasCenteredIsland()||!isStripNode(image))return false;
+    const svg=island.querySelector("svg"),records=[];
+    for(const [node,properties] of [[island,["background-color","background-image","box-shadow","color","padding-inline-start","padding-inline-end"]],[islandTitle,["display"]],[svg,["display"]]]){
+      if(!node)continue;
+      const computed=window.getComputedStyle(node);
+      for(const name of properties)records.push({node,name,value:computed.getPropertyValue(name),old:node.style.getPropertyValue(name),priority:node.style.getPropertyPriority(name)});
+    }
+    const surface=window.document?.getElementById("oneplane-toolbar-surface");
+    const lease={records,hold:false,token:nativeDragToken,svg,label:islandTitle.textContent,
+      surface,surfacePaint:vanishingSurfacePaint(surface)};
+    vanishingPresentation=lease;
+    try{
+      for(const r of records)r.node.style.setProperty(r.name,r.value,"important");
+      row.setAttribute("data-op-vanishing-presentation","true");
+      window.__nocturneTrace?.("drag.vanish.presentation",{token:lease.token,phase:"acquire",
+        label:records.some(r=>r.node===islandTitle&&r.name==="display"&&r.value!=="none"),
+        icon:records.some(r=>r.node===svg&&r.name==="display"&&r.value!=="none")},{sample:1000});
+      return true;
+    }catch(error){releaseVanishingPresentation();throw error;}
+  }
+  function vanishingSurfacePaint(node){
+    if(!node)return null;
+    const style=window.getComputedStyle(node);
+    return ["background-color","background-image","--op-surface-tint","--op-surface-paint","opacity","filter","backdrop-filter"].map(k=>style.getPropertyValue(k));
+  }
+  function checkVanishingPresentation(phase){
+    const lease=vanishingPresentation;if(!lease)return;
+    try{
+      const paint=vanishingSurfacePaint(lease.surface);
+      const surfaceStable=paint&&lease.surfacePaint?paint.every((x,i)=>x===lease.surfacePaint[i]):null;
+      const icon=lease.records.find(r=>r.node===lease.svg&&r.name==="display");
+      const label=lease.records.find(r=>r.node===islandTitle&&r.name==="display");
+      const style=window.getComputedStyle(island);
+      const stable=r=>!r||(r.node===island?style:window.getComputedStyle(r.node)).getPropertyValue(r.name)===r.value;
+      window.__nocturneTrace?.("drag.vanish.presentation",{token:lease.token,phase,
+        titleStable:islandTitle.textContent===lease.label,modeStable:stable(icon)&&stable(label),
+        islandStable:lease.records.filter(r=>r.node===island).every(stable),surfaceStable},{sample:1000});
+    }catch{}
+  }
+  function releaseVanishingPresentation(){
+    const lease=vanishingPresentation;if(!lease)return;
+    vanishingPresentation=null;
+    for(const r of lease.records){
+      if(r.old)r.node.style.setProperty(r.name,r.old,r.priority);
+      else r.node.style.removeProperty(r.name);
+    }
+    row.removeAttribute("data-op-vanishing-presentation");
+    window.__nocturneTrace?.("drag.vanish.presentation",{token:lease.token,phase:"release"},{sample:1000});
+  }
+  function finishVanishingHandoff(snapshot,confirmed){
+    try{finishStripCommit();return startVanishingReturn(snapshot,confirmed);}
+    finally{
+      if(vanishingPresentation?.hold){releaseVanishingPresentation();refreshIslandTitle();}
+    }
+  }
   function vanishMotionEnabled(){
     return !reducedMotion.matches&&prefs.getIntPref("zen.oneplane.animation-duration",160)!==0;
   }
@@ -9111,9 +9175,10 @@ function vanishingHomePressure(width,delta,room) {
     const center=Math.max(bounds.left+centered.total/2,Math.min(bounds.right-centered.total/2,desiredCenter));
     const ref=vanishingHomeSlots(widths,center,plusBox.width,gap);
     if(ref.positions[0]<bounds.left-.1||ref.plus+plusBox.width>bounds.right+.1)return false;
-    const boundary=nodes.filter(n=>n.parentElement===leftLane).length;
-    const seam=(ref.positions[boundary]??ref.plus)-gap/2;
-    const origin=bunnyClamp((seam-home.left)/home.width);
+    // Home pivot is independent of pointer-grip geometry.
+    const origin=.5;
+    const refX=new Map(nodes.map((n,i)=>[n,ref.positions[i]+widths[i]/2]));
+    refX.set(plus,ref.plus+plusBox.width/2);
     const toolbar=toolbarWrapper.getBoundingClientRect();
     if(!Number.isFinite(toolbar.left)||!Number.isFinite(toolbar.right)||toolbar.right<=toolbar.left)return false;
     const rest=nodes.filter(n=>n!==source),midpoints=rest.map(n=>{
@@ -9128,14 +9193,13 @@ function vanishingHomePressure(width,delta,room) {
       point:{x:event.clientX,y:event.clientY},lastX:event.clientX,
       full:{width:ghost.width,height:ghost.height},bounds:{left:bounds.left,right:bounds.right},
       edge:dragEdge,origin,toolbar:{left:toolbar.left,right:toolbar.right},
-      p:0,paintedP:0,paint:new Map(boxes),scale:1,k:0,frame:0,lastFrame:0,
-      duration:vanishMotionEnabled()?VANISH_CLOSE_MS:0,start:window.performance.now(),gaps:[]};
+      p:0,paintedP:0,paint:new Map(boxes),refX,offsets:new Map(),scale:1,k:0,frame:0,lastFrame:0,
+      duration:vanishMotionEnabled()?VANISH_CLOSE_MS:0,start:null,gaps:[]};
     vanishingHome=s;
     row.setAttribute("data-op-vanishing-home","true");
     row.setAttribute("data-op-live-drag","true");
     row.style.setProperty("--op-vanishing-scale","1");
-    row.style.setProperty("--op-vanishing-origin",origin*100+"%");
-    window.__nocturneTrace?.("drag.vanish.begin",{token:nativeDragToken,count:nodes.length,index,homeWidth:home.width,continuousWidth:ref.total,gripOffset:center-home.x,origin},{sample:1000});
+    window.__nocturneTrace?.("drag.vanish.begin",{token:nativeDragToken,count:nodes.length,index,homeWidth:home.width,continuousWidth:ref.total,gripOffset:center-home.x,origin,duration:s.duration},{sample:1000});
     armVanishingHome(s);
     return true;
   }
@@ -9160,7 +9224,7 @@ function vanishingHomePressure(width,delta,room) {
     const x=event.clientX;
     if(Math.abs(x-s.lastX)>.01){
       const old=s.index;
-      // During the 205ms join, thresholds share the painted coordinate
+      // During the join, thresholds share the painted coordinate
       // interpolation. They never chase shifted neighboring cards.
       const mids=s.rest.map((n,i)=>bunnyMix(s.boxes.get(n).x,s.midpoints[i],s.k));
       s.index=vanishingHomeIndex(mids,x,s.index,REORDER_BUFFER);
@@ -9186,23 +9250,31 @@ function vanishingHomePressure(width,delta,room) {
     const dt=s.lastFrame?Math.max(0,now-s.lastFrame):16;
     if(s.lastFrame&&s.gaps.length<160)s.gaps.push(dt);
     s.lastFrame=now;
-    const k=s.duration?bunnySmooth((now-s.start)/s.duration):1;
+    if(s.start===null)s.start=now;
+    const k=s.duration?vanishingHomeEase((now-s.start)/s.duration):1;
     s.k=k;s.scale=1-k;
     row.style.setProperty("--op-vanishing-scale",String(s.scale));
     const order=vanishOrder(s),widths=order.map(n=>s.boxes.get(n).width);
     const q=vanishingHomePull(widths,s.index,s.center,s.plusBox.width,s.p,s.gap);
     const original=s.boxes.get(s.source),sourceIndex=s.index;
-    const anchor={...original,x:bunnyMix(original.x,q.anchor,k)};
-    const raw=s.point.x-original.width*dragGrabRatio+original.width/2-anchor.x;
+    const raw=s.point.x-original.width*dragGrabRatio+original.width/2-bunnyMix(original.x,q.anchor,k);
     const available=raw>=0?s.bounds.right-(q.plus+s.plusBox.width):q.positions[0]-s.bounds.left;
-    const pressure=s.p===0?vanishingHomePressure(original.width,raw,available)*k:0;
+    const pressure=s.p===0?vanishingHomePressure(original.width,raw,available):0;
     const outside=dragImageMode==="outside",ghost=!outside&&s.p>0;
     let settling=k<1;
     const boxes=[];
+    // Base join uses exactly the Home clock. Only target/pressure
+    // changes receive a bounded response filter.
+    const position=(n,targetX)=>{
+      const base=s.boxes.get(n),ref=s.refX.get(n),delta=targetX-ref,prev=s.offsets.get(n)||0;
+      const next=Math.abs(delta-prev)<.1||!s.duration?delta:bunnyMix(prev,delta,1-Math.exp(-Math.min(dt,45)/38));
+      if(Math.abs(delta-next)>.1)settling=true;
+      s.offsets.set(n,next);
+      return bunnyMix(base.x,ref,k)+next*k;
+    };
+    const anchor={...original,x:position(s.source,q.anchor+pressure)};
     const slide=(n,targetX)=>{
-      const base=s.boxes.get(n),prev=s.paint.get(n)||base;
-      const x=Math.abs(targetX-prev.x)<.1||!s.duration?targetX:bunnyMix(prev.x,targetX,1-Math.exp(-Math.min(dt,45)/30));
-      if(Math.abs(x-targetX)>.1)settling=true;
+      const base=s.boxes.get(n),x=position(n,targetX);
       const b={...base,x};s.paint.set(n,b);
       shiftDragNode(n,x-base.x);
       boxes.push(vanishRect(b));
@@ -9210,13 +9282,12 @@ function vanishingHomePressure(width,delta,room) {
     for(let i=0;i<order.length;i++){
       const n=order[i];if(n===s.source)continue;
       const b=s.boxes.get(n),onSide=pressure>0?i>sourceIndex:i<sourceIndex;
-      const x=bunnyMix(b.x,q.positions[i]+b.width/2,k)+(onSide?pressure:0);
-      slide(n,x);
+      slide(n,q.positions[i]+b.width/2+(onSide?pressure:0));
     }
-    slide(plus,bunnyMix(s.plusBox.x,q.plus+s.plusBox.width/2,k)+Math.max(0,pressure));
-    if(s.scale>.001)boxes.push(vanishRect({...s.home,x:s.home.x+(s.origin-.5)*s.home.width*(1-s.scale),width:s.home.width*s.scale}));
+    slide(plus,q.plus+s.plusBox.width/2+Math.max(0,pressure));
+    if(s.scale>.001)boxes.push(vanishRect({...s.home,width:s.home.width*s.scale}));
     const pose=s.p>0?bunnyPose(s.p,anchor,s.point,s.full,"C",s.gap,s.edge):
-      {x:anchor.x+pressure,y:original.y,width:original.width,height:original.height};
+      {x:anchor.x,y:original.y,width:original.width,height:original.height};
     if(s.p===1&&(s.point.x<s.toolbar.left||s.point.x>s.toolbar.right)){
       pose.x=s.point.x;pose.y=s.point.y;pose.width=s.full.width;pose.height=s.full.height;
     }
@@ -9237,6 +9308,7 @@ function vanishingHomePressure(width,delta,room) {
       if(clip)dragGhost.style.setProperty("clip-path",clip);else dragGhost.style.removeProperty("clip-path");
     }else if(!dragGhost.hidden){hideGhost();dragGhost.style.removeProperty("clip-path");}
     if(s.ghost!==hidden){s.ghost=hidden;refreshIndicator();}
+    if(k>=.25&&!s.presentationChecked){s.presentationChecked=true;checkVanishingPresentation("collapse");}
     // A pause between pointer events is not a slow presented frame.
     if(!settling)s.lastFrame=0;
     return settling;
@@ -9244,6 +9316,7 @@ function vanishingHomePressure(width,delta,room) {
   function captureVanishingReturn(){
     const s=vanishingHome;
     if(!s||dragImageMode==="outside")return null;
+    if(vanishingPresentation)vanishingPresentation.hold=true;
     return {source:s.source,tab:s.tab,token:s.token,order:vanishOrder(s),fullMap:vanishFullMap(s),
       paint:new Map(s.paint),point:{...s.point},p:s.paintedP,k:s.k,scale:s.scale,
       full:s.full,gap:s.gap,edge:s.edge,origin:s.origin,search:dragSearch};
@@ -9257,7 +9330,6 @@ function vanishingHomePressure(width,delta,room) {
     row.removeAttribute("data-op-vanishing-home");
     row.removeAttribute("data-op-vanishing-ghost");
     row.style.removeProperty("--op-vanishing-scale");
-    row.style.removeProperty("--op-vanishing-origin");
     dragGhost?.style.removeProperty("clip-path");hideGhost();
     const gaps=s.gaps.slice().sort((a,b)=>a-b);
     window.__nocturneTrace?.("drag.vanish.end",{token:s.token,index:s.index,p:s.p,frames:gaps.length,
@@ -9268,7 +9340,7 @@ function vanishingHomePressure(width,delta,room) {
   // The existing insertion-tail lease owns this bounded timeline.
   function startVanishingReturn(snapshot,confirmed=false){
     if(!snapshot)return false;
-    const fallback=()=>{restoreStartupSearch(snapshot.search);return false;};
+    const fallback=()=>{releaseVanishingPresentation();refreshIslandTitle();restoreStartupSearch(snapshot.search);return false;};
     if(dead||dragLifecycle.current()||dragInsertPending||!dragPhaseInputAllowed()||
       !hasCenteredIsland()||useLaneDrop()||!vanishMotionEnabled()||!validNativeTab(snapshot.tab))return fallback();
     const nodes=stripNodes(),source=snapshot.source;
@@ -9285,7 +9357,7 @@ function vanishingHomePressure(width,delta,room) {
     const a=virtual?{...snapshot.fullMap.get(source),width:sourceFinal.width,height:sourceFinal.height}:null;
     const curve=virtual?bunnyPose(snapshot.p,a,snapshot.point,snapshot.full,"C",snapshot.gap,snapshot.edge):null;
     let frame=0,start=window.performance.now();
-    const gaps=[];let last=0;
+    const gaps=[];let last=0,presentationChecked=false;
     const set=(n,b)=>{
       const dest=final.get(n);
       shiftDragNode(n,b.x-dest.x,n===source);
@@ -9305,7 +9377,7 @@ function vanishingHomePressure(width,delta,room) {
         set(source,pose);
         row.style.setProperty("--op-vanishing-scale",String(snapshot.scale));
       }else{
-        const u=bunnySmooth((elapsed-insertion)/VANISH_OPEN_MS);
+        const u=vanishingHomeEase((elapsed-insertion)/VANISH_OPEN_MS);
         for(const [n,b] of final)set(n,vanishMixBox(from.get(n),b,u));
         row.style.setProperty("--op-vanishing-scale",String(bunnyMix(snapshot.scale,1,u)));
       }
@@ -9316,7 +9388,6 @@ function vanishingHomePressure(width,delta,room) {
       for(const key of ["--op-vanishing-y","--op-vanishing-sx","--op-vanishing-sy"])source.style.removeProperty(key);
       row.removeAttribute("data-op-vanishing-home");row.removeAttribute("data-op-vanishing-ghost");
       row.style.removeProperty("--op-vanishing-scale");
-      row.style.removeProperty("--op-vanishing-origin");
     }};
     const tick=now=>{
       frame=0;if(dragInsertAnimation!==animation)return;
@@ -9324,6 +9395,9 @@ function vanishingHomePressure(width,delta,room) {
       if(retireChangedDragViewport())return;
       if(last&&gaps.length<160)gaps.push(now-last);last=now;
       const elapsed=Math.min(duration,now-start);paint(elapsed);
+      if(!presentationChecked&&elapsed>=insertion+VANISH_OPEN_MS*.25){
+        presentationChecked=true;checkVanishingPresentation("restore");
+      }
       if(elapsed<duration){frame=window.requestAnimationFrame(tick);return;}
       const sorted=gaps.slice().sort((a,b)=>a-b);
       window.__nocturneTrace?.("drag.vanish.restore",{token:snapshot.token,confirmed,virtual,duration,frames:sorted.length,p95:sorted[Math.floor((sorted.length-1)*.95)]||0,max:sorted.at(-1)||0},{sample:1000});
@@ -9335,8 +9409,8 @@ function vanishingHomePressure(width,delta,room) {
     row.setAttribute("data-op-dragging","true");row.setAttribute("data-op-live-drag","true");
     row.setAttribute("data-op-vanishing-home","true");row.setAttribute("data-op-vanishing-ghost","true");
     source.setAttribute("data-op-vanishing-tail-source","true");
-    row.style.setProperty("--op-vanishing-origin",snapshot.origin*100+"%");
     try{
+      if(vanishingPresentation)vanishingPresentation.hold=false;
       paint(0);refreshIndicator();holdToolbarForReturn();
       if(dragRevealTimer){window.clearTimeout(dragRevealTimer);dragRevealTimer=0;}
       if(dragInsertAnimation===animation)frame=window.requestAnimationFrame(tick);
@@ -9882,6 +9956,7 @@ function vanishingHomePressure(width,delta,room) {
     clearLiveDrag();
     clearDropMarker();
     row.removeAttribute("data-op-dragging");
+    if(dead||!vanishingPresentation?.hold)releaseVanishingPresentation();
     if(!dead){applyHoverMode();scheduleGeometry();schedule();}
     for (const entry of splitEntries.values()) entry.box.removeAttribute("data-op-group-dragging");
     splitZone.removeAttribute("data-op-dragging");
@@ -9895,7 +9970,10 @@ function vanishingHomePressure(width,delta,room) {
     if(!reopening)restoreStartupSearch(search);
     reconcileTabCascade();
     if(reopening)startVanishingReturn(reopening,false);
-    }finally{if(temporaryCommit)row.removeAttribute("data-op-drag-commit");}
+    }finally{
+      if(temporaryCommit)row.removeAttribute("data-op-drag-commit");
+      if(reopenVanishing&&vanishingPresentation?.hold){releaseVanishingPresentation();refreshIslandTitle();}
+    }
   }
   function sourceHandled(tab,finishReturn=false,expectedToken=null) {
     const source=tabOwner(tab)?.[DRAG_CONTROLLER];
@@ -9924,7 +10002,6 @@ function vanishingHomePressure(width,delta,room) {
     dragEdge = grabbed.bottom + BUNNY_EDGE_PAD;
     typeof window!=="undefined"&&window.__nocturneTrace?.("drag.start.geometry",()=>({group:!!group,edge:dragEdge,cardBottom:grabbed.bottom,edgePad:BUNNY_EDGE_PAD,width:dragWidth,grabX:dragGrabRatio,grabY:dragGrabY,pullDistance:PULL_DISTANCE,overflow:row.hasAttribute('data-op-overflow-row'),panelHeight:toolbarWrapper?.getBoundingClientRect().height}),{sample:1800});
     dragLastPoint = {x:event.clientX,y:event.clientY};
-    clearTabHover();
     if (group && (splitGroup(tab) !== group || groupMembers(group).length < 2)) {
       event.preventDefault();
       return;
@@ -9940,6 +10017,8 @@ function vanishingHomePressure(width,delta,room) {
     dragStartPoint = { x: event.screenX, y: event.screenY };
     dragViewport=dragViewportState();
     try {
+      acquireVanishingPresentation(image);
+      clearTabHover();
       event.dataTransfer.mozSetDataAt(DRAG_TYPE, tab, 0);
       event.dataTransfer.effectAllowed = "move";
       dragNode = image;
@@ -9954,7 +10033,7 @@ function vanishingHomePressure(width,delta,room) {
       if (!group && (browser.selectedTab !== tab || isSplit(tab))) {
         splitZone.setAttribute("data-op-dragging", "true");
       }
-      beginVanishingHome(event,tab);
+      if(!beginVanishingHome(event,tab))releaseVanishingPresentation();
       previewStripDrag(event,tab);
       dragChromeFrame=readDragChromeFrame();
       if(!dragChromeFrame){cancelActiveDrag("chrome-frame-unready");return;}
@@ -10043,7 +10122,7 @@ function vanishingHomePressure(width,delta,room) {
       finally{
         settleVanishing();
         if(!clearIncomingDrag("target-rejected",incoming)){clearLiveDrag();clearDropMarker();}
-        if(reopening){finishStripCommit();startVanishingReturn(reopening,false);}
+        if(reopening)finishVanishingHandoff(reopening,false);
       }
       return;
     }
@@ -10111,8 +10190,8 @@ function vanishingHomePressure(width,delta,room) {
       settleVanishing();
       if(incoming&&incomingDrag===incoming){incomingDrag=null;releaseDragReveal();}
       clearDropMarker();
-      finishStripCommit();
-      if(reopening)startVanishingReturn(reopening,outcome==="confirmed"||outcome==="no-op");
+      if(reopening)finishVanishingHandoff(reopening,outcome==="confirmed"||outcome==="no-op");
+      else finishStripCommit();
     }
   }
   function splitDropPoint(event){
@@ -10655,7 +10734,7 @@ function vanishingHomePressure(width,delta,room) {
     }catch{finish();}
   }
   function refreshIslandTitle(){
-    if(dead || !row.hasAttribute("data-op-show-island")) return;
+    if(dead || !row.hasAttribute("data-op-show-island") || row.hasAttribute("data-op-vanishing-presentation")) return;
     const dragging=dragNode && row.hasAttribute("data-op-dragging")?dragNode:null;
     const hovered=indicatorHover && list.contains(indicatorHover)?indicatorHover:null;
     const item=dragging||hovered||entries.get(browser.selectedTab)?.item;

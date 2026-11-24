@@ -275,7 +275,7 @@
 #oneplane-tabs[data-op-vanishing-home] .oneplane-title-island {
   scale:var(--op-vanishing-scale,1) 1!important;
   opacity:var(--op-vanishing-scale,1)!important;
-  transform-origin:var(--op-vanishing-origin,50%) center!important;
+  transform-origin:center center!important;
   transition:none!important;pointer-events:none!important;
 }
 #oneplane-tabs[data-op-vanishing-ghost] #oneplane-tab-indicator {

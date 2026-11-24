@@ -590,3 +590,7 @@ Use the existing startup, disassembly, workspace and window lifecycle traces to 
 Preview.205: boot.accelerate records one trusted primary-click acceleration, elapsed/adjusted minimum, playback rate, successful effect updates and exit status. boot.ready and boot.handoff include accelerated; no input values or pointer IDs recorded. Existing Assembly readiness, epoch and watchdog events distinguish waiting from successful reveal.
 
 Preview.206: existing toolbar-surface sample adds materialFlat, materialOpacity (percentage), materialBlur (px), and contour.paint uses mode flat with left/right null and base=deep. No additional sampling cadence, observer, URLs or titles. Compare computed tokens with native white/dark page appearance; mask shape tests alone cannot establish compositing.
+
+### Preview.207 — Vanishing Home VH1–VH4
+
+`drag.vanish.begin` records fixed origin 0.5 and duration. `drag.vanish.presentation` acquires/releases the gesture-scoped presentation lease and samples collapse/restore once each; titleStable, modeStable, islandStable and surfaceStable are comparisons only (surfaceStable null when absent). No title, URL or material value is logged. A false surface comparison is evidence for further tint/contour investigation, not proof of a particular paint defect. Check paired acquire/release and no residual presentation attribute after drop/cancel.

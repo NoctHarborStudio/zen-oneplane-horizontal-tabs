@@ -63,17 +63,17 @@ test("Home island displays explicit hovered tab and restores Home after hover ex
  const source=await readFile(new URL("../src/toolbar/hover.js.part",import.meta.url),"utf8");
  const code=source.slice(source.indexOf("function refreshIslandTitle()"),source.indexOf("let hoverModePending"));
  const run=new Function(`
-  let dead=false,dragNode=null,indicatorHover=null,homeLease={open:true},homeIdle=true,homeTitleKey=null,homeNativeTitle="",cascadeState="idle",phase=null,dragging=false;
+  let dead=false,dragNode=null,indicatorHover=null,homeLease={open:true},homeIdle=true,homeTitleKey=null,homeNativeTitle="",cascadeState="idle",phase=null,dragging=false,frozen=false;
   const selected={},browser={selectedTab:selected},reducedMotion={matches:false},prefs={getIntPref:()=>160};
   const tab=title=>({classList:{contains:()=>false},querySelector:()=>({textContent:title})});
   const a=tab("Selected"),b=tab("Hovered"),stale=tab("Detached"),empty=tab("");
   const group={classList:{contains:k=>k==="oneplane-split-group"},querySelectorAll:()=>[{textContent:"Left"},{textContent:"Right"}]};
   const list={contains:n=>[a,b,empty,group].includes(n)},entries=new Map([[selected,{item:a}]]);
-  const row={hasAttribute:k=>k==="data-op-show-island"||k==="data-op-dragging"&&dragging};
+  const row={hasAttribute:k=>k==="data-op-show-island"||k==="data-op-dragging"&&dragging||k==="data-op-vanishing-presentation"&&frozen};
   const root={getAttribute:()=>phase,hasAttribute:()=>false};
   const labels=[];function setIslandTitle(title){labels.push(title);}function markHomeTitleActivity(){homeIdle=false;}
   ${code}
-  return {refresh(){refreshIslandTitle();return labels.at(-1);},hover(n){indicatorHover=n;},drag(n){dragNode=n;dragging=!!n;},home(open,idle){homeLease={open};homeIdle=idle;},phase(p){phase=p;},a,b,stale,empty,group};
+  return {refresh(){refreshIslandTitle();return labels.at(-1);},hover(n){indicatorHover=n;},drag(n){dragNode=n;dragging=!!n;},home(open,idle){homeLease={open};homeIdle=idle;},phase(p){phase=p;},freeze(v){frozen=v;},a,b,stale,empty,group};
  `)();
  assert.equal(run.refresh(),"Home");
  run.hover(run.b);assert.equal(run.refresh(),"Hovered");
@@ -90,4 +90,7 @@ test("Home island displays explicit hovered tab and restores Home after hover ex
  run.home(false,false);assert.equal(run.refresh(),"Selected");
  run.home(false,true);assert.equal(run.refresh(),"Home");
  run.hover(run.a);assert.equal(run.refresh(),"Selected");
+ run.freeze(true);run.hover(null);run.drag(run.b);assert.equal(run.refresh(),"Selected");
+ run.drag(null);assert.equal(run.refresh(),"Selected");
+ run.freeze(false);assert.equal(run.refresh(),"Home");
 });

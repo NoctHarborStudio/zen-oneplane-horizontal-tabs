@@ -44,7 +44,7 @@
     }catch{finish();}
   }
   function refreshIslandTitle(){
-    if(dead || !row.hasAttribute("data-op-show-island")) return;
+    if(dead || !row.hasAttribute("data-op-show-island") || row.hasAttribute("data-op-vanishing-presentation")) return;
     const dragging=dragNode && row.hasAttribute("data-op-dragging")?dragNode:null;
     const hovered=indicatorHover && list.contains(indicatorHover)?indicatorHover:null;
     const item=dragging||hovered||entries.get(browser.selectedTab)?.item;
