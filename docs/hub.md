@@ -127,3 +127,7 @@ A2 source implementation and independent integrated audit complete at R2, subjec
 ### Independent A2 follow-up — preview.79
 
 Preview.79: strengthen existing Workspace switch verification against missing target in list, ambiguous container membership and incorrect outermost group pin role; Return rechecks the actual peer gate and manager at final preflight. No new owner or UX changes. Native acceptance deferred.
+
+## Preview.159 — History entry below Hub
+
+One additional 30px toolbar control directly below the One Plane Hub icon opens the already implemented Nocturne Library History when its experimental preference and native services are ready. The Layout Hub controller owns the button and its lifecycle; it does not add a second History view or source. If Nocturne Library declines the open, the same button invokes Zen's stock History command. The CSS places it visually in the following row while balancing flex width so existing navigation/tabs do not shift. Focus-visible, click, scope cleanup and bounded `library.button` diagnostics are included. Source/CI verification and physical Zen hit testing/compact, overflow, bookmarks, DPI and hot reload remain distinct acceptance gates. The user did not request a new Hub item inside its popover, so the Hub workspace menu remains unchanged.

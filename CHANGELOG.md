@@ -1,3 +1,11 @@
+## 0.3.0-preview.159 — History button below One Plane Hub
+
+Add a small History launcher directly below the existing One Plane Hub toolbar icon. The new control is owned by the existing Layout/Hub lifecycle and reuses the existing Nocturne Library `toggle("history")` route. When the experimental shell is disabled, unready, private or otherwise cannot accept, it invokes the stock `Browser:ShowAllHistory` command instead of creating another panel or modifying native history.
+
+The second-row launcher occupies zero net horizontal flex width (30px width balanced by a -30px inline margin) and translates down by the existing `--op-top-row-height` metric. Hub, Downloads, nav controls and tab mirror keep their first-row layout, including narrow/overflow modes. The icon uses the same hover/focus/drag styling and `aria-label` as the existing toolbar language. One existing Hub scope owns click listeners and cleans up both buttons on Sine teardown. A bounded `library.button` diagnostic records only boolean accepted/nativeFallback, without browsing or keystroke data.
+
+A source-extracted action regression covers Nocturne success, rejected/missing/throwing Library API fallback, unsupported/destroyed owner and action cleanup; generated `layout.uc.mjs` and `chrome.css` remain sourced from the build plan. No new Library data owner, no change to Ctrl+H/J routing, prefs, saved history, scanner, animation timings or native workspace operations. Native Zen/Sine hit testing, placement under Hub across UI scales/overflow, and actual click acceptance still require live user confirmation.
+
 ## 0.3.0-preview.158 — A7 Library Ctrl+H/J keyboard-layout fallback
 
 A user-observed regression opened the native Zen History/Downloads interface instead of the experimental Nocturne Library. The attached three-session diagnostics file captured preview.156 and preview.157 startup with Library enabled and both shortcuts opted in, services/overlay present, but no Library shortcut attempts and no Library open/accept/reject events. This narrows the observed break to shortcut recognition/dispatch, not shell opt-out or a reported Library opening failure.

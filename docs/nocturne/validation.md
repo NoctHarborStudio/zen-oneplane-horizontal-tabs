@@ -811,3 +811,12 @@ This is independent of the existing A7 / NA-1 five-lane native checklist and doe
 - [x] Add regression for synthetic non-Latin events and negative modifier/previous-default guards; no raw keystroke data logged.
 - [x] Published preview.158 via [PR #44](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/pull/44), HEAD `71b9cf268a113920dfa08783930d87e72ec08538`; [CI 45291988867](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45291988867) **SUCCESS** (843 Node, 15 Python, 12 runtime parsers, public Sine/Raw reproducibility). Source/CI PASS, native cause and acceptance still OPEN.
 - [ ] Installed Zen/Sine: Ctrl+H and Ctrl+J after full restart with the experimental prefs still on; test Latin and Cyrillic input layouts in a normal window. Also check native fallback when shortcut prefs are disabled and in private windows. If failure persists, capture event/command dispatch ordering without recording raw key values.
+
+### UX / preview.159 — History icon below One Plane Hub
+
+- [x] Existing Hub/Layout owner creates one `oneplane-history-button`, positions it under Hub without net flex-width change, binds click through scoped lifecycle, removes it on disable/reload.
+- [x] Existing Nocturne Library `toggle("history")` handles the click; if unavailable or rejected, use `Browser:ShowAllHistory` command, not a new data service.
+- [x] Source-extracted button action fixture covers Library success, rejection, no API, throwing API, disabled owner, teardown and fallback exactly once; CSS source checks positioning and cleanup wiring.
+- [ ] After preview.159 Sine update and full browser restart, click the second-row History icon on Home and on a website. With experimental Library enabled, it should open History; clicking again while that section is active should close it. Ctrl+H/Ctrl+J should remain unchanged.
+- [ ] Toggle `zen.nocturne.library.preview=false` in a disposable session: button should fall back to native Zen History. Check disabled/unloaded Sine, normal/private windows, narrow window, overflow, bookmarks row, DPI and keyboard focus/Enter/Space. Validate placement, no horizontal tab strip shift, and no zombie button after hot reload.
+- [ ] Native hit testing and visual acceptance are not established by source/CI fixtures.
