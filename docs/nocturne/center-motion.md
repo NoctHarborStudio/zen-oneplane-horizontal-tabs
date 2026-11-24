@@ -103,3 +103,7 @@ Workspace uses the existing native command and geometry transaction, with 240ms 
 ### Preview.204 — Center Flow integration release
 
 The complete M1–M5 candidate is integrated over preview.203, including Vanishing Home and the native Windows close-alpha finale. [Candidate CI](https://github.com/NoctHarborStudio/zen-oneplane-horizontal-tabs/actions/runs/45412760410) passed 931 Node and 16 Python tests, deterministic builds and all 12 runtime parsers. Native Zen acceptance: OPEN. Test full cold startup, one/two-row geometry, explicit window close, Workspace transitions and interruption. Boot/native readiness and the close finale are separate from the visible flow durations.
+
+### Preview.205 — Boot click acceleration
+
+Trusted primary pointerdown during Boot requests a single 3x WAAPI playback rate for the existing logo/cover effects and shortens only the remaining minimum hold when the effect update succeeds. Pending native/layout/icon/geometry readiness, quiet interval and absolute watchdog remain authoritative; entrance completion precedes accelerated exit. The existing paused Center Flow cohort resumes at its normal epoch and speed after the cover exits. Repeat clicks do not compound speed; the originating pointer click is consumed across handoff. Keyboard, wheel, drag, customization and other genuine interruption paths retain their existing behavior. No native startup or close changes. Native acceptance pending.

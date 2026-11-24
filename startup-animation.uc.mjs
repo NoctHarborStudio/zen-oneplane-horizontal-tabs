@@ -339,7 +339,7 @@ function createNocturneBrandMark(document){
 }
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.204"};
+  const event="assembly.script",data={version:"0.3.0-preview.205"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -425,7 +425,9 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
   const islandRegistered=registered&&registerHomeIslandMotion(window.CSS);
   const BOOT_PREF="zen.nocturne.boot.enabled",BOOT_MIN=1010,BOOT_EXIT=320,BOOT_LEAD=150,BOOT_ENTER=460;
   let boot=null,bootMark=null,bootEffects=[],bootAt=0,bootTimer=0,bootFrame=0,bootPreparing=false;
-  const inputs=["pointerdown","keydown","wheel","dragstart","beforecustomization"];
+  const BOOT_FAST_RATE=3;
+  let bootFast=false,bootMinimum=BOOT_MIN,bootClickPending=null;
+  const inputs=["pointerdown","pointercancel","click","keydown","wheel","dragstart","beforecustomization"];
   const EASE="cubic-bezier(.25,.55,.25,1)";
   const FADE="cubic-bezier(.32,.12,.3,1)";
   function bootReady(now,shown,min,quietSince,deadline){
@@ -525,7 +527,7 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     root.setAttribute("data-nocturne-boot","exit");
     const done=()=>{
       if(dead||boot!==overlay)return;
-      removeBoot();decision("boot.handoff",{elapsed:now()-bootAt});
+      removeBoot();decision("boot.handoff",{elapsed:now()-bootAt,accelerated:bootFast});
       try{resume();}catch(error){decision("assembly.resume.error",{name:assemblyErrorClass(error)});finish("setup-failed");}
     };
     // Allow the frozen proxy tree to receive a paint before the exit.
@@ -535,12 +537,15 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
         const logo=bootMark.animate([{opacity:1,transform:"scale(1)"},{opacity:0,transform:"scale(.94)"}],{duration:260,easing:"ease-in-out",fill:"both"});
         if(dead||boot!==overlay){try{logo.finished.catch(()=>{});}catch{}try{logo.cancel();}catch{}return;}
         bootEffects.push(logo);logo.finished.catch(()=>{});
+        if(bootFast)speedBootEffect(logo);
         const fade=overlay.animate([{opacity:1},{opacity:0}],{delay:110,duration:BOOT_EXIT-110,easing:"ease-in-out",fill:"both"});
         if(dead||boot!==overlay){try{fade.finished.catch(()=>{});}catch{}try{fade.cancel();}catch{}return;}
-        bootEffects.push(fade);fade.finished.then(done,()=>{
+        bootEffects.push(fade);
+        const fastExit=bootFast&&speedBootEffect(fade);
+        fade.finished.then(done,()=>{
           if(!dead&&boot===overlay)finish("boot-cancelled");
         });
-        bootTimer=window.setTimeout(done,BOOT_EXIT+150);
+        bootTimer=window.setTimeout(done,BOOT_EXIT/(fastExit?BOOT_FAST_RATE:1)+150);
       }catch{done();}
     });
   }
@@ -669,9 +674,50 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     armFinish(now()+155);
     }catch(error){decision("assembly.settle.error",{name:assemblyErrorClass(error)});finish("setup-failed");}
   }
+  function speedBootEffect(effect){
+    try{
+      if(!effect)return false;
+      if(effect.playState==="finished")return true;
+      // WAAPI preserves current progress when updating the playback rate.
+      effect.updatePlaybackRate(BOOT_FAST_RATE);return true;
+    }catch{return false;}
+  }
+  function accelerateBoot(){
+    if(bootFast||!boot||dead)return;
+    bootFast=true;
+    const elapsed=Math.max(0,now()-bootAt);
+    let accelerated=0;
+    for(const effect of bootEffects)if(speedBootEffect(effect))accelerated++;
+    // Never shorten the logo's hold if the entrance cannot be accelerated.
+    // Keep the readiness checks, paused Assembly epoch and absolute deadline.
+    if(bootEffects.length&&accelerated===bootEffects.length)
+      bootMinimum=Math.min(BOOT_MIN,elapsed+Math.max(0,BOOT_MIN-elapsed)/BOOT_FAST_RATE);
+    decision("boot.accelerate",{elapsed,minimum:bootMinimum,rate:BOOT_FAST_RATE,effects:accelerated,exiting:root.getAttribute("data-nocturne-boot")==="exit"});
+  }
   function interrupt(event){
     // Typing in Home or a web page must not terminate a chrome animation.
     // Explicit toolbar actions and customization can still interrupt it.
+    // Consume the click used to accelerate Boot, including its click event
+    // if the cover has already handed off between pointerdown and click.
+    if(event?.type==="click"){
+      if(event.isTrusted===true&&bootClickPending!==null&&event.detail>0&&
+         (event.pointerId==null||event.pointerId===bootClickPending||bootClickPending===-1)){
+        bootClickPending=null;event.preventDefault();event.stopImmediatePropagation();
+      }
+      return;
+    }
+    if(event?.type==="pointercancel"){
+      if(event.isTrusted===true)bootClickPending=null;
+      return;
+    }
+    if(event?.type==="pointerdown"&&event.isTrusted===true){
+      bootClickPending=null;
+      if(boot&&event.button===0&&event.isPrimary!==false){
+        bootClickPending=event.pointerId??-1;
+        event.preventDefault();event.stopImmediatePropagation();
+        accelerateBoot();return;
+      }
+    }
     const toolbar=!!event?.target?.closest?.("#nav-bar,#PersonalToolbar,#oneplane-tabs");
     const accepted=event?.isTrusted!==false&&(event?.type==="beforecustomization"||event?.type==="dragstart"||event?.type==="pointerdown"&&toolbar);
     decision("assembly.interrupt",{type:event?.type,trusted:event?.isTrusted,playing,toolbar,accepted});
@@ -1329,8 +1375,9 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
     if(boot){
       const key=JSON.stringify([state,one,homeState,resourceRevision,iconStatus,homeIcons,window.innerWidth,window.innerHeight]);
       if(key!==readinessKey){readinessKey=key;quietSince=now();}
-      if(!bootReady(now(),bootAt,BOOT_MIN,quietSince,deadline-BOOT_EXIT-200)){schedule();return;}
-      decision("boot.ready",{elapsed:now()-bootAt,quiet:now()-quietSince});
+      if(!bootReady(now(),bootAt,bootMinimum,quietSince,deadline-BOOT_EXIT-200)){schedule();return;}
+      if(bootFast&&bootEffects[0]?.playState!=="finished"&&now()<deadline-BOOT_EXIT-200){schedule();return;}
+      decision("boot.ready",{elapsed:now()-bootAt,quiet:now()-quietSince,accelerated:bootFast,minimum:bootMinimum});
     }
     decision("assembly.icons.ready",{...iconStatus,homeIcons,homeState,revision:resourceRevision,wait:now()-iconWaitAt,timeout:waiting});
     window.__nocturneTrace?.("assembly.ready",{one,active,state,expected,nativeReady,settled,homeState,resourceTimeout:waiting},{sample:2500});

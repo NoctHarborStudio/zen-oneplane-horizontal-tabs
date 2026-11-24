@@ -62,7 +62,7 @@ test("startup keeps the waiting gate until targets own their resting styles",()=
 
 test("typing or scrolling in Home does not abort startup, explicit toolbar interaction does",()=>{
  const a=source.indexOf("function interrupt("),b=source.indexOf("let viewport=",a);
- const run=new Function(source.slice(a,b)+'let playing=true,calls=0,boot=null;function decision(){}function settle(){calls++}const target=toolbar=>({closest:()=>toolbar?{}:null});for(const type of ["keydown","wheel","pointerdown"])interrupt({type,isTrusted:true,target:target(false)});interrupt({type:"keydown",isTrusted:true,target:target(true)});interrupt({type:"pointerdown",isTrusted:false,target:target(true)});interrupt({type:"pointerdown",isTrusted:true,target:target(true)});return calls;');
+ const run=new Function(source.slice(a,b)+'let playing=true,calls=0,boot=null,bootClickPending=null;function decision(){}function settle(){calls++}const target=toolbar=>({closest:()=>toolbar?{}:null});for(const type of ["keydown","wheel","pointerdown"])interrupt({type,isTrusted:true,target:target(false)});interrupt({type:"keydown",isTrusted:true,target:target(true)});interrupt({type:"pointerdown",isTrusted:false,target:target(true)});interrupt({type:"pointerdown",isTrusted:true,target:target(true)});return calls;');
  assert.equal(run(),1);
  assert.ok(source.includes("now()-iconWaitAt<(boot?1400:600)"));
  assert.ok(source.includes("assembly.center.result"));
@@ -710,4 +710,50 @@ test("Nocturne motion is default-on independently of system motion and explicit 
    assert.equal(evaluate({getBoolPref:(k,f)=>choice??f},window),choice===false);
  }
  assert.ok(source.includes('reduced.matches?"reduced-motion"'));
+});
+
+test("click accelerates Boot exactly once, preserves Assembly and consumes its eventual click",()=>{
+ const code=source.slice(source.indexOf("  function speedBootEffect("),source.indexOf("  let viewport="));
+ const run=new Function(`
+ let boot={},dead=false,bootFast=false,bootMinimum=1010,bootAt=0,bootClickPending=null,playing=false,clock=100;
+ const BOOT_FAST_RATE=3,BOOT_MIN=1010,events=[],rates=[],actions=[],root={getAttribute:()=>"waiting"};
+ const bootEffects=[{playState:"running",updatePlaybackRate:r=>rates.push(r)}];
+ function now(){return clock;}function decision(e,d){events.push([e,d]);}
+ function finish(){actions.push("finish")}function settle(){actions.push("settle")}
+ const event=(type,pointerId=1)=>({type,pointerId,isTrusted:true,button:0,isPrimary:true,detail:1,target:{closest:()=>({})},preventDefault(){actions.push("prevent")},stopImmediatePropagation(){actions.push("stop")}});
+ ${code}
+ interrupt(event("pointerdown"));clock=150;interrupt(event("pointerdown"));
+ boot=null;interrupt(event("click"));interrupt(event("pointerdown",2));
+ return {rates,minimum:bootMinimum,events:events.filter(x=>x[0]==="boot.accelerate"),actions};`);
+ const result=run();assert.deepEqual(result.rates,[3]);assert.equal(result.minimum,100+910/3);
+ assert.equal(result.events.length,1);assert.deepEqual(result.actions,["prevent","stop","prevent","stop","prevent","stop","settle"]);
+});
+test("Boot acceleration does not shorten hold if playback update is unsupported; keyboard still cancels",()=>{
+ const code=source.slice(source.indexOf("  function speedBootEffect("),source.indexOf("  let viewport="));
+ const run=new Function(`
+ let boot={},dead=false,bootFast=false,bootMinimum=1010,bootAt=0,bootClickPending=null,playing=false;
+ const BOOT_FAST_RATE=3,BOOT_MIN=1010,root={getAttribute:()=>"waiting"},bootEffects=[{playState:"running",updatePlaybackRate(){throw Error("unsupported")}}];
+ let cancelled=0;function now(){return 10;}function decision(){}function finish(){cancelled++}function settle(){}
+ ${code}
+ interrupt({type:"pointerdown",isTrusted:false,button:0});const before=bootFast;
+ interrupt({type:"pointerdown",isTrusted:true,button:0,preventDefault(){},stopImmediatePropagation(){}});
+ interrupt({type:"keydown",isTrusted:true});
+ return {before,bootFast,bootMinimum,cancelled};`);
+ assert.deepEqual(run(),{before:false,bootFast:true,bootMinimum:1010,cancelled:1});
+});
+test("accelerated Boot exit speeds only its two effects and resumes via existing completion",async()=>{
+ const speed=source.slice(source.indexOf("  function speedBootEffect("),source.indexOf("  function accelerateBoot("));
+ const exit=source.slice(source.indexOf("  function exitBoot("),source.indexOf("  function hold("));
+ const run=new Function(`
+ let bootFast=true,bootPreparing=true,dead=false,bootFrame=0,bootTimer=0,bootAt=0;
+ const BOOT_FAST_RATE=3,BOOT_EXIT=320,rates=[],delays=[],bootEffects=[];
+ let resolveFade,callback,doneCount=0;
+ function animate(){let resolve;const finished=new Promise(r=>resolve=r);resolveFade=resolve;return {finished,playState:"running",updatePlaybackRate:r=>rates.push(r)};}
+ let boot={animate},bootMark={animate};const root={setAttribute(){}};
+ const window={requestAnimationFrame(fn){callback=fn;return 1},setTimeout(fn,ms){delays.push(ms);return 1;}};
+ function now(){return 500}function decision(){}function removeBoot(){boot=null;}function finish(){throw Error("unexpected cancellation")}
+ function assemblyErrorClass(){return "Error"}
+ ${speed}${exit}
+ exitBoot(()=>doneCount++);callback();resolveFade();return Promise.resolve().then(()=>({rates,delays,doneCount,bootPreparing}));`);
+ const result=await run();assert.deepEqual(result.rates,[3,3]);assert.deepEqual(result.delays,[320/3+150]);assert.equal(result.doneCount,1);assert.equal(result.bootPreparing,true);
 });
