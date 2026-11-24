@@ -50,3 +50,21 @@ test("invalid native geometry is not silently animated",()=>{
  assert.throws(()=>createCenterFlowPlan([cards[0],{...cards[0]}]),/slot-overlap/);
  assert.throws(()=>createCenterFlowPlan([{...cards[0],r:{width:NaN,height:28}}]),/geometry/);
 });
+function interpolate(plan,i,p){
+ const k=Math.min(79,Math.floor(p*80)),u=p*80-k,a=plan.sample(i,k/80),b=plan.sample(i,(k+1)/80),mix=(x,y)=>x+(y-x)*u;
+ return {x:mix(a.x,b.x),y:mix(a.y,b.y),a:mix(a.a,b.a),clip:a.clip.map((v,j)=>mix(v,b.clip[j]))};
+}
+test("linear interpolation of WAAPI keyframes preserves separated card bodies",()=>{
+ for(const widths of [[24],[24,24],[24,68,24,44,24],[110,24,26,72,24,40,24],[120,24],[24,120,24,32,100,24,24,24,24,24]]){
+  for(const dual of [false,true]){
+   const cards=makeCards(widths,dual),plan=createCenterFlowPlan(cards);
+   for(let k=0;k<=320;k++){
+    const boxes=cards.map((c,i)=>visible(c,interpolate(plan,i,k/320)));
+    for(let i=0;i<boxes.length;i++)for(let j=0;j<i;j++){
+     const a=boxes[i],b=boxes[j];if(a.a<=0||b.a<=0)continue;
+     assert.ok(Math.min(a.r,b.r)-Math.max(a.l,b.l)<=.51||Math.min(a.b,b.b)-Math.max(a.t,b.t)<=.51,`interpolated overlap ${i}/${j} at ${k}`);
+    }
+   }
+  }
+ }
+});
