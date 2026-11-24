@@ -1,4 +1,4 @@
-  const leftIds = new Set(["oneplane-hub-button", "oneplane-download-indicator-slot", "sidebar-button", "sidebar-toggle-button", "back-button",
+  const leftIds = new Set(["oneplane-hub-button", "oneplane-history-button", "oneplane-download-indicator-slot", "sidebar-button", "sidebar-toggle-button", "back-button",
     "forward-button", "stop-reload-button", "reload-button", "home-button", "urlbar-container"]);
   const centerIds = new Set(["oneplane-tabs", "oneplane-center-start", "oneplane-center-end"]);
   const GEOMETRY_HEIGHT=1,GEOMETRY_CONTOUR=2,GEOMETRY_CENTER=4;

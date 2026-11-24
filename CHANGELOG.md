@@ -1,3 +1,7 @@
+## 0.3.0-preview.200 — Shared top-row alignment and History slot
+
+Use the existing tab lane center for native navigation, address, utility controls and captions, including adaptive two-row layout. Place History in a normal 30px slot between Hub and Downloads, include its width in the existing left-side budget, and retain the Library controller and native popup anchors. Bound the compact address anchor and log the resting control rectangles through the existing sampler. Source-backed regressions cover the shared center and slot order; native Zen visual acceptance pending.
+
 ## 0.3.0-preview.199 — Per-window Acrylic release during close
 
 On Windows, wait for the opaque branded cover and two rendering opportunities before removing the current chrome root's `windowsmica` attribute. Use the existing logo interval for the compositor handoff; skip if fewer than 100ms remain before fade. Restore the owned attribute on cancellation or modal recovery. No global preference changes or native DLL calls. Gecko requests DWMSBT_AUTO, not guaranteed desktop alpha; native visual validation remains open.

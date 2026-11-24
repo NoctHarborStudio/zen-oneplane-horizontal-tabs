@@ -7,6 +7,9 @@
       padding-block: 0 !important;
       align-items: center !important;
       height: var(--op-height) !important;
+      min-height: var(--op-height) !important;
+      max-height: var(--op-height) !important;
+      box-sizing: border-box !important;
       /* The top-layer popover alone expands. Keep its layout anchor
          compact, including during native focus/close notifications. */
       transition: none !important;
