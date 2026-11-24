@@ -1,3 +1,7 @@
+## 0.3.0-preview.208 — Bookmark center aperture and verified startup
+
+Make the actual center bookmark fold inward from both sides instead of only fading in place; preserve all other conveyor paths and exact reverse frames. Verify effective opacity, translated native rectangles and computed clipping at bounded paused samples; recheck the native bookmark cohort before the common startup epoch and reacquire once if necessary. Preserve existing list fold as a startup-only fallback on rejected child acquisition. No new timer, native-data changes, or changes to tab choreography. Preview.205 diagnostics showed 3 successful startups and 2 closes, but did not establish actual bookmark paint or smoothness. Native visual validation remains open.
+
 ## 0.3.0-preview.207 — Vanishing Home visual stabilization (VH1–VH4)
 
 Keep the original island centered while collapsing, preserve its existing label/icon mode and material from before hover reset until native drop/cancel and return finish, and share a smoother 350ms join / 400ms restore timeline. Separate pointer pressure/reorder response from the base join clock; do not change native drop authority or Bunny pull shape. Add presentation cleanup/handoff tests and bounded title/mode/material/surface comparison diagnostics (no titles or URLs). Retain preview.206 shared Glass material. Whole-toolbar tint changes are not yet independently reproduced; native visual acceptance pending.

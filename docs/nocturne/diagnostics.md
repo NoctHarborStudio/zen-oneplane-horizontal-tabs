@@ -594,3 +594,5 @@ Preview.206: existing toolbar-surface sample adds materialFlat, materialOpacity 
 ### Preview.207 — Vanishing Home VH1–VH4
 
 `drag.vanish.begin` records fixed origin 0.5 and duration. `drag.vanish.presentation` acquires/releases the gesture-scoped presentation lease and samples collapse/restore once each; titleStable, modeStable, islandStable and surfaceStable are comparisons only (surfaceStable null when absent). No title, URL or material value is logged. A false surface comparison is evidence for further tint/contour investigation, not proof of a particular paint defect. Check paired acquire/release and no residual presentation attribute after drop/cancel.
+
+Bookmark paint admission: `center.bookmarks.paint` reports transaction id, owner, sample fraction, count, bad targets and maximum numeric alpha/position/clip errors. `assembly.bookmarks.recheck` reports whether the pre-epoch retry acquired the current native list. These bounded checks detect CSS conflicts and changed membership, not presented frames. No bookmark labels or URLs are recorded.

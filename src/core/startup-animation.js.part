@@ -1,6 +1,6 @@
 // Nocturne preview.36: early trace, independent Sine script order.
 try{if(typeof window!=="undefined"){
-  const event="assembly.script",data={version:"0.3.0-preview.207"};
+  const event="assembly.script",data={version:"0.3.0-preview.208"};
   if(window.__nocturneTrace)window.__nocturneTrace(event,data,{sample:1500});
   else{const q=window.__nocturneEarlyTrace??(window.__nocturneEarlyTrace=[]);if(q.length<32)q.push({event,t:window.performance?.now?.()??0,data});}
 }}catch{}
@@ -694,7 +694,14 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
         prepared.push({n,mark:n.getAttribute(MANAGED)});
         seen.add(n);n.setAttribute(MANAGED,"true");
       }
-      handle=engine.bookmarks?.({owner:"startup",direction:"in",duration:Math.round((timeline.bookmarksLength||420)*scale),delay:Math.round(timeline.bookmarks*scale),paused:timeline.paused,observeEffect:timeline.observeEffect,flow:!!timeline.flow})||null;
+      const options={owner:"startup",direction:"in",duration:Math.round((timeline.bookmarksLength||420)*scale),delay:Math.round(timeline.bookmarks*scale),paused:timeline.paused,observeEffect:timeline.observeEffect,flow:!!timeline.flow};
+      handle=engine.bookmarks?.(options)||null;
+      if(!handle&&timeline.flow&&!dead&&window.__nocturneCenterMotion===engine&&[...items.children].some(n=>bounds(n,true))){
+        // If the real child cascade rejects the conveyor, preserve the
+        // same timing with the existing native-list fold rather than pop.
+        handle=engine.bookmarks?.({...options,flow:false})||null;
+        decision("assembly.bookmarks.fallback",{count:prepared.length,acquired:!!handle});
+      }
       if(dead||window.__nocturneCenterMotion!==engine){handle?.release();handle=null;}
       return handle;
     }catch(error){
@@ -945,6 +952,16 @@ function assemblyErrorClass(error){try{const name=error?.name;return typeof name
              root.getAttribute("inFullscreen")==="true"||window.closed)
             throw Error("assembly-bloom-owner");
           verifyPrepared();
+        }
+        if(timeline.flow&&(!bookmarkHandle||bookmarkHandle.validatePrepared?.()===false)){
+          // Places can replace or reveal children during the existing
+          // Boot exit. Reacquire once, before the common epoch, never
+          // replay a running wave or add an independent timer.
+          bookmarkHandle?.release();bookmarkHandle=null;
+          bookmarkHandle=acquireStartupBookmarks(engine,get("PlacesToolbarItems"),timeline);
+          if(!bookmarkHandle)revealBookmarks(center);
+          decision("assembly.bookmarks.recheck",{acquired:!!bookmarkHandle});
+          if(dead)return;
         }
         bindStartupEpoch(timeline,document.timeline);
         bootPreparing=false;

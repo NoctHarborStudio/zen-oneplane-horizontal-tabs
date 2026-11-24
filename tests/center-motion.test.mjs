@@ -716,15 +716,20 @@ test("flow bookmark ownership releases every native child and the list on failur
  const f=bookmarkFixture(),children=[];
  for(const [left,width] of [[20,50],[75,40],[120,55]]){
   const attrs=new Map(),node={hidden:false,collapsed:false,getAttribute:k=>attrs.get(k)??null,setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k),
-   getBoundingClientRect:()=>({left,right:left+width,top:20,bottom:40,width,height:20}),
-   animate(){return f.node.animate();}};
+   getBoundingClientRect(){const x=parseFloat(this.frame()?.["--zr-flow-bookmark-x"]||"0");return {left:left+x,right:left+width+x,top:20,bottom:40,width,height:20};},
+   frame(){if(!this.effect||this.effect.cancelled)return null;const {duration,delay}=this.effect.timing;const k=Math.round(Math.max(0,Math.min(1,((this.effect.currentTime||0)-delay)/duration))*80);return this.effect.keys[k];},
+   animate(keys,timing){const a=f.node.animate();a.keys=keys;a.timing=timing;this.effect=a;return a;}};
   children.push(node);
  }
  f.node.children=children;f.node.getBoundingClientRect=()=>({left:0,right:200,width:200});
- f.window.getComputedStyle=()=>({display:"flex",visibility:"visible",opacity:"1"});
+ f.window.getComputedStyle=n=>{const k=n.frame?.();return {display:"flex",visibility:"visible",opacity:k?.["--zr-flow-bookmark-alpha"]??"1",
+  clipPath:k?`inset(-8px ${k["--zr-flow-bookmark-right"]} -8px ${k["--zr-flow-bookmark-left"]})`:"none"};};
  const engine=f.mount(),handle=engine.bookmarks({owner:"startup",flow:true,paused:true});
- assert.ok(handle);assert.equal(f.effects.length,3);
+ assert.ok(handle);assert.equal(f.effects.length,3);assert.equal(handle.validatePrepared(),true);
  assert.ok(children.every(n=>n.getAttribute("data-zr-flow-bookmark")==="true"));
+ const before=f.window.getComputedStyle;f.window.getComputedStyle=n=>({...before(n),clipPath:"none"});
+ assert.equal(handle.validatePrepared(),false);f.window.getComputedStyle=before;
+ f.node.children=[...children].reverse();assert.equal(handle.validatePrepared(),false);f.node.children=children;
  handle.release();assert.ok(f.effects.every(a=>a.cancelled===1));
  assert.ok(children.every(n=>n.getAttribute("data-zr-flow-bookmark")===null));
  assert.equal(f.node.getAttribute(foldMark),null);

@@ -68,3 +68,26 @@ test("linear interpolation of WAAPI keyframes preserves separated card bodies",(
   }
  }
 });
+
+test("center bookmark opens from an aperture at the actual portal and reverses without affecting its neighbors",()=>{
+ for(const widths of [[40,100,20],[30,140,60,25],[80],[30,30]]){
+  let left=0;const width=widths.reduce((a,b)=>a+b,0)+5*(widths.length-1),cx=width/2;
+  const cards=widths.map(w=>{const c={x:left+w/2,y:20,cx,cy:20,opacity:1,r:{width:w,height:20}};left+=w+5;return c;});
+  const plan=createCenterFlowPlan(cards,{centerAperture:true}),legacy=createCenterFlowPlan(cards);
+  cards.forEach((c,i)=>{
+   const middle=Math.abs(c.x-cx)<c.r.width/2;
+   if(middle){
+    const first=plan.sample(i,0);assert.equal(first.x,0);assert.ok(Math.abs(first.clip[1]+first.clip[3]-c.r.width)<1e-8);
+    assert.equal(c.x-c.r.width/2+first.clip[3],cx);
+    assert.ok(plan.sample(i,.5).clip[1]+plan.sample(i,.5).clip[3]<c.r.width);
+   }else for(let k=0;k<=80;k++)assert.deepEqual(plan.sample(i,k/80),legacy.sample(i,k/80));
+   const rev=plan.keyframes(i,true),forward=plan.keyframes(i);
+   for(let j=0;j<81;j++){const {offset:a,...x}=rev[j],{offset:b,...y}=forward[80-j];assert.deepEqual(x,y);}
+  });
+  for(let k=0;k<=320;k++){
+   const boxes=cards.map((c,i)=>visible(c,interpolate(plan,i,k/320)));
+   for(let i=0;i<boxes.length;i++)for(let j=0;j<i;j++)if(boxes[i].a>0&&boxes[j].a>0)
+    assert.ok(Math.min(boxes[i].r,boxes[j].r)-Math.max(boxes[i].l,boxes[j].l)<=.51);
+  }
+ }
+});

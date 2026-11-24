@@ -598,7 +598,7 @@
       trace("center.motion.error",{id,owner,mode:handle.mode,stage:"setup",name:nocturneErrorClass(error)},{flush:true});return null;
     }
   }
-  // Bookmarks use the Lab's center squeeze, not individual vertical slides.
+  // Bookmark conveyor and the center aperture share the Lab's geometry.
   function bookmarks(options={}){
     if(dead||motionBusy||disposing||!current())return null;
     motionBusy=true;
@@ -612,9 +612,10 @@
     const id=++bookmarkSequence,frames=Array.from({length:21},(_,i)=>{const p=smooth(direction==="out"?1-i/20:i/20);return {offset:i/20,[B]:String(p)};});
     const old=n.style.getPropertyValue(B),priority=n.style.getPropertyPriority(B),mark=n.getAttribute(markKey);
     const running=[],saved=[];
-    let released=false;
+    let released=false,verifyPrepared=null;
     const exact=()=>!released&&!dead&&current()&&activeBookmark===handle;
     const handle={owner,retainOnDispose,startupOutcomeVersion:1,finished:Promise.resolve(),
+      validatePrepared(){try{return exact()&&(!verifyPrepared||verifyPrepared());}catch{return false;}},
       resume(){if(!released)for(const a of running)try{a.play();}catch{}},
       resumeAt(start){
         if(!exact()||!running.length)throw Error("bookmark-epoch-stale");
@@ -650,6 +651,7 @@
         running.push(a);a.finished.catch(()=>{});
         if(owner==="startup")observeEffect?.(a,"bookmarks",exact);
         if(paused){a.pause();a.currentTime=0;}
+        return a;
       };
       if(flow){
         if(!bookFlowRegistered)throw Error("bookmark-flow-registration");
@@ -663,7 +665,8 @@
         });
         if(!cards.length||cards.length>256)throw Error("bookmark-flow-geometry");
         const cx=(Math.min(...cards.map(c=>c.r.left))+Math.max(...cards.map(c=>c.r.right)))/2;
-        const plan=createCenterFlowPlan(cards.map(c=>({...c,cx,cy:c.y,lower:false,hub:null})));
+        const plan=createCenterFlowPlan(cards.map(c=>({...c,cx,cy:c.y,lower:false,hub:null})),{centerAperture:true});
+        const children=[...n.children],cohort=[];
         for(const [i,c] of cards.entries()){
           if(!exact())throw Error("bookmark-flow-stale");
           saved.push({node:c.node,value:c.node.getAttribute(BOOK_FLOW)});c.node.setAttribute(BOOK_FLOW,"true");
@@ -672,7 +675,39 @@
             return {offset:k/80,[BOOK_PROPS[0]]:f.x+"px",[BOOK_PROPS[1]]:String(f.a),
               [BOOK_PROPS[2]]:f.clip[3]+"px",[BOOK_PROPS[3]]:f.clip[1]+"px"};
           });
-          animate(c.node,keys);
+          cohort.push({c,i,a:animate(c.node,keys)});
+        }
+        // Bounded paint admission: one initial and one interior sample,
+        // then restore the exact initial pose. No per-frame DOM reads.
+        // Check the effective cascade, not merely the presence of WAAPI.
+        const px=value=>{
+          const m=/^inset\(([-.\dpx\s]+)\)$/.exec(String(value));
+          if(!m)return null;
+          const v=m[1].trim().split(/\s+/).map(x=>/^-?(?:\d+(?:\.\d*)?|\.\d+)(?:px)?$/.test(x)?parseFloat(x):NaN);
+          if(!v.length||v.length>4||v.some(x=>!Number.isFinite(x)))return null;
+          return [v[0],v[1]??v[0],v[2]??v[0],v[3]??v[1]??v[0]];
+        };
+        const sameChildren=()=>exact()&&document.getElementById("PlacesToolbarItems")===n&&n.children.length===children.length&&children.every((child,i)=>n.children[i]===child);
+        const sample=(fraction,seek)=>{
+          if(!sameChildren())return false;
+          if(seek)for(const {a} of cohort)a.currentTime=fraction?delay+duration*fraction:0;
+          let bad=0,maxAlphaError=0,maxPositionError=0,maxClipError=0;
+          for(const {c,i} of cohort){
+            const pose=plan.sample(i,direction==="out"?1-fraction:fraction);
+            const s=win.getComputedStyle(c.node),r=c.node.getBoundingClientRect(),clip=px(s.clipPath);
+            const ae=Math.abs(Number(s.opacity)-pose.a);
+            const pe=Math.max(Math.abs(r.left-c.r.left-pose.x),Math.abs(r.top-c.r.top),Math.abs(r.width-c.r.width),Math.abs(r.height-c.r.height));
+            const ce=clip?Math.max(...clip.map((v,j)=>Math.abs(v-pose.clip[j]))):Infinity;
+            if(!Number.isFinite(ae)||!Number.isFinite(pe)||ae>.01||pe>1||ce>1||c.node.hidden||c.node.collapsed||s.visibility!=="visible"||s.display==="none")bad++;
+            maxAlphaError=Math.max(maxAlphaError,ae);maxPositionError=Math.max(maxPositionError,pe);maxClipError=Math.max(maxClipError,ce);
+          }
+          trace("center.bookmarks.paint",{id,owner,fraction,count:cohort.length,bad,maxAlphaError,maxPositionError,maxClipError},{flush:bad>0});
+          return bad===0;
+        };
+        if(paused){
+          const initial=sample(0,true),interior=initial&&sample(.5,true),restored=sample(0,true);
+          if(!initial||!interior||!restored)throw Error("bookmark-flow-computed-conflict");
+          verifyPrepared=()=>sample(0,false);
         }
       }else animate(n,frames);
       handle.finished=Promise.all(running.map(a=>a.finished.catch(()=>{})));
