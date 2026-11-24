@@ -14,6 +14,36 @@ test("no invented Free; unavailable manager fails closed",()=>{
   assert.equal(hubWorkspaceSnapshot({getWorkspaces(){throw Error("unavailable")},changeWorkspaceWithID(){}}),null);
 });
 
+test("History launcher uses existing Library toggle and native fallback without a second owner",()=>{
+  const src=readFileSync(new URL("../src/hub/controller.js.part",import.meta.url),"utf8");
+  const css=readFileSync(new URL("../src/styles/base.css.part",import.meta.url),"utf8");
+  const begin=src.indexOf("    function openHistory(event){"),end=src.indexOf("    function toggle(event){",begin);
+  assert.ok(begin>0&&end>begin);
+  const handler=src.slice(begin,end);
+  const run=(library,supported=true,destroyed=false)=>{
+    const native=[],trace=[],events=[];
+    const win={__nocturneLibrary:library,__nocturneTrace:(name,data)=>trace.push({name,data})};
+    const doc={getElementById:id=>{assert.equal(id,"Browser:ShowAllHistory");return {doCommand:()=>native.push("history")};}};
+    const click=new Function("window","document","supported","destroyed",handler+"return openHistory;")(win,doc,()=>supported,destroyed);
+    click({preventDefault:()=>events.push("prevent"),stopPropagation:()=>events.push("stop")});
+    return {native,trace,events};
+  };
+  let called=0;
+  const accepted=run({toggle:section=>{assert.equal(section,"history");called++;return true;}});
+  assert.equal(called,1);assert.deepEqual(accepted.native,[]);assert.deepEqual(accepted.events,["prevent","stop"]);
+  assert.deepEqual(accepted.trace[0].data,{accepted:true,nativeFallback:false});
+  assert.deepEqual(run({toggle:()=>false}).native,["history"]);
+  assert.deepEqual(run(null).native,["history"]);
+  assert.deepEqual(run({toggle:()=>{throw Error("unavailable");}}).native,["history"]);
+  assert.deepEqual(run({toggle:()=>true},false).native,[]);
+  assert.deepEqual(run({toggle:()=>true},true,true).native,[]);
+  assert.match(src,/button\.after\(historyButton\)/);
+  assert.match(src,/cleanupStep\("history button",\(\)=>historyButton\.remove\(\)\)/);
+  assert.match(src,/\[historyButton,"click",openHistory\]/);
+  assert.match(css,/#oneplane-history-button \{/);
+  assert.match(css,/margin:0 0 0 -30px !important/);
+  assert.match(css,/transform:translateY\(var\(--op-top-row-height\)\) !important/);
+});
 test("hub follows navigation right edge and clamps to viewport",()=>{
   assert.equal(hubPanelWidth(5,255,1920),250);
   assert.equal(hubPanelWidth(5,100,1920),180);

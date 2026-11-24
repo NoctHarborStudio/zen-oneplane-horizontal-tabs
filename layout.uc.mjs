@@ -5335,6 +5335,16 @@ function installTabStrip() {
     shape.setAttribute("d","M4 3.5h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2ZM2 8h16M7 8v8.5M10 11h5M10 14h5");
     glyph.append(shape);button.append(glyph);button.title="One Plane Hub";
     for(const [key,value] of Object.entries({skipintoolbarset:"true",removable:"false",tooltiptext:"One Plane Hub","aria-label":"One Plane Hub","aria-haspopup":"dialog","aria-expanded":"false"}))button.setAttribute(key,value);
+    // The History launcher shares Hub's toolbar owner, but delegates all data,
+    // shortcut and overlay decisions to the existing Library controller.
+    const historyButton=html("button","op-history-trigger");
+    historyButton.id="oneplane-history-button";historyButton.type="button";historyButton.title="History";
+    for(const [key,value] of Object.entries({skipintoolbarset:"true",removable:"false",tooltiptext:"History","aria-label":"Open History"}))historyButton.setAttribute(key,value);
+    const historyGlyph=document.createElementNS(glyph.namespaceURI,"svg");
+    historyGlyph.setAttribute("viewBox","0 0 20 20");historyGlyph.setAttribute("aria-hidden","true");
+    const historyPath=document.createElementNS(glyph.namespaceURI,"path");
+    historyPath.setAttribute("d","M3 9a7 7 0 1 1 2 5M3 4v5h5M10 6v4l3 2");
+    historyGlyph.append(historyPath);historyButton.append(historyGlyph);
     const panel=html("div","op-hub-panel");
     panel.hidden=true;
     const topLayer=typeof panel.showPopover==="function"&&typeof panel.hidePopover==="function";
@@ -6740,7 +6750,21 @@ function installTabStrip() {
     function ensure(){
       if(destroyed)return;
       if(button.parentElement!==target)target.prepend(button);
+      if(historyButton.parentElement!==target||historyButton.previousElementSibling!==button)button.after(historyButton);
       if(panel.parentElement!==root)root.append(panel);
+    }
+    function openHistory(event){
+      event.preventDefault();event.stopPropagation();
+      if(destroyed||!supported())return;
+      let accepted=false,nativeFallback=false;
+      try{accepted=window.__nocturneLibrary?.toggle?.("history")===true;}catch{}
+      if(!accepted){
+        try{
+          const native=document.getElementById("Browser:ShowAllHistory");
+          if(typeof native?.doCommand==="function"){native.doCommand();nativeFallback=true;}
+        }catch{}
+      }
+      try{window.__nocturneTrace?.("library.button",{accepted,nativeFallback},{flush:true});}catch{}
     }
     function toggle(event){
       event.preventDefault();event.stopPropagation();
@@ -6784,6 +6808,7 @@ function installTabStrip() {
     function stopDrag(event){event.stopPropagation();}
     function stopDouble(event){event.preventDefault();event.stopImmediatePropagation();}
     const listeners=[[button,"click",toggle],[button,"pointerdown",stopDrag],[button,"mousedown",stopDrag],[button,"dblclick",stopDouble],
+      [historyButton,"click",openHistory],[historyButton,"pointerdown",stopDrag],[historyButton,"mousedown",stopDrag],[historyButton,"dblclick",stopDouble],
       [panel,"keydown",key],[form,"submit",create],[mode,"click",toggleMode],[returnButton,"click",()=>void returnProjection()],[window,"deactivate",deactivate],[name,"input",onInput],[window,"resize",scheduleHubGeometry]];
     const hubScope=createDisposableScope({onError:(resource,error)=>{
       try{window.__nocturneTrace?.("layout.scope.error",{owner:"hub",resource,name:error?.name||"Error"},{flush:true});}catch{}
@@ -6827,6 +6852,7 @@ function installTabStrip() {
       cleanupStep("hub badge",()=>hideDragBadge(true));
       cleanupStep("hub placement",()=>clearPlacementPreview(true));
       cleanupStep("hub panel",()=>panel.remove());
+      cleanupStep("history button",()=>historyButton.remove());
       cleanupStep("hub button",()=>button.remove());
     }
     return {mount,ensure,close,onMode,destroy};
