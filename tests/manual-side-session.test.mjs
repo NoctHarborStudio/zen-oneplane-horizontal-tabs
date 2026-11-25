@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {captureManualSideCohort,inspectManualSide,commitManualSide,MANUAL_SIDE_KEY} from "../src/native/manual-side-session.mjs";
+import {captureManualSideCohort,inspectManualSide,commitManualSide,MANUAL_SIDE_KEY,planManualSideActivation} from "../src/native/manual-side-session.mjs";
 
 function fixture(){
   const sync={},values=new Map(),writes=[],windows=[];
-  let enabled=true,onlyPinned=false,owns=true,failAt=0,afterWrite=()=>{};
+  let enabled=true,onlyPinned=false,owns=true,failAt=0,afterWrite=()=>{},afterRead=()=>{};
   function windowWithTab(){
     const win={closed:false,gZenStartup:{isReady:true},gZenWindowSync:sync};
     const normal={isConnected:true,querySelectorAll:()=>[tab],contains:t=>t===tab};
@@ -21,14 +21,14 @@ function fixture(){
   }
   const a=windowWithTab(),b=windowWithTab();
   const sessionStore={getWindowId:win=>win.closed?null:"tracked",
-    getCustomTabValue(tab,key){assert.equal(key,MANUAL_SIDE_KEY);return values.get(tab)??"";},
+    getCustomTabValue(tab,key){assert.equal(key,MANUAL_SIDE_KEY);const value=values.get(tab)??"";afterRead();return value;},
     setCustomTabValue(tab,key,value){assert.equal(key,MANUAL_SIDE_KEY);writes.push(tab);values.set(tab,value);
       if(failAt===writes.length)throw Error("after write");afterWrite();}};
   const context={source:a.tab,sessionStore,prefs:{getBoolPref:k=>k==="zen.window-sync.enabled"?enabled:onlyPinned},
     getWindows:()=>windows,isPrivate:win=>win.private===true?true:win.unknownPrivacy?null:false};
   return {a,b,windows,values,writes,context,windowWithTab,owns:()=>owns,
     setPinnedOnly:v=>{onlyPinned=v},setEnabled:v=>{enabled=v},loseOwner:()=>{owns=false},
-    failAt:v=>{failAt=v},afterWrite:fn=>{afterWrite=fn}};
+    failAt:v=>{failAt=v},afterWrite:fn=>{afterWrite=fn},afterRead:fn=>{afterRead=fn}};
 }
 
 test("ordinary cohort honors sync-all versus pinned-only or disabled sync",()=>{
@@ -104,4 +104,107 @@ test("focus-order changes preserve identity, unknown values cannot be overwritte
   f.values.set(f.b.tab,"future");
   assert.equal(commitManualSide(f.context,inspectManualSide(f.context),"right",f.owns).status,"rejected");
   assert.equal(f.writes.length,2);
+});
+
+test("unchanged copy count cannot conceal changed native scope or container identity",()=>{
+  for(const fault of ["sync-pref","context","browser","container","store","sync-instance"]){
+    const f=fixture();f.setPinnedOnly(true);
+    const before=inspectManualSide(f.context);
+    if(fault==="sync-pref")f.setEnabled(false);
+    if(fault==="context")f.a.tab.userContextId=2;
+    if(fault==="browser")f.a.win.gBrowser={...f.a.win.gBrowser};
+    if(fault==="container"){
+      const previous=f.a.win.gZenWorkspaces.workspaceElement;
+      const element=previous();element.tabsContainer={...element.tabsContainer};
+      f.a.win.gZenWorkspaces.workspaceElement=()=>element;
+    }
+    if(fault==="store")f.context.sessionStore={...f.context.sessionStore};
+    if(fault==="sync-instance")f.a.win.gZenWindowSync={};
+    assert.equal(commitManualSide(f.context,before,"left",f.owns).status,"rejected",fault);
+    assert.equal(f.writes.length,0);
+  }
+});
+test("a read callback that loses the lease cannot reach a native setter",()=>{
+  const f=fixture(),before=inspectManualSide(f.context);
+  f.afterRead(()=>f.loseOwner());
+  assert.equal(commitManualSide(f.context,before,"right",f.owns).status,"rejected");
+  assert.equal(f.writes.length,0);
+});
+
+const missing=()=>({status:"missing"});
+const saved=side=>({status:"confirmed",side});
+function unit(...reads){
+  const nativeMembers=reads.map(()=>({}));
+  return {node:{},nativeMembers,members:nativeMembers.map((tab,i)=>({tab,eligible:true,read:reads[i]}))};
+}
+function auto(units,sides){
+  return {order:units.map(u=>u.node),projection:{mode:"automatic",sides}};
+}
+const activate=(units,automatic,intent="enable")=>planManualSideActivation({mode:"manual",intent,units,automatic});
+
+test("first enable initializes only absent values from the exact Auto unit provenance",()=>{
+  const units=[unit(missing()),unit(missing()),unit(missing())];
+  const p=activate(units,auto(units,["left","left","right"]));
+  assert.equal(p.status,"needs-initialization");
+  assert.deepEqual(p.sides,["left","left","right"]);
+  assert.equal(p.initializations.length,3);
+  for(let i=0;i<3;i++){
+    assert.equal(p.initializations[i].tab,units[i].members[0].tab);
+    assert.equal(p.initializations[i].expected,units[i].members[0].read);
+    units[i].members[0].read=saved(p.sides[i]);
+  }
+  assert.deepEqual(activate(units,null,"restore"),{status:"ready",sides:p.sides,initializations:[]});
+});
+test("Auto mode is dormant, re-enable preserves saved membership despite reordered and new units",()=>{
+  const first=unit(saved("left")),second=unit(saved("right")),fresh=unit(missing());
+  assert.equal(planManualSideActivation({mode:"automatic"}).status,"inactive");
+  const units=[second,fresh,first];
+  const p=activate(units,auto(units,["left","right","right"]));
+  assert.equal(p.status,"needs-initialization");
+  assert.deepEqual(p.sides,["right","right","left"]);
+  assert.equal(p.initializations.length,1);
+  assert.equal(p.initializations[0].tab,fresh.members[0].tab);
+});
+test("restoration never guesses from geometry and conflict suppresses the whole write proposal",()=>{
+  for(const read of [missing(),{status:"conflict"},{status:"incomplete"},{status:"invalid"},{status:"stale"},{status:"unavailable"},saved("future")]){
+    const units=[unit(saved("right")),unit(read)];
+    const p=activate(units,auto(units,["left","right"]),"restore");
+    assert.equal(p.status,"blocked");assert.deepEqual(p.initializations,[]);
+  }
+  const units=[unit(missing()),unit({status:"conflict"})];
+  assert.deepEqual(activate(units,auto(units,["left","right"])).initializations,[]);
+});
+test("one verified Split unit has one side; mixed, missing or hidden members block guessing",()=>{
+  const good=unit(saved("left"),saved("left"));
+  assert.deepEqual(activate([good],null,"restore").sides,["left"]);
+  for(const group of [unit(saved("left"),saved("right")),unit(saved("left"),missing())]){
+    assert.equal(activate([group],auto([group],["right"])).reason,"group-conflict");
+  }
+  const hidden=unit(saved("left"),saved("left"));hidden.members.pop();
+  assert.equal(activate([hidden],null,"restore").reason,"membership");
+  const unsupported=unit(missing(),missing());unsupported.members[1].eligible=false;
+  assert.equal(activate([unsupported],auto([unsupported],["left"])).reason,"role");
+  const allMissing=unit(missing(),missing());
+  const p=activate([allMissing],auto([allMissing],["right"]));
+  assert.equal(p.status,"needs-initialization");assert.equal(p.initializations.length,2);
+  assert.ok(p.initializations.every(x=>x.side==="right"));
+});
+test("stale Auto order, missing provenance, duplicate identities and empty workspace",()=>{
+  const units=[unit(missing()),unit(missing())];
+  for(const invalid of [null,auto([...units].reverse(),["left","right"]),auto(units,["left"]),auto(units,["left","bad"]),auto(units,Array(2))]){
+    assert.equal(activate(units,invalid).reason,"auto-provenance");
+  }
+  const repeated=[units[0],units[0]];
+  assert.equal(activate(repeated,auto(repeated,["left","right"])).reason,"membership");
+  const a=unit(saved("left")),b=unit(saved("left"));
+  b.nativeMembers=[a.members[0].tab];b.members=[a.members[0]];
+  assert.equal(activate([a,b],null,"restore").reason,"membership");
+  assert.deepEqual(activate([],auto([],[])),{status:"ready",sides:[],initializations:[]});
+});
+
+test("reentrant SessionStore replacement during a value read rejects the old transaction",()=>{
+  const f=fixture(),before=inspectManualSide(f.context);
+  f.afterRead(()=>{f.context.sessionStore={...f.context.sessionStore}});
+  assert.equal(commitManualSide(f.context,before,"right",f.owns).status,"rejected");
+  assert.equal(f.writes.length,0);
 });
