@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {planManualTabRows} from "../src/algorithms/manual-tab-rows.mjs";
+import {planManualTabRows,planManualPlusPlacement,verifyManualPlusPlacement} from "../src/algorithms/manual-tab-rows.mjs";
 import {planAdaptiveTabRows,normalizeAutomaticTabRows} from "../src/algorithms/tab-overflow.mjs";
 
 const plan=(widths,sides,leftCapacity,rightCapacity,plusWidth=36,gap=3)=>
@@ -92,4 +92,59 @@ test("invalid or incomplete snapshots fail closed instead of inventing placement
   assert.throws(()=>normalizeAutomaticTabRows({...auto,lower:[1],hasSecondRow:true},2,1),TypeError);
   assert.throws(()=>normalizeAutomaticTabRows({...auto,topRight:[]},2,1),TypeError);
   assert.throws(()=>normalizeAutomaticTabRows({...auto,topPlus:false},2,1),TypeError);
+});
+
+test("explicit plus corrects native insert-after-active to outer same-side position",()=>{
+  const [l2,l1,r1,r2,n]=Array.from({length:5},()=>({}));
+  const existing=[{unit:l2,side:"left"},{unit:l1,side:"left"},{unit:r1,side:"right"},{unit:r2,side:"right"}];
+  const after=[l2,l1,n,r1,r2],p=planManualPlusPlacement({existing,after,created:n,side:"left"});
+  assert.equal(p.status,"planned");assert.equal(p.move.native,l2);assert.equal(p.move.before,true);
+  assert.equal(verifyManualPlusPlacement(p,after),false);
+  assert.equal(verifyManualPlusPlacement(p,[n,l2,l1,r1,r2]),true);
+  const right=planManualPlusPlacement({existing,after,created:n,side:"right"});
+  assert.equal(right.move.native,r2);assert.equal(right.move.before,false);
+  assert.equal(verifyManualPlusPlacement(right,[l2,l1,r1,r2,n]),true);
+});
+test("outer logical order needs no global adjacency or move on an empty side",()=>{
+  const [a,b,c,n]=Array.from({length:4},()=>({}));
+  const existing=[{unit:a,side:"right"},{unit:b,side:"left"},{unit:c,side:"right"}];
+  const after=[a,n,b,c],p=planManualPlusPlacement({existing,after,created:n,side:"left"});
+  assert.equal(p.move,null);assert.equal(verifyManualPlusPlacement(p,after),true);
+  const empty=[{unit:a,side:"right"},{unit:c,side:"right"}];
+  const q=planManualPlusPlacement({existing:empty,after:[a,n,c],created:n,side:"left"});
+  assert.equal(q.move,null);assert.equal(verifyManualPlusPlacement(q,[a,n,c]),true);
+});
+test("plus insertion plans preserve all existing order for both sides and every insertion gap",()=>{
+  for(const count of [0,1,2,17,100]){
+    const original=Array.from({length:count},()=>({}));
+    const existing=original.map((unit,i)=>({unit,side:i%3===0?"left":"right"}));
+    const n={};
+    for(const side of ["left","right"])for(let gap=0;gap<=count;gap++){
+      const after=[...original.slice(0,gap),n,...original.slice(gap)];
+      const p=planManualPlusPlacement({existing,after,created:n,side});
+      assert.equal(p.status,"planned");
+      let result=after;
+      if(p.move){
+        const index=original.indexOf(p.move.native)+(p.move.before?0:1);
+        assert.ok(index>=0);
+        result=[...original.slice(0,index),n,...original.slice(index)];
+        assert.equal(verifyManualPlusPlacement(p,after),false);
+      }
+      assert.equal(verifyManualPlusPlacement(p,result),true);
+      const filtered=result.filter(x=>x===n||existing.some(e=>e.unit===x&&e.side===side));
+      assert.equal(side==="left"?filtered[0]:filtered.at(-1),n);
+      assert.ok(result.filter(x=>x!==n).every((x,i)=>x===original[i]));
+    }
+  }
+});
+test("stale, duplicate, unknown or concurrent native units reject rather than relocate another tab",()=>{
+  const [a,b,n,x]=Array.from({length:4},()=>({}));
+  const existing=[{unit:a,side:"left"},{unit:b,side:"right"}];
+  const args={existing,after:[a,n,b],created:n,side:"left"};
+  for(const change of [{after:[a,b]},{after:[a,n,b,x]},{after:[b,n,a]},{after:[a,n,n]},{after:[a,n,,]},{created:a},
+      {existing:[existing[0],existing[0]]},{existing:[existing[0],{unit:b,side:"unknown"}]},{side:"unknown"}]){
+    assert.equal(planManualPlusPlacement({...args,...change}).status,"rejected");
+  }
+  const p=planManualPlusPlacement(args);
+  for(const after of [[a,n,b],[n,b,a],[n,a,x],[n,a,b,x],[n,a,a],[n,a,,]])assert.equal(verifyManualPlusPlacement(p,after),false);
 });
