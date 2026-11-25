@@ -3,21 +3,39 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 const base=read("src/styles/base.css.part"),prefs=JSON.parse(read("preferences.json"));
-test("every supported material property has an independently inherited override and valid CSS options",()=>{
- const roles={"top-plane":["tint"],"address":["tint","radius","border"],"home-search":["tint","radius","border"],"hub":["tint","radius","border","shadow"],"downloads":["tint","radius","border","shadow"],"library":["tint","radius","border","shadow"]};
- const get=k=>prefs.find(p=>p.property==="zen.nocturne.material."+k);
- for(const [role,keys] of Object.entries(roles))for(const key of keys){
-  const global=get(key),local=get(role+"."+key),token=["border","shadow"].includes(key)?key+"-strength":key;
-  assert.equal(local.defaultValue,-1);
-  assert.deepEqual(local.options.slice(1),global.options);
-  assert.ok(base.includes("--nocturne-"+role+"-"+token+": var(--nocturne-glass-"+token+")"));
-  for(const opt of local.options.slice(1))assert.ok(base.includes('(-moz-pref("zen.nocturne.material.'+role+'.'+key+'", '+opt.value+')) { --nocturne-'+role+'-'+token+':'));
-  for(const opt of global.options)assert.ok(base.includes('(-moz-pref("zen.nocturne.material.'+key+'", '+opt.value+')) { --nocturne-glass-'+token+':'));
+const contour=read("src/styles/contour.css.part");
+test("all Glass preference options, defaults and independent overrides match CSS tokens",function(){
+ const roles={"top-plane":["tint","opacity","blur"],address:["tint","opacity","blur","radius","border"],"home-search":["tint","opacity","blur","radius","border"],hub:["tint","opacity","blur","radius","border","shadow"],downloads:["tint","opacity","blur","radius","border","shadow"],library:["tint","opacity","blur","radius","border","shadow"]};
+ const defaults={tint:0,opacity:70,blur:24,radius:12,border:12,shadow:20};
+ const prefix="zen.nocturne.material.";
+ const get=k=>{const matches=prefs.filter(p=>p.property===prefix+k);assert.equal(matches.length,1,k);return matches[0]};
+ const rules=[...(base+"\n"+contour).matchAll(/@media \(-moz-pref\("zen\.nocturne\.material\.([^"]+)", (-?\d+)\)\) \{ (--[\w-]+): ([^;]+); \}/g)].map(([,key,value,token,paint])=>({key,value:Number(value),token,paint}));
+ const tokenName=key=>["border","shadow"].includes(key)?key+"-strength":key;
+ const globals={};
+ const expected=new Set(Object.keys(defaults));
+ for(const [key,value] of Object.entries(defaults)){
+  const pref=get(key),token="--nocturne-glass-"+tokenName(key),list=rules.filter(r=>r.key===key);
+  assert.equal(pref.defaultValue,value,key);
+  assert.deepEqual(list.map(r=>r.value).sort((a,b)=>a-b),pref.options.map(o=>o.value).sort((a,b)=>a-b),key);
+  assert.ok(list.every(r=>r.token===token),key);
+  assert.ok(base.includes(token+": "+list.find(r=>r.value===value).paint+";"),key);
+  globals[key]=list;
  }
- assert.equal(get("radius").defaultValue,12);
- assert.equal(get("border").defaultValue,12);
- assert.equal(get("shadow").defaultValue,20);
- assert.ok(!get("top-plane.radius"));
+ for(const [role,keys] of Object.entries(roles))for(const key of keys){
+  const name=role+"."+key;expected.add(name);
+  const local=get(name),global=get(key),suffix=tokenName(key);
+  const topLocal=role==="top-plane"&&["opacity","blur"].includes(key);
+  const token="--nocturne-"+(topLocal?"surface":role)+"-"+suffix;
+  assert.equal(local.defaultValue,-1,name);
+  assert.equal(local.options[0].value,-1,name);
+  assert.deepEqual(local.options.slice(1),global.options,name);
+  assert.ok((topLocal?contour:base).includes(token+": var(--nocturne-glass-"+suffix+");"),name);
+  const list=rules.filter(r=>r.key===name);
+  assert.deepEqual(list.map(r=>r.value).sort((a,b)=>a-b),global.options.map(o=>o.value).sort((a,b)=>a-b),name);
+  for(const rule of list){assert.equal(rule.token,token,name);assert.equal(rule.paint,globals[key].find(r=>r.value===rule.value).paint,name);}
+ }
+ assert.deepEqual(prefs.filter(p=>p.property?.startsWith(prefix)&&p.property!==prefix+"legacy-toolbar").map(p=>p.property.slice(prefix.length)).sort(),[...expected].sort());
+ assert.ok(rules.every(r=>expected.has(r.key)));
 });
 test("download wave final geometry uses the selected radius including zero",()=>{
  const source=read("downloads-indicator.uc.mjs");
