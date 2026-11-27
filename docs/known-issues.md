@@ -1,5 +1,14 @@
 # Known issues
 
+## OP-023 — Empty second tab row appears on narrow laptop
+
+- Status: **OPEN — user-observed native visual defect**, reported 2026-11-27 after the preview.219 startup mitigation. Exact installed version and viewport/DPI at the time of the photograph are not independently confirmed. User confirms the previously missing horizontal interface now works on the affected laptop; this is a limited native startup acceptance, not a full regression pass.
+- Evidence: the upper horizontal strip contains the visible tabs. A separate lower tab-row region is displayed with an isolated `+` control and no visible tab cards; the expanded toolbar surface occupies unnecessary vertical space above the page. A bookmark is visible separately below. Photograph inspected in chat only; do not attach it to the repository.
+- Expected: in resting Automatic layout, if no real tab/group requires the overflow row, collapse the lower tab row and its reserved height, and keep the new-tab control accessible in the appropriate upper row. Do not hide the independent bookmark shelf. Preserve legitimate narrow-width overflow when it actually contains tabs; any intentionally different Manual-mode plus-only behavior must follow its agreed contract.
+- Investigation: inspect actual committed upper/lower partition membership, plus placement/reserved width, lower-lane visibility and geometry/contour handoff. Small viewport, display scaling, stale partition or an empty-lane admission rule are hypotheses, not established causes. The parallel [Manual Mirror Layout workstream](nocturne/manual-mirror-layout.md) is the relevant coordination point; no evidence that its staged algorithm changes caused this report.
+- Acceptance: verify one-row resting layout with few tabs on the affected laptop, genuine overflow and return to one row after closing tabs or widening the window, selection, bookmark coexistence, resize and transition/drag settlement. No orphan plus-only row in Automatic mode, no leftover row height or contour, and no hidden/unreachable tabs. Integrate with the existing row owner rather than adding a second layout controller.
+- Deferred to the current adaptive-tab/Manual Mirror Layout workstream; no runtime fix or version bump in this documentation change.
+
 ## OP-001 — UI jumps for one frame when activating an unloaded tab
 
 - Reported against 0.2.0-preview.1 / 0.1.0-preview.32 runtime.
