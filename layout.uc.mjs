@@ -86,7 +86,7 @@
 /* Nocturne preview.18 diagnostic recorder — read-only chrome telemetry.
  * No content, URLs, titles, input values or native identifiers. */
 (()=>{
-  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.217",PREF="zen.nocturne.diagnostics.enabled";
+  const win=window,doc=document,root=doc.documentElement,VERSION="0.3.0-preview.218",PREF="zen.nocturne.diagnostics.enabled";
   if(typeof win.addUnloadListener!=="function"||root.hasAttribute("popup-window"))return;
   try{win.__nocturneDiagnostics?.dispose?.();}catch{}
   const started=Date.now(),id=started.toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -1794,15 +1794,20 @@ function validNativeValue(name,value){
 }
 function readNativeValue(name){return name===NATIVE_FRAME?prefs.getIntPref(name):prefs.getBoolPref(name);}
 function writeNativeValue(name,value){if(name===NATIVE_FRAME)prefs.setIntPref(name,value);else prefs.setBoolPref(name,value);}
-function snapshot() {
+function snapshot(mark=()=>{}) {
   const capture=name=>{
+    mark("pref-type",name);
     if (prefs.getPrefType(name) !== (name===NATIVE_FRAME?prefs.PREF_INT:prefs.PREF_BOOL))
       throw new Error("Unsupported Zen preference: " + name);
+    mark("pref-read",name);
     return { value: readNativeValue(name), user: prefs.prefHasUserValue(name), owned:false };
   };
+  mark("backup-read");
   const raw = prefs.getStringPref(KEY, "");
   if (raw) {
+    mark("backup-parse");
     const saved = JSON.parse(raw);
+    mark("backup-validation");
     const valid=name=>validNativeValue(name,saved?.[name]?.value)&&typeof saved?.[name]?.user==="boolean";
     const keys=[...Object.keys(TARGET),STARTUP];
     // Extend the pre-cutover backup only after validating all legacy keys.
@@ -1817,13 +1822,14 @@ function snapshot() {
       for (const name of Object.keys(TARGET)) {
         if (saved[name].released===true) { saved[name]=capture(name); changed=true; }
       }
-      if (changed) prefs.setStringPref(KEY, JSON.stringify(saved));
+      if (changed) { mark("backup-write"); prefs.setStringPref(KEY, JSON.stringify(saved)); }
       return saved;
     }
     throw new Error("Invalid OnePlane layout backup; refusing to overwrite it.");
   }
   const saved = {};
   for (const name of [...Object.keys(TARGET), STARTUP]) saved[name]=capture(name);
+  mark("backup-write");
   prefs.setStringPref(KEY, JSON.stringify(saved));
   return saved;
 }
@@ -12024,33 +12030,79 @@ function waitFreeAtStartup(){
   });
 }
 
+// Bounded read-only failure report: no raw messages, stacks, stored values or paths.
+function layoutVersion(value){
+  return typeof value==="string"&&/^\d{1,4}(?:\.\d{1,4}){1,3}(?:[ab]\d{0,4}|c)?$/.test(value)?value:null;
+}
+function layoutFailureProbe(stage,resource,error,sine){
+  const read=fn=>{try{return fn();}catch{return null;}};
+  return {stage,resource,name:nocturneErrorClass(error),
+    zen:{version:read(()=>layoutVersion(Services.appinfo.version))},
+    gecko:{version:read(()=>layoutVersion(Services.appinfo.platformVersion))},
+    sine:{version:sine.version,status:sine.status},
+    compactManager:read(()=>!!window.gZenCompactModeManager),
+    compactAPI:read(()=>typeof window.gZenCompactModeManager?.hideToolbar==="function"),
+    backupPresent:read(()=>prefs.prefHasUserValue(KEY)),
+    backupType:read(()=>prefs.getPrefType(KEY)),
+    preferences:[...Object.keys(TARGET),STARTUP].map(key=>({
+      resource:key,actual:read(()=>prefs.getPrefType(key)),
+      expected:read(()=>key===NATIVE_FRAME?prefs.PREF_INT:prefs.PREF_BOOL)
+    }))
+  };
+}
+function startLayoutSineVersionProbe(current,sine){
+  // Sine 2.3.3 services/updates.js uses chrome/JS/engine.json.
+  // Do not wait for I/O or alter activation/cleanup timing.
+  try{
+    if(typeof window.__nocturneTrace!=="function"||
+       !prefs.getBoolPref("zen.nocturne.diagnostics.enabled",true)||
+       typeof IOUtils==="undefined"||typeof PathUtils==="undefined")return;
+    sine.status="pending";
+    void IOUtils.readJSON(PathUtils.join(PathUtils.profileDir,"chrome","JS","engine.json")).then(data=>{
+      sine.version=layoutVersion(data?.version);sine.status=sine.version?"available":"unavailable";
+      if(current())try{window.__nocturneTrace?.("layout.engine.version",{version:sine.version,status:sine.status},{flush:true});}catch{}
+    },()=>{
+      sine.status="unavailable";
+      if(current())try{window.__nocturneTrace?.("layout.engine.version",{version:null,status:sine.status},{flush:true});}catch{}
+    });
+  }catch{sine.status="unavailable";}
+}
+
 async function activate() {
     typeof window!=="undefined"&&window.__nocturneTrace?.("layout.activate.begin",()=>({reloadingLayout}),{sample:1800});
   const current=()=>!disposed&&!window.closed&&window[CONTROLLER]===controller;
+  let stage="native-ready",resource=null;
+  const mark=(nextStage,nextResource=null)=>{stage=nextStage;resource=nextResource;};
+  const sine={version:null,status:"unavailable"};
+  startLayoutSineVersionProbe(current,sine);
   try {
     await window.SessionStore?.promiseAllWindowsRestored;
     await window.gZenWorkspaces?.promiseInitialized;
     typeof window!=="undefined"&&window.__nocturneTrace?.("layout.native.ready",()=>({closed:window.closed}),{sample:1800});
     if (!current() || root.hasAttribute("popup-window")) return;
+    mark("free-startup");
     if(!reloadingLayout)await waitFreeAtStartup();
     if(!current())return;
+    mark("compact-api");
     const manager = window.gZenCompactModeManager;
     if (!manager || typeof manager.hideToolbar !== "function") {
       throw new Error("Unsupported Zen Compact Mode API.");
     }
+    mark("peer-lease");
     const shared=otherActiveWindow();
     if(!current())return;
     preferenceMutation=true;
     ownsPreferences=true;
     try{
       let saved;
-      try{saved=shared?null:snapshot();}
+      try{saved=shared?null:snapshot(mark);}
       catch(error){
         // No native target has been written by this acquisition yet.
         // Do not restore an unvalidated backup.
         ownsPreferences=false;throw error;
       }
       if(!current())return;
+      mark("pref-lease");
       applied=true;
       try{window.__nocturneTrace?.("layout.prefs.lease",{action:"acquire",shared},{flush:true});}catch{}
       // Only the first live window applies global native preferences.
@@ -12058,13 +12110,16 @@ async function activate() {
         if(!current())return;
         // Native Library cutover is selected only for a profile that opted into Nocturne Library.
         if(name===NATIVE_LIBRARY&&!prefs.getBoolPref("zen.nocturne.library.preview",true))continue;
+        mark("target-read",name);
         const actual=readNativeValue(name);
         if(actual===value)continue;
         if(saved[name].owned!==undefined){
           saved[name]={value:actual,user:prefs.prefHasUserValue(name),owned:true};
+          mark("target-checkpoint",name);
           prefs.setStringPref(KEY,JSON.stringify(saved));
           if(!current())return;
         }
+        mark("target-write",name);
         writeNativeValue(name,value);
       }
     }finally{
@@ -12072,6 +12127,7 @@ async function activate() {
       finishCleanup();
     }
     if(!current())return;
+    mark("native-layout");
     try{window.__nocturneTrace?.("layout.frame",()=>({separation:readNativeValue(NATIVE_FRAME),borderless:readNativeValue(NATIVE_FRAME)===0}),{flush:true});}catch{}
     // Zen's supported preference blocks toggle and edge-swipe admission.
     // Close an already visible native Library via its own API, not DOM hiding.
@@ -12087,6 +12143,7 @@ async function activate() {
     // emit only its native layout notification, without duplicate mutation.
     window.dispatchEvent(new window.CustomEvent("ZenCompactMode:LayoutUpdate"));
     if(!current())return;
+    mark("strip-mount");
     const strip=installTabStrip();
     // Mount dispatches synchronous native/UI events. Cleanup may have run
     // before installTabStrip returned its handle.
@@ -12096,6 +12153,7 @@ async function activate() {
       return;
     }
     removeTabStrip = strip;
+    mark("publish-ready");
     typeof window!=="undefined"&&window.__nocturneTrace?.("layout.strip.installed",()=>({installed:!!removeTabStrip}),{sample:1800});
     // Native state changes and animations remain owned by Zen.
     root.setAttribute("oneplane-active", "true");
@@ -12112,7 +12170,9 @@ async function activate() {
       window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
     }));
   } catch (error) {
-    console.error("[OnePlane] Layout activation failed:",nocturneErrorClass(error));
+    const failureClass=nocturneErrorClass(error);
+    try{window.__nocturneTrace?.("layout.activate.failed",()=>layoutFailureProbe(stage,resource,error,sine),{flush:true});}catch{}
+    console.error("[OnePlane] Layout activation failed:",failureClass,stage,resource);
     cleanup();
   }
 }

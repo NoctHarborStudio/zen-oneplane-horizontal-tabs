@@ -1,3 +1,7 @@
+## 0.3.0-preview.218 — Fresh-profile Layout activation diagnostics
+
+Record the exact activation stage and allowlisted native preference key/type, Compact API admission, backup presence/type, application and Gecko versions, and best-effort Sine engine version before Layout cleanup. Retain fail-open cleanup, preference ownership and existing animation/geometry behavior. This is a diagnostic build, not a confirmed fix for the reported clean-profile failure.
+
 ## 0.3.0-preview.217 — Global and local Glass settings (DS-M4/M5/M6)
 
 Add theme-adaptive tint presets, corner radius, outline and shadow strengths with independent per-property role inheritance wherever those treatments apply. Keep flat top-plane geometry and search clipping semantics. Downloads wave terminal corners and compact-to-full reveal use the resolved resting radius; address motion accepts an explicit zero radius. Preserve forced-colors fallback and native data/motion timing. Native visual acceptance pending.

@@ -208,3 +208,30 @@ test("legacy native layout backup migrates absent integer frame without losing p
  assert.deepEqual(JSON.parse(f.values.get(KEY))[key],{value:8,user:false,owned:true});
  b.cleanup();assert.equal(f.values.has(key),false);assert.equal(f.prefs.getIntPref(key),8);assert.equal(f.values.has(KEY),false);
 });
+
+test("failed Compact API admission records stage and leaves native preferences alone",async()=>{
+ const f=fixture(),events=[];const a=f.mount({__nocturneTrace:(event,data)=>{if(event==="layout.activate.failed")events.push(data());}});
+ delete a.window.gZenCompactModeManager;await a.activate();
+ assert.equal(events.length,1);assert.equal(events[0].stage,"compact-api");assert.equal(events[0].compactAPI,false);
+ assert.equal(events[0].resource,null);assert.deepEqual(f.writes,[]);assert.equal(a.controller.ownsPreferences,false);
+});
+test("missing native preference records exact key and type without values",async()=>{
+ const f=fixture(),events=[],key="zen.library.enabled",get=f.prefs.getPrefType;
+ f.prefs.getPrefType=k=>k===key?0:get(k);
+ const a=f.mount({__nocturneTrace:(event,data)=>{if(event==="layout.activate.failed")events.push(data());}});
+ await a.activate();const d=events[0];assert.equal(d.stage,"pref-type");assert.equal(d.resource,key);
+ assert.deepEqual(d.preferences.find(x=>x.resource===key),{resource:key,actual:0,expected:128});
+ assert.deepEqual(f.writes,[]);assert.equal(f.values.has(KEY),false);
+});
+test("malformed backup records parse stage without exposing stored contents",async()=>{
+ const f=fixture(),events=[],secret="https://example.invalid/private";f.values.set(KEY,secret);
+ const a=f.mount({__nocturneTrace:(event,data)=>{if(event==="layout.activate.failed")events.push(data());}});
+ await a.activate();assert.equal(events[0].stage,"backup-parse");assert.equal(events[0].backupPresent,true);
+ assert.equal(JSON.stringify(events[0]).includes(secret),false);assert.equal(f.values.get(KEY),secret);assert.deepEqual(f.writes,[]);
+});
+test("invalid backup schema records validation stage and trace failure cannot prevent cleanup",async()=>{
+ const f=fixture(),events=[];f.values.set(KEY,"{}");
+ const a=f.mount({__nocturneTrace:(event,data)=>{if(event==="layout.activate.failed"){events.push(data());throw Error("trace failed");}}});
+ await a.activate();assert.equal(events[0].stage,"backup-validation");assert.equal(a.controller.ownsPreferences,false);
+ assert.equal(a.window[CTRL],undefined);assert.equal(f.values.get(KEY),"{}");assert.deepEqual(f.writes,[]);
+});

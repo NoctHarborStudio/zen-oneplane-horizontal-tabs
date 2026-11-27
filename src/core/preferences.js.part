@@ -34,15 +34,20 @@ function validNativeValue(name,value){
 }
 function readNativeValue(name){return name===NATIVE_FRAME?prefs.getIntPref(name):prefs.getBoolPref(name);}
 function writeNativeValue(name,value){if(name===NATIVE_FRAME)prefs.setIntPref(name,value);else prefs.setBoolPref(name,value);}
-function snapshot() {
+function snapshot(mark=()=>{}) {
   const capture=name=>{
+    mark("pref-type",name);
     if (prefs.getPrefType(name) !== (name===NATIVE_FRAME?prefs.PREF_INT:prefs.PREF_BOOL))
       throw new Error("Unsupported Zen preference: " + name);
+    mark("pref-read",name);
     return { value: readNativeValue(name), user: prefs.prefHasUserValue(name), owned:false };
   };
+  mark("backup-read");
   const raw = prefs.getStringPref(KEY, "");
   if (raw) {
+    mark("backup-parse");
     const saved = JSON.parse(raw);
+    mark("backup-validation");
     const valid=name=>validNativeValue(name,saved?.[name]?.value)&&typeof saved?.[name]?.user==="boolean";
     const keys=[...Object.keys(TARGET),STARTUP];
     // Extend the pre-cutover backup only after validating all legacy keys.
@@ -57,13 +62,14 @@ function snapshot() {
       for (const name of Object.keys(TARGET)) {
         if (saved[name].released===true) { saved[name]=capture(name); changed=true; }
       }
-      if (changed) prefs.setStringPref(KEY, JSON.stringify(saved));
+      if (changed) { mark("backup-write"); prefs.setStringPref(KEY, JSON.stringify(saved)); }
       return saved;
     }
     throw new Error("Invalid OnePlane layout backup; refusing to overwrite it.");
   }
   const saved = {};
   for (const name of [...Object.keys(TARGET), STARTUP]) saved[name]=capture(name);
+  mark("backup-write");
   prefs.setStringPref(KEY, JSON.stringify(saved));
   return saved;
 }
