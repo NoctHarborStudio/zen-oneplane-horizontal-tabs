@@ -183,11 +183,8 @@ async function activate() {
     mark("free-startup");
     if(!reloadingLayout)await waitFreeAtStartup();
     if(!current())return;
-    mark("compact-api");
-    const manager = window.gZenCompactModeManager;
-    if (!manager || typeof manager.hideToolbar !== "function") {
-      throw new Error("Unsupported Zen Compact Mode API.");
-    }
+    // hideToolbar() is no longer called: the reversible preference owner
+    // and native LayoutUpdate notification are authoritative.
     mark("peer-lease");
     const shared=otherActiveWindow();
     if(!current())return;
@@ -211,6 +208,11 @@ async function activate() {
         // Native Library cutover is selected only for a profile that opted into Nocturne Library.
         if(name===NATIVE_LIBRARY&&!prefs.getBoolPref("zen.nocturne.library.preview",true))continue;
         mark("target-read",name);
+        if((name===NATIVE_LIBRARY||name===NATIVE_FRAME)&&
+           (!saved[name]||prefs.getPrefType(name)!==(name===NATIVE_FRAME?prefs.PREF_INT:prefs.PREF_BOOL))){
+          try{window.__nocturneTrace?.("layout.pref.skipped",{resource:name,reason:"unsupported-native-pref"});}catch{}
+          continue;
+        }
         const actual=readNativeValue(name);
         if(actual===value)continue;
         if(saved[name].owned!==undefined){
@@ -231,7 +233,7 @@ async function activate() {
     try{window.__nocturneTrace?.("layout.frame",()=>({separation:readNativeValue(NATIVE_FRAME),borderless:readNativeValue(NATIVE_FRAME)===0}),{flush:true});}catch{}
     // Zen's supported preference blocks toggle and edge-swipe admission.
     // Close an already visible native Library via its own API, not DOM hiding.
-    if(!prefs.getBoolPref(NATIVE_LIBRARY,true)){
+    if(typeof prefs.getPrefType==="function"&&prefs.getPrefType(NATIVE_LIBRARY)===prefs.PREF_BOOL&&!prefs.getBoolPref(NATIVE_LIBRARY,true)){
       try{
         const nativeLibrary=window.customElements?.get("zen-library");
         if(nativeLibrary?.isLibraryOpen||nativeLibrary?.isLibrarySlightlyOpen)nativeLibrary.close();
@@ -270,9 +272,8 @@ async function activate() {
       window.dispatchEvent(new window.CustomEvent("OnePlane:StartupState"));
     }));
   } catch (error) {
-    const failureClass=nocturneErrorClass(error);
     try{window.__nocturneTrace?.("layout.activate.failed",()=>layoutFailureProbe(stage,resource,error,sine),{flush:true});}catch{}
-    console.error("[OnePlane] Layout activation failed:",failureClass,stage,resource);
+    console.error("[OnePlane] Layout activation failed:",nocturneErrorClass(error),stage,resource);
     cleanup();
   }
 }

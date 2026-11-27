@@ -67,7 +67,7 @@ test("layout cleanup continues after feature disposal throws",()=>{
 
 test("layout preference restore isolates failed keys and retains complete backup",()=>{
  const src=read("src/core/preferences.js.part");
- const code=src.slice(src.indexOf("function validNativeValue("),src.indexOf("function snapshot()"))+src.slice(src.indexOf("function restorePrefs("),src.indexOf("function markClosing"));
+ const code=src.slice(src.indexOf("function validNativeValue("),src.indexOf("function snapshot("))+src.slice(src.indexOf("function restorePrefs("),src.indexOf("function markClosing"));
  const backup={a:{value:false,user:true},b:{value:true,user:false},c:{value:false,user:true}};
  const values=new Map([["a",true],["b",false],["c",false]]);
  const cleared=[],traces=[];let fail=true,raw=JSON.stringify(backup);
@@ -97,7 +97,7 @@ test("new activation captures released preference keys without losing unresolved
 });
 test("failed backup removal checkpoints release progress before retry",()=>{
  const src=read("src/core/preferences.js.part");
- const code=src.slice(src.indexOf("function validNativeValue("),src.indexOf("function snapshot()"))+src.slice(src.indexOf("function restorePrefs("),src.indexOf("function markClosing"));
+ const code=src.slice(src.indexOf("function validNativeValue("),src.indexOf("function snapshot("))+src.slice(src.indexOf("function restorePrefs("),src.indexOf("function markClosing"));
  let raw=JSON.stringify({a:{value:false,user:true}}),value=true,fail=true,sets=0;
  const prefs={getStringPref:()=>raw,setStringPref(k,v){raw=v;},getBoolPref:()=>value,
   setBoolPref(k,v){sets++;value=v;},clearUserPref(){if(fail)throw Error("locked backup");raw="";}};
@@ -115,7 +115,7 @@ test("Hub and drag publication occur only in guarded strip mount",()=>{
 
 test("layout activation releases strip returned after synchronous cleanup and never publishes readiness",async()=>{
  const src=read("src/core/bootstrap.js.part");
- const code=src.slice(src.indexOf("async function activate()"),src.indexOf("const reloadingLayout="));
+ const code=src.slice(src.indexOf("function layoutVersion("),src.indexOf("const reloadingLayout="));
  const run=new Function(`let disposed=false,applied=false,ownsPreferences=false,removeTabStrip=null,preferenceMutation=false;
  const reloadingLayout=true,startupRecord={},CONTROLLER="controller",controller={};const marks=[],calls=[];
  const root={hasAttribute:()=>false,setAttribute:k=>marks.push(k)};
@@ -140,7 +140,7 @@ test("Hub overlay stale generation cannot handle Escape after rebinding",()=>{
 
 test("MB-014 native exit retains only owned sidebar preference; live disable restores baseline",()=>{
  const src=read("src/core/preferences.js.part");
- const code=src.slice(src.indexOf("function validNativeValue("),src.indexOf("function snapshot()"))+src.slice(src.indexOf("function restorePrefs("),src.indexOf("function markClosing"));
+ const code=src.slice(src.indexOf("function validNativeValue("),src.indexOf("function snapshot("))+src.slice(src.indexOf("function restorePrefs("),src.indexOf("function markClosing"));
  const side="zen.view.compact.hide-tabbar",other="zen.view.compact.hide-toolbar";
  for(const scenario of ["owned","no-op","external-change"]){
   const original={value:scenario==="no-op",user:true,owned:scenario!=="no-op"};

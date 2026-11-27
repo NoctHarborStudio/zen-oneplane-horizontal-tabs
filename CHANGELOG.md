@@ -1,3 +1,7 @@
+## 0.3.0-preview.219 — Layout startup admission hardening
+
+Remove the unused Compact Mode hideToolbar API and startup preference from mandatory admission. Skip unsupported native Library and content-frame enhancements without creating or overwriting their preferences; retain the required layout preference checks, existing backup, native mount and cleanup. Repair diagnostic/lifecycle fixture extraction and retain exact stage reporting. No animation or geometry changes. Native resolution of the reported fresh-profile failure remains unverified.
+
 ## 0.3.0-preview.218 — Fresh-profile Layout activation diagnostics
 
 Record the exact activation stage and allowlisted native preference key/type, Compact API admission, backup presence/type, application and Gecko versions, and best-effort Sine engine version before Layout cleanup. Retain fail-open cleanup, preference ownership and existing animation/geometry behavior. This is a diagnostic build, not a confirmed fix for the reported clean-profile failure.

@@ -209,19 +209,39 @@ test("legacy native layout backup migrates absent integer frame without losing p
  b.cleanup();assert.equal(f.values.has(key),false);assert.equal(f.prefs.getIntPref(key),8);assert.equal(f.values.has(KEY),false);
 });
 
-test("failed Compact API admission records stage and leaves native preferences alone",async()=>{
- const f=fixture(),events=[];const a=f.mount({__nocturneTrace:(event,data)=>{if(event==="layout.activate.failed")events.push(data());}});
+test("unused Compact API and startup pref cannot block mounting",async()=>{
+ const f=fixture(),events=[],key="zen.view.compact.enable-at-startup",get=f.prefs.getPrefType;
+ f.prefs.getPrefType=k=>k===key?0:get(k);
+ const a=f.mount({__nocturneTrace:(event,data)=>{if(event==="layout.activate.failed")events.push(data());}});
  delete a.window.gZenCompactModeManager;await a.activate();
- assert.equal(events.length,1);assert.equal(events[0].stage,"compact-api");assert.equal(events[0].compactAPI,false);
- assert.equal(events[0].resource,null);assert.deepEqual(f.writes,[]);assert.equal(a.controller.ownsPreferences,false);
+ assert.equal(events.length,0);assert.equal(a.controller.active,true);
+ assert.equal(Object.hasOwn(JSON.parse(f.values.get(KEY)),key),false);
+ a.cleanup();assert.equal(f.values.has(KEY),false);assert.equal(f.writes.some(([k])=>k===key),false);
 });
-test("missing native preference records exact key and type without values",async()=>{
- const f=fixture(),events=[],key="zen.library.enabled",get=f.prefs.getPrefType;
+test("missing required native layout preference still fails with exact key and type",async()=>{
+ const f=fixture(),events=[],key=A,get=f.prefs.getPrefType;
  f.prefs.getPrefType=k=>k===key?0:get(k);
  const a=f.mount({__nocturneTrace:(event,data)=>{if(event==="layout.activate.failed")events.push(data());}});
  await a.activate();const d=events[0];assert.equal(d.stage,"pref-type");assert.equal(d.resource,key);
  assert.deepEqual(d.preferences.find(x=>x.resource===key),{resource:key,actual:0,expected:128});
  assert.deepEqual(f.writes,[]);assert.equal(f.values.has(KEY),false);
+});
+test("optional unsupported native enhancements do not block strip or create prefs",async()=>{
+ const f=fixture(),keys=["zen.library.enabled","zen.theme.content-element-separation"],get=f.prefs.getPrefType;
+ f.prefs.getPrefType=k=>keys.includes(k)?0:get(k);
+ f.defaults.delete(keys[0]);f.defaults.delete(keys[1]);f.defaults.set("zen.nocturne.library.preview",true);
+ const a=f.mount();await a.activate();assert.equal(a.controller.active,true);
+ const backup=JSON.parse(f.values.get(KEY));
+ for(const key of keys){assert.equal(Object.hasOwn(backup,key),false);assert.equal(f.writes.some(([k])=>k===key),false);}
+ a.cleanup();assert.equal(f.values.has(KEY),false);
+});
+test("missing optional keys migrate only when a supported native type becomes available",async()=>{
+ const f=fixture(),key="zen.theme.content-element-separation",get=f.prefs.getPrefType;let available=false;
+ f.prefs.getPrefType=k=>k===key&&!available?0:get(k);
+ const a=f.mount();await a.activate();assert.equal(a.controller.active,true);assert.equal(Object.hasOwn(JSON.parse(f.values.get(KEY)),key),false);
+ a.window.closed=true;available=true;const b=f.mount();await b.activate();
+ assert.equal(b.controller.active,true);assert.equal(f.prefs.getIntPref(key),0);assert.equal(JSON.parse(f.values.get(KEY))[key].value,8);
+ b.cleanup();assert.equal(f.prefs.getIntPref(key),8);assert.equal(f.values.has(KEY),false);
 });
 test("malformed backup records parse stage without exposing stored contents",async()=>{
  const f=fixture(),events=[],secret="https://example.invalid/private";f.values.set(KEY,secret);

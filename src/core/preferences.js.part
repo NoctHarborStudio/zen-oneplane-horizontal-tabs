@@ -37,8 +37,12 @@ function writeNativeValue(name,value){if(name===NATIVE_FRAME)prefs.setIntPref(na
 function snapshot(mark=()=>{}) {
   const capture=name=>{
     mark("pref-type",name);
-    if (prefs.getPrefType(name) !== (name===NATIVE_FRAME?prefs.PREF_INT:prefs.PREF_BOOL))
+    if (prefs.getPrefType(name) !== (name===NATIVE_FRAME?prefs.PREF_INT:prefs.PREF_BOOL)) {
+      // Library cutover and the content frame are optional enhancements.
+      // Never create or overwrite an unsupported native preference.
+      if(name===NATIVE_LIBRARY||name===NATIVE_FRAME)return null;
       throw new Error("Unsupported Zen preference: " + name);
+    }
     mark("pref-read",name);
     return { value: readNativeValue(name), user: prefs.prefHasUserValue(name), owned:false };
   };
@@ -49,7 +53,9 @@ function snapshot(mark=()=>{}) {
     const saved = JSON.parse(raw);
     mark("backup-validation");
     const valid=name=>validNativeValue(name,saved?.[name]?.value)&&typeof saved?.[name]?.user==="boolean";
-    const keys=[...Object.keys(TARGET),STARTUP];
+    // STARTUP is user-owned and never written/restored by Layout. Preserve
+    // any legacy entry, but do not require it for acquisition.
+    const keys=Object.keys(TARGET);
     // Extend the pre-cutover backup only after validating all legacy keys.
     // An absent key has never been owned; do not invent its original value.
     const addedKeys=[NATIVE_LIBRARY,NATIVE_FRAME];
@@ -58,9 +64,15 @@ function snapshot(mark=()=>{}) {
       // A partial release may leave a complete backup. Reacquire only
       // previously released keys from their current user/default state.
       let changed=false;
-      for(const name of addedKeys)if(missing(name)){saved[name]=capture(name);changed=true;}
+      for(const name of addedKeys)if(missing(name)){
+        const entry=capture(name);
+        if(entry){saved[name]=entry;changed=true;}
+      }
       for (const name of Object.keys(TARGET)) {
-        if (saved[name].released===true) { saved[name]=capture(name); changed=true; }
+        if (saved[name]?.released===true) {
+          const entry=capture(name);
+          if(entry){saved[name]=entry;changed=true;}
+        }
       }
       if (changed) { mark("backup-write"); prefs.setStringPref(KEY, JSON.stringify(saved)); }
       return saved;
@@ -68,7 +80,10 @@ function snapshot(mark=()=>{}) {
     throw new Error("Invalid OnePlane layout backup; refusing to overwrite it.");
   }
   const saved = {};
-  for (const name of [...Object.keys(TARGET), STARTUP]) saved[name]=capture(name);
+  for (const name of Object.keys(TARGET)) {
+    const entry=capture(name);
+    if(entry)saved[name]=entry;
+  }
   mark("backup-write");
   prefs.setStringPref(KEY, JSON.stringify(saved));
   return saved;
