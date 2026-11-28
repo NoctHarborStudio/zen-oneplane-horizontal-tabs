@@ -95,3 +95,104 @@ test("reentrant selection changes stop writes and partial native exceptions rema
   assert.equal(g.call("write","right",arm).status,"unverified");assert.equal(g.values.get(g.a.t),"right");
   assert.ok(!JSON.stringify(g.traces).includes("secret"));
 });
+
+function searchFixture(){
+  const f=fixture(),w=f.a.w,browser=w.gBrowser,manager=w.gZenWorkspaces;
+  const events=new Map(),timers=new Map(),tabs=[f.a.t],seen=[];
+  let nativeCalls=0,loadCalls=0,owner=0,open=false,seq=0,kind="normal",nextTimer=0;
+  manager.activeWorkspace="workspace-id";manager.allStoredTabs=tabs;
+  browser.tabs=tabs;browser.getTabForBrowser=target=>tabs.find(t=>t.linkedBrowser===target);
+  browser.isTab=t=>tabs.includes(t);
+  w.addEventListener=(type,fn)=>events.set(type,fn);
+  w.removeEventListener=(type,fn)=>{if(events.get(type)===fn)events.delete(type)};
+  w.setTimeout=fn=>{timers.set(++nextTimer,fn);return nextTimer};
+  w.clearTimeout=id=>timers.delete(id);
+  const parent=Object.create({loadURL(request){
+    loadCalls++;
+    if(kind==="throw")throw Error("native");
+    const params=request.params;
+    if(kind==="existing"){
+      params.resolveOnNewTabCreated?.(f.a.t.linkedBrowser);return "native";
+    }
+    const linkedBrowser={},t={linkedBrowser,ownerDocument:{defaultView:w},isConnected:true};
+    tabs.push(t);seen.push(t);
+    if(kind==="late")later=()=>params.resolveOnNewTabCreated?.(linkedBrowser);
+    else if(kind==="double"){params.resolveOnNewTabCreated?.(linkedBrowser);params.resolveOnNewTabCreated?.(linkedBrowser);}
+    else params.resolveOnNewTabCreated?.(linkedBrowser);
+    return "native";
+  }});
+  parent.browserWindow=w;parent.rendersInContentProcess=false;
+  f.a.t.linkedBrowser={};
+  let later=()=>{},foreignCalls=0;
+  const bar=Object.create({pickResult({event}){
+    nativeCalls++;
+    if(kind==="switch")return "switch";
+    const params=kind==="foreign"?{resolveOnNewTabCreated:()=>foreignCalls++}:{};
+    const request={where:"tab",params};
+    const result=parent.loadURL(request);
+    if(kind==="multiple")parent.loadURL({where:"tab",params:{}});
+    return result;
+  }});
+  bar.parentController=parent;bar.hasAttribute=k=>k==="zen-newtab"&&open;
+  w.gURLBar=bar;w.gZenUIManager={handleNewTab(a,b,c,d,token){token.id=++seq;owner=seq;open=true;return true},
+    _isOwner:id=>id===owner,matchesCloseToken:(token,e)=>token.id===e.detail.closeSeq};
+  return {...f,w,bar,parent,events,timers,seen,nativeCalls:()=>nativeCalls,loadCalls:()=>loadCalls,foreignCalls:()=>foreignCalls,
+    setKind:v=>{kind=v},supersede:()=>{owner++},close:()=>events.get("ZenURLBarClosed")?.({detail:{closeSeq:owner}}),
+    late:()=>later(),pick:(event={isTrusted:true,eventPhase:2})=>bar.pickResult({event}),
+    last:()=>f.traces.filter(x=>x.data.stage==="search").at(-1)?.data};
+}
+test("armed native search observes one exact callback and releases instance shadows",()=>{
+  const f=searchFixture();
+  assert.equal(f.call("startSearch",arm).status,"armed");
+  assert.equal(f.pick(),"native");
+  assert.equal(f.last().status,"observed");
+  assert.equal(f.call("searchResult").status,"observed");
+  assert.equal(f.last().exact,true);assert.equal(f.last().callbacks,1);assert.equal(f.last().released,true);
+  assert.equal(f.nativeCalls(),1);assert.equal(f.loadCalls(),1);assert.equal(f.writes.length,0);
+  assert.equal(Object.hasOwn(f.bar,"pickResult"),false);assert.equal(Object.hasOwn(f.parent,"loadURL"),false);
+  assert.equal(f.events.size,0);assert.equal(f.timers.size,0);
+});
+test("switch, stale or buffered dispatch, existing browser and multiple callbacks cannot prove creation",()=>{
+  for(const kind of ["switch","existing","double","multiple","late","foreign"]){
+    const f=searchFixture();f.setKind(kind);f.call("startSearch",arm);f.pick();f.late();
+    assert.equal(f.last().status,"uncorrelated",kind);
+    assert.equal(f.nativeCalls(),1);assert.equal(f.writes.length,0);
+    assert.equal(f.events.size,0);assert.equal(f.timers.size,0);
+    if(kind==="foreign")assert.equal(f.foreignCalls(),1);
+  }
+  for(const kind of ["buffered","untrusted","superseded"]){
+    const f=searchFixture();f.call("startSearch",arm);
+    if(kind==="superseded")f.supersede();
+    f.pick({isTrusted:kind!=="untrusted",eventPhase:kind==="buffered"?0:2});
+    assert.equal(f.last().status,"uncorrelated",kind);assert.equal(f.nativeCalls(),1);
+  }
+});
+test("native exceptions, cancellation, expiry and explicit stop release exact probe resources",()=>{
+  const f=searchFixture();f.setKind("throw");f.call("startSearch",arm);
+  assert.throws(()=>f.pick(),/native/);assert.equal(f.last().status,"uncorrelated");
+  assert.equal(Object.hasOwn(f.parent,"loadURL"),false);
+  for(const kind of ["close","expiry","stop"]){
+    const g=searchFixture();g.call("startSearch",arm);
+    if(kind==="close")g.close();
+    if(kind==="expiry")g.timers.values().next().value();
+    if(kind==="stop")g.call("stopSearch");
+    assert.equal(g.events.size,0);assert.equal(g.timers.size,0);
+    assert.equal(g.call("searchResult").status,kind==="close"?"closed":kind==="expiry"?"expired":"stopped");
+    assert.equal(Object.hasOwn(g.bar,"pickResult"),false);
+    assert.equal(g.nativeCalls(),0);
+  }
+});
+test("unsupported context and foreign instance methods are not modified",()=>{
+  for(const kind of ["unarmed","private","proxy","foreign-parent","foreign-bar"]){
+    const f=searchFixture();
+    if(kind==="private")f.w.private=true;
+    if(kind==="proxy")f.parent.rendersInContentProcess=true;
+    if(kind==="foreign-parent")f.parent.loadURL=()=>{};
+    if(kind==="foreign-bar")f.bar.pickResult=()=>{};
+    const pick=f.bar.pickResult,load=f.parent.loadURL;
+    const result=f.call("startSearch",kind==="unarmed"?null:arm);
+    assert.ok(["unsupported","rejected"].includes(result.status),kind);
+    assert.equal(f.bar.pickResult,pick);assert.equal(f.parent.loadURL,load);
+    assert.equal(f.events.size,0);assert.equal(f.timers.size,0);
+  }
+});

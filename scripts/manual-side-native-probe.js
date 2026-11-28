@@ -1,7 +1,9 @@
 /* Manual Mirror Layout native evidence probe. Developer-only Browser Console
  * script, NOT a Sine entrypoint. Review before pasting; use a disposable Zen
  * profile. Loading this script performs no native writes or listener setup.
- * Only the separate probe key may be set/deleted by explicit commands. */
+ * Only the separate probe key may be set/deleted by explicit commands.
+ * Armed search observation temporarily shadows exact instance methods;
+ * it never changes the native navigation destination or writes metadata. */
 var nocturneSideProbe = (() => {
   const KEY="nocturne.manual-side.probe.v1", ARM="disposable-profile";
   const {SessionStore:store}=ChromeUtils.importESModule("moz-src:///browser/components/sessionstore/SessionStore.sys.mjs");
@@ -91,7 +93,142 @@ var nocturneSideProbe = (() => {
       return current(s)&&details.local===classify(value)?report(operation,"verified",s,details):report(operation,"unverified",s);
     }catch{return report(operation,"unverified",s);}
   }
+  // Developer-only experiment. Observe a callback on the exact synchronous
+  // native result dispatch, not the next TabOpen. Never assign a side.
+  let searchProbe=null,lastSearch=null;
+  function shadow(target,key,make){
+    if(!target||Object.hasOwn(target,key)||typeof target[key]!=="function")return null;
+    const original=target[key],wrapper=make(original);
+    Object.defineProperty(target,key,{value:wrapper,writable:true,configurable:true});
+    return ()=>{
+      const d=Object.getOwnPropertyDescriptor(target,key);
+      if(d?.value!==wrapper)return false;
+      if(!d.configurable)return false;
+      return delete target[key];
+    };
+  }
+  function finishSearch(s,status){
+    if(!s||searchProbe!==s)return;
+    searchProbe=null;
+    let released=true;
+    for(const cleanup of s.cleanup.reverse()){
+      try{if(cleanup()===false)released=false;}catch{released=false;}
+    }
+    s.cleanup.length=0;
+    lastSearch={stage:"search",status,released,loads:s.loads,callbacks:s.callbacks,exact:s.exact};
+    report("search",status,s,{released,loads:s.loads,callbacks:s.callbacks,exact:s.exact});
+  }
+  function stopSearch(){
+    if(!searchProbe)return JSON.stringify({stage:"search",status:"inactive"});
+    finishSearch(searchProbe,"stopped");
+    return JSON.stringify({stage:"search",status:"stopped"});
+  }
+  function startSearch(arm){
+    if(arm!==ARM||searchProbe)return report("search","rejected",null);
+    let s=null;
+    try{
+      const w=Services.wm.getMostRecentWindow("navigator:browser"),bar=w?.gURLBar,ui=w?.gZenUIManager;
+      const parent=bar?.parentController,browser=w?.gBrowser,manager=w?.gZenWorkspaces;
+      if(!eligibleWindow(w)||!bar||bar.hasAttribute("zen-newtab")||
+         typeof ui?.handleNewTab!=="function"||typeof ui._isOwner!=="function"||
+         typeof ui.matchesCloseToken!=="function"||parent?.browserWindow!==w||
+         parent.rendersInContentProcess!==false||typeof parent.loadURL!=="function"||
+         Object.hasOwn(parent,"loadURL")||typeof browser?.getTabForBrowser!=="function"||
+         typeof browser.isTab!=="function")return report("search","unsupported",null);
+      s={w,bar,ui,parent,browser,manager,workspace:manager.activeWorkspace,token:{},
+        cleanup:[],loads:0,callbacks:0,exact:false};
+      const current=()=>searchProbe===s&&eligibleWindow(w)&&w.gURLBar===bar&&w.gZenUIManager===ui&&
+        w.gBrowser===browser&&w.gZenWorkspaces===manager&&manager.activeWorkspace===s.workspace&&
+        bar.parentController===parent&&Number.isSafeInteger(s.token.id)&&ui._isOwner(s.token.id)&&
+        bar.hasAttribute("zen-newtab");
+      const releasePick=shadow(bar,"pickResult",original=>function(...args){
+        if(searchProbe!==s||this!==bar)return Reflect.apply(original,this,args);
+        // A buffered or old asynchronous input is not a current dispatch.
+        const event=args[0]?.event;
+        let releaseLoad=null,active=false,before=null,ownerAtLoad=false;
+        try{
+          if(!current()||event?.isTrusted!==true||!event.eventPhase){
+            finishSearch(s,"uncorrelated");
+          }else{
+            before=new Set([...browser.tabs,...manager.allStoredTabs]);
+            releaseLoad=shadow(parent,"loadURL",load=>function(...loadArgs){
+              if(!active||this!==parent||!current())return Reflect.apply(load,this,loadArgs);
+              const request=loadArgs[0],params=request?.params;
+              s.loads++;
+              if(s.loads!==1||!["tab","tabshifted"].includes(request?.where)||!params||
+                 "resolveOnNewTabCreated" in params||!Object.isExtensible(params))
+                return Reflect.apply(load,this,loadArgs);
+              ownerAtLoad=true;
+              const callback=target=>{
+                if(!active||searchProbe!==s)return;
+                s.callbacks++;
+                try{
+                  const tab=browser.getTabForBrowser(target);
+                  s.exact=s.callbacks===1&&!!tab&&!before.has(tab)&&browser.isTab(tab)&&
+                    tab.linkedBrowser===target&&tab.ownerDocument?.defaultView===w&&
+                    !tab.closing&&tab.isConnected;
+                }catch{s.exact=false;}
+              };
+              // Exact call only. Preserve any foreign callback; never
+              // replace resolveOnContentBrowserCreated (native telemetry).
+              try{Object.defineProperty(params,"resolveOnNewTabCreated",{value:callback,configurable:true,writable:true,enumerable:true});}
+              catch{return Reflect.apply(load,this,loadArgs);}
+              try{return Reflect.apply(load,this,loadArgs);}
+              finally{
+                try{
+                  const d=Object.getOwnPropertyDescriptor(params,"resolveOnNewTabCreated");
+                  if(d?.value!==callback||!d.configurable||!delete params.resolveOnNewTabCreated)s.exact=false;
+                }catch{s.exact=false;}
+              }
+            });
+            if(!releaseLoad)finishSearch(s,"unsupported");
+            else active=true;
+          }
+        }catch{
+          if(releaseLoad)try{releaseLoad();}catch{}
+          releaseLoad=null;active=false;finishSearch(s,"unsupported");
+        }
+        let completed=false;
+        try{
+          const result=Reflect.apply(original,this,args);
+          completed=true;
+          return result;
+        }finally{
+          active=false;
+          let released=true;
+          if(releaseLoad)try{released=releaseLoad();}catch{released=false;}
+          if(searchProbe===s)finishSearch(s,!released?"cleanup-failed":
+            completed&&ownerAtLoad&&s.loads===1&&s.callbacks===1&&s.exact?"observed":"uncorrelated");
+        }
+      });
+      if(!releasePick)return report("search","unsupported",null);
+      s.cleanup.push(releasePick);searchProbe=s;lastSearch=null;
+      const closed=event=>{
+        try{if(ui.matchesCloseToken(s.token,event))finishSearch(s,"closed");}catch{finishSearch(s,"uncorrelated");}
+      };
+      const unload=event=>{if(event.target===w||event.target===w.document)finishSearch(s,"unloaded");};
+      s.cleanup.push(()=>w.removeEventListener("ZenURLBarClosed",closed));
+      w.addEventListener("ZenURLBarClosed",closed);
+      s.cleanup.push(()=>w.removeEventListener("unload",unload));
+      w.addEventListener("unload",unload);
+      // Test-only lifetime cap. Never cancels the native search or creates
+      // a tab; merely detaches this explicitly armed instrumentation.
+      const timer=w.setTimeout(()=>finishSearch(s,"expired"),120000);
+      s.cleanup.push(()=>w.clearTimeout(timer));
+      const handled=ui.handleNewTab(false,false,"tab",false,s.token);
+      if(!handled||!current()){
+        finishSearch(s,"unsupported");
+        return JSON.stringify({stage:"search",status:"unsupported"});
+      }
+      return report("search","armed",s);
+    }catch{
+      if(s)finishSearch(s,"unsupported");
+      return report("search","unsupported",null);
+    }
+  }
   return Object.freeze({
+    startSearch,stopSearch,
+    searchResult:()=>JSON.stringify(lastSearch??{stage:"search",status:searchProbe?"armed":"inactive"}),
     snapshot,
     write:(side,arm)=>mutate("write",side,arm),
     clear:arm=>mutate("clear","",arm),
